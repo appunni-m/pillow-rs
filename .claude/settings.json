@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "rust-development@ai-plugin-marketplace": true
+  }
+}
