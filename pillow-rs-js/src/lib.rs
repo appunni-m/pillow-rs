@@ -237,7 +237,16 @@ impl ImageSequence {
 
 // ── Remaining stubs (WASM equivalents for file-I/O functions) ────
 #[wasm_bindgen] impl Image {
-    #[wasm_bindgen(js_name = "save")] pub fn save(&mut self) -> Result<Vec<u8>, JsValue> { self.inner.to_bytes().map_err(err) }
+    #[wasm_bindgen(js_name = "save")] pub fn save(&mut self) -> Result<Vec<u8>, JsValue> {
+        // Returns PNG-encoded bytes for download (browser) or fs.writeFile (server).
+        // Uses the image crate's PNG encoder built into pillow-rs-core.
+        self.inner.to_png_bytes().map_err(err)
+    }
+
+    /// Encode DynamicImage to PNG bytes
+    fn encode_png(img: &mut RsImage) -> Result<Vec<u8>, JsValue> {
+        img.to_png_bytes().map_err(|e| JsValue::from_str(&e.to_string()))
+    }
     #[wasm_bindgen(js_name = "show")] pub fn show(&self) -> JsValue { JsValue::from_str("show: use toBytes() for display") }
     #[wasm_bindgen(js_name = "close")] pub fn close(&self) {}
     #[wasm_bindgen(js_name = "draftFn")] pub fn draft_fn(&self, _m: &str, _w: u32, _h: u32) -> Image { Image{inner: self.inner.clone()} }

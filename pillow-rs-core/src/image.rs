@@ -446,6 +446,15 @@ impl Image {
     }
 
     /// Seek to frame in multi-frame image. Stub for now (no multi-frame support).
+    /// Encode image to PNG bytes. Used by WASM for browser download and server fs.writeFile.
+    pub fn to_png_bytes(&mut self) -> Result<Vec<u8>, PilError> {
+        let img = self.ensure_loaded()?;
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png)
+            .map_err(|e| PilError::ImageError(e))?;
+        Ok(buf.into_inner())
+    }
+
     pub fn seek(&mut self, _frame: u32) -> Result<(), PilError> {
         Ok(())
     }
