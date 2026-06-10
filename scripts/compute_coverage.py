@@ -163,6 +163,14 @@ FUNC_MAP = {
     # ImagePalette
     "test_create_palette": "ImagePalette", "test_copy_palette": "ImagePalette.copy",
     # ImageStat
+    "test_frombytes_rgb_parity": "Image.frombytes",
+    "test_effect_noise_works": "ImageModule.effect_noise",
+    "test_draw_bitmap_works": "ImageDraw.bitmap",
+    "test_ops_colorize_works": "ImageOps.colorize",
+    "test_palette_getcolor_works": "ImagePalette.getcolor",
+    "test_palette_save_works": "ImagePalette.save",
+    "test_font_getmetrics_works": "ImageFont.getmetrics",
+    "test_font_getname_works": "ImageFont.getname",
     "test_stat_basic": "ImageStat.Stat",
     # ImageSequence
     "test_iterator_exists": "ImageSequence.Iterator",

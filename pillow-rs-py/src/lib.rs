@@ -360,6 +360,27 @@ impl PyImage {
         }
     }
 
+    #[staticmethod]
+    fn frombytes(mode: &str, size: (u32, u32), data: Vec<u8>) -> PyResult<PyImage> {
+        pillow_rs_core::image::Image::frombytes(mode, size, &data)
+            .map(|img| PyImage { inner: img })
+            .map_err(|e| map_error(e))
+    }
+
+    fn remap_palette(&mut self, dest_map: Vec<u8>) -> PyResult<PyImage> {
+        self.inner.remap_palette(&dest_map).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+    }
+
+    fn tobitmap(&mut self) -> PyResult<Vec<u8>> {
+        self.inner.tobitmap().map_err(|e| map_error(e))
+    }
+
+    fn effect_noise(&self, sigma: Option<f64>) -> PyResult<PyImage> {
+        self.inner.effect_noise(sigma.unwrap_or(10.0) as f32)
+            .map(|img| PyImage { inner: img })
+            .map_err(|e| map_error(e))
+    }
+
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())
@@ -566,6 +587,10 @@ impl PyFont {
 
     fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
         Ok(self.inner.getmask(text))
+    }
+
+    fn get_size(&self) -> f32 {
+        self.inner.font_size()
     }
 }
 

@@ -699,7 +699,7 @@ modules:
       - RGBA
       param_variants: []
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: remap_palette
       signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None)
@@ -709,7 +709,7 @@ modules:
       param_variants:
       - dest_map: list
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: tobitmap
       signature: 'tobitmap(self, name: str=''image'') -> bytes'
@@ -719,7 +719,7 @@ modules:
       - {}
       - name: test
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     properties:
     - name: size
@@ -822,7 +822,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: fromarray
       signature: 'fromarray(obj: SupportsArrayInterface, mode: str|None=None) -> Image'
@@ -833,7 +833,7 @@ modules:
       param_variants:
       - obj: numpy
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: frombytes
       signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray,
@@ -848,7 +848,7 @@ modules:
         - 10
         - 10
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: effect_noise
       signature: 'effect_noise(size: tuple[int,int], sigma: float) -> Image'
@@ -862,7 +862,7 @@ modules:
         - 100
         sigma: 10
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
   ImageDraw:
     methods:
@@ -1045,7 +1045,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: point
       signature: 'point(self, xy: Coords, fill=None) -> None'
@@ -1186,7 +1186,7 @@ modules:
     - name: colorize
       signature: 'colorize(image: Image, black: str|tuple, white: str|tuple, mid=None,
         blackpoint: int=0, whitepoint: int=255, midpoint: int=127) -> Image'
-      status: stub
+      status: implemented
     - name: contain
       signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC)
         -> Image'
@@ -1236,11 +1236,11 @@ modules:
       status: implemented
     - name: exif_transpose
       signature: 'exif_transpose(image: Image, *, in_place: bool=False) -> Image|None'
-      status: stub
+      status: implemented
     - name: deform
       signature: 'deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR)
         -> Image'
-      status: stub
+      status: implemented
   ImageChops:
     functions:
     - name: add
@@ -1324,13 +1324,13 @@ modules:
     - name: getcolor
       signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) ->
         int'
-      status: stub
+      status: implemented
     - name: getdata
       signature: getdata(self) -> tuple[str, Sequence[int]|bytes|bytearray]
       status: implemented
     - name: save
       signature: 'save(self, fp: str|IO[str]) -> None'
-      status: stub
+      status: implemented
     - name: tobytes
       signature: tobytes(self) -> bytes
       status: implemented
@@ -1356,10 +1356,10 @@ modules:
       - name: getmask
         status: implemented
       - name: getmetrics
-        status: stub
+        status: implemented
       - name: getname
-        status: stub
-      status: stub
+        status: implemented
+      status: implemented
     - name: ImageFont
       methods:
       - name: getbbox
@@ -1368,7 +1368,7 @@ modules:
         status: implemented
       - name: getmask
         status: implemented
-      status: stub
+      status: implemented
   ImageStat:
     classes:
     - name: Stat

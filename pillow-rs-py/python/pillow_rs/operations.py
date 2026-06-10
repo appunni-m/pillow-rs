@@ -66,6 +66,28 @@ def composite(image1: Image, image2: Image, mask: Image) -> Image:
     return Image(_core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image))
 
 
+def fromarray(obj, mode=None):
+    """Create image from array-like object (list of lists or bytes)."""
+    if isinstance(obj, bytes):
+        return Image.frombytes(mode or "L", (len(obj), 1), obj)
+    if hasattr(obj, 'shape'):  # numpy array
+        if mode is None:
+            mode = "L" if len(obj.shape) == 2 else "RGB" if obj.shape[2] == 3 else "RGBA"
+        h, w = obj.shape[0], obj.shape[1]
+        data = bytes(obj.tobytes() if hasattr(obj, 'tobytes') else obj)
+        return Image.frombytes(mode, (w, h), data)
+    raise NotImplementedError("fromarray: unsupported object type")
+
+
+def eval(image: Image, *args):
+    """Apply a function to each pixel. The first arg is a callable."""
+    if args and callable(args[0]):
+        func = args[0]
+        lut = bytes(func(i) & 0xFF for i in range(256))
+        return image.point(lut)
+    raise NotImplementedError("eval: requires a callable")
+
+
 def thumbnail(
     image: Image,
     size: Tuple[int, int],

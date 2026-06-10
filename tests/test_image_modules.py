@@ -23,9 +23,9 @@ class TestImageFilter:
 
 
 class TestImageFont:
-    def test_load_default_raises(self):
-        with pytest.raises(NotImplementedError):
-            ImageFont.load_default()
+    def test_load_default_returns_font(self):
+        font = ImageFont.load_default(10)
+        assert font is not None
 
     def test_freetype_stub(self):
         with pytest.raises((NotImplementedError, OSError)):

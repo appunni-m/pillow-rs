@@ -74,7 +74,14 @@ class ImageDraw:
         self._sync()
 
     def bitmap(self, xy, bitmap, fill=None):
-        raise NotImplementedError("ImageDraw.bitmap")
+        if fill is None:
+            fill = (0, 0, 0)
+        bmp = bitmap.convert("1")
+        for y in range(min(bitmap.height, self._image.height - int(xy[1]))):
+            for x in range(min(bitmap.width, self._image.width - int(xy[0]))):
+                if bmp.getpixel((x, y)) == 0:
+                    self.point([(int(xy[0]) + x, int(xy[1]) + y)], fill=fill)
+        self._sync()
 
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
                        align="left", direction=None, features=None, language=None,

@@ -164,6 +164,14 @@ FUNC_MAP = {
     "TestImageFont::test_truetype_stub": "ImageFont.truetype",
     "TestImageOpsExpand::test_expand_border": "ImageOps.expand",
     "TestImagePalette::test_copy_palette": "ImagePalette.copy",
+    "test_frombytes_rgb_parity": "Image.frombytes",
+    "test_effect_noise_works": "ImageModule.effect_noise",
+    "test_draw_bitmap_works": "ImageDraw.bitmap",
+    "test_ops_colorize_works": "ImageOps.colorize",
+    "test_palette_getcolor_works": "ImagePalette.getcolor",
+    "test_palette_save_works": "ImagePalette.save",
+    "test_font_getmetrics_works": "ImageFont.getmetrics",
+    "test_font_getname_works": "ImageFont.getname",
     "test_stat_basic": "ImageStat.Stat", "test_iterator_exists": "ImageSequence.Iterator",
 }
 
