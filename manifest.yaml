@@ -1338,10 +1338,10 @@ modules:
     functions:
     - name: load
       signature: 'load(filename: str) -> ImageFont'
-      status: stub
+      status: implemented
     - name: load_default
       signature: 'load_default(size: float|None=None) -> FreeTypeFont|ImageFont'
-      status: stub
+      status: implemented
     - name: truetype
       signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
         encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
@@ -1350,11 +1350,11 @@ modules:
     - name: FreeTypeFont
       methods:
       - name: getbbox
-        status: stub
+        status: implemented
       - name: getlength
-        status: stub
+        status: implemented
       - name: getmask
-        status: stub
+        status: implemented
       - name: getmetrics
         status: stub
       - name: getname
@@ -1363,11 +1363,11 @@ modules:
     - name: ImageFont
       methods:
       - name: getbbox
-        status: stub
+        status: implemented
       - name: getlength
-        status: stub
+        status: implemented
       - name: getmask
-        status: stub
+        status: implemented
       status: stub
   ImageStat:
     classes:
@@ -1382,8 +1382,8 @@ modules:
       - rms
       - var
       - stddev
-      status: stub
+      status: implemented
   ImageSequence:
     classes:
     - name: Iterator
-      status: stub
+      status: implemented
