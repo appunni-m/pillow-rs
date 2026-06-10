@@ -147,13 +147,13 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     })
 }
 
-/// Convert to grayscale (faster path than convert("L") for simple cases).
+/// Convert to grayscale using PIL-compatible BT.601 formula.
 pub fn grayscale(image: &Image) -> Result<Image, PilError> {
     let mut clone = image.clone();
     let img = clone.ensure_loaded()?;
     Ok(Image {
         inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(
-            image::imageops::colorops::grayscale(img),
+            crate::color::pil_grayscale(img),
         )),
         format: image.format,
     })

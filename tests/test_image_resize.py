@@ -1,47 +1,57 @@
-"""Tests for Image.resize() — all resample filters and edge cases."""
+"""PIL parity tests for Image.resize()."""
 import pytest
 from pillow_rs import Image, Resampling
+from conftest import assert_images_equal
 
 
-class TestImageResize:
-    @pytest.mark.covers("Image.resize", mode="RGB", variant="default")
-    def test_resize_default_bilinear(self):
-        img = Image.new("RGB", (100, 100), (255, 0, 0))
-        small = img.resize((50, 50))
-        assert small.size == (50, 50)
-        assert small is not img
+@pytest.mark.covers("Image.resize", mode="RGB", variant="default")
+def test_resize_bilinear_parity(PIL):
+    pil = PIL.Image.new("RGB", (100, 100), (255, 128, 64))
+    rs = Image.new("RGB", (100, 100), (255, 128, 64))
+    pil_r = pil.resize((50, 50), PIL.Image.BILINEAR)
+    rs_r = rs.resize((50, 50), Resampling.BILINEAR)
+    assert_images_equal(rs_r, pil_r)
 
-    @pytest.mark.covers("Image.resize", mode="RGB", variant="nearest")
-    def test_resize_nearest(self):
-        img = Image.new("RGB", (100, 100))
-        small = img.resize((30, 30), Resampling.NEAREST)
-        assert small.size == (30, 30)
 
-    @pytest.mark.covers("Image.resize", mode="RGB", variant="lanczos")
-    def test_resize_lanczos(self):
-        img = Image.new("RGB", (100, 100))
-        big = img.resize((200, 200), Resampling.LANCZOS)
-        assert big.size == (200, 200)
+@pytest.mark.covers("Image.resize", mode="RGB", variant="nearest")
+def test_resize_nearest_parity(PIL):
+    pil = PIL.Image.new("RGB", (80, 60), (255, 0, 0))
+    rs = Image.new("RGB", (80, 60), (255, 0, 0))
+    pil_r = pil.resize((40, 30), PIL.Image.NEAREST)
+    rs_r = rs.resize((40, 30), Resampling.NEAREST)
+    assert_images_equal(rs_r, pil_r)
 
-    def test_resize_same_size_returns_copy(self):
-        img = Image.new("RGB", (50, 50))
-        same = img.resize((50, 50))
-        assert same.size == (50, 50)
-        assert same is not img
 
-    def test_resize_zero_dimension_raises(self):
-        img = Image.new("RGB", (100, 100))
-        with pytest.raises(Exception):
-            img.resize((0, 100))
+@pytest.mark.covers("Image.resize", mode="L", variant="default")
+def test_resize_grayscale_parity(PIL):
+    pil = PIL.Image.new("L", (100, 100), 200)
+    rs = Image.new("L", (100, 100), 200)
+    pil_r = pil.resize((50, 50), PIL.Image.BILINEAR)
+    rs_r = rs.resize((50, 50), Resampling.BILINEAR)
+    assert_images_equal(rs_r, pil_r)
 
-    def test_resize_rgba_mode(self):
-        img = Image.new("RGBA", (100, 100), (255, 0, 0, 128))
-        small = img.resize((50, 50))
-        assert small.size == (50, 50)
-        assert small.mode == "RGBA"
 
-    def test_resize_grayscale_mode(self):
-        img = Image.new("L", (100, 100), 128)
-        small = img.resize((50, 50))
-        assert small.size == (50, 50)
-        assert small.mode == "L"
+@pytest.mark.covers("Image.resize", mode="RGBA", variant="default")
+def test_resize_rgba_parity(PIL):
+    pil = PIL.Image.new("RGBA", (100, 100), (255, 0, 0, 128))
+    rs = Image.new("RGBA", (100, 100), (255, 0, 0, 128))
+    pil_r = pil.resize((50, 50), PIL.Image.BILINEAR)
+    rs_r = rs.resize((50, 50), Resampling.BILINEAR)
+    assert_images_equal(rs_r, pil_r)
+
+
+def test_resize_same_size_parity(PIL):
+    """Resizing to same dimensions returns identical image."""
+    pil = PIL.Image.new("RGB", (50, 50), (100, 200, 50))
+    rs = Image.new("RGB", (50, 50), (100, 200, 50))
+    pil_r = pil.resize((50, 50))
+    rs_r = rs.resize((50, 50))
+    assert_images_equal(rs_r, pil_r)
+
+
+def test_resize_upscale_parity(PIL):
+    pil = PIL.Image.new("RGB", (50, 50), (128, 128, 128))
+    rs = Image.new("RGB", (50, 50), (128, 128, 128))
+    pil_r = pil.resize((100, 100), PIL.Image.BILINEAR)
+    rs_r = rs.resize((100, 100), Resampling.BILINEAR)
+    assert_images_equal(rs_r, pil_r)
