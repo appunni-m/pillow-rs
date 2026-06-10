@@ -14,7 +14,7 @@ impl Image {
         colors: u32,
         _kmeans: u32,
         _palette: Option<&Image>,
-        dither: bool,
+        _dither: bool,
     ) -> Result<Image, PilError> {
         let colors = colors.clamp(2, 256) as usize;
         let mut clone = self.clone();

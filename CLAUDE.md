@@ -78,8 +78,37 @@ All work starts from `manifest.yaml`. To add a new function:
 - Tests that verify signature existence or stub behavior are NOT parity tests — they don't count toward coverage
 
 ### Coverage System
-- `scripts/compute_coverage.py` maps test function names to manifest entries via hardcoded `func_name_map`
-- Every new test function MUST be added to this map or coverage won't reflect the work
-- Scoring: 75% base for any passing tests + up to 25% bonus for variant/edge/format completeness
-- Coverage report generated after each test run shows per-function pass/fail status
-- Use `@pytest.mark.covers(...)` markers for documentation; the script infers coverage from test names
+
+**Methodology:** Trust-based binary coverage. A function is TRUSTED if it has ≥1 PIL parity test passing. No weighted formulas.
+
+**Files involved:**
+| File | Purpose |
+|------|---------|
+| `scripts/coverage_map.json` | Source of truth: 221 test→function mappings |
+| `scripts/compute_coverage.py` | Reads JSON + `manifest.yaml` + pytest report → trust report |
+| `scripts/generate_coverage_page.py` | Full COVERAGE.md generator with benchmarks |
+| `manifest.yaml` | API surface definition with status per function |
+| `tests/conftest.py` | PIL parity fixtures (`assert_images_equal`, `assert_values_equal`) |
+
+**Flow:**
+```
+pytest tests/ --json-report --json-report-file=/tmp/report.json
+        ↓
+python scripts/compute_coverage.py manifest.yaml /tmp/report.json
+        ↓
+    TRUST REPORT: 135/135 TRUSTED, 5 stubs, 0 untracked
+```
+
+**Adding a new test:**
+1. Add test function in `tests/test_<module>.py`
+2. Add entry to `scripts/coverage_map.json`: `"test_name": ["Module.function"]`
+3. For tests inside classes: `"ClassName::test_name": ["Module.function"]`
+4. For name collisions across files: `"file_name::test_name": ["Module.function"]`
+5. Run coverage to verify: `python scripts/compute_coverage.py manifest.yaml /tmp/report.json`
+6. Verify 0 UNTRACKED tests and function is now TRUSTED
+
+**Coverage guarantees:**
+- Every TRUSTED function has a PIL parity test that creates identical inputs, runs the same operation on both PIL and RSPIL, and asserts binary-identical output
+- Zero mocked tests, zero "signature exists" tests
+- Untracked tests = test exists but no coverage_map.json entry → must add entry
+- `@pytest.mark.covers()` decorators on tests for self-documentation (parsed by compute_coverage.py)
