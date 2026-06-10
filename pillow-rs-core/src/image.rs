@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::color::color_type_to_mode;
 use crate::error::PilError;
+use crate::format::parse_format_str;
 use crate::lazy::LazyImage;
 
 #[derive(Clone)]
@@ -142,16 +143,3 @@ impl Image {
     }
 }
 
-/// Parse a format string into ImageFormat
-fn parse_format_str(s: &str) -> Result<ImageFormat, PilError> {
-    match s.to_uppercase().as_str() {
-        "JPEG" | "JPG" => Ok(ImageFormat::Jpeg),
-        "PNG" => Ok(ImageFormat::Png),
-        "GIF" => Ok(ImageFormat::Gif),
-        "BMP" => Ok(ImageFormat::Bmp),
-        "TIFF" | "TIF" => Ok(ImageFormat::Tiff),
-        "WEBP" => Ok(ImageFormat::WebP),
-        "ICO" => Ok(ImageFormat::Ico),
-        _ => Err(PilError::UnknownFormat(format!("Unsupported format: {}", s))),
-    }
-}

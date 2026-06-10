@@ -120,10 +120,67 @@ impl PyImage {
         box_coords: Option<&Bound<'_, PyAny>>,
         mask: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let _ = (im, box_coords, mask);
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Image.paste",
-        ))
+        use pillow_rs_core::ops::paste::PasteSource;
+
+        // Handle abbreviated syntax: paste(im, mask) where box is actually mask
+        let (effective_box, effective_mask): (Option<&Bound<'_, PyAny>>, Option<&Bound<'_, PyAny>>) =
+            if let Some(box_val) = box_coords {
+                if box_val.downcast::<PyImage>().is_ok() {
+                    // Abbreviated: paste(im, mask) — box_val is actually mask
+                    (None, Some(box_val))
+                } else {
+                    (Some(box_val), mask)
+                }
+            } else {
+                (None, mask)
+            };
+
+        // Parse source: Image or color
+        let source = if let Ok(py_img) = im.downcast::<PyImage>() {
+            let borrowed = py_img.borrow();
+            PasteSource::Image(borrowed.inner.clone())
+        } else if let Ok((r, g, b)) = im.extract::<(u8, u8, u8)>() {
+            PasteSource::Color((r, g, b, 255))
+        } else if let Ok((r, g, b, a)) = im.extract::<(u8, u8, u8, u8)>() {
+            PasteSource::Color((r, g, b, a))
+        } else if let Ok(val) = im.extract::<u8>() {
+            PasteSource::Color((val, val, val, 255))
+        } else {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "im must be Image or color tuple",
+            ));
+        };
+
+        // Parse box: 2-tuple or 4-tuple
+        let parsed_box = if let Some(box_val) = effective_box {
+            if let Ok((x1, y1, x2, y2)) = box_val.extract::<(i32, i32, i32, i32)>() {
+                Some((x1, y1, x2, y2))
+            } else if let Ok((x, y)) = box_val.extract::<(i32, i32)>() {
+                Some((x, y, x, y))
+            } else {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "box must be (x,y) or (left,upper,right,lower)",
+                ));
+            }
+        } else {
+            None
+        };
+
+        // Parse mask
+        let parsed_mask = if let Some(mask_val) = effective_mask {
+            let py_img = mask_val.downcast::<PyImage>().map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err("mask must be an Image")
+            })?;
+            let borrowed = py_img.borrow();
+            Some(borrowed.inner.clone())
+        } else {
+            None
+        };
+
+        let mask_ref = parsed_mask.as_ref();
+        self.inner
+            .paste(source, parsed_box, mask_ref)
+            .map_err(|e| map_error(e))
     }
 
     fn split(&self) -> PyResult<Vec<PyImage>> {
@@ -156,6 +213,38 @@ impl PyImage {
         self.inner
             .thumbnail(size, resample.as_deref())
             .map_err(|e| map_error(e))
+    }
+
+    fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .enhance_brightness(factor)
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn enhance_contrast(&self, factor: f64) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .enhance_contrast(factor)
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn enhance_color(&self, factor: f64) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .enhance_color(factor)
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn enhance_sharpness(&self, factor: f64) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .enhance_sharpness(factor)
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
     }
 
     #[getter]
