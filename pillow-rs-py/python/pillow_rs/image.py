@@ -261,6 +261,22 @@ class Image:
         """Close the image file and release resources."""
         self._rust_image.close()
 
+    def point(self, lut, mode=None):
+        """Apply lookup table or function to each pixel."""
+        if callable(lut):
+            # Function-based: convert to LUT
+            table = [lut(i) for i in range(256)]
+            lut = bytes(int(v) & 0xFF for v in table)
+        return Image(self._rust_image.point(list(lut)))
+
+    def effect_spread(self, distance):
+        """Simple spread/blur effect."""
+        return Image(self._rust_image.effect_spread(distance))
+
+    def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
+        """General affine/perspective transform. Not yet implemented."""
+        raise NotImplementedError("Image.transform")
+
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""
         self._rust_image.verify()

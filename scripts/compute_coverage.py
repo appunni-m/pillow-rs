@@ -144,6 +144,15 @@ def infer_function_from_test(test: dict) -> str | None:
         "test_enhance_color_parity": "ImageEnhance.Color",
         "test_enhance_contrast_parity": "ImageEnhance.Contrast",
         "test_enhance_sharpness_parity": "ImageEnhance.Sharpness",
+        # Final additions
+        "test_point_lut": "Image.point",
+        "test_point_callable": "Image.point",
+        "test_effect_spread_works": "Image.effect_spread",
+        "test_draw_arc_works": "ImageDraw.arc",
+        "test_draw_pieslice_works": "ImageDraw.pieslice",
+        "test_draw_circle_works": "ImageDraw.circle",
+        "test_contain_works": "ImageOps.contain",
+        "test_duplicate_works": "ImageChops.duplicate",
         # Module tests
         "test_blur_constant": "ImageFilter.BLUR",
         "test_gaussian_blur_class": "ImageFilter.GaussianBlur",

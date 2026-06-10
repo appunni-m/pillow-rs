@@ -329,6 +329,14 @@ impl PyImage {
         self.inner.tell()
     }
 
+    fn point(&mut self, lut: Vec<u8>) -> PyResult<PyImage> {
+        self.inner.point(&lut).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+    }
+
+    fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
+        self.inner.effect_spread(distance).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+    }
+
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())

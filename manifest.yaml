@@ -447,7 +447,7 @@ modules:
       - channel: A
       edge_cases:
       - invalid_channel
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: getcolors
       signature: 'getcolors(self, maxcolors: int=256) -> list[tuple[int,tuple[int,...]]]|list[tuple[int,float]]|None'
@@ -460,7 +460,7 @@ modules:
       - maxcolors: 16
       edge_cases:
       - too_many_colors
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: getdata
       signature: 'getdata(self, band: int|None=None) -> core.ImagingCore'
@@ -474,7 +474,7 @@ modules:
       - band: 0
       edge_cases:
       - invalid_band
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: getextrema
       signature: getextrema(self) -> tuple[float,float]|tuple[tuple[int,int],...]
@@ -514,7 +514,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: histogram
       signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
@@ -541,7 +541,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: point
       signature: 'point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None)
@@ -553,7 +553,7 @@ modules:
       param_variants:
       - lut: callable
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: putalpha
       signature: 'putalpha(self, alpha: Image|int) -> None'
@@ -565,7 +565,7 @@ modules:
       - alpha: int
       - alpha: image
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: putdata
       signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0,
@@ -620,7 +620,7 @@ modules:
       param_variants:
       - factor: 2
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '9.0'
     - name: seek
       signature: 'seek(self, frame: int) -> None'
@@ -631,7 +631,7 @@ modules:
       param_variants:
       - frame: 0
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: tell
       signature: tell(self) -> int
@@ -642,7 +642,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: transform
       signature: 'transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler,
@@ -676,7 +676,7 @@ modules:
       param_variants:
       - distance: 3
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
     - name: entropy
       signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
@@ -689,7 +689,7 @@ modules:
       - {}
       - mask: image
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '5.0'
     - name: draft
       signature: 'draft(self, mode: str|None, size: tuple[int,int]|None) -> tuple[str,tuple[int,int,float,float]]|None'
@@ -878,7 +878,7 @@ modules:
         start: 0
         end: 180
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: line
       signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None)
@@ -982,7 +982,7 @@ modules:
         - 50
         radius: 20
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
     - name: rounded_rectangle
       signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None,
@@ -995,7 +995,7 @@ modules:
       - xy: box
         radius: 10
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
     - name: regular_polygon
       signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0,
@@ -1020,7 +1020,7 @@ modules:
         start: 0
         end: 180
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: pieslice
       signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None,
@@ -1034,7 +1034,7 @@ modules:
         start: 0
         end: 180
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: bitmap
       signature: 'bitmap(self, xy: Sequence[int], bitmap: Image, fill=None) -> None'
@@ -1190,11 +1190,11 @@ modules:
     - name: contain
       signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC)
         -> Image'
-      status: stub
+      status: implemented
     - name: cover
       signature: 'cover(image: Image, size: tuple[int,int], method: int=BICUBIC) ->
         Image'
-      status: stub
+      status: implemented
     - name: crop
       signature: 'crop(image: Image, border: int=0) -> Image'
       status: stub
@@ -1204,7 +1204,7 @@ modules:
     - name: expand
       signature: 'expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0)
         -> Image'
-      status: stub
+      status: implemented
     - name: fit
       signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed:
         float=0.0, centering: tuple[float,float]=(0.5,0.5)) -> Image'
@@ -1230,7 +1230,7 @@ modules:
       status: implemented
     - name: scale
       signature: 'scale(image: Image, factor: float, resample: int=BICUBIC) -> Image'
-      status: stub
+      status: implemented
     - name: solarize
       signature: 'solarize(image: Image, threshold: int=128) -> Image'
       status: implemented
@@ -1249,16 +1249,16 @@ modules:
       status: implemented
     - name: add_modulo
       signature: 'add_modulo(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: blend
       signature: 'blend(image1: Image, image2: Image, alpha: float) -> Image'
-      status: stub
+      status: implemented
     - name: composite
       signature: 'composite(image1: Image, image2: Image, mask: Image) -> Image'
-      status: stub
+      status: implemented
     - name: constant
       signature: 'constant(image: Image, value: int) -> Image'
-      status: stub
+      status: implemented
     - name: darker
       signature: 'darker(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -1267,7 +1267,7 @@ modules:
       status: implemented
     - name: duplicate
       signature: 'duplicate(image: Image) -> Image'
-      status: stub
+      status: implemented
     - name: hard_light
       signature: 'hard_light(image1: Image, image2: Image) -> Image'
       status: stub
@@ -1307,7 +1307,7 @@ modules:
       status: implemented
     - name: subtract_modulo
       signature: 'subtract_modulo(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
   ImageColor:
     functions:
     - name: getrgb
