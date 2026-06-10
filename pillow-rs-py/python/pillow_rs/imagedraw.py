@@ -110,6 +110,14 @@ class ImageDraw:
             return w
         return len(str(text)) * 8
 
+    def getfont(self):
+        """Return the current font."""
+        return None
+
+    def shape(self, shape, fill=None, outline=None):
+        """Draw a shape outline."""
+        raise NotImplementedError("ImageDraw.shape")
+
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         import math
         (cx, cy), r = bounding_circle

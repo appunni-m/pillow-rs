@@ -1,6 +1,7 @@
 {
   "test_new_rgb_default": [
-    "Image.new"
+    "Image.new",
+    "ImageModule.new"
   ],
   "test_new_rgb_with_int": [
     "Image.new"
@@ -33,7 +34,8 @@
     "Image.save"
   ],
   "TestOpenSave::test_open_bytes": [
-    "Image.open"
+    "Image.open",
+    "ImageModule.open"
   ],
   "TestThumbnail::test_thumbnail_parity": [
     "Image.thumbnail"
@@ -229,7 +231,8 @@
     "Image.quantize"
   ],
   "TestAlphaComposite::test_alpha_composite_works": [
-    "Image.alpha_composite"
+    "Image.alpha_composite",
+    "ImageModule.alpha_composite"
   ],
   "TestAnalysis::test_entropy_works": [
     "Image.entropy"
@@ -627,5 +630,52 @@
   ],
   "ImageFont.getmask": [
     "ImageFont.FreeTypeFont"
+  ],
+  "test_apply_transparency": [
+    "Image.apply_transparency"
+  ],
+  "test_get_child_images": [
+    "Image.get_child_images"
+  ],
+  "test_getexif": [
+    "Image.getexif"
+  ],
+  "test_getpalette": [
+    "Image.getpalette"
+  ],
+  "test_getxmp": [
+    "Image.getxmp"
+  ],
+  "test_putpalette": [
+    "Image.putpalette"
+  ],
+  "test_show_no_error": [
+    "Image.show"
+  ],
+  "test_get_flattened_data": [
+    "Image.get_flattened_data"
+  ],
+  "test_draw_getfont": [
+    "ImageDraw.getfont"
+  ],
+  "test_palette_tostring": [
+    "ImagePalette.tostring"
+  ],
+  "test_load_default_imagefont": [
+    "ImageFont.load_default_imagefont"
+  ],
+  "test_load_path": [
+    "ImageFont.load_path"
+  ],
+  "test_getim_raises": [
+    "Image.getim"
+  ],
+  "test_alpha_composite_works": [
+    "Image.alpha_composite",
+    "ImageModule.alpha_composite"
+  ],
+  "test_open_bytes": [
+    "Image.open",
+    "ImageModule.open"
   ]
 }
