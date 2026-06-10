@@ -200,6 +200,108 @@ impl Image {
         })
     }
 
+    /// Alpha composite another image over this one.
+    pub fn alpha_composite(&mut self, src: &Image, dest: (i32, i32), source: (i32, i32)) -> Result<(), PilError> {
+        let mut src_clone = src.clone();
+        let src_img = src_clone.ensure_loaded()?;
+        let dst_img = self.ensure_loaded()?;
+        let mut dst_rgba = dst_img.to_rgba8();
+        let src_rgba = src_img.to_rgba8();
+        let (dx, dy) = (dest.0.max(0) as u32, dest.1.max(0) as u32);
+        let (sx, sy) = (source.0.max(0) as u32, source.1.max(0) as u32);
+
+        for py in 0..src_rgba.height().min(dst_rgba.height().saturating_sub(dy)) {
+            for px in 0..src_rgba.width().min(dst_rgba.width().saturating_sub(dx)) {
+                let sp = src_rgba.get_pixel(sx + px, sy + py);
+                let dp = dst_rgba.get_pixel(dx + px, dy + py);
+                let sa = sp[3] as f64 / 255.0;
+                let da = dp[3] as f64 / 255.0;
+                let out_a = sa + da * (1.0 - sa);
+                if out_a > 0.0 {
+                    let r = ((sp[0] as f64 * sa + dp[0] as f64 * da * (1.0 - sa)) / out_a).round() as u8;
+                    let g = ((sp[1] as f64 * sa + dp[1] as f64 * da * (1.0 - sa)) / out_a).round() as u8;
+                    let b = ((sp[2] as f64 * sa + dp[2] as f64 * da * (1.0 - sa)) / out_a).round() as u8;
+                    dst_rgba.put_pixel(dx + px, dy + py, image::Rgba([r, g, b, (out_a * 255.0).round() as u8]));
+                }
+            }
+        }
+        self.inner = crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgba8(dst_rgba));
+        Ok(())
+    }
+
+    /// Get unique colors and their counts.
+    pub fn getcolors(&mut self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
+        let img = self.ensure_loaded()?;
+        let rgb = img.to_rgb8();
+        let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
+        for p in rgb.pixels() {
+            let key = vec![p[0], p[1], p[2]];
+            *counts.entry(key).or_insert(0) += 1;
+        }
+        if counts.len() > maxcolors as usize {
+            return Ok(None);
+        }
+        let result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
+        Ok(Some(result))
+    }
+
+    /// Get entropy of the image.
+    pub fn entropy(&mut self) -> Result<f64, PilError> {
+        let img = self.ensure_loaded()?;
+        let gray = img.to_luma8();
+        let mut hist = [0u32; 256];
+        for &p in gray.iter() { hist[p as usize] += 1; }
+        let total = gray.len() as f64;
+        let mut entropy = 0.0f64;
+        for &h in &hist {
+            if h > 0 {
+                let p = h as f64 / total;
+                entropy -= p * p.log2();
+            }
+        }
+        Ok(entropy)
+    }
+
+    /// Get pixel data as sequence (returns raw bytes as Vec<u8>).
+    pub fn getdata(&mut self, band: Option<i32>) -> Result<Vec<u8>, PilError> {
+        let img = self.ensure_loaded()?;
+        let rgba = img.to_rgba8();
+        let band = band.unwrap_or(-1);
+        if band < 0 {
+            Ok(rgba.into_raw())
+        } else {
+            let b = band.min(3) as usize;
+            Ok(rgba.pixels().map(|p| p[b]).collect())
+        }
+    }
+
+    /// Get horizontal and vertical projections.
+    pub fn getprojection(&mut self) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+        let img = self.ensure_loaded()?;
+        let gray = img.to_luma8();
+        let (w, h) = (gray.width() as usize, gray.height() as usize);
+        let mut h_proj = vec![0u32; w];
+        let mut v_proj = vec![0u32; h];
+        for y in 0..h {
+            for x in 0..w {
+                let v = gray.get_pixel(x as u32, y as u32)[0] as u32;
+                h_proj[x] += v;
+                v_proj[y] += v;
+            }
+        }
+        Ok((h_proj, v_proj))
+    }
+
+    /// Seek to frame in multi-frame image. Stub for now (no multi-frame support).
+    pub fn seek(&mut self, _frame: u32) -> Result<(), PilError> {
+        Ok(())
+    }
+
+    /// Return current frame number.
+    pub fn tell(&self) -> u32 {
+        0
+    }
+
     pub fn to_bytes(&mut self) -> Result<Vec<u8>, PilError> {
         let img = self.ensure_loaded()?;
         Ok(img.as_bytes().to_vec())

@@ -48,16 +48,66 @@ def duplicate(image: Image) -> Image:
     return image.copy()
 
 
+def constant(image: Image, value: int) -> Image:
+    """Fill image with constant value."""
+    from . import _core
+    return Image(_core.chops_constant(image._rust_image, value))
+
+
+def add_modulo(image1: Image, image2: Image) -> Image:
+    """Add two images with wrap-around."""
+    from . import _core
+    return Image(_core.chops_add_modulo(image1._rust_image, image2._rust_image))
+
+
+def subtract_modulo(image1: Image, image2: Image) -> Image:
+    """Subtract with wrap-around."""
+    from . import _core
+    return Image(_core.chops_subtract_modulo(image1._rust_image, image2._rust_image))
+
+
+def blend(image1: Image, image2: Image, alpha: float) -> Image:
+    """Linear interpolation between two images."""
+    from . import _core
+    return Image(_core.image_blend(image1._rust_image, image2._rust_image, alpha))
+
+
+def composite(image1: Image, image2: Image, mask: Image) -> Image:
+    """Composite image1 over image2 using mask."""
+    from . import _core
+    return Image(_core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image))
+
+
 def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
     """Offset image contents."""
     raise NotImplementedError("ImageChops.offset")
 
 
 def logical_and(image1: Image, image2: Image) -> Image:
-    """Bitwise AND."""
+    """Bitwise AND. Not yet implemented."""
     raise NotImplementedError("ImageChops.logical_and")
 
 
 def logical_or(image1: Image, image2: Image) -> Image:
-    """Bitwise OR."""
+    """Bitwise OR. Not yet implemented."""
     raise NotImplementedError("ImageChops.logical_or")
+
+
+def logical_xor(image1: Image, image2: Image) -> Image:
+    """Bitwise XOR. Not yet implemented."""
+    raise NotImplementedError("ImageChops.logical_xor")
+
+
+def hard_light(image1: Image, image2: Image) -> Image:
+    """Hard light blend. Not yet implemented."""
+    raise NotImplementedError("ImageChops.hard_light")
+
+
+def soft_light(image1: Image, image2: Image) -> Image:
+    """Soft light blend. Not yet implemented."""
+    raise NotImplementedError("ImageChops.soft_light")
+
+
+def overlay(image1: Image, image2: Image) -> Image:
+    """Overlay blend. Not yet implemented."""
+    raise NotImplementedError("ImageChops.overlay")
