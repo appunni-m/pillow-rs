@@ -38,8 +38,10 @@ impl Image {
     }
 
     #[wasm_bindgen(js_name = "crop")]
-    pub fn crop_js(&self, x: u32, y: u32, w: u32, h: u32) -> Result<Image, JsValue> {
-        self.inner.crop((x, y, w, h)).map(|i| Image { inner: i }).map_err(err)
+    pub fn crop_js(&self, left: u32, top: u32, right: u32, bottom: u32) -> Result<Image, JsValue> {
+        let w = right - left;
+        let h = bottom - top;
+        self.inner.crop((left, top, w, h)).map(|i| Image { inner: i }).map_err(err)
     }
 
     #[wasm_bindgen(js_name = "rotate")]
