@@ -1,6 +1,6 @@
 //! Paste operations — image overlay, color fill, and mask-based alpha blending.
 
-use image::{DynamicImage, GenericImage, GenericImageView};
+use image::{GenericImage, GenericImageView};
 
 use crate::error::PilError;
 use crate::image::Image;

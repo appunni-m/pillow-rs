@@ -9,12 +9,9 @@ use crate::image::Image;
 
 /// Drawing context wrapping an Image.
 /// PIL: `draw = ImageDraw.Draw(image)` then `draw.line(...)`, `draw.rectangle(...)`, etc.
+#[derive(Debug)]
 pub struct Draw {
     image: Image,
-    /// Fill color (r, g, b, a) — None means no fill
-    fill: Option<(u8, u8, u8, u8)>,
-    /// Outline color
-    outline: Option<(u8, u8, u8, u8)>,
 }
 
 impl Draw {
@@ -22,8 +19,6 @@ impl Draw {
     pub fn new(image: Image) -> Self {
         Draw {
             image,
-            fill: None,
-            outline: Some((0, 0, 0, 255)), // default: black outline
         }
     }
 
@@ -195,11 +190,10 @@ impl Draw {
 
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
-                    if x >= 0 && y >= 0 && (x as u32) < img_w && (y as u32) < img_h {
-                        if point_in_polygon(x, y, points) {
+                    if x >= 0 && y >= 0 && (x as u32) < img_w && (y as u32) < img_h
+                        && point_in_polygon(x, y, points) {
                             canvas.put_pixel(x as u32, y as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
                         }
-                    }
                 }
             }
         }

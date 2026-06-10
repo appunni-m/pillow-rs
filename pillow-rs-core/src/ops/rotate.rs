@@ -24,11 +24,7 @@ impl Image {
                 img.rotate90()
             }
         } else if (angle_norm - 180.0).abs() < f64::EPSILON {
-            if expand {
-                img.rotate180()
-            } else {
-                img.rotate180()
-            }
+            img.rotate180()
         } else if (angle_norm - 270.0).abs() < f64::EPSILON {
             if expand {
                 let h = img.height();

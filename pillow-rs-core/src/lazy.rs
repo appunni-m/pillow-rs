@@ -2,7 +2,7 @@ use image::{DynamicImage, ImageFormat};
 use std::io::Cursor;
 use std::path::PathBuf;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum LazyImage {
     Loaded(DynamicImage),
     Path {
@@ -20,7 +20,7 @@ impl LazyImage {
         match self {
             LazyImage::Loaded(img) => Ok(img),
             LazyImage::Path { path, format: _ } => {
-                let img = image::open(path).map_err(|e| crate::error::PilError::ImageError(e))?;
+                let img = image::open(path).map_err(crate::error::PilError::ImageError)?;
                 *self = LazyImage::Loaded(img);
                 match self {
                     LazyImage::Loaded(img) => Ok(img),
@@ -31,10 +31,10 @@ impl LazyImage {
                 let cursor = Cursor::new(data);
                 let reader = image::ImageReader::new(cursor)
                     .with_guessed_format()
-                    .map_err(|e| crate::error::PilError::Io(e))?;
+                    .map_err(crate::error::PilError::Io)?;
                 let img = reader
                     .decode()
-                    .map_err(|e| crate::error::PilError::ImageError(e))?;
+                    .map_err(crate::error::PilError::ImageError)?;
                 *self = LazyImage::Loaded(img);
                 match self {
                     LazyImage::Loaded(img) => Ok(img),

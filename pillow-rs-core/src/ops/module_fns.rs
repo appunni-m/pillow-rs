@@ -26,7 +26,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     }
 
     // Get dimensions from first band
-    let mut band_clones: Vec<Image> = bands.iter().map(|b| b.clone()).collect();
+    let mut band_clones: Vec<Image> = bands.to_vec();
     let w = {
         let b0 = band_clones[0].ensure_loaded()?;
         b0.width()

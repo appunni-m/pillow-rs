@@ -9,10 +9,10 @@ impl Image {
     pub fn getbbox(&self, alpha_only: bool) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
         let mut clone = self.clone();
         let img = clone.ensure_loaded()?;
-        let (w, h) = (img.width(), img.height());
+        let (img_w, img_h) = (img.width(), img.height());
 
-        let mut left = w;
-        let mut top = h;
+        let mut left = img_w;
+        let mut top = img_h;
         let mut right = 0u32;
         let mut bottom = 0u32;
 
@@ -23,8 +23,8 @@ impl Image {
                 | image::ColorType::Rgba32F
         );
         let rgba = img.to_rgba8();
-        for y in 0..h {
-            for x in 0..w {
+        for y in 0..img_h {
+            for x in 0..img_w {
                 let px = rgba.get_pixel(x, y);
                 let is_nonzero = if alpha_only && has_alpha {
                     px[3] > 0

@@ -6,7 +6,7 @@ use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::lazy::LazyImage;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Image {
     pub(crate) inner: LazyImage,
     pub(crate) format: Option<ImageFormat>,
@@ -78,7 +78,7 @@ impl Image {
         let img = self.ensure_loaded()?;
         let gray = img.to_luma8();
         let (w, h) = (gray.width(), gray.height());
-        let row_bytes = ((w + 7) / 8) as usize;
+        let row_bytes = w.div_ceil(8) as usize;
         let mut bmp = vec![0u8; row_bytes * h as usize];
         for y in 0..h {
             for x in 0..w {
@@ -519,7 +519,7 @@ impl Image {
             })?
         };
         img.save_with_format(path, save_format)
-            .map_err(|e| PilError::ImageError(e))
+            .map_err(PilError::ImageError)
     }
 
     pub fn thumbnail(
