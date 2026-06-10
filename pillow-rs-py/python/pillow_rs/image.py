@@ -273,9 +273,47 @@ class Image:
         """Simple spread/blur effect."""
         return Image(self._rust_image.effect_spread(distance))
 
+    @classmethod
+    def frombytes(cls, mode, size, data, decoder_name="raw", *args):
+        """Create image from raw pixel bytes."""
+        from ._core import Image as RustImage
+        return cls(RustImage.frombytes(mode, size, bytes(data)))
+
+    def effect_noise(self, sigma=10.0):
+        """Generate noise in the image."""
+        return Image(self._rust_image.effect_noise(sigma))
+
+    @classmethod
+    def fromarray(cls, obj, mode=None):
+        """Create image from numpy array or similar. Not yet implemented."""
+        raise NotImplementedError("Image.fromarray requires numpy")
+
+    @staticmethod
+    def eval(image, *args):
+        """Apply function to each pixel. Not yet implemented."""
+        raise NotImplementedError("Image.eval not yet implemented")
+
+    def draft(self, mode, size):
+        """Configure decoder for draft mode."""
+        raise NotImplementedError("Image.draft")
+
+    def tobitmap(self, name="image"):
+        """Convert to X11 bitmap format."""
+        return self._rust_image.tobitmap()
+
+    def remap_palette(self, dest_map, source_palette=None):
+        """Remap image palette using destination map."""
+        return Image(self._rust_image.remap_palette(list(dest_map)))
+
+    def draft(self, mode, size):
+        """Configure decoder for draft mode. Returns self for compatibility."""
+        return self
+
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
-        """General affine/perspective transform. Not yet implemented."""
-        raise NotImplementedError("Image.transform")
+        """General affine/perspective transform."""
+        if method == 0 or method == "AFFINE" or (isinstance(data, list) and len(data) == 6):
+            return Image(self._rust_image.transform(size, "AFFINE", data, resample, fill, fillcolor))
+        raise NotImplementedError(f"transform method '{method}' not yet implemented")
 
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""

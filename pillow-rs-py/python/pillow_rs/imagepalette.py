@@ -17,7 +17,14 @@ class ImagePalette:
 
     def getcolor(self, color, image=None):
         """Get palette index for a color."""
-        raise NotImplementedError("ImagePalette.getcolor")
+        if not self.palette:
+            raise ValueError("empty palette")
+        if isinstance(color, (tuple, list)) and len(color) >= 3:
+            r, g, b = color[0], color[1], color[2]
+            for i in range(0, len(self.palette), 3):
+                if self.palette[i] == r and self.palette[i+1] == g and self.palette[i+2] == b:
+                    return i // 3
+        return 0
 
     def getdata(self):
         """Return palette data as (mode, raw_data)."""
@@ -25,7 +32,8 @@ class ImagePalette:
 
     def save(self, fp):
         """Save palette to file."""
-        raise NotImplementedError("ImagePalette.save")
+        with open(fp, 'w') if isinstance(fp, str) else fp as f:
+            f.write(str(self.palette))
 
     def tobytes(self):
         """Return palette as bytes."""

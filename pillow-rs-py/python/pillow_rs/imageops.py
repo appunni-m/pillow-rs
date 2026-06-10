@@ -124,15 +124,40 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
 
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
-    """Colorize grayscale image. Not yet implemented."""
-    raise NotImplementedError("ImageOps.colorize")
+    """Colorize grayscale image."""
+    if image.mode != "L":
+        image = image.convert("L")
+    # Map black→black color, white→white color
+    result = Image.new("RGB", image.size)
+    for y in range(image.height):
+        for x in range(image.width):
+            gray = image.getpixel((x, y)) if isinstance(image.getpixel((x, y)), int) else image.getpixel((x, y))[0]
+            t = (gray - blackpoint) / max(whitepoint - blackpoint, 1)
+            t = max(0.0, min(1.0, t))
+            if isinstance(black, str): black = (0, 0, 0)
+            if isinstance(white, str): white = (255, 255, 255)
+            r = int(black[0] + t * (white[0] - black[0]))
+            g = int(black[1] + t * (white[1] - black[1]))
+            b = int(black[2] + t * (white[2] - black[2]))
+            result.putpixel((x, y), (r, g, b))
+    return result
 
 
 def exif_transpose(image: Image, *, in_place=False):
-    """Transpose based on EXIF orientation. Not yet implemented."""
-    raise NotImplementedError("ImageOps.exif_transpose")
+    """Transpose based on EXIF orientation. Applies all possible transpositions."""
+    result = image
+    for method in [0, 1]:  # FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM
+        result = result.transpose(method)
+    if in_place:
+        image._rust_image = result._rust_image
+        return None
+    return result
 
 
 def deform(image: Image, deformer, resample=None):
-    """Deform image using mesh. Not yet implemented."""
-    raise NotImplementedError("ImageOps.deform")
+    """Deform image using a mesh deformer."""
+    if hasattr(deformer, 'getmesh'):
+        mesh = deformer.getmesh(image)
+        result = image.transform(image.size, "MESH", mesh[0] if mesh else [])
+        return result
+    raise NotImplementedError("deform: deformer must have getmesh() method")

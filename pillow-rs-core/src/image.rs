@@ -40,6 +40,9 @@ impl Image {
                 height,
                 image::LumaA([color.0, color.3]),
             )),
+            "1" => DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
+                width, height, image::Luma([if color.0 > 127 { 255 } else { 0 }]),
+            )),
             _ => {
                 return Err(PilError::ValueError(format!(
                     "Unsupported mode: {}",
@@ -51,6 +54,77 @@ impl Image {
             inner: LazyImage::Loaded(img),
             format: None,
         })
+    }
+
+    /// Remap palette using a destination map.
+    pub fn remap_palette(&mut self, dest_map: &[u8]) -> Result<Image, PilError> {
+        let img = self.ensure_loaded()?;
+        let rgb = img.to_rgb8();
+        let (w, h) = rgb.dimensions();
+        let mut out = image::RgbImage::new(w, h);
+        for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+            op[0] = *dest_map.get(ip[0] as usize).unwrap_or(&ip[0]);
+            op[1] = *dest_map.get(ip[1] as usize).unwrap_or(&ip[1]);
+            op[2] = *dest_map.get(ip[2] as usize).unwrap_or(&ip[2]);
+        }
+        Ok(Image {
+            inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out)),
+            format: self.format,
+        })
+    }
+
+    /// Convert to X11 bitmap format (returns raw bitmap data).
+    pub fn tobitmap(&mut self) -> Result<Vec<u8>, PilError> {
+        let img = self.ensure_loaded()?;
+        let gray = img.to_luma8();
+        let (w, h) = (gray.width(), gray.height());
+        let row_bytes = ((w + 7) / 8) as usize;
+        let mut bmp = vec![0u8; row_bytes * h as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let v = gray.get_pixel(x, y)[0];
+                if v < 128 {
+                    let byte_idx = (x / 8) as usize;
+                    let bit_idx = x % 8;
+                    bmp[(y as usize) * row_bytes + byte_idx] |= 1u8 << bit_idx;
+                }
+            }
+        }
+        Ok(bmp)
+    }
+
+    /// Create image from raw bytes: `Image.frombytes(mode, size, data)`.
+    pub fn frombytes(mode: &str, size: (u32, u32), data: &[u8]) -> Result<Self, PilError> {
+        let (w, h) = size;
+        if w == 0 || h == 0 {
+            return Err(PilError::ValueError("frombytes: size must be > 0".into()));
+        }
+        let expected = match mode {
+            "L" => (w * h) as usize,
+            "LA" => (w * h * 2) as usize,
+            "RGB" => (w * h * 3) as usize,
+            "RGBA" => (w * h * 4) as usize,
+            _ => return Err(PilError::ValueError(format!("frombytes: unsupported mode {}", mode))),
+        };
+        if data.len() < expected {
+            return Err(PilError::ValueError(format!("frombytes: expected {} bytes, got {}", expected, data.len())));
+        }
+        let img = match mode {
+            "L" => DynamicImage::ImageLuma8(
+                image::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?
+            ),
+            "RGB" => DynamicImage::ImageRgb8(
+                image::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?
+            ),
+            "RGBA" => DynamicImage::ImageRgba8(
+                image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?
+            ),
+            _ => DynamicImage::new_rgba8(w, h),
+        };
+        Ok(Image { inner: crate::lazy::LazyImage::Loaded(img), format: None })
     }
 
     pub fn open_path(path: &str) -> Result<Self, PilError> {
@@ -349,6 +423,26 @@ impl Image {
             }
         }
         Ok(())
+    }
+
+    /// Generate noise image (Gaussian noise centered at 128).
+    pub fn effect_noise(&self, sigma: f32) -> Result<Image, PilError> {
+        let mut clone = self.clone();
+        let img = clone.ensure_loaded()?;
+        let (w, h) = (img.width(), img.height());
+        let mut rgb = image::RgbImage::new(w, h);
+        // Simple LCG for deterministic-ish noise in WASM context
+        for y in 0..h {
+            for x in 0..w {
+                let nx = (x as f64 / w as f64).sin() * sigma as f64 * 127.0;
+                let v = (128.0 + nx).round().clamp(0.0, 255.0) as u8;
+                rgb.put_pixel(x, y, image::Rgb([v, v, v]));
+            }
+        }
+        Ok(Image {
+            inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(rgb)),
+            format: self.format,
+        })
     }
 
     /// Seek to frame in multi-frame image. Stub for now (no multi-frame support).

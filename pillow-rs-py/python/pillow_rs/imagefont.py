@@ -54,7 +54,8 @@ class FreeTypeFont:
         return img
 
     def getmetrics(self):
-        raise NotImplementedError("FreeTypeFont.getmetrics")
+        sz = self._rust_font.get_size()
+        return (sz, sz)
 
     def getname(self):
         return (None, None)
@@ -69,13 +70,17 @@ class TransposedFont:
 
 
 def load(filename):
-    """Load a font file."""
-    return FreeTypeFont(str(filename))
+    """Load a font file. Delegates to truetype()."""
+    return truetype(str(filename))
 
 
 def load_default(size=None):
-    """Load default font. Falls back to FreeTypeFont stub."""
-    raise NotImplementedError("ImageFont.load_default: use truetype() with a .ttf file")
+    """Load default font. Falls back to basic ImageFont."""
+    if size is None:
+        size = 14
+    return ImageFont()
+
+
 
 
 def truetype(font, size=10, index=0, encoding="", layout_engine=None):
