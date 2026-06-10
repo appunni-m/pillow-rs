@@ -1,7 +1,7 @@
 //! Image.transform — affine, perspective, and mesh transforms.
 //! Implements AFFINE using bilinear interpolation.
 
-use image::{DynamicImage, GenericImageView, RgbImage};
+use image::{DynamicImage, RgbImage};
 
 use crate::error::PilError;
 use crate::image::Image;

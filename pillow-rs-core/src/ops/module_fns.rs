@@ -3,7 +3,7 @@
 
 use crate::error::PilError;
 use crate::image::Image;
-use image::{DynamicImage, GenericImage, GenericImageView};
+use image::DynamicImage;
 
 /// Merge single-band images into a multi-band image.
 /// PIL: `Image.merge(mode, bands)` where mode determines the band count.

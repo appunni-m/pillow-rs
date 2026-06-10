@@ -2,7 +2,7 @@
 //! Implements line, rectangle, ellipse, polygon, point, text.
 //! Uses Bresenham-style algorithms for pixel-perfect rendering.
 
-use image::{DynamicImage, GenericImage, GenericImageView, Rgba, RgbaImage};
+use image::{DynamicImage, Rgba, RgbaImage};
 
 use crate::error::PilError;
 use crate::image::Image;

@@ -2,7 +2,7 @@
 //! MaxFilter, MinFilter, MedianFilter, ModeFilter, RankFilter.
 //! These differ from built-in kernels in that they take constructor arguments.
 
-use image::{DynamicImage, GenericImageView};
+use image::DynamicImage;
 
 use crate::error::PilError;
 use crate::image::Image;
