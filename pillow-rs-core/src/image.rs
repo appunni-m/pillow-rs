@@ -105,15 +105,53 @@ impl Image {
         self.clone()
     }
 
-    pub fn save(&mut self, _path: &str, _format: Option<&str>) -> Result<(), PilError> {
-        Err(PilError::NotImplementedError("Image.save".into()))
+    pub fn save(&mut self, path: &str, format: Option<&str>) -> Result<(), PilError> {
+        let img = self.ensure_loaded()?;
+        let save_format = if let Some(fmt) = format {
+            parse_format_str(fmt)?
+        } else {
+            ImageFormat::from_path(path).map_err(|_| {
+                PilError::UnknownFormat("Cannot determine format from path".into())
+            })?
+        };
+        img.save_with_format(path, save_format)
+            .map_err(|e| PilError::ImageError(e))
     }
 
     pub fn thumbnail(
         &mut self,
-        _size: (u32, u32),
-        _filter: Option<&str>,
+        size: (u32, u32),
+        filter: Option<&str>,
     ) -> Result<(), PilError> {
-        Err(PilError::NotImplementedError("Image.thumbnail".into()))
+        let (w, h) = {
+            let img = self.ensure_loaded()?;
+            (img.width(), img.height())
+        };
+        let (max_w, max_h) = size;
+        if max_w == 0 || max_h == 0 {
+            return Err(PilError::ValueError("thumbnail size must be > 0".into()));
+        }
+        let scale = (max_w as f64 / w as f64).min(max_h as f64 / h as f64);
+        let new_w = (w as f64 * scale) as u32;
+        let new_h = (h as f64 * scale) as u32;
+        // resize returns a new Image — replace self.inner with it
+        let resized = self.resize((new_w, new_h), filter)?;
+        self.inner = resized.inner;
+        self.format = resized.format;
+        Ok(())
+    }
+}
+
+/// Parse a format string into ImageFormat
+fn parse_format_str(s: &str) -> Result<ImageFormat, PilError> {
+    match s.to_uppercase().as_str() {
+        "JPEG" | "JPG" => Ok(ImageFormat::Jpeg),
+        "PNG" => Ok(ImageFormat::Png),
+        "GIF" => Ok(ImageFormat::Gif),
+        "BMP" => Ok(ImageFormat::Bmp),
+        "TIFF" | "TIF" => Ok(ImageFormat::Tiff),
+        "WEBP" => Ok(ImageFormat::WebP),
+        "ICO" => Ok(ImageFormat::Ico),
+        _ => Err(PilError::UnknownFormat(format!("Unsupported format: {}", s))),
     }
 }
