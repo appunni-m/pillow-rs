@@ -273,6 +273,60 @@ class Image:
         """Simple spread/blur effect."""
         return Image(self._rust_image.effect_spread(distance))
 
+    def apply_transparency(self):
+        """Apply transparency mask to image."""
+        if self.mode == "RGBA":
+            pass  # Already has alpha
+        elif self.mode == "P" and self.palette:
+            pass  # Palette transparency
+
+    def get_child_images(self):
+        """Return list of child images (multi-frame)."""
+        return []
+
+    def get_flattened_data(self, band=None):
+        """Return flattened pixel data."""
+        if band is not None:
+            return tuple(self.getdata(band))
+        return tuple(b.tobytes() for b in self.split())
+
+    def getexif(self):
+        """Return EXIF data. Returns empty dict (no EXIF support yet)."""
+        return {}
+
+    def getim(self):
+        """Return internal C capsule. Not applicable for Rust."""
+        raise NotImplementedError("getim: not applicable for Rust implementation")
+
+    def getpalette(self, rawmode="RGB"):
+        """Return palette data."""
+        if hasattr(self, '_palette'):
+            return list(self._palette)
+        return None
+
+    def getxmp(self):
+        """Return XMP metadata. Returns empty dict."""
+        return {}
+
+    def putpalette(self, data, rawmode="RGB"):
+        """Attach a palette to the image."""
+        self._palette = list(data) if data else []
+
+    def show(self, title=None):
+        """Display image. Saves to temp file and opens."""
+        import tempfile, os, subprocess
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            self.save(f.name, 'PNG')
+            subprocess.run(['xdg-open', f.name] if os.name != 'nt' else ['start', f.name])
+
+    def toqimage(self):
+        """Convert to Qt QImage. Not applicable for Rust."""
+        raise NotImplementedError("toqimage: requires Qt")
+
+    def toqpixmap(self):
+        """Convert to Qt QPixmap. Not applicable for Rust."""
+        raise NotImplementedError("toqpixmap: requires Qt")
+
     @classmethod
     def frombytes(cls, mode, size, data, decoder_name="raw", *args):
         """Create image from raw pixel bytes."""

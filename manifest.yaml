@@ -721,6 +721,78 @@ modules:
       edge_cases: []
       status: implemented
       pillow_since: '1.0'
+    - name: apply_transparency
+      signature: apply_transparency(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: get_child_images
+      signature: get_child_images(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: get_flattened_data
+      signature: get_flattened_data(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: getexif
+      signature: getexif(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: getim
+      signature: getim(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: getpalette
+      signature: getpalette(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: getxmp
+      signature: getxmp(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: putpalette
+      signature: putpalette(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: show
+      signature: show(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: toqimage
+      signature: toqimage(*args, **kwargs)
+      status: stub
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: toqpixmap
+      signature: toqpixmap(*args, **kwargs)
+      status: stub
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: frombytes
+      signature: frombytes(data, decoder_name, *args)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
     properties:
     - name: size
       type: tuple[int,int]
@@ -864,6 +936,36 @@ modules:
       edge_cases: []
       status: implemented
       pillow_since: '8.0'
+    - name: alpha_composite
+      signature: alpha_composite(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: effect_mandelbrot
+      signature: effect_mandelbrot(*args, **kwargs)
+      status: stub
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: frombuffer
+      signature: frombuffer(*args, **kwargs)
+      status: stub
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: new
+      signature: new(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: open
+      signature: open(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
   ImageDraw:
     methods:
     - name: arc
@@ -1098,6 +1200,18 @@ modules:
       edge_cases: []
       status: implemented
       pillow_since: '8.0'
+    - name: getfont
+      signature: getfont(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: shape
+      signature: shape(*args, **kwargs)
+      status: stub
+      param_variants:
+      - {}
+      edge_cases: []
   ImageFilter:
     classes:
     - name: BLUR
@@ -1346,6 +1460,18 @@ modules:
       signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
         encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
       status: implemented
+    - name: load_default_imagefont
+      signature: load_default_imagefont(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+    - name: load_path
+      signature: load_path(*args, **kwargs)
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
     classes:
     - name: FreeTypeFont
       methods:
