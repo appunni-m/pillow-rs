@@ -166,7 +166,20 @@ impl ImageDraw {
         self.draw.rounded_rectangle(x0,y0,x1,y1,radius,fill,out,1).map_err(err)
     }
     #[wasm_bindgen(js_name = "text")] pub fn text(&mut self, x: f64, y: f64, text: &str, font: &ImageFont) -> Result<(), JsValue> { self.draw.text(x as i32, y as i32, text, &font.font, (0,0,0,255)).map_err(err) }
-    #[wasm_bindgen(getter)] pub fn image(&self) -> Image { Image { inner: self.draw.image_clone() } }
+    #[wasm_bindgen(getter)] pub fn image(&self) -> Image {
+        let mut img = Image { inner: self.draw.image_clone() };
+        // Convert back to RGB if original was RGB (Draw uses RGBA internally)
+        let mut clone = img.inner.clone();
+        if let Ok(mode) = clone.mode() {
+            if mode == "RGBA" {
+                // Check if all alpha values are 255 (no transparency) — if so, convert to RGB
+                if let Ok(rgb) = clone.convert("RGB", None, None, None, None) {
+                    img.inner = rgb;
+                }
+            }
+        }
+        img
+    }
 }
 
 // ── ImageFont ────────────────────────────────────────────────────
