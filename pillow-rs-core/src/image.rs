@@ -313,6 +313,44 @@ impl Image {
         Ok((h_proj, v_proj))
     }
 
+    /// Set pixel data from a flat byte sequence (matching image mode dimensions).
+    pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
+        let img = self.ensure_loaded()?;
+        let (w, h) = (img.width() as usize, img.height() as usize);
+        let expected = match img.color() {
+            image::ColorType::L8 | image::ColorType::L16 => w * h,
+            image::ColorType::La8 | image::ColorType::La16 => w * h * 2,
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 => w * h * 3,
+            _ => w * h * 4,
+        };
+        if data.len() < expected {
+            return Err(PilError::ValueError(format!(
+                "putdata: expected {} bytes, got {}", expected, data.len()
+            )));
+        }
+        match img.color() {
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 => {
+                let copy = data[..expected].to_vec();
+                let rgb = image::RgbImage::from_raw(w as u32, h as u32, copy)
+                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+                self.inner = crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(rgb));
+            }
+            image::ColorType::L8 | image::ColorType::L16 => {
+                let copy = data[..expected].to_vec();
+                let gray = image::GrayImage::from_raw(w as u32, h as u32, copy)
+                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+                self.inner = crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(gray));
+            }
+            _ => {
+                let copy = data[..expected].to_vec();
+                let rgba = image::RgbaImage::from_raw(w as u32, h as u32, copy)
+                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+                self.inner = crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgba8(rgba));
+            }
+        }
+        Ok(())
+    }
+
     /// Seek to frame in multi-frame image. Stub for now (no multi-frame support).
     pub fn seek(&mut self, _frame: u32) -> Result<(), PilError> {
         Ok(())

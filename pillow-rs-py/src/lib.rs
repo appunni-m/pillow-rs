@@ -408,6 +408,10 @@ impl PyImage {
         self.inner.getpixel(xy.0, xy.1).map_err(|e| map_error(e))
     }
 
+    fn putdata(&mut self, data: Vec<u8>) -> PyResult<()> {
+        self.inner.putdata(&data).map_err(|e| map_error(e))
+    }
+
     fn putpixel(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
         let (r, g, b, a) = if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
             (r, g, b, 255)
@@ -665,12 +669,12 @@ impl PyDraw {
             .map_err(|e| map_error(e))
     }
 
-    fn text(&mut self, xy: (f64, f64), text: &str, fill: Option<&Bound<'_, PyAny>>,
+    fn text(&mut self, xy: (f64, f64), text: String, fill: Option<&Bound<'_, PyAny>>,
             font: Option<&Bound<'_, PyFont>>) -> PyResult<()> {
         let color = parse_draw_color(fill)?;
         if let Some(pyfont) = font {
             let borrowed = pyfont.borrow();
-            self.draw.text(xy.0 as i32, xy.1 as i32, text, &borrowed.inner, color)
+            self.draw.text(xy.0 as i32, xy.1 as i32, &text, &borrowed.inner, color)
                 .map_err(|e| map_error(e))
         } else {
             Err(pyo3::exceptions::PyNotImplementedError::new_err("text() requires a font"))

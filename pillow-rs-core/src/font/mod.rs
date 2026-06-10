@@ -52,13 +52,13 @@ impl Font {
         let mut canvas = vec![0u8; (w * h) as usize];
         let mut xo = 0i32;
         for (metrics, data) in &glyphs {
-            let dx = (xo + metrics.xmin) as u32;
+            let dx = (xo as i64 + metrics.xmin as i64).max(0).min(u32::MAX as i64) as u32;
             for gy in 0..metrics.height { for gx in 0..metrics.width {
                 let a = data[(gy * metrics.width + gx) as usize];
                 if a > 0 { let cx = dx + gx as u32; let cy = gy as u32;
                     if cx < w && cy < h { let d = (cy * w + cx) as usize; canvas[d] = canvas[d].max(a); } }
             }}
-            xo += metrics.advance_width as i32;
+            xo = xo.saturating_add(metrics.advance_width as i32);
         }
         (w, h, canvas)
     }
@@ -111,8 +111,8 @@ impl Font {
         for (metrics, rgba) in &glyphs {
             let gw = metrics.width as u32;
             let gh = metrics.height as u32;
-            let dx = (x_offset + metrics.xmin) as u32;
-            let dy = (0i32 - metrics.ymin).max(0) as u32;
+            let dx = (x_offset as i64 + metrics.xmin as i64).max(0).min(u32::MAX as i64) as u32;
+            let dy = (-(metrics.ymin as i64)).max(0).min(u32::MAX as i64) as u32;
 
             for gy in 0..gh {
                 for gx in 0..gw {
@@ -137,7 +137,7 @@ impl Font {
                     }
                 }
             }
-            x_offset += metrics.advance_width as i32;
+            x_offset = x_offset.saturating_add(metrics.advance_width as i32);
         }
 
         (w, h, canvas)
