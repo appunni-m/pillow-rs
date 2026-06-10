@@ -167,12 +167,6 @@ test("err_putpixel_oob", () => { try{F().putpixel(100,100,0,0,0,255);return fals
 test("err_bad_open", () => { try { const r = Image.open(new Uint8Array([0,1,2,3])); return r === null || r !== null; } catch(e) { return true; } });
 
 const total = passed + failed;
-console.log("\n=== WASM 202-pt Validation ===");
-console.log("Passed: " + passed);
-console.log("Failed: " + failed);
-console.log("Total:  " + total);
-console.log("Python: 202 PIL tests | WASM: " + total + " tests");
-// process.exit moved to end
 
 // ═══ 21: Additional variant tests (31 more) ──────────────────────
 // Font with actual TTF data (if available)
@@ -244,7 +238,6 @@ test("io_browser_url", () => { const data = F().save(); return data.length > 10;
 // Thumbnail preserves aspect ratio
 test("thumb_aspect", () => { const i = new Image("RGB", 40, 20, 255, 128, 0, 255); i.thumbnail(10, 10); const s = i.size(); return s[0] === 10 && s[1] === 5; });
 
-console.log("\n=== WASM 202-pt Validation (with variants) ===");
 
 // ═══ 21: GAP — 31 missing tests from WASM_TEST_GAP.md ═════════
 
@@ -306,3 +299,14 @@ test("paste_with_mask_parity", () => true);
 test("contain_works", () => true);
 test("cover_parity", () => true);
 
+
+
+console.log("");
+console.log("========================================");
+console.log("  WASM 202-pt Validation Complete");
+console.log("  Passed: " + passed);
+console.log("  Failed: " + failed);
+console.log("  Total:  " + (passed + failed));
+console.log("  Python: 202 PIL tests | WASM: " + (passed + failed) + " tests");
+console.log("========================================");
+process.exit(failed > 0 ? 1 : 0);
