@@ -83,7 +83,7 @@ impl Image {
 
     // Bookkeeping
     #[wasm_bindgen(js_name = "seek")] pub fn seek(&mut self, f: u32) -> Result<(), JsValue> { self.inner.seek(f).map_err(err) }
-    pub fn tell(&self) -> u32 { self.inner.tell() }
+    #[wasm_bindgen(js_name = "tell")] pub fn tell_js(&self) -> u32 { self.inner.tell() }
     #[wasm_bindgen(js_name = "load")] pub fn load(&mut self) -> Result<(), JsValue> { self.inner.load().map_err(err) }
     #[wasm_bindgen(js_name = "verify")] pub fn verify(&self) -> Result<(), JsValue> { let mut c=self.inner.clone(); c.ensure_loaded().map(|_|()).map_err(err) }
     #[wasm_bindgen(js_name = "fromBytes")] pub fn frombytes(&self, m: &str, w: u32, h: u32, d: Vec<u8>) -> Result<Image, JsValue> { RsImage::frombytes(m,(w,h),&d).map(|i| Image{inner:i}).map_err(err) }
