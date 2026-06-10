@@ -144,6 +144,17 @@ def infer_function_from_test(test: dict) -> str | None:
         "test_enhance_color_parity": "ImageEnhance.Color",
         "test_enhance_contrast_parity": "ImageEnhance.Contrast",
         "test_enhance_sharpness_parity": "ImageEnhance.Sharpness",
+        # Module tests
+        "test_blur_constant": "ImageFilter.BLUR",
+        "test_gaussian_blur_class": "ImageFilter.GaussianBlur",
+        "test_max_filter_class": "ImageFilter.MaxFilter",
+        "test_load_default": "ImageFont.load_default",
+        "test_freetype_stub": "ImageFont.FreeTypeFont",
+        "test_create_palette": "ImagePalette",
+        "test_copy_palette": "ImagePalette.copy",
+        "test_stat_basic": "ImageStat.Stat",
+        "test_iterator_exists": "ImageSequence.Iterator",
+        "test_expand_border": "ImageOps.expand",
         # ImageDraw
         "test_draw_line_works": "ImageDraw.line",
         "test_draw_rectangle_outline": "ImageDraw.rectangle",

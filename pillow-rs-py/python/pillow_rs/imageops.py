@@ -45,8 +45,17 @@ def grayscale(image: Image) -> Image:
 
 
 def expand(image: Image, border=0, fill=0) -> Image:
-    """Add a border around the image. Not yet implemented."""
-    raise NotImplementedError("ImageOps.expand")
+    """Add a border around the image."""
+    if isinstance(border, int):
+        border = (border, border, border, border)
+    w, h = image.size
+    new_w = w + border[0] + border[2]
+    new_h = h + border[1] + border[3]
+    if isinstance(fill, int):
+        fill = (fill, fill, fill)
+    expanded = Image.new(image.mode, (new_w, new_h), fill)
+    expanded.paste(image, (border[0], border[1]))
+    return expanded
 
 
 def crop(image: Image, border: int = 0) -> Image:
