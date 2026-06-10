@@ -36,6 +36,33 @@ impl Font {
         (w.round() as u32, self.size.round() as u32)
     }
 
+    /// Render text as an alpha mask (L-mode). PIL: getmask().
+    pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
+        if text.is_empty() { return (0, 0, vec![]); }
+        let mut glyphs: Vec<(fontdue::Metrics, Vec<u8>)> = Vec::new();
+        let mut total_w = 0f32; let mut max_h = 0u32;
+        for ch in text.chars() {
+            let (metrics, bitmap) = self.inner.rasterize(ch, self.size);
+            total_w += metrics.advance_width;
+            max_h = max_h.max(metrics.height as u32);
+            glyphs.push((metrics, bitmap));
+        }
+        let w = total_w.round() as u32; let h = max_h;
+        if w == 0 || h == 0 { return (w, h, vec![]); }
+        let mut canvas = vec![0u8; (w * h) as usize];
+        let mut xo = 0i32;
+        for (metrics, data) in &glyphs {
+            let dx = (xo + metrics.xmin) as u32;
+            for gy in 0..metrics.height { for gx in 0..metrics.width {
+                let a = data[(gy * metrics.width + gx) as usize];
+                if a > 0 { let cx = dx + gx as u32; let cy = gy as u32;
+                    if cx < w && cy < h { let d = (cy * w + cx) as usize; canvas[d] = canvas[d].max(a); } }
+            }}
+            xo += metrics.advance_width as i32;
+        }
+        (w, h, canvas)
+    }
+
     /// Render text to an RGBA image. Returns (width, height, pixel_data).
     pub fn render_text(&self, text: &str, fill: (u8, u8, u8, u8), _spacing: f32) -> (u32, u32, Vec<u8>) {
         if text.is_empty() {
