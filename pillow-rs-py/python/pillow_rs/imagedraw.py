@@ -76,6 +76,43 @@ class ImageDraw:
     def bitmap(self, xy, bitmap, fill=None):
         raise NotImplementedError("ImageDraw.bitmap")
 
+    def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
+                       align="left", direction=None, features=None, language=None,
+                       stroke_width=0, stroke_fill=None, embedded_color=False, **kwargs):
+        lines = str(text).split('\n')
+        x, y = xy
+        for line in lines:
+            self.text((x, y), line, fill=fill, font=font, anchor=anchor, spacing=spacing,
+                      align=align, stroke_width=stroke_width, stroke_fill=stroke_fill)
+            if font:
+                _, h = font.getbbox(line)
+                y += int(h * 1.2)
+            else:
+                y += 12
+        self._sync()
+
+    def textbbox(self, xy, text, font=None, **kwargs):
+        if font and hasattr(font, 'getbbox'):
+            w, h = font.getbbox(str(text))
+            return (xy[0], xy[1], xy[0] + w, xy[1] + h)
+        return (xy[0], xy[1], xy[0] + 80, xy[1] + 12)
+
+    def textlength(self, text, font=None, **kwargs):
+        if font and hasattr(font, 'getbbox'):
+            w, _ = font.getbbox(str(text))
+            return w
+        return len(str(text)) * 8
+
+    def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
+        import math
+        (cx, cy), r = bounding_circle
+        points = []
+        for i in range(n_sides):
+            angle = math.radians(rotation + i * 360 / n_sides)
+            points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+        self.polygon(points, fill=fill, outline=outline, width=width)
+        self._sync()
+
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):
