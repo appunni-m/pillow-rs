@@ -85,34 +85,43 @@ def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
 
 def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
     """Offset image contents."""
-    raise NotImplementedError("ImageChops.offset")
+    from . import _core
+    if yoffset is None:
+        yoffset = xoffset
+    return Image(_core.chops_offset(image._rust_image, xoffset, yoffset))
 
 
 def logical_and(image1: Image, image2: Image) -> Image:
     """Bitwise AND."""
-    raise NotImplementedError("ImageChops.logical_and")
+    from . import _core
+    return Image(_core.chops_logical_and(image1._rust_image, image2._rust_image))
 
 
 def logical_or(image1: Image, image2: Image) -> Image:
     """Bitwise OR."""
-    raise NotImplementedError("ImageChops.logical_or")
+    from . import _core
+    return Image(_core.chops_logical_or(image1._rust_image, image2._rust_image))
 
 
 def logical_xor(image1: Image, image2: Image) -> Image:
     """Bitwise XOR."""
-    raise NotImplementedError("ImageChops.logical_xor")
+    from . import _core
+    return Image(_core.chops_logical_xor(image1._rust_image, image2._rust_image))
 
 
 def hard_light(image1: Image, image2: Image) -> Image:
     """Hard light blend."""
-    raise NotImplementedError("ImageChops.hard_light")
+    from . import _core
+    return Image(_core.chops_hard_light(image1._rust_image, image2._rust_image))
 
 
 def soft_light(image1: Image, image2: Image) -> Image:
     """Soft light blend."""
-    raise NotImplementedError("ImageChops.soft_light")
+    from . import _core
+    return Image(_core.chops_soft_light(image1._rust_image, image2._rust_image))
 
 
 def overlay(image1: Image, image2: Image) -> Image:
     """Overlay blend."""
-    raise NotImplementedError("ImageChops.overlay")
+    from . import _core
+    return Image(_core.chops_overlay(image1._rust_image, image2._rust_image))

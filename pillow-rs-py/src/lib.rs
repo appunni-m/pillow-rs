@@ -337,6 +337,29 @@ impl PyImage {
         self.inner.effect_spread(distance).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
     }
 
+    #[pyo3(signature = (size, method, data=None, resample=0, fill=1, fillcolor=None))]
+    fn transform(&self, size: (u32, u32), method: &str, data: Option<Vec<f64>>,
+                 resample: Option<i32>, fill: Option<i32>, fillcolor: Option<&Bound<'_, PyAny>>) -> PyResult<PyImage> {
+        let _ = (resample, fill);
+        let fill = if let Some(fc) = fillcolor {
+            if let Ok((r, g, b)) = fc.extract::<(u8, u8, u8)>() { (r, g, b, 255) }
+            else if let Ok((r, g, b, a)) = fc.extract::<(u8, u8, u8, u8)>() { (r, g, b, a) }
+            else if let Ok(i) = fc.extract::<u8>() { (i, i, i, 255) }
+            else { (0, 0, 0, 255) }
+        } else { (0, 0, 0, 255) };
+
+        match method {
+            "AFFINE" => {
+                let matrix = data.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("AFFINE requires data"))?;
+                self.inner.transform_affine(size, &matrix, fill)
+                    .map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+            }
+            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                format!("Transform method '{}' not yet implemented", method)
+            ))
+        }
+    }
+
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())
@@ -463,6 +486,7 @@ fn map_error(e: PilError) -> PyErr {
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyImage>()?;
     m.add_class::<PyDraw>()?;
+    m.add_class::<PyFont>()?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
@@ -488,6 +512,13 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(chops_add_modulo, m)?)?;
     m.add_function(wrap_pyfunction!(chops_subtract_modulo, m)?)?;
     m.add_function(wrap_pyfunction!(chops_constant, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_hard_light, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_soft_light, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_overlay, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_logical_and, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_logical_or, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_logical_xor, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_offset, m)?)?;
 
     // ImageColor
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
@@ -498,6 +529,36 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(image_composite, m)?)?;
 
     Ok(())
+}
+
+// --- ImageFont ---
+
+#[pyclass(name = "ImageFont")]
+pub struct PyFont {
+    inner: pillow_rs_core::font::Font,
+}
+
+#[pymethods]
+impl PyFont {
+    #[staticmethod]
+    fn truetype(fp: &str, size: f64) -> PyResult<Self> {
+        let data = std::fs::read(fp)
+            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Cannot read font file: {}", e)))?;
+        let font = pillow_rs_core::font::Font::from_bytes(data, size as f32)
+            .map_err(|e| map_error(e))?;
+        Ok(PyFont { inner: font })
+    }
+
+    #[staticmethod]
+    fn load_default() -> PyResult<Self> {
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "load_default(): use ImageFont.truetype('path.ttf', size) instead"
+        ))
+    }
+
+    fn getbbox(&self, text: &str) -> PyResult<(u32, u32)> {
+        Ok(self.inner.text_bbox(text))
+    }
 }
 
 // --- ImageDraw ---
@@ -598,6 +659,18 @@ impl PyDraw {
         let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
         self.draw.rounded_rectangle(xy.0, xy.1, xy.2, xy.3, radius, fc, oc, width.unwrap_or(1))
             .map_err(|e| map_error(e))
+    }
+
+    fn text(&mut self, xy: (f64, f64), text: &str, fill: Option<&Bound<'_, PyAny>>,
+            font: Option<&Bound<'_, PyFont>>) -> PyResult<()> {
+        let color = parse_draw_color(fill)?;
+        if let Some(pyfont) = font {
+            let borrowed = pyfont.borrow();
+            self.draw.text(xy.0 as i32, xy.1 as i32, text, &borrowed.inner, color)
+                .map_err(|e| map_error(e))
+        } else {
+            Err(pyo3::exceptions::PyNotImplementedError::new_err("text() requires a font"))
+        }
     }
 
     #[getter]
@@ -813,6 +886,48 @@ fn chops_subtract_modulo(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage
 fn chops_constant(image: &Bound<'_, PyImage>, value: u8) -> PyResult<PyImage> {
     let b = image.borrow();
     pillow_rs_core::ops::chops::constant(&b.inner, value).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_hard_light(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::hard_light(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_soft_light(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::soft_light(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_overlay(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::overlay(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_logical_and(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::logical_and(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_logical_or(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::logical_or(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_logical_xor(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::logical_xor(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_offset(image: &Bound<'_, PyImage>, xoffset: i32, yoffset: i32) -> PyResult<PyImage> {
+    let b = image.borrow();
+    pillow_rs_core::ops::chops::offset(&b.inner, xoffset, yoffset).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
 }
 
 // --- Image module functions ---
