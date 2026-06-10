@@ -97,7 +97,14 @@ def fit(image: Image, size, method=None, bleed=0.0, centering=(0.5, 0.5)):
     from .enums import Resampling
     if method is None:
         method = Resampling.BICUBIC
-    return cover(image, size, method)
+    w, h = image.size
+    tw, th = size
+    scale = max(tw / w, th / h)
+    rw, rh = int(w * scale + 0.5), int(h * scale + 0.5)
+    resized = image.resize((rw, rh), method)
+    left = (rw - tw) // 2
+    top = (rh - th) // 2
+    return resized.crop((left, top, left + tw, top + th))
 
 
 def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):

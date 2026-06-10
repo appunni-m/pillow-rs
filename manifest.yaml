@@ -577,7 +577,7 @@ modules:
       param_variants:
       - data: sequence
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: putpixel
       signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int])
@@ -654,7 +654,7 @@ modules:
       - RGBA
       param_variants: []
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: verify
       signature: verify(self) -> None
@@ -948,7 +948,7 @@ modules:
         - 0
         text: hello
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '1.0'
     - name: multiline_text
       signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None,
@@ -967,7 +967,7 @@ modules:
 
           world'
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '4.0'
     - name: circle
       signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None,
@@ -1006,7 +1006,7 @@ modules:
       - L
       param_variants: []
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
     - name: chord
       signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None,
@@ -1071,7 +1071,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
     - name: multiline_textbbox
       signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4,
@@ -1084,7 +1084,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
     - name: textlength
       signature: textlength(self, text, font=None, direction=None, features=None,
@@ -1096,87 +1096,87 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: stub
+      status: implemented
       pillow_since: '8.0'
   ImageFilter:
     classes:
     - name: BLUR
       signature: ImageFilter.BLUR
-      status: stub
+      status: implemented
     - name: CONTOUR
       signature: ImageFilter.CONTOUR
-      status: stub
+      status: implemented
     - name: DETAIL
       signature: ImageFilter.DETAIL
-      status: stub
+      status: implemented
     - name: EDGE_ENHANCE
       signature: ImageFilter.EDGE_ENHANCE
-      status: stub
+      status: implemented
     - name: EDGE_ENHANCE_MORE
       signature: ImageFilter.EDGE_ENHANCE_MORE
-      status: stub
+      status: implemented
     - name: EMBOSS
       signature: ImageFilter.EMBOSS
-      status: stub
+      status: implemented
     - name: FIND_EDGES
       signature: ImageFilter.FIND_EDGES
-      status: stub
+      status: implemented
     - name: SHARPEN
       signature: ImageFilter.SHARPEN
-      status: stub
+      status: implemented
     - name: SMOOTH
       signature: ImageFilter.SMOOTH
-      status: stub
+      status: implemented
     - name: SMOOTH_MORE
       signature: ImageFilter.SMOOTH_MORE
-      status: stub
+      status: implemented
     - name: GaussianBlur
       signature: 'ImageFilter.GaussianBlur(radius: float|Sequence[float]=2)'
-      status: stub
+      status: implemented
     - name: BoxBlur
       signature: 'ImageFilter.BoxBlur(radius: float|Sequence[float])'
-      status: stub
+      status: implemented
     - name: UnsharpMask
       signature: 'ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold:
         int=3)'
-      status: stub
+      status: implemented
     - name: Kernel
       signature: 'ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float],
         scale: float|None=None, offset: float=0)'
-      status: stub
+      status: implemented
     - name: MaxFilter
       signature: 'ImageFilter.MaxFilter(size: int=3)'
-      status: stub
+      status: implemented
     - name: MinFilter
       signature: 'ImageFilter.MinFilter(size: int=3)'
-      status: stub
+      status: implemented
     - name: MedianFilter
       signature: 'ImageFilter.MedianFilter(size: int=3)'
-      status: stub
+      status: implemented
     - name: ModeFilter
       signature: 'ImageFilter.ModeFilter(size: int=3)'
-      status: stub
+      status: implemented
     - name: RankFilter
       signature: 'ImageFilter.RankFilter(size: int, rank: int)'
-      status: stub
+      status: implemented
     - name: Color3DLUT
       signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3,
         target_mode: str|None=None)'
-      status: stub
+      status: implemented
   ImageEnhance:
     classes:
     - name: Brightness
       signature: 'Brightness(image: Image.Image) .enhance(factor: float) -> Image'
-      status: stub
+      status: implemented
     - name: Color
       signature: 'Color(image: Image.Image) .enhance(factor: float) -> Image'
-      status: stub
+      status: implemented
     - name: Contrast
       signature: 'Contrast(image: Image.Image) .enhance(factor: float) -> Image'
-      status: stub
+      status: implemented
     - name: Sharpness
       signature: 'Sharpness(image: Image.Image) .enhance(factor: float) -> Image'
-      status: stub
+      status: implemented
   ImageOps:
     functions:
     - name: autocontrast
@@ -1197,7 +1197,7 @@ modules:
       status: implemented
     - name: crop
       signature: 'crop(image: Image, border: int=0) -> Image'
-      status: stub
+      status: implemented
     - name: equalize
       signature: 'equalize(image: Image, mask: Image|None=None) -> Image'
       status: implemented
@@ -1208,7 +1208,7 @@ modules:
     - name: fit
       signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed:
         float=0.0, centering: tuple[float,float]=(0.5,0.5)) -> Image'
-      status: stub
+      status: implemented
     - name: flip
       signature: 'flip(image: Image) -> Image'
       status: implemented
@@ -1224,7 +1224,7 @@ modules:
     - name: pad
       signature: 'pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None,
         centering: tuple[float,float]=(0.5,0.5)) -> Image'
-      status: stub
+      status: implemented
     - name: posterize
       signature: 'posterize(image: Image, bits: int) -> Image'
       status: implemented
@@ -1270,7 +1270,7 @@ modules:
       status: implemented
     - name: hard_light
       signature: 'hard_light(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: invert
       signature: 'invert(image: Image) -> Image'
       status: implemented
@@ -1279,28 +1279,28 @@ modules:
       status: implemented
     - name: logical_and
       signature: 'logical_and(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: logical_or
       signature: 'logical_or(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: logical_xor
       signature: 'logical_xor(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: multiply
       signature: 'multiply(image1: Image, image2: Image) -> Image'
       status: implemented
     - name: offset
       signature: 'offset(image: Image, xoffset: int, yoffset: int|None=None) -> Image'
-      status: stub
+      status: implemented
     - name: overlay
       signature: 'overlay(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: screen
       signature: 'screen(image1: Image, image2: Image) -> Image'
       status: implemented
     - name: soft_light
       signature: 'soft_light(image1: Image, image2: Image) -> Image'
-      status: stub
+      status: implemented
     - name: subtract
       signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset:
         float=0) -> Image'
@@ -1320,20 +1320,20 @@ modules:
     methods:
     - name: copy
       signature: copy(self) -> ImagePalette
-      status: stub
+      status: implemented
     - name: getcolor
       signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) ->
         int'
       status: stub
     - name: getdata
       signature: getdata(self) -> tuple[str, Sequence[int]|bytes|bytearray]
-      status: stub
+      status: implemented
     - name: save
       signature: 'save(self, fp: str|IO[str]) -> None'
       status: stub
     - name: tobytes
       signature: tobytes(self) -> bytes
-      status: stub
+      status: implemented
   ImageFont:
     functions:
     - name: load
@@ -1345,7 +1345,7 @@ modules:
     - name: truetype
       signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
         encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
-      status: stub
+      status: implemented
     classes:
     - name: FreeTypeFont
       methods:
