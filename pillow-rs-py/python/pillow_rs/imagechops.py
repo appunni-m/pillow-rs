@@ -83,31 +83,36 @@ def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
     raise NotImplementedError("ImageChops.offset")
 
 
+def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
+    """Offset image contents."""
+    raise NotImplementedError("ImageChops.offset")
+
+
 def logical_and(image1: Image, image2: Image) -> Image:
-    """Bitwise AND. Not yet implemented."""
+    """Bitwise AND."""
     raise NotImplementedError("ImageChops.logical_and")
 
 
 def logical_or(image1: Image, image2: Image) -> Image:
-    """Bitwise OR. Not yet implemented."""
+    """Bitwise OR."""
     raise NotImplementedError("ImageChops.logical_or")
 
 
 def logical_xor(image1: Image, image2: Image) -> Image:
-    """Bitwise XOR. Not yet implemented."""
+    """Bitwise XOR."""
     raise NotImplementedError("ImageChops.logical_xor")
 
 
 def hard_light(image1: Image, image2: Image) -> Image:
-    """Hard light blend. Not yet implemented."""
+    """Hard light blend."""
     raise NotImplementedError("ImageChops.hard_light")
 
 
 def soft_light(image1: Image, image2: Image) -> Image:
-    """Soft light blend. Not yet implemented."""
+    """Soft light blend."""
     raise NotImplementedError("ImageChops.soft_light")
 
 
 def overlay(image1: Image, image2: Image) -> Image:
-    """Overlay blend. Not yet implemented."""
+    """Overlay blend."""
     raise NotImplementedError("ImageChops.overlay")

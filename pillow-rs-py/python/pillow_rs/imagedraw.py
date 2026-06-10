@@ -49,6 +49,33 @@ class ImageDraw:
         self._draw.point(pts, fill)
         self._sync()
 
+    def arc(self, xy, start, end, fill=None, width=1):
+        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        self._draw.arc((x0, y0, x1, y1), float(start), float(end), fill, width)
+        self._sync()
+
+    def chord(self, xy, start, end, fill=None, outline=None, width=1):
+        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        self._draw.chord((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
+        self._sync()
+
+    def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
+        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        self._draw.pieslice((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
+        self._sync()
+
+    def circle(self, xy, radius, fill=None, outline=None, width=1):
+        self._draw.circle((float(xy[0]), float(xy[1])), float(radius), fill, outline, width)
+        self._sync()
+
+    def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1):
+        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+        self._draw.rounded_rectangle((x0, y0, x1, y1), float(radius), fill, outline, width)
+        self._sync()
+
+    def bitmap(self, xy, bitmap, fill=None):
+        raise NotImplementedError("ImageDraw.bitmap")
+
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):

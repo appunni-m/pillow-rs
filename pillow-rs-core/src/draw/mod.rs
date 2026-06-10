@@ -225,6 +225,99 @@ impl Draw {
         self.image.clone()
     }
 
+    /// Draw an arc (partial ellipse outline).
+    pub fn arc(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: (u8, u8, u8, u8), _width: u32) -> Result<(), PilError> {
+        let img = self.image.ensure_loaded()?;
+        let (img_w, img_h) = (img.width(), img.height());
+        let mut canvas = img.to_rgba8();
+        let cx = (x0 + x1) as f64 / 2.0;
+        let cy = (y0 + y1) as f64 / 2.0;
+        let rx = ((x1 - x0) as f64 / 2.0).abs();
+        let ry = ((y1 - y0) as f64 / 2.0).abs();
+        let steps = ((rx + ry) * 2.0) as i32;
+        for i in 0..steps {
+            let angle = start.to_radians() + (end - start).to_radians() * i as f64 / steps as f64;
+            let x = (cx + rx * angle.cos()).round() as i32;
+            let y = (cy + ry * angle.sin()).round() as i32;
+            plot(&mut canvas, x, y, fill, img_w, img_h);
+        }
+        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        Ok(())
+    }
+
+    /// Draw a chord (arc + filled to center).
+    pub fn chord(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
+        // Simplified: draw arc outline + fill by drawing pie slice
+        if let Some(fc) = fill {
+            self.pieslice(x0, y0, x1, y1, start, end, Some(fc), outline, 1)?;
+        } else {
+            self.arc(x0, y0, x1, y1, start, end, outline.unwrap_or((0, 0, 0, 255)), 1)?;
+        }
+        Ok(())
+    }
+
+    /// Draw a pieslice.
+    pub fn pieslice(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
+        let img = self.image.ensure_loaded()?;
+        let (img_w, img_h) = (img.width(), img.height());
+        let mut canvas = img.to_rgba8();
+        let cx = (x0 + x1) as f64 / 2.0;
+        let cy = (y0 + y1) as f64 / 2.0;
+        let rx = ((x1 - x0) as f64 / 2.0).abs();
+        let ry = ((y1 - y0) as f64 / 2.0).abs();
+
+        // Fill
+        if let Some(fc) = fill {
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    if x >= 0 && y >= 0 && (x as u32) < img_w && (y as u32) < img_h {
+                        let dx = (x as f64 - cx) / rx;
+                        let dy = (y as f64 - cy) / ry;
+                        if dx * dx + dy * dy <= 1.0 {
+                            let angle = dy.atan2(dx).to_degrees();
+                            let angle = if angle < 0.0 { angle + 360.0 } else { angle };
+                            if angle >= start && angle <= end {
+                                canvas.put_pixel(x as u32, y as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Outline
+        if let Some(oc) = outline {
+            let steps = ((rx + ry) * 2.0) as i32;
+            for i in 0..steps {
+                let angle = start.to_radians() + (end - start).to_radians() * i as f64 / steps as f64;
+                let x = (cx + rx * angle.cos()).round() as i32;
+                let y = (cy + ry * angle.sin()).round() as i32;
+                plot(&mut canvas, x, y, oc, img_w, img_h);
+            }
+            // Radii lines
+            for a in [start, end] {
+                let ax = (cx + rx * a.to_radians().cos()).round() as i32;
+                let ay = (cy + ry * a.to_radians().sin()).round() as i32;
+                bresenham_line(&mut canvas, cx as i32, cy as i32, ax, ay, oc, img_w, img_h);
+            }
+        }
+
+        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        Ok(())
+    }
+
+    /// Draw a circle.
+    pub fn circle(&mut self, cx: i32, cy: i32, radius: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
+        let r = radius as i32;
+        self.ellipse(cx - r, cy - r, cx + r, cy + r, fill, outline, 1)
+    }
+
+    /// Draw a rounded rectangle.
+    pub fn rounded_rectangle(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, _radius: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
+        // Simplified: regular rectangle (rounded corners not yet implemented)
+        self.rectangle(x0, y0, x1, y1, fill, outline, 1)
+    }
+
     /// Consume the drawing context and return the modified image.
     pub fn into_image(self) -> Image {
         self.image
