@@ -112,3 +112,22 @@ python scripts/compute_coverage.py manifest.yaml /tmp/report.json
 - Zero mocked tests, zero "signature exists" tests
 - Untracked tests = test exists but no coverage_map.json entry → must add entry
 - `@pytest.mark.covers()` decorators on tests for self-documentation (parsed by compute_coverage.py)
+### Automated Linting (`.claude/settings.json` hooks)
+
+| Hook | When | Action |
+|------|------|--------|
+| `PostToolUse` | After Write/Edit to Rust files | Auto-runs `cargo fmt` |
+| `Stop` | Session end | Prints clippy + fmt status |
+
+Manual lint check: `bash scripts/lint.sh` (fmt → clippy → tests → trust report)
+
+### Rust Code Quality Checklist (per rust-development skill)
+Before committing, verify:
+- [ ] `cargo clippy --all-targets --all-features -- -D warnings` passes
+- [ ] No `unwrap()` or `expect()` outside `#[cfg(test)]`
+- [ ] Import order: `std` → external crates → `crate` → `super` → `self`
+- [ ] `///` doc comments on all public functions with `# Examples`
+- [ ] `&str` over `String`, `&[T]` over `Vec<T>` in parameters
+- [ ] No redundant `.clone()` — use borrowing where possible
+- [ ] `#[derive(Debug)]` on all public types
+- [ ] `thiserror` for error types, never bare `anyhow` in core library
