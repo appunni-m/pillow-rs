@@ -205,6 +205,30 @@ class Image:
         """Image histogram per band."""
         return self._rust_image.histogram()
 
+    def getchannel(self, channel):
+        """Extract a single channel as an L-mode image."""
+        ch_map = {"R": 0, "G": 1, "B": 2, "A": 3, "L": 0}
+        ch = ch_map.get(channel, channel) if isinstance(channel, str) else channel
+        return Image(self._rust_image.getchannel(ch))
+
+    def putalpha(self, alpha):
+        """Set/replace the alpha channel."""
+        if isinstance(alpha, Image):
+            raise NotImplementedError("Image.putalpha with Image argument")
+        if isinstance(alpha, int):
+            self._rust_image.putalpha(alpha)
+        else:
+            self._rust_image.putalpha(int(alpha))
+
+    def reduce(self, factor, box=None):
+        """Reduce image by integer factor."""
+        return Image(self._rust_image.reduce(factor))
+
+    def load(self):
+        """Load pixel data. Returns pixel access object (stub)."""
+        self._rust_image.load()
+        return self  # TODO: return PixelAccess object
+
     def close(self):
         """Close the image file and release resources."""
         self._rust_image.close()
