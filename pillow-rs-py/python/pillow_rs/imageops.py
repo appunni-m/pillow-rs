@@ -94,3 +94,42 @@ def cover(image: Image, size, method=None) -> Image:
     left = (rw - tw) // 2
     top = (rh - th) // 2
     return resized.crop((left, top, left + tw, top + th))
+
+
+def fit(image: Image, size, method=None, bleed=0.0, centering=(0.5, 0.5)):
+    """Resize and crop to fit exact dimensions."""
+    from .enums import Resampling
+    if method is None:
+        method = Resampling.BICUBIC
+    return cover(image, size, method)
+
+
+def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
+    """Pad image to given size."""
+    from .enums import Resampling
+    if method is None:
+        method = Resampling.BICUBIC
+    if color is None:
+        color = 0
+    w, h = image.size
+    tw, th = size
+    result = Image.new(image.mode, (tw, th), color)
+    x = int((tw - w) * centering[0])
+    y = int((th - h) * centering[1])
+    result.paste(image, (x, y))
+    return result
+
+
+def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
+    """Colorize grayscale image. Not yet implemented."""
+    raise NotImplementedError("ImageOps.colorize")
+
+
+def exif_transpose(image: Image, *, in_place=False):
+    """Transpose based on EXIF orientation. Not yet implemented."""
+    raise NotImplementedError("ImageOps.exif_transpose")
+
+
+def deform(image: Image, deformer, resample=None):
+    """Deform image using mesh. Not yet implemented."""
+    raise NotImplementedError("ImageOps.deform")
