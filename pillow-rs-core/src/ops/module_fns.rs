@@ -105,6 +105,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
 
 /// Linear interpolation between two images.
 /// PIL: `Image.blend(im1, im2, alpha)` → (1-alpha)*im1 + alpha*im2
+/// Uses integer arithmetic for exact PIL parity.
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let mut c1 = image1.clone();
     let mut c2 = image2.clone();
@@ -115,6 +116,7 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
     let rgb1 = img1.to_rgb8();
     let rgb2 = img2.to_rgb8();
 
+    // PIL uses: int(p1 * (1-alpha) + p2 * alpha) — float multiply + truncation
     let a = alpha.clamp(0.0, 1.0);
     let mut out = image::RgbImage::new(w, h);
     for y in 0..h {
@@ -122,9 +124,9 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
             let p1 = rgb1.get_pixel(x, y);
             let p2 = rgb2.get_pixel(x, y);
             out.put_pixel(x, y, image::Rgb([
-                ((p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).round() as u8),
-                ((p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).round() as u8),
-                ((p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).round() as u8),
+                (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
+                (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
+                (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
             ]));
         }
     }

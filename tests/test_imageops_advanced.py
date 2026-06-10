@@ -17,10 +17,10 @@ def test_contain_parity(PIL):
 
 
 def test_cover_parity(PIL):
+    import PIL.ImageOps
     pil = PIL.Image.new("RGB", (200, 100), (128, 0, 0))
     rs = Image.new("RGB", (200, 100), (128, 0, 0))
-    rs_result = ImageOps.cover(rs, (80, 80))
-    assert rs_result.size == (80, 80)
+    assert_images_equal(ImageOps.cover(rs, (80, 80)), PIL.ImageOps.cover(pil, (80, 80)))
 
 
 def test_expand_parity(PIL):

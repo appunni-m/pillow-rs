@@ -25,12 +25,11 @@ def test_constant_works():
 
 
 def test_blend_parity(PIL):
-    pil1 = PIL.Image.new("RGB", (20, 20), (255, 0, 0))
-    pil2 = PIL.Image.new("RGB", (20, 20), (0, 0, 255))
-    rs1 = Image.new("RGB", (20, 20), (255, 0, 0))
-    rs2 = Image.new("RGB", (20, 20), (0, 0, 255))
-    rs_result = ImageChops.blend(rs1, rs2, 0.5)
-    assert rs_result.size == (20, 20)
+    pil1 = PIL.Image.new("RGB", (10, 10), (255, 0, 0))
+    pil2 = PIL.Image.new("RGB", (10, 10), (0, 0, 255))
+    rs1 = Image.new("RGB", (10, 10), (255, 0, 0))
+    rs2 = Image.new("RGB", (10, 10), (0, 0, 255))
+    assert_images_equal(ImageChops.blend(rs1, rs2, 0.5), PIL.ImageChops.blend(pil1, pil2, 0.5))
 
 
 def test_composite_works():

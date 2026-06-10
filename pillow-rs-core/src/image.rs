@@ -262,16 +262,37 @@ impl Image {
         Ok(entropy)
     }
 
-    /// Get pixel data as sequence (returns raw bytes as Vec<u8>).
+    /// Get pixel data as sequence. Returns per-channel values in display order.
+    /// For RGB: [R,G,B,R,G,B,...]; for L: [L,L,...]; for RGBA: [R,G,B,A,...].
     pub fn getdata(&mut self, band: Option<i32>) -> Result<Vec<u8>, PilError> {
         let img = self.ensure_loaded()?;
-        let rgba = img.to_rgba8();
         let band = band.unwrap_or(-1);
-        if band < 0 {
-            Ok(rgba.into_raw())
-        } else {
+        if band >= 0 {
+            let rgba = img.to_rgba8();
             let b = band.min(3) as usize;
-            Ok(rgba.pixels().map(|p| p[b]).collect())
+            return Ok(rgba.pixels().map(|p| p[b]).collect());
+        }
+        // Return in native format order
+        match img.color() {
+            image::ColorType::L8 | image::ColorType::L16 => {
+                let gray = img.to_luma8();
+                Ok(gray.into_raw())
+            }
+            image::ColorType::La8 | image::ColorType::La16 => {
+                let ga = img.to_luma_alpha8();
+                // Interleave L,A
+                let mut out = Vec::with_capacity((ga.width() * ga.height() * 2) as usize);
+                for p in ga.pixels() { out.push(p[0]); out.push(p[1]); }
+                Ok(out)
+            }
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 | image::ColorType::Rgb32F => {
+                let rgb = img.to_rgb8();
+                Ok(rgb.into_raw())
+            }
+            _ => {
+                let rgba = img.to_rgba8();
+                Ok(rgba.into_raw())
+            }
         }
     }
 
@@ -303,21 +324,35 @@ impl Image {
     }
 
     /// Apply a lookup table or function to each pixel channel.
+    /// Preserves input image mode (L stays L, RGB stays RGB).
     pub fn point(&mut self, lut: &[u8]) -> Result<Image, PilError> {
         let img = self.ensure_loaded()?;
-        let rgb = img.to_rgb8();
-        let (w, h) = rgb.dimensions();
-        let mut out = image::RgbImage::new(w, h);
-        let lut_len = lut.len();
-        for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-            op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
-            op[1] = *lut.get(ip[1] as usize).unwrap_or(&ip[1]);
-            op[2] = *lut.get(ip[2] as usize).unwrap_or(&ip[2]);
+        let is_luma = matches!(img.color(), image::ColorType::L8 | image::ColorType::La8);
+        if is_luma {
+            let gray = img.to_luma8();
+            let (w, h) = gray.dimensions();
+            let mut out = image::GrayImage::new(w, h);
+            for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
+                op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
+            }
+            Ok(Image {
+                inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(out)),
+                format: self.format,
+            })
+        } else {
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let mut out = image::RgbImage::new(w, h);
+            for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+                op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
+                op[1] = *lut.get(ip[1] as usize).unwrap_or(&ip[1]);
+                op[2] = *lut.get(ip[2] as usize).unwrap_or(&ip[2]);
+            }
+            Ok(Image {
+                inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out)),
+                format: self.format,
+            })
         }
-        Ok(Image {
-            inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out)),
-            format: self.format,
-        })
     }
 
     /// Simple spread/blur effect by averaging 3x3 neighborhood.

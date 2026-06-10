@@ -14,15 +14,10 @@ class TestAlphaComposite:
 
 class TestPoint:
     def test_point_lut_parity(self, PIL):
-        pil = PIL.Image.new("L", (20, 20), 100)
-        rs = Image.new("L", (20, 20), 100)
-        lut = [min(255, i + 50) for i in range(256)]
-        pil_out = pil.point(lut)
-        rs_out = rs.point(lut)
-        # Our point() always returns RGB; convert to L for parity
-        if rs_out.mode != pil_out.mode:
-            rs_out = rs_out.convert(pil_out.mode)
-        assert_images_equal(rs_out, pil_out)
+        pil = PIL.Image.new("L", (5, 5), 100)
+        rs = Image.new("L", (5, 5), 100)
+        lut = bytes([min(255, i + 50) for i in range(256)])
+        assert_images_equal(rs.point(lut), pil.point(lut))
 
 
 class TestEffectSpread:
@@ -52,11 +47,10 @@ class TestAnalysis:
         colors = img.getcolors(256)
         assert colors is not None
 
-    def test_getdata_works(self):
-        img = Image.new("RGB", (10, 10), (100, 100, 100))
-        data = img.getdata()
-        # Returns RGBA raw data (4 bytes per pixel = 400)
-        assert len(data) in (300, 400)
+    def test_getdata_rgb_parity(self, PIL):
+        pil = PIL.Image.new("RGB", (5, 5), (100, 150, 200))
+        rs = Image.new("RGB", (5, 5), (100, 150, 200))
+        assert rs.tobytes() == pil.tobytes()
 
     def test_getprojection_works(self):
         img = Image.new("L", (10, 10), 128)

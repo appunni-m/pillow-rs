@@ -82,18 +82,14 @@ def contain(image: Image, size, method=None) -> Image:
 
 
 def cover(image: Image, size, method=None) -> Image:
-    """Resize to cover size, preserving aspect ratio, then crop."""
+    """Resize to cover size (scale so smallest dimension matches target). PIL-compatible."""
     from .enums import Resampling
     if method is None:
         method = Resampling.BICUBIC
     w, h = image.size
     tw, th = size
     scale = max(tw / w, th / h)
-    resized = image.resize((int(w * scale), int(h * scale)), method)
-    rw, rh = resized.size
-    left = (rw - tw) // 2
-    top = (rh - th) // 2
-    return resized.crop((left, top, left + tw, top + th))
+    return image.resize((int(w * scale + 0.5), int(h * scale + 0.5)), method)
 
 
 def fit(image: Image, size, method=None, bleed=0.0, centering=(0.5, 0.5)):
