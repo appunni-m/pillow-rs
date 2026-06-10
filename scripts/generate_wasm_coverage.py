@@ -143,11 +143,16 @@ with open('/tmp/wasm_cover.js','w') as f: f.write(js)
 result = subprocess.run(['node','/tmp/wasm_cover.js'], capture_output=True, text=True, timeout=30)
 wasm = json.loads(result.stdout.strip()) if result.returncode==0 else {"CRASH":result.stderr[:100]}
 
-# Compare
+# Compare — normalize types (tuple→list) for fair comparison
+def normalize(v):
+    if isinstance(v, tuple): return list(v)
+    if isinstance(v, list): return v
+    return v
+
 results = []
 passed = failed = 0
 for name in sorted(ref):
-    py_val, w_val = ref[name], wasm.get(name)
+    py_val, w_val = normalize(ref[name]), normalize(wasm.get(name))
     match = py_val == w_val
     if match: passed += 1; results.append((name,"✅",""))
     else: failed += 1; results.append((name,"❌",f"Py={str(py_val)[:20]} WASM={str(w_val)[:20]}"))

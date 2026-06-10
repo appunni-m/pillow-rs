@@ -12,14 +12,18 @@ use crate::image::Image;
 #[derive(Debug)]
 pub struct Draw {
     image: Image,
+    /// Original mode before draw canvas created. Used to convert back on image_clone().
+    orig_mode: Option<String>,
 }
 
 impl Draw {
     /// Create a new drawing context.
     pub fn new(image: Image) -> Self {
-        Draw {
-            image,
-        }
+        let mode = {
+            let mut clone = image.clone();
+            clone.mode().ok()
+        };
+        Draw { image, orig_mode: mode }
     }
 
     /// Draw a line from (x0,y0) to (x1,y1). Bresenham's algorithm.
@@ -214,9 +218,20 @@ impl Draw {
         Ok(())
     }
 
-    /// Return a clone of the current image state (for inspection without consuming Draw).
+    /// Return a clone of the current image state, converted back to original mode.
     pub fn image_clone(&self) -> Image {
-        self.image.clone()
+        let mut img = self.image.clone();
+        if let Some(ref orig) = self.orig_mode {
+            if let Ok(current) = img.mode() {
+                if current != *orig && *orig != "RGBA" {
+                    // Convert RGBA back to RGB/L if that was the original mode
+                    if let Ok(converted) = img.convert(orig, None, None, None, None) {
+                        return converted;
+                    }
+                }
+            }
+        }
+        img
     }
 
     /// Draw an arc (partial ellipse outline).

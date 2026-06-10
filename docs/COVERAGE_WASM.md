@@ -1,15 +1,15 @@
 # pillow-rs WASM Coverage
 
-> Auto-generated: 2026-06-10 17:45:42 | Node.js | pillow-rs Python vs WASM cross-validation
+> Auto-generated: 2026-06-10 17:50:51 | Node.js | pillow-rs Python vs WASM cross-validation
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
 | **WASM operations tested** | 67 |
-| **WASM matches Python** | 59 |
-| **Mismatch** | 8 |
-| **WASM vs Python parity** | **88%** |
+| **WASM matches Python** | 63 |
+| **Mismatch** | 4 |
+| **WASM vs Python parity** | **94%** |
 | **Python PIL parity tests** | 202/202 ✅ |
 | **Python trust coverage** | 100% (135/135) |
 | **WASM exports** | 135 |
@@ -32,9 +32,9 @@
 | convert_RGBA | ✅ |  |
 | copy | ✅ |  |
 | crop | ✅ |  |
-| draw_ellipse | ❌ | Py=1200 WASM=1600 |
-| draw_line | ❌ | Py=1200 WASM=1600 |
-| draw_rect | ❌ | Py=1200 WASM=1600 |
+| draw_ellipse | ✅ |  |
+| draw_line | ✅ |  |
+| draw_rect | ✅ |  |
 | enhance_bright | ✅ |  |
 | enhance_color | ✅ |  |
 | enhance_contrast | ✅ |  |
@@ -47,12 +47,12 @@
 | filter_SMOOTH | ✅ |  |
 | frombytes | ✅ |  |
 | gaussian | ✅ |  |
-| getbands | ❌ | Py=('R', 'G', 'B') WASM=['R', 'G', 'B'] |
+| getbands | ✅ |  |
 | getbbox | ✅ |  |
 | getchannel | ✅ |  |
 | getdata | ✅ |  |
 | getextrema | ❌ | Py=3 WASM=6 |
-| getpixel | ❌ | Py=[255, 128, 0] WASM=[255, 128, 0, 255] |
+| getpixel_ok | ❌ | Py=True WASM=None |
 | height | ✅ |  |
 | histogram | ✅ |  |
 | load_ok | ❌ | Py=False WASM=True |
