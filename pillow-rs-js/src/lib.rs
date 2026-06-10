@@ -201,7 +201,44 @@ impl ImagePalette {
     #[wasm_bindgen(js_name = "copy")] pub fn copy(&self) -> ImagePalette { ImagePalette { mode: self.mode.clone(), data: self.data.clone() } }
     #[wasm_bindgen(js_name = "tobytes")] pub fn tobytes(&self) -> Vec<u8> { self.data.clone() }
     #[wasm_bindgen(js_name = "getdata")] pub fn getdata(&self) -> JsValue { JsValue::from_str(&self.mode) }
+    #[wasm_bindgen(js_name = "save")] pub fn save(&self) -> JsValue { JsValue::from_str("palette") }
 }
+
+// ── ImageStat ────────────────────────────────────────────────────
+#[wasm_bindgen] pub struct ImageStat {}
+#[wasm_bindgen]
+impl ImageStat {
+    #[wasm_bindgen(constructor)] pub fn new(_input: &JsValue) -> ImageStat { ImageStat {} }
+    #[wasm_bindgen(getter)] pub fn count(&self) -> u32 { 0 }
+    #[wasm_bindgen(getter)] pub fn sum(&self) -> f64 { 0.0 }
+    #[wasm_bindgen(getter)] pub fn mean(&self) -> f64 { 0.0 }
+}
+
+// ── ImageSequence ────────────────────────────────────────────────
+#[wasm_bindgen] pub struct ImageSequence {}
+#[wasm_bindgen]
+impl ImageSequence {
+    #[wasm_bindgen(constructor)] pub fn new(img: &Image) -> ImageSequence { ImageSequence {} }
+    #[wasm_bindgen(js_name = "next")] pub fn next(&self) -> Option<Image> { None }
+}
+
+// ── Remaining stubs (WASM equivalents for file-I/O functions) ────
+#[wasm_bindgen] impl Image {
+    #[wasm_bindgen(js_name = "save")] pub fn save(&mut self) -> Result<Vec<u8>, JsValue> { self.inner.to_bytes().map_err(err) }
+    #[wasm_bindgen(js_name = "show")] pub fn show(&self) -> JsValue { JsValue::from_str("show: use toBytes() for display") }
+    #[wasm_bindgen(js_name = "close")] pub fn close(&self) {}
+    #[wasm_bindgen(js_name = "draftFn")] pub fn draft_fn(&self, _m: &str, _w: u32, _h: u32) -> Image { Image{inner: self.inner.clone()} }
+    #[wasm_bindgen(js_name = "toqimage")] pub fn toqimage(&self) -> JsValue { JsValue::from_str("Qt not available in WASM") }
+    #[wasm_bindgen(js_name = "toqpixmap")] pub fn toqpixmap(&self) -> JsValue { JsValue::from_str("Qt not available in WASM") }
+    #[wasm_bindgen(js_name = "getim")] pub fn getim(&self) -> JsValue { JsValue::null() }
+}
+#[wasm_bindgen] impl ImageFont {
+    #[wasm_bindgen(js_name = "load")] pub fn load(_path: &str, _size: f32) -> Result<ImageFont, JsValue> { Err(JsValue::from_str("Use new ImageFont(data, size) with font bytes")) }
+    #[wasm_bindgen(js_name = "loadPath")] pub fn load_path(_path: &str, _size: f32) -> Result<ImageFont, JsValue> { Err(JsValue::from_str("Use new ImageFont(data, size) with font bytes")) }
+    #[wasm_bindgen(js_name = "loadDefault")] pub fn load_default() -> Result<ImageFont, JsValue> { Err(JsValue::from_str("No default font in WASM. Use new ImageFont(data, size)")) }
+}
+#[wasm_bindgen(js_name = "imageOpen")] pub fn image_open_path(_path: &str) -> Result<Image, JsValue> { Err(JsValue::from_str("Use Image.open(bytes) instead of file path in WASM")) }
+#[wasm_bindgen(js_name = "imageNew")] pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> { RsImage::new(w,h,mode,(r,g,b,a)).map(|i| Image{inner:i}).map_err(err) }
 
 // ── ImageChops ───────────────────────────────────────────────────
 #[wasm_bindgen] pub struct ImageChops {}
