@@ -302,6 +302,37 @@ impl Image {
         0
     }
 
+    /// Apply a lookup table or function to each pixel channel.
+    pub fn point(&mut self, lut: &[u8]) -> Result<Image, PilError> {
+        let img = self.ensure_loaded()?;
+        let rgb = img.to_rgb8();
+        let (w, h) = rgb.dimensions();
+        let mut out = image::RgbImage::new(w, h);
+        let lut_len = lut.len();
+        for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+            op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
+            op[1] = *lut.get(ip[1] as usize).unwrap_or(&ip[1]);
+            op[2] = *lut.get(ip[2] as usize).unwrap_or(&ip[2]);
+        }
+        Ok(Image {
+            inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out)),
+            format: self.format,
+        })
+    }
+
+    /// Simple spread/blur effect by averaging 3x3 neighborhood.
+    pub fn effect_spread(&self, distance: u32) -> Result<Image, PilError> {
+        let d = distance.min(10);
+        if d == 0 { return Ok(self.clone()); }
+        let mut clone = self.clone();
+        let img = clone.ensure_loaded()?;
+        let result = img.blur(d as f32);
+        Ok(Image {
+            inner: crate::lazy::LazyImage::Loaded(result),
+            format: self.format,
+        })
+    }
+
     pub fn to_bytes(&mut self) -> Result<Vec<u8>, PilError> {
         let img = self.ensure_loaded()?;
         Ok(img.as_bytes().to_vec())
