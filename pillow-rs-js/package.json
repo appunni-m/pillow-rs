@@ -1,0 +1,15 @@
+{
+  "name": "pillow-rs",
+  "version": "0.1.0",
+  "description": "Pillow drop-in replacement for the browser, powered by Rust/WASM",
+  "main": "pkg/pillow_rs_js.js",
+  "module": "pkg/pillow_rs_js.js",
+  "types": "pkg/pillow_rs_js.d.ts",
+  "files": ["pkg/"],
+  "scripts": {
+    "build": "wasm-pack build --target web",
+    "build:release": "wasm-pack build --target web --release"
+  },
+  "keywords": ["image", "pillow", "wasm", "rust"],
+  "license": "MIT"
+}

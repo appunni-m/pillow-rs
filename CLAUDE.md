@@ -59,3 +59,7 @@ All work starts from `manifest.yaml`. To add a new function:
 4. Add binding delegation in `pillow-rs-py` and `pillow-rs-js`
 5. Write tests with `@pytest.mark.covers(...)` markers
 6. Run tests, then `scripts/compute_coverage.py` to update coverage
+
+### Git
+- Never sign commits with `Co-Authored-By: Claude` or Anthropic references
+- Use your own git identity; the AI provides code, you own the commits

@@ -1,0 +1,16 @@
+/target/
+**/*.rs.bk
+*.pyc
+__pycache__/
+.pytest_cache/
+dist/
+*.so
+*.dylib
+*.dll
+*.wasm
+/pkg/
+/node_modules/
+coverage/report.json
+.python-version
+venv/
+.venv/
