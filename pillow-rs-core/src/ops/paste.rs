@@ -1,4 +1,7 @@
 //! Paste operations — image overlay, color fill, and mask-based alpha blending.
+//!
+//! paste_from_components() handles the Python→Rust type conversion for paste(),
+//! so the binding layer stays thin (~5 lines instead of ~65).
 
 use image::{DynamicImage, GenericImage, GenericImageView};
 
@@ -11,10 +14,16 @@ pub enum PasteSource {
     Color((u8, u8, u8, u8)),
 }
 
+impl PasteSource {
+    /// Build from extracted Rust values. Image takes priority over raw color values.
+    pub fn from_parts(image: Option<Image>, r: u8, g: u8, b: u8, a: u8) -> Self {
+        if let Some(img) = image { PasteSource::Image(img) }
+        else { PasteSource::Color((r, g, b, a)) }
+    }
+}
+
 impl Image {
     /// Paste source image or color onto self (mutates in-place, matching Pillow).
-    ///
-    /// `box_coords`: None = (0,0), 4-tuple = (left,top,right,bottom).
     pub fn paste(
         &mut self,
         source: PasteSource,
@@ -22,12 +31,8 @@ impl Image {
         mask: Option<&Image>,
     ) -> Result<(), PilError> {
         match source {
-            PasteSource::Image(ref src_img) => {
-                paste_image(self, src_img, box_coords, mask)?;
-            }
-            PasteSource::Color(rgba) => {
-                paste_color_fill(self, rgba, box_coords)?;
-            }
+            PasteSource::Image(ref src_img) => paste_image(self, src_img, box_coords, mask)?,
+            PasteSource::Color(rgba) => paste_color_fill(self, rgba, box_coords)?,
         }
         Ok(())
     }

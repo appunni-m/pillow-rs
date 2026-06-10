@@ -21,35 +21,17 @@ impl PyImage {
     #[classmethod]
     #[pyo3(signature = (mode, size, color=None))]
     fn new(_cls: &Bound<'_, PyType>, mode: &str, size: (u32, u32), color: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let c = if let Some(val) = color {
-            if let Ok(hex_str) = val.extract::<String>() {
-                pillow_rs_core::color::parse_color_str(&hex_str).map_err(map_error)?
-            } else if let Ok(i) = val.extract::<u8>() {
-                // PIL: single int fills only the first channel for multi-band modes
-                if mode == "L" || mode == "LA" {
-                    (i, i, i, 255)
-                } else {
-                    (i, 0, 0, 255)
-                }
-            } else if let Ok((r, g, b)) = val.extract::<(u8, u8, u8)>() {
-                (r, g, b, 255)
-            } else if let Ok((r, g, b, a)) = val.extract::<(u8, u8, u8, u8)>() {
-                (r, g, b, a)
-            } else if let Ok((l,)) = val.extract::<(u8,)>() {
-                // PIL: single-element tuple same as single int
-                if mode == "L" || mode == "LA" {
-                    (l, l, l, 255)
-                } else {
-                    (l, 0, 0, 255)
-                }
-            } else {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "color must be int, tuple, or string",
-                ));
-            }
-        } else {
-            (0, 0, 0, 0)
-        };
+        // Thin binding: extract Python types, delegate logic to core
+        let (hex, single, rgb, rgba) = if let Some(val) = color {
+            (
+                val.extract::<String>().ok(),
+                val.extract::<u8>().ok(),
+                val.extract::<(u8, u8, u8)>().ok(),
+                val.extract::<(u8, u8, u8, u8)>().ok(),
+            )
+        } else { (None, None, None, None) };
+        let c = pillow_rs_core::color::resolve_new_color(mode, hex.as_deref(), single, rgb, rgba)
+            .map_err(map_error)?;
         let img = RsImage::new(size.0, size.1, mode, c).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
@@ -132,66 +114,38 @@ impl PyImage {
         mask: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         use pillow_rs_core::ops::paste::PasteSource;
+        // Thin binding: extract Python types, core handles all logic
+        let is_abbreviated = box_coords.map_or(false, |b| b.downcast::<PyImage>().is_ok());
+        let effective_mask = if is_abbreviated { box_coords } else { mask };
 
-        // Handle abbreviated syntax: paste(im, mask) where box is actually mask
-        let (effective_box, effective_mask): (Option<&Bound<'_, PyAny>>, Option<&Bound<'_, PyAny>>) =
-            if let Some(box_val) = box_coords {
-                if box_val.downcast::<PyImage>().is_ok() {
-                    // Abbreviated: paste(im, mask) — box_val is actually mask
-                    (None, Some(box_val))
-                } else {
-                    (Some(box_val), mask)
-                }
-            } else {
-                (None, mask)
-            };
-
-        // Parse source: Image or color
-        let source = if let Ok(py_img) = im.downcast::<PyImage>() {
-            let borrowed = py_img.borrow();
-            PasteSource::Image(borrowed.inner.clone())
-        } else if let Ok((r, g, b)) = im.extract::<(u8, u8, u8)>() {
-            PasteSource::Color((r, g, b, 255))
-        } else if let Ok((r, g, b, a)) = im.extract::<(u8, u8, u8, u8)>() {
+        let src_image = im.downcast::<PyImage>().ok().map(|p| p.borrow().inner.clone());
+        let src_rgb = im.extract::<(u8, u8, u8)>().ok();
+        let src_rgba = im.extract::<(u8, u8, u8, u8)>().ok();
+        let src_int = im.extract::<u8>().ok();
+        let source = if let Some(img) = src_image {
+            PasteSource::Image(img)
+        } else if let Some((r, g, b, a)) = src_rgba {
             PasteSource::Color((r, g, b, a))
-        } else if let Ok(val) = im.extract::<u8>() {
-            PasteSource::Color((val, val, val, 255))
+        } else if let Some((r, g, b)) = src_rgb {
+            PasteSource::Color((r, g, b, 255))
+        } else if let Some(v) = src_int {
+            PasteSource::Color((v, v, v, 255))
         } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "im must be Image or color tuple",
-            ));
+            return Err(pyo3::exceptions::PyTypeError::new_err("im must be Image or color"));
         };
 
-        // Parse box: 2-tuple or 4-tuple
-        let parsed_box = if let Some(box_val) = effective_box {
-            if let Ok((x1, y1, x2, y2)) = box_val.extract::<(i32, i32, i32, i32)>() {
-                Some((x1, y1, x2, y2))
-            } else if let Ok((x, y)) = box_val.extract::<(i32, i32)>() {
-                Some((x, y, x, y))
-            } else {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "box must be (x,y) or (left,upper,right,lower)",
-                ));
-            }
-        } else {
-            None
+        let parsed_box = if is_abbreviated { None } else {
+            box_coords.and_then(|b| {
+                b.extract::<(i32,i32,i32,i32)>().ok()
+                    .or_else(|| b.extract::<(i32,i32)>().ok().map(|(x, y)| (x, y, x, y)))
+            })
         };
 
-        // Parse mask
-        let parsed_mask = if let Some(mask_val) = effective_mask {
-            let py_img = mask_val.downcast::<PyImage>().map_err(|_| {
-                pyo3::exceptions::PyTypeError::new_err("mask must be an Image")
-            })?;
-            let borrowed = py_img.borrow();
-            Some(borrowed.inner.clone())
-        } else {
-            None
-        };
+        let parsed_mask = effective_mask
+            .and_then(|m| m.downcast::<PyImage>().ok())
+            .map(|p| p.borrow().inner.clone());
 
-        let mask_ref = parsed_mask.as_ref();
-        self.inner
-            .paste(source, parsed_box, mask_ref)
-            .map_err(map_error)
+        self.inner.paste(source, parsed_box, parsed_mask.as_ref()).map_err(map_error)
     }
 
     fn split(&self) -> PyResult<Vec<PyImage>> {

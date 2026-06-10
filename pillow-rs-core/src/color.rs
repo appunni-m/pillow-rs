@@ -45,6 +45,29 @@ pub fn pil_grayscale(img: &DynamicImage) -> image::GrayImage {
     gray
 }
 
+/// Resolve a color value for a given image mode. The binding layer extracts
+/// Python types (int/tuple/string) and passes raw values here. Core handles
+/// ALL mode-aware logic: single-int semantics, tuple lengths, defaults.
+pub fn resolve_new_color(
+    mode: &str,
+    hex_str: Option<&str>,
+    single_value: Option<u8>,
+    rgb: Option<(u8, u8, u8)>,
+    rgba: Option<(u8, u8, u8, u8)>,
+) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
+    if let Some(s) = hex_str {
+        return parse_color_str(s);
+    }
+    let is_luma = mode == "L" || mode == "LA";
+    if let Some(v) = single_value {
+        if is_luma { return Ok((v, v, v, 255)); }
+        else { return Ok((v, 0, 0, 255)); } // PIL: single int to RGB = (R,0,0)
+    }
+    if let Some((r, g, b)) = rgb { return Ok((r, g, b, 255)); }
+    if let Some(rgba) = rgba { return Ok(rgba); }
+    Ok((0, 0, 0, 0)) // default: black
+}
+
 /// Convert an RGB image to LA using PIL's BT.601 formula + opaque alpha.
 pub fn pil_grayscale_alpha(img: &DynamicImage) -> image::GrayAlphaImage {
     let gray = pil_grayscale(img);
