@@ -37,7 +37,7 @@ for op,meth in [("bright","enhance_brightness"),("contrast","enhance_contrast"),
                 ("color","enhance_color"),("sharp","enhance_sharpness")]:
     py(f"enhance_{op}_ok", len(getattr(F()._rust_image,meth)(1.5).tobytes()) > 0)
 
-py("getpixel_ok", len(F().getpixel((5,5))) >= 3)
+py("getpixel_ok", len(F().getpixel((5,5))) >= 3)  # RGB=3, RGBA=4 — both valid
 i=F(); i.putpixel((0,0),(0,255,0)); py("putpixel_ok", True)
 py("point_ok", len(F()._rust_image.point(bytes(range(256))).tobytes()) > 0)
 i=F(); i.putalpha(128); py("putalpha_ok", len(i.tobytes()) > 0)
