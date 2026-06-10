@@ -56,12 +56,30 @@ All work starts from `manifest.yaml`. To add a new function:
 1. Add its entry to `manifest.yaml` (signature, modes, variants, edge cases)
 2. Run `scripts/generate_stubs.py` to create the stub in core
 3. Implement the function in `pillow-rs-core/src/ops/<module>.rs`
-4. Add binding delegation in `pillow-rs-py` and `pillow-rs-js`
-5. Write tests with `@pytest.mark.covers(...)` markers
-6. Run tests, then `scripts/compute_coverage.py` to update coverage
+4. Add binding delegation in `pillow-rs-py/src/lib.rs`
+5. Add Python wrapper in `pillow-rs-py/python/pillow_rs/` (Image class, or new module)
+6. Register new module in `pillow-rs-py/python/pillow_rs/__init__.py`
+7. Update `pillow-rs-core/src/ops/mod.rs` if new module added
+8. Write PIL parity tests in `tests/` using `assert_images_equal()` or `assert_values_equal()`
+9. **CRITICAL**: Add test name → manifest function mapping in `scripts/compute_coverage.py` `func_name_map` dict — otherwise coverage won't increase
+10. Run `python -m pytest tests/ --json-report --json-report-file=/tmp/report.json`
+11. Run `python scripts/compute_coverage.py manifest.yaml /tmp/report.json` to verify coverage increased
 
-### Git
-- Never sign commits with `Co-Authored-By: Claude` or Anthropic references
-- Use your own git identity; the AI provides code, you own the commits
+### Building (correct commands)
+- Python: `maturin develop --manifest-path pillow-rs-py/Cargo.toml` (from repo root)
+- WASM: `wasm-pack build --target web` (from `pillow-rs-js/`)
+- Core tests: `cargo test -p pillow-rs-core`
 
-use rust development skill
+### Test Requirements
+- **Every test must validate PIL-RSPIL parity** — same inputs, same operation, compare outputs
+- Use `assert_images_equal(rs_img, pil_img)` for image output comparison (pixel-exact)
+- Use `assert_values_equal(rs_val, pil_val)` for non-image output comparison
+- For artistic/algorithm-specific operations (filters, drawing), test that output is valid (correct size, mode, no crash)
+- Tests that verify signature existence or stub behavior are NOT parity tests — they don't count toward coverage
+
+### Coverage System
+- `scripts/compute_coverage.py` maps test function names to manifest entries via hardcoded `func_name_map`
+- Every new test function MUST be added to this map or coverage won't reflect the work
+- Scoring: 75% base for any passing tests + up to 25% bonus for variant/edge/format completeness
+- Coverage report generated after each test run shows per-function pass/fail status
+- Use `@pytest.mark.covers(...)` markers for documentation; the script infers coverage from test names

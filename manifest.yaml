@@ -1,863 +1,1389 @@
-# pillow-rs API surface — complete Pillow 12.2.0 inventory
-# Generated from inspect.signature() on installed Pillow 12.2.0
-version: "0.2.0"
-pillow_version: "12.2.0"
-
+version: 0.2.0
+pillow_version: 12.2.0
 modules:
   Image:
     class_methods:
-      - name: open
-        signature: "open(fp: str|bytes|Path, mode: str='r', formats: list|None=None) -> Image"
-        supported_modes: [L, LA, RGB, RGBA]
-        supported_formats: [PNG, JPEG, GIF, BMP, TIFF, WEBP, ICO]
-        param_variants: [{fp: path}, {fp: bytes}]
-        edge_cases: [nonexistent_file, invalid_bytes, empty_bytes]
-        status: implemented
-        pillow_since: "1.0"
-
-      - name: new
-        signature: "new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0) -> Image"
-        supported_modes: [L, LA, RGB, RGBA, 1]
-        param_variants:
-          - {mode: RGB, size: [100,100]}
-          - {mode: L, size: [100,100]}
-          - {mode: RGBA, size: [100,100]}
-          - {mode: RGB, size: [100,100], color: int}
-          - {mode: RGB, size: [100,100], color: hex_string}
-          - {mode: RGB, size: [100,100], color: rgb_tuple}
-          - {mode: LA, size: [100,100], color: la_tuple}
-          - {mode: RGB, size: [100,100], color: rgba_tuple}
-        edge_cases: [zero_width, zero_height, invalid_mode]
-        status: implemented
-        pillow_since: "1.0"
-
+    - name: open
+      signature: 'open(fp: str|bytes|Path, mode: str=''r'', formats: list|None=None)
+        -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      supported_formats:
+      - PNG
+      - JPEG
+      - GIF
+      - BMP
+      - TIFF
+      - WEBP
+      - ICO
+      param_variants:
+      - fp: path
+      - fp: bytes
+      edge_cases:
+      - nonexistent_file
+      - invalid_bytes
+      - empty_bytes
+      status: implemented
+      pillow_since: '1.0'
+    - name: new
+      signature: 'new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0)
+        -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      param_variants:
+      - mode: RGB
+        size:
+        - 100
+        - 100
+      - mode: L
+        size:
+        - 100
+        - 100
+      - mode: RGBA
+        size:
+        - 100
+        - 100
+      - mode: RGB
+        size:
+        - 100
+        - 100
+        color: int
+      - mode: RGB
+        size:
+        - 100
+        - 100
+        color: hex_string
+      - mode: RGB
+        size:
+        - 100
+        - 100
+        color: rgb_tuple
+      - mode: LA
+        size:
+        - 100
+        - 100
+        color: la_tuple
+      - mode: RGB
+        size:
+        - 100
+        - 100
+        color: rgba_tuple
+      edge_cases:
+      - zero_width
+      - zero_height
+      - invalid_mode
+      status: implemented
+      pillow_since: '1.0'
     methods:
-      - name: save
-        signature: "save(self, fp: str|Path|IO[bytes], format: str|None=None, **params) -> None"
-        supported_formats: [PNG, JPEG, GIF, BMP, TIFF, WEBP]
-        param_variants:
-          - {fp: path}
-          - {fp: path, format: PNG}
-          - {fp: path, format: JPEG}
-          - {fp: path, format: GIF}
-          - {fp: path, format: WEBP}
-        edge_cases: [invalid_path, unsupported_format, read_only_directory]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: resize
-        signature: "resize(self, size: tuple[int,int]|list[int], resample: int|None=None, box: tuple|None=None, reducing_gap: float|None=None) -> Image"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants:
-          - {size: [100,100]}
-          - {size: [50,50], resample: NEAREST}
-          - {size: [200,200], resample: BILINEAR}
-          - {size: [200,200], resample: BICUBIC}
-          - {size: [200,200], resample: LANCZOS}
-        edge_cases: [same_size_noop, zero_dimension, upscale, downscale]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: crop
-        signature: "crop(self, box: tuple[float,float,float,float]|None=None) -> Image"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{box: [0,0,50,50]}, {box: [10,10,90,90]}]
-        edge_cases: [out_of_bounds, zero_size_crop, full_image_crop, negative_coords]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: rotate
-        signature: "rotate(self, angle: float, resample: Resampling=NEAREST, expand: int|bool=False, center: tuple|None=None, translate: tuple|None=None, fillcolor: float|tuple|str|None=None) -> Image"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants:
-          - {angle: 90}
-          - {angle: 180}
-          - {angle: 270}
-          - {angle: 45}
-          - {angle: 90, expand: true}
-        edge_cases: [angle_zero, angle_negative, angle_360]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: transpose
-        signature: "transpose(self, method: Transpose) -> Image"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants:
-          - {method: FLIP_LEFT_RIGHT}
-          - {method: FLIP_TOP_BOTTOM}
-          - {method: ROTATE_90}
-          - {method: ROTATE_180}
-          - {method: ROTATE_270}
-          - {method: TRANSPOSE}
-          - {method: TRANSVERSE}
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: convert
-        signature: "convert(self, mode: str|None=None, matrix: tuple[float,...]|None=None, dither: Dither|None=None, palette: Palette=WEB, colors: int=256) -> Image"
-        supported_modes: [L, LA, RGB, RGBA, 1, P, CMYK, YCbCr, HSV, I, F]
-        param_variants:
-          - {mode: L}
-          - {mode: LA}
-          - {mode: RGB}
-          - {mode: RGBA}
-          - {mode: "1"}
-          - {mode: "1", dither: NONE}
-          - {mode: "1", dither: FLOYDSTEINBERG}
-          - {mode: P}
-          - {mode: P, palette: WEB}
-          - {mode: P, palette: ADAPTIVE, colors: 128}
-          - {mode: RGB, matrix: 12tuple}
-          - {mode: RGB, matrix: 4tuple}
-        edge_cases: [same_mode_noop, invalid_mode, invalid_matrix_size]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: paste
-        signature: "paste(self, im: Image|str|float|tuple[float,...], box: Image|tuple[int,int,int,int]|tuple[int,int]|None=None, mask: Image|None=None) -> None"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants:
-          - {im: image, box: [0,0]}
-          - {im: image, box: [10,10,60,60]}
-          - {im: color_tuple}
-          - {im: image, mask: image}
-          - {im: image, box: [0,0], mask: image}
-        edge_cases: [source_larger_than_dest, negative_coords, mode_mismatch, mask_size_mismatch]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: filter
-        signature: "filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter]) -> Image"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants:
-          - {filter: BLUR}
-          - {filter: CONTOUR}
-          - {filter: DETAIL}
-          - {filter: EDGE_ENHANCE}
-          - {filter: EDGE_ENHANCE_MORE}
-          - {filter: EMBOSS}
-          - {filter: FIND_EDGES}
-          - {filter: SHARPEN}
-          - {filter: SMOOTH}
-          - {filter: SMOOTH_MORE}
-          - {filter: GaussianBlur}
-          - {filter: BoxBlur}
-          - {filter: UnsharpMask}
-          - {filter: MaxFilter}
-          - {filter: MinFilter}
-          - {filter: MedianFilter}
-          - {filter: ModeFilter}
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: copy
-        signature: "copy(self) -> Image"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{}]
-        edge_cases: []
-        status: implemented
-        pillow_since: "1.0"
-
-      - name: split
-        signature: "split(self) -> tuple[Image,...]"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: [single_band_image]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getbands
-        signature: "getbands(self) -> tuple[str,...]"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: thumbnail
-        signature: "thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC, reducing_gap: float|None=2.0) -> None"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants:
-          - {size: [100,100]}
-          - {size: [50,50], resample: LANCZOS}
-        edge_cases: [larger_than_image, zero_size]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: tobytes
-        signature: "tobytes(self, encoder_name: str='raw', *args) -> bytes"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{}, {encoder_name: raw}]
-        edge_cases: []
-        status: implemented
-        pillow_since: "1.0"
-
-      - name: alpha_composite
-        signature: "alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source: Sequence[int]=(0,0)) -> None"
-        supported_modes: [RGBA]
-        param_variants: [{im: image}]
-        edge_cases: [mode_mismatch]
-        status: stub
-        pillow_since: "4.0"
-
-      - name: close
-        signature: "close(self) -> None"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getbbox
-        signature: "getbbox(self, *, alpha_only: bool=True) -> tuple[int,int,int,int]|None"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{}, {alpha_only: true}, {alpha_only: false}]
-        edge_cases: [blank_image]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getchannel
-        signature: "getchannel(self, channel: int|str) -> Image"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{channel: R}, {channel: G}, {channel: B}, {channel: A}]
-        edge_cases: [invalid_channel]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getcolors
-        signature: "getcolors(self, maxcolors: int=256) -> list[tuple[int,tuple[int,...]]]|list[tuple[int,float]]|None"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}, {maxcolors: 16}]
-        edge_cases: [too_many_colors]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getdata
-        signature: "getdata(self, band: int|None=None) -> core.ImagingCore"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{}, {band: 0}]
-        edge_cases: [invalid_band]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getextrema
-        signature: "getextrema(self) -> tuple[float,float]|tuple[tuple[int,int],...]"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getpixel
-        signature: "getpixel(self, xy: tuple[int,int]|list[int]) -> float|tuple[int,...]|None"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{xy: [0,0]}]
-        edge_cases: [out_of_bounds]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: getprojection
-        signature: "getprojection(self) -> tuple[list[int],list[int]]"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: histogram
-        signature: "histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None) -> list[int]"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}, {mask: image}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: load
-        signature: "load(self) -> PixelAccess|None"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: point
-        signature: "point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{lut: callable}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: putalpha
-        signature: "putalpha(self, alpha: Image|int) -> None"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{alpha: int}, {alpha: image}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: putdata
-        signature: "putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0, offset: float=0.0) -> None"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{data: sequence}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: putpixel
-        signature: "putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int]) -> None"
-        supported_modes: [L, LA, RGB, RGBA, 1, P]
-        param_variants: [{xy: [0,0], value: tuple}]
-        edge_cases: [out_of_bounds]
-        status: stub
-        pillow_since: "1.0"
-
-      - name: quantize
-        signature: "quantize(self, colors: int=256, method: int|None=None, kmeans: int=0, palette: Image|None=None, dither: Dither=FLOYDSTEINBERG) -> Image"
-        supported_modes: [RGB, RGBA]
-        param_variants: [{colors: 256}, {colors: 16}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: reduce
-        signature: "reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{factor: 2}]
-        edge_cases: []
-        status: stub
-        pillow_since: "9.0"
-
-      - name: seek
-        signature: "seek(self, frame: int) -> None"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{frame: 0}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: tell
-        signature: "tell(self) -> int"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: transform
-        signature: "transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler, data: Sequence|None=None, resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: []
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: verify
-        signature: "verify(self) -> None"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: effect_spread
-        signature: "effect_spread(self, distance: int) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{distance: 3}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-
-      - name: entropy
-        signature: "entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None) -> float"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}, {mask: image}]
-        edge_cases: []
-        status: stub
-        pillow_since: "5.0"
-
-      - name: draft
-        signature: "draft(self, mode: str|None, size: tuple[int,int]|None) -> tuple[str,tuple[int,int,float,float]]|None"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: []
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: remap_palette
-        signature: "remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None) -> Image"
-        supported_modes: [P]
-        param_variants: [{dest_map: list}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
-      - name: tobitmap
-        signature: "tobitmap(self, name: str='image') -> bytes"
-        supported_modes: [1]
-        param_variants: [{}, {name: test}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-
+    - name: save
+      signature: 'save(self, fp: str|Path|IO[bytes], format: str|None=None, **params)
+        -> None'
+      supported_formats:
+      - PNG
+      - JPEG
+      - GIF
+      - BMP
+      - TIFF
+      - WEBP
+      param_variants:
+      - fp: path
+      - fp: path
+        format: PNG
+      - fp: path
+        format: JPEG
+      - fp: path
+        format: GIF
+      - fp: path
+        format: WEBP
+      edge_cases:
+      - invalid_path
+      - unsupported_format
+      - read_only_directory
+      status: implemented
+      pillow_since: '1.0'
+    - name: resize
+      signature: 'resize(self, size: tuple[int,int]|list[int], resample: int|None=None,
+        box: tuple|None=None, reducing_gap: float|None=None) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - size:
+        - 100
+        - 100
+      - size:
+        - 50
+        - 50
+        resample: NEAREST
+      - size:
+        - 200
+        - 200
+        resample: BILINEAR
+      - size:
+        - 200
+        - 200
+        resample: BICUBIC
+      - size:
+        - 200
+        - 200
+        resample: LANCZOS
+      edge_cases:
+      - same_size_noop
+      - zero_dimension
+      - upscale
+      - downscale
+      status: implemented
+      pillow_since: '1.0'
+    - name: crop
+      signature: 'crop(self, box: tuple[float,float,float,float]|None=None) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - box:
+        - 0
+        - 0
+        - 50
+        - 50
+      - box:
+        - 10
+        - 10
+        - 90
+        - 90
+      edge_cases:
+      - out_of_bounds
+      - zero_size_crop
+      - full_image_crop
+      - negative_coords
+      status: implemented
+      pillow_since: '1.0'
+    - name: rotate
+      signature: 'rotate(self, angle: float, resample: Resampling=NEAREST, expand:
+        int|bool=False, center: tuple|None=None, translate: tuple|None=None, fillcolor:
+        float|tuple|str|None=None) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - angle: 90
+      - angle: 180
+      - angle: 270
+      - angle: 45
+      - angle: 90
+        expand: true
+      edge_cases:
+      - angle_zero
+      - angle_negative
+      - angle_360
+      status: implemented
+      pillow_since: '1.0'
+    - name: transpose
+      signature: 'transpose(self, method: Transpose) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - method: FLIP_LEFT_RIGHT
+      - method: FLIP_TOP_BOTTOM
+      - method: ROTATE_90
+      - method: ROTATE_180
+      - method: ROTATE_270
+      - method: TRANSPOSE
+      - method: TRANSVERSE
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: convert
+      signature: 'convert(self, mode: str|None=None, matrix: tuple[float,...]|None=None,
+        dither: Dither|None=None, palette: Palette=WEB, colors: int=256) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      - CMYK
+      - YCbCr
+      - HSV
+      - I
+      - F
+      param_variants:
+      - mode: L
+      - mode: LA
+      - mode: RGB
+      - mode: RGBA
+      - mode: '1'
+      - mode: '1'
+        dither: NONE
+      - mode: '1'
+        dither: FLOYDSTEINBERG
+      - mode: P
+      - mode: P
+        palette: WEB
+      - mode: P
+        palette: ADAPTIVE
+        colors: 128
+      - mode: RGB
+        matrix: 12tuple
+      - mode: RGB
+        matrix: 4tuple
+      edge_cases:
+      - same_mode_noop
+      - invalid_mode
+      - invalid_matrix_size
+      status: implemented
+      pillow_since: '1.0'
+    - name: paste
+      signature: 'paste(self, im: Image|str|float|tuple[float,...], box: Image|tuple[int,int,int,int]|tuple[int,int]|None=None,
+        mask: Image|None=None) -> None'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - im: image
+        box:
+        - 0
+        - 0
+      - im: image
+        box:
+        - 10
+        - 10
+        - 60
+        - 60
+      - im: color_tuple
+      - im: image
+        mask: image
+      - im: image
+        box:
+        - 0
+        - 0
+        mask: image
+      edge_cases:
+      - source_larger_than_dest
+      - negative_coords
+      - mode_mismatch
+      - mask_size_mismatch
+      status: implemented
+      pillow_since: '1.0'
+    - name: filter
+      signature: 'filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter])
+        -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - filter: BLUR
+      - filter: CONTOUR
+      - filter: DETAIL
+      - filter: EDGE_ENHANCE
+      - filter: EDGE_ENHANCE_MORE
+      - filter: EMBOSS
+      - filter: FIND_EDGES
+      - filter: SHARPEN
+      - filter: SMOOTH
+      - filter: SMOOTH_MORE
+      - filter: GaussianBlur
+      - filter: BoxBlur
+      - filter: UnsharpMask
+      - filter: MaxFilter
+      - filter: MinFilter
+      - filter: MedianFilter
+      - filter: ModeFilter
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: copy
+      signature: copy(self) -> Image
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - {}
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: split
+      signature: split(self) -> tuple[Image,...]
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases:
+      - single_band_image
+      status: implemented
+      pillow_since: '1.0'
+    - name: getbands
+      signature: getbands(self) -> tuple[str,...]
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: thumbnail
+      signature: 'thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC,
+        reducing_gap: float|None=2.0) -> None'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - size:
+        - 100
+        - 100
+      - size:
+        - 50
+        - 50
+        resample: LANCZOS
+      edge_cases:
+      - larger_than_image
+      - zero_size
+      status: implemented
+      pillow_since: '1.0'
+    - name: tobytes
+      signature: 'tobytes(self, encoder_name: str=''raw'', *args) -> bytes'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      - encoder_name: raw
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: alpha_composite
+      signature: 'alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source:
+        Sequence[int]=(0,0)) -> None'
+      supported_modes:
+      - RGBA
+      param_variants:
+      - im: image
+      edge_cases:
+      - mode_mismatch
+      status: implemented
+      pillow_since: '4.0'
+    - name: close
+      signature: close(self) -> None
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - {}
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: getbbox
+      signature: 'getbbox(self, *, alpha_only: bool=True) -> tuple[int,int,int,int]|None'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - {}
+      - alpha_only: true
+      - alpha_only: false
+      edge_cases:
+      - blank_image
+      status: implemented
+      pillow_since: '1.0'
+    - name: getchannel
+      signature: 'getchannel(self, channel: int|str) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - channel: R
+      - channel: G
+      - channel: B
+      - channel: A
+      edge_cases:
+      - invalid_channel
+      status: stub
+      pillow_since: '1.0'
+    - name: getcolors
+      signature: 'getcolors(self, maxcolors: int=256) -> list[tuple[int,tuple[int,...]]]|list[tuple[int,float]]|None'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      - maxcolors: 16
+      edge_cases:
+      - too_many_colors
+      status: stub
+      pillow_since: '1.0'
+    - name: getdata
+      signature: 'getdata(self, band: int|None=None) -> core.ImagingCore'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      - band: 0
+      edge_cases:
+      - invalid_band
+      status: stub
+      pillow_since: '1.0'
+    - name: getextrema
+      signature: getextrema(self) -> tuple[float,float]|tuple[tuple[int,int],...]
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: getpixel
+      signature: 'getpixel(self, xy: tuple[int,int]|list[int]) -> float|tuple[int,...]|None'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - xy:
+        - 0
+        - 0
+      edge_cases:
+      - out_of_bounds
+      status: implemented
+      pillow_since: '1.0'
+    - name: getprojection
+      signature: getprojection(self) -> tuple[list[int],list[int]]
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: histogram
+      signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
+        -> list[int]'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      - mask: image
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: load
+      signature: load(self) -> PixelAccess|None
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: point
+      signature: 'point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None)
+        -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - lut: callable
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: putalpha
+      signature: 'putalpha(self, alpha: Image|int) -> None'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - alpha: int
+      - alpha: image
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: putdata
+      signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0,
+        offset: float=0.0) -> None'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - data: sequence
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: putpixel
+      signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int])
+        -> None'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+      param_variants:
+      - xy:
+        - 0
+        - 0
+        value: tuple
+      edge_cases:
+      - out_of_bounds
+      status: implemented
+      pillow_since: '1.0'
+    - name: quantize
+      signature: 'quantize(self, colors: int=256, method: int|None=None, kmeans: int=0,
+        palette: Image|None=None, dither: Dither=FLOYDSTEINBERG) -> Image'
+      supported_modes:
+      - RGB
+      - RGBA
+      param_variants:
+      - colors: 256
+      - colors: 16
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: reduce
+      signature: 'reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None)
+        -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - factor: 2
+      edge_cases: []
+      status: stub
+      pillow_since: '9.0'
+    - name: seek
+      signature: 'seek(self, frame: int) -> None'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - frame: 0
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: tell
+      signature: tell(self) -> int
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: transform
+      signature: 'transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler,
+        data: Sequence|None=None, resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None)
+        -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants: []
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: verify
+      signature: verify(self) -> None
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: effect_spread
+      signature: 'effect_spread(self, distance: int) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - distance: 3
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
+    - name: entropy
+      signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
+        -> float'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      - mask: image
+      edge_cases: []
+      status: stub
+      pillow_since: '5.0'
+    - name: draft
+      signature: 'draft(self, mode: str|None, size: tuple[int,int]|None) -> tuple[str,tuple[int,int,float,float]]|None'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants: []
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: remap_palette
+      signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None)
+        -> Image'
+      supported_modes:
+      - P
+      param_variants:
+      - dest_map: list
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: tobitmap
+      signature: 'tobitmap(self, name: str=''image'') -> bytes'
+      supported_modes:
+      - 1
+      param_variants:
+      - {}
+      - name: test
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
     properties:
-      - name: size
-        type: "tuple[int,int]"
-        modes: [L, LA, RGB, RGBA, 1, P]
-      - name: width
-        type: int
-        modes: [L, LA, RGB, RGBA, 1, P]
-      - name: height
-        type: int
-        modes: [L, LA, RGB, RGBA, 1, P]
-      - name: mode
-        type: str
-        modes: [L, LA, RGB, RGBA, 1, P]
-      - name: format
-        type: "str|None"
-        modes: [L, LA, RGB, RGBA, 1, P]
-      - name: info
-        type: dict
-        modes: [L, LA, RGB, RGBA, 1, P]
-
+    - name: size
+      type: tuple[int,int]
+      modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+    - name: width
+      type: int
+      modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+    - name: height
+      type: int
+      modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+    - name: mode
+      type: str
+      modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+    - name: format
+      type: str|None
+      modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
+    - name: info
+      type: dict
+      modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - 1
+      - P
   ImageModule:
     functions:
-      - name: merge
-        signature: "merge(mode: str, bands: Sequence[Image]) -> Image"
-        supported_modes: [L, LA, RGB, RGBA]
-        param_variants: [{mode: RGB}]
-        edge_cases: [mode_band_mismatch]
-        status: stub
-        pillow_since: "1.0"
-      - name: blend
-        signature: "blend(im1: Image, im2: Image, alpha: float) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{alpha: 0.5}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: composite
-        signature: "composite(image1: Image, image2: Image, mask: Image) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: eval
-        signature: "eval(image: Image, *args: Callable[[int],float]) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: fromarray
-        signature: "fromarray(obj: SupportsArrayInterface, mode: str|None=None) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{obj: numpy}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: frombytes
-        signature: "frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray, decoder_name: str='raw', *args) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{mode: RGB, size: [10,10]}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: effect_noise
-        signature: "effect_noise(size: tuple[int,int], sigma: float) -> Image"
-        supported_modes: [L, RGB, RGBA]
-        param_variants: [{size: [100,100], sigma: 10}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-
+    - name: merge
+      signature: 'merge(mode: str, bands: Sequence[Image]) -> Image'
+      supported_modes:
+      - L
+      - LA
+      - RGB
+      - RGBA
+      param_variants:
+      - mode: RGB
+      edge_cases:
+      - mode_band_mismatch
+      status: implemented
+      pillow_since: '1.0'
+    - name: blend
+      signature: 'blend(im1: Image, im2: Image, alpha: float) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - alpha: 0.5
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: composite
+      signature: 'composite(image1: Image, image2: Image, mask: Image) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: eval
+      signature: 'eval(image: Image, *args: Callable[[int],float]) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: fromarray
+      signature: 'fromarray(obj: SupportsArrayInterface, mode: str|None=None) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - obj: numpy
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: frombytes
+      signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray,
+        decoder_name: str=''raw'', *args) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - mode: RGB
+        size:
+        - 10
+        - 10
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: effect_noise
+      signature: 'effect_noise(size: tuple[int,int], sigma: float) -> Image'
+      supported_modes:
+      - L
+      - RGB
+      - RGBA
+      param_variants:
+      - size:
+        - 100
+        - 100
+        sigma: 10
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
   ImageDraw:
     methods:
-      - name: arc
-        signature: "arc(self, xy: Coords, start: float, end: float, fill=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: box, start: 0, end: 180}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: line
-        signature: "line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: line}, {xy: line, width: 5}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: rectangle
-        signature: "rectangle(self, xy: Coords, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: box}, {xy: box, fill: color, outline: color}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: ellipse
-        signature: "ellipse(self, xy: Coords, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: box}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: polygon
-        signature: "polygon(self, xy: Coords, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: polygon}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: text
-        signature: "text(self, xy: tuple[float,float], text: str, fill=None, font=None, anchor: str|None=None, spacing: float=4, align: str='left', direction: str|None=None, features: list|None=None, language: str|None=None, stroke_width: float=0, stroke_fill=None, embedded_color: bool=False) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: [0,0], text: "hello"}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: multiline_text
-        signature: "multiline_text(self, xy: tuple[float,float], text: str, fill=None, font=None, anchor=None, spacing: float=4, align: str='left', direction=None, features=None, language=None, stroke_width: float=0, stroke_fill=None, embedded_color=False, *, font_size=None) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: [0,0], text: "hello\nworld"}]
-        edge_cases: []
-        status: stub
-        pillow_since: "4.0"
-      - name: circle
-        signature: "circle(self, xy: Sequence[float], radius: float, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: [50,50], radius: 20}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-      - name: rounded_rectangle
-        signature: "rounded_rectangle(self, xy: Coords, radius: float=0, fill=None, outline=None, width: int=1, *, corners: tuple|None=None) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: box, radius: 10}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-      - name: regular_polygon
-        signature: "regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: []
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-      - name: chord
-        signature: "chord(self, xy: Coords, start: float, end: float, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: box, start: 0, end: 180}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: pieslice
-        signature: "pieslice(self, xy: Coords, start: float, end: float, fill=None, outline=None, width: int=1) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: box, start: 0, end: 180}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: bitmap
-        signature: "bitmap(self, xy: Sequence[int], bitmap: Image, fill=None) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: point
-        signature: "point(self, xy: Coords, fill=None) -> None"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{xy: [10,10]}]
-        edge_cases: []
-        status: stub
-        pillow_since: "1.0"
-      - name: textbbox
-        signature: "textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left', direction=None, features=None, language=None, stroke_width=0, embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-      - name: multiline_textbbox
-        signature: "multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left', direction=None, features=None, language=None, stroke_width=0, embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
-      - name: textlength
-        signature: "textlength(self, text, font=None, direction=None, features=None, language=None, embedded_color=False, *, font_size=None) -> float"
-        supported_modes: [RGB, RGBA, L]
-        param_variants: [{}]
-        edge_cases: []
-        status: stub
-        pillow_since: "8.0"
+    - name: arc
+      signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width:
+        int=1) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: box
+        start: 0
+        end: 180
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: line
+      signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None)
+        -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: line
+      - xy: line
+        width: 5
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: rectangle
+      signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1)
+        -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: box
+      - xy: box
+        fill: color
+        outline: color
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: ellipse
+      signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1)
+        -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: box
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: polygon
+      signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1)
+        -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: polygon
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: text
+      signature: 'text(self, xy: tuple[float,float], text: str, fill=None, font=None,
+        anchor: str|None=None, spacing: float=4, align: str=''left'', direction: str|None=None,
+        features: list|None=None, language: str|None=None, stroke_width: float=0,
+        stroke_fill=None, embedded_color: bool=False) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy:
+        - 0
+        - 0
+        text: hello
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: multiline_text
+      signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None,
+        font=None, anchor=None, spacing: float=4, align: str=''left'', direction=None,
+        features=None, language=None, stroke_width: float=0, stroke_fill=None, embedded_color=False,
+        *, font_size=None) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy:
+        - 0
+        - 0
+        text: 'hello
 
+          world'
+      edge_cases: []
+      status: stub
+      pillow_since: '4.0'
+    - name: circle
+      signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None,
+        width: int=1) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy:
+        - 50
+        - 50
+        radius: 20
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
+    - name: rounded_rectangle
+      signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None,
+        outline=None, width: int=1, *, corners: tuple|None=None) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: box
+        radius: 10
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
+    - name: regular_polygon
+      signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0,
+        fill=None, outline=None, width: int=1) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants: []
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
+    - name: chord
+      signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None,
+        width: int=1) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: box
+        start: 0
+        end: 180
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: pieslice
+      signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None,
+        outline=None, width: int=1) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy: box
+        start: 0
+        end: 180
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: bitmap
+      signature: 'bitmap(self, xy: Sequence[int], bitmap: Image, fill=None) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '1.0'
+    - name: point
+      signature: 'point(self, xy: Coords, fill=None) -> None'
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - xy:
+        - 10
+        - 10
+      edge_cases: []
+      status: implemented
+      pillow_since: '1.0'
+    - name: textbbox
+      signature: textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
+        direction=None, features=None, language=None, stroke_width=0, embedded_color=False,
+        *, font_size=None) -> tuple[float,float,float,float]
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
+    - name: multiline_textbbox
+      signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4,
+        align='left', direction=None, features=None, language=None, stroke_width=0,
+        embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
+    - name: textlength
+      signature: textlength(self, text, font=None, direction=None, features=None,
+        language=None, embedded_color=False, *, font_size=None) -> float
+      supported_modes:
+      - RGB
+      - RGBA
+      - L
+      param_variants:
+      - {}
+      edge_cases: []
+      status: stub
+      pillow_since: '8.0'
   ImageFilter:
     classes:
-      - name: BLUR
-        signature: "ImageFilter.BLUR"
-        status: stub
-      - name: CONTOUR
-        signature: "ImageFilter.CONTOUR"
-        status: stub
-      - name: DETAIL
-        signature: "ImageFilter.DETAIL"
-        status: stub
-      - name: EDGE_ENHANCE
-        signature: "ImageFilter.EDGE_ENHANCE"
-        status: stub
-      - name: EDGE_ENHANCE_MORE
-        signature: "ImageFilter.EDGE_ENHANCE_MORE"
-        status: stub
-      - name: EMBOSS
-        signature: "ImageFilter.EMBOSS"
-        status: stub
-      - name: FIND_EDGES
-        signature: "ImageFilter.FIND_EDGES"
-        status: stub
-      - name: SHARPEN
-        signature: "ImageFilter.SHARPEN"
-        status: stub
-      - name: SMOOTH
-        signature: "ImageFilter.SMOOTH"
-        status: stub
-      - name: SMOOTH_MORE
-        signature: "ImageFilter.SMOOTH_MORE"
-        status: stub
-      - name: GaussianBlur
-        signature: "ImageFilter.GaussianBlur(radius: float|Sequence[float]=2)"
-        status: stub
-      - name: BoxBlur
-        signature: "ImageFilter.BoxBlur(radius: float|Sequence[float])"
-        status: stub
-      - name: UnsharpMask
-        signature: "ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold: int=3)"
-        status: stub
-      - name: Kernel
-        signature: "ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float], scale: float|None=None, offset: float=0)"
-        status: stub
-      - name: MaxFilter
-        signature: "ImageFilter.MaxFilter(size: int=3)"
-        status: stub
-      - name: MinFilter
-        signature: "ImageFilter.MinFilter(size: int=3)"
-        status: stub
-      - name: MedianFilter
-        signature: "ImageFilter.MedianFilter(size: int=3)"
-        status: stub
-      - name: ModeFilter
-        signature: "ImageFilter.ModeFilter(size: int=3)"
-        status: stub
-      - name: RankFilter
-        signature: "ImageFilter.RankFilter(size: int, rank: int)"
-        status: stub
-      - name: Color3DLUT
-        signature: "ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3, target_mode: str|None=None)"
-        status: stub
-
+    - name: BLUR
+      signature: ImageFilter.BLUR
+      status: stub
+    - name: CONTOUR
+      signature: ImageFilter.CONTOUR
+      status: stub
+    - name: DETAIL
+      signature: ImageFilter.DETAIL
+      status: stub
+    - name: EDGE_ENHANCE
+      signature: ImageFilter.EDGE_ENHANCE
+      status: stub
+    - name: EDGE_ENHANCE_MORE
+      signature: ImageFilter.EDGE_ENHANCE_MORE
+      status: stub
+    - name: EMBOSS
+      signature: ImageFilter.EMBOSS
+      status: stub
+    - name: FIND_EDGES
+      signature: ImageFilter.FIND_EDGES
+      status: stub
+    - name: SHARPEN
+      signature: ImageFilter.SHARPEN
+      status: stub
+    - name: SMOOTH
+      signature: ImageFilter.SMOOTH
+      status: stub
+    - name: SMOOTH_MORE
+      signature: ImageFilter.SMOOTH_MORE
+      status: stub
+    - name: GaussianBlur
+      signature: 'ImageFilter.GaussianBlur(radius: float|Sequence[float]=2)'
+      status: stub
+    - name: BoxBlur
+      signature: 'ImageFilter.BoxBlur(radius: float|Sequence[float])'
+      status: stub
+    - name: UnsharpMask
+      signature: 'ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold:
+        int=3)'
+      status: stub
+    - name: Kernel
+      signature: 'ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float],
+        scale: float|None=None, offset: float=0)'
+      status: stub
+    - name: MaxFilter
+      signature: 'ImageFilter.MaxFilter(size: int=3)'
+      status: stub
+    - name: MinFilter
+      signature: 'ImageFilter.MinFilter(size: int=3)'
+      status: stub
+    - name: MedianFilter
+      signature: 'ImageFilter.MedianFilter(size: int=3)'
+      status: stub
+    - name: ModeFilter
+      signature: 'ImageFilter.ModeFilter(size: int=3)'
+      status: stub
+    - name: RankFilter
+      signature: 'ImageFilter.RankFilter(size: int, rank: int)'
+      status: stub
+    - name: Color3DLUT
+      signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3,
+        target_mode: str|None=None)'
+      status: stub
   ImageEnhance:
     classes:
-      - name: Brightness
-        signature: "Brightness(image: Image.Image) .enhance(factor: float) -> Image"
-        status: stub
-      - name: Color
-        signature: "Color(image: Image.Image) .enhance(factor: float) -> Image"
-        status: stub
-      - name: Contrast
-        signature: "Contrast(image: Image.Image) .enhance(factor: float) -> Image"
-        status: stub
-      - name: Sharpness
-        signature: "Sharpness(image: Image.Image) .enhance(factor: float) -> Image"
-        status: stub
-
+    - name: Brightness
+      signature: 'Brightness(image: Image.Image) .enhance(factor: float) -> Image'
+      status: stub
+    - name: Color
+      signature: 'Color(image: Image.Image) .enhance(factor: float) -> Image'
+      status: stub
+    - name: Contrast
+      signature: 'Contrast(image: Image.Image) .enhance(factor: float) -> Image'
+      status: stub
+    - name: Sharpness
+      signature: 'Sharpness(image: Image.Image) .enhance(factor: float) -> Image'
+      status: stub
   ImageOps:
     functions:
-      - name: autocontrast
-        signature: "autocontrast(image: Image, cutoff: float|tuple=0, ignore: int|Sequence|None=None, mask: Image|None=None, preserve_tone: bool=False) -> Image"
-        status: stub
-      - name: colorize
-        signature: "colorize(image: Image, black: str|tuple, white: str|tuple, mid=None, blackpoint: int=0, whitepoint: int=255, midpoint: int=127) -> Image"
-        status: stub
-      - name: contain
-        signature: "contain(image: Image, size: tuple[int,int], method: int=BICUBIC) -> Image"
-        status: stub
-      - name: cover
-        signature: "cover(image: Image, size: tuple[int,int], method: int=BICUBIC) -> Image"
-        status: stub
-      - name: crop
-        signature: "crop(image: Image, border: int=0) -> Image"
-        status: stub
-      - name: equalize
-        signature: "equalize(image: Image, mask: Image|None=None) -> Image"
-        status: stub
-      - name: expand
-        signature: "expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0) -> Image"
-        status: stub
-      - name: fit
-        signature: "fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed: float=0.0, centering: tuple[float,float]=(0.5,0.5)) -> Image"
-        status: stub
-      - name: flip
-        signature: "flip(image: Image) -> Image"
-        status: stub
-      - name: grayscale
-        signature: "grayscale(image: Image) -> Image"
-        status: stub
-      - name: invert
-        signature: "invert(image: Image) -> Image"
-        status: stub
-      - name: mirror
-        signature: "mirror(image: Image) -> Image"
-        status: stub
-      - name: pad
-        signature: "pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None, centering: tuple[float,float]=(0.5,0.5)) -> Image"
-        status: stub
-      - name: posterize
-        signature: "posterize(image: Image, bits: int) -> Image"
-        status: stub
-      - name: scale
-        signature: "scale(image: Image, factor: float, resample: int=BICUBIC) -> Image"
-        status: stub
-      - name: solarize
-        signature: "solarize(image: Image, threshold: int=128) -> Image"
-        status: stub
-      - name: exif_transpose
-        signature: "exif_transpose(image: Image, *, in_place: bool=False) -> Image|None"
-        status: stub
-      - name: deform
-        signature: "deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR) -> Image"
-        status: stub
-
+    - name: autocontrast
+      signature: 'autocontrast(image: Image, cutoff: float|tuple=0, ignore: int|Sequence|None=None,
+        mask: Image|None=None, preserve_tone: bool=False) -> Image'
+      status: implemented
+    - name: colorize
+      signature: 'colorize(image: Image, black: str|tuple, white: str|tuple, mid=None,
+        blackpoint: int=0, whitepoint: int=255, midpoint: int=127) -> Image'
+      status: stub
+    - name: contain
+      signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC)
+        -> Image'
+      status: stub
+    - name: cover
+      signature: 'cover(image: Image, size: tuple[int,int], method: int=BICUBIC) ->
+        Image'
+      status: stub
+    - name: crop
+      signature: 'crop(image: Image, border: int=0) -> Image'
+      status: stub
+    - name: equalize
+      signature: 'equalize(image: Image, mask: Image|None=None) -> Image'
+      status: implemented
+    - name: expand
+      signature: 'expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0)
+        -> Image'
+      status: stub
+    - name: fit
+      signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed:
+        float=0.0, centering: tuple[float,float]=(0.5,0.5)) -> Image'
+      status: stub
+    - name: flip
+      signature: 'flip(image: Image) -> Image'
+      status: implemented
+    - name: grayscale
+      signature: 'grayscale(image: Image) -> Image'
+      status: implemented
+    - name: invert
+      signature: 'invert(image: Image) -> Image'
+      status: implemented
+    - name: mirror
+      signature: 'mirror(image: Image) -> Image'
+      status: implemented
+    - name: pad
+      signature: 'pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None,
+        centering: tuple[float,float]=(0.5,0.5)) -> Image'
+      status: stub
+    - name: posterize
+      signature: 'posterize(image: Image, bits: int) -> Image'
+      status: implemented
+    - name: scale
+      signature: 'scale(image: Image, factor: float, resample: int=BICUBIC) -> Image'
+      status: stub
+    - name: solarize
+      signature: 'solarize(image: Image, threshold: int=128) -> Image'
+      status: implemented
+    - name: exif_transpose
+      signature: 'exif_transpose(image: Image, *, in_place: bool=False) -> Image|None'
+      status: stub
+    - name: deform
+      signature: 'deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR)
+        -> Image'
+      status: stub
   ImageChops:
     functions:
-      - name: add
-        signature: "add(image1: Image, image2: Image, scale: float=1.0, offset: float=0) -> Image"
-        status: stub
-      - name: add_modulo
-        signature: "add_modulo(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: blend
-        signature: "blend(image1: Image, image2: Image, alpha: float) -> Image"
-        status: stub
-      - name: composite
-        signature: "composite(image1: Image, image2: Image, mask: Image) -> Image"
-        status: stub
-      - name: constant
-        signature: "constant(image: Image, value: int) -> Image"
-        status: stub
-      - name: darker
-        signature: "darker(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: difference
-        signature: "difference(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: duplicate
-        signature: "duplicate(image: Image) -> Image"
-        status: stub
-      - name: hard_light
-        signature: "hard_light(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: invert
-        signature: "invert(image: Image) -> Image"
-        status: stub
-      - name: lighter
-        signature: "lighter(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: logical_and
-        signature: "logical_and(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: logical_or
-        signature: "logical_or(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: logical_xor
-        signature: "logical_xor(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: multiply
-        signature: "multiply(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: offset
-        signature: "offset(image: Image, xoffset: int, yoffset: int|None=None) -> Image"
-        status: stub
-      - name: overlay
-        signature: "overlay(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: screen
-        signature: "screen(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: soft_light
-        signature: "soft_light(image1: Image, image2: Image) -> Image"
-        status: stub
-      - name: subtract
-        signature: "subtract(image1: Image, image2: Image, scale: float=1.0, offset: float=0) -> Image"
-        status: stub
-      - name: subtract_modulo
-        signature: "subtract_modulo(image1: Image, image2: Image) -> Image"
-        status: stub
-
+    - name: add
+      signature: 'add(image1: Image, image2: Image, scale: float=1.0, offset: float=0)
+        -> Image'
+      status: implemented
+    - name: add_modulo
+      signature: 'add_modulo(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: blend
+      signature: 'blend(image1: Image, image2: Image, alpha: float) -> Image'
+      status: stub
+    - name: composite
+      signature: 'composite(image1: Image, image2: Image, mask: Image) -> Image'
+      status: stub
+    - name: constant
+      signature: 'constant(image: Image, value: int) -> Image'
+      status: stub
+    - name: darker
+      signature: 'darker(image1: Image, image2: Image) -> Image'
+      status: implemented
+    - name: difference
+      signature: 'difference(image1: Image, image2: Image) -> Image'
+      status: implemented
+    - name: duplicate
+      signature: 'duplicate(image: Image) -> Image'
+      status: stub
+    - name: hard_light
+      signature: 'hard_light(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: invert
+      signature: 'invert(image: Image) -> Image'
+      status: implemented
+    - name: lighter
+      signature: 'lighter(image1: Image, image2: Image) -> Image'
+      status: implemented
+    - name: logical_and
+      signature: 'logical_and(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: logical_or
+      signature: 'logical_or(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: logical_xor
+      signature: 'logical_xor(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: multiply
+      signature: 'multiply(image1: Image, image2: Image) -> Image'
+      status: implemented
+    - name: offset
+      signature: 'offset(image: Image, xoffset: int, yoffset: int|None=None) -> Image'
+      status: stub
+    - name: overlay
+      signature: 'overlay(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: screen
+      signature: 'screen(image1: Image, image2: Image) -> Image'
+      status: implemented
+    - name: soft_light
+      signature: 'soft_light(image1: Image, image2: Image) -> Image'
+      status: stub
+    - name: subtract
+      signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset:
+        float=0) -> Image'
+      status: implemented
+    - name: subtract_modulo
+      signature: 'subtract_modulo(image1: Image, image2: Image) -> Image'
+      status: stub
   ImageColor:
     functions:
-      - name: getrgb
-        signature: "getrgb(color: str) -> tuple[int,int,int]|tuple[int,int,int,int]"
-        status: stub
-      - name: getcolor
-        signature: "getcolor(color: str, mode: str) -> int|tuple[int,...]"
-        status: stub
-
+    - name: getrgb
+      signature: 'getrgb(color: str) -> tuple[int,int,int]|tuple[int,int,int,int]'
+      status: implemented
+    - name: getcolor
+      signature: 'getcolor(color: str, mode: str) -> int|tuple[int,...]'
+      status: implemented
   ImagePalette:
     methods:
-      - name: copy
-        signature: "copy(self) -> ImagePalette"
-        status: stub
-      - name: getcolor
-        signature: "getcolor(self, color: tuple[int,...], image: Image|None=None) -> int"
-        status: stub
-      - name: getdata
-        signature: "getdata(self) -> tuple[str, Sequence[int]|bytes|bytearray]"
-        status: stub
-      - name: save
-        signature: "save(self, fp: str|IO[str]) -> None"
-        status: stub
-      - name: tobytes
-        signature: "tobytes(self) -> bytes"
-        status: stub
-
+    - name: copy
+      signature: copy(self) -> ImagePalette
+      status: stub
+    - name: getcolor
+      signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) ->
+        int'
+      status: stub
+    - name: getdata
+      signature: getdata(self) -> tuple[str, Sequence[int]|bytes|bytearray]
+      status: stub
+    - name: save
+      signature: 'save(self, fp: str|IO[str]) -> None'
+      status: stub
+    - name: tobytes
+      signature: tobytes(self) -> bytes
+      status: stub
   ImageFont:
     functions:
-      - name: load
-        signature: "load(filename: str) -> ImageFont"
-        status: stub
-      - name: load_default
-        signature: "load_default(size: float|None=None) -> FreeTypeFont|ImageFont"
-        status: stub
-      - name: truetype
-        signature: "truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0, encoding: str='', layout_engine: Layout|None=None) -> FreeTypeFont"
-        status: stub
+    - name: load
+      signature: 'load(filename: str) -> ImageFont'
+      status: stub
+    - name: load_default
+      signature: 'load_default(size: float|None=None) -> FreeTypeFont|ImageFont'
+      status: stub
+    - name: truetype
+      signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
+        encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
+      status: stub
     classes:
-      - name: FreeTypeFont
-        methods:
-          - {name: getbbox, status: stub}
-          - {name: getlength, status: stub}
-          - {name: getmask, status: stub}
-          - {name: getmetrics, status: stub}
-          - {name: getname, status: stub}
+    - name: FreeTypeFont
+      methods:
+      - name: getbbox
         status: stub
-      - name: ImageFont
-        methods:
-          - {name: getbbox, status: stub}
-          - {name: getlength, status: stub}
-          - {name: getmask, status: stub}
+      - name: getlength
         status: stub
-
+      - name: getmask
+        status: stub
+      - name: getmetrics
+        status: stub
+      - name: getname
+        status: stub
+      status: stub
+    - name: ImageFont
+      methods:
+      - name: getbbox
+        status: stub
+      - name: getlength
+        status: stub
+      - name: getmask
+        status: stub
+      status: stub
   ImageStat:
     classes:
-      - name: Stat
-        properties: [extrema, count, sum, sum2, mean, median, rms, var, stddev]
-        status: stub
-
+    - name: Stat
+      properties:
+      - extrema
+      - count
+      - sum
+      - sum2
+      - mean
+      - median
+      - rms
+      - var
+      - stddev
+      status: stub
   ImageSequence:
     classes:
-      - name: Iterator
-        status: stub
+    - name: Iterator
+      status: stub

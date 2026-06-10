@@ -146,6 +146,60 @@ impl Image {
         Ok(())
     }
 
+    /// Extract a single channel as an L-mode image.
+    pub fn getchannel(&mut self, channel: i32) -> Result<Image, PilError> {
+        let img = self.ensure_loaded()?;
+        let bands = img.color().channel_count();
+        let ch = if channel < 0 { (bands as i32 + channel) as usize } else { channel as usize };
+        if ch >= bands as usize {
+            return Err(PilError::ValueError(format!("Channel {} out of range (0-{})", channel, bands - 1)));
+        }
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let mut gray = image::GrayImage::new(w, h);
+        for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
+            gp[0] = rp[ch.min(3)];
+        }
+        Ok(Image {
+            inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(gray)),
+            format: self.format,
+        })
+    }
+
+    /// Load pixel data (no-op in Rust — data is always loaded). Returns Ok.
+    pub fn load(&mut self) -> Result<(), PilError> {
+        self.ensure_loaded()?;
+        Ok(())
+    }
+
+    /// Set/replace alpha channel.
+    pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
+        let img = self.ensure_loaded()?;
+        let mut rgba = img.to_rgba8();
+        for p in rgba.pixels_mut() {
+            p[3] = alpha;
+        }
+        self.inner = crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgba8(rgba));
+        Ok(())
+    }
+
+    /// Reduce image by integer factor.
+    pub fn reduce(&self, factor: u32) -> Result<Image, PilError> {
+        if factor < 2 {
+            return Ok(self.clone());
+        }
+        let mut clone = self.clone();
+        let img = clone.ensure_loaded()?;
+        let (w, h) = (img.width(), img.height());
+        let new_w = w / factor;
+        let new_h = h / factor;
+        let small = img.resize_exact(new_w, new_h, image::imageops::FilterType::Nearest);
+        Ok(Image {
+            inner: crate::lazy::LazyImage::Loaded(small),
+            format: self.format,
+        })
+    }
+
     pub fn to_bytes(&mut self) -> Result<Vec<u8>, PilError> {
         let img = self.ensure_loaded()?;
         Ok(img.as_bytes().to_vec())

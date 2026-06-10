@@ -149,6 +149,31 @@ pub fn offset(image: &Image, xoffset: i32, yoffset: i32) -> Result<Image, PilErr
     })
 }
 
+/// Modulo addition (wrap-around).
+pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    channel_op(image1, image2, |a, b| a.wrapping_add(b))
+}
+
+/// Modulo subtraction.
+pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    channel_op(image1, image2, |a, b| a.wrapping_sub(b))
+}
+
+/// Fill with constant value (single-channel fill).
+pub fn constant(image: &Image, value: u8) -> Result<Image, PilError> {
+    let mut clone = image.clone();
+    let img = clone.ensure_loaded()?;
+    let (w, h) = (img.width(), img.height());
+    let mut out = image::RgbImage::new(w, h);
+    for p in out.pixels_mut() {
+        p[0] = value; p[1] = value; p[2] = value;
+    }
+    Ok(Image {
+        inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out)),
+        format: image.format,
+    })
+}
+
 /// Generic per-channel operation helper.
 fn channel_op<F>(image1: &Image, image2: &Image, op: F) -> Result<Image, PilError>
 where

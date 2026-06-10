@@ -281,6 +281,24 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn getchannel(&mut self, channel: i32) -> PyResult<PyImage> {
+        let rs = self.inner.getchannel(channel).map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn load(&mut self) -> PyResult<()> {
+        self.inner.load().map_err(|e| map_error(e))
+    }
+
+    fn putalpha(&mut self, alpha: u8) -> PyResult<()> {
+        self.inner.putalpha(alpha).map_err(|e| map_error(e))
+    }
+
+    fn reduce(&self, factor: u32) -> PyResult<PyImage> {
+        let rs = self.inner.reduce(factor).map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())

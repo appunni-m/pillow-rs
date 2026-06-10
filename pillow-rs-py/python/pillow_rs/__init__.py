@@ -6,6 +6,7 @@ Import as: from RSPIL import Image
 from . import imagechops as ImageChops
 from . import imagecolor as ImageColor
 from . import imagedraw as ImageDraw
+from . import imageenhance as ImageEnhance
 from . import imageops as ImageOps
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
 from .image import Image
