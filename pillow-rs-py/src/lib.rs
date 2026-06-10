@@ -548,6 +548,50 @@ impl PyDraw {
         self.draw.point(&xy, color).map_err(|e| map_error(e))
     }
 
+    #[pyo3(signature = (xy, start, end, fill=None, width=1))]
+    fn arc(&mut self, xy: (i32, i32, i32, i32), start: f64, end: f64,
+           fill: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let color = parse_draw_color(fill)?;
+        self.draw.arc(xy.0, xy.1, xy.2, xy.3, start, end, color, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    #[pyo3(signature = (xy, start, end, fill=None, outline=None, width=1))]
+    fn chord(&mut self, xy: (i32, i32, i32, i32), start: f64, end: f64,
+             fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
+        self.draw.chord(xy.0, xy.1, xy.2, xy.3, start, end, fc, oc, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    #[pyo3(signature = (xy, start, end, fill=None, outline=None, width=1))]
+    fn pieslice(&mut self, xy: (i32, i32, i32, i32), start: f64, end: f64,
+                fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
+        self.draw.pieslice(xy.0, xy.1, xy.2, xy.3, start, end, fc, oc, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    #[pyo3(signature = (xy, radius, fill=None, outline=None, width=1))]
+    fn circle(&mut self, xy: (f64, f64), radius: f64,
+              fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
+        self.draw.circle(xy.0 as i32, xy.1 as i32, radius, fc, oc, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    #[pyo3(signature = (xy, radius=0.0, fill=None, outline=None, width=1))]
+    fn rounded_rectangle(&mut self, xy: (i32, i32, i32, i32), radius: f64,
+                         fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
+        self.draw.rounded_rectangle(xy.0, xy.1, xy.2, xy.3, radius, fc, oc, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
     #[getter]
     fn image(&self) -> PyImage {
         // Return a copy of the current image state
