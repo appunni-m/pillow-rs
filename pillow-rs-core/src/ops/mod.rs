@@ -5,6 +5,7 @@ pub mod crop;
 pub mod enhance;
 pub mod filter;
 pub mod imageops;
+pub mod module_fns;
 pub mod param_filters;
 pub mod paste;
 pub mod quantize;
