@@ -225,6 +225,74 @@ impl PyImage {
             .map_err(|e| map_error(e))
     }
 
+    fn quantize(&self, colors: Option<u32>, dither: Option<bool>) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .quantize(colors.unwrap_or(256), 0, None, dither.unwrap_or(true))
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn getbbox(&self, alpha_only: Option<bool>) -> PyResult<Option<(u32, u32, u32, u32)>> {
+        self.inner
+            .getbbox(alpha_only.unwrap_or(true))
+            .map_err(|e| map_error(e))
+    }
+
+    fn getextrema(&self) -> PyResult<Vec<(u8, u8)>> {
+        self.inner.getextrema().map_err(|e| map_error(e))
+    }
+
+    fn histogram(&self) -> PyResult<Vec<u32>> {
+        self.inner.histogram().map_err(|e| map_error(e))
+    }
+
+    fn gaussian_blur(&self, radius: Option<f64>) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .gaussian_blur(radius.unwrap_or(2.0) as f32)
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn unsharp_mask(&self, radius: Option<f64>, percent: Option<i32>, threshold: Option<u8>) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .unsharp_mask(radius.unwrap_or(2.0) as f32, percent.unwrap_or(150), threshold.unwrap_or(3))
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn max_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
+        let rs = self.inner.max_filter(size.unwrap_or(3))
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn min_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
+        let rs = self.inner.min_filter(size.unwrap_or(3))
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn median_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
+        let rs = self.inner.median_filter(size.unwrap_or(3))
+            .map_err(|e| map_error(e))?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn close(&self) -> PyResult<()> {
+        // No-op: Rust's Drop handles cleanup
+        Ok(())
+    }
+
+    fn verify(&self) -> PyResult<()> {
+        // Verify image data integrity
+        let mut clone = self.inner.clone();
+        clone.ensure_loaded().map_err(|e| map_error(e))?;
+        Ok(())
+    }
+
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
         let rs = self
             .inner
