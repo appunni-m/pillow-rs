@@ -3,6 +3,9 @@ pillow-rs — Pillow drop-in replacement powered by Rust.
 Import as: from RSPIL import Image
 """
 
+from . import imagechops as ImageChops
+from . import imagecolor as ImageColor
+from . import imageops as ImageOps
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
 from .image import Image
 from .operations import convert, crop, new, open, resize, rotate, save
@@ -13,6 +16,9 @@ __all__ = [
     "Image",
     "ImageMode",
     "ImageFormat",
+    "ImageOps",
+    "ImageChops",
+    "ImageColor",
     "Resampling",
     "Transpose",
     "Dither",

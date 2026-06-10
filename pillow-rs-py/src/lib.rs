@@ -247,6 +247,27 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn getpixel(&mut self, xy: (u32, u32)) -> PyResult<(u8, u8, u8, u8)> {
+        self.inner.getpixel(xy.0, xy.1).map_err(|e| map_error(e))
+    }
+
+    fn putpixel(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let (r, g, b, a) = if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
+            (r, g, b, 255)
+        } else if let Ok((r, g, b, a)) = value.extract::<(u8, u8, u8, u8)>() {
+            (r, g, b, a)
+        } else if let Ok(val) = value.extract::<u8>() {
+            (val, val, val, 255)
+        } else {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "value must be int, RGB tuple, or RGBA tuple",
+            ));
+        };
+        self.inner
+            .putpixel(xy.0, xy.1, r, g, b, a)
+            .map_err(|e| map_error(e))
+    }
+
     #[getter]
     fn size(&mut self) -> PyResult<(u32, u32)> {
         self.inner.size().map_err(|e| map_error(e))
@@ -307,5 +328,204 @@ fn map_error(e: PilError) -> PyErr {
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyImage>()?;
+
+    // ImageOps functions
+    m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_equalize, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_invert, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_flip, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_mirror, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_posterize, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_solarize, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_grayscale, m)?)?;
+
+    // ImageChops functions
+    m.add_function(wrap_pyfunction!(chops_add, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_subtract, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_multiply, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_screen, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_darker, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_lighter, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_difference, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_invert, m)?)?;
+
+    // ImageColor
+    m.add_function(wrap_pyfunction!(getrgb, m)?)?;
+
     Ok(())
+}
+
+// --- ImageOps module-level functions ---
+
+#[pyfunction]
+fn ops_autocontrast(image: &Bound<'_, PyImage>, cutoff: Option<f64>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::autocontrast(&borrowed.inner, cutoff.unwrap_or(0.0))
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::equalize(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::invert(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_flip(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::flip(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_mirror(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::mirror(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::posterize(&borrowed.inner, bits)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::solarize(&borrowed.inner, threshold.unwrap_or(128))
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::imageops::grayscale(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+// --- ImageChops module-level functions ---
+
+#[pyfunction]
+#[pyo3(signature = (image1, image2, scale=1.0, offset=0.0))]
+fn chops_add(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+    scale: f64,
+    offset: f64,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::add(&b1.inner, &b2.inner, scale, offset)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+#[pyo3(signature = (image1, image2, scale=1.0, offset=0.0))]
+fn chops_subtract(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+    scale: f64,
+    offset: f64,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::subtract(&b1.inner, &b2.inner, scale, offset)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_multiply(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::multiply(&b1.inner, &b2.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_screen(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::screen(&b1.inner, &b2.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_darker(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::darker(&b1.inner, &b2.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_lighter(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::lighter(&b1.inner, &b2.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_difference(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::chops::difference(&b1.inner, &b2.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    let rs = pillow_rs_core::ops::chops::invert(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+// --- ImageColor ---
+
+#[pyfunction]
+fn getrgb(color: &str) -> PyResult<(u8, u8, u8)> {
+    pillow_rs_core::color::parse_color_str(color)
+        .map(|(r, g, b, _a)| (r, g, b))
+        .map_err(|e| map_error(e))
 }

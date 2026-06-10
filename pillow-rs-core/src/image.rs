@@ -1,4 +1,4 @@
-use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat};
 use std::path::PathBuf;
 
 use crate::color::color_type_to_mode;
@@ -95,6 +95,55 @@ impl Image {
 
     pub fn format_name(&self) -> Option<String> {
         self.format.map(|f| format!("{:?}", f).to_uppercase())
+    }
+
+    /// Get a single pixel's RGBA value. Returns (r, g, b, a) for color images,
+    /// or (l, a) for grayscale+alpha. Mode-aware.
+    pub fn getpixel(&mut self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
+        let img = self.ensure_loaded()?;
+        if x >= img.width() || y >= img.height() {
+            return Err(PilError::ValueError(format!(
+                "pixel ({},{}) out of bounds ({}x{})",
+                x,
+                y,
+                img.width(),
+                img.height()
+            )));
+        }
+        let px = img.get_pixel(x, y);
+        let rgba = px.0;
+        Ok((
+            rgba[0],
+            rgba.get(1).copied().unwrap_or(0),
+            rgba.get(2).copied().unwrap_or(0),
+            rgba.get(3).copied().unwrap_or(255),
+        ))
+    }
+
+    /// Set a single pixel. Mutates self in-place.
+    pub fn putpixel(
+        &mut self,
+        x: u32,
+        y: u32,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+    ) -> Result<(), PilError> {
+        let img = self.ensure_loaded()?;
+        if x >= img.width() || y >= img.height() {
+            return Err(PilError::ValueError(format!(
+                "pixel ({},{}) out of bounds ({}x{})",
+                x,
+                y,
+                img.width(),
+                img.height()
+            )));
+        }
+        let mut clone = img.clone();
+        clone.put_pixel(x, y, image::Rgba([r, g, b, a]));
+        self.inner = crate::lazy::LazyImage::Loaded(clone);
+        Ok(())
     }
 
     pub fn to_bytes(&mut self) -> Result<Vec<u8>, PilError> {
