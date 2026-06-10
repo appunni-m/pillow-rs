@@ -161,6 +161,58 @@ class Image:
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
         return self._rust_image.tobytes()
 
+    def getpixel(self, xy: Tuple[int, int]):
+        """Get pixel value at (x, y). Returns tuple matching image mode."""
+        r, g, b, a = self._rust_image.getpixel(xy)
+        if self.mode == "L":
+            return r
+        elif self.mode == "LA":
+            return (r, a)
+        elif self.mode == "RGB":
+            return (r, g, b)
+        elif self.mode == "RGBA":
+            return (r, g, b, a)
+        return (r, g, b)
+
+    def putpixel(self, xy: Tuple[int, int], value):
+        """Set pixel value at (x, y). Accepts int, tuple, or list."""
+        if isinstance(value, int):
+            self._rust_image.putpixel(xy, (value, value, value, 255))
+        elif len(value) == 3:
+            self._rust_image.putpixel(xy, (*value, 255))
+        elif len(value) == 4:
+            self._rust_image.putpixel(xy, tuple(value))
+        else:
+            self._rust_image.putpixel(xy, (value[0], value[0], value[0], 255))
+
+    def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
+                 palette=None, dither: int = 1):
+        """Reduce colors using NeuQuant algorithm."""
+        return Image(self._rust_image.quantize(colors, dither != 0))
+
+    def getbbox(self, *, alpha_only: bool = True):
+        """Bounding box of non-zero regions."""
+        return self._rust_image.getbbox(alpha_only)
+
+    def getextrema(self):
+        """Min/max pixel values per band. Returns tuple matching PIL format."""
+        result = self._rust_image.getextrema()
+        if len(result) == 1:
+            return tuple(result[0])
+        return tuple(tuple(v) for v in result)
+
+    def histogram(self, mask=None, extrema=None):
+        """Image histogram per band."""
+        return self._rust_image.histogram()
+
+    def close(self):
+        """Close the image file and release resources."""
+        self._rust_image.close()
+
+    def verify(self):
+        """Verify file contents. Raises exception if corrupted."""
+        self._rust_image.verify()
+
     @property
     def size(self) -> Tuple[int, int]:
         return self._rust_image.size
