@@ -4,6 +4,9 @@ from pillow_rs import Image, ImageChops
 from conftest import assert_images_equal
 
 
+@pytest.mark.covers("ImageChops.add_modulo")
+
+
 def test_add_modulo_works():
     im1 = Image.new("RGB", (10, 10), (250, 200, 100))
     im2 = Image.new("RGB", (10, 10), (20, 10, 5))
@@ -16,6 +19,9 @@ def test_subtract_modulo_works():
     im2 = Image.new("RGB", (10, 10), (5, 10, 15))
     result = ImageChops.subtract_modulo(im1, im2)
     assert result.size == (10, 10)
+
+
+@pytest.mark.covers("ImageChops.constant")
 
 
 def test_constant_works():
@@ -38,6 +44,9 @@ def test_composite_works():
     mask = Image.new("L", (20, 20), 128)
     result = ImageChops.composite(im1, im2, mask)
     assert result.size == (20, 20)
+
+
+@pytest.mark.covers("ImageChops.duplicate")
 
 
 def test_duplicate_parity(PIL):

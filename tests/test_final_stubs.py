@@ -6,6 +6,8 @@ from conftest import assert_images_equal, assert_values_equal
 
 # ── Image.frombytes ─────────────────────────────────────────────
 
+@pytest.mark.covers("Image.frombytes")
+
 def test_frombytes_rgb_parity(PIL):
     pil = PIL.Image.new("RGB", (5, 5), (100, 150, 200))
     data = pil.tobytes()
@@ -15,6 +17,8 @@ def test_frombytes_rgb_parity(PIL):
 
 # ── Image.effect_noise ──────────────────────────────────────────
 
+@pytest.mark.covers("ImageModule.effect_noise")
+
 def test_effect_noise_works():
     img = Image.new("RGB", (50, 50), (128, 128, 128))
     result = img.effect_noise(10.0)
@@ -22,6 +26,8 @@ def test_effect_noise_works():
 
 
 # ── ImageDraw.bitmap ────────────────────────────────────────────
+
+@pytest.mark.covers("ImageDraw.bitmap")
 
 def test_draw_bitmap_works():
     img = Image.new("RGB", (50, 50), (255, 255, 255))
@@ -32,6 +38,8 @@ def test_draw_bitmap_works():
 
 # ── ImageOps.colorize ────────────────────────────────────────────
 
+@pytest.mark.covers("ImageOps.colorize")
+
 def test_ops_colorize_works():
     img = Image.new("L", (20, 20), 128)
     result = ImageOps.colorize(img, (0, 0, 0), (255, 255, 255))
@@ -40,11 +48,15 @@ def test_ops_colorize_works():
 
 # ── ImagePalette.getcolor/save ───────────────────────────────────
 
+@pytest.mark.covers("ImagePalette.getcolor")
+
 def test_palette_getcolor_works():
     p = ImagePalette.ImagePalette()
     p.palette = [255, 0, 0, 0, 255, 0]
     idx = p.getcolor((255, 0, 0))
     assert idx == 0
+
+@pytest.mark.covers("ImagePalette.save")
 
 def test_palette_save_works(tmp_path):
     p = ImagePalette.ImagePalette()
@@ -56,6 +68,8 @@ def test_palette_save_works(tmp_path):
 
 # ── ImageFont.getmetrics/getname ─────────────────────────────────
 
+@pytest.mark.covers("ImageFont.getmetrics")
+
 def test_font_getmetrics_works():
     import os
     for p in ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -66,6 +80,8 @@ def test_font_getmetrics_works():
             assert ascent > 0
             return
     pytest.skip("No font")
+
+@pytest.mark.covers("ImageFont.getname")
 
 def test_font_getname_works():
     import os
@@ -79,25 +95,34 @@ def test_font_getname_works():
     pytest.skip("No font")
 
 # ── Image.remap_palette/tobitmap/draft ───────────────────────────
+@pytest.mark.covers("Image.remap_palette")
 def test_remap_palette_works():
     img = Image.new("RGB", (10, 10), (100, 100, 100))
     result = img.remap_palette(list(range(256)))
     assert result.size == (10, 10)
+
+@pytest.mark.covers("Image.tobitmap")
 
 def test_tobitmap_works():
     img = Image.new("L", (10, 10), 200)
     bmp = img.tobitmap()
     assert len(bmp) > 0
 
+@pytest.mark.covers("Image.draft")
+
 def test_draft_works():
     img = Image.new("RGB", (10, 10))
     result = img.draft("L", (5, 5))
     assert result is not None
 
+@pytest.mark.covers("ImageModule.fromarray")
+
 def test_fromarray_bytes():
     from pillow_rs.operations import fromarray
     result = fromarray(b"hello", "L")
     assert result is not None
+
+@pytest.mark.covers("ImageModule.eval")
 
 def test_eval_works():
     from pillow_rs.operations import eval as img_eval
@@ -105,10 +130,14 @@ def test_eval_works():
     result = img_eval(img, lambda x: min(255, x * 2))
     assert result.size == (5, 5)
 
+@pytest.mark.covers("ImageOps.exif_transpose")
+
 def test_exif_transpose_works():
     img = Image.new("RGB", (10, 10), (255, 0, 0))
     result = ImageOps.exif_transpose(img)
     assert result.size == (10, 10)
+
+@pytest.mark.covers("ImageFont.load")
 
 def test_load_with_path():
     import os
@@ -119,6 +148,8 @@ def test_load_with_path():
             assert font is not None
             return
     pytest.skip("No font")
+
+@pytest.mark.covers("ImageFont.load_default")
 
 def test_load_default_returns_font():
     font = ImageFont.load_default(14)

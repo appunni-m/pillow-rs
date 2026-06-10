@@ -6,6 +6,7 @@ from pillow_rs import (
 
 
 class TestImageFilter:
+    @pytest.mark.covers("ImageFilter.BLUR")
     def test_blur_constant(self):
         assert ImageFilter.BLUR == "BLUR"
 
@@ -15,6 +16,8 @@ class TestImageFilter:
         result = ImageFilter.apply_filter(img, f)
         assert result.size == (20, 20)
 
+    @pytest.mark.covers("ImageFilter.MaxFilter")
+
     def test_max_filter_class(self):
         f = ImageFilter.MaxFilter(size=3)
         img = Image.new("RGB", (20, 20), (128, 128, 128))
@@ -23,13 +26,18 @@ class TestImageFilter:
 
 
 class TestImageFont:
+    @pytest.mark.covers("ImageFont.load_default")
     def test_load_default_returns_font(self):
         font = ImageFont.load_default(10)
         assert font is not None
 
+    @pytest.mark.covers("ImageFont.FreeTypeFont")
+
     def test_freetype_stub(self):
         with pytest.raises((NotImplementedError, OSError)):
             ImageFont.FreeTypeFont("nonexistent.ttf")
+
+    @pytest.mark.covers("ImageFont.truetype")
 
     def test_truetype_stub(self):
         with pytest.raises((NotImplementedError, OSError)):
@@ -37,6 +45,7 @@ class TestImageFont:
 
 
 class TestImagePalette:
+    @pytest.mark.covers("ImagePalette")
     def test_create_palette(self):
         p = ImagePalette.ImagePalette()
         assert p.mode == "RGB"
@@ -50,6 +59,7 @@ class TestImagePalette:
 
 
 class TestImageStat:
+    @pytest.mark.covers("ImageStat.Stat")
     def test_stat_basic(self):
         s = ImageStat.Stat([1, 2, 3, 4, 5])
         assert s.count == 5

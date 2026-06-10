@@ -40,6 +40,9 @@ def test_resize_rgba_parity(PIL):
     assert_images_equal(rs_r, pil_r)
 
 
+@pytest.mark.covers("Image.resize")
+
+
 def test_resize_same_size_parity(PIL):
     """Resizing to same dimensions returns identical image."""
     pil = PIL.Image.new("RGB", (50, 50), (100, 200, 50))
