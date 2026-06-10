@@ -431,6 +431,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // ImageColor
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
 
+    // Image module functions
+    m.add_function(wrap_pyfunction!(image_merge, m)?)?;
+    m.add_function(wrap_pyfunction!(image_blend, m)?)?;
+    m.add_function(wrap_pyfunction!(image_composite, m)?)?;
+
     Ok(())
 }
 
@@ -683,6 +688,42 @@ fn chops_difference(
 fn chops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let borrowed = image.borrow();
     let rs = pillow_rs_core::ops::chops::invert(&borrowed.inner)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+// --- Image module functions ---
+
+#[pyfunction]
+fn image_merge(mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    let mut band_images: Vec<pillow_rs_core::image::Image> = Vec::new();
+    for item in bands.iter()? {
+        let obj = item?;
+        let py_img = obj.downcast::<PyImage>().map_err(|_| {
+            pyo3::exceptions::PyTypeError::new_err("bands must be a sequence of Image objects")
+        })?;
+        band_images.push(py_img.borrow().inner.clone());
+    }
+    let rs = pillow_rs_core::ops::module_fns::merge(mode, &band_images)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn image_blend(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>, alpha: f64) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let rs = pillow_rs_core::ops::module_fns::blend(&b1.inner, &b2.inner, alpha)
+        .map_err(|e| map_error(e))?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn image_composite(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>, mask: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    let bm = mask.borrow();
+    let rs = pillow_rs_core::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner)
         .map_err(|e| map_error(e))?;
     Ok(PyImage { inner: rs })
 }

@@ -9,7 +9,7 @@ from . import imagedraw as ImageDraw
 from . import imageops as ImageOps
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
 from .image import Image
-from .operations import convert, crop, new, open, resize, rotate, save
+from .operations import blend, composite, convert, crop, merge, new, open, resize, rotate, save
 
 __version__ = "0.1.0"
 

@@ -45,7 +45,25 @@ def rotate(image: Image, angle: float, expand: bool = False) -> Image:
 
 
 def convert(image: Image, mode: str) -> Image:
-    raise NotImplementedError("Mode conversion not yet implemented")
+    return image.convert(mode)
+
+
+def merge(mode: str, bands):
+    """Merge single-band images into a multi-band image."""
+    from . import _core
+    return Image(_core.image_merge(mode, [b._rust_image for b in bands]))
+
+
+def blend(im1: Image, im2: Image, alpha: float) -> Image:
+    """Linear interpolation between two images."""
+    from . import _core
+    return Image(_core.image_blend(im1._rust_image, im2._rust_image, alpha))
+
+
+def composite(image1: Image, image2: Image, mask: Image) -> Image:
+    """Composite image1 over image2 using mask."""
+    from . import _core
+    return Image(_core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image))
 
 
 def thumbnail(
