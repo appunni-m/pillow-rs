@@ -1,0 +1,28 @@
+[workspace]
+members = [
+    "pillow-rs-core",
+    "pillow-rs-py",
+    "pillow-rs-js",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.lints.clippy]
+redundant_clone = "deny"
+large_enum_variant = "deny"
+needless_collect = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+
+[workspace.profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+panic = "abort"
+
+[workspace.profile.dev]
+opt-level = 1

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test -p pillow-rs-core
+
+  python-tests:
+    needs: core-tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install maturin pyyaml pytest pytest-json-report
+      - working-directory: pillow-rs-py
+        run: maturin develop
+      - run: pip install -e "pillow-rs-py/[dev]"
+      - run: python -m pytest tests/ -v --json-report --json-report-file=report.json
+      - run: python scripts/compute_coverage.py manifest.yaml report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-py${{ matrix.python-version }}
+          path: coverage/report.json
+
+  wasm-build:
+    needs: core-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo install wasm-pack
+      - working-directory: pillow-rs-js
+        run: wasm-pack build --target web --dev
+
+  benchmark:
+    needs: python-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install maturin pytest pytest-benchmark
+      - working-directory: pillow-rs-py
+        run: maturin develop --release
+      - run: pip install -e "pillow-rs-py/[dev]"
+      - run: python -m pytest tests/benchmarks/ -m benchmark --benchmark-only --benchmark-json=bench-rs.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench-rs.json
