@@ -1,12 +1,14 @@
-"""Test configuration for pillow-rs."""
+"""Test configuration for pillow-rs PIL-RSPIL parity testing.
+
+Each test runs against both PIL (reference) and RSPIL (pillow-rs),
+then compares results to verify identical behavior.
+"""
 import pytest
 import yaml
 from pathlib import Path
 
 
 def pytest_addoption(parser):
-    parser.addoption("--pil", action="store_true", default=False,
-                     help="Run tests against Pillow instead of pillow-rs")
     parser.addoption("--manifest", action="store", default="manifest.yaml",
                      help="Path to manifest.yaml")
 
@@ -18,36 +20,70 @@ def manifest(request):
         return yaml.safe_load(f)
 
 
-@pytest.fixture(scope="session")
-def use_pillow(request):
-    return request.config.getoption("--pil", False)
-
-
-@pytest.fixture(scope="session")
-def ImageModule(use_pillow):
-    if use_pillow:
-        from PIL import Image as PILImage
-        return PILImage
-    else:
-        from pillow_rs import Image
-        return Image
-
-
-@pytest.fixture
-def Image(ImageModule):
-    return ImageModule
-
-
-def pytest_collection_modifyitems(config, items):
-    if config.getoption("--pil", False):
-        skip_rs = pytest.mark.skip(reason="requires pillow-rs")
-        for item in items:
-            if "rs_only" in item.keywords:
-                item.add_marker(skip_rs)
-
-
 def pytest_configure(config):
     config.addinivalue_line("markers",
         "covers(func, mode=None, variant=None): mark test as covering a manifest entry")
-    config.addinivalue_line("markers",
-        "rs_only: test only applies to pillow-rs (not Pillow)")
+
+
+# ── PIL reference ──────────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def PIL():
+    """Reference Pillow library for parity comparison."""
+    import PIL.Image
+    import PIL.ImageOps
+    import PIL.ImageChops
+    import PIL.ImageFilter
+    import PIL.ImageEnhance
+    import PIL.ImageColor
+    return PIL
+
+
+# ── RSPIL (pillow-rs) ──────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def RSPIL():
+    """Our pillow-rs implementation."""
+    import pillow_rs
+    return pillow_rs
+
+
+# ── Parity assertion helpers ───────────────────────────────────
+
+def assert_images_equal(rs_img, pil_img, tolerance=0):
+    """Assert pillow-rs image matches PIL image pixel-for-pixel.
+
+    Args:
+        rs_img: pillow-rs Image
+        pil_img: PIL Image
+        tolerance: max per-channel difference (0 = exact match)
+    """
+    assert rs_img.size == pil_img.size, \
+        f"Size mismatch: RSPIL={rs_img.size} PIL={pil_img.size}"
+    assert rs_img.mode == pil_img.mode, \
+        f"Mode mismatch: RSPIL={rs_img.mode} PIL={pil_img.mode}"
+
+    rs_bytes = rs_img.tobytes()
+    pil_bytes = pil_img.tobytes()
+
+    assert len(rs_bytes) == len(pil_bytes), \
+        f"Byte length mismatch: RSPIL={len(rs_bytes)} PIL={len(pil_bytes)}"
+
+    if tolerance == 0:
+        assert rs_bytes == pil_bytes, \
+            "Pixel data differs (expected exact match)"
+    else:
+        mismatches = 0
+        max_diff = 0
+        for i, (r, p) in enumerate(zip(rs_bytes, pil_bytes)):
+            diff = abs(r - p)
+            if diff > tolerance:
+                mismatches += 1
+                max_diff = max(max_diff, diff)
+        assert mismatches == 0, \
+            f"{mismatches} pixels exceed tolerance {tolerance}, max diff={max_diff}"
+
+
+def assert_values_equal(rs_val, pil_val):
+    """Assert that two non-image values match."""
+    assert rs_val == pil_val, f"Value mismatch: RSPIL={rs_val} PIL={pil_val}"

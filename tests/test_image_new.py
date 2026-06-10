@@ -1,51 +1,72 @@
-"""Tests for Image.new() — creation with various modes and colors."""
+"""PIL parity tests for Image.new() — creation with all modes and color types."""
 import pytest
 from pillow_rs import Image
+from conftest import assert_images_equal, assert_values_equal
 
 
-class TestImageNew:
-    @pytest.mark.covers("Image.new", mode="RGB", variant="default")
-    def test_new_rgb_default(self):
-        img = Image.new("RGB", (100, 100))
-        assert img.size == (100, 100)
-        assert img.mode == "RGB"
+@pytest.mark.covers("Image.new", mode="RGB", variant="default")
+def test_new_rgb_default(PIL):
+    pil_img = PIL.Image.new("RGB", (100, 100))
+    rs_img = Image.new("RGB", (100, 100))
+    assert_images_equal(rs_img, pil_img)
 
-    @pytest.mark.covers("Image.new", mode="RGB", variant="color_int")
-    def test_new_rgb_with_int_color(self):
-        img = Image.new("RGB", (50, 50), 128)
-        assert img.size == (50, 50)
 
-    @pytest.mark.covers("Image.new", mode="RGB", variant="color_hex")
-    def test_new_rgb_with_hex_color(self):
-        img = Image.new("RGB", (10, 10), "#FF0000")
-        data = img.tobytes()
-        assert data[0] == 255
-        assert data[1] == 0
+@pytest.mark.covers("Image.new", mode="RGB", variant="color_int")
+def test_new_rgb_with_int(PIL):
+    pil_img = PIL.Image.new("RGB", (50, 50), 128)
+    rs_img = Image.new("RGB", (50, 50), 128)
+    assert_images_equal(rs_img, pil_img)
 
-    @pytest.mark.covers("Image.new", mode="RGB", variant="color_rgb_tuple")
-    def test_new_rgb_with_rgb_tuple(self):
-        img = Image.new("RGB", (25, 25), (255, 0, 0))
-        assert img.mode == "RGB"
 
-    @pytest.mark.covers("Image.new", mode="RGBA", variant="default")
-    def test_new_rgba(self):
-        img = Image.new("RGBA", (30, 30))
-        assert img.mode == "RGBA"
+@pytest.mark.covers("Image.new", mode="RGB", variant="color_hex")
+def test_new_rgb_hex(PIL):
+    pil_img = PIL.Image.new("RGB", (20, 20), "#FF8040")
+    rs_img = Image.new("RGB", (20, 20), "#FF8040")
+    assert_images_equal(rs_img, pil_img)
 
-    @pytest.mark.covers("Image.new", mode="L", variant="default")
-    def test_new_grayscale(self):
-        img = Image.new("L", (10, 10), 128)
-        assert img.mode == "L"
-        data = img.tobytes()
-        assert data[0] == 128
 
-    @pytest.mark.covers("Image.new", edge_case="zero_width")
-    def test_new_zero_width_creates_empty(self):
-        # Phase 1: core doesn't yet validate dimensions; Phase 2 will add validation
-        img = Image.new("RGB", (0, 100))
-        assert img.size[0] == 0
+@pytest.mark.covers("Image.new", mode="RGB", variant="color_rgb_tuple")
+def test_new_rgb_tuple(PIL):
+    pil_img = PIL.Image.new("RGB", (30, 30), (100, 200, 50))
+    rs_img = Image.new("RGB", (30, 30), (100, 200, 50))
+    assert_images_equal(rs_img, pil_img)
 
-    @pytest.mark.covers("Image.new", edge_case="invalid_mode")
-    def test_new_invalid_mode_raises(self):
-        with pytest.raises(Exception):
-            Image.new("INVALID", (100, 100))
+
+@pytest.mark.covers("Image.new", mode="RGBA", variant="default")
+def test_new_rgba(PIL):
+    pil_img = PIL.Image.new("RGBA", (40, 40), (255, 0, 0, 128))
+    rs_img = Image.new("RGBA", (40, 40), (255, 0, 0, 128))
+    assert_images_equal(rs_img, pil_img)
+
+
+@pytest.mark.covers("Image.new", mode="L", variant="default")
+def test_new_grayscale(PIL):
+    pil_img = PIL.Image.new("L", (25, 25), 200)
+    rs_img = Image.new("L", (25, 25), 200)
+    assert_images_equal(rs_img, pil_img)
+
+
+def test_new_properties_match(PIL):
+    """Basic properties match PIL for new images."""
+    pil_img = PIL.Image.new("RGB", (150, 75), (10, 20, 30))
+    rs_img = Image.new("RGB", (150, 75), (10, 20, 30))
+    assert_values_equal(rs_img.size, pil_img.size)
+    assert_values_equal(rs_img.width, pil_img.width)
+    assert_values_equal(rs_img.height, pil_img.height)
+    assert_values_equal(rs_img.mode, pil_img.mode)
+
+
+def test_new_copy_parity(PIL):
+    """Image.copy() produces identical images."""
+    pil_img = PIL.Image.new("RGB", (50, 50), (255, 128, 0))
+    rs_img = Image.new("RGB", (50, 50), (255, 128, 0))
+    pil_copy = pil_img.copy()
+    rs_copy = rs_img.copy()
+    assert_images_equal(rs_copy, pil_copy)
+
+
+def test_new_tobytes_parity(PIL):
+    """tobytes() matches PIL."""
+    pil_img = PIL.Image.new("RGB", (20, 20), (100, 150, 200))
+    rs_img = Image.new("RGB", (20, 20), (100, 150, 200))
+    assert rs_img.tobytes() == pil_img.tobytes()

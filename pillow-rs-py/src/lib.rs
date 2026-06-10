@@ -24,13 +24,23 @@ impl PyImage {
             if let Ok(hex_str) = val.extract::<String>() {
                 pillow_rs_core::color::parse_color_str(&hex_str).map_err(|e| map_error(e))?
             } else if let Ok(i) = val.extract::<u8>() {
-                (i, i, i, 255)
+                // PIL: single int fills only the first channel for multi-band modes
+                if mode == "L" || mode == "LA" {
+                    (i, i, i, 255)
+                } else {
+                    (i, 0, 0, 255)
+                }
             } else if let Ok((r, g, b)) = val.extract::<(u8, u8, u8)>() {
                 (r, g, b, 255)
             } else if let Ok((r, g, b, a)) = val.extract::<(u8, u8, u8, u8)>() {
                 (r, g, b, a)
             } else if let Ok((l,)) = val.extract::<(u8,)>() {
-                (l, l, l, 255)
+                // PIL: single-element tuple same as single int
+                if mode == "L" || mode == "LA" {
+                    (l, l, l, 255)
+                } else {
+                    (l, 0, 0, 255)
+                }
             } else {
                 return Err(pyo3::exceptions::PyTypeError::new_err(
                     "color must be int, tuple, or string",

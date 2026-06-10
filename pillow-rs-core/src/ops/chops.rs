@@ -37,10 +37,12 @@ pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     })
 }
 
-/// Screen blend mode.
+/// Screen blend mode (PIL uses integer division).
 pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     channel_op(image1, image2, |a, b| {
-        255u16.saturating_sub((((255.0 - a as f64) * (255.0 - b as f64)) / 255.0).round() as u16) as u8
+        let a_inv = 255u32 - a as u32;
+        let b_inv = 255u32 - b as u32;
+        (255u32 - (a_inv * b_inv / 255)) as u8
     })
 }
 

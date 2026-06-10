@@ -1,3 +1,6 @@
+use image::DynamicImage;
+
+use crate::color::{pil_grayscale, pil_grayscale_alpha};
 use crate::error::PilError;
 use crate::image::Image;
 
@@ -25,8 +28,8 @@ impl Image {
         }
 
         let converted = match mode {
-            "L" => image::DynamicImage::ImageLuma8(img.to_luma8()),
-            "LA" => image::DynamicImage::ImageLumaA8(img.to_luma_alpha8()),
+            "L" => DynamicImage::ImageLuma8(pil_grayscale(img)),
+            "LA" => DynamicImage::ImageLumaA8(pil_grayscale_alpha(img)),
             "RGB" => image::DynamicImage::ImageRgb8(img.to_rgb8()),
             "RGBA" => image::DynamicImage::ImageRgba8(img.to_rgba8()),
             "1" => {
