@@ -229,6 +229,34 @@ class Image:
         self._rust_image.load()
         return self  # TODO: return PixelAccess object
 
+    def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
+        """Alpha composite im over self."""
+        self._rust_image.alpha_composite(im._rust_image)
+
+    def getcolors(self, maxcolors=256):
+        """Return list of (count, color) tuples or None if too many colors."""
+        return self._rust_image.getcolors(maxcolors)
+
+    def getdata(self, band=None):
+        """Return pixel data as sequence."""
+        return self._rust_image.getdata(band if band is not None else -1)
+
+    def getprojection(self):
+        """Return horizontal and vertical projections."""
+        return self._rust_image.getprojection()
+
+    def entropy(self, mask=None, extrema=None):
+        """Calculate image entropy."""
+        return self._rust_image.entropy()
+
+    def seek(self, frame):
+        """Seek to frame in multi-frame image."""
+        self._rust_image.seek(frame)
+
+    def tell(self):
+        """Return current frame number."""
+        return self._rust_image.tell()
+
     def close(self):
         """Close the image file and release resources."""
         self._rust_image.close()

@@ -299,6 +299,36 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn alpha_composite(&mut self, im: &Bound<'_, PyImage>) -> PyResult<()> {
+        let borrowed = im.borrow();
+        self.inner.alpha_composite(&borrowed.inner, (0, 0), (0, 0))
+            .map_err(|e| map_error(e))
+    }
+
+    fn getcolors(&mut self, maxcolors: Option<u32>) -> PyResult<Option<Vec<(u32, Vec<u8>)>>> {
+        self.inner.getcolors(maxcolors.unwrap_or(256)).map_err(|e| map_error(e))
+    }
+
+    fn getdata(&mut self, band: Option<i32>) -> PyResult<Vec<u8>> {
+        self.inner.getdata(band).map_err(|e| map_error(e))
+    }
+
+    fn getprojection(&mut self) -> PyResult<(Vec<u32>, Vec<u32>)> {
+        self.inner.getprojection().map_err(|e| map_error(e))
+    }
+
+    fn entropy(&mut self) -> PyResult<f64> {
+        self.inner.entropy().map_err(|e| map_error(e))
+    }
+
+    fn seek(&mut self, frame: u32) -> PyResult<()> {
+        self.inner.seek(frame).map_err(|e| map_error(e))
+    }
+
+    fn tell(&self) -> u32 {
+        self.inner.tell()
+    }
+
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())
@@ -445,6 +475,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(chops_lighter, m)?)?;
     m.add_function(wrap_pyfunction!(chops_difference, m)?)?;
     m.add_function(wrap_pyfunction!(chops_invert, m)?)?;
+
+    // More ImageChops
+    m.add_function(wrap_pyfunction!(chops_add_modulo, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_subtract_modulo, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_constant, m)?)?;
 
     // ImageColor
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
@@ -708,6 +743,24 @@ fn chops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let rs = pillow_rs_core::ops::chops::invert(&borrowed.inner)
         .map_err(|e| map_error(e))?;
     Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_add_modulo(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::add_modulo(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_subtract_modulo(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let b1 = image1.borrow(); let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::subtract_modulo(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
+}
+
+#[pyfunction]
+fn chops_constant(image: &Bound<'_, PyImage>, value: u8) -> PyResult<PyImage> {
+    let b = image.borrow();
+    pillow_rs_core::ops::chops::constant(&b.inner, value).map(|i| PyImage { inner: i }).map_err(|e| map_error(e))
 }
 
 // --- Image module functions ---
