@@ -3,7 +3,7 @@
 
 use crate::error::PilError;
 use crate::image::Image;
-use image::{DynamicImage, GenericImageView};
+use image::DynamicImage;
 
 /// Pre-defined filter kernels matching PIL's ImageFilter module exactly.
 struct FilterKernel {

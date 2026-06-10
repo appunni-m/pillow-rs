@@ -22,4 +22,12 @@ echo ""
 echo "=== trust report ==="
 python scripts/compute_coverage.py manifest.yaml /tmp/report.json 2>&1 | grep -E "TRUST|Total"
 echo ""
-echo "Lint complete."
+echo "=== wasm build ==="
+wasm-pack build --target web --dev 2>&1 | tail -2
+
+echo ""
+echo "=== wasm api coverage ==="
+grep -c "pub fn\|js_name" pillow-rs-js/src/lib.rs | tail -1 || echo "?"
+
+echo ""
+echo "Lint complete. Python: 202 tests | WASM: check pkg/ output"

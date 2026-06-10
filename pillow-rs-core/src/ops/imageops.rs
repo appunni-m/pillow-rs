@@ -2,7 +2,7 @@
 //! Mirroring PIL.ImageOps: autocontrast, equalize, invert, flip, mirror,
 //! posterize, solarize, expand, scale, contain, cover, fit, pad, grayscale.
 
-use image::{GenericImage, GenericImageView};
+use image::{DynamicImage, GenericImage};
 
 use crate::error::PilError;
 use crate::image::Image;
