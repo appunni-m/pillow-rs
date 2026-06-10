@@ -63,3 +63,5 @@ All work starts from `manifest.yaml`. To add a new function:
 ### Git
 - Never sign commits with `Co-Authored-By: Claude` or Anthropic references
 - Use your own git identity; the AI provides code, you own the commits
+
+use rust development skill

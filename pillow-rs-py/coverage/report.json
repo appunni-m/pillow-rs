@@ -1,26 +1,54 @@
 {
-  "version": "0.1.0",
-  "pillow_version": "11.0.0",
-  "overall_coverage": 0.095,
+  "version": "0.2.0",
+  "pillow_version": "12.2.0",
+  "overall_coverage": 0.098,
   "modules": {
     "Image": {
-      "function_count": 20,
-      "average": 0.09
+      "function_count": 41,
+      "average": 0.095
+    },
+    "ImageChops": {
+      "function_count": 21,
+      "average": 0.1
+    },
+    "ImageColor": {
+      "function_count": 2,
+      "average": 0.1
     },
     "ImageDraw": {
-      "function_count": 4,
-      "average": 0.1
-    },
-    "ImageEnhance": {
-      "function_count": 1,
-      "average": 0.1
-    },
-    "ImageFilter": {
       "function_count": 17,
+      "average": 0.1
+    },
+    "ImageFont": {
+      "function_count": 3,
+      "average": 0.1
+    },
+    "ImageModule": {
+      "function_count": 7,
+      "average": 0.1
+    },
+    "ImageOps": {
+      "function_count": 18,
+      "average": 0.1
+    },
+    "ImagePalette": {
+      "function_count": 5,
       "average": 0.1
     }
   },
   "functions": [
+    {
+      "function": "Image.alpha_composite",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
     {
       "function": "Image.close",
       "signature_score": 0.0,
@@ -70,6 +98,42 @@
       "variant_coverage": "0/2"
     },
     {
+      "function": "Image.draft",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.effect_spread",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.entropy",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/6",
+      "variant_coverage": "0/2"
+    },
+    {
       "function": "Image.filter",
       "signature_score": 0.0,
       "param_score": 0.0,
@@ -78,11 +142,71 @@
       "format_score": 1.0,
       "parity_score": 0.0,
       "total": 0.1,
-      "mode_coverage": "0/40",
-      "variant_coverage": "0/10"
+      "mode_coverage": "0/68",
+      "variant_coverage": "0/17"
     },
     {
       "function": "Image.getbands",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/4",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.getbbox",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/18",
+      "variant_coverage": "0/3"
+    },
+    {
+      "function": "Image.getchannel",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/16",
+      "variant_coverage": "0/4"
+    },
+    {
+      "function": "Image.getcolors",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/6",
+      "variant_coverage": "0/2"
+    },
+    {
+      "function": "Image.getdata",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/8",
+      "variant_coverage": "0/2"
+    },
+    {
+      "function": "Image.getextrema",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -106,6 +230,30 @@
       "variant_coverage": "0/1"
     },
     {
+      "function": "Image.getprojection",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.histogram",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/6",
+      "variant_coverage": "0/2"
+    },
+    {
       "function": "Image.load",
       "signature_score": 0.0,
       "param_score": 0.0,
@@ -114,7 +262,7 @@
       "format_score": 1.0,
       "parity_score": 0.0,
       "total": 0.1,
-      "mode_coverage": "0/4",
+      "mode_coverage": "0/6",
       "variant_coverage": "0/1"
     },
     {
@@ -138,8 +286,8 @@
       "format_score": 0.0,
       "parity_score": 0.0,
       "total": 0.0,
-      "mode_coverage": "0/12",
-      "variant_coverage": "0/3"
+      "mode_coverage": "0/8",
+      "variant_coverage": "0/2"
     },
     {
       "function": "Image.paste",
@@ -152,6 +300,42 @@
       "total": 0.1,
       "mode_coverage": "0/20",
       "variant_coverage": "0/5"
+    },
+    {
+      "function": "Image.point",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.putalpha",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/6",
+      "variant_coverage": "0/2"
+    },
+    {
+      "function": "Image.putdata",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
     },
     {
       "function": "Image.putpixel",
@@ -176,6 +360,30 @@
       "total": 0.1,
       "mode_coverage": "0/4",
       "variant_coverage": "0/2"
+    },
+    {
+      "function": "Image.reduce",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.remap_palette",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
     },
     {
       "function": "Image.resize",
@@ -214,6 +422,18 @@
       "variant_coverage": "0/5"
     },
     {
+      "function": "Image.seek",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
       "function": "Image.split",
       "signature_score": 0.0,
       "param_score": 0.0,
@@ -223,6 +443,18 @@
       "parity_score": 0.0,
       "total": 0.1,
       "mode_coverage": "0/4",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "Image.tell",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
       "variant_coverage": "0/1"
     },
     {
@@ -238,6 +470,18 @@
       "variant_coverage": "0/2"
     },
     {
+      "function": "Image.tobitmap",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/2",
+      "variant_coverage": "0/2"
+    },
+    {
       "function": "Image.tobytes",
       "signature_score": 0.0,
       "param_score": 0.0,
@@ -250,6 +494,18 @@
       "variant_coverage": "0/2"
     },
     {
+      "function": "Image.transform",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
       "function": "Image.transpose",
       "signature_score": 0.0,
       "param_score": 0.0,
@@ -260,6 +516,342 @@
       "total": 0.1,
       "mode_coverage": "0/42",
       "variant_coverage": "0/7"
+    },
+    {
+      "function": "Image.verify",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.add",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.add_modulo",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.blend",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.composite",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.constant",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.darker",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.difference",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.duplicate",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.hard_light",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.invert",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.lighter",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.logical_and",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.logical_or",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.logical_xor",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.multiply",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.offset",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.overlay",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.screen",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.soft_light",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.subtract",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageChops.subtract_modulo",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageColor.getcolor",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageColor.getrgb",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.arc",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.bitmap",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.chord",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.circle",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
     },
     {
       "function": "ImageDraw.ellipse",
@@ -286,6 +878,66 @@
       "variant_coverage": "0/2"
     },
     {
+      "function": "ImageDraw.multiline_text",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.multiline_textbbox",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.pieslice",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.point",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.polygon",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
       "function": "ImageDraw.rectangle",
       "signature_score": 0.0,
       "param_score": 0.0,
@@ -296,6 +948,30 @@
       "total": 0.1,
       "mode_coverage": "0/6",
       "variant_coverage": "0/2"
+    },
+    {
+      "function": "ImageDraw.regular_polygon",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageDraw.rounded_rectangle",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
     },
     {
       "function": "ImageDraw.text",
@@ -310,7 +986,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageEnhance.enhance",
+      "function": "ImageDraw.textbbox",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -318,11 +994,23 @@
       "format_score": 1.0,
       "parity_score": 0.0,
       "total": 0.1,
-      "mode_coverage": "0/12",
-      "variant_coverage": "0/3"
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.BLUR",
+      "function": "ImageDraw.textlength",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageFont.load",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -334,7 +1022,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.BoxBlur",
+      "function": "ImageFont.load_default",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -346,7 +1034,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.CONTOUR",
+      "function": "ImageFont.truetype",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -358,7 +1046,91 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.DETAIL",
+      "function": "ImageModule.blend",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageModule.composite",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageModule.effect_noise",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageModule.eval",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageModule.fromarray",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageModule.frombytes",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/3",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageModule.merge",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/4",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageOps.autocontrast",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -370,7 +1142,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.EDGE_ENHANCE",
+      "function": "ImageOps.colorize",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -382,7 +1154,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.EDGE_ENHANCE_MORE",
+      "function": "ImageOps.contain",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -394,7 +1166,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.EMBOSS",
+      "function": "ImageOps.cover",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -406,7 +1178,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.FIND_EDGES",
+      "function": "ImageOps.crop",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -418,7 +1190,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.GaussianBlur",
+      "function": "ImageOps.deform",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -430,7 +1202,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.MaxFilter",
+      "function": "ImageOps.equalize",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -442,7 +1214,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.MedianFilter",
+      "function": "ImageOps.exif_transpose",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -454,7 +1226,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.MinFilter",
+      "function": "ImageOps.expand",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -466,7 +1238,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.ModeFilter",
+      "function": "ImageOps.fit",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -478,7 +1250,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.SHARPEN",
+      "function": "ImageOps.flip",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -490,7 +1262,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.SMOOTH",
+      "function": "ImageOps.grayscale",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -502,7 +1274,7 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.SMOOTH_MORE",
+      "function": "ImageOps.invert",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
@@ -514,7 +1286,115 @@
       "variant_coverage": "0/1"
     },
     {
-      "function": "ImageFilter.UnsharpMask",
+      "function": "ImageOps.mirror",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageOps.pad",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageOps.posterize",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageOps.scale",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImageOps.solarize",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImagePalette.copy",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImagePalette.getcolor",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImagePalette.getdata",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImagePalette.save",
+      "signature_score": 0.0,
+      "param_score": 0.0,
+      "mode_score": 0.0,
+      "edge_score": 0.0,
+      "format_score": 1.0,
+      "parity_score": 0.0,
+      "total": 0.1,
+      "mode_coverage": "0/1",
+      "variant_coverage": "0/1"
+    },
+    {
+      "function": "ImagePalette.tobytes",
       "signature_score": 0.0,
       "param_score": 0.0,
       "mode_score": 0.0,
