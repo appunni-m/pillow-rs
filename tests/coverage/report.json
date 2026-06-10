@@ -1,18 +1,18 @@
 {
   "version": "0.2.0",
   "pillow_version": "12.2.0",
-  "overall_coverage": 0.384,
-  "total_tests": 117,
+  "overall_coverage": 0.507,
+  "total_tests": 152,
   "modules": {
     "Image": {
       "function_count": 41,
       "average": 0.502,
-      "tested_funcs": 42
+      "tested_funcs": 59
     },
     "ImageChops": {
       "function_count": 21,
-      "average": 0.408,
-      "tested_funcs": 8
+      "average": 0.653,
+      "tested_funcs": 14
     },
     "ImageColor": {
       "function_count": 2,
@@ -21,8 +21,8 @@
     },
     "ImageDraw": {
       "function_count": 17,
-      "average": 0.331,
-      "tested_funcs": 5
+      "average": 0.584,
+      "tested_funcs": 10
     },
     "ImageFont": {
       "function_count": 8,
@@ -31,13 +31,13 @@
     },
     "ImageModule": {
       "function_count": 7,
-      "average": 0.08,
-      "tested_funcs": 0
+      "average": 0.209,
+      "tested_funcs": 1
     },
     "ImageOps": {
       "function_count": 18,
-      "average": 0.414,
-      "tested_funcs": 7
+      "average": 0.653,
+      "tested_funcs": 12
     },
     "ImagePalette": {
       "function_count": 5,
@@ -594,55 +594,55 @@
     },
     {
       "function": "ImageChops.add_modulo",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageChops.blend",
-      "tests": 0,
-      "passed": 0,
+      "tests": 2,
+      "passed": 2,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageChops.composite",
-      "tests": 0,
-      "passed": 0,
+      "tests": 2,
+      "passed": 2,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageChops.constant",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageChops.darker",
@@ -672,16 +672,16 @@
     },
     {
       "function": "ImageChops.duplicate",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageChops.hard_light",
@@ -841,16 +841,16 @@
     },
     {
       "function": "ImageChops.subtract_modulo",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageColor.getcolor",
@@ -880,16 +880,16 @@
     },
     {
       "function": "ImageDraw.arc",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageDraw.bitmap",
@@ -906,29 +906,29 @@
     },
     {
       "function": "ImageDraw.chord",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageDraw.circle",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageDraw.ellipse",
@@ -984,16 +984,16 @@
     },
     {
       "function": "ImageDraw.pieslice",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageDraw.point",
@@ -1049,16 +1049,16 @@
     },
     {
       "function": "ImageDraw.rounded_rectangle",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageDraw.text",
@@ -1283,29 +1283,29 @@
     },
     {
       "function": "ImageModule.merge",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.975,
+      "mode_score": 0.975,
+      "edge_score": 0.975,
+      "format_score": 0.975,
+      "parity_score": 1.0,
+      "total": 0.98
     },
     {
       "function": "ImageOps.autocontrast",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageOps.colorize",
@@ -1322,29 +1322,29 @@
     },
     {
       "function": "ImageOps.contain",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageOps.cover",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageOps.crop",
@@ -1400,16 +1400,16 @@
     },
     {
       "function": "ImageOps.expand",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageOps.fit",
@@ -1504,16 +1504,16 @@
     },
     {
       "function": "ImageOps.scale",
-      "tests": 0,
-      "passed": 0,
+      "tests": 1,
+      "passed": 1,
       "failed": 0,
-      "signature_score": 0.0,
-      "param_score": 0.1,
-      "mode_score": 0.1,
-      "edge_score": 0.1,
-      "format_score": 0.1,
-      "parity_score": 0.0,
-      "total": 0.08
+      "signature_score": 1.0,
+      "param_score": 0.925,
+      "mode_score": 0.925,
+      "edge_score": 0.925,
+      "format_score": 0.925,
+      "parity_score": 1.0,
+      "total": 0.94
     },
     {
       "function": "ImageOps.solarize",
