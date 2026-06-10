@@ -559,6 +559,10 @@ impl PyFont {
     fn getbbox(&self, text: &str) -> PyResult<(u32, u32)> {
         Ok(self.inner.text_bbox(text))
     }
+
+    fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
+        Ok(self.inner.getmask(text))
+    }
 }
 
 // --- ImageDraw ---

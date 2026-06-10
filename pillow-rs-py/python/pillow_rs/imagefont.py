@@ -43,7 +43,15 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        raise NotImplementedError("FreeTypeFont.getmask")
+        w, h, alpha = self._rust_font.getmask_alpha(str(text))
+        from .image import Image as PILImage
+        img = PILImage.new("L", (w, h), 0)
+        for y in range(h):
+            for x in range(w):
+                a = alpha[y * w + x]
+                if a > 0:
+                    img.putpixel((x, y), a if ink == 0 else ink)
+        return img
 
     def getmetrics(self):
         raise NotImplementedError("FreeTypeFont.getmetrics")
