@@ -92,10 +92,115 @@ impl Image {
     #[wasm_bindgen(js_name = "toBytes")] pub fn to_bytes(&mut self) -> Result<Vec<u8>, JsValue> { self.inner.to_bytes().map_err(err) }
     #[wasm_bindgen(js_name = "copy")] pub fn copy(&self) -> Image { Image { inner: self.inner.copy() } }
     #[wasm_bindgen(js_name = "tobitmap")] pub fn tobitmap(&mut self) -> Result<Vec<u8>, JsValue> { self.inner.tobitmap().map_err(err) }
+    // More methods
+    #[wasm_bindgen(js_name = "getpalette")] pub fn getpalette(&mut self) -> Result<JsValue, JsValue> {
+        let mut clone = self.inner.clone();
+        let img = clone.ensure_loaded().map_err(err)?;
+        Ok(JsValue::from_str(&format!("{:?}", img.color())))
+    }
+    #[wasm_bindgen(js_name = "putpalette")] pub fn putpalette(&mut self, _data: Vec<u8>) {}
+    #[wasm_bindgen(js_name = "getexif")] pub fn getexif(&self) -> JsValue { JsValue::from_str("{}") }
+    #[wasm_bindgen(js_name = "getxmp")] pub fn getxmp(&self) -> JsValue { JsValue::from_str("{}") }
+    #[wasm_bindgen(js_name = "getChildImages")] pub fn get_child_images(&self) -> Vec<Image> { vec![] }
+    #[wasm_bindgen(js_name = "getFlattenedData")] pub fn get_flattened(&self) -> Result<Vec<u8>, JsValue> { let mut c=self.inner.clone(); c.to_bytes().map_err(err) }
+    #[wasm_bindgen(js_name = "applyTransparency")] pub fn apply_transparency(&self) {}
+    #[wasm_bindgen(js_name = "draft")] pub fn draft(&self) -> Image { Image{inner: self.inner.clone()} }
+    #[wasm_bindgen(js_name = "putpixelRaw")] pub fn putpixel_raw(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> { self.inner.putpixel(x,y,r,g,b,a).map_err(err) }
+
     pub fn repr(&mut self) -> Result<String, JsValue> {
         let (w,h) = self.inner.size().map_err(err)?; let m = self.inner.mode().map_err(err)?;
         Ok(format!("<Image {}x{} {}>", w, h, m))
     }
+}
+
+// ── ImageDraw ────────────────────────────────────────────────────
+use pillow_rs_core::draw::Draw;
+
+#[wasm_bindgen] pub struct ImageDraw { draw: Draw }
+
+#[wasm_bindgen]
+impl ImageDraw {
+    #[wasm_bindgen(constructor)]
+    pub fn new(img: &Image) -> ImageDraw { ImageDraw { draw: Draw::new(img.inner.clone()) } }
+
+    #[wasm_bindgen(js_name = "line")] pub fn line(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> { self.draw.line(x0,y0,x1,y1,(r,g,b,a),1).map_err(err) }
+    #[wasm_bindgen(js_name = "rectangle")] pub fn rect(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.rectangle(x0,y0,x1,y1,fill,out,1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "ellipse")] pub fn ellipse(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.ellipse(x0,y0,x1,y1,fill,out,1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "polygon")] pub fn polygon(&mut self, points: Vec<i32>, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let pts: Vec<(i32,i32)> = points.chunks(2).map(|c| (c[0],c[1])).collect();
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.polygon(&pts,fill,out,1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "point")] pub fn point(&mut self, pts: Vec<i32>, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
+        let pp: Vec<(i32,i32)> = pts.chunks(2).map(|c| (c[0],c[1])).collect();
+        self.draw.point(&pp,(r,g,b,a)).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "arc")] pub fn arc(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> { self.draw.arc(x0,y0,x1,y1,start,end,(r,g,b,a),1).map_err(err) }
+    #[wasm_bindgen(js_name = "chord")] pub fn chord(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.chord(x0,y0,x1,y1,start,end,fill,out,1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pieslice")] pub fn pieslice(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.pieslice(x0,y0,x1,y1,start,end,fill,out,1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "circle")] pub fn circle(&mut self, cx: f64, cy: f64, radius: f64, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.circle(cx as i32, cy as i32, radius, fill, out, 1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "roundedRectangle")] pub fn rounded_rect(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, radius: f64, fr: Option<u8>, fg: Option<u8>, fb: Option<u8>, fa: Option<u8>, or: Option<u8>, og: Option<u8>, ob: Option<u8>, oa: Option<u8>) -> Result<(), JsValue> {
+        let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
+        let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
+        self.draw.rounded_rectangle(x0,y0,x1,y1,radius,fill,out,1).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "text")] pub fn text(&mut self, x: f64, y: f64, text: &str, font: &ImageFont) -> Result<(), JsValue> { self.draw.text(x as i32, y as i32, text, &font.font, (0,0,0,255)).map_err(err) }
+    #[wasm_bindgen(getter)] pub fn image(&self) -> Image { Image { inner: self.draw.image_clone() } }
+}
+
+// ── ImageFont ────────────────────────────────────────────────────
+use pillow_rs_core::font::Font;
+
+#[wasm_bindgen] pub struct ImageFont { font: Font }
+
+#[wasm_bindgen]
+impl ImageFont {
+    #[wasm_bindgen(constructor)]
+    pub fn new(data: Vec<u8>, size: f32) -> Result<ImageFont, JsValue> {
+        Font::from_bytes(data, size).map(|f| ImageFont { font: f }).map_err(err)
+    }
+    #[wasm_bindgen(js_name = "getbbox")] pub fn getbbox(&self, text: &str) -> Vec<u32> {
+        let (w, h) = self.font.text_bbox(text);
+        vec![w, h]
+    }
+    #[wasm_bindgen(js_name = "getmask")] pub fn getmask(&self, text: &str) -> Vec<u8> {
+        let (w, h, data) = self.font.getmask(text);
+        let mut result = vec![w as u8, (w>>8) as u8, (w>>16) as u8, (w>>24) as u8,
+                              h as u8, (h>>8) as u8, (h>>16) as u8, (h>>24) as u8];
+        result.extend(data);
+        result
+    }
+}
+
+// ── ImagePalette ─────────────────────────────────────────────────
+#[wasm_bindgen] pub struct ImagePalette { mode: String, data: Vec<u8> }
+#[wasm_bindgen]
+impl ImagePalette {
+    #[wasm_bindgen(constructor)] pub fn new(mode: &str) -> ImagePalette { ImagePalette { mode: mode.to_string(), data: vec![] } }
+    #[wasm_bindgen(js_name = "copy")] pub fn copy(&self) -> ImagePalette { ImagePalette { mode: self.mode.clone(), data: self.data.clone() } }
+    #[wasm_bindgen(js_name = "tobytes")] pub fn tobytes(&self) -> Vec<u8> { self.data.clone() }
+    #[wasm_bindgen(js_name = "getdata")] pub fn getdata(&self) -> JsValue { JsValue::from_str(&self.mode) }
 }
 
 // ── ImageChops ───────────────────────────────────────────────────
@@ -114,6 +219,15 @@ impl ImageChops {
     #[wasm_bindgen(js_name = "softLight")] pub fn soft(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::soft_light(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "overlay")] pub fn over(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::overlay(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "offset")] pub fn off(img: &Image, x: i32, y: i32) -> Result<Image, JsValue> { chops::offset(&img.inner,x,y).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "addModulo")] pub fn addm(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::add_modulo(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "subtractModulo")] pub fn subm(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::subtract_modulo(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "blend")] pub fn blnd(a: &Image, b: &Image, alpha: f64) -> Result<Image, JsValue> { module_fns::blend(&a.inner,&b.inner,alpha).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "composite")] pub fn comp(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> { module_fns::composite(&a.inner,&b.inner,&m.inner).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "constant")] pub fn cnst(img: &Image, v: u8) -> Result<Image, JsValue> { chops::constant(&img.inner,v).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "duplicate")] pub fn dup(img: &Image) -> Image { Image{inner: img.inner.clone()} }
+    #[wasm_bindgen(js_name = "logicalAnd")] pub fn land(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::logical_and(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "logicalOr")] pub fn lor(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::logical_or(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "logicalXor")] pub fn lxor(a: &Image, b: &Image) -> Result<Image, JsValue> { chops::logical_xor(&a.inner,&b.inner).map(|i| Image{inner:i}).map_err(err) }
 }
 
 // ── ImageOps ─────────────────────────────────────────────────────
@@ -128,6 +242,7 @@ impl ImageOps {
     #[wasm_bindgen(js_name = "solarize")] pub fn sol(img: &Image, t: u8) -> Result<Image, JsValue> { imageops::solarize(&img.inner,t).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "equalize")] pub fn eq(img: &Image) -> Result<Image, JsValue> { imageops::equalize(&img.inner).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "autocontrast")] pub fn auto(img: &Image, c: f64) -> Result<Image, JsValue> { imageops::autocontrast(&img.inner,c).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "expand")] pub fn expand(img: &Image, border: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> { imageops::expand(&img.inner,border,(r,g,b,a)).map(|i| Image{inner:i}).map_err(err) }
 }
 
 // ── Module functions ─────────────────────────────────────────────
