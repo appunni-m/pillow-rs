@@ -4,6 +4,9 @@ from pillow_rs import Image, ImageChops
 from conftest import assert_images_equal
 
 
+@pytest.mark.covers("ImageChops.add")
+
+
 def test_chops_add_parity(PIL):
     im1_pil = PIL.Image.new("RGB", (20, 20), (100, 50, 0))
     im2_pil = PIL.Image.new("RGB", (20, 20), (50, 50, 50))
@@ -24,6 +27,9 @@ def test_chops_subtract_parity(PIL):
         ImageChops.subtract(im1_rs, im2_rs),
         PIL.ImageChops.subtract(im1_pil, im2_pil),
     )
+
+
+@pytest.mark.covers("ImageChops.multiply")
 
 
 def test_chops_multiply_parity(PIL):
@@ -48,6 +54,9 @@ def test_chops_screen_parity(PIL):
     )
 
 
+@pytest.mark.covers("ImageChops.darker")
+
+
 def test_chops_darker_parity(PIL):
     im1_pil = PIL.Image.new("RGB", (20, 20), (200, 100, 50))
     im2_pil = PIL.Image.new("RGB", (20, 20), (100, 150, 100))
@@ -68,6 +77,9 @@ def test_chops_lighter_parity(PIL):
         ImageChops.lighter(im1_rs, im2_rs),
         PIL.ImageChops.lighter(im1_pil, im2_pil),
     )
+
+
+@pytest.mark.covers("ImageChops.difference")
 
 
 def test_chops_difference_parity(PIL):

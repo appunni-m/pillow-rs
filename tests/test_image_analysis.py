@@ -4,6 +4,9 @@ from pillow_rs import Image
 from conftest import assert_images_equal, assert_values_equal
 
 
+@pytest.mark.covers("Image.getpixel")
+
+
 def test_getpixel_rgb_parity(PIL):
     pil = PIL.Image.new("RGB", (3, 3), (255, 128, 0))
     rs = Image.new("RGB", (3, 3), (255, 128, 0))
@@ -16,10 +19,16 @@ def test_getpixel_rgba_parity(PIL):
     assert_values_equal(rs.getpixel((0, 0)), pil.getpixel((0, 0)))
 
 
+@pytest.mark.covers("Image.getpixel")
+
+
 def test_getpixel_grayscale_parity(PIL):
     pil = PIL.Image.new("L", (5, 5), 128)
     rs = Image.new("L", (5, 5), 128)
     assert_values_equal(rs.getpixel((2, 2)), pil.getpixel((2, 2)))
+
+
+@pytest.mark.covers("Image.putpixel")
 
 
 def test_putpixel_rgb_parity(PIL):
@@ -28,6 +37,9 @@ def test_putpixel_rgb_parity(PIL):
     pil.putpixel((1, 1), (255, 0, 0))
     rs.putpixel((1, 1), (255, 0, 0))
     assert_images_equal(rs, pil)
+
+
+@pytest.mark.covers("Image.getbbox")
 
 
 def test_getbbox_parity(PIL):
@@ -46,6 +58,9 @@ def test_getextrema_rgb_parity(PIL):
     pil = PIL.Image.new("RGB", (10, 10), (128, 64, 32))
     rs = Image.new("RGB", (10, 10), (128, 64, 32))
     assert_values_equal(rs.getextrema(), pil.getextrema())
+
+
+@pytest.mark.covers("Image.histogram")
 
 
 def test_histogram_rgb_parity(PIL):

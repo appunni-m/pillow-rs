@@ -4,6 +4,9 @@ from pillow_rs import Image, ImageEnhance
 from conftest import assert_images_equal, assert_values_equal
 
 
+@pytest.mark.covers("Image.getchannel")
+
+
 def test_getchannel_r_parity(PIL):
     pil = PIL.Image.new("RGB", (10, 10), (255, 128, 0))
     rs = Image.new("RGB", (10, 10), (255, 128, 0))
@@ -14,6 +17,9 @@ def test_getchannel_g_parity(PIL):
     pil = PIL.Image.new("RGB", (10, 10), (100, 200, 50))
     rs = Image.new("RGB", (10, 10), (100, 200, 50))
     assert_images_equal(rs.getchannel("G"), pil.getchannel("G"))
+
+
+@pytest.mark.covers("Image.putalpha")
 
 
 def test_putalpha_rgb_parity(PIL):
@@ -30,12 +36,18 @@ def test_reduce_parity(PIL):
     assert_images_equal(rs.reduce(2), pil.reduce(2))
 
 
+@pytest.mark.covers("ImageEnhance.Brightness")
+
+
 def test_enhance_brightness_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (128, 64, 32))
     rs = Image.new("RGB", (50, 50), (128, 64, 32))
     pil_out = PIL.ImageEnhance.Brightness(pil).enhance(1.5)
     rs_out = ImageEnhance.Brightness(rs).enhance(1.5)
     assert rs_out.size == (50, 50)
+
+
+@pytest.mark.covers("ImageEnhance.Color")
 
 
 def test_enhance_color_parity(PIL):
@@ -46,12 +58,18 @@ def test_enhance_color_parity(PIL):
     assert rs_out.size == (50, 50)
 
 
+@pytest.mark.covers("ImageEnhance.Contrast")
+
+
 def test_enhance_contrast_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (128, 128, 128))
     rs = Image.new("RGB", (50, 50), (128, 128, 128))
     pil_out = PIL.ImageEnhance.Contrast(pil).enhance(1.5)
     rs_out = ImageEnhance.Contrast(rs).enhance(1.5)
     assert rs_out.size == (50, 50)
+
+
+@pytest.mark.covers("ImageEnhance.Sharpness")
 
 
 def test_enhance_sharpness_parity(PIL):

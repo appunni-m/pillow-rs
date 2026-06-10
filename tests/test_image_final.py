@@ -4,11 +4,14 @@ from pillow_rs import Image, ImageDraw, ImageOps, ImageChops
 
 
 class TestPoint:
+    @pytest.mark.covers("Image.point")
     def test_point_lut(self):
         img = Image.new("RGB", (10, 10), (100, 100, 100))
         lut = bytes([min(255, i + 50) for i in range(256)])
         result = img.point(lut)
         assert result.size == (10, 10)
+
+    @pytest.mark.covers("Image.point")
 
     def test_point_callable(self, PIL=None):
         img = Image.new("RGB", (10, 10), (100, 100, 100))
@@ -24,10 +27,13 @@ class TestEffectSpread:
 
 
 class TestDrawArcPieslice:
+    @pytest.mark.covers("ImageDraw.arc")
     def test_draw_arc_works(self):
         img = Image.new("RGB", (80, 80), (255, 255, 255))
         ImageDraw.ImageDraw(img).arc([10, 10, 70, 70], start=0, end=180, fill=(255, 0, 0))
         assert img.size == (80, 80)
+
+    @pytest.mark.covers("ImageDraw.pieslice")
 
     def test_draw_pieslice_works(self):
         img = Image.new("RGB", (80, 80), (255, 255, 255))

@@ -46,6 +46,9 @@ def test_new_grayscale(PIL):
     assert_images_equal(rs_img, pil_img)
 
 
+@pytest.mark.covers("Image.new")
+
+
 def test_new_properties_match(PIL):
     """Basic properties match PIL for new images."""
     pil_img = PIL.Image.new("RGB", (150, 75), (10, 20, 30))
@@ -63,6 +66,9 @@ def test_new_copy_parity(PIL):
     pil_copy = pil_img.copy()
     rs_copy = rs_img.copy()
     assert_images_equal(rs_copy, pil_copy)
+
+
+@pytest.mark.covers("Image.tobytes")
 
 
 def test_new_tobytes_parity(PIL):

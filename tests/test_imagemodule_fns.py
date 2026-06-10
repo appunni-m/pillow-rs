@@ -4,6 +4,9 @@ from pillow_rs import Image, blend, composite, merge
 from conftest import assert_images_equal
 
 
+@pytest.mark.covers("ImageModule.merge")
+
+
 def test_merge_rgb_parity(PIL):
     pil = PIL.Image.new("RGB", (30, 20), (255, 128, 0))
     rs = Image.new("RGB", (30, 20), (255, 128, 0))

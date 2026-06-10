@@ -4,10 +4,16 @@ from pillow_rs import Image, ImageOps
 from conftest import assert_images_equal
 
 
+@pytest.mark.covers("ImageOps.autocontrast")
+
+
 def test_autocontrast_works():
     img = Image.new("RGB", (50, 50), (128, 128, 128))
     result = ImageOps.autocontrast(img, cutoff=2)
     assert result.size == (50, 50)
+
+
+@pytest.mark.covers("ImageOps.contain")
 
 
 def test_contain_parity(PIL):
@@ -21,6 +27,9 @@ def test_cover_parity(PIL):
     pil = PIL.Image.new("RGB", (200, 100), (128, 0, 0))
     rs = Image.new("RGB", (200, 100), (128, 0, 0))
     assert_images_equal(ImageOps.cover(rs, (80, 80)), PIL.ImageOps.cover(pil, (80, 80)))
+
+
+@pytest.mark.covers("ImageOps.expand")
 
 
 def test_expand_parity(PIL):
