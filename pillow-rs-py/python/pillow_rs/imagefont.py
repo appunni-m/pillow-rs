@@ -1,31 +1,45 @@
-"""ImageFont — font loading and text rendering. Pillow-compatible stubs."""
+"""ImageFont — font loading and text rendering via fontdue (pure Rust FreeType equivalent)."""
+from ._core import ImageFont as RustFont
+from .image import Image
 
 
 class ImageFont:
-    """Default bitmap font (stub)."""
+    """Default bitmap font (fallback)."""
 
     def getbbox(self, text, *args, **kwargs):
-        raise NotImplementedError("ImageFont.getbbox")
+        raise NotImplementedError("ImageFont.getbbox: use ImageFont.truetype() instead")
 
     def getlength(self, text, *args, **kwargs):
-        raise NotImplementedError("ImageFont.getlength")
+        raise NotImplementedError("ImageFont.getlength: use ImageFont.truetype() instead")
 
     def getmask(self, text, mode="", *args, **kwargs):
-        raise NotImplementedError("ImageFont.getmask")
+        raise NotImplementedError("ImageFont.getmask: use ImageFont.truetype() instead")
 
 
 class FreeTypeFont:
-    """TrueType/OpenType font via FreeType (stub)."""
+    """TrueType/OpenType font loaded via fontdue."""
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
-        raise NotImplementedError("FreeTypeFont requires FreeType library")
+        if isinstance(font, str):
+            self._rust_font = RustFont.truetype(font, float(size))
+        elif hasattr(font, 'read'):
+            data = font.read()
+            import tempfile, os
+            with tempfile.NamedTemporaryFile(suffix='.ttf', delete=False) as f:
+                f.write(data)
+                f.flush()
+                self._rust_font = RustFont.truetype(f.name, float(size))
+            os.unlink(f.name)
+        else:
+            raise TypeError("font must be a file path or file-like object")
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
-        raise NotImplementedError("FreeTypeFont.getbbox")
+        return self._rust_font.getbbox(text)
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
-        raise NotImplementedError("FreeTypeFont.getlength")
+        w, _h = self._rust_font.getbbox(text)
+        return w
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
@@ -35,7 +49,10 @@ class FreeTypeFont:
         raise NotImplementedError("FreeTypeFont.getmetrics")
 
     def getname(self):
-        raise NotImplementedError("FreeTypeFont.getname")
+        return (None, None)
+
+    def font_variant(self, font=None, size=None, index=None, encoding=None, layout_engine=None):
+        raise NotImplementedError("FreeTypeFont.font_variant")
 
 
 class TransposedFont:
@@ -45,14 +62,14 @@ class TransposedFont:
 
 def load(filename):
     """Load a font file."""
-    raise NotImplementedError("ImageFont.load requires FreeType")
+    return FreeTypeFont(str(filename))
 
 
 def load_default(size=None):
-    """Load default PIL font."""
-    return ImageFont()
+    """Load default font. Falls back to FreeTypeFont stub."""
+    raise NotImplementedError("ImageFont.load_default: use truetype() with a .ttf file")
 
 
 def truetype(font, size=10, index=0, encoding="", layout_engine=None):
     """Load a TrueType/OpenType font."""
-    raise NotImplementedError("ImageFont.truetype requires FreeType")
+    return FreeTypeFont(font, size, index, encoding, layout_engine)

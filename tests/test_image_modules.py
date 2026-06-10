@@ -23,17 +23,17 @@ class TestImageFilter:
 
 
 class TestImageFont:
-    def test_load_default(self):
-        font = ImageFont.load_default()
-        assert font is not None
+    def test_load_default_raises(self):
+        with pytest.raises(NotImplementedError):
+            ImageFont.load_default()
 
     def test_freetype_stub(self):
-        with pytest.raises(NotImplementedError):
-            ImageFont.FreeTypeFont("arial.ttf")
+        with pytest.raises((NotImplementedError, OSError)):
+            ImageFont.FreeTypeFont("nonexistent.ttf")
 
     def test_truetype_stub(self):
-        with pytest.raises(NotImplementedError):
-            ImageFont.truetype("arial.ttf")
+        with pytest.raises((NotImplementedError, OSError)):
+            ImageFont.truetype("nonexistent.ttf", 12)
 
 
 class TestImagePalette:
@@ -63,6 +63,19 @@ class TestImageSequence:
         it = ImageSequence.Iterator(img)
         assert it is not None
         assert it._frame == 0
+
+
+class TestImageFontTruetype:
+    def test_truetype_loads_real_font(self):
+        import os
+        for path in ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                     '/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf']:
+            if os.path.exists(path):
+                font = ImageFont.truetype(path, 14)
+                bbox = font.getbbox("Test")
+                assert bbox[0] > 0
+                return
+        pytest.skip("No DejaVuSans.ttf found")
 
 
 class TestImageOpsExpand:

@@ -79,4 +79,12 @@ class ImageDraw:
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):
-        raise NotImplementedError("ImageDraw.text requires font rendering")
+        if font is None:
+            raise NotImplementedError("ImageDraw.text requires a font: use ImageFont.truetype()")
+        if hasattr(font, '_rust_font'):
+            self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font._rust_font)
+        elif hasattr(font, 'getmask'):
+            raise NotImplementedError("PIL ImageFont not yet supported")
+        else:
+            self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font)
+        self._sync()

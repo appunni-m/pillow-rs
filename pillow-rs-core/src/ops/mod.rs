@@ -12,6 +12,7 @@ pub mod quantize;
 pub mod resize;
 pub mod rotate;
 pub mod split;
+pub mod transform;
 pub mod transpose;
 
 // Re-export types needed by binding layers

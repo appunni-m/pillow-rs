@@ -318,6 +318,41 @@ impl Draw {
         self.rectangle(x0, y0, x1, y1, fill, outline, 1)
     }
 
+    /// Draw text at position (x, y) using a font.
+    pub fn text(&mut self, x: i32, y: i32, text: &str, font: &crate::font::Font, fill: (u8, u8, u8, u8)) -> Result<(), PilError> {
+        let (w, h, pixels) = font.render_text(text, fill, 0.0);
+        if w == 0 || h == 0 { return Ok(()); }
+        let img = self.image.ensure_loaded()?;
+        let mut canvas = img.to_rgba8();
+        let (img_w, img_h) = (canvas.width(), canvas.height());
+
+        for py in 0..h {
+            for px in 0..w {
+                let off = ((py * w + px) * 4) as usize;
+                if off + 3 < pixels.len() {
+                    let sa = pixels[off + 3];
+                    if sa == 0 { continue; }
+                    let dx = (x as u32 + px).min(img_w - 1);
+                    let dy = (y as u32 + py).min(img_h - 1);
+                    if sa == 255 {
+                        canvas.put_pixel(dx, dy, Rgba([pixels[off], pixels[off+1], pixels[off+2], 255]));
+                    } else {
+                        let dp = canvas.get_pixel(dx, dy);
+                        let inv = 255u16 - sa as u16;
+                        canvas.put_pixel(dx, dy, Rgba([
+                            blend_u8(pixels[off], dp[0], sa, inv),
+                            blend_u8(pixels[off+1], dp[1], sa, inv),
+                            blend_u8(pixels[off+2], dp[2], sa, inv),
+                            255,
+                        ]));
+                    }
+                }
+            }
+        }
+        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        Ok(())
+    }
+
     /// Consume the drawing context and return the modified image.
     pub fn into_image(self) -> Image {
         self.image
@@ -382,6 +417,12 @@ fn draw_ellipse_outline(canvas: &mut RgbaImage, cx: i32, cy: i32, rx: i32, ry: i
         let y = (cy as f64 + ry * angle.sin()).round() as i32;
         plot(canvas, x, y, color, w, h);
     }
+}
+
+#[inline]
+fn blend_u8(src: u8, dst: u8, alpha: u8, inv_alpha: u16) -> u8 {
+    let a = alpha as u16;
+    (((src as u16 * a) + (dst as u16 * inv_alpha) + 127) / 255) as u8
 }
 
 /// Even-odd rule for point-in-polygon testing.
