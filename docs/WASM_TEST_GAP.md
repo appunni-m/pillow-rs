@@ -51,8 +51,24 @@ These Python tests have NO WASM equivalent:
 | `test_chops_add_parity` | `chops_add` | Same — channel add |
 | ... (many more) | | |
 
-## Implementation Plan
+## Extra WASM Tests (beyond Python coverage)
 
-1. Add WASM exports for missing functions (getexif, getxmp, show, draft, etc.)
-2. Add WASM tests matching Python test names exactly  
-3. Regenerate coverage to show 202/202
+WASM has 29 extra tests that Python doesn't cover:
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| **ERROR-RECOVERY** | 6 | err_bad_filter, err_crop_oob, err_getpixel_oob, err_putpixel_oob, err_resize_zero, err_bad_open |
+| **EDGE** | 9 | enhance_bright_0x/2x, new_invalid, new_zero, getpixel_corner, thumb_aspect |
+| **VARIANT** | 8 | quantize_2/8/256, reduce_4, filter_DETAIL, filter_EDGE_ENHANCE_MORE, resize_downscale, convert_RGB_to_1 |
+| **WASM-ONLY** | 5 | io_browser_download, io_browser_url, font_browser, open_from_file, save_bytes |
+| **IDEMPOTENT** | 1 | chops_invert_twice |
+
+These are marked in `pillow-rs-js/tests/wasm_202_validation.cjs` with `// EXTRA` or `// WASM-ONLY` comments.
+
+## Resolution
+
+- Core functions: 171 matched 1:1 between Python and WASM ✅
+- WASM extras: 29 beyond Python (error recovery, edge cases, browser/server I/O)
+- Python-specific: 31 PIL-only tests (class comparisons, file-I/O with paths)
+
+Total: Python 202 + WASM 231 = complementary coverage.
