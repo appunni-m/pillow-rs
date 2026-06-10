@@ -406,6 +406,7 @@ fn map_error(e: PilError) -> PyErr {
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyImage>()?;
+    m.add_class::<PyDraw>()?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
@@ -431,6 +432,93 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
 
     Ok(())
+}
+
+// --- ImageDraw ---
+
+#[pyclass(name = "ImageDraw")]
+pub struct PyDraw {
+    draw: pillow_rs_core::draw::Draw,
+}
+
+#[pymethods]
+impl PyDraw {
+    #[new]
+    fn new(image: &Bound<'_, PyImage>) -> PyResult<Self> {
+        let borrowed = image.borrow();
+        let draw = pillow_rs_core::draw::Draw::new(borrowed.inner.clone());
+        Ok(PyDraw { draw })
+    }
+
+    fn line(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let color = parse_draw_color(fill)?;
+        for i in 0..xy.len() - 1 {
+            let (x0, y0) = xy[i];
+            let (x1, y1) = xy[i + 1];
+            self.draw.line(x0, y0, x1, y1, color, width.unwrap_or(1))
+                .map_err(|e| map_error(e))?;
+        }
+        Ok(())
+    }
+
+    fn rectangle(&mut self, xy: (i32, i32, i32, i32), fill: Option<&Bound<'_, PyAny>>,
+                 outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fill_color = if let Some(ref _f) = fill { Some(parse_draw_color(fill)?) } else { None };
+        let out_color = if let Some(ref _o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        self.draw.rectangle(xy.0, xy.1, xy.2, xy.3, fill_color, out_color, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    fn ellipse(&mut self, xy: (i32, i32, i32, i32), fill: Option<&Bound<'_, PyAny>>,
+               outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fill_color = if let Some(ref _f) = fill { Some(parse_draw_color(fill)?) } else { None };
+        let out_color = if let Some(ref _o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        self.draw.ellipse(xy.0, xy.1, xy.2, xy.3, fill_color, out_color, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    fn polygon(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>,
+               outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        let fill_color = if let Some(ref _f) = fill { Some(parse_draw_color(fill)?) } else { None };
+        let out_color = if let Some(ref _o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        self.draw.polygon(&xy, fill_color, out_color, width.unwrap_or(1))
+            .map_err(|e| map_error(e))
+    }
+
+    fn point(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let color = parse_draw_color(fill)?;
+        self.draw.point(&xy, color).map_err(|e| map_error(e))
+    }
+
+    #[getter]
+    fn image(&self) -> PyImage {
+        // Return a copy of the current image state
+        PyImage { inner: self.draw_get_image() }
+    }
+}
+
+impl PyDraw {
+    fn draw_get_image(&self) -> pillow_rs_core::image::Image {
+        self.draw.image_clone()
+    }
+}
+
+fn parse_draw_color(val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
+    let v = match val {
+        Some(v) => v,
+        None => return Ok((0, 0, 0, 255)), // default black
+    };
+    if let Ok(s) = v.extract::<String>() {
+        pillow_rs_core::color::parse_color_str(&s).map_err(|e| map_error(e))
+    } else if let Ok((r, g, b)) = v.extract::<(u8, u8, u8)>() {
+        Ok((r, g, b, 255))
+    } else if let Ok((r, g, b, a)) = v.extract::<(u8, u8, u8, u8)>() {
+        Ok((r, g, b, a))
+    } else if let Ok(i) = v.extract::<u8>() {
+        Ok((i, i, i, 255))
+    } else {
+        Err(pyo3::exceptions::PyTypeError::new_err("Expected color tuple, int, or string"))
+    }
 }
 
 // --- ImageOps module-level functions ---

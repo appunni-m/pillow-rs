@@ -120,6 +120,13 @@ def infer_function_from_test(test: dict) -> str | None:
         "test_chops_lighter_parity": "ImageChops.lighter",
         "test_chops_difference_parity": "ImageChops.difference",
         "test_chops_invert_parity": "ImageChops.invert",
+        # ImageDraw
+        "test_draw_line_works": "ImageDraw.line",
+        "test_draw_rectangle_outline": "ImageDraw.rectangle",
+        "test_draw_rectangle_filled": "ImageDraw.rectangle",
+        "test_draw_ellipse": "ImageDraw.ellipse",
+        "test_draw_point": "ImageDraw.point",
+        "test_draw_polygon": "ImageDraw.polygon",
         # ImageColor
         "test_getrgb_hex_parity": "ImageColor.getrgb",
         "test_getrgb_named_parity": "ImageColor.getrgb",
