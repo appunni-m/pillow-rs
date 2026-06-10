@@ -1,9 +1,12 @@
-pub mod resize;
-pub mod crop;
-pub mod rotate;
-pub mod transpose;
 pub mod convert;
-pub mod paste;
-pub mod split;
-pub mod filter;
+pub mod crop;
 pub mod enhance;
+pub mod filter;
+pub mod paste;
+pub mod resize;
+pub mod rotate;
+pub mod split;
+pub mod transpose;
+
+// Re-export types needed by binding layers
+pub use paste::PasteSource;
