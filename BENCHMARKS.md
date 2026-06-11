@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-11 14:17:40 | commit `5a9e608` | 166 functions | 6 targets
+> Auto-generated: 2026-06-11 14:43:38 | commit `370505b` | 166 functions | 6 targets
 
 ## Summary
 
@@ -8,21 +8,22 @@
 |--------|-------|
 | Functions benchmarked | 166 |
 | Functions with GPU path | 42 |
-| Valid CPU speedups (excl. outliers) | 42 |
+| Valid CPU speedups (excl. outliers) | 44 |
 | Outliers flagged ⚠️ | 2 |
-| Average CPU speedup vs Pillow | 2.31× |
+| Average CPU speedup vs Pillow | 3.59× |
 | Native CPU benchmarks run | 47 |
-| Missing (no data yet) | 76 |
+| Missing (no data yet) | 10 |
 
 ## Pipeline Benchmark — 20 Operations (Single- vs Multi-Thread)
 
 > Chaining 20 image operations end-to-end. Measures scheduling, coherence, and clone avoidance.
 
-| Variant | Time (ms) |
-|---------|-----------|
-| MT | 220.26ms |
-| ST | 303.23ms |
-| **MT Speedup** | **1.38×** |
+| Variant | Time (ms) | vs Pillow |
+|---------|-----------|-----------|
+| MT | 220.26ms | 0.27× |
+| ST | 303.23ms | 0.19× |
+| **MT Speedup** | **1.38×** | |
+| Pillow (reference) | 59.0ms | — |
 
 ## Priority Operations (Tier 1)
 
@@ -37,9 +38,9 @@
 | Image.paste | 0.72× | NYW | 0.36× | NYW | 212.05× ⚠️ | 200.52× ⚠️ |
 | Image.convert | 0.64× | NYW | 1.83× | NYW | 1.77× | 1.62× |
 | Image.filter | — | NYW | 2.46× | NYW | — | NYW |
-| Image.open | 709317.14× ⚠️ | — | 572.95× ⚠️ | — | 702.29× ⚠️ | — |
-| Image.save | 1.75× | — | 1.30× | — | 1.23× | — |
-| Image.tobytes | — | — | — | — | — | — |
+| Image.open | 353322.82× ⚠️ | — | 285.40× ⚠️ | — | 349.82× ⚠️ | — |
+| Image.save | 4.63× | — | 3.45× | — | 3.26× | — |
+| Image.tobytes | 57.76× | — | — | — | — | — |
 
 ## All Functions
 
@@ -63,7 +64,7 @@
 | Image.effect_spread | — | — | — | — | — | — |
 | Image.entropy | — | — | — | — | — | — |
 | Image.filter | — | NYW | 2.46× | NYW | — | NYW |
-| Image.frombytes | — | — | — | — | — | — |
+| Image.frombytes | 0.17× | — | — | — | — | — |
 | Image.get_child_images | — | — | — | — | — | — |
 | Image.get_flattened_data | — | — | — | — | — | — |
 | Image.getbands | — | — | 75.73× | — | 53.56× | — |
@@ -80,7 +81,7 @@
 | Image.getxmp | — | — | — | — | — | — |
 | Image.histogram | — | — | 4.79× | — | 6.09× | — |
 | Image.load | — | — | — | — | — | — |
-| Image.open | 709317.14× ⚠️ | — | 572.95× ⚠️ | — | 702.29× ⚠️ | — |
+| Image.open | 353322.82× ⚠️ | — | 285.40× ⚠️ | — | 349.82× ⚠️ | — |
 | Image.point | 0.62× | NYW | — | NYW | — | NYW |
 | Image.putalpha | 29.26× | — | — | — | — | — |
 | Image.putdata | — | — | — | — | — | — |
@@ -89,13 +90,13 @@
 | Image.quantize | 0.20× | NYW | — | NYW | — | NYW |
 | Image.reduce | 0.42× | NYW | 2.26× | NYW | 1.94× | 2.13× |
 | Image.remap_palette | — | — | — | — | — | — |
-| Image.save | 1.75× | — | 1.30× | — | 1.23× | — |
+| Image.save | 4.63× | — | 3.45× | — | 3.26× | — |
 | Image.seek | — | — | — | — | — | — |
 | Image.show | — | — | — | — | — | — |
 | Image.split | 0.37× | — | 7.98× | — | 8.06× | — |
 | Image.tell | — | — | — | — | — | — |
 | Image.tobitmap | — | — | — | — | — | — |
-| Image.tobytes | — | — | — | — | — | — |
+| Image.tobytes | 57.76× | — | — | — | — | — |
 | Image.transform | — | NYW | — | NYW | — | NYW |
 | Image.verify | — | — | — | — | — | — |
 

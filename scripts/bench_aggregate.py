@@ -222,18 +222,25 @@ def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data):
 
     # Pipeline
     cpu_pipes = pipeline_data.get("native_cpu", {})
+    pil_pipe = baseline_lookup.get("pipeline_20") or baseline_lookup.get("Image.pipeline_20")
     if cpu_pipes:
         lines += [
             "## Pipeline Benchmark — 20 Operations (Single- vs Multi-Thread)", "",
             "> Chaining 20 image operations end-to-end. Measures scheduling, coherence, and clone avoidance.", "",
-            "| Variant | Time (ms) |", "|---------|-----------|",
+            "| Variant | Time (ms) | vs Pillow |", "|---------|-----------|-----------|",
         ]
         for name, ms in sorted(cpu_pipes.items()):
             label = name.replace("pipeline_20_", "").replace("_", "-").upper()
-            lines.append(f"| {label} | {ms:.2f}ms |")
+            vs = ""
+            if pil_pipe:
+                ratio = pil_pipe / ms if ms > 0 else 0
+                vs = f"{ratio:.2f}×"
+            lines.append(f"| {label} | {ms:.2f}ms | {vs} |")
         if "pipeline_20_st" in cpu_pipes and "pipeline_20_mt" in cpu_pipes:
             st, mt = cpu_pipes["pipeline_20_st"], cpu_pipes["pipeline_20_mt"]
-            lines.append(f"| **MT Speedup** | **{st / mt:.2f}×** |")
+            lines.append(f"| **MT Speedup** | **{st / mt:.2f}×** | |")
+        if pil_pipe:
+            lines.append(f"| Pillow (reference) | {pil_pipe:.1f}ms | — |")
         lines.append("")
 
     # Priority
