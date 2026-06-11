@@ -15,7 +15,7 @@ export const WARMUP_RUNS = 3;
 
 let _rootDir = null;
 export function rootDir() {
-    if (!_rootDir) _rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+    if (!_rootDir) _rootDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
     return _rootDir;
 }
 
