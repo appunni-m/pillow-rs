@@ -46,9 +46,47 @@ Every operation that returns a new Image or mutates in-place becomes a PipelineO
 | Enhance | Brightness, Contrast, ColorSaturation, Sharpness | 4 |
 | ModuleFns | Merge, BlendModule, CompositeModule, Eval, EffectNoise | 5 |
 | Effect | EffectSpread, Paste, AlphaComposite | 3 |
-| **Pipeline-capable** | | **67 + 29 (Chops/Enhance/ModuleFns) = 96** |
+| **Pipeline-capable** | | **96** |
 
-### Non-Pipeline Operations (70 ops — always immediate)
+### Complete Function List (all 166 from manifest.yaml)
+
+#### Pipeline Operations (96)
+
+**Image (22):** resize, crop, rotate, transpose, convert, filter, quantize, reduce, effect_spread, point, transform, thumbnail, remap_palette, tobitmap, draft, alpha_composite, paste, pasteColor, frombytes, apply_transparency, tobytes, save
+
+**ImageOps (16):** autocontrast, equalize, invert, flip, mirror, posterize, solarize, grayscale, colorize, contain, cover, fit, pad, scale, expand, crop
+
+**ImageChops (21):** add, subtract, multiply, screen, darker, lighter, difference, overlay, hard_light, soft_light, add_modulo, subtract_modulo, logical_and, logical_or, logical_xor, constant, offset, blend, composite, duplicate, invert
+
+**ImageEnhance (4):** Brightness, Color, Contrast, Sharpness
+
+**ImageFilter (20):** BLUR, CONTOUR, DETAIL, EDGE_ENHANCE, EDGE_ENHANCE_MORE, EMBOSS, FIND_EDGES, SHARPEN, SMOOTH, SMOOTH_MORE, GaussianBlur, BoxBlur, UnsharpMask, MaxFilter, MinFilter, MedianFilter, ModeFilter, RankFilter, Kernel, Color3DLUT
+
+**ImageModule (8):** merge, blend, composite, eval, effect_noise, fromarray, frombytes, new
+
+**ImageDraw (1):** point
+
+**ImageEffect (1):** effect_spread
+
+**Mutating pipeline (3):** paste, thumbnail, alpha_composite
+
+#### Non-Pipeline Operations (70 — execute immediately)
+
+**Image analysis (17):** getpixel, getbands, getbbox, getcolors, getdata, getextrema, getprojection, histogram, entropy, getchannel, getexif, getim, getpalette, getxmp, get_child_images, get_flattened_data, load
+
+**Image IO/mutation (14):** open, new, copy, split, putalpha, putpixel, putdata, putpalette, show, close, seek, tell, verify, draft
+
+**ImageColor (2):** getcolor, getrgb
+
+**ImageDraw (17):** arc, bitmap, chord, circle, ellipse, getfont, line, multiline_text, multiline_textbbox, pieslice, polygon, rectangle, regular_polygon, rounded_rectangle, text, textbbox, textlength
+
+**ImageFont (15):** FreeTypeFont, ImageFont, load, load_default, load_default_imagefont, load_path, truetype, getbbox(FreeTypeFont), getlength(FreeTypeFont), getmask(FreeTypeFont), getmetrics, getname, getbbox(ImageFont), getlength(ImageFont), getmask(ImageFont)
+
+**ImagePalette (5):** copy, getcolor, getdata, save, tobytes
+
+**ImageSequence (1):** Iterator
+
+**ImageStat (1):** Stat
 
 - **Getters**: getpixel, getbands, getbbox, getcolors, getdata, getextrema, getprojection, histogram, entropy, getchannel, getexif, getim, getpalette, getxmp, get_child_images, get_flattened_data, load, getrgb, getcolor
 - **IO**: new, open, frombytes, fromarray, save, tobytes, tobitmap, seek, tell, verify, show, close, copy, split
