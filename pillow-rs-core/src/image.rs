@@ -6,7 +6,7 @@ use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::pipeline::{
-    ColorMode, PipelineOp, ResampleFilter, TransposeMethod,
+    ColorMode, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
 };
 
 #[derive(Debug, Clone)]
@@ -551,6 +551,63 @@ fn channel_op_binary(
     Ok(DynamicImage::ImageRgb8(out))
 }
 
+/// Helper: preserve the color mode of the input image after operations
+/// that may convert to RGBA (e.g., the `image` crate's resize always returns RGBA).
+fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicImage {
+    let orig_color = original.color();
+    let res_color = result.color();
+    if orig_color == res_color {
+        return result;
+    }
+    match orig_color {
+        image::ColorType::L8 => DynamicImage::ImageLuma8(result.to_luma8()),
+        image::ColorType::La8 => DynamicImage::ImageLumaA8(result.to_luma_alpha8()),
+        image::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
+        image::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
+        _ => result,
+    }
+}
+
+/// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
+fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicImage, PilError> {
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let mut out = image::RgbImage::new(w, h);
+    let half = (size / 2) as i32;
+    let area = (size * size) as usize;
+    let rank = rank.min((area - 1) as u32) as usize;
+
+    for y in 0..h {
+        for x in 0..w {
+            let mut r_vals = Vec::with_capacity(area);
+            let mut g_vals = Vec::with_capacity(area);
+            let mut b_vals = Vec::with_capacity(area);
+            for dy in -half..=half {
+                for dx in -half..=half {
+                    let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
+                    let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
+                    let p = rgb.get_pixel(sx, sy);
+                    r_vals.push(p[0]);
+                    g_vals.push(p[1]);
+                    b_vals.push(p[2]);
+                }
+            }
+            r_vals.sort_unstable();
+            g_vals.sort_unstable();
+            b_vals.sort_unstable();
+            out.put_pixel(x, y, image::Rgb([r_vals[rank], g_vals[rank], b_vals[rank]]));
+        }
+    }
+    Ok(DynamicImage::ImageRgb8(out))
+}
+
+/// Bilinear interpolation helper.
+fn bilerp(v00: u8, v10: u8, v01: u8, v11: u8, fx: f64, fy: f64) -> u8 {
+    let top = v00 as f64 * (1.0 - fx) + v10 as f64 * fx;
+    let bot = v01 as f64 * (1.0 - fx) + v11 as f64 * fx;
+    (top * (1.0 - fy) + bot * fy).round().clamp(0.0, 255.0) as u8
+}
+
 /// Execute a single PipelineOp against a DynamicImage.
 /// Each op borrows the input, allocates and returns the output.
 pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, PilError> {
@@ -565,17 +622,19 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 ResampleFilter::Box => image::imageops::FilterType::Gaussian,
                 ResampleFilter::Hamming => image::imageops::FilterType::Lanczos3,
             };
-            Ok(image::imageops::resize(img, *w, *h, f).into())
+            let result = DynamicImage::from(image::imageops::resize(img, *w, *h, f));
+            Ok(preserve_mode(img, result))
         }
         PipelineOp::Crop { left, top, right, bottom } => {
             let w = right.saturating_sub(*left);
             let h = bottom.saturating_sub(*top);
             Ok(img.crop_imm(*left, *top, w, h))
         }
-        PipelineOp::Rotate { angle, expand: _e, fill: _f } => {
+        PipelineOp::Rotate { angle, expand, fill: _f } => {
             // Round to nearest multiple of 90 for discrete rotation
-            // We use the DynamicImage rotate90/180/270 methods
-            let deg = (angle.to_degrees().round() as i32).rem_euclid(360);
+            // Note: angle is already in degrees (passed from Python/Rust API directly)
+            let deg = (angle.round() as i32).rem_euclid(360);
+            let _ = expand; // for discrete 90-degree rotations, PIL always swaps dimensions
             let result = if (deg - 90).abs() < 2 || (deg - 90).abs() >= 358 {
                 img.rotate90()
             } else if (deg - 180).abs() < 2 {
@@ -586,7 +645,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 // For non-90-degree rotations, return the original (not yet implemented)
                 img.clone()
             };
-            Ok(result)
+            Ok(preserve_mode(img, result))
         }
         PipelineOp::Transpose { method } => match method {
             TransposeMethod::FlipLeftRight => Ok(img.fliph()),
@@ -617,7 +676,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let scale = (*w as f64 / cur_w as f64).min(*h as f64 / cur_h as f64);
             let new_w = (cur_w as f64 * scale) as u32;
             let new_h = (cur_h as f64 * scale) as u32;
-            Ok(image::imageops::resize(img, new_w.max(1), new_h.max(1), f).into())
+            let result = DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), f));
+            Ok(preserve_mode(img, result))
         }
         PipelineOp::Reduce { factor } => {
             if *factor < 2 {
@@ -625,7 +685,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             let new_w = img.width() / factor;
             let new_h = img.height() / factor;
-            Ok(image::imageops::resize(img, new_w.max(1), new_h.max(1), image::imageops::FilterType::Nearest).into())
+            let result = DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), image::imageops::FilterType::Nearest));
+            Ok(preserve_mode(img, result))
         }
 
         // ── Color/Convert ──
@@ -643,14 +704,65 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
+            ColorMode::Mode1 => {
+                // PIL convert to "1": threshold at 128 (no dither for now)
+                let gray = crate::color::pil_grayscale(img);
+                let (w, h) = gray.dimensions();
+                let mut out = image::GrayImage::new(w, h);
+                for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
+                    op[0] = if gp[0] >= 128 { 255 } else { 0 };
+                }
+                Ok(DynamicImage::ImageLuma8(out))
+            }
             _ => Err(PilError::NotImplementedError(format!(
                 "Convert to {:?} not yet implemented",
                 mode
             ))),
         },
-        PipelineOp::Quantize { .. } => Err(PilError::NotImplementedError(
-            "Quantize not yet implemented".into(),
-        )),
+        PipelineOp::Quantize { colors, dither } => {
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let n = (w * h) as usize;
+            // color_quant expects RGBA format (4 bytes per pixel)
+            let rgb_raw = rgb.into_raw();
+            let mut rgba_data = Vec::with_capacity(n * 4);
+            for i in 0..n {
+                rgba_data.push(rgb_raw[i * 3]);
+                rgba_data.push(rgb_raw[i * 3 + 1]);
+                rgba_data.push(rgb_raw[i * 3 + 2]);
+                rgba_data.push(255);
+            }
+            let nq = color_quant::NeuQuant::new(10, *colors as usize, &rgba_data);
+            let _ = dither;
+            if *colors >= 256 {
+                let palette = nq.color_map_rgb();
+                let mut out = image::RgbImage::new(w, h);
+                for (i, op) in out.pixels_mut().enumerate() {
+                    if i >= n { break; }
+                    let pixel = &rgba_data[i * 4..i * 4 + 3]; // just R,G,B of RGBA pixel
+                    let idx = nq.index_of(pixel);
+                    if idx * 3 + 2 < palette.len() {
+                        op[0] = palette[idx * 3];
+                        op[1] = palette[idx * 3 + 1];
+                        op[2] = palette[idx * 3 + 2];
+                    }
+                }
+                Ok(DynamicImage::ImageRgb8(out))
+            } else {
+                let mut out = image::RgbImage::new(w, h);
+                for (i, op) in out.pixels_mut().enumerate() {
+                    if i >= n { break; }
+                    let pixel = &rgba_data[i * 4..i * 4 + 4];
+                    let idx = nq.index_of(pixel);
+                    if let Some(entry) = nq.lookup(idx) {
+                        op[0] = entry[0];
+                        op[1] = entry[1];
+                        op[2] = entry[2];
+                    }
+                }
+                Ok(DynamicImage::ImageRgb8(out))
+            }
+        }
         PipelineOp::RemapPalette { dest_map } => {
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
@@ -704,18 +816,18 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         }
         PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
         PipelineOp::BoxBlur { radius } => Ok(img.blur(*radius as f32)),
-        PipelineOp::MedianFilter { .. } => Err(PilError::NotImplementedError(
-            "MedianFilter not yet implemented".into(),
-        )),
-        PipelineOp::MaxFilter { .. } => Err(PilError::NotImplementedError(
-            "MaxFilter not yet implemented".into(),
-        )),
-        PipelineOp::MinFilter { .. } => Err(PilError::NotImplementedError(
-            "MinFilter not yet implemented".into(),
-        )),
-        PipelineOp::RankFilter { .. } => Err(PilError::NotImplementedError(
-            "RankFilter not yet implemented".into(),
-        )),
+        PipelineOp::MedianFilter { size } => {
+            rank_filter_impl(img, *size, *size * *size / 2)
+        }
+        PipelineOp::MaxFilter { size } => {
+            rank_filter_impl(img, *size, *size * *size - 1)
+        }
+        PipelineOp::MinFilter { size } => {
+            rank_filter_impl(img, *size, 0)
+        }
+        PipelineOp::RankFilter { size, rank } => {
+            rank_filter_impl(img, *size, *rank)
+        }
 
         // ── ImageOps ──
         PipelineOp::Autocontrast { cutoff } => {
@@ -826,7 +938,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             };
             let new_w = (img.width() as f64 * factor).round() as u32;
             let new_h = (img.height() as f64 * factor).round() as u32;
-            Ok(image::imageops::resize(img, new_w.max(1), new_h.max(1), f).into())
+            let result = DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), f));
+            Ok(preserve_mode(img, result))
         }
         PipelineOp::Expand { border, fill } => {
             let (w, h) = (img.width(), img.height());
@@ -839,7 +952,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 }
             }
             image::imageops::overlay(&mut expanded, &img.to_rgba8(), *border as i64, *border as i64);
-            Ok(expanded)
+            Ok(preserve_mode(img, expanded))
         }
         PipelineOp::CropBorder { .. } => Err(PilError::NotImplementedError(
             "CropBorder not yet implemented".into(),
@@ -932,12 +1045,49 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             Ok(result)
         }
-        PipelineOp::Blend { .. } => Err(PilError::NotImplementedError(
-            "Blend not yet implemented".into(),
-        )),
-        PipelineOp::Composite { .. } => Err(PilError::NotImplementedError(
-            "Composite not yet implemented".into(),
-        )),
+        PipelineOp::Blend { other, alpha } => {
+            let other_img = other.materialize()?;
+            let a = alpha.clamp(0.0, 1.0);
+            let rgb1 = img.to_rgb8();
+            let rgb2 = other_img.to_rgb8();
+            let (w, h) = (rgb1.width().min(rgb2.width()), rgb1.height().min(rgb2.height()));
+            let mut out = image::RgbImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let p1 = rgb1.get_pixel(x, y);
+                    let p2 = rgb2.get_pixel(x, y);
+                    out.put_pixel(x, y, image::Rgb([
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
+                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
+                    ]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(out))
+        }
+        PipelineOp::Composite { other, mask } => {
+            let other_img = other.materialize()?;
+            let mask_img = mask.materialize()?;
+            let rgb1 = img.to_rgb8();
+            let rgb2 = other_img.to_rgb8();
+            let mask_gray = mask_img.to_luma8();
+            let (w, h) = (rgb1.width().min(rgb2.width()).min(mask_gray.width()),
+                          rgb1.height().min(rgb2.height()).min(mask_gray.height()));
+            let mut out = image::RgbImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let p1 = rgb1.get_pixel(x, y);
+                    let p2 = rgb2.get_pixel(x, y);
+                    let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                    out.put_pixel(x, y, image::Rgb([
+                        ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
+                        ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
+                        ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
+                    ]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(out))
+        }
         PipelineOp::Duplicate => Ok(img.clone()),
         PipelineOp::InvertChops => {
             let mut rgb = img.to_rgb8();
@@ -972,12 +1122,38 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             Ok(DynamicImage::ImageRgba8(rgba))
         }
-        PipelineOp::ColorSaturation { .. } => Err(PilError::NotImplementedError(
-            "ColorSaturation not yet implemented".into(),
-        )),
-        PipelineOp::Sharpness { .. } => Err(PilError::NotImplementedError(
-            "Sharpness not yet implemented".into(),
-        )),
+        PipelineOp::ColorSaturation { factor } => {
+            let gray = img.to_luma8();
+            let mut rgb = img.to_rgb8();
+            let f = *factor;
+            for (px, gp) in rgb.pixels_mut().zip(gray.pixels()) {
+                let g = gp[0] as f64;
+                px[0] = ((g + f * (px[0] as f64 - g)).clamp(0.0, 255.0)) as u8;
+                px[1] = ((g + f * (px[1] as f64 - g)).clamp(0.0, 255.0)) as u8;
+                px[2] = ((g + f * (px[2] as f64 - g)).clamp(0.0, 255.0)) as u8;
+            }
+            Ok(DynamicImage::ImageRgb8(rgb))
+        }
+        PipelineOp::Sharpness { factor } => {
+            let f = *factor;
+            if f <= 1.0 {
+                let sigma = ((1.0 - f) * 5.0).max(0.01) as f32;
+                Ok(img.blur(sigma))
+            } else {
+                let sigma = ((f - 1.0) * 0.5).max(0.01) as f32;
+                let blurred = img.blur(sigma);
+                let blur_rgb = blurred.to_rgb8();
+                let mut rgb = img.to_rgb8();
+                let amount = (f - 1.0).min(5.0);
+                for (px, bp) in rgb.pixels_mut().zip(blur_rgb.pixels()) {
+                    for c in 0..3 {
+                        let diff = px[c] as f64 - bp[c] as f64;
+                        px[c] = ((px[c] as f64 + diff * amount).clamp(0.0, 255.0)) as u8;
+                    }
+                }
+                Ok(DynamicImage::ImageRgb8(rgb))
+            }
+        }
 
         // ── Effects ──
         PipelineOp::EffectSpread { distance } => {
@@ -986,23 +1162,188 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             Ok(img.blur(*distance as f32))
         }
-        PipelineOp::Paste { .. } => Err(PilError::NotImplementedError(
-            "Paste not yet implemented in pipeline execute_op".into(),
-        )),
-        PipelineOp::AlphaComposite { .. } => Err(PilError::NotImplementedError(
-            "AlphaComposite not yet implemented in pipeline execute_op".into(),
-        )),
+        PipelineOp::Paste { source, x, y, w: _w, h: _h, mask } => {
+            let src_img = source.materialize()?;
+            let (src_w, src_h) = (src_img.width(), src_img.height());
+            let paste_x = *x as i64;
+            let paste_y = *y as i64;
+            let orig_color = img.color();
+
+            if let Some(mask_img_ref) = mask {
+                let mask_img = mask_img_ref.materialize()?;
+                let mask_gray = mask_img.to_luma8();
+                let mut dest_clone = img.to_rgba8();
+
+                for py in 0..src_h.min(dest_clone.height().max(0)) {
+                    for px in 0..src_w.min(dest_clone.width().max(0)) {
+                        let mask_val = if px < mask_gray.width() && py < mask_gray.height() {
+                            mask_gray.get_pixel(px, py)[0]
+                        } else { 0 };
+                        if mask_val == 0 { continue; }
+                        let sp = src_img.get_pixel(px, py);
+                        let dx = (paste_x + px as i64) as u32;
+                        let dy = (paste_y + py as i64) as u32;
+                        if dx >= dest_clone.width() || dy >= dest_clone.height() { continue; }
+                        if mask_val == 255 {
+                            dest_clone.put_pixel(dx, dy, sp);
+                        } else {
+                            let inv_alpha = 255u16 - mask_val as u16;
+                            let dp = dest_clone.get_pixel(dx, dy);
+                            let a = sp.0.get(3).copied().unwrap_or(255) as u16;
+                            let da = dp.0.get(3).copied().unwrap_or(255) as u16;
+                            let blended = image::Rgba([
+                                ((sp[0] as u16 * mask_val as u16 + dp[0] as u16 * inv_alpha + 127) / 255) as u8,
+                                ((sp[1] as u16 * mask_val as u16 + dp[1] as u16 * inv_alpha + 127) / 255) as u8,
+                                ((sp[2] as u16 * mask_val as u16 + dp[2] as u16 * inv_alpha + 127) / 255) as u8,
+                                ((a * mask_val as u16 + da * inv_alpha + 127) / 255) as u8,
+                            ]);
+                            dest_clone.put_pixel(dx, dy, blended);
+                        }
+                    }
+                }
+                Ok(preserve_mode(img, DynamicImage::ImageRgba8(dest_clone)))
+            } else {
+                let mut dest_clone = img.to_rgba8();
+                image::imageops::overlay(
+                    &mut dest_clone,
+                    &src_img.to_rgba8(),
+                    paste_x,
+                    paste_y,
+                );
+                Ok(preserve_mode(img, DynamicImage::ImageRgba8(dest_clone)))
+            }
+        }
+        PipelineOp::AlphaComposite { source, dest: _dest, src: _src } => {
+            let src_img = source.materialize()?;
+            let mut dest_rgba = img.to_rgba8();
+            let src_rgba = src_img.to_rgba8();
+            let (sw, sh) = src_rgba.dimensions();
+            for py in 0..sh.min(dest_rgba.height()) {
+                for px in 0..sw.min(dest_rgba.width()) {
+                    let sp = src_rgba.get_pixel(px, py);
+                    let dp = dest_rgba.get_pixel(px, py);
+                    let sa = sp[3] as f64 / 255.0;
+                    let da = dp[3] as f64 / 255.0;
+                    let out_a = sa + da * (1.0 - sa);
+                    if out_a <= 0.0 { continue; }
+                    let r = ((sp[0] as f64 * sa + dp[0] as f64 * da * (1.0 - sa)) / out_a).round().clamp(0.0, 255.0) as u8;
+                    let g = ((sp[1] as f64 * sa + dp[1] as f64 * da * (1.0 - sa)) / out_a).round().clamp(0.0, 255.0) as u8;
+                    let b = ((sp[2] as f64 * sa + dp[2] as f64 * da * (1.0 - sa)) / out_a).round().clamp(0.0, 255.0) as u8;
+                    let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
+                    dest_rgba.put_pixel(px, py, image::Rgba([r, g, b, a]));
+                }
+            }
+            Ok(DynamicImage::ImageRgba8(dest_rgba))
+        }
 
         // ── Module fns ──
-        PipelineOp::Merge { .. } => Err(PilError::NotImplementedError(
-            "Merge not yet implemented".into(),
-        )),
-        PipelineOp::BlendModule { .. } => Err(PilError::NotImplementedError(
-            "BlendModule not yet implemented".into(),
-        )),
-        PipelineOp::CompositeModule { .. } => Err(PilError::NotImplementedError(
-            "CompositeModule not yet implemented".into(),
-        )),
+        PipelineOp::Merge { mode, bands } => {
+            // Merge bands into a multi-channel image.
+            // The pipeline source is the first band; remaining bands are in `bands[1..]`.
+            let n_expected = match mode {
+                ColorMode::RGB => 3,
+                ColorMode::RGBA => 4,
+                ColorMode::LA => 2,
+                ColorMode::L | ColorMode::Mode1 => 1,
+                _ => return Err(PilError::ValueError(format!("Unsupported merge mode: {:?}", mode))),
+            };
+            // Get pixel data from each band
+            let mut band_pixels: Vec<Vec<u8>> = Vec::new();
+            // First band is the current image
+            let first_gray = img.to_luma8();
+            let (w, h) = first_gray.dimensions();
+            band_pixels.push(first_gray.into_raw());
+            for band in bands.iter().skip(1) {
+                let b_img = band.materialize()?;
+                let b_gray = b_img.to_luma8();
+                band_pixels.push(b_gray.into_raw());
+            }
+            let n = (w * h) as usize;
+            match mode {
+                ColorMode::RGB => {
+                    let mut rgb = vec![0u8; n * 3];
+                    for i in 0..n {
+                        rgb[i * 3] = band_pixels[0][i];
+                        rgb[i * 3 + 1] = band_pixels[1][i];
+                        rgb[i * 3 + 2] = band_pixels[2][i];
+                    }
+                    let img = image::RgbImage::from_raw(w, h, rgb)
+                        .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
+                    Ok(DynamicImage::ImageRgb8(img))
+                }
+                ColorMode::RGBA => {
+                    let mut rgba = vec![0u8; n * 4];
+                    for i in 0..n {
+                        rgba[i * 4] = band_pixels[0][i];
+                        rgba[i * 4 + 1] = band_pixels[1][i];
+                        rgba[i * 4 + 2] = band_pixels[2][i];
+                        rgba[i * 4 + 3] = band_pixels[3][i];
+                    }
+                    let img = image::RgbaImage::from_raw(w, h, rgba)
+                        .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
+                    Ok(DynamicImage::ImageRgba8(img))
+                }
+                ColorMode::LA => {
+                    let mut la = vec![0u8; n * 2];
+                    for i in 0..n {
+                        la[i * 2] = band_pixels[0][i];
+                        la[i * 2 + 1] = band_pixels[1][i];
+                    }
+                    let img = image::GrayAlphaImage::from_raw(w, h, la)
+                        .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
+                    Ok(DynamicImage::ImageLumaA8(img))
+                }
+                ColorMode::L | ColorMode::Mode1 => {
+                    let img = image::GrayImage::from_raw(w, h, band_pixels.remove(0))
+                        .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
+                    Ok(DynamicImage::ImageLuma8(img))
+                }
+                _ => Err(PilError::ValueError("Unsupported merge mode".into())),
+            }
+        }
+        PipelineOp::BlendModule { other, alpha } => {
+            let other_img = other.materialize()?;
+            let a = alpha.clamp(0.0, 1.0);
+            let rgb1 = img.to_rgb8();
+            let rgb2 = other_img.to_rgb8();
+            let (w, h) = (rgb1.width().min(rgb2.width()), rgb1.height().min(rgb2.height()));
+            let mut out = image::RgbImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let p1 = rgb1.get_pixel(x, y);
+                    let p2 = rgb2.get_pixel(x, y);
+                    out.put_pixel(x, y, image::Rgb([
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
+                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
+                    ]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(out))
+        }
+        PipelineOp::CompositeModule { other, mask } => {
+            let other_img = other.materialize()?;
+            let mask_img = mask.materialize()?;
+            let rgb1 = img.to_rgb8();
+            let rgb2 = other_img.to_rgb8();
+            let mask_gray = mask_img.to_luma8();
+            let (w, h) = (rgb1.width().min(rgb2.width()).min(mask_gray.width()),
+                          rgb1.height().min(rgb2.height()).min(mask_gray.height()));
+            let mut out = image::RgbImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let p1 = rgb1.get_pixel(x, y);
+                    let p2 = rgb2.get_pixel(x, y);
+                    let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                    out.put_pixel(x, y, image::Rgb([
+                        ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
+                        ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
+                        ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
+                    ]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(out))
+        }
         PipelineOp::Eval { lut } => {
             let is_luma =
                 matches!(img.color(), image::ColorType::L8 | image::ColorType::La8);
@@ -1064,8 +1405,49 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 Ok(DynamicImage::ImageRgb8(out))
             }
         }
-        PipelineOp::Transform { .. } => Err(PilError::NotImplementedError(
-            "Transform not yet implemented".into(),
-        )),
+        PipelineOp::Transform { w, h, method, data, filter: _f, fill } => {
+            match method {
+                TransformMethod::Affine => {
+                    if data.len() < 6 {
+                        return Err(PilError::ValueError("Affine transform needs 6 coefficients".into()));
+                    }
+                    let (a, b, c, d, e, f) = (data[0], data[1], data[2], data[3], data[4], data[5]);
+                    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+                    let src_rgba = img.to_rgba8();
+                    let (sw, sh) = src_rgba.dimensions();
+                    let mut out = image::RgbaImage::new(*w, *h);
+                    for dy in 0..*h {
+                        for dx in 0..*w {
+                            let sx = a * dx as f64 + b * dy as f64 + c;
+                            let sy = d * dx as f64 + e * dy as f64 + f;
+                            if sx >= 0.0 && sx < sw as f64 - 1.0 && sy >= 0.0 && sy < sh as f64 - 1.0 {
+                                let x0 = sx.floor() as u32;
+                                let y0 = sy.floor() as u32;
+                                let x1 = (x0 + 1).min(sw - 1);
+                                let y1 = (y0 + 1).min(sh - 1);
+                                let fx = sx - x0 as f64;
+                                let fy = sy - y0 as f64;
+                                let p00 = src_rgba.get_pixel(x0, y0);
+                                let p10 = src_rgba.get_pixel(x1, y0);
+                                let p01 = src_rgba.get_pixel(x0, y1);
+                                let p11 = src_rgba.get_pixel(x1, y1);
+                                out.put_pixel(dx, dy, image::Rgba([
+                                    bilerp(p00[0], p10[0], p01[0], p11[0], fx, fy),
+                                    bilerp(p00[1], p10[1], p01[1], p11[1], fx, fy),
+                                    bilerp(p00[2], p10[2], p01[2], p11[2], fx, fy),
+                                    bilerp(p00[3], p10[3], p01[3], p11[3], fx, fy),
+                                ]));
+                            } else {
+                                out.put_pixel(dx, dy, image::Rgba([fill_color.0, fill_color.1, fill_color.2, fill_color.3]));
+                            }
+                        }
+                    }
+                    Ok(DynamicImage::ImageRgba8(out))
+                }
+                _ => Err(PilError::NotImplementedError(format!(
+                    "Transform method {:?} not yet implemented", method
+                ))),
+            }
+        }
     }
 }

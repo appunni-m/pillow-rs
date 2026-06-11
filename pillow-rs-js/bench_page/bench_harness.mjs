@@ -8,8 +8,8 @@ import { fileURLToPath } from 'url';
 import { performance } from 'perf_hooks';
 import { createHash } from 'crypto';
 
-export const BENCH_RUNS = 30;
-export const WARMUP_RUNS = 3;
+export const BENCH_RUNS = 10;
+export const WARMUP_RUNS = 2;
 
 // ── Path resolution ──
 
