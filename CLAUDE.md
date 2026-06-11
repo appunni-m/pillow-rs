@@ -131,3 +131,6 @@ Before committing, verify:
 - [ ] No redundant `.clone()` — use borrowing where possible
 - [ ] `#[derive(Debug)]` on all public types
 - [ ] `thiserror` for error types, never bare `anyhow` in core library
+
+
+never leave commit message as anthropic or fable 

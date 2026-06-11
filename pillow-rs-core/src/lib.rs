@@ -7,6 +7,7 @@ pub mod formats;
 pub mod image;
 pub mod lazy;
 pub mod ops;
+pub mod gpu;
 
 pub use draw::Draw;
 pub use error::PilError;
