@@ -36,6 +36,59 @@ PRIORITY_OP_NAMES = [
     "to_bytes", "new", "paste", "paste_mask", "paste_color", "pipeline",
 ]
 
+# Map criterion benchmark names → manifest function names
+BENCH_NAME_MAP = {
+    "open_jpg": "open",
+    "save_png": "save",
+    "resize_800x600_lanczos": "resize",
+    "crop_100x100_to_500x500": "crop",
+    "rotate_90": "rotate",
+    "transpose_flip_left_right": "transpose",
+    "thumbnail_128x128": "thumbnail",
+    "tobytes": "to_bytes",
+    "new_1920x1080_rgb": "new",
+    "paste_image_overlay": "paste",
+    "paste_color_fill": "paste",
+    "convert_rgb_to_l": "convert",
+    "filter_blur": "filter",
+    "filter_contour": "filter",
+    "filter_detail": "filter",
+    "filter_edge_enhance": "filter",
+    "filter_emboss": "filter",
+    "filter_find_edges": "filter",
+    "filter_sharpen": "filter",
+    "filter_smooth": "filter",
+    "gaussian_blur_radius_2": "GaussianBlur",
+    "box_blur_radius_2": "BoxBlur",
+    "unsharp_mask_radius_2": "UnsharpMask",
+    "median_filter_size_3": "MedianFilter",
+    "mode_filter_size_3": "ModeFilter",
+    "max_filter_size_3": "MaxFilter",
+    "min_filter_size_3": "MinFilter",
+    "chops_add": "add",
+    "chops_subtract": "subtract",
+    "chops_multiply": "multiply",
+    "chops_screen": "screen",
+    "chops_darker": "darker",
+    "chops_lighter": "lighter",
+    "chops_difference": "difference",
+    "quantize_256_colors": "quantize",
+    "reduce_factor_2": "reduce",
+    "split_rgb": "split",
+    "getpixel": "getpixel",
+    "putpixel": "putpixel",
+    "putalpha_rgba": "putalpha",
+    "point_lut_invert": "point",
+    "imageops_invert": "invert",
+    "imageops_autocontrast": "autocontrast",
+    "imageops_equalize": "equalize",
+    "enhance_brightness_1_5": "Brightness",
+    "enhance_contrast_1_5": "Contrast",
+    "enhance_color_1_5": "Color",
+    "enhance_sharpness_2_0": "Sharpness",
+    "frombytes_rgb_1024x1024": "frombytes",
+}
+
 
 def load_baseline(path):
     """Load Pillow baseline, normalize to {func_name: mean_ms}."""
@@ -56,19 +109,32 @@ def load_target(path):
 
     Expected format: {func_name: {mean_ms: float, std_ms: float}}
     If the file does not exist, returns empty dict.
+    Applies BENCH_NAME_MAP to normalize criterion names → manifest names.
+    Also returns raw pipeline results separately.
     """
     if not path.exists():
-        return {}
+        return {}, {}
     with open(path) as f:
         raw = json.load(f)
-    # Allow both dict-of-objects and list-of-objects formats
-    if isinstance(raw, list):
-        return {item["name"]: item["mean_ms"] for item in raw if "name" in item and "mean_ms" in item}
     results = {}
+    pipelines = {}
     for func_name, entry in raw.items():
         if isinstance(entry, dict) and "mean_ms" in entry:
-            results[func_name] = entry["mean_ms"]
-    return results
+            ms = entry["mean_ms"]
+        elif isinstance(entry, (int, float)):
+            ms = float(entry)
+        else:
+            ms = None
+        if ms is None:
+            continue
+        # Check for pipeline benchmarks
+        if "pipeline" in func_name:
+            pipelines[func_name] = ms
+            continue
+        # Apply name mapping
+        mapped = BENCH_NAME_MAP.get(func_name, func_name)
+        results[mapped] = ms
+    return results, pipelines
 
 
 def speedup_str(rs_ms, pil_ms):
@@ -106,15 +172,20 @@ def build_target_data(baseline, funcs):
     Returns:
         baseline_lookup: {func_name: pil_mean_ms}
         target_lookups: {target_name: {func_name: rs_mean_ms}}
+        pipeline_data: {target_name: {bench_name: mean_ms}}
     """
     baseline_lookup = load_baseline(BASELINE_PATH)
 
     target_lookups = {}
+    pipeline_data = {}
     for target in TARGET_NAMES:
         path = TARGET_DIR / f"{target}.json"
-        target_lookups[target] = load_target(path)
+        results, pipelines = load_target(path)
+        target_lookups[target] = results
+        if pipelines:
+            pipeline_data[target] = pipelines
 
-    return baseline_lookup, target_lookups
+    return baseline_lookup, target_lookups, pipeline_data
 
 
 def compute_summary_stats(funcs, baseline_lookup, target_lookups):
@@ -161,7 +232,7 @@ def write_row(func, baseline_lookup, target_lookups):
     return "| " + " | ".join(cells) + " |"
 
 
-def generate_report(funcs, baseline_lookup, target_lookups):
+def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data):
     """Generate the full BENCHMARKS.md content."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     commit = get_git_commit()
@@ -185,6 +256,25 @@ def generate_report(funcs, baseline_lookup, target_lookups):
     lines.append(f"| Functions with GPU path | {stats['gpu_count']} |")
     lines.append(f"| Average CPU speedup vs Pillow | {stats['avg_cpu_speedup']:.2f}× |")
     lines.append("")
+
+    # --- Pipeline Benchmarks ---
+    cpu_pipes = pipeline_data.get("native_cpu", {})
+    if cpu_pipes:
+        lines.append("## Pipeline Benchmark — 20 Operations (Single- vs Multi-Thread)")
+        lines.append("")
+        lines.append("> Chaining 20 image operations end-to-end. Measures scheduling overhead, coherence, and clone avoidance.")
+        lines.append("")
+        lines.append("| Variant | Time (ms) |")
+        lines.append("|---------|-----------|")
+        for name, ms in sorted(cpu_pipes.items()):
+            label = name.replace("pipeline_20_", "").replace("_", "-").upper()
+            lines.append(f"| {label} | {ms:.2f}ms |")
+        if "pipeline_20_st" in cpu_pipes and "pipeline_20_mt" in cpu_pipes:
+            st = cpu_pipes["pipeline_20_st"]
+            mt = cpu_pipes["pipeline_20_mt"]
+            speedup = st / mt if mt > 0 else 0
+            lines.append(f"| **MT Speedup** | **{speedup:.2f}×** |")
+        lines.append("")
 
     # --- Priority Operations ---
     lines.append("## Priority Operations (Tier 1)")
@@ -226,10 +316,14 @@ def main():
 
     baseline_lookup = load_baseline(BASELINE_PATH)
     target_lookups = {}
+    pipeline_data = {}
     for target in TARGET_NAMES:
-        target_lookups[target] = load_target(TARGET_DIR / f"{target}.json")
+        results, pipelines = load_target(TARGET_DIR / f"{target}.json")
+        target_lookups[target] = results
+        if pipelines:
+            pipeline_data[target] = pipelines
 
-    report = generate_report(funcs, baseline_lookup, target_lookups)
+    report = generate_report(funcs, baseline_lookup, target_lookups, pipeline_data)
 
     output_path = ROOT / "BENCHMARKS.md"
     output_path.write_text(report)

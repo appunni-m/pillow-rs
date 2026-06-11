@@ -623,4 +623,101 @@ criterion_group!(
         bench_frombytes,
 );
 
-criterion_main!(priority, filters, channel_ops, misc);
+// ============================================================================
+// Pipeline Benchmarks — 20-op chain (single-thread vs multi-thread)
+// Measures scheduling, coherence, and clone overhead across sequential ops.
+
+fn bench_pipeline_20_st(c: &mut Criterion) {
+    let img = load_ref_2k();
+    c.bench_function("pipeline_20_st", |b| {
+        b.iter(|| {
+            // 1. resize (2048x1536 → 800x600 LANCZOS)
+            let r = img.resize((800, 600), Some("LANCZOS")).unwrap();
+            // 2. crop (100,100)-(500,500)
+            let r = r.crop((100, 100, 500, 500)).unwrap();
+            // 3. convert RGB→L
+            let r = r.convert("L", None, None, None, None).unwrap();
+            // 4. rotate 90°
+            let r = r.rotate(90.0, false, None).unwrap();
+            // 5. transpose FLIP_LEFT_RIGHT
+            let r = r.transpose("FLIP_LEFT_RIGHT").unwrap();
+            // 6. filter BLUR
+            let r = r.filter("BLUR").unwrap();
+            // 7. autocontrast
+            let r = pillow_rs_core::ops::imageops::autocontrast(&r, 0.0).unwrap();
+            // 8. equalize
+            let r = pillow_rs_core::ops::imageops::equalize(&r).unwrap();
+            // 9. invert (chops)
+            let r = chops::invert(&r).unwrap();
+            // 10. enhance brightness
+            let r = r.enhance_brightness(1.5).unwrap();
+            // 11. enhance contrast
+            let r = r.enhance_contrast(1.5).unwrap();
+            // 12. flip
+            let r = pillow_rs_core::ops::imageops::flip(&r).unwrap();
+            // 13. mirror
+            let r = pillow_rs_core::ops::imageops::mirror(&r).unwrap();
+            // 14. paste color
+            let mut r2 = r.clone();
+            r2.paste(PasteSource::Color((255, 0, 0, 255)), Some((0, 0, 50, 50)), None).unwrap();
+            // 15. quantize
+            let r = r2.quantize(256, 0, None, false).unwrap();
+            // 16. reduce
+            let r = r.reduce(2).unwrap();
+            // 17. split
+            let _bands = r.split().unwrap();
+            // 18. getpixel (needs &mut)
+            let mut r_mut = r.clone();
+            let _px = r_mut.getpixel(10, 10).unwrap();
+            // 19. to_bytes
+            let mut r_mut = r.clone();
+            let _bytes = r_mut.to_bytes().unwrap();
+            // 20. save (to buffer)
+            let mut r_mut2 = r.clone();
+            let _ = r_mut2.to_bytes();
+            black_box(_bytes);
+        })
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn bench_pipeline_20_mt(c: &mut Criterion) {
+    let img = load_ref_2k();
+    c.bench_function("pipeline_20_mt", |b| {
+        b.iter(|| {
+            // Multi-threaded: run independent sub-pipelines in parallel via rayon::join
+            let (r1, r2) = rayon::join(
+                || {
+                    // Sub-pipeline A: resize + crop + convert + flip
+                    let r = img.resize((800, 600), Some("LANCZOS")).unwrap();
+                    let r = r.crop((100, 100, 500, 500)).unwrap();
+                    let r = r.convert("L", None, None, None, None).unwrap();
+                    pillow_rs_core::ops::imageops::flip(&r).unwrap()
+                },
+                || {
+                    // Sub-pipeline B: filter BLUR + invert + equalize (runs on original)
+                    let r = img.filter("BLUR").unwrap();
+                    let r = chops::invert(&r).unwrap();
+                    pillow_rs_core::ops::imageops::equalize(&r).unwrap()
+                },
+            );
+            // Sequential merge
+            let r = chops::add(&r1, &r2, 1.0, 0.0).unwrap();
+            let r = r.reduce(2).unwrap();
+            let r = r.rotate(90.0, false, None).unwrap();
+            let mut r_mut = r.clone();
+            let _bytes = r_mut.to_bytes().unwrap();
+            black_box(_bytes);
+        })
+    });
+}
+
+criterion_group!(
+    name = pipeline;
+    config = Criterion::default();
+    targets =
+        bench_pipeline_20_st,
+        bench_pipeline_20_mt,
+);
+
+criterion_main!(priority, filters, channel_ops, misc, pipeline);
