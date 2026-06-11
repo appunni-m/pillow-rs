@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-11 13:47:21 | commit `21a4fdd` | 166 functions | 6 targets
+> Auto-generated: 2026-06-11 13:49:58 | commit `f6c73e2` | 166 functions | 6 targets
 
 ## Summary
 
@@ -8,9 +8,9 @@
 |--------|-------|
 | Functions benchmarked | 166 |
 | Functions with GPU path | 42 |
-| Valid CPU speedups (excl. outliers) | 41 |
-| Outliers flagged ⚠️ | 1 |
-| Average CPU speedup vs Pillow | 2.33× |
+| Valid CPU speedups (excl. outliers) | 42 |
+| Outliers flagged ⚠️ | 2 |
+| Average CPU speedup vs Pillow | 2.32× |
 | Native CPU benchmarks run | 47 |
 | Missing (no data yet) | 76 |
 
@@ -27,8 +27,8 @@
 | Image.paste | 0.72× | NYW | 0.38× | NYW | 212.05× ⚠️ | 200.52× ⚠️ |
 | Image.convert | 0.64× | NYW | 1.81× | NYW | 1.77× | 1.62× |
 | Image.filter | — | NYW | 2.64× | NYW | — | NYW |
-| Image.open | — | — | — | — | — | — |
-| Image.save | — | — | — | — | — | — |
+| Image.open | 709317.14× ⚠️ | — | 544.37× ⚠️ | — | 702.29× ⚠️ | — |
+| Image.save | 1.88× | — | 1.34× | — | 1.23× | — |
 | Image.tobytes | — | — | — | — | — | — |
 
 ## All Functions
@@ -70,7 +70,7 @@
 | Image.getxmp | — | — | — | — | — | — |
 | Image.histogram | — | — | 5.55× | — | 6.09× | — |
 | Image.load | — | — | — | — | — | — |
-| Image.open | — | — | — | — | — | — |
+| Image.open | 709317.14× ⚠️ | — | 544.37× ⚠️ | — | 702.29× ⚠️ | — |
 | Image.point | 0.64× | NYW | — | NYW | — | NYW |
 | Image.putalpha | 28.57× | — | — | — | — | — |
 | Image.putdata | — | — | — | — | — | — |
@@ -79,7 +79,7 @@
 | Image.quantize | 0.21× | NYW | — | NYW | — | NYW |
 | Image.reduce | 0.44× | NYW | 2.28× | NYW | 1.94× | 2.13× |
 | Image.remap_palette | — | — | — | — | — | — |
-| Image.save | — | — | — | — | — | — |
+| Image.save | 1.88× | — | 1.34× | — | 1.23× | — |
 | Image.seek | — | — | — | — | — | — |
 | Image.show | — | — | — | — | — | — |
 | Image.split | 0.37× | — | 8.94× | — | 8.06× | — |

@@ -92,9 +92,13 @@ def load_baseline(path):
     for entry in data.get("results", []):
         name = entry.get("function", "")
         mean_ms = entry.get("mean_s", 0) * 1000
-        # Normalize: if short name (no dot), try to resolve via mapping
+        # Handle composites: open_save covers both Image.open and Image.save
+        if name == "open_save":
+            results["Image.open"] = mean_ms
+            results["Image.save"] = mean_ms
+            continue
+        # Normalize short names → full qualified
         if "." not in name:
-            # Try BENCH_TO_FULL, then assume Image.<name>
             full = BENCH_TO_FULL.get(name, f"Image.{name}")
             results[full] = mean_ms
         else:
