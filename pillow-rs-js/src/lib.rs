@@ -43,7 +43,7 @@ impl Image {
     // Pixels
     #[wasm_bindgen(js_name = "getpixel")] pub fn getpixel(&mut self, x: u32, y: u32) -> Result<Vec<u8>, JsValue> { self.inner.getpixel(x,y).map(|(r,g,b,a)| vec![r,g,b,a]).map_err(err) }
     #[wasm_bindgen(js_name = "putpixel")] pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> { self.inner.putpixel(x,y,r,g,b,a).map_err(err) }
-    #[wasm_bindgen(js_name = "point")] pub fn point(&mut self, lut: Vec<u8>) -> Result<Image, JsValue> { self.inner.point(&lut).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "point")] pub fn point(&self, lut: Vec<u8>) -> Result<Image, JsValue> { module_fns::eval(&self.inner, &lut).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "putalpha")] pub fn putalpha(&mut self, a: u8) -> Result<(), JsValue> { self.inner.putalpha(a).map_err(err) }
 
     // Bands
@@ -78,31 +78,30 @@ impl Image {
     #[wasm_bindgen(js_name = "quantize")] pub fn quantize(&self, c: u32) -> Result<Image, JsValue> { self.inner.quantize(c,0,None,true).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "reduce")] pub fn reduce(&self, f: u32) -> Result<Image, JsValue> { self.inner.reduce(f).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "remapPalette")] pub fn remap(&mut self, m: Vec<u8>) -> Result<Image, JsValue> { self.inner.remap_palette(&m).map(|i| Image{inner:i}).map_err(err) }
-    #[wasm_bindgen(js_name = "effectSpread")] pub fn spread(&self, d: u32) -> Result<Image, JsValue> { self.inner.effect_spread(d).map(|i| Image{inner:i}).map_err(err) }
-    #[wasm_bindgen(js_name = "thumbnail")] pub fn thumb(&mut self, w: u32, h: u32) -> Result<(), JsValue> { self.inner.thumbnail((w,h), None).map_err(err) }
+    #[wasm_bindgen(js_name = "effectSpread")] pub fn spread(&self, d: u32) -> Result<Image, JsValue> { module_fns::effect_spread(&self.inner, d).map(|i| Image{inner:i}).map_err(err) }
+    #[wasm_bindgen(js_name = "thumbnail")] pub fn thumb(&mut self, w: u32, h: u32) -> Result<(), JsValue> { self.inner.thumbnail((w,h)).map_err(err) }
 
     // Bookkeeping
     #[wasm_bindgen(js_name = "seek")] pub fn seek(&mut self, f: u32) -> Result<(), JsValue> { self.inner.seek(f).map_err(err) }
     #[wasm_bindgen(js_name = "tell")] pub fn tell_js(&self) -> u32 { self.inner.tell() }
     #[wasm_bindgen(js_name = "load")] pub fn load(&mut self) -> Result<(), JsValue> { self.inner.load().map_err(err) }
-    #[wasm_bindgen(js_name = "verify")] pub fn verify(&self) -> Result<(), JsValue> { let mut c=self.inner.clone(); c.ensure_loaded().map(|_|()).map_err(err) }
+    #[wasm_bindgen(js_name = "verify")] pub fn verify(&self) -> Result<(), JsValue> { self.inner.materialize().map(|_|()).map_err(err) }
     #[wasm_bindgen(js_name = "fromBytes")] pub fn frombytes(&self, m: &str, w: u32, h: u32, d: Vec<u8>) -> Result<Image, JsValue> { RsImage::frombytes(m,(w,h),&d).map(|i| Image{inner:i}).map_err(err) }
     #[wasm_bindgen(js_name = "putdata")] pub fn putdata(&mut self, d: Vec<u8>) -> Result<(), JsValue> { self.inner.putdata(&d).map_err(err) }
     #[wasm_bindgen(js_name = "transform")] pub fn transform(&self, sz: Vec<u32>, d: Vec<f64>) -> Result<Image, JsValue> { self.inner.transform_affine((sz[0],sz[1]),&d,(0,0,0,255)).map(|i| Image{inner:i}).map_err(err) }
-    #[wasm_bindgen(js_name = "toBytes")] pub fn to_bytes(&mut self) -> Result<Vec<u8>, JsValue> { self.inner.to_bytes().map_err(err) }
+    #[wasm_bindgen(js_name = "toBytes")] pub fn tobytes(&self) -> Result<Vec<u8>, JsValue> { self.inner.tobytes().map_err(err) }
     #[wasm_bindgen(js_name = "copy")] pub fn copy(&self) -> Image { Image { inner: self.inner.copy() } }
     #[wasm_bindgen(js_name = "tobitmap")] pub fn tobitmap(&mut self) -> Result<Vec<u8>, JsValue> { self.inner.tobitmap().map_err(err) }
     // More methods
-    #[wasm_bindgen(js_name = "getpalette")] pub fn getpalette(&mut self) -> Result<JsValue, JsValue> {
-        let mut clone = self.inner.clone();
-        let img = clone.ensure_loaded().map_err(err)?;
+    #[wasm_bindgen(js_name = "getpalette")] pub fn getpalette(&self) -> Result<JsValue, JsValue> {
+        let img = self.inner.materialize().map_err(err)?;
         Ok(JsValue::from_str(&format!("{:?}", img.color())))
     }
     #[wasm_bindgen(js_name = "putpalette")] pub fn putpalette(&mut self, _data: Vec<u8>) {}
     #[wasm_bindgen(js_name = "getexif")] pub fn getexif(&self) -> JsValue { JsValue::from_str("{}") }
     #[wasm_bindgen(js_name = "getxmp")] pub fn getxmp(&self) -> JsValue { JsValue::from_str("{}") }
     #[wasm_bindgen(js_name = "getChildImages")] pub fn get_child_images(&self) -> Vec<Image> { vec![] }
-    #[wasm_bindgen(js_name = "getFlattenedData")] pub fn get_flattened(&self) -> Result<Vec<u8>, JsValue> { let mut c=self.inner.clone(); c.to_bytes().map_err(err) }
+    #[wasm_bindgen(js_name = "getFlattenedData")] pub fn get_flattened(&self) -> Result<Vec<u8>, JsValue> { self.inner.tobytes().map_err(err) }
     #[wasm_bindgen(js_name = "applyTransparency")] pub fn apply_transparency(&self) {}
     #[wasm_bindgen(js_name = "draft")] pub fn draft(&self) -> Image { Image{inner: self.inner.clone()} }
     #[wasm_bindgen(js_name = "putpixelRaw")] pub fn putpixel_raw(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> { self.inner.putpixel(x,y,r,g,b,a).map_err(err) }
