@@ -180,3 +180,247 @@ pub const COLOR_OPS_SHADER: &str = include_str!("shaders/color_ops.wgsl");
 pub const RESAMPLE_SHADER: &str = include_str!("shaders/resample.wgsl");
 pub const BLEND_SHADER: &str = include_str!("shaders/blend.wgsl");
 pub const CONVOLVE_SHADER: &str = include_str!("shaders/convolve.wgsl");
+
+// ─── Tests ───
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Shader embedding ──
+
+    #[test]
+    fn test_shaders_are_embedded() {
+        assert!(!BLUR_SHADER.is_empty(), "BLUR_SHADER must be non-empty");
+        assert!(!COLOR_OPS_SHADER.is_empty(), "COLOR_OPS_SHADER must be non-empty");
+        assert!(!RESAMPLE_SHADER.is_empty(), "RESAMPLE_SHADER must be non-empty");
+        assert!(!BLEND_SHADER.is_empty(), "BLEND_SHADER must be non-empty");
+        assert!(!CONVOLVE_SHADER.is_empty(), "CONVOLVE_SHADER must be non-empty");
+    }
+
+    #[test]
+    fn test_blur_shader_has_expected_decorations() {
+        assert!(BLUR_SHADER.contains("@compute"), "blur shader must contain @compute");
+        assert!(BLUR_SHADER.contains("@group(0)"), "blur shader must have bind group");
+        assert!(BLUR_SHADER.contains("texture_storage_2d"), "blur shader must write to storage texture");
+    }
+
+    #[test]
+    fn test_color_ops_shader_has_all_modes() {
+        assert!(COLOR_OPS_SHADER.contains("invert"), "must support invert");
+        assert!(COLOR_OPS_SHADER.contains("solarize"), "must support solarize");
+        assert!(COLOR_OPS_SHADER.contains("posterize"), "must support posterize");
+        assert!(COLOR_OPS_SHADER.contains("grayscale"), "must support grayscale");
+    }
+
+    #[test]
+    fn test_convolve_shader_accepts_kernel_uniform() {
+        assert!(CONVOLVE_SHADER.contains("kernel: array<f32, 9>"), "must have 3x3 kernel uniform");
+        assert!(CONVOLVE_SHADER.contains("scale"), "must have scale uniform");
+        assert!(CONVOLVE_SHADER.contains("offset"), "must have offset uniform");
+    }
+
+    // ── GpuEngine initialization ──
+
+    #[test]
+    fn test_gpu_engine_new_sync_returns_option() {
+        // GPU may or may not be available — the method must not panic
+        let result = GpuEngine::new_sync();
+        // Either Some(engine) or None, never panic
+        if let Some(ref engine) = result {
+            assert!(engine.is_available());
+        }
+    }
+
+    #[test]
+    fn test_gpu_engine_is_available() {
+        // If we can create an engine, it must report available
+        if let Some(engine) = GpuEngine::new_sync() {
+            assert!(engine.is_available());
+        }
+    }
+
+    #[test]
+    fn test_gpu_engine_creation_is_idempotent() {
+        // Multiple calls should not panic
+        for _ in 0..3 {
+            let _ = GpuEngine::new_sync();
+        }
+    }
+
+    // ── GPU stub methods: return error, never panic ──
+
+    fn make_test_image() -> Image {
+        Image::new(64, 64, "RGB", (128, 64, 32, 255)).unwrap()
+    }
+
+    #[test]
+    fn test_gpu_blur_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let result = engine.blur(&img, 5);
+            // Currently returns "not yet wired" error — NOT a panic
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(
+                format!("{}", err).contains("GPU"),
+                "Error should mention GPU: {}",
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn test_gpu_invert_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let result = engine.invert(&img);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_gpu_grayscale_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let result = engine.grayscale(&img);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_gpu_sharpen_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let result = engine.sharpen(&img);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_gpu_resize_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let result = engine.resize(&img, 32, 32);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_gpu_convolve_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let kernel: [f32; 9] = [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0];
+            let result = engine.convolve(&img, &kernel, 1.0, 0.0);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_gpu_blend_returns_error_not_panic() {
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img_a = make_test_image();
+            let img_b = make_test_image();
+            let result = engine.blend(&img_a, &img_b, 0);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_all_gpu_stubs_return_pil_error() {
+        // Verify every GPU method returns PilError (not JsValue, not panic)
+        // This guarantees callers can match on PilError variants
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let methods: [&dyn Fn() -> Result<Image, PilError>; 7] = [
+                &|| engine.blur(&img, 3),
+                &|| engine.sharpen(&img),
+                &|| engine.invert(&img),
+                &|| engine.grayscale(&img),
+                &|| engine.resize(&img, 16, 16),
+                &|| {
+                    let k: [f32; 9] = [1.0; 9];
+                    engine.convolve(&img, &k, 9.0, 0.0)
+                },
+                &|| engine.blend(&img, &img, 0),
+            ];
+            for method in &methods {
+                let result = method();
+                assert!(result.is_err(), "GPU stub should return Err(PilError)");
+            }
+        }
+    }
+
+    #[test]
+    fn test_gpu_stub_errors_are_distinct() {
+        // Each stub method should return a different error message
+        // so callers can distinguish which GPU path is missing
+        if let Some(engine) = GpuEngine::new_sync() {
+            let img = make_test_image();
+            let err_blur = engine.blur(&img, 3).unwrap_err().to_string();
+            let err_invert = engine.invert(&img).unwrap_err().to_string();
+            let err_resize = engine.resize(&img, 16, 16).unwrap_err().to_string();
+            assert_ne!(err_blur, err_invert, "blur and invert errors should differ");
+            assert_ne!(err_blur, err_resize, "blur and resize errors should differ");
+            // Each should name the operation
+            assert!(err_blur.contains("blur"), "should mention blur: {}", err_blur);
+            assert!(err_invert.contains("invert"), "should mention invert: {}", err_invert);
+            assert!(err_resize.contains("resize"), "should mention resize: {}", err_resize);
+        }
+    }
+
+    // ── Flag-controlled dispatch pattern ──
+
+    #[test]
+    fn test_dispatch_pattern_gpu_disabled_uses_cpu() {
+        // When gpu_enabled is false, call CPU path directly
+        let gpu_enabled = false;
+        let img = make_test_image();
+
+        // CPU path: always works (no dependency on GPU availability)
+        let result = if gpu_enabled {
+            if let Some(engine) = GpuEngine::new_sync() {
+                engine.blur(&img, 3)
+            } else {
+                img.filter("BLUR") // CPU fallback
+            }
+        } else {
+            img.filter("BLUR") // CPU path directly
+        };
+        assert!(result.is_ok(), "CPU filter should succeed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_dispatch_pattern_gpu_enabled_graceful_fallback() {
+        // When gpu_enabled is true but GPU is unavailable, fall back to CPU
+        let gpu_enabled = true;
+        let img = make_test_image();
+
+        let engine = GpuEngine::new_sync(); // may be None on headless/CI
+        let result: Result<Image, PilError> = if let Some(ref e) = engine {
+            match e.blur(&img, 3) {
+                Ok(img) => Ok(img),           // GPU succeeded
+                Err(_) => img.filter("BLUR"), // GPU stub → CPU fallback
+            }
+        } else {
+            img.filter("BLUR") // No GPU → CPU
+        };
+        assert!(result.is_ok(), "Should always get a result via fallback");
+    }
+
+    #[test]
+    fn test_dispatch_pattern_no_gpu_does_not_panic() {
+        // Calling GPU methods when engine is None should be impossible
+        // because the caller checks Option<GpuEngine> before calling any method.
+        // This test verifies the pattern compiles and works:
+        let engine: Option<GpuEngine> = GpuEngine::new_sync();
+        let img = make_test_image();
+
+        // When gpu_enabled: try GPU path; None falls back to CPU
+        let _result = engine.map_or_else(
+            || img.filter("BLUR"),       // None: CPU fallback
+            |e| e.blur(&img, 3),         // Some: try GPU (may error for stubs)
+        );
+        // Doesn't panic — that's the test
+    }
+}
