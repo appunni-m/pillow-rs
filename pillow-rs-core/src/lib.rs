@@ -5,8 +5,8 @@ pub mod font;
 pub mod format;
 pub mod formats;
 pub mod image;
-pub mod lazy;
 pub mod ops;
+pub mod pipeline;
 pub mod gpu;
 
 pub use draw::Draw;

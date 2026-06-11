@@ -20,7 +20,7 @@ impl Draw {
     /// Create a new drawing context.
     pub fn new(image: Image) -> Self {
         let mode = {
-            let mut clone = image.clone();
+            let clone = image.clone();
             clone.mode().ok()
         };
         Draw { image, orig_mode: mode }
@@ -36,7 +36,7 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         width: u32,
     ) -> Result<(), PilError> {
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (w, h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
 
@@ -51,7 +51,7 @@ impl Draw {
             }
         }
 
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
@@ -66,7 +66,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         width: u32,
     ) -> Result<(), PilError> {
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
 
@@ -102,7 +102,7 @@ impl Draw {
             }
         }
 
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
@@ -117,7 +117,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
 
@@ -150,7 +150,7 @@ impl Draw {
             draw_ellipse_outline(&mut canvas, cx as i32, cy as i32, rx as i32, ry as i32, oc, img_w, img_h);
         }
 
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
@@ -165,7 +165,7 @@ impl Draw {
         if points.len() < 3 {
             return Ok(());
         }
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
 
@@ -202,19 +202,19 @@ impl Draw {
             }
         }
 
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
     /// Draw a single point.
     pub fn point(&mut self, points: &[(i32, i32)], fill: (u8, u8, u8, u8)) -> Result<(), PilError> {
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
         for &(x, y) in points {
             plot(&mut canvas, x, y, fill, img_w, img_h);
         }
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
@@ -225,8 +225,15 @@ impl Draw {
             if let Ok(current) = img.mode() {
                 if current != *orig && *orig != "RGBA" {
                     // Convert RGBA back to RGB/L if that was the original mode
-                    if let Ok(converted) = img.convert(orig, None, None, None, None) {
-                        return converted;
+                    if let Ok(img_loaded) = img.materialize() {
+                        let converted = match orig.as_str() {
+                            "RGB" => DynamicImage::ImageRgb8(img_loaded.to_rgb8()),
+                            "L" => DynamicImage::ImageLuma8(
+                                crate::color::pil_grayscale(&img_loaded)
+                            ),
+                            _ => img_loaded,
+                        };
+                        return Image::Loaded(converted);
                     }
                 }
             }
@@ -236,7 +243,7 @@ impl Draw {
 
     /// Draw an arc (partial ellipse outline).
     pub fn arc(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: (u8, u8, u8, u8), _width: u32) -> Result<(), PilError> {
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
         let cx = (x0 + x1) as f64 / 2.0;
@@ -250,7 +257,7 @@ impl Draw {
             let y = (cy + ry * angle.sin()).round() as i32;
             plot(&mut canvas, x, y, fill, img_w, img_h);
         }
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
@@ -267,7 +274,7 @@ impl Draw {
 
     /// Draw a pieslice.
     pub fn pieslice(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
         let cx = (x0 + x1) as f64 / 2.0;
@@ -311,7 +318,7 @@ impl Draw {
             }
         }
 
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
@@ -331,7 +338,7 @@ impl Draw {
     pub fn text(&mut self, x: i32, y: i32, text: &str, font: &crate::font::Font, fill: (u8, u8, u8, u8)) -> Result<(), PilError> {
         let (w, h, pixels) = font.render_text(text, fill, 0.0);
         if w == 0 || h == 0 { return Ok(()); }
-        let img = self.image.ensure_loaded()?;
+        let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
         let (img_w, img_h) = (canvas.width(), canvas.height());
 
@@ -358,7 +365,7 @@ impl Draw {
                 }
             }
         }
-        self.image.inner = crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
         Ok(())
     }
 
