@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-10 21:23:03 | commit 9088f0f | 166 functions | 6 targets
+> Auto-generated: 2026-06-11 09:51:27 | commit 34e2717 | 166 functions | 6 targets
 
 ## Summary
 
@@ -14,15 +14,15 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| resize | — | — | — | — | — | — |
-| crop | — | — | — | — | — | — |
-| crop | — | — | — | — | — | — |
+| resize | — | — | 1.79× | — | 1.29× | 1.75× |
+| crop | — | — | 3.35× | — | 3.10× | 3.11× |
+| crop | — | — | 3.35× | — | 3.10× | 3.11× |
 | rotate | — | — | — | — | — | — |
-| transpose | — | — | — | — | — | — |
-| thumbnail | — | — | — | — | — | — |
-| new | — | — | — | — | — | — |
-| new | — | — | — | — | — | — |
-| paste | — | — | — | — | — | — |
+| transpose | — | — | 2.39× | — | 2.29× | 2.35× |
+| thumbnail | — | — | 1.61× | — | 1.54× | 1.59× |
+| new | — | — | 1.04× | — | 0.89× | — |
+| new | — | — | 1.04× | — | 0.89× | — |
+| paste | — | — | 100.53× | — | — | — |
 
 ## All Functions
 
@@ -30,52 +30,52 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| resize | — | — | — | — | — | — |
-| crop | — | — | — | — | — | — |
+| resize | — | — | 1.79× | — | 1.29× | 1.75× |
+| crop | — | — | 3.35× | — | 3.10× | 3.11× |
 | rotate | — | — | — | — | — | — |
-| transpose | — | — | — | — | — | — |
-| thumbnail | — | — | — | — | — | — |
-| new | — | — | — | — | — | — |
-| paste | — | — | — | — | — | — |
+| transpose | — | — | 2.39× | — | 2.29× | 2.35× |
+| thumbnail | — | — | 1.61× | — | 1.54× | 1.59× |
+| new | — | — | 1.04× | — | 0.89× | — |
+| paste | — | — | 100.53× | — | — | — |
 | alpha_composite | — | — | — | — | — | — |
 | apply_transparency | — | — | — | — | — | — |
 | close | — | — | — | — | — | — |
-| convert | — | — | — | — | — | — |
+| convert | — | — | 1.70× | — | 1.77× | 1.62× |
 | copy | — | — | — | — | — | — |
 | draft | — | — | — | — | — | — |
 | effect_spread | — | — | — | — | — | — |
 | entropy | — | — | — | — | — | — |
-| filter | — | — | — | — | — | — |
+| filter | — | — | 2.45× | — | — | — |
 | frombytes | — | — | — | — | — | — |
 | get_child_images | — | — | — | — | — | — |
 | get_flattened_data | — | — | — | — | — | — |
-| getbands | — | — | — | — | — | — |
-| getbbox | — | — | — | — | — | — |
+| getbands | — | — | 49.57× | — | 53.56× | — |
+| getbbox | — | — | 10.76× | — | 11.81× | — |
 | getchannel | — | — | — | — | — | — |
 | getcolors | — | — | — | — | — | — |
 | getdata | — | — | — | — | — | — |
 | getexif | — | — | — | — | — | — |
-| getextrema | — | — | — | — | — | — |
+| getextrema | — | — | 7.40× | — | 7.71× | — |
 | getim | — | — | — | — | — | — |
 | getpalette | — | — | — | — | — | — |
-| getpixel | — | — | — | — | — | — |
+| getpixel | — | — | 11731.14× | — | 17596.71× | — |
 | getprojection | — | — | — | — | — | — |
 | getxmp | — | — | — | — | — | — |
-| histogram | — | — | — | — | — | — |
+| histogram | — | — | 9.24× | — | 6.09× | — |
 | load | — | — | — | — | — | — |
 | open | — | — | — | — | — | — |
 | point | — | — | — | — | — | — |
 | putalpha | — | — | — | — | — | — |
 | putdata | — | — | — | — | — | — |
 | putpalette | — | — | — | — | — | — |
-| putpixel | — | — | — | — | — | — |
+| putpixel | — | — | 3.37× | — | 3.51× | — |
 | quantize | — | — | — | — | — | — |
-| reduce | — | — | — | — | — | — |
+| reduce | — | — | 2.08× | — | 1.94× | 2.13× |
 | remap_palette | — | — | — | — | — | — |
 | save | — | — | — | — | — | — |
 | seek | — | — | — | — | — | — |
 | show | — | — | — | — | — | — |
-| split | — | — | — | — | — | — |
+| split | — | — | 8.49× | — | 8.06× | — |
 | tell | — | — | — | — | — | — |
 | tobitmap | — | — | — | — | — | — |
 | tobytes | — | — | — | — | — | — |
@@ -178,8 +178,8 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | FreeTypeFont | — | — | — | — | — | — |
 | ImageFont | — | — | — | — | — | — |
-| getbbox | — | — | — | — | — | — |
-| getbbox | — | — | — | — | — | — |
+| getbbox | — | — | 10.76× | — | 11.81× | — |
+| getbbox | — | — | 10.76× | — | 11.81× | — |
 | getlength | — | — | — | — | — | — |
 | getlength | — | — | — | — | — | — |
 | getmask | — | — | — | — | — | — |
@@ -196,7 +196,7 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| new | — | — | — | — | — | — |
+| new | — | — | 1.04× | — | 0.89× | — |
 | alpha_composite | — | — | — | — | — | — |
 | blend | — | — | — | — | — | — |
 | composite | — | — | — | — | — | — |
@@ -211,7 +211,7 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| crop | — | — | — | — | — | — |
+| crop | — | — | 3.35× | — | 3.10× | 3.11× |
 | autocontrast | — | — | — | — | — | — |
 | colorize | — | — | — | — | — | — |
 | contain | — | — | — | — | — | — |

@@ -5,11 +5,22 @@
   "main": "pkg/pillow_rs_js.js",
   "module": "pkg/pillow_rs_js.js",
   "types": "pkg/pillow_rs_js.d.ts",
-  "files": ["pkg/"],
+  "files": [
+    "pkg/"
+  ],
+  "type": "module",
   "scripts": {
     "build": "wasm-pack build --target web",
     "build:release": "wasm-pack build --target web --release"
   },
-  "keywords": ["image", "pillow", "wasm", "rust"],
-  "license": "MIT"
+  "keywords": [
+    "image",
+    "pillow",
+    "wasm",
+    "rust"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "puppeteer": "^22.15.0"
+  }
 }
