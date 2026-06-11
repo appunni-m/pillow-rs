@@ -105,49 +105,80 @@ impl Image {
 }
 
 /// Apply a PIL-compatible 3x3 convolution kernel.
+/// Uses rayon for parallel row processing on native targets.
+/// GPU path (GpuEngine::convolve) will replace this when wired.
 fn apply_kernel(image: &Image, k: &FilterKernel) -> Result<Image, PilError> {
     let mut clone = image.clone();
     let img = clone.ensure_loaded()?;
 
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-
     let inv_scale = 1.0 / k.scale;
+    let wu = w as usize;
+    let hu = h as usize;
 
-    let mut out = image::RgbImage::new(w, h);
+    let mut out = vec![0u8; wu * hu * 3];
 
-    for y in 0..h {
-        for x in 0..w {
-            let mut r = 0f32;
-            let mut g = 0f32;
-            let mut b = 0f32;
+    // Share raw slices for parallel access
+    let rgb_data = rgb.as_raw().as_slice();
+    let out_ptr = out.as_mut_ptr();
 
-            for ky in 0..3i32 {
-                for kx in 0..3i32 {
-                    let sx = (x as i32 + kx - 1).clamp(0, w as i32 - 1) as u32;
-                    let sy = (y as i32 + ky - 1).clamp(0, h as i32 - 1) as u32;
-                    let px = rgb.get_pixel(sx, sy);
-                    let ki = (ky * 3 + kx) as usize;
-                    r += px[0] as f32 * k.kernel[ki];
-                    g += px[1] as f32 * k.kernel[ki];
-                    b += px[2] as f32 * k.kernel[ki];
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        out.par_chunks_mut(wu * 3).enumerate().for_each(|(y, row_out)| {
+            for x in 0..wu {
+                let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
+                for ky in 0..3i32 {
+                    for kx in 0..3i32 {
+                        let sx = (x as i32 + kx - 1).clamp(0, w as i32 - 1) as usize;
+                        let sy = (y as i32 + ky - 1).clamp(0, h as i32 - 1) as usize;
+                        let idx = (sy * wu + sx) * 3;
+                        let ki = (ky * 3 + kx) as usize;
+                        r += rgb_data[idx] as f32 * k.kernel[ki];
+                        g += rgb_data[idx + 1] as f32 * k.kernel[ki];
+                        b += rgb_data[idx + 2] as f32 * k.kernel[ki];
+                    }
                 }
+                let ox = x * 3;
+                row_out[ox] = (r * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8;
+                row_out[ox + 1] = (g * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8;
+                row_out[ox + 2] = (b * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8;
             }
+        });
+    }
 
-            out.put_pixel(
-                x,
-                y,
-                image::Rgb([
-                    (r * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8,
-                    (g * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8,
-                    (b * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8,
-                ]),
-            );
+    #[cfg(target_arch = "wasm32")]
+    {
+        for y in 0..hu {
+            let row_start = y * wu * 3;
+            for x in 0..wu {
+                let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
+                for ky in 0..3i32 {
+                    for kx in 0..3i32 {
+                        let sx = (x as i32 + kx - 1).clamp(0, w as i32 - 1) as usize;
+                        let sy = (y as i32 + ky - 1).clamp(0, h as i32 - 1) as usize;
+                        let idx = (sy * wu + sx) * 3;
+                        let ki = (ky * 3 + kx) as usize;
+                        r += rgb_data[idx] as f32 * k.kernel[ki];
+                        g += rgb_data[idx + 1] as f32 * k.kernel[ki];
+                        b += rgb_data[idx + 2] as f32 * k.kernel[ki];
+                    }
+                }
+                let ox = row_start + x * 3;
+                out[ox] = (r * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8;
+                out[ox + 1] = (g * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8;
+                out[ox + 2] = (b * inv_scale + k.offset as f32).clamp(0.0, 255.0).round() as u8;
+            }
         }
     }
 
+    let _ = out_ptr; // silence unused warning in wasm32 path
+    let out_img = image::RgbImage::from_raw(w, h, out)
+        .ok_or_else(|| PilError::ValueError("failed to construct output image".into()))?;
+
     Ok(Image {
-        inner: crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgb8(out)),
+        inner: crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgb8(out_img)),
         format: image.format,
     })
 }

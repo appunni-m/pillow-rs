@@ -159,25 +159,37 @@ pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError
     channel_op(image1, image2, |a, b| a.wrapping_sub(b))
 }
 
-/// Fill with constant value (single-channel fill).
+/// Fill with constant value (single-channel fill). Parallelized.
 pub fn constant(image: &Image, value: u8) -> Result<Image, PilError> {
     let mut clone = image.clone();
     let img = clone.ensure_loaded()?;
     let (w, h) = (img.width(), img.height());
-    let mut out = image::RgbImage::new(w, h);
-    for p in out.pixels_mut() {
-        p[0] = value; p[1] = value; p[2] = value;
+    let total = (w as usize) * (h as usize) * 3;
+    let mut out = vec![0u8; total];
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        out.par_chunks_mut(3).for_each(|px| { px[0] = value; px[1] = value; px[2] = value; });
     }
+    #[cfg(target_arch = "wasm32")]
+    {
+        for px in out.chunks_mut(3) { px[0] = value; px[1] = value; px[2] = value; }
+    }
+
+    let out_img = image::RgbImage::from_raw(w, h, out)
+        .ok_or_else(|| PilError::ValueError("constant: failed to construct output".into()))?;
     Ok(Image {
-        inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out)),
+        inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(out_img)),
         format: image.format,
     })
 }
 
 /// Generic per-channel operation helper.
+/// Uses rayon for parallel processing on native targets.
 fn channel_op<F>(image1: &Image, image2: &Image, op: F) -> Result<Image, PilError>
 where
-    F: Fn(u8, u8) -> u8,
+    F: Fn(u8, u8) -> u8 + Sync,
 {
     let mut clone1 = image1.clone();
     let mut clone2 = image2.clone();
@@ -191,19 +203,36 @@ where
 
     let rgb1 = img1.to_rgb8();
     let rgb2 = img2.to_rgb8();
+    let wu = w as usize;
+    let hu = h as usize;
 
-    let mut result = image::RgbImage::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let p1 = rgb1.get_pixel(x, y);
-            let p2 = rgb2.get_pixel(x, y);
-            result.put_pixel(
-                x,
-                y,
-                image::Rgb([op(p1[0], p2[0]), op(p1[1], p2[1]), op(p1[2], p2[2])]),
-            );
+    let raw1 = rgb1.as_raw().as_slice();
+    let raw2 = rgb2.as_raw().as_slice();
+    let mut out = vec![0u8; wu * hu * 3];
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        out.par_chunks_mut(3).enumerate().for_each(|(i, px)| {
+            let idx = i * 3;
+            px[0] = op(raw1[idx], raw2[idx]);
+            px[1] = op(raw1[idx + 1], raw2[idx + 1]);
+            px[2] = op(raw1[idx + 2], raw2[idx + 2]);
+        });
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        for i in 0..(wu * hu) {
+            let idx = i * 3;
+            out[idx] = op(raw1[idx], raw2[idx]);
+            out[idx + 1] = op(raw1[idx + 1], raw2[idx + 1]);
+            out[idx + 2] = op(raw1[idx + 2], raw2[idx + 2]);
         }
     }
+
+    let result = image::RgbImage::from_raw(w, h, out)
+        .ok_or_else(|| PilError::ValueError("channel_op: failed to construct output".into()))?;
 
     Ok(Image {
         inner: crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgb8(result)),
