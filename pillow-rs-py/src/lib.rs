@@ -39,7 +39,7 @@ impl PyImage {
     #[classmethod]
     fn open(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<Self> {
         if let Ok(path) = fp.extract::<String>() {
-            let img = RsImage::open_path(&path).map_err(map_error)?;
+            let img = RsImage::open(&path, None).map_err(map_error)?;
             Ok(PyImage { inner: img })
         } else if let Ok(bytes) = fp.extract::<Vec<u8>>() {
             let img = RsImage::open_bytes(bytes).map_err(map_error)?;
@@ -170,13 +170,13 @@ impl PyImage {
         }
     }
 
-    fn tobytes(&mut self) -> PyResult<Vec<u8>> {
-        self.inner.to_bytes().map_err(map_error)
+    fn tobytes(&self) -> PyResult<Vec<u8>> {
+        self.inner.tobytes().map_err(map_error)
     }
 
-    fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
+    fn thumbnail(&mut self, size: (u32, u32), _resample: Option<String>) -> PyResult<()> {
         self.inner
-            .thumbnail(size, resample.as_deref())
+            .thumbnail(size)
             .map_err(map_error)
     }
 
@@ -255,8 +255,8 @@ impl PyImage {
     }
 
     fn alpha_composite(&mut self, im: &Bound<'_, PyImage>) -> PyResult<()> {
-        let borrowed = im.borrow();
-        self.inner.alpha_composite(&borrowed.inner, (0, 0), (0, 0))
+        let source = im.borrow().inner.clone();
+        self.inner.alpha_composite(&source, (0, 0), (0, 0))
             .map_err(map_error)
     }
 
@@ -284,12 +284,12 @@ impl PyImage {
         self.inner.tell()
     }
 
-    fn point(&mut self, lut: Vec<u8>) -> PyResult<PyImage> {
-        self.inner.point(&lut).map(|i| PyImage { inner: i }).map_err(map_error)
+    fn point(&self, lut: Vec<u8>) -> PyResult<PyImage> {
+        pillow_rs_core::ops::module_fns::eval(&self.inner, &lut).map(|i| PyImage { inner: i }).map_err(map_error)
     }
 
     fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
-        self.inner.effect_spread(distance).map(|i| PyImage { inner: i }).map_err(map_error)
+        pillow_rs_core::ops::module_fns::effect_spread(&self.inner, distance).map(|i| PyImage { inner: i }).map_err(map_error)
     }
 
     #[pyo3(signature = (size, method, data=None, resample=0, fill=1, fillcolor=None))]
@@ -331,7 +331,7 @@ impl PyImage {
     }
 
     fn effect_noise(&self, sigma: Option<f64>) -> PyResult<PyImage> {
-        self.inner.effect_noise(sigma.unwrap_or(10.0) as f32)
+        pillow_rs_core::ops::module_fns::effect_noise(&self.inner, sigma.unwrap_or(10.0))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -343,40 +343,39 @@ impl PyImage {
 
     fn verify(&self) -> PyResult<()> {
         // Verify image data integrity
-        let mut clone = self.inner.clone();
-        clone.ensure_loaded().map_err(map_error)?;
+        self.inner.materialize().map_err(map_error)?;
         Ok(())
     }
 
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .enhance_brightness(factor)
-            .map_err(map_error)?;
+        let inner = self.inner.clone();
+        let rs = Python::with_gil(|py| {
+            py.allow_threads(|| inner.enhance_brightness(factor))
+        }).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_contrast(&self, factor: f64) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .enhance_contrast(factor)
-            .map_err(map_error)?;
+        let inner = self.inner.clone();
+        let rs = Python::with_gil(|py| {
+            py.allow_threads(|| inner.enhance_contrast(factor))
+        }).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_color(&self, factor: f64) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .enhance_color(factor)
-            .map_err(map_error)?;
+        let inner = self.inner.clone();
+        let rs = Python::with_gil(|py| {
+            py.allow_threads(|| inner.enhance_color(factor))
+        }).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_sharpness(&self, factor: f64) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .enhance_sharpness(factor)
-            .map_err(map_error)?;
+        let inner = self.inner.clone();
+        let rs = Python::with_gil(|py| {
+            py.allow_threads(|| inner.enhance_sharpness(factor))
+        }).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -696,65 +695,75 @@ fn parse_draw_color(val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)
 
 #[pyfunction]
 fn ops_autocontrast(image: &Bound<'_, PyImage>, cutoff: Option<f64>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::autocontrast(&borrowed.inner, cutoff.unwrap_or(0.0))
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let c = cutoff.unwrap_or(0.0);
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::autocontrast(&inner, c))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::equalize(&borrowed.inner)
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::equalize(&inner))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::invert(&borrowed.inner)
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::invert(&inner))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_flip(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::flip(&borrowed.inner)
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::flip(&inner))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_mirror(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::mirror(&borrowed.inner)
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::mirror(&inner))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::posterize(&borrowed.inner, bits)
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::posterize(&inner, bits))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::solarize(&borrowed.inner, threshold.unwrap_or(128))
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let t = threshold.unwrap_or(128);
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::solarize(&inner, t))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::imageops::grayscale(&borrowed.inner)
-        .map_err(map_error)?;
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::grayscale(&inner))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -768,10 +777,11 @@ fn chops_add(
     scale: f64,
     offset: f64,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::add(&b1.inner, &b2.inner, scale, offset)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::add(&b1, &b2, scale, offset))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -783,10 +793,11 @@ fn chops_subtract(
     scale: f64,
     offset: f64,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::subtract(&b1.inner, &b2.inner, scale, offset)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::subtract(&b1, &b2, scale, offset))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -795,10 +806,11 @@ fn chops_multiply(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::multiply(&b1.inner, &b2.inner)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::multiply(&b1, &b2))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -807,10 +819,11 @@ fn chops_screen(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::screen(&b1.inner, &b2.inner)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::screen(&b1, &b2))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -819,10 +832,11 @@ fn chops_darker(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::darker(&b1.inner, &b2.inner)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::darker(&b1, &b2))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -831,10 +845,11 @@ fn chops_lighter(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::lighter(&b1.inner, &b2.inner)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::lighter(&b1, &b2))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -843,10 +858,11 @@ fn chops_difference(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
 ) -> PyResult<PyImage> {
-    let b1 = image1.borrow();
-    let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::chops::difference(&b1.inner, &b2.inner)
-        .map_err(map_error)?;
+    let b1 = image1.borrow().inner.clone();
+    let b2 = image2.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::chops::difference(&b1, &b2))
+    }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
