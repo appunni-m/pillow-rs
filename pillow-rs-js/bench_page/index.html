@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pillow-RS WASM Benchmark</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 20px; }
+  h1 { color: #e94560; font-size: 1.5em; margin-bottom: 10px; }
+  #status { color: #0f3460; background: #e94560; padding: 8px 16px; border-radius: 4px; display: inline-block; font-weight: bold; transition: background 0.3s; }
+  #status.done { background: #16a34a; }
+  #results { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; margin-top: 16px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+  #error { color: #f87171; background: #451a1a; border: 1px solid #991b1b; border-radius: 8px; padding: 16px; margin-top: 16px; display: none; }
+  .loading { color: #fbbf24; }
+</style>
+</head>
+<body>
+  <h1>Pillow-RS WASM Benchmarks</h1>
+  <div id="status">Loading...</div>
+  <pre id="results">Waiting for benchmarks to complete...</pre>
+  <div id="error"></div>
+  <script type="module" src="/pillow-rs-js/bench_page/bench_runner.js"></script>
+</body>
+</html>
