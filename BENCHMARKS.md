@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-11 20:09:15 | commit `dc1c94f` | 166 functions | 6 targets
+> Auto-generated: 2026-06-11 22:31:16 | commit `9a5e4d7` | 166 functions | 6 targets
 
 ## Summary
 
