@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-11 14:43:38 | commit `370505b` | 166 functions | 6 targets
+> Auto-generated: 2026-06-11 16:00:48 | commit `cbcb9a7` | 166 functions | 6 targets
 
 ## Summary
 
@@ -10,9 +10,9 @@
 | Functions with GPU path | 42 |
 | Valid CPU speedups (excl. outliers) | 44 |
 | Outliers flagged ⚠️ | 2 |
-| Average CPU speedup vs Pillow | 3.59× |
+| Average CPU speedup vs Pillow | 3.36× |
 | Native CPU benchmarks run | 47 |
-| Missing (no data yet) | 10 |
+| Missing (no data yet) | 6 |
 
 ## Pipeline Benchmark — 20 Operations (Single- vs Multi-Thread)
 
@@ -20,27 +20,27 @@
 
 | Variant | Time (ms) | vs Pillow |
 |---------|-----------|-----------|
-| MT | 220.26ms | 0.27× |
-| ST | 303.23ms | 0.19× |
-| **MT Speedup** | **1.38×** | |
+| MT | 154.17ms | 0.38× |
+| ST | 289.51ms | 0.20× |
+| **MT Speedup** | **1.88×** | |
 | Pillow (reference) | 59.0ms | — |
 
 ## Priority Operations (Tier 1)
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.67× | NYW | 2.05× | NYW | 1.29× | 1.75× |
-| Image.crop | 0.94× | NYW | 3.62× | NYW | 3.10× | 3.11× |
-| Image.rotate | 4.93× | NYW | 15.17× | NYW | — | NYW |
-| Image.transpose | — | NYW | 2.53× | NYW | 2.29× | 2.35× |
-| Image.thumbnail | 45960.16× ⚠️ | NYW | 1.80× | NYW | 1.54× | 1.59× |
-| Image.new | 1.34× | — | 1.53× | — | 0.89× | — |
-| Image.paste | 0.72× | NYW | 0.36× | NYW | 212.05× ⚠️ | 200.52× ⚠️ |
-| Image.convert | 0.64× | NYW | 1.83× | NYW | 1.77× | 1.62× |
-| Image.filter | — | NYW | 2.46× | NYW | — | NYW |
-| Image.open | 353322.82× ⚠️ | — | 285.40× ⚠️ | — | 349.82× ⚠️ | — |
-| Image.save | 4.63× | — | 3.45× | — | 3.26× | — |
-| Image.tobytes | 57.76× | — | — | — | — | — |
+| Image.resize | 0.73× | NYW | 2.01× | NYW | 1.29× | 1.75× |
+| Image.crop | 0.91× | NYW | 3.39× | NYW | 3.10× | 3.11× |
+| Image.rotate | 4.77× | NYW | 15.21× | NYW | — | NYW |
+| Image.transpose | — | NYW | 2.61× | NYW | 2.29× | 2.35× |
+| Image.thumbnail | 41364.15× ⚠️ | NYW | 1.82× | NYW | 1.54× | 1.59× |
+| Image.new | 1.26× | — | 1.35× | — | 0.89× | — |
+| Image.paste | 0.69× | NYW | 0.36× | NYW | 212.05× ⚠️ | 200.52× ⚠️ |
+| Image.convert | 0.62× | NYW | 1.84× | NYW | 1.77× | 1.62× |
+| Image.filter | — | NYW | 2.80× | NYW | — | NYW |
+| Image.open | 353322.82× ⚠️ | — | 397.89× ⚠️ | — | 349.82× ⚠️ | — |
+| Image.save | 4.82× | — | 3.41× | — | 3.26× | — |
+| Image.tobytes | 48.55× | — | — | — | — | — |
 
 ## All Functions
 
@@ -48,55 +48,55 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.67× | NYW | 2.05× | NYW | 1.29× | 1.75× |
-| Image.crop | 0.94× | NYW | 3.62× | NYW | 3.10× | 3.11× |
-| Image.rotate | 4.93× | NYW | 15.17× | NYW | — | NYW |
-| Image.transpose | — | NYW | 2.53× | NYW | 2.29× | 2.35× |
-| Image.thumbnail | 45960.16× ⚠️ | NYW | 1.80× | NYW | 1.54× | 1.59× |
-| Image.new | 1.34× | — | 1.53× | — | 0.89× | — |
-| Image.paste | 0.72× | NYW | 0.36× | NYW | 212.05× ⚠️ | 200.52× ⚠️ |
+| Image.resize | 0.73× | NYW | 2.01× | NYW | 1.29× | 1.75× |
+| Image.crop | 0.91× | NYW | 3.39× | NYW | 3.10× | 3.11× |
+| Image.rotate | 4.77× | NYW | 15.21× | NYW | — | NYW |
+| Image.transpose | — | NYW | 2.61× | NYW | 2.29× | 2.35× |
+| Image.thumbnail | 41364.15× ⚠️ | NYW | 1.82× | NYW | 1.54× | 1.59× |
+| Image.new | 1.26× | — | 1.35× | — | 0.89× | — |
+| Image.paste | 0.69× | NYW | 0.36× | NYW | 212.05× ⚠️ | 200.52× ⚠️ |
 | Image.alpha_composite | — | — | — | — | — | — |
 | Image.apply_transparency | — | — | — | — | — | — |
 | Image.close | — | — | — | — | — | — |
-| Image.convert | 0.64× | NYW | 1.83× | NYW | 1.77× | 1.62× |
+| Image.convert | 0.62× | NYW | 1.84× | NYW | 1.77× | 1.62× |
 | Image.copy | — | — | — | — | — | — |
 | Image.draft | — | — | — | — | — | — |
 | Image.effect_spread | — | — | — | — | — | — |
 | Image.entropy | — | — | — | — | — | — |
-| Image.filter | — | NYW | 2.46× | NYW | — | NYW |
+| Image.filter | — | NYW | 2.80× | NYW | — | NYW |
 | Image.frombytes | 0.17× | — | — | — | — | — |
 | Image.get_child_images | — | — | — | — | — | — |
 | Image.get_flattened_data | — | — | — | — | — | — |
-| Image.getbands | — | — | 75.73× | — | 53.56× | — |
-| Image.getbbox | — | — | 12.92× | — | 11.81× | — |
+| Image.getbands | — | — | 71.88× | — | 53.56× | — |
+| Image.getbbox | — | — | 13.29× | — | 11.81× | — |
 | Image.getchannel | — | — | — | — | — | — |
 | Image.getcolors | — | — | — | — | — | — |
 | Image.getdata | — | — | — | — | — | — |
 | Image.getexif | — | — | — | — | — | — |
-| Image.getextrema | — | — | 8.45× | — | 7.71× | — |
+| Image.getextrema | — | — | 8.29× | — | 7.71× | — |
 | Image.getim | — | — | — | — | — | — |
 | Image.getpalette | — | — | — | — | — | — |
-| Image.getpixel | — | — | 20702.01× ⚠️ | — | 17596.71× ⚠️ | — |
+| Image.getpixel | — | — | 16758.77× ⚠️ | — | 17596.71× ⚠️ | — |
 | Image.getprojection | — | — | — | — | — | — |
 | Image.getxmp | — | — | — | — | — | — |
-| Image.histogram | — | — | 4.79× | — | 6.09× | — |
+| Image.histogram | — | — | 7.19× | — | 6.09× | — |
 | Image.load | — | — | — | — | — | — |
-| Image.open | 353322.82× ⚠️ | — | 285.40× ⚠️ | — | 349.82× ⚠️ | — |
-| Image.point | 0.62× | NYW | — | NYW | — | NYW |
-| Image.putalpha | 29.26× | — | — | — | — | — |
+| Image.open | 353322.82× ⚠️ | — | 397.89× ⚠️ | — | 349.82× ⚠️ | — |
+| Image.point | 0.57× | NYW | — | NYW | — | NYW |
+| Image.putalpha | 25.24× | — | — | — | — | — |
 | Image.putdata | — | — | — | — | — | — |
 | Image.putpalette | — | — | — | — | — | — |
-| Image.putpixel | 33.59× | — | 3.71× | — | 3.51× | — |
+| Image.putpixel | 31.76× | — | 3.88× | — | 3.51× | — |
 | Image.quantize | 0.20× | NYW | — | NYW | — | NYW |
-| Image.reduce | 0.42× | NYW | 2.26× | NYW | 1.94× | 2.13× |
+| Image.reduce | 0.41× | NYW | 2.28× | NYW | 1.94× | 2.13× |
 | Image.remap_palette | — | — | — | — | — | — |
-| Image.save | 4.63× | — | 3.45× | — | 3.26× | — |
+| Image.save | 4.82× | — | 3.41× | — | 3.26× | — |
 | Image.seek | — | — | — | — | — | — |
 | Image.show | — | — | — | — | — | — |
-| Image.split | 0.37× | — | 7.98× | — | 8.06× | — |
+| Image.split | 0.30× | — | 9.11× | — | 8.06× | — |
 | Image.tell | — | — | — | — | — | — |
 | Image.tobitmap | — | — | — | — | — | — |
-| Image.tobytes | 57.76× | — | — | — | — | — |
+| Image.tobytes | 48.55× | — | — | — | — | — |
 | Image.transform | — | NYW | — | NYW | — | NYW |
 | Image.verify | — | — | — | — | — | — |
 
@@ -104,26 +104,26 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageChops.add | 0.53× | NYW | — | NYW | — | NYW |
+| ImageChops.add | 0.64× | NYW | — | NYW | — | NYW |
 | ImageChops.add_modulo | — | NYW | — | NYW | — | NYW |
 | ImageChops.blend | — | NYW | — | NYW | — | NYW |
 | ImageChops.composite | — | — | — | — | — | — |
 | ImageChops.constant | — | — | — | — | — | — |
-| ImageChops.darker | 0.32× | NYW | — | NYW | — | NYW |
-| ImageChops.difference | 0.47× | NYW | — | NYW | — | NYW |
+| ImageChops.darker | 0.33× | NYW | — | NYW | — | NYW |
+| ImageChops.difference | 0.48× | NYW | — | NYW | — | NYW |
 | ImageChops.duplicate | — | — | — | — | — | — |
 | ImageChops.hard_light | — | NYW | — | NYW | — | NYW |
 | ImageChops.invert | — | NYW | — | NYW | — | NYW |
-| ImageChops.lighter | 0.32× | NYW | — | NYW | — | NYW |
+| ImageChops.lighter | 0.34× | NYW | — | NYW | — | NYW |
 | ImageChops.logical_and | — | NYW | — | NYW | — | NYW |
 | ImageChops.logical_or | — | NYW | — | NYW | — | NYW |
 | ImageChops.logical_xor | — | NYW | — | NYW | — | NYW |
-| ImageChops.multiply | 0.36× | NYW | — | NYW | — | NYW |
+| ImageChops.multiply | 0.48× | NYW | — | NYW | — | NYW |
 | ImageChops.offset | — | — | — | — | — | — |
 | ImageChops.overlay | — | NYW | — | NYW | — | NYW |
-| ImageChops.screen | 0.37× | NYW | — | NYW | — | NYW |
+| ImageChops.screen | 0.39× | NYW | — | NYW | — | NYW |
 | ImageChops.soft_light | — | NYW | — | NYW | — | NYW |
-| ImageChops.subtract | 0.55× | NYW | — | NYW | — | NYW |
+| ImageChops.subtract | 0.63× | NYW | — | NYW | — | NYW |
 | ImageChops.subtract_modulo | — | NYW | — | NYW | — | NYW |
 
 ### ImageColor
@@ -160,35 +160,35 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageEnhance.Brightness | 1.17× | NYW | 8.11× | NYW | 8.59× | 8.94× |
-| ImageEnhance.Color | 0.98× | NYW | — | NYW | — | NYW |
-| ImageEnhance.Contrast | 0.95× | NYW | — | NYW | — | NYW |
-| ImageEnhance.Sharpness | 1.48× | NYW | — | NYW | — | NYW |
+| ImageEnhance.Brightness | 1.06× | NYW | 7.64× | NYW | 8.59× | 8.94× |
+| ImageEnhance.Color | 1.07× | NYW | — | NYW | — | NYW |
+| ImageEnhance.Contrast | 0.88× | NYW | — | NYW | — | NYW |
+| ImageEnhance.Sharpness | 1.63× | NYW | — | NYW | — | NYW |
 
 ### ImageFilter
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageFilter.BLUR | 1.04× | — | — | — | — | — |
-| ImageFilter.BoxBlur | 1.36× | — | — | — | — | — |
-| ImageFilter.CONTOUR | 0.58× | — | — | — | — | — |
+| ImageFilter.BLUR | 2.09× | — | — | — | — | — |
+| ImageFilter.BoxBlur | 1.33× | — | — | — | — | — |
+| ImageFilter.CONTOUR | 1.18× | — | — | — | — | — |
 | ImageFilter.Color3DLUT | — | — | — | — | — | — |
-| ImageFilter.DETAIL | 0.48× | — | — | — | — | — |
-| ImageFilter.EDGE_ENHANCE | 0.60× | — | — | — | — | — |
+| ImageFilter.DETAIL | 1.10× | — | — | — | — | — |
+| ImageFilter.EDGE_ENHANCE | 1.24× | — | — | — | — | — |
 | ImageFilter.EDGE_ENHANCE_MORE | — | — | — | — | — | — |
-| ImageFilter.EMBOSS | 0.59× | — | — | — | — | — |
-| ImageFilter.FIND_EDGES | 0.60× | — | — | — | — | — |
-| ImageFilter.GaussianBlur | 1.85× | — | 2.75× | — | 2.45× | — |
+| ImageFilter.EMBOSS | 1.20× | — | — | — | — | — |
+| ImageFilter.FIND_EDGES | 1.17× | — | — | — | — | — |
+| ImageFilter.GaussianBlur | 1.74× | — | 2.65× | — | 2.45× | — |
 | ImageFilter.Kernel | — | — | — | — | — | — |
-| ImageFilter.MaxFilter | 0.60× | — | — | — | — | — |
-| ImageFilter.MedianFilter | 0.78× | — | — | — | — | — |
-| ImageFilter.MinFilter | 0.61× | — | — | — | — | — |
-| ImageFilter.ModeFilter | 2.40× | — | — | — | — | — |
+| ImageFilter.MaxFilter | 0.59× | — | — | — | — | — |
+| ImageFilter.MedianFilter | 0.77× | — | — | — | — | — |
+| ImageFilter.MinFilter | 0.59× | — | — | — | — | — |
+| ImageFilter.ModeFilter | 2.34× | — | — | — | — | — |
 | ImageFilter.RankFilter | — | — | — | — | — | — |
-| ImageFilter.SHARPEN | 0.51× | — | — | — | — | — |
-| ImageFilter.SMOOTH | 0.57× | — | — | — | — | — |
+| ImageFilter.SHARPEN | 1.11× | — | — | — | — | — |
+| ImageFilter.SMOOTH | 1.12× | — | — | — | — | — |
 | ImageFilter.SMOOTH_MORE | — | — | — | — | — | — |
-| ImageFilter.UnsharpMask | 1.34× | — | — | — | — | — |
+| ImageFilter.UnsharpMask | 1.30× | — | — | — | — | — |
 
 ### ImageFont
 
@@ -235,13 +235,13 @@
 | ImageOps.contain | — | — | — | — | — | — |
 | ImageOps.cover | — | — | — | — | — | — |
 | ImageOps.deform | — | — | — | — | — | — |
-| ImageOps.equalize | 0.07× | NYW | — | NYW | — | NYW |
+| ImageOps.equalize | 0.06× | NYW | — | NYW | — | NYW |
 | ImageOps.exif_transpose | — | — | — | — | — | — |
 | ImageOps.expand | — | — | — | — | — | — |
 | ImageOps.fit | — | — | — | — | — | — |
 | ImageOps.flip | — | — | — | — | — | — |
-| ImageOps.grayscale | — | — | 5.05× | — | 5.17× | — |
-| ImageOps.invert | 0.09× | NYW | 1.51× | NYW | 1.58× | 1.61× |
+| ImageOps.grayscale | — | — | 5.56× | — | 5.17× | — |
+| ImageOps.invert | 0.08× | NYW | 2.04× | NYW | 1.58× | 1.61× |
 | ImageOps.mirror | — | — | — | — | — | — |
 | ImageOps.pad | — | — | — | — | — | — |
 | ImageOps.posterize | — | NYW | — | NYW | — | NYW |
