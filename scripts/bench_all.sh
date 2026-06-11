@@ -5,24 +5,47 @@ BENCH_DIR="$ROOT/target/benchmarks"
 
 mkdir -p "$BENCH_DIR"
 
-MODE="${1:-incremental}"
+MODE="incremental"
+ONLY=""
+GROUP=""
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        full) MODE="full"; shift ;;
+        incremental) MODE="incremental"; shift ;;
+        --only) ONLY="$2"; MODE="only"; shift 2 ;;
+        --group) GROUP="$2"; MODE="group"; shift 2 ;;
+        --skip-wasm) SKIP_WASM=1; shift ;;
+        --skip-browser) SKIP_BROWSER=1; shift ;;
+        *) echo "Unknown: $1"; echo "Usage: bench_all.sh [full|incremental] [--only a,b,c] [--group priority|filters|chops|enhance|misc]"; exit 1 ;;
+    esac
+done
 
 echo "=== pillow-rs Benchmark Orchestrator ==="
-echo "Mode: $MODE"
+if [ "$MODE" = "only" ]; then echo "Mode: only [$ONLY]"; elif [ "$MODE" = "group" ]; then echo "Mode: group [$GROUP]"; else echo "Mode: $MODE"; fi
 echo ""
 
-# Step 0: Check cache
+# Step 0: Check cache (skip for --only/--group — always run those)
 if [ "$MODE" = "incremental" ]; then
     cd "$ROOT"
     STALE=$(python3 scripts/bench_cache.py --check 2>&1)
     if echo "$STALE" | grep -q "FRESH"; then
-        echo "> All functions up-to-date. Skipping benchmarks."
+        echo "✓ All functions up-to-date. Skipping benchmarks."
         echo "  (use 'bash scripts/bench_all.sh full' to force re-bench)"
         python3 scripts/bench_aggregate.py
         exit 0
     fi
     echo "$STALE" | head -20
     echo ""
+fi
+
+# Build filter args for harnesses
+FILTER_ARG=""
+if [ "$MODE" = "only" ]; then
+    FILTER_ARG="--only $ONLY"
+elif [ "$MODE" = "group" ]; then
+    FILTER_ARG="--group $GROUP"
 fi
 
 # Step 1: Native CPU benchmarks (criterion)
