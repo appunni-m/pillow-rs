@@ -191,12 +191,18 @@ def write_row(full_name, func, baseline_lookup, target_lookups):
     for i, target in enumerate(TARGET_NAMES):
         rs_ms = target_lookups[target].get(full_name)
         s, is_valid, _ = speedup_str(rs_ms, pil_ms)
-        # GPU columns: if no data but gpu_applicable, show NYW (not yet wired)
         is_gpu_col = (i % 2) == 1
-        if is_gpu_col and not func["gpu_applicable"]:
-            s = "—"
-        elif is_gpu_col and func["gpu_applicable"] and s == "—":
-            s = "NYW"
+        if is_gpu_col:
+            if s == "—":
+                s = "NYW" if func["gpu_applicable"] else "N/A"
+        else:
+            # CPU/WASM/Browser columns: use N/A instead of — for readability
+            if s == "—":
+                # Check if baseline exists — if so, benchmark is missing
+                if pil_ms is not None and pil_ms > 0:
+                    s = "TBD"  # Has baseline, benchmark should exist
+                else:
+                    s = "N/A"  # No baseline, can't compute speedup
         cells.append(s)
     return "| " + " | ".join(cells) + " |"
 

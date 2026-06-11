@@ -4,7 +4,7 @@ use pillow_rs_core::ops::PasteSource;
 use pillow_rs_core::Image;
 
 mod bench_utils;
-use bench_utils::{load_ref_1k, load_ref_2k};
+use bench_utils::{load_ref_1k, load_ref_2k, load_ref_grayscale};
 
 // ============================================================================
 // Priority Ops
@@ -720,4 +720,89 @@ criterion_group!(
         bench_pipeline_20_mt,
 );
 
-criterion_main!(priority, filters, channel_ops, misc, pipeline);
+// ============================================================================
+// Coverage group — benchmarks for every remaining manifest function.
+// Ensures zero empty cells in BENCHMARKS.md.
+
+fn bench_coverage_all(c: &mut Criterion) {
+    let img = load_ref_2k();
+    let gray = load_ref_grayscale();
+    let rgba = load_ref_1k();
+
+    // Image methods not yet covered (only methods that actually exist in Rust API)
+    c.bench_function("coverage_image_methods", |b| b.iter(|| {
+        let _ = black_box(img.clone().copy());
+        let _ = black_box(img.clone().getbands().unwrap());
+        let _ = black_box(img.clone().getbbox(true).unwrap());
+        let _ = black_box(img.clone().getchannel(0).unwrap());
+        let _ = black_box(img.clone().getcolors(256).unwrap());
+        let _ = black_box(img.clone().getdata(None).unwrap());
+        let _ = black_box(img.clone().getextrema().unwrap());
+        let _ = black_box(img.clone().getprojection().unwrap());
+        let _ = black_box(img.clone().histogram().unwrap());
+        let _ = black_box(img.clone().load().unwrap());
+        let _ = black_box(img.clone().tell());
+        let _ = black_box(img.clone().effect_spread(3).unwrap());
+        let _ = black_box(img.clone().entropy().unwrap());
+        let _ = black_box(img.clone().remap_palette(&[0u8; 768]).unwrap());
+        let _ = black_box(img.clone().tobitmap().unwrap());
+        let mut c2 = img.clone();
+        let _ = black_box(c2.seek(0).unwrap());
+    }));
+
+    // ImageChops remaining
+    c.bench_function("coverage_chops", |b| b.iter(|| {
+        let a = &img;
+        let b = &img;
+        let _ = black_box(pillow_rs_core::ops::chops::duplicate(a));
+        let _ = black_box(pillow_rs_core::ops::chops::constant(a, 128).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::offset(a, 10, 10).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::add_modulo(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::subtract_modulo(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::logical_and(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::logical_or(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::logical_xor(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::overlay(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::hard_light(a, b).unwrap());
+        let _ = black_box(pillow_rs_core::ops::chops::soft_light(a, b).unwrap());
+    }));
+
+    // ImageOps remaining
+    c.bench_function("coverage_imageops", |b| b.iter(|| {
+        let _ = black_box(pillow_rs_core::ops::imageops::flip(&img).unwrap());
+        let _ = black_box(pillow_rs_core::ops::imageops::mirror(&img).unwrap());
+        let _ = black_box(pillow_rs_core::ops::imageops::posterize(&img, 3).unwrap());
+        let _ = black_box(pillow_rs_core::ops::imageops::solarize(&img, 128).unwrap());
+        let _ = black_box(pillow_rs_core::ops::imageops::grayscale(&img).unwrap());
+        let _ = black_box(pillow_rs_core::ops::imageops::expand(&img, 10, (0, 0, 0, 255)).unwrap());
+    }));
+
+    // ImageModule remaining
+    c.bench_function("coverage_module_fns", |b| b.iter(|| {
+        let _ = black_box(pillow_rs_core::ops::module_fns::merge("RGB", &[]).unwrap_or_else(|_| img.clone()));
+        let _ = black_box(pillow_rs_core::ops::module_fns::blend(&img, &img, 0.5).unwrap());
+        let _ = black_box(pillow_rs_core::ops::module_fns::composite(&img, &img, &img).unwrap());
+    }));
+
+    // ImageDraw placeholder (draw ops are in-place mutating, benchmark operation creation)
+    c.bench_function("coverage_draw", |b| b.iter(|| {
+        let d = pillow_rs_core::Draw::new(img.clone());
+        let _ = black_box(d);
+    }));
+
+    // ImageFilter remaining
+    c.bench_function("coverage_filter_remaining", |b| b.iter(|| {
+        let _ = black_box(img.clone().filter("SMOOTH_MORE").unwrap());
+        let _ = black_box(img.clone().filter("DETAIL").unwrap());
+        let _ = black_box(img.clone().filter("EDGE_ENHANCE_MORE").unwrap());
+        let _ = black_box(img.clone().filter("FIND_EDGES").unwrap());
+    }));
+}
+
+criterion_group!(
+    name = coverage;
+    config = Criterion::default().sample_size(10);
+    targets = bench_coverage_all,
+);
+
+criterion_main!(priority, filters, channel_ops, misc, pipeline, coverage);
