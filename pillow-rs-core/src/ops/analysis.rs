@@ -1,4 +1,5 @@
-//! Image analysis operations — getbbox, histogram, getextrema, entropy.
+//! Image analysis operations — getbbox, histogram, getextrema.
+//! These are IMMEDIATE operations that materialize the pipeline first.
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -7,8 +8,7 @@ impl Image {
     /// Return the bounding box of non-zero regions.
     /// PIL: `getbbox(*, alpha_only=True) -> (left, top, right, bottom) | None`
     pub fn getbbox(&self, alpha_only: bool) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
-        let mut clone = self.clone();
-        let img = clone.ensure_loaded()?;
+        let img = self.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
 
         let mut left = img_w;
@@ -18,8 +18,10 @@ impl Image {
 
         let has_alpha = matches!(
             img.color(),
-            image::ColorType::La8 | image::ColorType::La16
-                | image::ColorType::Rgba8 | image::ColorType::Rgba16
+            image::ColorType::La8
+                | image::ColorType::La16
+                | image::ColorType::Rgba8
+                | image::ColorType::Rgba16
                 | image::ColorType::Rgba32F
         );
         let rgba = img.to_rgba8();
@@ -50,8 +52,7 @@ impl Image {
     /// Return min/max pixel values per band.
     /// PIL: `getextrema() -> tuple[float, float] | tuple[tuple[int,int],...]`
     pub fn getextrema(&self) -> Result<Vec<(u8, u8)>, PilError> {
-        let mut clone = self.clone();
-        let img = clone.ensure_loaded()?;
+        let img = self.materialize()?;
         let rgba = img.to_rgba8();
 
         let bands = match img.color() {
@@ -75,8 +76,7 @@ impl Image {
     /// PIL: `histogram(mask=None, extrema=None) -> list[int]`
     /// Returns 256 values per band, concatenated.
     pub fn histogram(&self) -> Result<Vec<u32>, PilError> {
-        let mut clone = self.clone();
-        let img = clone.ensure_loaded()?;
+        let img = self.materialize()?;
         let rgba = img.to_rgba8();
 
         let n_bands = match img.color() {

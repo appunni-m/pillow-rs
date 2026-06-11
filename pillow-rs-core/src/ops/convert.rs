@@ -1,8 +1,32 @@
-use image::DynamicImage;
-
-use crate::color::{pil_grayscale, pil_grayscale_alpha};
 use crate::error::PilError;
 use crate::image::Image;
+use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
+
+/// Parse a mode string into ColorMode.
+pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
+    match s {
+        "L" => Ok(ColorMode::L),
+        "LA" => Ok(ColorMode::LA),
+        "RGB" => Ok(ColorMode::RGB),
+        "RGBA" => Ok(ColorMode::RGBA),
+        "CMYK" => Ok(ColorMode::CMYK),
+        "YCbCr" => Ok(ColorMode::YCbCr),
+        "HSV" => Ok(ColorMode::HSV),
+        "I" => Ok(ColorMode::I),
+        "F" => Ok(ColorMode::F),
+        "P" => Ok(ColorMode::P),
+        "1" => Ok(ColorMode::Mode1),
+        _ => Err(PilError::ValueError(format!("Unknown mode: {}", s))),
+    }
+}
+
+fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
+    match s {
+        Some("NONE") | Some("none") => Some(DitherMethod::None),
+        Some("FLOYDSTEINBERG") | Some("floydsteinberg") => Some(DitherMethod::FloydSteinberg),
+        _ => None,
+    }
+}
 
 /// Convert image between modes.
 /// Supports: L, LA, RGB, RGBA, 1 (bilevel, with/without Floyd-Steinberg dither)
@@ -16,41 +40,23 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
-        let mut clone = self.clone();
-        let img = clone.ensure_loaded()?;
-
+        // Matrix-based conversion must be executed immediately since it modifies
+        // pixel values directly and can't be represented as a simple mode convert.
         if let Some(mat) = matrix {
-            return convert_with_matrix(img, mode, &mat)
-                .map(|result| Image {
-                    inner: crate::lazy::LazyImage::Loaded(result),
-                    format: self.format,
-                });
+            let img = self.materialize()?;
+            return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result));
         }
 
-        let converted = match mode {
-            "L" => DynamicImage::ImageLuma8(pil_grayscale(img)),
-            "LA" => DynamicImage::ImageLumaA8(pil_grayscale_alpha(img)),
-            "RGB" => image::DynamicImage::ImageRgb8(img.to_rgb8()),
-            "RGBA" => image::DynamicImage::ImageRgba8(img.to_rgba8()),
-            "1" => {
-                let apply_dither = match dither {
-                    Some("NONE") | Some("none") => false,
-                    _ => true, // default: Floyd-Steinberg
-                };
-                convert_to_bilevel(img, apply_dither)?
-            }
-            _ => {
-                return Err(PilError::NotImplementedError(format!(
-                    "Conversion to mode '{}' not yet implemented",
-                    mode
-                )));
-            }
-        };
-
-        Ok(Image {
-            inner: crate::lazy::LazyImage::Loaded(converted),
-            format: self.format,
-        })
+        let mode_enum = parse_mode(mode)?;
+        let dither_enum = parse_dither(dither);
+        Ok(Image::push_op(
+            self,
+            PipelineOp::Convert {
+                mode: mode_enum,
+                matrix: None,
+                dither: dither_enum,
+            },
+        ))
     }
 }
 
@@ -104,19 +110,4 @@ fn convert_with_matrix(
             "Matrix must be 4 or 12 elements, got {}", n
         ))),
     }
-}
-
-fn convert_to_bilevel(
-    img: &image::DynamicImage,
-    apply_dither: bool,
-) -> Result<image::DynamicImage, PilError> {
-    let mut luma = image::imageops::colorops::grayscale(img);
-    if apply_dither {
-        image::imageops::colorops::dither(&mut luma, &image::imageops::colorops::BiLevel);
-    } else {
-        for p in luma.pixels_mut() {
-            p[0] = if p[0] > 127 { 255 } else { 0 };
-        }
-    }
-    Ok(image::DynamicImage::ImageLuma8(luma))
 }

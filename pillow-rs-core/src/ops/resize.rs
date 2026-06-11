@@ -1,17 +1,17 @@
 use crate::error::PilError;
 use crate::image::Image;
-use image::imageops::FilterType;
+use crate::pipeline::{PipelineOp, ResampleFilter};
 
-/// Parse a resample filter string into image::imageops::FilterType.
-/// Defaults to Bilinear (Triangle) matching Pillow's BILINEAR default.
-pub fn parse_resample(s: Option<&str>) -> Result<FilterType, PilError> {
+/// Parse a resample filter string into ResampleFilter.
+/// Defaults to Bilinear matching Pillow's BILINEAR default.
+pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
     match s {
-        None | Some("BILINEAR") | Some("bilinear") => Ok(FilterType::Triangle),
-        Some("NEAREST") | Some("nearest") => Ok(FilterType::Nearest),
-        Some("BICUBIC") | Some("bicubic") => Ok(FilterType::CatmullRom),
-        Some("LANCZOS") | Some("lanczos") => Ok(FilterType::Lanczos3),
-        Some("BOX") | Some("box") => Ok(FilterType::Gaussian),
-        Some("HAMMING") | Some("hamming") => Ok(FilterType::Lanczos3),
+        None | Some("BILINEAR") | Some("bilinear") => Ok(ResampleFilter::Bilinear),
+        Some("NEAREST") | Some("nearest") => Ok(ResampleFilter::Nearest),
+        Some("BICUBIC") | Some("bicubic") => Ok(ResampleFilter::Bicubic),
+        Some("LANCZOS") | Some("lanczos") => Ok(ResampleFilter::Lanczos),
+        Some("BOX") | Some("box") => Ok(ResampleFilter::Box),
+        Some("HAMMING") | Some("hamming") => Ok(ResampleFilter::Hamming),
         Some(other) => Err(PilError::ValueError(format!(
             "Unknown resample filter: {}",
             other
@@ -20,6 +20,8 @@ pub fn parse_resample(s: Option<&str>) -> Result<FilterType, PilError> {
 }
 
 impl Image {
+    /// Resize the image to the given size.
+    /// Returns a new image (does not mutate self).
     pub fn resize(&self, size: (u32, u32), filter: Option<&str>) -> Result<Image, PilError> {
         let (w, h) = size;
         if w == 0 || h == 0 {
@@ -27,17 +29,28 @@ impl Image {
                 "resize dimensions must be > 0".into(),
             ));
         }
-        let filter_type = parse_resample(filter)?;
-        let mut clone = self.clone();
-        let img = clone.ensure_loaded()?;
-        let (cur_w, cur_h) = (img.width(), img.height());
-        if cur_w == w && cur_h == h {
-            return Ok(clone);
+        let filter = parse_resample(filter)?;
+        Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
+    }
+
+    /// Resize the image to thumbnail size, mutating in place.
+    /// Matching Pillow's Image.thumbnail() semantics.
+    pub fn thumbnail(&mut self, size: (u32, u32)) -> Result<(), PilError> {
+        let (w, h) = size;
+        if w == 0 || h == 0 {
+            return Err(PilError::ValueError(
+                "thumbnail size must be > 0".into(),
+            ));
         }
-        let resized = img.resize_exact(w, h, filter_type);
-        Ok(Image {
-            inner: crate::lazy::LazyImage::Loaded(resized),
-            format: self.format,
-        })
+        let new_self = Image::push_op(
+            self,
+            PipelineOp::Thumbnail {
+                w,
+                h,
+                filter: ResampleFilter::Bilinear,
+            },
+        );
+        *self = new_self;
+        Ok(())
     }
 }
