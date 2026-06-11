@@ -18,15 +18,72 @@ while [[ $# -gt 0 ]]; do
         --group) GROUP="$2"; MODE="group"; shift 2 ;;
         --skip-wasm) SKIP_WASM=1; shift ;;
         --skip-browser) SKIP_BROWSER=1; shift ;;
-        *) echo "Unknown: $1"; echo "Usage: bench_all.sh [full|incremental] [--only a,b,c] [--group priority|filters|chops|enhance|misc]"; exit 1 ;;
+        --baseline) RUN_BASELINE=1; shift ;;
+        --setup) RUN_SETUP=1; shift ;;
+        *) echo "Unknown: $1"; echo "Usage: bench_all.sh [full|incremental|setup] [--only a,b,c] [--group priority|filters|chops|enhance|misc] [--baseline]"; exit 1 ;;
     esac
 done
 
 echo "=== pillow-rs Benchmark Orchestrator ==="
-if [ "$MODE" = "only" ]; then echo "Mode: only [$ONLY]"; elif [ "$MODE" = "group" ]; then echo "Mode: group [$GROUP]"; else echo "Mode: $MODE"; fi
+if [ "$MODE" = "only" ]; then echo "Mode: only [$ONLY]"; elif [ "$MODE" = "group" ]; then echo "Mode: group [$GROUP]"; elif [ "$MODE" = "setup" ]; then echo "Mode: setup (generate baselines + reference images)"; else echo "Mode: $MODE"; fi
 echo ""
 
-# Step 0: Check cache (skip for --only/--group — always run those)
+# Step -1: Setup mode — generate reference images and Pillow baselines (one-time)
+if [ "${RUN_SETUP:-0}" = "1" ] || [ "$MODE" = "setup" ]; then
+    echo "--- Setup: Generating reference images ---"
+    python3 -c "
+from PIL import Image
+import os, random
+d = 'scripts/bench_reference_images'
+os.makedirs(d, exist_ok=True)
+random.seed(42)
+# ref_2k.jpg
+im = Image.new('RGB', (2048, 1536))
+px = im.load()
+for y in range(im.height):
+    for x in range(im.width):
+        px[x, y] = ((x * 255 // im.width + y * 64 // im.height) % 256,
+                     (y * 255 // im.height + x * 32 // im.width) % 256,
+                     ((x + y) * 128 // (im.width + im.height)) % 256)
+im.save(f'{d}/ref_2k.jpg', quality=95)
+print(f'Created ref_2k.jpg: {im.size}')
+# ref_1k.png
+im = Image.new('RGBA', (1024, 1024))
+px = im.load()
+for y in range(im.height):
+    for x in range(im.width):
+        a = 255 if (x + y) % 200 > 100 else 128
+        px[x, y] = (int(x/im.width*255), int(y/im.height*255), 128, a)
+im.save(f'{d}/ref_1k.png')
+print(f'Created ref_1k.png: {im.size}')
+# ref_grayscale.png
+im = Image.new('L', (1024, 1024))
+px = im.load()
+for y in range(im.height):
+    for x in range(im.width):
+        px[x, y] = int(((x + y) / (im.width + im.height)) * 255)
+im.save(f'{d}/ref_grayscale.png')
+print(f'Created ref_grayscale.png: {im.size}')
+"
+    echo "--- Setup: Generating Pillow baselines (165 functions) ---"
+    python3 scripts/bench_pillow_baseline.py --runs 10
+    python3 scripts/bench_baseline_add.py
+    echo "✓ Setup complete. Run 'bash scripts/bench_all.sh full' to benchmark."
+    if [ "$MODE" = "setup" ]; then
+        python3 scripts/bench_aggregate.py
+        exit 0
+    fi
+fi
+
+# Step 0: Update baselines if requested
+if [ "${RUN_BASELINE:-0}" = "1" ]; then
+    echo "--- Updating Pillow baselines ---"
+    python3 scripts/bench_pillow_baseline.py --runs 10
+    python3 scripts/bench_baseline_add.py
+    echo ""
+fi
+
+# Step 0.5: Check cache (skip for --only/--group — always run those)
 if [ "$MODE" = "incremental" ]; then
     cd "$ROOT"
     STALE=$(python3 scripts/bench_cache.py --check 2>&1)
