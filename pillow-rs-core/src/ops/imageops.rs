@@ -1,11 +1,49 @@
 //! ImageOps — high-level image operations (module-level functions).
 //! Mirroring PIL.ImageOps: autocontrast, equalize, invert, flip, mirror,
 //! posterize, solarize, expand, scale, contain, cover, fit, pad, grayscale.
+//!
+//! Pixel-parallel ops use rayon on native targets for multicore speedup.
+//! GPU path (GpuEngine methods in src/gpu/) will replace rayon when wired.
 
 use image::{DynamicImage, GenericImage};
 
 use crate::error::PilError;
 use crate::image::Image;
+
+/// Apply a per-pixel RGB transform in parallel (native) or sequential (WASM).
+/// GPU path will replace this when GpuEngine is wired.
+fn par_transform_rgb<F: Fn(u8, u8, u8) -> (u8, u8, u8) + Sync>(
+    rgb: &mut image::RgbImage,
+    f: F,
+) {
+    let (w, h) = rgb.dimensions();
+    let data = rgb.as_mut_ptr();
+    let row_bytes = (w * 3) as usize;
+    let total = (w as usize) * (h as usize);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        let slice = unsafe { std::slice::from_raw_parts_mut(data, total * 3) };
+        slice.par_chunks_mut(3).for_each(|px| {
+            let (r, g, b) = f(px[0], px[1], px[2]);
+            px[0] = r; px[1] = g; px[2] = b;
+        });
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        for i in 0..total {
+            unsafe {
+                let p = data.add(i * 3);
+                let (r, g, b) = f((*p), (*p.add(1)), (*p.add(2)));
+                *p = r; *p.add(1) = g; *p.add(2) = b;
+            }
+        }
+    }
+
+    let _ = (row_bytes, data);
+}
 
 /// Normalize image contrast. Clips the darkest and lightest `cutoff` percent.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
@@ -28,12 +66,9 @@ pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
 
     let mut rgb = img.to_rgb8();
     let scale = 255.0 / (hi - lo) as f64;
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            let v = (p[c] as f64 - lo as f64) * scale;
-            p[c] = v.clamp(0.0, 255.0) as u8;
-        }
-    }
+    let lo_f = lo as f64;
+    let auto = |v: u8| -> u8 { ((v as f64 - lo_f) * scale).clamp(0.0, 255.0) as u8 };
+    par_transform_rgb(&mut rgb, move |r, g, b| (auto(r), auto(g), auto(b)));
 
     Ok(Image {
         inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(rgb)),
@@ -62,12 +97,17 @@ pub fn equalize(image: &Image) -> Result<Image, PilError> {
 
     let (w, h) = luma.dimensions();
     let mut rgb = img.to_rgb8();
-    for (px, lp) in rgb.pixels_mut().zip(luma.pixels()) {
-        let mapped = cdf[lp[0] as usize] as f64 / 255.0;
-        for c in 0..3 {
-            px[c] = (px[c] as f64 * mapped).clamp(0.0, 255.0) as u8;
-        }
-    }
+    let cdf_ref = &cdf;
+    par_transform_rgb(&mut rgb, |r, g, b| {
+        let luma_val = (0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64) as usize;
+        let mapped = cdf_ref[luma_val.min(255)] as f64 / 255.0;
+        (
+            (r as f64 * mapped).clamp(0.0, 255.0) as u8,
+            (g as f64 * mapped).clamp(0.0, 255.0) as u8,
+            (b as f64 * mapped).clamp(0.0, 255.0) as u8,
+        )
+    });
+    let _ = luma; // moved into closure
 
     Ok(Image {
         inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(rgb)),
@@ -80,11 +120,7 @@ pub fn invert(image: &Image) -> Result<Image, PilError> {
     let mut clone = image.clone();
     let img = clone.ensure_loaded()?;
     let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] = 255 - p[c];
-        }
-    }
+    par_transform_rgb(&mut rgb, |r, g, b| (255 - r, 255 - g, 255 - b));
     Ok(Image {
         inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(rgb)),
         format: image.format,
@@ -118,11 +154,7 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     let mut clone = image.clone();
     let img = clone.ensure_loaded()?;
     let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] &= mask;
-        }
-    }
+    par_transform_rgb(&mut rgb, |r, g, b| (r & mask, g & mask, b & mask));
     Ok(Image {
         inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageRgb8(rgb)),
         format: image.format,
@@ -134,6 +166,11 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     let mut clone = image.clone();
     let img = clone.ensure_loaded()?;
     let mut rgb = img.to_rgb8();
+    let t = threshold;
+    par_transform_rgb(&mut rgb, move |r, g, b| {
+        let sol = |v: u8| if v > t { 255 - v } else { v };
+        (sol(r), sol(g), sol(b))
+    });
     for p in rgb.pixels_mut() {
         for c in 0..3 {
             if p[c] > threshold {

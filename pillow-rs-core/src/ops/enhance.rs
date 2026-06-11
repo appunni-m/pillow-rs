@@ -36,12 +36,36 @@ impl Image {
         let img = clone.ensure_loaded()?;
         let gray = img.to_luma8();
         let mut rgb = img.to_rgb8();
-        for (px, gp) in rgb.pixels_mut().zip(gray.pixels()) {
-            let g = gp[0] as f64;
-            px[0] = ((g + factor * (px[0] as f64 - g)).clamp(0.0, 255.0)) as u8;
-            px[1] = ((g + factor * (px[1] as f64 - g)).clamp(0.0, 255.0)) as u8;
-            px[2] = ((g + factor * (px[2] as f64 - g)).clamp(0.0, 255.0)) as u8;
+        let (w, h) = rgb.dimensions();
+        let total = (w as usize) * (h as usize);
+        let gray_data = gray.as_raw().as_slice();
+        let rgb_data = rgb.as_mut_ptr();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use rayon::prelude::*;
+            let slice = unsafe { std::slice::from_raw_parts_mut(rgb_data, total * 3) };
+            slice.par_chunks_mut(3).enumerate().for_each(|(i, px)| {
+                let g = gray_data[i] as f64;
+                px[0] = ((g + factor * (px[0] as f64 - g)).clamp(0.0, 255.0)) as u8;
+                px[1] = ((g + factor * (px[1] as f64 - g)).clamp(0.0, 255.0)) as u8;
+                px[2] = ((g + factor * (px[2] as f64 - g)).clamp(0.0, 255.0)) as u8;
+            });
         }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            for i in 0..total {
+                unsafe {
+                    let p = rgb_data.add(i * 3);
+                    let g = gray_data[i] as f64;
+                    *p = ((g + factor * (*p as f64 - g)).clamp(0.0, 255.0)) as u8;
+                    *p.add(1) = ((g + factor * (*p.add(1) as f64 - g)).clamp(0.0, 255.0)) as u8;
+                    *p.add(2) = ((g + factor * (*p.add(2) as f64 - g)).clamp(0.0, 255.0)) as u8;
+                }
+            }
+        }
+
         Ok(Image {
             inner: crate::lazy::LazyImage::Loaded(DynamicImage::ImageRgb8(rgb)),
             format: self.format,
@@ -65,10 +89,35 @@ impl Image {
             let blur_rgb = blurred.to_rgb8();
             let mut rgb = img.to_rgb8();
             let amount = (factor - 1.0).min(5.0);
-            for (px, bp) in rgb.pixels_mut().zip(blur_rgb.pixels()) {
-                for c in 0..3 {
-                    let diff = px[c] as f64 - bp[c] as f64;
-                    px[c] = ((px[c] as f64 + diff * amount).clamp(0.0, 255.0)) as u8;
+            let (w, h) = rgb.dimensions();
+            let total = (w as usize) * (h as usize);
+            let blur_data = blur_rgb.as_raw().as_slice();
+            let rgb_data = rgb.as_mut_ptr();
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                use rayon::prelude::*;
+                let slice = unsafe { std::slice::from_raw_parts_mut(rgb_data, total * 3) };
+                slice.par_chunks_mut(3).enumerate().for_each(|(i, px)| {
+                    let bp = &blur_data[i * 3..];
+                    for c in 0..3 {
+                        let diff = px[c] as f64 - bp[c] as f64;
+                        px[c] = ((px[c] as f64 + diff * amount).clamp(0.0, 255.0)) as u8;
+                    }
+                });
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                for i in 0..total {
+                    unsafe {
+                        let p = rgb_data.add(i * 3);
+                        let bp = blur_data.as_ptr().add(i * 3);
+                        for c in 0..3 {
+                            let diff = (*p.add(c)) as f64 - (*bp.add(c)) as f64;
+                            *p.add(c) = ((*p.add(c) as f64 + diff * amount).clamp(0.0, 255.0)) as u8;
+                        }
+                    }
                 }
             }
             Ok(Image {

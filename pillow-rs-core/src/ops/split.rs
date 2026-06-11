@@ -1,5 +1,29 @@
 use crate::error::PilError;
 use crate::image::Image;
+use image::GrayImage;
+
+/// Channel split using puhu's pre-allocation pattern (set_len + chunks_exact).
+fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<Image> {
+    let mut bufs: Vec<Vec<u8>> = (0..channels)
+        .map(|_| unsafe { let mut v = Vec::with_capacity(n); v.set_len(n); v })
+        .collect();
+
+    for (i, chunk) in raw.chunks_exact(channels).enumerate() {
+        for c in 0..channels { bufs[c][i] = chunk[c]; }
+    }
+
+    bufs.into_iter().map(|buf| {
+        Image {
+            inner: crate::lazy::LazyImage::Loaded(
+                image::DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(w, h, buf)
+                        .expect("split: buffer size mismatch"),
+                ),
+            ),
+            format: None,
+        }
+    }).collect()
+}
 
 impl Image {
     pub fn split(&self) -> Result<Vec<Image>, PilError> {
@@ -18,113 +42,17 @@ impl Image {
                 }]
             }
             image::DynamicImage::ImageLumaA8(ga) => {
-                let raw = ga.as_raw();
-                let (mut l, mut a) = unsafe {
-                    let mut lv = Vec::with_capacity(n);
-                    let mut av = Vec::with_capacity(n);
-                    lv.set_len(n);
-                    av.set_len(n);
-                    (lv, av)
-                };
-                for (i, chunk) in raw.chunks_exact(2).enumerate() {
-                    l[i] = chunk[0];
-                    a[i] = chunk[1];
-                }
-                vec![
-                    Image {
-                        inner: crate::lazy::LazyImage::Loaded(
-                            image::DynamicImage::ImageLuma8(
-                                image::GrayImage::from_raw(w, h, l)
-                                    .ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?,
-                            ),
-                        ),
-                        format: None,
-                    },
-                    Image {
-                        inner: crate::lazy::LazyImage::Loaded(
-                            image::DynamicImage::ImageLuma8(
-                                image::GrayImage::from_raw(w, h, a)
-                                    .ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?,
-                            ),
-                        ),
-                        format: None,
-                    },
-                ]
+                split_channels(ga.as_raw(), 2, n, w, h)
             }
             image::DynamicImage::ImageRgb8(rgb) => {
-                let raw = rgb.as_raw();
-                let (mut r, mut g, mut b) = unsafe {
-                    let mut rv = Vec::with_capacity(n);
-                    let mut gv = Vec::with_capacity(n);
-                    let mut bv = Vec::with_capacity(n);
-                    rv.set_len(n);
-                    gv.set_len(n);
-                    bv.set_len(n);
-                    (rv, gv, bv)
-                };
-                for (i, chunk) in raw.chunks_exact(3).enumerate() {
-                    r[i] = chunk[0];
-                    g[i] = chunk[1];
-                    b[i] = chunk[2];
-                }
-                vec![
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, r).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, g).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, b).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                ]
+                split_channels(rgb.as_raw(), 3, n, w, h)
             }
             image::DynamicImage::ImageRgba8(rgba) => {
-                let raw = rgba.as_raw();
-                let (mut r, mut g, mut b, mut a) = unsafe {
-                    let mut rv = Vec::with_capacity(n);
-                    let mut gv = Vec::with_capacity(n);
-                    let mut bv = Vec::with_capacity(n);
-                    let mut av = Vec::with_capacity(n);
-                    rv.set_len(n);
-                    gv.set_len(n);
-                    bv.set_len(n);
-                    av.set_len(n);
-                    (rv, gv, bv, av)
-                };
-                for (i, chunk) in raw.chunks_exact(4).enumerate() {
-                    r[i] = chunk[0];
-                    g[i] = chunk[1];
-                    b[i] = chunk[2];
-                    a[i] = chunk[3];
-                }
-                vec![
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, r).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, g).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, b).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, a).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                ]
+                split_channels(rgba.as_raw(), 4, n, w, h)
             }
             _ => {
                 let rgba = img.to_rgba8();
-                let raw = rgba.as_raw();
-                let (mut r, mut g, mut b, mut a) = unsafe {
-                    let mut rv = Vec::with_capacity(n);
-                    let mut gv = Vec::with_capacity(n);
-                    let mut bv = Vec::with_capacity(n);
-                    let mut av = Vec::with_capacity(n);
-                    rv.set_len(n);
-                    gv.set_len(n);
-                    bv.set_len(n);
-                    av.set_len(n);
-                    (rv, gv, bv, av)
-                };
-                for (i, chunk) in raw.chunks_exact(4).enumerate() {
-                    r[i] = chunk[0];
-                    g[i] = chunk[1];
-                    b[i] = chunk[2];
-                    a[i] = chunk[3];
-                }
-                vec![
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, r).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, g).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, b).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                    Image { inner: crate::lazy::LazyImage::Loaded(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, a).ok_or_else(|| PilError::ValueError("split: buffer mismatch".into()))?)), format: None },
-                ]
+                split_channels(rgba.as_raw(), 4, n, w, h)
             }
         };
 
