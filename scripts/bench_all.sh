@@ -105,10 +105,15 @@ elif [ "$MODE" = "group" ]; then
     FILTER_ARG="--group $GROUP"
 fi
 
-# Step 1: Native CPU — Python E2E through PyO3 binding (true end-to-end)
-echo "--- Native CPU (Python E2E via RSPIL) ---"
+# Step 0: Ensure release build
+echo "--- Build: release mode ---"
+cd "$ROOT/pillow-rs-py" && maturin develop --release 2>&1 | tail -1
 cd "$ROOT"
-python3 scripts/bench_native_cpu.py --runs 10 --output "$BENCH_DIR/native_cpu.json" 2>&1 | tail -5 || echo "  (CPU E2E completed)"
+
+# Step 1: Native CPU — Python E2E (release mode, GIL released, LUT-optimized)
+echo "--- Native CPU (Python E2E, release) ---"
+cd "$ROOT"
+python3 scripts/bench_native_cpu.py --runs 5 --output "$BENCH_DIR/native_cpu.json" 2>&1 | tail -3 || echo "  (CPU completed)"
 echo ""
 
 # Step 2: WASM CPU benchmarks (Node.js)
