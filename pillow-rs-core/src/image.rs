@@ -146,6 +146,7 @@ impl Image {
                 .with_guessed_format()
                 .ok()
                 .and_then(|r| r.format())
+                .or_else(|| detect_format_from_magic(&data))
         };
         Ok(Image::Bytes {
             data: Arc::new(data),
@@ -329,16 +330,15 @@ impl Image {
         if let Image::Loaded(_, Some(m)) = self {
             return Ok(m.clone());
         }
-        // Check format on Path/Bytes before materializing
-        match self {
-            Image::Path { format, .. } | Image::Bytes { format, .. } => {
-                if let Some(ImageFormat::Gif) = format {
-                    return Ok("P".to_string());
-                }
-            }
-            _ => {}
-        }
         let img = self.materialize()?;
+        // Check format-based mode for Path/Bytes
+        let fmt = match self {
+            Image::Path { format, .. } | Image::Bytes { format, .. } => *format,
+            _ => None,
+        };
+        if let Some(detected) = detect_format_mode(&img, fmt) {
+            return Ok(detected);
+        }
         Ok(color_type_to_mode(img.color()).to_string())
     }
 
@@ -649,12 +649,71 @@ fn channel_op_binary(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
-/// Detect the correct PIL mode from format + color type.
-fn detect_format_mode(_img: &DynamicImage, format: Option<ImageFormat>) -> Option<String> {
+/// Detect image format from magic bytes.
+fn detect_format_from_magic(data: &[u8]) -> Option<ImageFormat> {
+    if data.len() >= 3 && &data[..3] == b"GIF" {
+        Some(ImageFormat::Gif)
+    } else if data.len() >= 8 && &data[..8] == b"\x89PNG\r\n\x1a\n" {
+        Some(ImageFormat::Png)
+    } else if data.len() >= 2 && &data[..2] == b"BM" {
+        Some(ImageFormat::Bmp)
+    } else if data.len() >= 2 && &data[..2] == b"\xff\xd8" {
+        Some(ImageFormat::Jpeg)
+    } else {
+        None
+    }
+}
+
+/// Detect the correct PIL mode from format + color type after decoding.
+fn detect_format_mode(img: &DynamicImage, format: Option<ImageFormat>) -> Option<String> {
     match format {
-        Some(ImageFormat::Gif) => Some("P".to_string()),
+        Some(ImageFormat::Gif) => {
+            // GIF: bilevel source becomes L in PIL, RGB source becomes P
+            let ch = img.color().channel_count();
+            if ch == 1 || ch == 2 || is_bilevel(img) {
+                Some("L".to_string())
+            } else {
+                Some("P".to_string())
+            }
+        }
+        Some(ImageFormat::Png) => {
+            let ch = img.color().channel_count();
+            if ch == 1 || ch == 2 {
+                if is_bilevel(img) {
+                    Some("1".to_string())
+                } else if ch == 2 {
+                    Some("LA".to_string())
+                } else {
+                    Some("L".to_string())
+                }
+            } else {
+                None // Can't distinguish RGB from paletted without header
+            }
+        }
+        Some(ImageFormat::Bmp) => {
+            if is_grayscale_rgb(img) {
+                Some("L".to_string())
+            } else {
+                None
+            }
+        }
         _ => None,
     }
+}
+
+/// Check if all pixel values are exactly 0 or 255 (bilevel image).
+fn is_bilevel(img: &DynamicImage) -> bool {
+    let luma = img.to_luma8();
+    luma.pixels().all(|p| p[0] == 0 || p[0] == 255)
+}
+
+/// Check if an RGB image is actually grayscale (all channels equal per pixel).
+fn is_grayscale_rgb(img: &DynamicImage) -> bool {
+    if img.color().channel_count() < 3 {
+        return true;
+    }
+    let rgb = img.to_rgb8();
+    rgb.pixels().all(|p| p[0] == p[1] && p[1] == p[2])
 }
 
 /// Helper: preserve the color mode of the input image after operations
