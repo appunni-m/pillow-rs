@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.rounded_rectangle",
+  "mode": "RGBA",
+  "target": "wasm",
+  "expectedHash": "7306bc998096cfebf5afde72b63000ef7bde20353bff47e7b3f91bbb67a28cae"
+}

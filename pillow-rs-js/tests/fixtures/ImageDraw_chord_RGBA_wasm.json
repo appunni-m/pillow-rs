@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.chord",
+  "mode": "RGBA",
+  "target": "wasm",
+  "expectedHash": "856c8eb109c8f9dea9331a82335f4d2e904257f07749d805a54d8dc0eb9c47a8"
+}

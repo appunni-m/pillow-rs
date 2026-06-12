@@ -1,0 +1,6 @@
+{
+  "op": "ImageModule.eval",
+  "mode": "L",
+  "target": "wasm_gpu",
+  "expectedHash": "57daade2930c276e032c2a9602231ba2ed2007c064d7099566ce227aa234eafe"
+}

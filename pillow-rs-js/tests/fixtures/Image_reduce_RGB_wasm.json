@@ -1,0 +1,6 @@
+{
+  "op": "Image.reduce",
+  "mode": "RGB",
+  "target": "wasm",
+  "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+}

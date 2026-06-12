@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.point",
+  "mode": "RGBA",
+  "target": "wasm_gpu",
+  "expectedHash": "2e34331f064ceab706cffa0e679d40c9ef5237c6d77b3e4dd7032a12001b9d71"
+}

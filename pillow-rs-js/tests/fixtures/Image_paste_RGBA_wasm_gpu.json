@@ -1,0 +1,6 @@
+{
+  "op": "Image.paste",
+  "mode": "RGBA",
+  "target": "wasm_gpu",
+  "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+}

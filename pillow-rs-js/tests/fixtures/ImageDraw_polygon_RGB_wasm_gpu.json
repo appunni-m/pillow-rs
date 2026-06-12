@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.polygon",
+  "mode": "RGB",
+  "target": "wasm_gpu",
+  "expectedHash": "a1bcec5e8a2814cb6f4e93d9f086f9643abc70eab6582ec482a0b3be45bd8142"
+}

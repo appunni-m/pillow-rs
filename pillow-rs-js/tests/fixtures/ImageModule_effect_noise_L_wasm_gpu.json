@@ -2,5 +2,5 @@
   "op": "ImageModule.effect_noise",
   "mode": "L",
   "target": "wasm_gpu",
-  "expectedHash": "6c3af14c471475213a74b5e64e60d4ce3d588ed303d76465bb63c270916afec7"
+  "expectedHash": "4677341d8c5d21b258e47d6ddd8a5341e30ee1981825f5f33137071646de5c2c"
 }

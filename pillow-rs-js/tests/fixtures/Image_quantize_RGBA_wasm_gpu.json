@@ -2,5 +2,5 @@
   "op": "Image.quantize",
   "mode": "RGBA",
   "target": "wasm_gpu",
-  "expectedHash": "d4137411d33ab9e181b85f0bb3f05443d88b39b680bb168b05083ce417717250"
+  "expectedHash": "fc515a11b20f8f5369c2d314c878b3d6317f4346f1b9c5a0418a3f9628181f5c"
 }

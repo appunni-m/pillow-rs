@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.text",
+  "mode": "L",
+  "target": "wasm_gpu",
+  "expectedHash": "03d1b333cf7958150ad8f13a10ec4aec476fbd8ea638ac22b3987717e4f25fe6"
+}

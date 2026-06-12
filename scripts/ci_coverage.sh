@@ -17,12 +17,16 @@ python -m pytest tests/ -q --json-report --json-report-file=/tmp/report.json
 echo "=== 5. Coverage validation ==="
 python scripts/coverage/validate_coverage.py manifest.yaml
 
-echo "=== 6. JS/WASM tests ==="
+echo "=== 6. Generate WASM test fixtures ==="
+python scripts/coverage/generate_wasm_fixtures.py
+python scripts/coverage/generate_wasm_tests.py
+
+echo "=== 7. JS/WASM tests ==="
 if [ -f pillow-rs-js/tests/run.mjs ]; then
     node pillow-rs-js/tests/run.mjs || echo "WARNING: JS tests not yet configured"
 fi
 
-echo "=== 7. Generate coverage reports ==="
+echo "=== 8. Generate coverage reports ==="
 python scripts/coverage/generate_coverage_page.py
 python scripts/coverage/generate_wasm_coverage.py
 

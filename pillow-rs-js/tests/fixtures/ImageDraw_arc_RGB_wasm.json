@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.arc",
+  "mode": "RGB",
+  "target": "wasm",
+  "expectedHash": "65163bf7db00bee58619724fe99852b6c562b4ca36f2f27f1212a8245a3fb133"
+}

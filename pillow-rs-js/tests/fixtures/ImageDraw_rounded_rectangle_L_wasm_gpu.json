@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.rounded_rectangle",
+  "mode": "L",
+  "target": "wasm_gpu",
+  "expectedHash": "72e798be6f7f5d36da0f28b45fcd666c7cc911717d67a0fe22782d7e7f3f6a44"
+}

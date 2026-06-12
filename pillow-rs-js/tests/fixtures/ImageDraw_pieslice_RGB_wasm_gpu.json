@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.pieslice",
+  "mode": "RGB",
+  "target": "wasm_gpu",
+  "expectedHash": "524863c6336076336f0e7bbc89ad77f5ed2667ac29c0f0cac503d11c73705789"
+}

@@ -1,0 +1,6 @@
+{
+  "op": "ImageModule.eval",
+  "mode": "RGB",
+  "target": "wasm",
+  "expectedHash": "b8cc5349b71bb1c1ce7eddb4ff59555e8acb49c260fe488346b333d86cfb42d3"
+}

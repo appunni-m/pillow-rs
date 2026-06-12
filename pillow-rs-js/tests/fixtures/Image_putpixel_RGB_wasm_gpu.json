@@ -1,0 +1,6 @@
+{
+  "op": "Image.putpixel",
+  "mode": "RGB",
+  "target": "wasm_gpu",
+  "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+}

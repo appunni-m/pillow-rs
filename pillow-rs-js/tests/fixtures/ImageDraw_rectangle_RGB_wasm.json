@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.rectangle",
+  "mode": "RGB",
+  "target": "wasm",
+  "expectedHash": "1e66c43360dfa9773b31b82d0dfaebf5756933669cbd23ba122461bd0f561c9e"
+}

@@ -1,0 +1,6 @@
+{
+  "op": "Image.rotate",
+  "mode": "P",
+  "target": "wasm",
+  "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+}

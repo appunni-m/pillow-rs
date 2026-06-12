@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.ellipse",
+  "mode": "L",
+  "target": "wasm",
+  "expectedHash": "c9819d38af43ffb466734084004c6ee06c7225c1891fbdaafbc730c75a8cd65f"
+}

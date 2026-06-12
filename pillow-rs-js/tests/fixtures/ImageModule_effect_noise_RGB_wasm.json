@@ -2,5 +2,5 @@
   "op": "ImageModule.effect_noise",
   "mode": "RGB",
   "target": "wasm",
-  "expectedHash": "3e8d31c046d2614a0f2dbb1408f922ff5ec8f88b9ef6a958c1006c5f83f127cf"
+  "expectedHash": "b90bdd78d6be7409babd7c5e8de50494f8f8b73d2426bf3e5b4a125bbf3cedcf"
 }

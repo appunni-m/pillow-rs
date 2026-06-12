@@ -1,0 +1,6 @@
+{
+  "op": "ImageModule.eval",
+  "mode": "RGBA",
+  "target": "wasm_gpu",
+  "expectedHash": "c3095dc69d01ef08b8eec878e235d3b9b68265f542fbc5f8968dac09df89f24d"
+}

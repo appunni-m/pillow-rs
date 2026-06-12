@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.circle",
+  "mode": "L",
+  "target": "wasm_gpu",
+  "expectedHash": "8c4e541b20c781848a1bf8f406ace441389ad87302e543dff177c2c1175caded"
+}

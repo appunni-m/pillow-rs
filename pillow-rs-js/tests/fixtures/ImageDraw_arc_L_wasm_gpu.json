@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.arc",
+  "mode": "L",
+  "target": "wasm_gpu",
+  "expectedHash": "584f799795f64f29ce6d27cb3fdf7627faa97eab1f83c0bd1fe73037f2649c38"
+}

@@ -1,0 +1,6 @@
+{
+  "op": "ImageDraw.regular_polygon",
+  "mode": "L",
+  "target": "wasm",
+  "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+}

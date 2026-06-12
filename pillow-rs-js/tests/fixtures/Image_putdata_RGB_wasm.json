@@ -1,0 +1,6 @@
+{
+  "op": "Image.putdata",
+  "mode": "RGB",
+  "target": "wasm",
+  "expectedHash": "f28dbf25ec0ea3f6d9e551db1a0008de69666b87fdeea801583402ce12544ac7"
+}
