@@ -93,10 +93,6 @@ class Image:
         fillcolor: Optional[Any] = None,
     ) -> "Image":
         angle = angle % 360
-        if angle not in [0, 90, 180, 270]:
-            raise NotImplementedError(
-                f"Arbitrary angle rotation ({angle}°) not yet implemented."
-            )
         rust_image = self._rust_image.rotate(float(angle), expand, fillcolor)
         return Image(rust_image)
 

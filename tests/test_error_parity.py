@@ -109,12 +109,9 @@ def test_crop_nonstandard_modes(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("1", marks=[pytest.mark.covers("Image.rotate", mode="1", target="cpu", variant="error_parity"),
-                              pytest.mark.xfail(reason="rotate(45°) not yet implemented for mode '1'")]),
-    pytest.param("P", marks=[pytest.mark.covers("Image.rotate", mode="P", target="cpu", variant="error_parity"),
-                              pytest.mark.xfail(reason="rotate(45°) not yet implemented for mode 'P'")]),
-    pytest.param("CMYK", marks=[pytest.mark.covers("Image.rotate", mode="CMYK", target="cpu", variant="error_parity"),
-                                 pytest.mark.xfail(reason="rotate(45°) not yet implemented for mode 'CMYK'")]),
+    pytest.param("1", marks=pytest.mark.covers("Image.rotate", mode="1", target="cpu", variant="error_parity")),
+    pytest.param("P", marks=pytest.mark.covers("Image.rotate", mode="P", target="cpu", variant="error_parity")),
+    pytest.param("CMYK", marks=pytest.mark.covers("Image.rotate", mode="CMYK", target="cpu", variant="error_parity")),
 ])
 def test_rotate_nonstandard_modes(PIL, mode):
     def make_pil():
