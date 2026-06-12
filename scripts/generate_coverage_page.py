@@ -24,7 +24,70 @@ def run_tests():
          "--json-report", f"--json-report-file={REPORT_JSON}"], cwd=ROOT)
     with open(REPORT_JSON) as f: return json.load(f)
 
-# ── FUNC_MAP (same as compute_coverage.py) ──────────────────────
+# ── Marker scanner (same logic as validate_coverage.py) ──────────
+import re as _re
+
+_COVERS_RE = _re.compile(
+    r'@pytest\.mark\.covers\(\s*"([^"]+)"\s*'
+    r'(?:,\s*mode="([^"]*)")?\s*'
+    r'(?:,\s*target="([^"]*)")?\s*'
+    r'(?:,\s*variant="([^"]*)")?\s*'
+    r'\)'
+)
+
+def _scan_test_markers(tests_dir):
+    """Parse @pytest.mark.covers decorators, return {nodeid: [func_names]}."""
+    mapping = {}
+    for py_file in Path(tests_dir).rglob("test_*.py"):
+        content = py_file.read_text()
+        file_name = py_file.name
+        # Find all markers and their associated test functions
+        markers = []
+        current_marker = None
+        for line in content.split('\n'):
+            m = _COVERS_RE.search(line)
+            if m:
+                current_marker = m.group(1)
+                continue
+            if line.strip().startswith('def test_'):
+                func_name = line.strip().split('(')[0].replace('def ', '')
+                # Check for class context
+                cls_match = _re.search(r'class (\w+)', content[:content.index(line)] if line in content else '')
+                cls_name = None
+                # Find enclosing class
+                idx = content.index(line)
+                for cls_m in _re.finditer(r'class (\w+)', content[:idx]):
+                    cls_name = cls_m.group(1)
+                if cls_name:
+                    key = f"{file_name}::{cls_name}::{func_name}"
+                else:
+                    key = f"{file_name}::{func_name}"
+                if current_marker:
+                    mapping[key] = current_marker if isinstance(current_marker, str) else [current_marker]
+                current_marker = None
+    return mapping
+
+def _infer_functions(nodeid, marker_map):
+    """Infer function names from test nodeid using scanned markers."""
+    parts = nodeid.split("::")
+    if len(parts) >= 3:
+        file_name = parts[0].split("/")[-1]
+        key = f"{file_name}::{parts[-2]}::{parts[-1]}"
+    else:
+        file_name = parts[0].split("/")[-1] if parts else ""
+        test_name = parts[-1] if parts else ""
+        key = f"{file_name}::{test_name}"
+    result = marker_map.get(key)
+    if result is None:
+        return []
+    if isinstance(result, str):
+        return [result]
+    return list(result) if isinstance(result, list) else [result]
+
+# Build marker map at import time
+_MARKER_MAP = _scan_test_markers(ROOT / "tests")
+
+# Legacy FUNC_MAP kept as fallback
 FUNC_MAP = {
     "test_new_rgb_default": "Image.new", "test_new_rgb_with_int": "Image.new",
     "test_new_rgb_hex": "Image.new", "test_new_rgb_tuple": "Image.new",
@@ -195,6 +258,10 @@ FUNC_MAP = {
 }
 
 def infer_functions(nodeid):
+    # Try marker map first, then fall back to hardcoded FUNC_MAP
+    result = _infer_functions(nodeid, _MARKER_MAP)
+    if result:
+        return result
     parts = nodeid.split("::")
     test_name = f"{parts[-2]}::{parts[-1]}" if len(parts) >= 3 else (parts[-1] if parts else "")
     file_name = parts[0].split("/")[-1].replace(".py", "") if "::" in nodeid else ""
@@ -367,6 +434,49 @@ Every test in the trust report validates PIL-RSPIL parity:
 **Verification method:** `assert_images_equal(rs_img, pil_img)` for image output,
 `assert_values_equal(rs_val, pil_val)` for non-image values.
 
+## Mode × Operation Coverage Matrix
+
+* ✅ = tested (parity passes), ⬜ = untested, N/A = PIL doesn't support this mode*
+
+"""
+    # Build mode matrix
+    all_mode_cols = ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I", "F"]
+    for mod_name, mod_def in manifest.get("modules", {}).items():
+        rows = []
+        for section in ["class_methods", "methods", "functions"]:
+            for item in mod_def.get(section, []):
+                if not isinstance(item, dict) or item.get("status") != "implemented":
+                    continue
+                op_name = item["name"]
+                modes = item.get("supported_modes", [])
+                if not modes:
+                    continue
+                cells = []
+                for mode in all_mode_cols:
+                    if mode in modes:
+                        # Check if there's a test for this (op, mode)
+                        full_name = f"{mod_name}.{op_name}"
+                        has_test = any(
+                            t for t in trusted
+                            if t == full_name
+                        ) or any(
+                            k for k in _MARKER_MAP
+                            if _MARKER_MAP[k] == full_name
+                        )
+                        if has_test:
+                            cells.append("✅")
+                        else:
+                            cells.append("⬜")
+                    else:
+                        cells.append("N/A")
+                rows.append(f"| `{op_name}` | {' | '.join(cells)} |")
+        if rows:
+            md += f"### {mod_name}\n\n"
+            md += f"| Operation | {' | '.join(all_mode_cols)} |\n"
+            md += f"|-----------|{'|'.join(['---']*len(all_mode_cols))}|\n"
+            md += "\n".join(rows) + "\n\n"
+
+    md += """
 *Report generated by `scripts/generate_coverage_page.py`*
 """
 
