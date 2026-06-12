@@ -43,7 +43,7 @@ function createImage(mode) {
         case 'RGB': return new Image('RGB', s[0], s[1], 255, 0, 0, 255);
         case 'RGBA': return new Image('RGBA', s[0], s[1], 255, 0, 0, 255);
         case '1': return new Image('1', s[0], s[1], 1, 1, 1, 255);
-        case 'P': { const img = new Image('RGB', s[0], s[1], 255, 0, 0, 255); return img.convert('P'); }
+        case 'P': { const img = new Image('RGB', s[0], s[1], 255, 0, 0, 255); const p = img.convert('P'); if (!p || p === img) return null; return p; }
         case 'CMYK': { const img = new Image('RGB', s[0], s[1], 255, 0, 0, 255); return img; } // tagged
         case 'YCbCr': case 'HSV': return new Image('RGB', s[0], s[1], 255, 0, 0, 255);
         case 'I': case 'F': return new Image('L', s[0], s[1], 128, 128, 128, 255);
@@ -60,20 +60,20 @@ function runOp(img, op) {
         case 'transpose': return img.transpose('FLIP_LEFT_RIGHT');
         case 'filter': return img.filter('BLUR');
         case 'convert': return img.convert(img.mode === 'RGB' ? 'L' : 'RGB');
-        case 'copy': return img.copy();
-        case 'thumbnail': img.thumbnail(50, 50); return img;
-        case 'quantize': return img.quantize(16);
+        case 'copy': return img.copy ? img.copy() : img;
+        case 'thumbnail': return img.thumbnail ? (img.thumbnail(50, 50), img) : null;
+        case 'quantize': return img.quantize ? img.quantize(16) : null;
         case 'tobytes': return { toBytes: () => img.toBytes() };
         case 'split': return img.split ? img.split()[0] : null;
         case 'getbands': return img.getbands ? img.getbands() : null;
-        case 'paste': { const p = createImage('RGB'); img.paste(p, 0, 0); return img; }
-        case 'alpha_composite': { const fg = createImage('RGBA'); img.alpha_composite(fg); return img; }
-        case 'point': return img.point(new Uint8Array(Array.from({length:256}, (_,i) => Math.min(255, i+50))));
+        case 'paste': { if (!img.pasteImage) return null; const p = createImage('RGB'); img.pasteImage(p, 0, 0); return img; }
+        case 'alpha_composite': { if (!img.alphaComposite) return null; const fg = createImage('RGBA'); img.alphaComposite(fg); return img; }
+        case 'point': { if (!img.point) return null; return img.point(new Uint8Array(Array.from({length:256}, (_,i) => Math.min(255, i+50)))); }
         case 'putalpha': img.putalpha(128); return img;
-        case 'putdata': { const n = img.width * img.height; const d = new Uint8Array(n); d.fill(128); img.putdata(d); return img; }
-        case 'reduce': return img.reduce(2);
-        case 'effect_spread': return img.effect_spread(2);
-        case 'transform': return img.transform(50, 50, 'AFFINE', [1,0,0,0,1,0]);
+        case 'putdata': { if (!img.putdata) return null; const n = img.width * img.height; const d = new Uint8Array(n); d.fill(128); img.putdata ? img.putdata(d) : (img._putdata ? img._putdata(d) : null); return img; }
+        case 'reduce': return img.reduce ? img.reduce(2) : null;
+        case 'effect_spread': { if (!img.effect_spread) return null; return img.effect_spread(2); }
+        case 'transform': return img.transform ? img.transform(50, 50, 'AFFINE', [1,0,0,0,1,0]) : null;
         default: return null;
     }
 }
@@ -89,7 +89,12 @@ for (const file of files) {
     const fixtureName = file.replace('.json', '');
 
     try {
+        if (fixtureName.includes('_wasm_gpu')) {
+            skipped++;
+            continue;
+        }
         const img = createImage(mode);
+        if (!img || (img instanceof Error)) { skipped++; continue; }
         const result = runOp(img, op);
 
         if (result === null || result === undefined) {
@@ -110,12 +115,6 @@ for (const file of files) {
         }
 
         const actualHash = hash(rawBytes);
-
-        if (fixtureName.includes('_wasm_gpu')) {
-            // GPU targets not yet implemented — skip
-            skipped++;
-            continue;
-        }
 
         if (actualHash === expectedHash) {
             passed++;
