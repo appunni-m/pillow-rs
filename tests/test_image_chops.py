@@ -29,8 +29,7 @@ CHOps_MODES = [
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.add", mode="L", target="cpu", variant="default"),
-                              pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.add", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.add", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_add_parity(PIL, mode):
@@ -46,7 +45,7 @@ def test_chops_add_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.subtract", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.subtract", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.subtract", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_subtract_parity(PIL, mode):
@@ -62,7 +61,7 @@ def test_chops_subtract_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.multiply", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.multiply", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.multiply", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_multiply_parity(PIL, mode):
@@ -78,7 +77,7 @@ def test_chops_multiply_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.screen", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.screen", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.screen", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_screen_parity(PIL, mode):
@@ -94,7 +93,7 @@ def test_chops_screen_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.darker", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.darker", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.darker", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_darker_parity(PIL, mode):
@@ -110,7 +109,7 @@ def test_chops_darker_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.lighter", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.lighter", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.lighter", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_lighter_parity(PIL, mode):
@@ -126,7 +125,7 @@ def test_chops_lighter_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.difference", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.difference", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.difference", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_difference_parity(PIL, mode):
@@ -142,7 +141,7 @@ def test_chops_difference_parity(PIL, mode):
 
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("L", marks=[pytest.mark.covers("ImageChops.invert", mode="L", target="cpu", variant="default"), pytest.mark.xfail(reason="L-mode not preserved in ImageChops implementation")]),
+    pytest.param("L", marks=pytest.mark.covers("ImageChops.invert", mode="L", target="cpu", variant="default")),
     pytest.param("RGB", marks=pytest.mark.covers("ImageChops.invert", mode="RGB", target="cpu", variant="default")),
 ])
 def test_chops_invert_parity(PIL, mode):
