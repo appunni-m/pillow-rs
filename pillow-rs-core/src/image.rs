@@ -1284,7 +1284,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             })
         }
         PipelineOp::Multiply { other } => channel_op_binary(img, other, |a, b| {
-            ((a as f64 * b as f64) / 255.0).round() as u8
+            // PIL uses integer division (truncation): (a*b) // 255
+            ((a as u32 * b as u32) / 255) as u8
         }),
         PipelineOp::Screen { other } => channel_op_binary(img, other, |a, b| {
             (255u32 - ((255 - a as u32) * (255 - b as u32) / 255)) as u8
@@ -1295,35 +1296,35 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             (a as i16 - b as i16).unsigned_abs() as u8
         }),
         PipelineOp::Overlay { other } => channel_op_binary(img, other, |base, blend| {
+            // PIL uses float math with rounding
             let b = base as f64 / 255.0;
             let bl = blend as f64 / 255.0;
-            let r = if b < 0.5 {
-                2.0 * b * bl
+            if b < 0.5 {
+                (2.0 * b * bl * 255.0).round() as u8
             } else {
-                1.0 - 2.0 * (1.0 - b) * (1.0 - bl)
-            };
-            (r * 255.0).round() as u8
+                (255.0 - 2.0 * (1.0 - b) * (1.0 - bl) * 255.0).round() as u8
+            }
         }),
         PipelineOp::HardLight { other } => channel_op_binary(img, other, |base, blend| {
+            // PIL: HardLight mirrors Overlay with swapped roles
+            let b = base as f64 / 255.0;
             let bl = blend as f64 / 255.0;
-            if bl < 0.5 {
-                ((2.0 * base as f64 * bl) / 255.0).round() as u8
+            if bl <= 0.5 {
+                (2.0 * b * bl * 255.0).round() as u8
             } else {
-                255 - ((2.0 * (255.0 - base as f64) * (1.0 - bl)) / 255.0).round() as u8
+                (255.0 - 2.0 * (1.0 - b) * (1.0 - bl) * 255.0).round() as u8
             }
         }),
         PipelineOp::SoftLight { other } => channel_op_binary(img, other, |base, blend| {
+            // W3C soft-light formula (close to PIL, needs verification)
             let b = base as f64 / 255.0;
             let bl = blend as f64 / 255.0;
-            let r = if bl < 0.5 {
+            let r = if bl <= 0.5 {
                 b - (1.0 - 2.0 * bl) * b * (1.0 - b)
+            } else if b <= 0.25 {
+                b + (2.0 * bl - 1.0) * (((16.0 * b - 12.0) * b + 4.0) * b - b)
             } else {
-                b + (2.0 * bl - 1.0)
-                    * ((if b <= 0.25 {
-                        ((16.0 * b - 12.0) * b + 4.0) * b
-                    } else {
-                        b.sqrt()
-                    }) - b)
+                b + (2.0 * bl - 1.0) * (b.sqrt() - b)
             };
             (r * 255.0).round().clamp(0.0, 255.0) as u8
         }),
