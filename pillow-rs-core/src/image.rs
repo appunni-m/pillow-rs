@@ -804,7 +804,7 @@ fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicI
             out.put_pixel(x, y, image::Rgb([r_vals[rank], g_vals[rank], b_vals[rank]]));
         }
     }
-    Ok(DynamicImage::ImageRgb8(out))
+    Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
 /// Bilinear interpolation helper.
@@ -1001,7 +1001,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                         op[2] = palette[idx * 3 + 2];
                     }
                 }
-                Ok(DynamicImage::ImageRgb8(out))
+                Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
             } else {
                 let mut out = image::RgbImage::new(w, h);
                 for (i, op) in out.pixels_mut().enumerate() {
@@ -1014,7 +1014,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                         op[2] = entry[2];
                     }
                 }
-                Ok(DynamicImage::ImageRgb8(out))
+                Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
             }
         }
         PipelineOp::RemapPalette { dest_map } => {
@@ -1026,7 +1026,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 op[1] = *dest_map.get(ip[1] as usize).unwrap_or(&ip[1]);
                 op[2] = *dest_map.get(ip[2] as usize).unwrap_or(&ip[2]);
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
 
         // ── Filters ──
@@ -1066,7 +1066,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     );
                 }
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
         PipelineOp::BoxBlur { radius } => Ok(img.blur(*radius as f32)),
@@ -1106,7 +1106,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     p[c] = ((p[c] as f64 - lo_f) * scale).clamp(0.0, 255.0) as u8;
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Equalize => {
             let luma = img.to_luma8();
@@ -1128,7 +1128,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     px[c] = ((px[c] as f64 * mapped as f64 / 255.0).clamp(0.0, 255.0)) as u8;
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Invert => {
             let mut rgb = img.to_rgb8();
@@ -1149,7 +1149,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     p[c] &= mask;
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Solarize { threshold } => {
             let t = *threshold;
@@ -1161,7 +1161,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     }
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Grayscale => {
             Ok(DynamicImage::ImageLuma8(crate::color::pil_grayscale(img)))
@@ -1181,7 +1181,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     out.put_pixel(x, y, image::Rgb([r, gv, b]));
                 }
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Contain { w, h, .. } => {
             let (w, h) = (*w, *h);
@@ -1361,7 +1361,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     ]));
                 }
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Composite { other, mask } => {
             let other_img = other.materialize()?;
@@ -1384,7 +1384,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     ]));
                 }
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Duplicate => Ok(img.clone()),
         PipelineOp::InvertChops => {
@@ -1406,7 +1406,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     p[c] = ((p[c] as f64 * f).clamp(0.0, 255.0)) as u8;
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Contrast { factor } => {
             let mut rgba = img.to_rgba8();
@@ -1430,7 +1430,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 px[1] = ((g + f * (px[1] as f64 - g)).clamp(0.0, 255.0)) as u8;
                 px[2] = ((g + f * (px[2] as f64 - g)).clamp(0.0, 255.0)) as u8;
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Sharpness { factor } => {
             let f = *factor;
@@ -1449,7 +1449,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                         px[c] = ((px[c] as f64 + diff * amount).clamp(0.0, 255.0)) as u8;
                     }
                 }
-                Ok(DynamicImage::ImageRgb8(rgb))
+                Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
             }
         }
 
@@ -1677,7 +1677,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     rgb.put_pixel(x, y, image::Rgb([v, v, v]));
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
 
         // ── Point operations (lookup table) ──
