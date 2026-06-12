@@ -43,6 +43,7 @@ def test_paste_with_mask_parity(PIL):
     assert_images_equal(rs_bg, pil_bg)
 
 
+@pytest.mark.covers("Image.paste", mode="RGB", target="cpu", variant="origin")
 def test_paste_at_origin_parity(PIL):
     pil_bg = PIL.Image.new("RGB", (50, 50), (255, 255, 255))
     pil_fg = PIL.Image.new("RGB", (20, 20), (0, 0, 255))

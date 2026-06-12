@@ -22,6 +22,7 @@ def test_contain_parity(PIL):
     assert_images_equal(ImageOps.contain(rs, (50, 50)), PIL.ImageOps.contain(pil, (50, 50)))
 
 
+@pytest.mark.covers("ImageOps.cover", mode="RGB", target="cpu", variant="default")
 def test_cover_parity(PIL):
     import PIL.ImageOps
     pil = PIL.Image.new("RGB", (200, 100), (128, 0, 0))
@@ -38,6 +39,7 @@ def test_expand_parity(PIL):
     assert_images_equal(ImageOps.expand(rs, 5, (0, 255, 0)), PIL.ImageOps.expand(pil, 5, (0, 255, 0)))
 
 
+@pytest.mark.covers("ImageOps.scale", mode="RGB", target="cpu", variant="default")
 def test_scale_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (128, 128, 128))
     rs = Image.new("RGB", (50, 50), (128, 128, 128))

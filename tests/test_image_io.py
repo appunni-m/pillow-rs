@@ -5,6 +5,7 @@ from conftest import assert_images_equal
 
 
 class TestOpenSave:
+    @pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="png")
     def test_save_png_roundtrip(self, PIL):
         pil_img = PIL.Image.new("RGB", (50, 50), (255, 128, 0))
         rs_img = Image.new("RGB", (50, 50), (255, 128, 0))
@@ -16,6 +17,7 @@ class TestOpenSave:
             pil2 = PIL.Image.open(p)
             assert_images_equal(rs2, pil2)
 
+    @pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="jpeg")
     def test_save_jpeg_roundtrip(self, PIL):
         pil_img = PIL.Image.new("RGB", (30, 30), (100, 200, 50))
         rs_img = Image.new("RGB", (30, 30), (100, 200, 50))
@@ -27,6 +29,7 @@ class TestOpenSave:
             pil2 = PIL.Image.open(p)
             assert rs2.size == pil2.size
 
+    @pytest.mark.covers("Image.open", mode="RGB", target="cpu", variant="bytes")
     def test_open_bytes(self, PIL):
         import io
         pil_img = PIL.Image.new("RGB", (20, 20), (255, 0, 0))
@@ -38,6 +41,7 @@ class TestOpenSave:
 
 
 class TestThumbnail:
+    @pytest.mark.covers("Image.thumbnail", mode="RGB", target="cpu", variant="default")
     def test_thumbnail_parity(self, PIL):
         pil = PIL.Image.new("RGB", (400, 200), (128, 128, 128))
         rs = Image.new("RGB", (400, 200), (128, 128, 128))
@@ -47,19 +51,23 @@ class TestThumbnail:
 
 
 class TestBookkeeping:
+    @pytest.mark.covers("Image.close", mode="RGB", target="cpu", variant="default")
     def test_close_no_error(self):
         img = Image.new("RGB", (10, 10))
         img.close()
 
+    @pytest.mark.covers("Image.verify", mode="RGB", target="cpu", variant="default")
     def test_verify_no_error(self):
         img = Image.new("RGB", (10, 10))
         img.verify()
 
+    @pytest.mark.covers("Image.seek", mode="RGB", target="cpu", variant="default")
     def test_seek_tell(self):
         img = Image.new("RGB", (10, 10))
         img.seek(0)
         assert img.tell() == 0
 
+    @pytest.mark.covers("Image.load", mode="RGB", target="cpu", variant="default")
     def test_load_returns(self):
         img = Image.new("RGB", (10, 10))
         result = img.load()

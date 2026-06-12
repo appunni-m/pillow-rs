@@ -13,6 +13,7 @@ def test_getpixel_rgb_parity(PIL):
     assert_values_equal(rs.getpixel((1, 1)), pil.getpixel((1, 1)))
 
 
+@pytest.mark.covers("Image.getpixel", mode="RGBA", target="cpu", variant="default")
 def test_getpixel_rgba_parity(PIL):
     pil = PIL.Image.new("RGBA", (3, 3), (100, 200, 50, 128))
     rs = Image.new("RGBA", (3, 3), (100, 200, 50, 128))
@@ -54,6 +55,7 @@ def test_getbbox_parity(PIL):
     assert_values_equal(rs.getbbox(), pil.getbbox())
 
 
+@pytest.mark.covers("Image.getextrema", mode="RGB", target="cpu", variant="default")
 def test_getextrema_rgb_parity(PIL):
     pil = PIL.Image.new("RGB", (10, 10), (128, 64, 32))
     rs = Image.new("RGB", (10, 10), (128, 64, 32))

@@ -59,6 +59,7 @@ def test_new_properties_match(PIL):
     assert_values_equal(rs_img.mode, pil_img.mode)
 
 
+@pytest.mark.covers("Image.copy", mode="RGB", target="cpu", variant="default")
 def test_new_copy_parity(PIL):
     """Image.copy() produces identical images."""
     pil_img = PIL.Image.new("RGB", (50, 50), (255, 128, 0))

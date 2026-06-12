@@ -13,6 +13,7 @@ def test_getchannel_r_parity(PIL):
     assert_images_equal(rs.getchannel("R"), pil.getchannel("R"))
 
 
+@pytest.mark.covers("Image.getchannel", mode="RGB", target="cpu", variant="G")
 def test_getchannel_g_parity(PIL):
     pil = PIL.Image.new("RGB", (10, 10), (100, 200, 50))
     rs = Image.new("RGB", (10, 10), (100, 200, 50))
@@ -30,6 +31,7 @@ def test_putalpha_rgb_parity(PIL):
     assert_images_equal(rs, pil)
 
 
+@pytest.mark.covers("Image.reduce", mode="RGB", target="cpu", variant="default")
 def test_reduce_parity(PIL):
     pil = PIL.Image.new("RGB", (100, 100), (128, 128, 128))
     rs = Image.new("RGB", (100, 100), (128, 128, 128))

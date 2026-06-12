@@ -5,16 +5,19 @@ from conftest import assert_images_equal
 
 
 class TestRotate:
+    @pytest.mark.covers("Image.rotate", mode="RGB", target="cpu", variant="angle_90")
     def test_rotate_90_parity(self, PIL):
         pil = PIL.Image.new("RGB", (200, 100), (255, 128, 0))
         rs = Image.new("RGB", (200, 100), (255, 128, 0))
         assert_images_equal(rs.rotate(90), pil.rotate(90, expand=True))
 
+    @pytest.mark.covers("Image.rotate", mode="RGB", target="cpu", variant="angle_180")
     def test_rotate_180_parity(self, PIL):
         pil = PIL.Image.new("RGB", (200, 100), (255, 0, 0))
         rs = Image.new("RGB", (200, 100), (255, 0, 0))
         assert_images_equal(rs.rotate(180), pil.rotate(180))
 
+    @pytest.mark.covers("Image.rotate", mode="RGB", target="cpu", variant="angle_270")
     def test_rotate_270_parity(self, PIL):
         pil = PIL.Image.new("RGB", (200, 100), (0, 255, 0))
         rs = Image.new("RGB", (200, 100), (0, 255, 0))
@@ -67,6 +70,7 @@ class TestTranspose:
             pil.transpose(PIL.Image.ROTATE_270),
         )
 
+    @pytest.mark.covers("Image.transpose", mode="RGB", target="cpu", variant="TRANSPOSE")
     def test_transpose_parity(self, PIL):
         pil = PIL.Image.new("RGB", (100, 80), (100, 200, 50))
         rs = Image.new("RGB", (100, 80), (100, 200, 50))
@@ -75,6 +79,7 @@ class TestTranspose:
             pil.transpose(PIL.Image.TRANSPOSE),
         )
 
+    @pytest.mark.covers("Image.transpose", mode="RGB", target="cpu", variant="TRANSVERSE")
     def test_transverse_parity(self, PIL):
         pil = PIL.Image.new("RGB", (100, 80), (200, 100, 50))
         rs = Image.new("RGB", (100, 80), (200, 100, 50))

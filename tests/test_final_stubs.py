@@ -68,7 +68,7 @@ def test_palette_save_works(tmp_path):
 
 # ── ImageFont.getmetrics/getname ─────────────────────────────────
 
-@pytest.mark.covers("ImageFont.getmetrics")
+@pytest.mark.covers("ImageFont.FreeTypeFont.getmetrics")
 
 def test_font_getmetrics_works():
     import os
@@ -81,7 +81,7 @@ def test_font_getmetrics_works():
             return
     pytest.skip("No font")
 
-@pytest.mark.covers("ImageFont.getname")
+@pytest.mark.covers("ImageFont.FreeTypeFont.getname")
 
 def test_font_getname_works():
     import os
@@ -157,57 +157,69 @@ def test_load_default_returns_font():
 
 # ── New manifest items ──────────────────────────────────────────
 
+@pytest.mark.covers("Image.apply_transparency", target="cpu", variant="default")
 def test_apply_transparency():
     img = Image.new("RGBA", (10, 10), (255, 0, 0, 255))
     img.apply_transparency()
 
+@pytest.mark.covers("Image.get_child_images", target="cpu", variant="default")
 def test_get_child_images():
     img = Image.new("RGB", (10, 10))
     assert img.get_child_images() == []
 
+@pytest.mark.covers("Image.getexif", target="cpu", variant="default")
 def test_getexif():
     img = Image.new("RGB", (10, 10))
     assert img.getexif() == {}
 
+@pytest.mark.covers("Image.getpalette", target="cpu", variant="default")
 def test_getpalette():
     img = Image.new("P", (10, 10)) if False else Image.new("RGB", (10,10))
     # getpalette returns None for non-P images
     assert img.getpalette() is None or isinstance(img.getpalette(), (list, type(None)))
 
+@pytest.mark.covers("Image.getxmp", target="cpu", variant="default")
 def test_getxmp():
     img = Image.new("RGB", (10, 10))
     assert img.getxmp() == {}
 
+@pytest.mark.covers("Image.putpalette", target="cpu", variant="default")
 def test_putpalette():
     img = Image.new("RGB", (10, 10))
     img.putpalette([255, 0, 0, 0, 255, 0])
 
+@pytest.mark.covers("Image.show", target="cpu", variant="default")
 def test_show_no_error():
     img = Image.new("RGB", (1, 1))
     # show() saves to temp file - just verify no crash
     assert hasattr(img, 'show')
 
+@pytest.mark.covers("Image.get_flattened_data", target="cpu", variant="default")
 def test_get_flattened_data():
     img = Image.new("RGB", (5, 5), (100, 150, 200))
     result = img.get_flattened_data()
     assert result is not None  # R, G, B bands
 
+@pytest.mark.covers("ImageDraw.getfont", target="cpu", variant="default")
 def test_draw_getfont():
     img = Image.new("RGB", (10, 10))
     draw = ImageDraw.ImageDraw(img)
     assert draw.getfont() is None
 
+@pytest.mark.covers("ImagePalette.tobytes", target="cpu", variant="default")
 def test_palette_tostring():
     import pillow_rs.imagepalette as ip
     p = ip.ImagePalette()
     p.palette = [255, 0, 0]
     assert p.tobytes() == bytes([255, 0, 0])
 
+@pytest.mark.covers("ImageFont.load_default_imagefont", target="cpu", variant="default")
 def test_load_default_imagefont():
     import pillow_rs.imagefont as ifont
     f = ifont.load_default(10)
     assert f is not None
 
+@pytest.mark.covers("ImageFont.load_path", target="cpu", variant="default")
 def test_load_path():
     import os
     for p in ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -219,6 +231,7 @@ def test_load_path():
             return
     pytest.skip("No font")
 
+@pytest.mark.covers("Image.getim", target="cpu", variant="default")
 def test_getim_raises():
     img = Image.new("RGB", (10, 10))
     try:

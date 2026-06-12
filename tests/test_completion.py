@@ -178,6 +178,7 @@ def test_ops_fit_works():
     result = ImageOps.fit(img, (80, 80))
     assert result.size == (80, 80)
 
+@pytest.mark.covers("ImageOps.pad", mode="RGB", target="cpu", variant="default")
 def test_ops_pad_works():
     img = Image.new("RGB", (50, 50), (255, 0, 0))
     result = ImageOps.pad(img, (80, 60), color=(0, 255, 0))

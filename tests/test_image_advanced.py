@@ -5,6 +5,7 @@ from conftest import assert_images_equal, assert_values_equal
 
 
 class TestAlphaComposite:
+    @pytest.mark.covers("Image.alpha_composite", mode="RGBA", target="cpu", variant="default")
     def test_alpha_composite_works(self):
         bg = Image.new("RGBA", (50, 50), (255, 255, 255, 255))
         fg = Image.new("RGBA", (20, 20), (255, 0, 0, 128))
@@ -13,6 +14,7 @@ class TestAlphaComposite:
 
 
 class TestPoint:
+    @pytest.mark.covers("Image.point", mode="L", target="cpu", variant="lut")
     def test_point_lut_parity(self, PIL):
         pil = PIL.Image.new("L", (5, 5), 100)
         rs = Image.new("L", (5, 5), 100)
@@ -21,6 +23,7 @@ class TestPoint:
 
 
 class TestEffectSpread:
+    @pytest.mark.covers("Image.effect_spread", mode="RGB", target="cpu", variant="default")
     def test_effect_spread_works(self):
         img = Image.new("RGB", (50, 50), (255, 0, 0))
         result = img.effect_spread(3)
@@ -28,6 +31,7 @@ class TestEffectSpread:
 
 
 class TestQuantize:
+    @pytest.mark.covers("Image.quantize", mode="RGB", target="cpu", variant="default")
     def test_quantize_parity(self, PIL):
         pil = PIL.Image.new("RGB", (50, 50), (128, 64, 32))
         rs = Image.new("RGB", (50, 50), (128, 64, 32))
@@ -37,21 +41,25 @@ class TestQuantize:
 
 
 class TestAnalysis:
+    @pytest.mark.covers("Image.entropy", mode="RGB", target="cpu", variant="default")
     def test_entropy_works(self):
         img = Image.new("RGB", (50, 50), (128, 128, 128))
         e = img.entropy()
         assert 0 <= e <= 10
 
+    @pytest.mark.covers("Image.getcolors", mode="RGB", target="cpu", variant="default")
     def test_getcolors_works(self):
         img = Image.new("RGB", (10, 10), (255, 0, 0))
         colors = img.getcolors(256)
         assert colors is not None
 
+    @pytest.mark.covers("Image.getdata", mode="RGB", target="cpu", variant="default")
     def test_getdata_rgb_parity(self, PIL):
         pil = PIL.Image.new("RGB", (5, 5), (100, 150, 200))
         rs = Image.new("RGB", (5, 5), (100, 150, 200))
         assert rs.tobytes() == pil.tobytes()
 
+    @pytest.mark.covers("Image.getprojection", mode="L", target="cpu", variant="default")
     def test_getprojection_works(self):
         img = Image.new("L", (10, 10), 128)
         h_proj, v_proj = img.getprojection()

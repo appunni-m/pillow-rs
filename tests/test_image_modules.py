@@ -10,6 +10,7 @@ class TestImageFilter:
     def test_blur_constant(self):
         assert ImageFilter.BLUR == "BLUR"
 
+    @pytest.mark.covers("ImageFilter.GaussianBlur", mode="RGB", target="cpu", variant="default")
     def test_gaussian_blur_class(self):
         f = ImageFilter.GaussianBlur(radius=2)
         img = Image.new("RGB", (20, 20), (255, 0, 0))
@@ -45,12 +46,13 @@ class TestImageFont:
 
 
 class TestImagePalette:
-    @pytest.mark.covers("ImagePalette")
+    @pytest.mark.covers("ImagePalette.tobytes", target="cpu", variant="default")
     def test_create_palette(self):
         p = ImagePalette.ImagePalette()
         assert p.mode == "RGB"
         assert p.tobytes() == b""
 
+    @pytest.mark.covers("ImagePalette.copy", target="cpu", variant="default")
     def test_copy_palette(self):
         p = ImagePalette.ImagePalette()
         p.palette = [255, 0, 0]
@@ -68,6 +70,7 @@ class TestImageStat:
 
 
 class TestImageSequence:
+    @pytest.mark.covers("ImageSequence.Iterator", target="cpu", variant="default")
     def test_iterator_exists(self):
         img = Image.new("RGB", (10, 10))
         it = ImageSequence.Iterator(img)
@@ -76,6 +79,7 @@ class TestImageSequence:
 
 
 class TestImageFontTruetype:
+    @pytest.mark.covers("ImageFont.truetype", target="cpu", variant="default")
     def test_truetype_loads_real_font(self):
         import os
         for path in ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -89,6 +93,7 @@ class TestImageFontTruetype:
 
 
 class TestImageOpsExpand:
+    @pytest.mark.covers("ImageOps.expand", mode="RGB", target="cpu", variant="border")
     def test_expand_border(self):
         img = Image.new("RGB", (50, 50), (255, 0, 0))
         expanded = ImageOps.expand(img, border=5, fill=(0, 255, 0))

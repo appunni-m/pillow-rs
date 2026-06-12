@@ -13,6 +13,7 @@ def test_crop_parity(PIL):
     assert_images_equal(rs_c, pil_c)
 
 
+@pytest.mark.covers("Image.crop", mode="RGB", target="cpu", variant="full_image")
 def test_crop_full_image_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (255, 0, 0))
     rs = Image.new("RGB", (50, 50), (255, 0, 0))
@@ -32,6 +33,7 @@ def test_crop_small_region_parity(PIL):
     assert_images_equal(rs_c, pil_c)
 
 
+@pytest.mark.covers("Image.crop", mode="L", target="cpu", variant="default")
 def test_crop_grayscale_parity(PIL):
     pil = PIL.Image.new("L", (80, 80), 200)
     rs = Image.new("L", (80, 80), 200)
@@ -43,6 +45,7 @@ def test_crop_grayscale_parity(PIL):
 @pytest.mark.covers("Image.crop")
 
 
+@pytest.mark.covers("Image.crop", mode="RGBA", target="cpu", variant="default")
 def test_crop_rgba_parity(PIL):
     pil = PIL.Image.new("RGBA", (80, 80), (255, 0, 0, 128))
     rs = Image.new("RGBA", (80, 80), (255, 0, 0, 128))

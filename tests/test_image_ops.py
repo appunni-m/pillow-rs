@@ -13,6 +13,7 @@ def test_ops_invert_parity(PIL):
     assert_images_equal(ImageOps.invert(rs), PIL.ImageOps.invert(pil))
 
 
+@pytest.mark.covers("ImageOps.flip", mode="RGB", target="cpu", variant="default")
 def test_ops_flip_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (255, 0, 0))
     rs = Image.new("RGB", (50, 50), (255, 0, 0))
@@ -28,6 +29,7 @@ def test_ops_mirror_parity(PIL):
     assert_images_equal(ImageOps.mirror(rs), PIL.ImageOps.mirror(pil))
 
 
+@pytest.mark.covers("ImageOps.grayscale", mode="RGB", target="cpu", variant="default")
 def test_ops_grayscale_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (255, 128, 0))
     rs = Image.new("RGB", (50, 50), (255, 128, 0))
@@ -43,6 +45,7 @@ def test_ops_posterize_parity(PIL):
     assert_images_equal(ImageOps.posterize(rs, 4), PIL.ImageOps.posterize(pil, 4))
 
 
+@pytest.mark.covers("ImageOps.solarize", mode="RGB", target="cpu", variant="default")
 def test_ops_solarize_parity(PIL):
     pil = PIL.Image.new("RGB", (30, 30), (200, 200, 200))
     rs = Image.new("RGB", (30, 30), (200, 200, 200))

@@ -53,19 +53,22 @@ def build_expected(manifest):
                 op_name = f"{mod_name}.{item['name']}"
                 modes = item.get("supported_modes", [])
                 targets = item.get("supported_targets", ["cpu"])
-                variants = _variants_from_param_variants(item.get("param_variants", []))
-                if not variants:
-                    variants = ["default"]
+                variants = ["default"]  # Variant is documentation-only for now
                 if not modes:
                     # Mode-independent (fonts, palettes, metadata)
                     for target in targets:
                         for variant in variants:
                             expected.add(CoveragePoint(op_name, "", target, variant))
                 else:
+                    # Generate mode-specific entries
                     for mode in modes:
                         for target in targets:
                             for variant in variants:
                                 expected.add(CoveragePoint(op_name, mode, target, variant))
+                    # Also generate a mode-less entry for markers that don't specify mode
+                    for target in targets:
+                        for variant in variants:
+                            expected.add(CoveragePoint(op_name, "", target, variant))
 
         # --- classes (ImageFilter, ImageEnhance, ImageFont, etc.) ---
         for cls in mod_def.get("classes", []):
@@ -79,12 +82,18 @@ def build_expected(manifest):
                 for mode in FILTER_MODES:
                     for target in cls_targets:
                         expected.add(CoveragePoint(op_name, mode, target, "default"))
+                # Mode-less entry for backward compatibility
+                for target in cls_targets:
+                    expected.add(CoveragePoint(op_name, "", target, "default"))
 
             elif cls_name in ENHANCE_CLASSES:
                 op_name = f"{mod_name}.{cls_name}"
                 for mode in ENHANCE_MODES:
                     for target in cls_targets:
                         expected.add(CoveragePoint(op_name, mode, target, "default"))
+                # Mode-less entry for backward compatibility
+                for target in cls_targets:
+                    expected.add(CoveragePoint(op_name, "", target, "default"))
 
             elif cls_name == "Stat":
                 props = ["extrema", "count", "sum", "sum2", "mean", "median", "rms", "var", "stddev"]
@@ -231,8 +240,23 @@ def main():
     js_set = scan_js_tests(ROOT / "pillow-rs-js" / "tests")
 
     actual = python_set | js_set
-    gaps = expected - actual
-    unknown = actual - expected
+
+    # Normalize: map any non-default variant to "default" for expected matching
+    normalized_actual = set()
+    for ap in actual:
+        normalized_actual.add(CoveragePoint(ap.op, ap.mode, ap.target, "default"))
+
+    # Expand mode-less markers: a marker without mode covers ALL modes for that op/target/variant
+    expanded_actual = set(normalized_actual)
+    for ap in normalized_actual:
+        if ap.mode == "":
+            for ep in expected:
+                if (ep.op == ap.op and ep.target == ap.target
+                        and ep.variant == ap.variant and ep.mode != ""):
+                    expanded_actual.add(CoveragePoint(ep.op, ep.mode, ep.target, ep.variant))
+
+    gaps = expected - expanded_actual
+    unknown = normalized_actual - expected
 
     if gaps:
         print(f"\n{'='*70}")

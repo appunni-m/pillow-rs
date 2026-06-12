@@ -13,6 +13,7 @@ def test_getrgb_hex_parity(PIL):
     assert_values_equal(ImageColor.getrgb("#0000FF"), PIL.ImageColor.getrgb("#0000FF"))
 
 
+@pytest.mark.covers("ImageColor.getrgb", target="cpu", variant="named")
 def test_getrgb_named_parity(PIL):
     assert_values_equal(ImageColor.getrgb("red"), PIL.ImageColor.getrgb("red"))
     assert_values_equal(ImageColor.getrgb("green"), PIL.ImageColor.getrgb("green"))
@@ -31,6 +32,7 @@ def test_getcolor_rgb_parity(PIL):
     )
 
 
+@pytest.mark.covers("ImageColor.getcolor", mode="L", target="cpu", variant="default")
 def test_getcolor_l_parity(PIL):
     assert_values_equal(
         ImageColor.getcolor("red", "L"),

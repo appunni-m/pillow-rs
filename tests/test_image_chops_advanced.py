@@ -14,6 +14,7 @@ def test_add_modulo_works():
     assert result.size == (10, 10)
 
 
+@pytest.mark.covers("ImageChops.subtract_modulo", mode="RGB", target="cpu", variant="default")
 def test_subtract_modulo_works():
     im1 = Image.new("RGB", (10, 10), (10, 20, 30))
     im2 = Image.new("RGB", (10, 10), (5, 10, 15))
@@ -30,6 +31,7 @@ def test_constant_works():
     assert result.size == (10, 10)
 
 
+@pytest.mark.covers("ImageChops.blend", mode="RGB", target="cpu", variant="default")
 def test_blend_parity(PIL):
     pil1 = PIL.Image.new("RGB", (10, 10), (255, 0, 0))
     pil2 = PIL.Image.new("RGB", (10, 10), (0, 0, 255))
@@ -38,6 +40,7 @@ def test_blend_parity(PIL):
     assert_images_equal(ImageChops.blend(rs1, rs2, 0.5), PIL.ImageChops.blend(pil1, pil2, 0.5))
 
 
+@pytest.mark.covers("ImageChops.composite", mode="RGB", target="cpu", variant="default")
 def test_composite_works():
     im1 = Image.new("RGB", (20, 20), (255, 0, 0))
     im2 = Image.new("RGB", (20, 20), (0, 255, 0))

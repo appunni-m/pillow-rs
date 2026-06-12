@@ -52,6 +52,7 @@ def test_resize_same_size_parity(PIL):
     assert_images_equal(rs_r, pil_r)
 
 
+@pytest.mark.covers("Image.resize", mode="RGB", target="cpu", variant="upscale")
 def test_resize_upscale_parity(PIL):
     pil = PIL.Image.new("RGB", (50, 50), (128, 128, 128))
     rs = Image.new("RGB", (50, 50), (128, 128, 128))
