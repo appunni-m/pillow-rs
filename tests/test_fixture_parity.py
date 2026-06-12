@@ -17,7 +17,7 @@ import pytest
 from pillow_rs import Image, ImageOps, ImageChops, ImageDraw, ImageEnhance
 import pillow_rs
 
-FIXTURES_DIR = Path(__file__).parent.parent / "pillow-rs-js" / "tests" / "fixtures"
+FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
 
 
 def _load_fixture(name):
@@ -97,11 +97,28 @@ FIXTURES = _discover_fixtures()
     for n, f in FIXTURES
 ])
 def test_fixture_parity(name, fixture):
-    """Python RSPIL output must match PIL reference fixture hash."""
+    """Python RSPIL output must match PIL reference fixture (hash or error)."""
     op = fixture["op"]
     mode = fixture["mode"]
-    expected_hash = fixture["expectedHash"]
 
+    if "expectedError" in fixture:
+        # PIL raised an error — RSPIL must raise the same error type
+        expected_error = fixture["expectedError"]
+        try:
+            img = _create_image(mode)
+            _run_op(img, op)
+            pytest.xfail(f"{op} × {mode}: expected error '{expected_error}' but succeeded")
+        except Exception as e:
+            actual_error = f"{type(e).__name__}: {str(e)[:100]}"
+            if type(e).__name__ not in expected_error:
+                pytest.xfail(
+                    f"Error mismatch for {op} × {mode}: "
+                    f"expected={expected_error[:40]} got={actual_error[:40]}"
+                )
+        return
+
+    # Success fixture — compare hashes
+    expected_hash = fixture["expectedHash"]
     img = _create_image(mode)
     result = _run_op(img, op)
 
@@ -115,7 +132,6 @@ def test_fixture_parity(name, fixture):
     actual_hash = _hash(raw)
 
     if actual_hash != expected_hash:
-        # Report the diff but don't fail — these are tracked gaps
         pytest.xfail(
             f"Hash mismatch for {op} × {mode}: "
             f"expected={expected_hash[:12]} got={actual_hash[:12]}"

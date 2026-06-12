@@ -18,8 +18,8 @@ echo "=== 5. Coverage validation ==="
 python scripts/coverage/validate_coverage.py manifest.yaml
 
 echo "=== 6. Generate WASM test fixtures ==="
-python scripts/coverage/generate_wasm_fixtures.py
-python scripts/coverage/generate_wasm_tests.py
+python scripts/coverage/generate_fixtures.py
+python scripts/coverage/generate_fixture_tests.py
 
 echo "=== 7. JS/WASM tests ==="
 if [ -f pillow-rs-js/tests/run.mjs ]; then

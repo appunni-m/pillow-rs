@@ -6,7 +6,7 @@ hashes the output PNG, and writes a JSON fixture.
 
 JS/WASM tests load fixtures and compare output hashes.
 
-Usage: python scripts/coverage/generate_wasm_fixtures.py [--target wasm|wasm_gpu]
+Usage: python scripts/coverage/generate_fixtures.py [--target wasm|wasm_gpu]
 """
 import sys, json, hashlib, yaml
 from pathlib import Path
@@ -14,7 +14,7 @@ from io import BytesIO
 
 ROOT = Path(__file__).parent.parent.parent
 MANIFEST_PATH = ROOT / "manifest.yaml"
-FIXTURES_DIR = ROOT / "pillow-rs-js" / "tests" / "fixtures"
+FIXTURES_DIR = ROOT / "tests" / "fixtures"
 
 import PIL.Image as PILImage
 import PIL.ImageDraw as PILImageDraw
@@ -75,15 +75,15 @@ def run_pil(op_name, mode):
             return None
 
         if hasattr(result, 'tobytes'):
-            return result.tobytes()
+            return ('success', result.tobytes())
         elif hasattr(result, 'save'):
             buf = BytesIO()
             result.save(buf, format="PNG")
-            return buf.getvalue()
+            return ('success', buf.getvalue())
         else:
             return None
-    except Exception:
-        return None
+    except Exception as e:
+        return ('error', f"{type(e).__name__}: {str(e)[:100]}")
 
 
 def _run_image_op(img, func, mode):
@@ -251,23 +251,34 @@ def main():
 
                 for mode in modes:
                     for target in targets:
-                        if target not in ("wasm", "wasm_gpu"):
-                            continue
                         if target_filter and target != target_filter:
                             continue
 
-                        data = run_pil(op_name, mode)
-                        if data is None:
+                        result = run_pil(op_name, mode)
+                        if result is None:
                             continue
 
-                        h = hashlib.sha256(data).hexdigest()
+                        status, data = result
                         key = f"{op_name.replace('.', '_')}_{mode}_{target}"
-                        fixture = {
-                            "op": op_name,
-                            "mode": mode,
-                            "target": target,
-                            "expectedHash": h,
-                        }
+                        if status == 'success':
+                            h = hashlib.sha256(data).hexdigest()
+                            fixture = {
+                                "op": op_name,
+                                "mode": mode,
+                                "target": target,
+                                "inputMode": mode,
+                                "inputSize": [100, 100],
+                                "expectedHash": h,
+                            }
+                        else:  # error
+                            fixture = {
+                                "op": op_name,
+                                "mode": mode,
+                                "target": target,
+                                "inputMode": mode,
+                                "inputSize": [100, 100],
+                                "expectedError": data,
+                            }
                         index["operations"][key] = fixture
                         with open(FIXTURES_DIR / f"{key}.json", "w") as f_out:
                             json.dump(fixture, f_out, indent=2)

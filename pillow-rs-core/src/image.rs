@@ -977,23 +977,33 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             let n = (w * h) as usize;
+            if n == 0 {
+                return Err(PilError::ValueError("quantize: empty image".into()));
+            }
+            let colors = (*colors).clamp(2, 256) as usize;
             // color_quant expects RGBA format (4 bytes per pixel)
             let rgb_raw = rgb.into_raw();
-            let mut rgba_data = Vec::with_capacity(n * 4);
+            let mut rgba_data: Vec<u8> = Vec::with_capacity(n * 4);
             for i in 0..n {
-                rgba_data.push(rgb_raw[i * 3]);
-                rgba_data.push(rgb_raw[i * 3 + 1]);
-                rgba_data.push(rgb_raw[i * 3 + 2]);
-                rgba_data.push(255);
+                let base = i * 3;
+                if base + 2 < rgb_raw.len() {
+                    rgba_data.push(rgb_raw[base]);
+                    rgba_data.push(rgb_raw[base + 1]);
+                    rgba_data.push(rgb_raw[base + 2]);
+                    rgba_data.push(255);
+                }
             }
-            let nq = color_quant::NeuQuant::new(10, *colors as usize, &rgba_data);
+            if rgba_data.len() < colors * 4 {
+                return Err(PilError::ValueError("quantize: not enough pixel data".into()));
+            }
+            let nq = color_quant::NeuQuant::new(10, colors, &rgba_data);
             let _ = dither;
-            if *colors >= 256 {
+            if colors >= 256 {
                 let palette = nq.color_map_rgb();
                 let mut out = image::RgbImage::new(w, h);
                 for (i, op) in out.pixels_mut().enumerate() {
                     if i >= n { break; }
-                    let pixel = &rgba_data[i * 4..i * 4 + 3]; // just R,G,B of RGBA pixel
+                    let pixel = &rgba_data[i * 4..i * 4 + 4]; // RGBA pixel
                     let idx = nq.index_of(pixel);
                     if idx * 3 + 2 < palette.len() {
                         op[0] = palette[idx * 3];
