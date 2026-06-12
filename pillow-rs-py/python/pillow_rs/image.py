@@ -132,7 +132,7 @@ class Image:
         colors: int = 256,
     ) -> "Image":
         # Handle non-standard modes at Python level
-        if mode in ("CMYK", "YCbCr", "HSV"):
+        if mode in ("CMYK", "YCbCr", "HSV", "I", "F"):
             rgb = self._rust_image.convert("RGB", matrix=None, dither=None, palette=palette, colors=colors)
             img = Image(rgb)
             img._explicit_mode = mode
@@ -147,7 +147,10 @@ class Image:
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
         )
-        return Image(rust_image)
+        img = Image(rust_image)
+        if mode == "1":
+            img._explicit_mode = "1"
+        return img
 
     def paste(
         self,
