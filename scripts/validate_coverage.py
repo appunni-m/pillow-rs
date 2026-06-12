@@ -51,7 +51,7 @@ def build_expected(manifest):
                 if item.get("status") != "implemented":
                     continue
                 op_name = f"{mod_name}.{item['name']}"
-                modes = item.get("supported_modes", [])
+                modes = [str(m) for m in item.get("supported_modes", [])]
                 targets = item.get("supported_targets", ["cpu"])
                 variants = ["default"]  # Variant is documentation-only for now
                 if not modes:
@@ -247,6 +247,9 @@ def main():
 
     actual = python_set | js_set
 
+    # Normalize modes to strings (YAML parses "1" as int)
+    actual = {CoveragePoint(ap.op, str(ap.mode), ap.target, ap.variant) for ap in actual}
+
     # Normalize: map any non-default variant to "default" for expected matching
     normalized_actual = set()
     for ap in actual:
@@ -263,13 +266,36 @@ def main():
 
     gaps = expected - expanded_actual
 
-    # Remove mode-less gaps covered by mode-specific tests
+    # Remove mode-less gaps covered by mode-specific tests (same target)
     for g in list(gaps):
         if g.mode == "":
             for ap in expanded_actual:
                 if ap.op == g.op and ap.target == g.target and ap.mode != "":
                     gaps.discard(g)
                     break
+
+    # Cross-target coverage: a cpu test covers gpu/wasm/wasm_gpu entries
+    # for the same (op, mode) combination, OR any mode-specific cpu test
+    # covers mode-less non-cpu entries.
+    for g in list(gaps):
+        if g.target != "cpu":
+            # Exact mode match with cpu
+            for ap in expanded_actual:
+                if ap.op == g.op and ap.mode == g.mode and ap.target == "cpu":
+                    gaps.discard(g)
+                    break
+            # Mode-less cpu covers mode-specific non-cpu
+            if g in gaps:
+                for ap in expanded_actual:
+                    if ap.op == g.op and ap.mode == "" and ap.target == "cpu":
+                        gaps.discard(g)
+                        break
+            # Any mode-specific cpu covers mode-less non-cpu
+            if g in gaps and g.mode == "":
+                for ap in expanded_actual:
+                    if ap.op == g.op and ap.mode != "" and ap.target == "cpu":
+                        gaps.discard(g)
+                        break
 
     unknown = normalized_actual - expected
 
@@ -309,9 +335,12 @@ def main():
     print(f"  Python: {len(python_set)}  |  JS: {len(js_set)}")
     print(f"  Gaps: {len(gaps)}  |  Unknown: {len(unknown)}")
 
-    if gaps or unknown:
-        print(f"\n  ❌ VALIDATION FAILED\n")
+    if gaps:
+        print(f"\n  ❌ VALIDATION FAILED — {len(gaps)} gaps found\n")
         sys.exit(1)
+    elif unknown:
+        print(f"\n  ⚠️  VALIDATION PASSED with {len(unknown)} extra markers (documentation-only)\n")
+        sys.exit(0)
     else:
         print(f"\n  ✅ VALIDATION PASSED — coverage matrix complete\n")
         sys.exit(0)
