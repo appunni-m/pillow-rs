@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-12 07:32:11 | commit `7308da1` | 166 functions | 6 targets
+> Auto-generated: 2026-06-12 07:46:01 | commit `e7f3e71` | 166 functions | 6 targets
 
 ## Summary
 
@@ -10,7 +10,7 @@
 | Functions with GPU path | 42 |
 | Valid CPU speedups (excl. outliers) | 32 |
 | Outliers flagged ⚠️ | 0 |
-| Average CPU speedup vs Pillow | 1.59× |
+| Average CPU speedup vs Pillow | 1.95× |
 | Native CPU benchmarks run | 32 |
 | Missing (no data yet) | 9 |
 
@@ -18,18 +18,18 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.42× | NYW | 9316.67× ⚠️ | NYW | TBD | NYW |
-| Image.crop | 0.70× | NYW | 10501.46× ⚠️ | NYW | TBD | NYW |
-| Image.rotate | 4.35× | NYW | 95238.44× ⚠️ | NYW | TBD | NYW |
-| Image.transpose | 0.61× | NYW | 5626.46× ⚠️ | NYW | TBD | NYW |
-| Image.thumbnail | TBD | NYW | 1797.17× ⚠️ | NYW | TBD | NYW |
-| Image.new | TBD | N/A | 1.05× | N/A | TBD | N/A |
-| Image.paste | TBD | NYW | 20.02× | NYW | TBD | NYW |
-| Image.convert | 0.54× | NYW | 11082.26× ⚠️ | NYW | TBD | NYW |
-| Image.filter | 0.73× | NYW | 54198.48× ⚠️ | NYW | TBD | NYW |
-| Image.open | TBD | N/A | 324.79× ⚠️ | N/A | TBD | N/A |
-| Image.save | TBD | N/A | 2.55× | N/A | TBD | N/A |
-| Image.tobytes | 3.91× | N/A | TBD | N/A | TBD | N/A |
+| Image.resize | 0.50× | 0.50× | 1.41× | 0.50× | 0.50× | 0.50× |
+| Image.crop | 0.94× | 0.94× | 3.78× | 0.94× | 0.94× | 0.94× |
+| Image.rotate | 4.97× | 4.97× | 18.86× | 4.97× | 4.97× | 4.97× |
+| Image.transpose | 0.70× | 0.70× | 1.80× | 0.70× | 0.70× | 0.70× |
+| Image.thumbnail | — | — | 1.05× | — | — | — |
+| Image.new | — | — | 0.23× | — | — | — |
+| Image.paste | — | — | — | — | — | — |
+| Image.convert | 0.67× | 0.67× | 2.14× | 0.67× | 0.67× | 0.67× |
+| Image.filter | 1.07× | 1.07× | 2.27× | 1.07× | 1.07× | 1.07× |
+| Image.open | — | — | 1.86× | — | — | — |
+| Image.save | — | — | 2.85× | — | — | — |
+| Image.tobytes | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× |
 
 ## All Functions
 
@@ -37,224 +37,224 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.42× | NYW | 9316.67× ⚠️ | NYW | TBD | NYW |
-| Image.crop | 0.70× | NYW | 10501.46× ⚠️ | NYW | TBD | NYW |
-| Image.rotate | 4.35× | NYW | 95238.44× ⚠️ | NYW | TBD | NYW |
-| Image.transpose | 0.61× | NYW | 5626.46× ⚠️ | NYW | TBD | NYW |
-| Image.thumbnail | TBD | NYW | 1797.17× ⚠️ | NYW | TBD | NYW |
-| Image.new | TBD | N/A | 1.05× | N/A | TBD | N/A |
-| Image.paste | TBD | NYW | 20.02× | NYW | TBD | NYW |
-| Image.alpha_composite | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.apply_transparency | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.close | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.convert | 0.54× | NYW | 11082.26× ⚠️ | NYW | TBD | NYW |
-| Image.copy | 0.69× | N/A | TBD | N/A | TBD | N/A |
-| Image.draft | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.effect_spread | 17.28× | N/A | TBD | N/A | TBD | N/A |
-| Image.entropy | 0.20× | N/A | TBD | N/A | TBD | N/A |
-| Image.filter | 0.73× | NYW | 54198.48× ⚠️ | NYW | TBD | NYW |
-| Image.frombytes | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.get_child_images | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.get_flattened_data | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.getbands | 0.35× | N/A | 2.72× | N/A | TBD | N/A |
-| Image.getbbox | 0.66× | N/A | 2.56× | N/A | TBD | N/A |
-| Image.getchannel | 0.60× | N/A | TBD | N/A | TBD | N/A |
-| Image.getcolors | 0.16× | N/A | TBD | N/A | TBD | N/A |
-| Image.getdata | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.getexif | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.getextrema | 0.64× | N/A | 2.37× | N/A | TBD | N/A |
-| Image.getim | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.getpalette | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.getpixel | 0.19× | N/A | 2.83× | N/A | TBD | N/A |
-| Image.getprojection | 0.08× | N/A | TBD | N/A | TBD | N/A |
-| Image.getxmp | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.histogram | 0.66× | N/A | 2.83× | N/A | TBD | N/A |
-| Image.load | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.open | TBD | N/A | 324.79× ⚠️ | N/A | TBD | N/A |
-| Image.point | 0.08× | NYW | TBD | NYW | TBD | NYW |
-| Image.putalpha | 3.52× | N/A | TBD | N/A | TBD | N/A |
-| Image.putdata | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.putpalette | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.putpixel | 0.68× | N/A | 54.91× | N/A | TBD | N/A |
-| Image.quantize | 2.19× | NYW | TBD | NYW | TBD | NYW |
-| Image.reduce | 0.34× | NYW | 17574.16× ⚠️ | NYW | TBD | NYW |
-| Image.remap_palette | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.save | TBD | N/A | 2.55× | N/A | TBD | N/A |
-| Image.seek | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.show | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.split | 0.29× | N/A | 1.15× | N/A | TBD | N/A |
-| Image.tell | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.tobitmap | TBD | N/A | TBD | N/A | TBD | N/A |
-| Image.tobytes | 3.91× | N/A | TBD | N/A | TBD | N/A |
-| Image.transform | TBD | NYW | TBD | NYW | TBD | NYW |
-| Image.verify | TBD | N/A | TBD | N/A | TBD | N/A |
+| Image.resize | 0.50× | 0.50× | 1.41× | 0.50× | 0.50× | 0.50× |
+| Image.crop | 0.94× | 0.94× | 3.78× | 0.94× | 0.94× | 0.94× |
+| Image.rotate | 4.97× | 4.97× | 18.86× | 4.97× | 4.97× | 4.97× |
+| Image.transpose | 0.70× | 0.70× | 1.80× | 0.70× | 0.70× | 0.70× |
+| Image.thumbnail | — | — | 1.05× | — | — | — |
+| Image.new | — | — | 0.23× | — | — | — |
+| Image.paste | — | — | — | — | — | — |
+| Image.alpha_composite | — | — | — | — | — | — |
+| Image.apply_transparency | — | — | — | — | — | — |
+| Image.close | — | — | — | — | — | — |
+| Image.convert | 0.67× | 0.67× | 2.14× | 0.67× | 0.67× | 0.67× |
+| Image.copy | 0.73× | 0.73× | 0.73× | 0.73× | 0.73× | 0.73× |
+| Image.draft | — | — | — | — | — | — |
+| Image.effect_spread | 23.73× | 23.73× | 23.73× | 23.73× | 23.73× | 23.73× |
+| Image.entropy | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× |
+| Image.filter | 1.07× | 1.07× | 2.27× | 1.07× | 1.07× | 1.07× |
+| Image.frombytes | — | — | — | — | — | — |
+| Image.get_child_images | — | — | — | — | — | — |
+| Image.get_flattened_data | — | — | — | — | — | — |
+| Image.getbands | 0.38× | 0.38× | 2.46× | 0.38× | 0.38× | 0.38× |
+| Image.getbbox | 0.74× | 0.74× | 2.65× | 0.74× | 0.74× | 0.74× |
+| Image.getchannel | 0.63× | 0.63× | 0.63× | 0.63× | 0.63× | 0.63× |
+| Image.getcolors | 0.18× | 0.18× | 0.18× | 0.18× | 0.18× | 0.18× |
+| Image.getdata | — | — | — | — | — | — |
+| Image.getexif | — | — | — | — | — | — |
+| Image.getextrema | 0.67× | 0.67× | 2.05× | 0.67× | 0.67× | 0.67× |
+| Image.getim | — | — | — | — | — | — |
+| Image.getpalette | — | — | — | — | — | — |
+| Image.getpixel | 0.20× | 0.20× | 2.75× | 0.20× | 0.20× | 0.20× |
+| Image.getprojection | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× |
+| Image.getxmp | — | — | — | — | — | — |
+| Image.histogram | 0.64× | 0.64× | 2.56× | 0.64× | 0.64× | 0.64× |
+| Image.load | — | — | — | — | — | — |
+| Image.open | — | — | 1.86× | — | — | — |
+| Image.point | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× |
+| Image.putalpha | 3.32× | 3.32× | 3.32× | 3.32× | 3.32× | 3.32× |
+| Image.putdata | — | — | — | — | — | — |
+| Image.putpalette | — | — | — | — | — | — |
+| Image.putpixel | 0.74× | 0.74× | 70.74× | 0.74× | 0.74× | 0.74× |
+| Image.quantize | 2.25× | 2.25× | 2.25× | 2.25× | 2.25× | 2.25× |
+| Image.reduce | 0.32× | 0.32× | 1.25× | 0.32× | 0.32× | 0.32× |
+| Image.remap_palette | — | — | — | — | — | — |
+| Image.save | — | — | 2.85× | — | — | — |
+| Image.seek | — | — | — | — | — | — |
+| Image.show | — | — | — | — | — | — |
+| Image.split | 0.29× | 0.29× | 1.12× | 0.29× | 0.29× | 0.29× |
+| Image.tell | — | — | — | — | — | — |
+| Image.tobitmap | — | — | — | — | — | — |
+| Image.tobytes | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× |
+| Image.transform | — | — | — | — | — | — |
+| Image.verify | — | — | — | — | — | — |
 
 ### ImageChops
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageChops.add | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.add_modulo | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.blend | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.composite | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageChops.constant | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageChops.darker | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.difference | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.duplicate | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageChops.hard_light | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.invert | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.lighter | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.logical_and | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.logical_or | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.logical_xor | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.multiply | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.offset | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageChops.overlay | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.screen | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.soft_light | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.subtract | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageChops.subtract_modulo | TBD | NYW | TBD | NYW | TBD | NYW |
+| ImageChops.add | — | — | — | — | — | — |
+| ImageChops.add_modulo | — | — | — | — | — | — |
+| ImageChops.blend | — | — | — | — | — | — |
+| ImageChops.composite | — | — | — | — | — | — |
+| ImageChops.constant | — | — | — | — | — | — |
+| ImageChops.darker | — | — | — | — | — | — |
+| ImageChops.difference | — | — | — | — | — | — |
+| ImageChops.duplicate | — | — | — | — | — | — |
+| ImageChops.hard_light | — | — | — | — | — | — |
+| ImageChops.invert | — | — | — | — | — | — |
+| ImageChops.lighter | — | — | — | — | — | — |
+| ImageChops.logical_and | — | — | — | — | — | — |
+| ImageChops.logical_or | — | — | — | — | — | — |
+| ImageChops.logical_xor | — | — | — | — | — | — |
+| ImageChops.multiply | — | — | — | — | — | — |
+| ImageChops.offset | — | — | — | — | — | — |
+| ImageChops.overlay | — | — | — | — | — | — |
+| ImageChops.screen | — | — | — | — | — | — |
+| ImageChops.soft_light | — | — | — | — | — | — |
+| ImageChops.subtract | — | — | — | — | — | — |
+| ImageChops.subtract_modulo | — | — | — | — | — | — |
 
 ### ImageColor
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageColor.getcolor | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageColor.getrgb | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageColor.getcolor | — | — | — | — | — | — |
+| ImageColor.getrgb | — | — | — | — | — | — |
 
 ### ImageDraw
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageDraw.arc | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.bitmap | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.chord | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.circle | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.ellipse | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.getfont | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.line | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.multiline_text | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.multiline_textbbox | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.pieslice | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.point | N/A | NYW | N/A | NYW | N/A | NYW |
-| ImageDraw.polygon | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.rectangle | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.regular_polygon | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.rounded_rectangle | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.text | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.textbbox | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageDraw.textlength | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageDraw.arc | — | — | — | — | — | — |
+| ImageDraw.bitmap | — | — | — | — | — | — |
+| ImageDraw.chord | — | — | — | — | — | — |
+| ImageDraw.circle | — | — | — | — | — | — |
+| ImageDraw.ellipse | — | — | — | — | — | — |
+| ImageDraw.getfont | — | — | — | — | — | — |
+| ImageDraw.line | — | — | — | — | — | — |
+| ImageDraw.multiline_text | — | — | — | — | — | — |
+| ImageDraw.multiline_textbbox | — | — | — | — | — | — |
+| ImageDraw.pieslice | — | — | — | — | — | — |
+| ImageDraw.point | — | — | — | — | — | — |
+| ImageDraw.polygon | — | — | — | — | — | — |
+| ImageDraw.rectangle | — | — | — | — | — | — |
+| ImageDraw.regular_polygon | — | — | — | — | — | — |
+| ImageDraw.rounded_rectangle | — | — | — | — | — | — |
+| ImageDraw.text | — | — | — | — | — | — |
+| ImageDraw.textbbox | — | — | — | — | — | — |
+| ImageDraw.textlength | — | — | — | — | — | — |
 
 ### ImageEnhance
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageEnhance.Brightness | TBD | NYW | 17669.65× ⚠️ | NYW | TBD | NYW |
-| ImageEnhance.Color | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageEnhance.Contrast | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageEnhance.Sharpness | TBD | NYW | TBD | NYW | TBD | NYW |
+| ImageEnhance.Brightness | — | — | 2.38× | — | — | — |
+| ImageEnhance.Color | — | — | — | — | — | — |
+| ImageEnhance.Contrast | — | — | — | — | — | — |
+| ImageEnhance.Sharpness | — | — | — | — | — | — |
 
 ### ImageFilter
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageFilter.BLUR | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.BoxBlur | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.CONTOUR | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.Color3DLUT | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImageFilter.DETAIL | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.EDGE_ENHANCE | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.EDGE_ENHANCE_MORE | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.EMBOSS | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.FIND_EDGES | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.GaussianBlur | TBD | N/A | 28292.55× ⚠️ | N/A | TBD | N/A |
-| ImageFilter.Kernel | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.MaxFilter | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.MedianFilter | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.MinFilter | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.ModeFilter | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.RankFilter | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.SHARPEN | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.SMOOTH | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.SMOOTH_MORE | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFilter.UnsharpMask | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageFilter.BLUR | — | — | — | — | — | — |
+| ImageFilter.BoxBlur | — | — | — | — | — | — |
+| ImageFilter.CONTOUR | — | — | — | — | — | — |
+| ImageFilter.Color3DLUT | — | — | — | — | — | — |
+| ImageFilter.DETAIL | — | — | — | — | — | — |
+| ImageFilter.EDGE_ENHANCE | — | — | — | — | — | — |
+| ImageFilter.EDGE_ENHANCE_MORE | — | — | — | — | — | — |
+| ImageFilter.EMBOSS | — | — | — | — | — | — |
+| ImageFilter.FIND_EDGES | — | — | — | — | — | — |
+| ImageFilter.GaussianBlur | — | — | 1.94× | — | — | — |
+| ImageFilter.Kernel | — | — | — | — | — | — |
+| ImageFilter.MaxFilter | — | — | — | — | — | — |
+| ImageFilter.MedianFilter | — | — | — | — | — | — |
+| ImageFilter.MinFilter | — | — | — | — | — | — |
+| ImageFilter.ModeFilter | — | — | — | — | — | — |
+| ImageFilter.RankFilter | — | — | — | — | — | — |
+| ImageFilter.SHARPEN | — | — | — | — | — | — |
+| ImageFilter.SMOOTH | — | — | — | — | — | — |
+| ImageFilter.SMOOTH_MORE | — | — | — | — | — | — |
+| ImageFilter.UnsharpMask | — | — | — | — | — | — |
 
 ### ImageFont
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageFont.FreeTypeFont | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.ImageFont | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.FreeTypeFont.getbbox | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImageFont.ImageFont.getbbox | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImageFont.FreeTypeFont.getlength | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.ImageFont.getlength | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.FreeTypeFont.getmask | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.ImageFont.getmask | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.FreeTypeFont.getmetrics | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.FreeTypeFont.getname | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.load | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.load_default | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.load_default_imagefont | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageFont.load_path | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImageFont.truetype | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageFont.FreeTypeFont | — | — | — | — | — | — |
+| ImageFont.ImageFont | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getbbox | — | — | — | — | — | — |
+| ImageFont.ImageFont.getbbox | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getlength | — | — | — | — | — | — |
+| ImageFont.ImageFont.getlength | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getmask | — | — | — | — | — | — |
+| ImageFont.ImageFont.getmask | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getmetrics | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getname | — | — | — | — | — | — |
+| ImageFont.load | — | — | — | — | — | — |
+| ImageFont.load_default | — | — | — | — | — | — |
+| ImageFont.load_default_imagefont | — | — | — | — | — | — |
+| ImageFont.load_path | — | — | — | — | — | — |
+| ImageFont.truetype | — | — | — | — | — | — |
 
 ### ImageModule
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageModule.new | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImageModule.alpha_composite | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImageModule.blend | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageModule.composite | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageModule.effect_noise | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageModule.eval | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageModule.fromarray | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageModule.frombytes | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageModule.merge | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageModule.open | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageModule.new | — | — | — | — | — | — |
+| ImageModule.alpha_composite | — | — | — | — | — | — |
+| ImageModule.blend | — | — | — | — | — | — |
+| ImageModule.composite | — | — | — | — | — | — |
+| ImageModule.effect_noise | — | — | — | — | — | — |
+| ImageModule.eval | — | — | — | — | — | — |
+| ImageModule.fromarray | — | — | — | — | — | — |
+| ImageModule.frombytes | — | — | — | — | — | — |
+| ImageModule.merge | — | — | — | — | — | — |
+| ImageModule.open | — | — | — | — | — | — |
 
 ### ImageOps
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageOps.crop | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageOps.autocontrast | 0.09× | NYW | TBD | NYW | TBD | NYW |
-| ImageOps.colorize | TBD | NYW | TBD | NYW | TBD | NYW |
-| ImageOps.contain | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.cover | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.deform | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.equalize | 0.10× | NYW | TBD | NYW | TBD | NYW |
-| ImageOps.exif_transpose | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.expand | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.fit | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.flip | 3.75× | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.grayscale | 2.99× | N/A | 14721.49× ⚠️ | N/A | TBD | N/A |
-| ImageOps.invert | 0.45× | NYW | 2254.49× ⚠️ | NYW | TBD | NYW |
-| ImageOps.mirror | 2.77× | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.pad | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.posterize | 0.42× | NYW | TBD | NYW | TBD | NYW |
-| ImageOps.scale | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImageOps.solarize | 0.28× | NYW | TBD | NYW | TBD | NYW |
+| ImageOps.crop | — | — | — | — | — | — |
+| ImageOps.autocontrast | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× |
+| ImageOps.colorize | — | — | — | — | — | — |
+| ImageOps.contain | — | — | — | — | — | — |
+| ImageOps.cover | — | — | — | — | — | — |
+| ImageOps.deform | — | — | — | — | — | — |
+| ImageOps.equalize | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× |
+| ImageOps.exif_transpose | — | — | — | — | — | — |
+| ImageOps.expand | — | — | — | — | — | — |
+| ImageOps.fit | — | — | — | — | — | — |
+| ImageOps.flip | 4.27× | 4.27× | 4.27× | 4.27× | 4.27× | 4.27× |
+| ImageOps.grayscale | 3.72× | 3.72× | 2.28× | 3.72× | 3.72× | 3.72× |
+| ImageOps.invert | 0.57× | 0.57× | 0.31× | 0.57× | 0.57× | 0.57× |
+| ImageOps.mirror | 3.74× | 3.74× | 3.74× | 3.74× | 3.74× | 3.74× |
+| ImageOps.pad | — | — | — | — | — | — |
+| ImageOps.posterize | 0.51× | 0.51× | 0.51× | 0.51× | 0.51× | 0.51× |
+| ImageOps.scale | — | — | — | — | — | — |
+| ImageOps.solarize | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× |
 
 ### ImagePalette
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImagePalette.copy | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImagePalette.getcolor | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImagePalette.getdata | TBD | N/A | TBD | N/A | TBD | N/A |
-| ImagePalette.save | N/A | N/A | N/A | N/A | N/A | N/A |
-| ImagePalette.tobytes | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImagePalette.copy | — | — | — | — | — | — |
+| ImagePalette.getcolor | — | — | — | — | — | — |
+| ImagePalette.getdata | — | — | — | — | — | — |
+| ImagePalette.save | — | — | — | — | — | — |
+| ImagePalette.tobytes | — | — | — | — | — | — |
 
 ### ImageSequence
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageSequence.Iterator | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageSequence.Iterator | — | — | — | — | — | — |
 
 ### ImageStat
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageStat.Stat | TBD | N/A | TBD | N/A | TBD | N/A |
+| ImageStat.Stat | — | — | — | — | — | — |

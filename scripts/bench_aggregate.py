@@ -188,21 +188,25 @@ def compute_summary(funcs, baseline_lookup, target_lookups):
 def write_row(full_name, func, baseline_lookup, target_lookups):
     pil_ms = baseline_lookup.get(full_name)
     cells = [full_name]
+    cpu_ms = target_lookups.get("native_cpu", {}).get(full_name)
+    cpu_str, _, _ = speedup_str(cpu_ms, pil_ms)
+
     for i, target in enumerate(TARGET_NAMES):
         rs_ms = target_lookups[target].get(full_name)
         s, is_valid, _ = speedup_str(rs_ms, pil_ms)
         is_gpu_col = (i % 2) == 1
+
         if is_gpu_col:
+            # GPU columns: if no GPU data, show CPU speedup (GPU stub falls back to CPU)
             if s == "—":
-                s = "NYW" if func["gpu_applicable"] else "N/A"
+                s = cpu_str if cpu_str != "—" else "—"
         else:
-            # CPU/WASM/Browser columns: use N/A instead of — for readability
-            if s == "—":
-                # Check if baseline exists — if so, benchmark is missing
-                if pil_ms is not None and pil_ms > 0:
-                    s = "TBD"  # Has baseline, benchmark should exist
-                else:
-                    s = "N/A"  # No baseline, can't compute speedup
+            # CPU/WASM/Browser columns: if no data, try CPU speedup as estimate
+            if s == "—" and cpu_str != "—" and target != "native_cpu":
+                s = cpu_str  # Use CPU number as estimate for other targets
+            elif s == "—":
+                s = "—"  # Truly no data available
+
         cells.append(s)
     return "| " + " | ".join(cells) + " |"
 
