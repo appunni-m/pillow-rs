@@ -968,7 +968,12 @@ def test_fixture_parity(name, fixture):
             pytest.xfail(f'Cannot create input for {mode}')
         result = _run_op(img, op)
         if isinstance(result, (list, tuple)):
-            result_list = list(result)
+            # Deep convert tuples->lists for comparison (JSON stores lists)
+            def _deep_list(v):
+                if isinstance(v, (list, tuple)):
+                    return [_deep_list(x) for x in v]
+                return v
+            result_list = _deep_list(result)
             if result_list == expected_val:
                 return
             if isinstance(expected_val, (list, tuple)) and len(expected_val) <= 100 and len(result_list) > len(expected_val):
