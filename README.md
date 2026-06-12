@@ -46,11 +46,18 @@ cargo test -p pillow-rs-core
 # Run all PIL parity tests
 python -m pytest tests/ --json-report --json-report-file=/tmp/report.json
 
-# Compute coverage
-python scripts/compute_coverage.py manifest.yaml /tmp/report.json
+# Validate coverage (CI gate — exits 1 on any gap)
+python scripts/coverage/validate_coverage.py manifest.yaml
+
+# Generate coverage reports
+python scripts/coverage/generate_coverage_page.py   # → docs/COVERAGE.md
+python scripts/coverage/generate_wasm_coverage.py   # → docs/COVERAGE_WASM.md
 
 # Run Rust tests (includes 29 GPU validation tests)
 cargo test -p pillow-rs-core
+
+# Full CI pipeline
+bash scripts/ci_coverage.sh
 ```
 
 ## Benchmarking
@@ -58,7 +65,7 @@ cargo test -p pillow-rs-core
 ### Single command
 
 ```bash
-bash scripts/bench_all.sh full
+bash scripts/bench/bench_all.sh full
 ```
 
 This runs **all benchmarks** (native CPU, WASM CPU, pipeline) and regenerates `BENCHMARKS.md`.
@@ -81,9 +88,9 @@ GPU targets are flagged as **NYW** (not yet wired) — shaders exist but dispatc
 Only changed functions are re-benchmarked (SHA-256 cache keys from source files):
 
 ```bash
-bash scripts/bench_all.sh incremental   # only changed code
-bash scripts/bench_all.sh --group priority  # just Tier 1 ops
-bash scripts/bench_all.sh --only resize,crop # specific functions
+bash scripts/bench/bench_all.sh incremental   # only changed code
+bash scripts/bench/bench_all.sh --group priority  # just Tier 1 ops
+bash scripts/bench/bench_all.sh --only resize,crop # specific functions
 ```
 
 ### Output format
@@ -162,15 +169,18 @@ let result = engine.map_or_else(
 ├── pillow-rs-js/              ← wasm-bindgen
 │   └── bench_page/            ← Browser benchmark page + shared harness
 ├── scripts/
-│   ├── bench_all.sh           ← **Single benchmark command**
-│   ├── bench_spec.py          ← 43-function benchmark spec (groups)
-│   ├── bench_manifest.py      ← Manifest parser → function list
-│   ├── bench_pillow_baseline.py ← Pillow reference timings (165 ops)
-│   ├── bench_aggregate.py     ← JSONs → BENCHMARKS.md
-│   ├── bench_cache.py         ← SHA-256 incremental cache
-│   ├── bench_wasm_cpu.mjs     ← Node.js WASM harness
-│   ├── bench_browser.mjs      ← Puppeteer browser driver
-│   └── bench_reference_images/ ← Synthetic benchmark images
+│   ├── bench/                 ← Benchmark scripts
+│   │   ├── bench_all.sh       ← **Single benchmark command**
+│   │   ├── bench_unified.py   ← Unified benchmark runner
+│   │   ├── bench_aggregate.py ← JSONs → BENCHMARKS.md
+│   │   └── ...
+│   ├── coverage/              ← Coverage scripts
+│   │   ├── validate_coverage.py  ← CI gate (exit 1 on gap)
+│   │   ├── generate_coverage_page.py → COVERAGE.md
+│   │   └── ...
+│   ├── ci_coverage.sh         ← Full CI pipeline
+│   ├── lint.sh                ← Rust fmt + clippy
+│   └── generate_stubs.py      ← Manifest → Rust stubs
 └── tests/                     ← PIL parity test suite
 ```
 
@@ -184,7 +194,7 @@ All work starts from `manifest.yaml`. To add a function:
 3. Implement in `pillow-rs-core/src/ops/`
 4. Add binding delegation in `pillow-rs-py/src/lib.rs`
 5. Write PIL parity tests in `tests/`
-6. Add test→function mapping in `scripts/coverage_map.json`
+6. Add test→function mapping in `scripts/coverage/coverage_map.json`
 
 ### Code quality
 
@@ -194,7 +204,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --check
 
 # Before commit
-bash scripts/bench_all.sh full  # Regenerate BENCHMARKS.md
+bash scripts/bench/bench_all.sh full  # Regenerate BENCHMARKS.md
 python -m pytest tests/         # Verify PIL parity
 ```
 
