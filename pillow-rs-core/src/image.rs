@@ -1172,7 +1172,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let mut rgb = img.to_rgb8();
             for p in rgb.pixels_mut() {
                 for c in 0..3 {
-                    if p[c] > t {
+                    if p[c] >= t {  // PIL uses >=, not >
                         p[c] = 255 - p[c];
                     }
                 }

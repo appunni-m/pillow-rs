@@ -315,8 +315,12 @@ def _run_image_op(img, func, mode):
 def _run_imageops(img, func, mode):
     """Dispatch ImageOps functions. Returns (result, params)."""
     if func in ("autocontrast", "equalize", "invert", "flip", "mirror",
-                "grayscale", "posterize", "solarize"):
+                "grayscale"):
         return getattr(PILImageOps, func)(img), {"func": func}
+    if func in ("posterize",):
+        return getattr(PILImageOps, func)(img, 4), {"func": func, "bits": 4}
+    if func in ("solarize",):
+        return getattr(PILImageOps, func)(img, 128), {"func": func, "threshold": 128}
     if func in ("contain", "cover", "fit", "pad", "scale"):
         return getattr(PILImageOps, func)(img, (25, 25)), {"size": [25, 25], "func": func}
     if func in ("expand",):
