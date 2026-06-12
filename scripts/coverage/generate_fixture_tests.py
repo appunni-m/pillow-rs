@@ -22,10 +22,15 @@ FIXTURES_DIR = ROOT / "tests" / "fixtures"
 OUTPUT = ROOT / "tests" / "test_fixture_parity.py"
 
 index = {}
-index_path = FIXTURES_DIR / "index.json"
-if index_path.exists():
-    with open(index_path) as f:
-        index = json.load(f).get("operations", {})
+# Scan fixture files directly (no 51MB index.json needed)
+if FIXTURES_DIR.exists():
+    for f in sorted(FIXTURES_DIR.glob("*.json")):
+        try:
+            fixture = json.loads(f.read_text())
+            key = f.stem
+            index[key] = fixture
+        except Exception:
+            pass
 
 # Group by op for readability
 by_op = defaultdict(list)
@@ -319,7 +324,7 @@ for op_name in sorted(by_op.keys()):
 
         marks_str = ", ".join(marks)
         lines.append(
-            f"    pytest.param({_esc(test_id)}, _load_fixture({_esc(filename)}), "
+            f"    pytest.param({_esc(test_id)}, {_esc(filename)}, "
             f"id={_esc(test_id)}, marks=[{marks_str}]),"
         )
 
@@ -337,9 +342,10 @@ for op_name in sorted(by_op.keys()):
 lines.append("}")
 lines.append("")
 lines.append("")
-lines.append("@pytest.mark.parametrize('name,fixture', _PARAMS)")
-lines.append("def test_fixture_parity(name, fixture):")
+lines.append("@pytest.mark.parametrize('name,fixture_file', _PARAMS)")
+lines.append("def test_fixture_parity(name, fixture_file):")
 lines.append('    """RSPIL output must match PIL reference (hash, value, or error)."""')
+lines.append("    fixture = _load_fixture(fixture_file)  # lazy load — not at module level")
 lines.append('    op = fixture["op"]')
 lines.append('    mode = fixture["mode"]')
 lines.append("")
