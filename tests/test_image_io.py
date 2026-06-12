@@ -108,14 +108,11 @@ def _make_test_image(mode):
     pytest.param("JPEG", "L", "Image.save", marks=pytest.mark.covers("Image.save", mode="L", target="cpu", variant="jpeg_roundtrip")),
     pytest.param("JPEG", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="jpeg_roundtrip")),
     # GIF
-    pytest.param("GIF", "L", "Image.save", marks=[pytest.mark.covers("Image.save", mode="L", target="cpu", variant="gif_roundtrip"),
-                                                   pytest.mark.xfail(reason="GIF mode 'L' loaded incorrectly")]),
-    pytest.param("GIF", "RGB", "Image.save", marks=[pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="gif_roundtrip"),
-                                                     pytest.mark.xfail(reason="GIF mode 'RGB' loaded incorrectly")]),
+    pytest.param("GIF", "L", "Image.save", marks=pytest.mark.covers("Image.save", mode="L", target="cpu", variant="gif_roundtrip")),
+    pytest.param("GIF", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="gif_roundtrip")),
     pytest.param("GIF", "1", "Image.save", marks=[pytest.mark.covers("Image.save", mode="1", target="cpu", variant="gif_roundtrip"),
                                                    pytest.mark.xfail(reason="GIF mode '1' loaded incorrectly")]),
-    pytest.param("GIF", "P", "Image.save", marks=[pytest.mark.covers("Image.save", mode="P", target="cpu", variant="gif_roundtrip"),
-                                                   pytest.mark.xfail(reason="GIF mode 'P' loaded incorrectly")]),
+    pytest.param("GIF", "P", "Image.save", marks=pytest.mark.covers("Image.save", mode="P", target="cpu", variant="gif_roundtrip")),
     # BMP
     pytest.param("BMP", "L", "Image.save", marks=[pytest.mark.covers("Image.save", mode="L", target="cpu", variant="bmp_roundtrip"),
                                                    pytest.mark.xfail(reason="BMP mode 'L' loaded incorrectly")]),
