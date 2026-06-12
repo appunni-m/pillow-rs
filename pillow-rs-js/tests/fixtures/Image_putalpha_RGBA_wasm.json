@@ -2,5 +2,5 @@
   "op": "Image.putalpha",
   "mode": "RGBA",
   "target": "wasm",
-  "expectedHash": "7c61de0d82e06eccb930c25d4846f8c94bb981d51b7e105c448ac251246abfc2"
+  "expectedHash": "56e0bebe2b7d927add99f624802703065e2f1e34182bdd58b581d78787fe7000"
 }

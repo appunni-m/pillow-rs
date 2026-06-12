@@ -2,5 +2,5 @@
   "op": "ImageModule.eval",
   "mode": "RGB",
   "target": "wasm_gpu",
-  "expectedHash": "b8cc5349b71bb1c1ce7eddb4ff59555e8acb49c260fe488346b333d86cfb42d3"
+  "expectedHash": "12db54b8ee6853c34b8c398cba604b92ae18cd6a230d0eece624aa3825e43e73"
 }

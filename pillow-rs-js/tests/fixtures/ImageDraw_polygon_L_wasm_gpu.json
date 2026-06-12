@@ -2,5 +2,5 @@
   "op": "ImageDraw.polygon",
   "mode": "L",
   "target": "wasm_gpu",
-  "expectedHash": "05b357b918f3440f4916a20a7036529432b1e220390a91a0ae110c93b267d8a7"
+  "expectedHash": "fb63f5f111ace2402a65872be2675f10217c41433ed70377529b98666335fa22"
 }

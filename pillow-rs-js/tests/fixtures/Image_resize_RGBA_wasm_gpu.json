@@ -2,5 +2,5 @@
   "op": "Image.resize",
   "mode": "RGBA",
   "target": "wasm_gpu",
-  "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+  "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
 }

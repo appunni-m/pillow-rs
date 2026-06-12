@@ -2,5 +2,5 @@
   "op": "Image.convert",
   "mode": "LA",
   "target": "wasm_gpu",
-  "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+  "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
 }

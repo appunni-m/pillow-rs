@@ -2,5 +2,5 @@
   "op": "ImageModule.fromarray",
   "mode": "RGB",
   "target": "wasm_gpu",
-  "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+  "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
 }

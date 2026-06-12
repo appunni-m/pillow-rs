@@ -2,5 +2,5 @@
   "op": "ImageDraw.rounded_rectangle",
   "mode": "RGB",
   "target": "wasm_gpu",
-  "expectedHash": "b9ce440ed160bece105b8bf0d58f12748817afc4453ebb73a03312c93b7a51e8"
+  "expectedHash": "758091a6ec9540d3cad59a347252af0ec885aeaa2e0ae81814e4a5e7a44a4eb3"
 }

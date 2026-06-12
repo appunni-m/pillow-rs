@@ -2,5 +2,5 @@
   "op": "ImageDraw.line",
   "mode": "RGBA",
   "target": "wasm_gpu",
-  "expectedHash": "6525e4f11cbb20f3d76a07d74ae9a85c3fde46d21128b4de7d9c895f75a537c3"
+  "expectedHash": "3a7fc94cce313e23d0a9a3aca6aeff6b61986334c1a60189a7822c0bff90ff72"
 }

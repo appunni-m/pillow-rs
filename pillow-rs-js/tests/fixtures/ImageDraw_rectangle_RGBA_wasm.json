@@ -2,5 +2,5 @@
   "op": "ImageDraw.rectangle",
   "mode": "RGBA",
   "target": "wasm",
-  "expectedHash": "8ab6794e5dce9208813a4c832b831f82f24214f54f00838a51fc00fa6999ffd7"
+  "expectedHash": "496e37304aa887c3c6a1ae270166eb50f4210d9130c77d3ad1f1f12c43e6ba3a"
 }

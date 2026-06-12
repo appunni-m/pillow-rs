@@ -2,5 +2,5 @@
   "op": "ImageDraw.pieslice",
   "mode": "L",
   "target": "wasm_gpu",
-  "expectedHash": "bb63b3dca4eaff55242ea46563edbb5aaf6b0d0f611d8d3efed8643d2f81ba79"
+  "expectedHash": "d327837c45675f12a20344a488d2fdc40af1638e90819324ba5ade49ade25089"
 }

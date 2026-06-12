@@ -2,5 +2,5 @@
   "op": "ImageDraw.rounded_rectangle",
   "mode": "L",
   "target": "wasm",
-  "expectedHash": "72e798be6f7f5d36da0f28b45fcd666c7cc911717d67a0fe22782d7e7f3f6a44"
+  "expectedHash": "d576536ae0b337ade425add1b6bdcb0c9910588644cf35ed733fedfa51b454a2"
 }

@@ -2,5 +2,5 @@
   "op": "ImageDraw.line",
   "mode": "L",
   "target": "wasm_gpu",
-  "expectedHash": "49ec4205c32ef3bd9102fb91214ba3ac116cfe7fab1d05d4a1da12b6fdd9cce0"
+  "expectedHash": "6b9b14cbaf67e929f0b1e69b7880f7d7affdc019481f6a52d9d2e9a3839e0a13"
 }

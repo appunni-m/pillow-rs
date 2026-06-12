@@ -1,0 +1,6 @@
+{
+  "op": "Image.crop",
+  "mode": "F",
+  "target": "wasm",
+  "expectedHash": "372175aa08534d1bd70b825d070cfe9fe8e295998c145723561e893601bdc7ca"
+}

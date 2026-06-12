@@ -2,5 +2,5 @@
   "op": "Image.putpixel",
   "mode": "RGBA",
   "target": "wasm",
-  "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+  "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
 }

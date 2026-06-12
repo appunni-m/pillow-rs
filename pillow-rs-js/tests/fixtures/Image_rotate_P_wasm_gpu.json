@@ -2,5 +2,5 @@
   "op": "Image.rotate",
   "mode": "P",
   "target": "wasm_gpu",
-  "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+  "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
 }

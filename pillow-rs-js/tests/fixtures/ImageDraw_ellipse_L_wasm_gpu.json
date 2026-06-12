@@ -2,5 +2,5 @@
   "op": "ImageDraw.ellipse",
   "mode": "L",
   "target": "wasm_gpu",
-  "expectedHash": "c9819d38af43ffb466734084004c6ee06c7225c1891fbdaafbc730c75a8cd65f"
+  "expectedHash": "1de252c9a095b722bbfbb398e33b051895ba4f3a427c824cff368538aaca6a37"
 }

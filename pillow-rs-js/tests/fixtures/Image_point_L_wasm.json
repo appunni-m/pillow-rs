@@ -2,5 +2,5 @@
   "op": "Image.point",
   "mode": "L",
   "target": "wasm",
-  "expectedHash": "fd9d08985375979b61dccc93490cd38dd1a4369f04dd8e070ecfcbfc182ef21e"
+  "expectedHash": "24a85df761530d4b591ce6a99debeeb5bc8e649614e4fdc34786752fd32a91fc"
 }

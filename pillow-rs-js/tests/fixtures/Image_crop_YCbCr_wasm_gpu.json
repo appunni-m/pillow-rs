@@ -1,0 +1,6 @@
+{
+  "op": "Image.crop",
+  "mode": "YCbCr",
+  "target": "wasm_gpu",
+  "expectedHash": "3bbe5ba1518b22d45a4f7577ceacd016ae110d9270a320f0423aa67de31dada2"
+}

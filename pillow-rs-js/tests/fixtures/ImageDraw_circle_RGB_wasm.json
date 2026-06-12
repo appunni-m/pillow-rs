@@ -2,5 +2,5 @@
   "op": "ImageDraw.circle",
   "mode": "RGB",
   "target": "wasm",
-  "expectedHash": "bef8d6560c6ea6fb349fb0670da335dc8de79ff1ed2ec82fb52789fb5fca30d1"
+  "expectedHash": "b070505f58a1b89f46a1670f9bd2a9dcfc6784f78a6e22d6017838aed745fdf1"
 }

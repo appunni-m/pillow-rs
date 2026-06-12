@@ -2,5 +2,5 @@
   "op": "ImageDraw.arc",
   "mode": "RGBA",
   "target": "wasm_gpu",
-  "expectedHash": "9f9b7921bb8e0cf8a6f598293d07b60d98c2f224cf95099390335e077d67bd5e"
+  "expectedHash": "b91aab63328ee05db1e5748b9988b8f74dc1dbada35c002b5c066c163fac5048"
 }

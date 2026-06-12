@@ -2,5 +2,5 @@
   "op": "ImageDraw.text",
   "mode": "L",
   "target": "wasm",
-  "expectedHash": "03d1b333cf7958150ad8f13a10ec4aec476fbd8ea638ac22b3987717e4f25fe6"
+  "expectedHash": "074f8afbeadfdfbc02e00262f725a28dce7303cd79a0b62f2fed77aefe4633a8"
 }

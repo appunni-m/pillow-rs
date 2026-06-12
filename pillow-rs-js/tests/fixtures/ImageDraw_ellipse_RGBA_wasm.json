@@ -2,5 +2,5 @@
   "op": "ImageDraw.ellipse",
   "mode": "RGBA",
   "target": "wasm",
-  "expectedHash": "2688654d59844ec08389e99d483d6e5ae90efc28d5b54098cb2577d085966234"
+  "expectedHash": "3462b3109aed03067acb57e05b33550828761f04673755c5836d30c4e89225b9"
 }

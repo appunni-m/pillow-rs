@@ -2,5 +2,5 @@
   "op": "Image.new",
   "mode": "I",
   "target": "wasm_gpu",
-  "expectedHash": "db231016b15735c8a3666bfc4977fce7783e17881ceacaa00006599a620968dc"
+  "expectedHash": "55168fd88cdfd0ad269ad477af78d8bf8c08359a128f959f5425d3f12407524c"
 }

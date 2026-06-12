@@ -2,5 +2,5 @@
   "op": "ImageDraw.point",
   "mode": "RGBA",
   "target": "wasm",
-  "expectedHash": "2e34331f064ceab706cffa0e679d40c9ef5237c6d77b3e4dd7032a12001b9d71"
+  "expectedHash": "2c7f9bf2116d8ed5c51aafcc922e10e29b064c8e82d4ea5aeb2af261fd7b9a5e"
 }

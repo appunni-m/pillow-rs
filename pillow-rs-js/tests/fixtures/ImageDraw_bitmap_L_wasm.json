@@ -2,5 +2,5 @@
   "op": "ImageDraw.bitmap",
   "mode": "L",
   "target": "wasm",
-  "expectedHash": "1dca4d76d875b1f8cebefd754fae41589eee82e54b79beb49ab5fabf8dc7cadd"
+  "expectedHash": "99ca433dabd8bb0ae5023b7861d7afbff0c676f79bc2ba6b6de01887fefad9d8"
 }

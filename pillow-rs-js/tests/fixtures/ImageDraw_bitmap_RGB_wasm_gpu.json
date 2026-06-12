@@ -2,5 +2,5 @@
   "op": "ImageDraw.bitmap",
   "mode": "RGB",
   "target": "wasm_gpu",
-  "expectedHash": "79aa16560174c8dea4349211683bb7862f3cef36c5248583c6f3071834f0269c"
+  "expectedHash": "b2911903e092395f2097c90e957e3455500ae581a52e20cda908cc2c38aff1ca"
 }

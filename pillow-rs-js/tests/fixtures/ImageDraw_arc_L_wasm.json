@@ -2,5 +2,5 @@
   "op": "ImageDraw.arc",
   "mode": "L",
   "target": "wasm",
-  "expectedHash": "584f799795f64f29ce6d27cb3fdf7627faa97eab1f83c0bd1fe73037f2649c38"
+  "expectedHash": "600eb04281e23fc892c83a1a2f5edc266a1686940506d051b5205cf48ad00d0d"
 }

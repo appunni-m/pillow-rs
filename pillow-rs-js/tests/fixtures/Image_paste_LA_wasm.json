@@ -2,5 +2,5 @@
   "op": "Image.paste",
   "mode": "LA",
   "target": "wasm",
-  "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+  "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
 }

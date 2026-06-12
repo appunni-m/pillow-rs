@@ -2,5 +2,5 @@
   "op": "ImageDraw.line",
   "mode": "RGB",
   "target": "wasm",
-  "expectedHash": "f83de1a38c6c70f0afe457e79ff15037a6a31d4065a5753daf809a9d864aa7d9"
+  "expectedHash": "e920a904aca6e1613cbdda65f5cf5f831795490c4367d8da63ed4919cf888ee5"
 }

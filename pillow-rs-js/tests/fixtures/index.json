@@ -4,1969 +4,2137 @@
       "op": "Image.new",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_new_1_wasm_gpu": {
       "op": "Image.new",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
+    },
+    "Image_new_CMYK_wasm": {
+      "op": "Image.new",
+      "mode": "CMYK",
+      "target": "wasm",
+      "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
+    },
+    "Image_new_CMYK_wasm_gpu": {
+      "op": "Image.new",
+      "mode": "CMYK",
+      "target": "wasm_gpu",
+      "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
+    },
+    "Image_new_F_wasm": {
+      "op": "Image.new",
+      "mode": "F",
+      "target": "wasm",
+      "expectedHash": "8bd083d251dd4e732c814931c50383964351e22412a223eb702dc22e28737980"
+    },
+    "Image_new_F_wasm_gpu": {
+      "op": "Image.new",
+      "mode": "F",
+      "target": "wasm_gpu",
+      "expectedHash": "8bd083d251dd4e732c814931c50383964351e22412a223eb702dc22e28737980"
+    },
+    "Image_new_HSV_wasm": {
+      "op": "Image.new",
+      "mode": "HSV",
+      "target": "wasm",
+      "expectedHash": "5262b3814b687e8db370c2f643a37e0e3c7d9dd7a1fffb1839ff7a8d2934d96c"
+    },
+    "Image_new_HSV_wasm_gpu": {
+      "op": "Image.new",
+      "mode": "HSV",
+      "target": "wasm_gpu",
+      "expectedHash": "5262b3814b687e8db370c2f643a37e0e3c7d9dd7a1fffb1839ff7a8d2934d96c"
     },
     "Image_new_I_wasm": {
       "op": "Image.new",
       "mode": "I",
       "target": "wasm",
-      "expectedHash": "db231016b15735c8a3666bfc4977fce7783e17881ceacaa00006599a620968dc"
+      "expectedHash": "55168fd88cdfd0ad269ad477af78d8bf8c08359a128f959f5425d3f12407524c"
     },
     "Image_new_I_wasm_gpu": {
       "op": "Image.new",
       "mode": "I",
       "target": "wasm_gpu",
-      "expectedHash": "db231016b15735c8a3666bfc4977fce7783e17881ceacaa00006599a620968dc"
+      "expectedHash": "55168fd88cdfd0ad269ad477af78d8bf8c08359a128f959f5425d3f12407524c"
     },
     "Image_new_L_wasm": {
       "op": "Image.new",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_new_L_wasm_gpu": {
       "op": "Image.new",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_new_LA_wasm": {
       "op": "Image.new",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_new_LA_wasm_gpu": {
       "op": "Image.new",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_new_RGB_wasm": {
       "op": "Image.new",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_new_RGB_wasm_gpu": {
       "op": "Image.new",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_new_RGBA_wasm": {
       "op": "Image.new",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_new_RGBA_wasm_gpu": {
       "op": "Image.new",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
+    },
+    "Image_new_YCbCr_wasm": {
+      "op": "Image.new",
+      "mode": "YCbCr",
+      "target": "wasm",
+      "expectedHash": "88a8c5824a1f352ee038173463891c06c228338a23e60dc9aa49877366615231"
+    },
+    "Image_new_YCbCr_wasm_gpu": {
+      "op": "Image.new",
+      "mode": "YCbCr",
+      "target": "wasm_gpu",
+      "expectedHash": "88a8c5824a1f352ee038173463891c06c228338a23e60dc9aa49877366615231"
     },
     "Image_resize_1_wasm": {
       "op": "Image.resize",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_resize_1_wasm_gpu": {
       "op": "Image.resize",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
+    },
+    "Image_resize_CMYK_wasm": {
+      "op": "Image.resize",
+      "mode": "CMYK",
+      "target": "wasm",
+      "expectedHash": "387836d1b771ec0520b8d84767db7646742efc4d2ec66e60518441be7e8e8401"
+    },
+    "Image_resize_CMYK_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "CMYK",
+      "target": "wasm_gpu",
+      "expectedHash": "387836d1b771ec0520b8d84767db7646742efc4d2ec66e60518441be7e8e8401"
+    },
+    "Image_resize_F_wasm": {
+      "op": "Image.resize",
+      "mode": "F",
+      "target": "wasm",
+      "expectedHash": "372175aa08534d1bd70b825d070cfe9fe8e295998c145723561e893601bdc7ca"
+    },
+    "Image_resize_F_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "F",
+      "target": "wasm_gpu",
+      "expectedHash": "372175aa08534d1bd70b825d070cfe9fe8e295998c145723561e893601bdc7ca"
+    },
+    "Image_resize_HSV_wasm": {
+      "op": "Image.resize",
+      "mode": "HSV",
+      "target": "wasm",
+      "expectedHash": "fd9eeadb6869ab3708751260cca68cfa412b41ebda7dedff8913584ad98e54f3"
+    },
+    "Image_resize_HSV_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "HSV",
+      "target": "wasm_gpu",
+      "expectedHash": "fd9eeadb6869ab3708751260cca68cfa412b41ebda7dedff8913584ad98e54f3"
     },
     "Image_resize_I_wasm": {
       "op": "Image.resize",
       "mode": "I",
       "target": "wasm",
-      "expectedHash": "de02c07d7d1653cbac1544900d210d83065ca46aa104588b0864b239ef97c90d"
+      "expectedHash": "a5aa9ed29ac98ec87f26a39ee5c9dba6b483ebc6633de5d3a2f8881ba1ebbe25"
     },
     "Image_resize_I_wasm_gpu": {
       "op": "Image.resize",
       "mode": "I",
       "target": "wasm_gpu",
-      "expectedHash": "de02c07d7d1653cbac1544900d210d83065ca46aa104588b0864b239ef97c90d"
+      "expectedHash": "a5aa9ed29ac98ec87f26a39ee5c9dba6b483ebc6633de5d3a2f8881ba1ebbe25"
     },
     "Image_resize_L_wasm": {
       "op": "Image.resize",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_resize_L_wasm_gpu": {
       "op": "Image.resize",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_resize_LA_wasm": {
       "op": "Image.resize",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+      "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
     },
     "Image_resize_LA_wasm_gpu": {
       "op": "Image.resize",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+      "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
     },
     "Image_resize_P_wasm": {
       "op": "Image.resize",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+      "expectedHash": "a5bb6b4c74e2eef1b13d00eb7109cdc514655012acc24de51357efca18e8faca"
     },
     "Image_resize_P_wasm_gpu": {
       "op": "Image.resize",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+      "expectedHash": "a5bb6b4c74e2eef1b13d00eb7109cdc514655012acc24de51357efca18e8faca"
     },
     "Image_resize_RGB_wasm": {
       "op": "Image.resize",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_resize_RGB_wasm_gpu": {
       "op": "Image.resize",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_resize_RGBA_wasm": {
       "op": "Image.resize",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_resize_RGBA_wasm_gpu": {
       "op": "Image.resize",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
+    },
+    "Image_resize_YCbCr_wasm": {
+      "op": "Image.resize",
+      "mode": "YCbCr",
+      "target": "wasm",
+      "expectedHash": "3bbe5ba1518b22d45a4f7577ceacd016ae110d9270a320f0423aa67de31dada2"
+    },
+    "Image_resize_YCbCr_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "YCbCr",
+      "target": "wasm_gpu",
+      "expectedHash": "3bbe5ba1518b22d45a4f7577ceacd016ae110d9270a320f0423aa67de31dada2"
     },
     "Image_crop_1_wasm": {
       "op": "Image.crop",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_crop_1_wasm_gpu": {
       "op": "Image.crop",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
+    },
+    "Image_crop_CMYK_wasm": {
+      "op": "Image.crop",
+      "mode": "CMYK",
+      "target": "wasm",
+      "expectedHash": "387836d1b771ec0520b8d84767db7646742efc4d2ec66e60518441be7e8e8401"
+    },
+    "Image_crop_CMYK_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "CMYK",
+      "target": "wasm_gpu",
+      "expectedHash": "387836d1b771ec0520b8d84767db7646742efc4d2ec66e60518441be7e8e8401"
+    },
+    "Image_crop_F_wasm": {
+      "op": "Image.crop",
+      "mode": "F",
+      "target": "wasm",
+      "expectedHash": "372175aa08534d1bd70b825d070cfe9fe8e295998c145723561e893601bdc7ca"
+    },
+    "Image_crop_F_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "F",
+      "target": "wasm_gpu",
+      "expectedHash": "372175aa08534d1bd70b825d070cfe9fe8e295998c145723561e893601bdc7ca"
+    },
+    "Image_crop_HSV_wasm": {
+      "op": "Image.crop",
+      "mode": "HSV",
+      "target": "wasm",
+      "expectedHash": "fd9eeadb6869ab3708751260cca68cfa412b41ebda7dedff8913584ad98e54f3"
+    },
+    "Image_crop_HSV_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "HSV",
+      "target": "wasm_gpu",
+      "expectedHash": "fd9eeadb6869ab3708751260cca68cfa412b41ebda7dedff8913584ad98e54f3"
     },
     "Image_crop_I_wasm": {
       "op": "Image.crop",
       "mode": "I",
       "target": "wasm",
-      "expectedHash": "de02c07d7d1653cbac1544900d210d83065ca46aa104588b0864b239ef97c90d"
+      "expectedHash": "a5aa9ed29ac98ec87f26a39ee5c9dba6b483ebc6633de5d3a2f8881ba1ebbe25"
     },
     "Image_crop_I_wasm_gpu": {
       "op": "Image.crop",
       "mode": "I",
       "target": "wasm_gpu",
-      "expectedHash": "de02c07d7d1653cbac1544900d210d83065ca46aa104588b0864b239ef97c90d"
+      "expectedHash": "a5aa9ed29ac98ec87f26a39ee5c9dba6b483ebc6633de5d3a2f8881ba1ebbe25"
     },
     "Image_crop_L_wasm": {
       "op": "Image.crop",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_crop_L_wasm_gpu": {
       "op": "Image.crop",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_crop_LA_wasm": {
       "op": "Image.crop",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+      "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
     },
     "Image_crop_LA_wasm_gpu": {
       "op": "Image.crop",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+      "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
     },
     "Image_crop_P_wasm": {
       "op": "Image.crop",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+      "expectedHash": "a5bb6b4c74e2eef1b13d00eb7109cdc514655012acc24de51357efca18e8faca"
     },
     "Image_crop_P_wasm_gpu": {
       "op": "Image.crop",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+      "expectedHash": "a5bb6b4c74e2eef1b13d00eb7109cdc514655012acc24de51357efca18e8faca"
     },
     "Image_crop_RGB_wasm": {
       "op": "Image.crop",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_crop_RGB_wasm_gpu": {
       "op": "Image.crop",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_crop_RGBA_wasm": {
       "op": "Image.crop",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_crop_RGBA_wasm_gpu": {
       "op": "Image.crop",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
+    },
+    "Image_crop_YCbCr_wasm": {
+      "op": "Image.crop",
+      "mode": "YCbCr",
+      "target": "wasm",
+      "expectedHash": "3bbe5ba1518b22d45a4f7577ceacd016ae110d9270a320f0423aa67de31dada2"
+    },
+    "Image_crop_YCbCr_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "YCbCr",
+      "target": "wasm_gpu",
+      "expectedHash": "3bbe5ba1518b22d45a4f7577ceacd016ae110d9270a320f0423aa67de31dada2"
     },
     "Image_rotate_1_wasm": {
       "op": "Image.rotate",
       "mode": "1",
       "target": "wasm",
-      "expectedHash": "bdbc5b4d323deca7dc3521ebb8654f48adb383f389e3e65d522f9520b4e5fb1c"
+      "expectedHash": "6434857aeccbc84e49e5c2984d90e241df13e2f85b5dac733b9d23cb5ec3722e"
     },
     "Image_rotate_1_wasm_gpu": {
       "op": "Image.rotate",
       "mode": "1",
       "target": "wasm_gpu",
-      "expectedHash": "bdbc5b4d323deca7dc3521ebb8654f48adb383f389e3e65d522f9520b4e5fb1c"
+      "expectedHash": "6434857aeccbc84e49e5c2984d90e241df13e2f85b5dac733b9d23cb5ec3722e"
+    },
+    "Image_rotate_CMYK_wasm": {
+      "op": "Image.rotate",
+      "mode": "CMYK",
+      "target": "wasm",
+      "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
+    },
+    "Image_rotate_CMYK_wasm_gpu": {
+      "op": "Image.rotate",
+      "mode": "CMYK",
+      "target": "wasm_gpu",
+      "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
     },
     "Image_rotate_L_wasm": {
       "op": "Image.rotate",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_rotate_L_wasm_gpu": {
       "op": "Image.rotate",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_rotate_LA_wasm": {
       "op": "Image.rotate",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_rotate_LA_wasm_gpu": {
       "op": "Image.rotate",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_rotate_P_wasm": {
       "op": "Image.rotate",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_rotate_P_wasm_gpu": {
       "op": "Image.rotate",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_rotate_RGB_wasm": {
       "op": "Image.rotate",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_rotate_RGB_wasm_gpu": {
       "op": "Image.rotate",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_rotate_RGBA_wasm": {
       "op": "Image.rotate",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_rotate_RGBA_wasm_gpu": {
       "op": "Image.rotate",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_transpose_L_wasm": {
       "op": "Image.transpose",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_transpose_L_wasm_gpu": {
       "op": "Image.transpose",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_transpose_LA_wasm": {
       "op": "Image.transpose",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_transpose_LA_wasm_gpu": {
       "op": "Image.transpose",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_transpose_RGB_wasm": {
       "op": "Image.transpose",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_transpose_RGB_wasm_gpu": {
       "op": "Image.transpose",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_transpose_RGBA_wasm": {
       "op": "Image.transpose",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_transpose_RGBA_wasm_gpu": {
       "op": "Image.transpose",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_transpose_1_wasm": {
       "op": "Image.transpose",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_transpose_1_wasm_gpu": {
       "op": "Image.transpose",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_transpose_P_wasm": {
       "op": "Image.transpose",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_transpose_P_wasm_gpu": {
       "op": "Image.transpose",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_convert_L_wasm": {
       "op": "Image.convert",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+      "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
     },
     "Image_convert_L_wasm_gpu": {
       "op": "Image.convert",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+      "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
     },
     "Image_convert_LA_wasm": {
       "op": "Image.convert",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+      "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
     },
     "Image_convert_LA_wasm_gpu": {
       "op": "Image.convert",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+      "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
     },
     "Image_convert_RGB_wasm": {
       "op": "Image.convert",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+      "expectedHash": "cab217244f6b9877ba7dd3d8150d5d1b9c15569f52b4651e8aa40f30abd5c28a"
     },
     "Image_convert_RGB_wasm_gpu": {
       "op": "Image.convert",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+      "expectedHash": "cab217244f6b9877ba7dd3d8150d5d1b9c15569f52b4651e8aa40f30abd5c28a"
     },
     "Image_convert_RGBA_wasm": {
       "op": "Image.convert",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_RGBA_wasm_gpu": {
       "op": "Image.convert",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_1_wasm": {
       "op": "Image.convert",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+      "expectedHash": "cab217244f6b9877ba7dd3d8150d5d1b9c15569f52b4651e8aa40f30abd5c28a"
     },
     "Image_convert_1_wasm_gpu": {
       "op": "Image.convert",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+      "expectedHash": "cab217244f6b9877ba7dd3d8150d5d1b9c15569f52b4651e8aa40f30abd5c28a"
     },
     "Image_convert_P_wasm": {
       "op": "Image.convert",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_P_wasm_gpu": {
       "op": "Image.convert",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_CMYK_wasm": {
       "op": "Image.convert",
       "mode": "CMYK",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_CMYK_wasm_gpu": {
       "op": "Image.convert",
       "mode": "CMYK",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_YCbCr_wasm": {
       "op": "Image.convert",
       "mode": "YCbCr",
       "target": "wasm",
-      "expectedHash": "10c887bf6d129381a9313e8228b41643c0e31c6994087e7039733c937019c668"
+      "expectedHash": "71769ca2e8ab0c6913868951cd3f3dedd2a91e1b84f8f06007b981e3742aa257"
     },
     "Image_convert_YCbCr_wasm_gpu": {
       "op": "Image.convert",
       "mode": "YCbCr",
       "target": "wasm_gpu",
-      "expectedHash": "10c887bf6d129381a9313e8228b41643c0e31c6994087e7039733c937019c668"
+      "expectedHash": "71769ca2e8ab0c6913868951cd3f3dedd2a91e1b84f8f06007b981e3742aa257"
     },
     "Image_convert_HSV_wasm": {
       "op": "Image.convert",
       "mode": "HSV",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_HSV_wasm_gpu": {
       "op": "Image.convert",
       "mode": "HSV",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_convert_I_wasm": {
       "op": "Image.convert",
       "mode": "I",
       "target": "wasm",
-      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+      "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
     },
     "Image_convert_I_wasm_gpu": {
       "op": "Image.convert",
       "mode": "I",
       "target": "wasm_gpu",
-      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+      "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
     },
     "Image_convert_F_wasm": {
       "op": "Image.convert",
       "mode": "F",
       "target": "wasm",
-      "expectedHash": "d91acc41eb40d503d56cd97a1e9750f67928a0f2291681aece1f57de25cb96eb"
+      "expectedHash": "3755862355e2e7d0e0dc0f6b98a89978c0710890982862dd17975829e35be6b4"
     },
     "Image_convert_F_wasm_gpu": {
       "op": "Image.convert",
       "mode": "F",
       "target": "wasm_gpu",
-      "expectedHash": "d91acc41eb40d503d56cd97a1e9750f67928a0f2291681aece1f57de25cb96eb"
+      "expectedHash": "3755862355e2e7d0e0dc0f6b98a89978c0710890982862dd17975829e35be6b4"
     },
     "Image_paste_L_wasm": {
       "op": "Image.paste",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_paste_L_wasm_gpu": {
       "op": "Image.paste",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_paste_LA_wasm": {
       "op": "Image.paste",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_paste_LA_wasm_gpu": {
       "op": "Image.paste",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_paste_RGB_wasm": {
       "op": "Image.paste",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_paste_RGB_wasm_gpu": {
       "op": "Image.paste",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_paste_RGBA_wasm": {
       "op": "Image.paste",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_paste_RGBA_wasm_gpu": {
       "op": "Image.paste",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_filter_1_wasm": {
       "op": "Image.filter",
       "mode": "1",
       "target": "wasm",
-      "expectedHash": "bdbc5b4d323deca7dc3521ebb8654f48adb383f389e3e65d522f9520b4e5fb1c"
+      "expectedHash": "6434857aeccbc84e49e5c2984d90e241df13e2f85b5dac733b9d23cb5ec3722e"
     },
     "Image_filter_1_wasm_gpu": {
       "op": "Image.filter",
       "mode": "1",
       "target": "wasm_gpu",
-      "expectedHash": "bdbc5b4d323deca7dc3521ebb8654f48adb383f389e3e65d522f9520b4e5fb1c"
+      "expectedHash": "6434857aeccbc84e49e5c2984d90e241df13e2f85b5dac733b9d23cb5ec3722e"
+    },
+    "Image_filter_CMYK_wasm": {
+      "op": "Image.filter",
+      "mode": "CMYK",
+      "target": "wasm",
+      "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
+    },
+    "Image_filter_CMYK_wasm_gpu": {
+      "op": "Image.filter",
+      "mode": "CMYK",
+      "target": "wasm_gpu",
+      "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
     },
     "Image_filter_L_wasm": {
       "op": "Image.filter",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_filter_L_wasm_gpu": {
       "op": "Image.filter",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_filter_LA_wasm": {
       "op": "Image.filter",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_filter_LA_wasm_gpu": {
       "op": "Image.filter",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_filter_RGB_wasm": {
       "op": "Image.filter",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_filter_RGB_wasm_gpu": {
       "op": "Image.filter",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_filter_RGBA_wasm": {
       "op": "Image.filter",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_filter_RGBA_wasm_gpu": {
       "op": "Image.filter",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_copy_L_wasm": {
       "op": "Image.copy",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_copy_L_wasm_gpu": {
       "op": "Image.copy",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_copy_LA_wasm": {
       "op": "Image.copy",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_copy_LA_wasm_gpu": {
       "op": "Image.copy",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_copy_RGB_wasm": {
       "op": "Image.copy",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_copy_RGB_wasm_gpu": {
       "op": "Image.copy",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_copy_RGBA_wasm": {
       "op": "Image.copy",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_copy_RGBA_wasm_gpu": {
       "op": "Image.copy",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_copy_1_wasm": {
       "op": "Image.copy",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_copy_1_wasm_gpu": {
       "op": "Image.copy",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_copy_P_wasm": {
       "op": "Image.copy",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_copy_P_wasm_gpu": {
       "op": "Image.copy",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_thumbnail_L_wasm": {
       "op": "Image.thumbnail",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_thumbnail_L_wasm_gpu": {
       "op": "Image.thumbnail",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_thumbnail_LA_wasm": {
       "op": "Image.thumbnail",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+      "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
     },
     "Image_thumbnail_LA_wasm_gpu": {
       "op": "Image.thumbnail",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+      "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
     },
     "Image_thumbnail_RGB_wasm": {
       "op": "Image.thumbnail",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_thumbnail_RGB_wasm_gpu": {
       "op": "Image.thumbnail",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_thumbnail_RGBA_wasm": {
       "op": "Image.thumbnail",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_thumbnail_RGBA_wasm_gpu": {
       "op": "Image.thumbnail",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_alpha_composite_RGBA_wasm": {
       "op": "Image.alpha_composite",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_alpha_composite_RGBA_wasm_gpu": {
       "op": "Image.alpha_composite",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_getchannel_L_wasm": {
       "op": "Image.getchannel",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_getchannel_L_wasm_gpu": {
       "op": "Image.getchannel",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_getchannel_LA_wasm": {
       "op": "Image.getchannel",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_getchannel_LA_wasm_gpu": {
       "op": "Image.getchannel",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_getchannel_RGB_wasm": {
       "op": "Image.getchannel",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_getchannel_RGB_wasm_gpu": {
       "op": "Image.getchannel",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_getchannel_RGBA_wasm": {
       "op": "Image.getchannel",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_getchannel_RGBA_wasm_gpu": {
       "op": "Image.getchannel",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_point_L_wasm": {
       "op": "Image.point",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "fd9d08985375979b61dccc93490cd38dd1a4369f04dd8e070ecfcbfc182ef21e"
+      "expectedHash": "24a85df761530d4b591ce6a99debeeb5bc8e649614e4fdc34786752fd32a91fc"
     },
     "Image_point_L_wasm_gpu": {
       "op": "Image.point",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "fd9d08985375979b61dccc93490cd38dd1a4369f04dd8e070ecfcbfc182ef21e"
+      "expectedHash": "24a85df761530d4b591ce6a99debeeb5bc8e649614e4fdc34786752fd32a91fc"
     },
     "Image_putalpha_L_wasm": {
       "op": "Image.putalpha",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "e0e57f78710e7480daf8e8df8b5776dd05fd97864c39e60073f259666d689557"
+      "expectedHash": "d598ebad6481f20f9bcc79f64bc16f51faff5d153dd750d34819f57187528713"
     },
     "Image_putalpha_L_wasm_gpu": {
       "op": "Image.putalpha",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "e0e57f78710e7480daf8e8df8b5776dd05fd97864c39e60073f259666d689557"
+      "expectedHash": "d598ebad6481f20f9bcc79f64bc16f51faff5d153dd750d34819f57187528713"
     },
     "Image_putalpha_RGB_wasm": {
       "op": "Image.putalpha",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7c61de0d82e06eccb930c25d4846f8c94bb981d51b7e105c448ac251246abfc2"
+      "expectedHash": "56e0bebe2b7d927add99f624802703065e2f1e34182bdd58b581d78787fe7000"
     },
     "Image_putalpha_RGB_wasm_gpu": {
       "op": "Image.putalpha",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7c61de0d82e06eccb930c25d4846f8c94bb981d51b7e105c448ac251246abfc2"
+      "expectedHash": "56e0bebe2b7d927add99f624802703065e2f1e34182bdd58b581d78787fe7000"
     },
     "Image_putalpha_RGBA_wasm": {
       "op": "Image.putalpha",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "7c61de0d82e06eccb930c25d4846f8c94bb981d51b7e105c448ac251246abfc2"
+      "expectedHash": "56e0bebe2b7d927add99f624802703065e2f1e34182bdd58b581d78787fe7000"
     },
     "Image_putalpha_RGBA_wasm_gpu": {
       "op": "Image.putalpha",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "7c61de0d82e06eccb930c25d4846f8c94bb981d51b7e105c448ac251246abfc2"
+      "expectedHash": "56e0bebe2b7d927add99f624802703065e2f1e34182bdd58b581d78787fe7000"
     },
     "Image_putdata_L_wasm": {
       "op": "Image.putdata",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_putdata_L_wasm_gpu": {
       "op": "Image.putdata",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_putdata_RGB_wasm": {
       "op": "Image.putdata",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "f28dbf25ec0ea3f6d9e551db1a0008de69666b87fdeea801583402ce12544ac7"
+      "expectedHash": "623a0b5240043928b14c929630967db2f87c60ae6008663dada8fb58d3ad228a"
     },
     "Image_putdata_RGB_wasm_gpu": {
       "op": "Image.putdata",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "f28dbf25ec0ea3f6d9e551db1a0008de69666b87fdeea801583402ce12544ac7"
+      "expectedHash": "623a0b5240043928b14c929630967db2f87c60ae6008663dada8fb58d3ad228a"
     },
     "Image_putdata_RGBA_wasm": {
       "op": "Image.putdata",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "9da4e81a634171c78fa054ade31fb9db19e578950d27c4616363d76f7b4b5a03"
+      "expectedHash": "55168fd88cdfd0ad269ad477af78d8bf8c08359a128f959f5425d3f12407524c"
     },
     "Image_putdata_RGBA_wasm_gpu": {
       "op": "Image.putdata",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "9da4e81a634171c78fa054ade31fb9db19e578950d27c4616363d76f7b4b5a03"
+      "expectedHash": "55168fd88cdfd0ad269ad477af78d8bf8c08359a128f959f5425d3f12407524c"
     },
     "Image_putpixel_L_wasm": {
       "op": "Image.putpixel",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_putpixel_L_wasm_gpu": {
       "op": "Image.putpixel",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_putpixel_LA_wasm": {
       "op": "Image.putpixel",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_putpixel_LA_wasm_gpu": {
       "op": "Image.putpixel",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "Image_putpixel_RGB_wasm": {
       "op": "Image.putpixel",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_putpixel_RGB_wasm_gpu": {
       "op": "Image.putpixel",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_putpixel_RGBA_wasm": {
       "op": "Image.putpixel",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_putpixel_RGBA_wasm_gpu": {
       "op": "Image.putpixel",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_putpixel_1_wasm": {
       "op": "Image.putpixel",
       "mode": 1,
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_putpixel_1_wasm_gpu": {
       "op": "Image.putpixel",
       "mode": 1,
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_putpixel_P_wasm": {
       "op": "Image.putpixel",
       "mode": "P",
       "target": "wasm",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_putpixel_P_wasm_gpu": {
       "op": "Image.putpixel",
       "mode": "P",
       "target": "wasm_gpu",
-      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+      "expectedHash": "e4c716bbdf23cf595cb2d3fddd72451d91ed2add0266a37996170341c79dbcd0"
     },
     "Image_quantize_RGB_wasm": {
       "op": "Image.quantize",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "3dfcacd73130f60ae8a737323330239b63a81997827cdb329fb93e93ff622770"
+      "expectedHash": "95b532cc4381affdff0d956e12520a04129ed49d37e154228368fe5621f0b9a2"
     },
     "Image_quantize_RGB_wasm_gpu": {
       "op": "Image.quantize",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "3dfcacd73130f60ae8a737323330239b63a81997827cdb329fb93e93ff622770"
+      "expectedHash": "95b532cc4381affdff0d956e12520a04129ed49d37e154228368fe5621f0b9a2"
     },
     "Image_quantize_RGBA_wasm": {
       "op": "Image.quantize",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "fc515a11b20f8f5369c2d314c878b3d6317f4346f1b9c5a0418a3f9628181f5c"
+      "expectedHash": "95b532cc4381affdff0d956e12520a04129ed49d37e154228368fe5621f0b9a2"
     },
     "Image_quantize_RGBA_wasm_gpu": {
       "op": "Image.quantize",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "fc515a11b20f8f5369c2d314c878b3d6317f4346f1b9c5a0418a3f9628181f5c"
+      "expectedHash": "95b532cc4381affdff0d956e12520a04129ed49d37e154228368fe5621f0b9a2"
     },
     "Image_reduce_L_wasm": {
       "op": "Image.reduce",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_reduce_L_wasm_gpu": {
       "op": "Image.reduce",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_reduce_RGB_wasm": {
       "op": "Image.reduce",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_reduce_RGB_wasm_gpu": {
       "op": "Image.reduce",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_reduce_RGBA_wasm": {
       "op": "Image.reduce",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_reduce_RGBA_wasm_gpu": {
       "op": "Image.reduce",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_transform_L_wasm": {
       "op": "Image.transform",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_transform_L_wasm_gpu": {
       "op": "Image.transform",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+      "expectedHash": "4c6d55141d2231f3b27e3811dc473e912511f950a0de2d33f93797248ba8e961"
     },
     "Image_transform_RGB_wasm": {
       "op": "Image.transform",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_transform_RGB_wasm_gpu": {
       "op": "Image.transform",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+      "expectedHash": "e6c80334bfebbe00b857c24dbe1387a5c0cf66e7106840edfbf34f910fb9a12e"
     },
     "Image_transform_RGBA_wasm": {
       "op": "Image.transform",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_transform_RGBA_wasm_gpu": {
       "op": "Image.transform",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+      "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
     },
     "Image_effect_spread_L_wasm": {
       "op": "Image.effect_spread",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_effect_spread_L_wasm_gpu": {
       "op": "Image.effect_spread",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "Image_effect_spread_RGB_wasm": {
       "op": "Image.effect_spread",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_effect_spread_RGB_wasm_gpu": {
       "op": "Image.effect_spread",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "Image_effect_spread_RGBA_wasm": {
       "op": "Image.effect_spread",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "Image_effect_spread_RGBA_wasm_gpu": {
       "op": "Image.effect_spread",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_merge_L_wasm": {
       "op": "ImageModule.merge",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_merge_L_wasm_gpu": {
       "op": "ImageModule.merge",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_merge_LA_wasm": {
       "op": "ImageModule.merge",
       "mode": "LA",
       "target": "wasm",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "ImageModule_merge_LA_wasm_gpu": {
       "op": "ImageModule.merge",
       "mode": "LA",
       "target": "wasm_gpu",
-      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+      "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
     },
     "ImageModule_merge_RGB_wasm": {
       "op": "ImageModule.merge",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_merge_RGB_wasm_gpu": {
       "op": "ImageModule.merge",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_merge_RGBA_wasm": {
       "op": "ImageModule.merge",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_merge_RGBA_wasm_gpu": {
       "op": "ImageModule.merge",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_blend_L_wasm": {
       "op": "ImageModule.blend",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_blend_L_wasm_gpu": {
       "op": "ImageModule.blend",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_blend_RGB_wasm": {
       "op": "ImageModule.blend",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_blend_RGB_wasm_gpu": {
       "op": "ImageModule.blend",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_blend_RGBA_wasm": {
       "op": "ImageModule.blend",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_blend_RGBA_wasm_gpu": {
       "op": "ImageModule.blend",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_composite_L_wasm": {
       "op": "ImageModule.composite",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_composite_L_wasm_gpu": {
       "op": "ImageModule.composite",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_composite_RGB_wasm": {
       "op": "ImageModule.composite",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_composite_RGB_wasm_gpu": {
       "op": "ImageModule.composite",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_composite_RGBA_wasm": {
       "op": "ImageModule.composite",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_composite_RGBA_wasm_gpu": {
       "op": "ImageModule.composite",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_eval_L_wasm": {
       "op": "ImageModule.eval",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "57daade2930c276e032c2a9602231ba2ed2007c064d7099566ce227aa234eafe"
+      "expectedHash": "c47b5614f853f8c5f18c5ef86a7d1396f599035ab9b9dc414300c0794673696e"
     },
     "ImageModule_eval_L_wasm_gpu": {
       "op": "ImageModule.eval",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "57daade2930c276e032c2a9602231ba2ed2007c064d7099566ce227aa234eafe"
+      "expectedHash": "c47b5614f853f8c5f18c5ef86a7d1396f599035ab9b9dc414300c0794673696e"
     },
     "ImageModule_eval_RGB_wasm": {
       "op": "ImageModule.eval",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "b8cc5349b71bb1c1ce7eddb4ff59555e8acb49c260fe488346b333d86cfb42d3"
+      "expectedHash": "12db54b8ee6853c34b8c398cba604b92ae18cd6a230d0eece624aa3825e43e73"
     },
     "ImageModule_eval_RGB_wasm_gpu": {
       "op": "ImageModule.eval",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "b8cc5349b71bb1c1ce7eddb4ff59555e8acb49c260fe488346b333d86cfb42d3"
+      "expectedHash": "12db54b8ee6853c34b8c398cba604b92ae18cd6a230d0eece624aa3825e43e73"
     },
     "ImageModule_eval_RGBA_wasm": {
       "op": "ImageModule.eval",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "c3095dc69d01ef08b8eec878e235d3b9b68265f542fbc5f8968dac09df89f24d"
+      "expectedHash": "9f8cf5c3d093d2a8801eb954297551a2530f4e13c1f7a5949e57b1d72e79936b"
     },
     "ImageModule_eval_RGBA_wasm_gpu": {
       "op": "ImageModule.eval",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "c3095dc69d01ef08b8eec878e235d3b9b68265f542fbc5f8968dac09df89f24d"
+      "expectedHash": "9f8cf5c3d093d2a8801eb954297551a2530f4e13c1f7a5949e57b1d72e79936b"
     },
     "ImageModule_fromarray_L_wasm": {
       "op": "ImageModule.fromarray",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_fromarray_L_wasm_gpu": {
       "op": "ImageModule.fromarray",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_fromarray_RGB_wasm": {
       "op": "ImageModule.fromarray",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_fromarray_RGB_wasm_gpu": {
       "op": "ImageModule.fromarray",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_fromarray_RGBA_wasm": {
       "op": "ImageModule.fromarray",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_fromarray_RGBA_wasm_gpu": {
       "op": "ImageModule.fromarray",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_frombytes_L_wasm": {
       "op": "ImageModule.frombytes",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_frombytes_L_wasm_gpu": {
       "op": "ImageModule.frombytes",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageModule_frombytes_RGB_wasm": {
       "op": "ImageModule.frombytes",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_frombytes_RGB_wasm_gpu": {
       "op": "ImageModule.frombytes",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageModule_frombytes_RGBA_wasm": {
       "op": "ImageModule.frombytes",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_frombytes_RGBA_wasm_gpu": {
       "op": "ImageModule.frombytes",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageModule_effect_noise_L_wasm": {
       "op": "ImageModule.effect_noise",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "e978c5fa00ceb398df19d0f46c0d56dc81b395c9a00cedcbc4dc965dd9a7cbd8"
+      "expectedHash": "8d3fe7e3670c9d0e671f931c37e6a07adb7ea046d52914c78f77d1185c17e1f9"
     },
     "ImageModule_effect_noise_L_wasm_gpu": {
       "op": "ImageModule.effect_noise",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "4677341d8c5d21b258e47d6ddd8a5341e30ee1981825f5f33137071646de5c2c"
+      "expectedHash": "c52da390366fbd3ef4eee3f9614541e4cf365fba79af660c976659ef19097fc9"
     },
     "ImageModule_effect_noise_RGB_wasm": {
       "op": "ImageModule.effect_noise",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "b90bdd78d6be7409babd7c5e8de50494f8f8b73d2426bf3e5b4a125bbf3cedcf"
+      "expectedHash": "b2a24d9bca746dc8d7f6ae270dd60fd388ad9ea71f1f6821b5e3d2c4d7a88347"
     },
     "ImageModule_effect_noise_RGB_wasm_gpu": {
       "op": "ImageModule.effect_noise",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "fe5bccbf7addb695ea6871ba831cb60b3e78d4ae29e67e2ab4b81b653863b2c9"
+      "expectedHash": "31e0025c8b26f411d3693a61a33ba756a928226c1922a973c25bae9ea32e3475"
     },
     "ImageModule_effect_noise_RGBA_wasm": {
       "op": "ImageModule.effect_noise",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "72d24ebf63339d1fb0ea87df461ac0ee972f7d1a67f647777f16d4d5608d64da"
+      "expectedHash": "af5cd183da6f5d8fc9c3ef67f817f01a0cf72ebe2d8f937b6cd6d85c95bf9c76"
     },
     "ImageModule_effect_noise_RGBA_wasm_gpu": {
       "op": "ImageModule.effect_noise",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "0eeac390288b810f4fc054c048786fbb8f107fd1d84ee286c5adc8c3ea467142"
+      "expectedHash": "50e57a62fe2c91920e3c31a5ef98564561b4c3b7ef036e02534307fb72ed9916"
     },
     "ImageDraw_arc_RGB_wasm": {
       "op": "ImageDraw.arc",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "65163bf7db00bee58619724fe99852b6c562b4ca36f2f27f1212a8245a3fb133"
+      "expectedHash": "1a385dfd6725e2c61aad3a85b5d14489e9dc216817df7e9af6d6e376d780bb43"
     },
     "ImageDraw_arc_RGB_wasm_gpu": {
       "op": "ImageDraw.arc",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "65163bf7db00bee58619724fe99852b6c562b4ca36f2f27f1212a8245a3fb133"
+      "expectedHash": "1a385dfd6725e2c61aad3a85b5d14489e9dc216817df7e9af6d6e376d780bb43"
     },
     "ImageDraw_arc_RGBA_wasm": {
       "op": "ImageDraw.arc",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "9f9b7921bb8e0cf8a6f598293d07b60d98c2f224cf95099390335e077d67bd5e"
+      "expectedHash": "b91aab63328ee05db1e5748b9988b8f74dc1dbada35c002b5c066c163fac5048"
     },
     "ImageDraw_arc_RGBA_wasm_gpu": {
       "op": "ImageDraw.arc",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "9f9b7921bb8e0cf8a6f598293d07b60d98c2f224cf95099390335e077d67bd5e"
+      "expectedHash": "b91aab63328ee05db1e5748b9988b8f74dc1dbada35c002b5c066c163fac5048"
     },
     "ImageDraw_arc_L_wasm": {
       "op": "ImageDraw.arc",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "584f799795f64f29ce6d27cb3fdf7627faa97eab1f83c0bd1fe73037f2649c38"
+      "expectedHash": "600eb04281e23fc892c83a1a2f5edc266a1686940506d051b5205cf48ad00d0d"
     },
     "ImageDraw_arc_L_wasm_gpu": {
       "op": "ImageDraw.arc",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "584f799795f64f29ce6d27cb3fdf7627faa97eab1f83c0bd1fe73037f2649c38"
+      "expectedHash": "600eb04281e23fc892c83a1a2f5edc266a1686940506d051b5205cf48ad00d0d"
     },
     "ImageDraw_line_RGB_wasm": {
       "op": "ImageDraw.line",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "f83de1a38c6c70f0afe457e79ff15037a6a31d4065a5753daf809a9d864aa7d9"
+      "expectedHash": "e920a904aca6e1613cbdda65f5cf5f831795490c4367d8da63ed4919cf888ee5"
     },
     "ImageDraw_line_RGB_wasm_gpu": {
       "op": "ImageDraw.line",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "f83de1a38c6c70f0afe457e79ff15037a6a31d4065a5753daf809a9d864aa7d9"
+      "expectedHash": "e920a904aca6e1613cbdda65f5cf5f831795490c4367d8da63ed4919cf888ee5"
     },
     "ImageDraw_line_RGBA_wasm": {
       "op": "ImageDraw.line",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "6525e4f11cbb20f3d76a07d74ae9a85c3fde46d21128b4de7d9c895f75a537c3"
+      "expectedHash": "3a7fc94cce313e23d0a9a3aca6aeff6b61986334c1a60189a7822c0bff90ff72"
     },
     "ImageDraw_line_RGBA_wasm_gpu": {
       "op": "ImageDraw.line",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "6525e4f11cbb20f3d76a07d74ae9a85c3fde46d21128b4de7d9c895f75a537c3"
+      "expectedHash": "3a7fc94cce313e23d0a9a3aca6aeff6b61986334c1a60189a7822c0bff90ff72"
     },
     "ImageDraw_line_L_wasm": {
       "op": "ImageDraw.line",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "49ec4205c32ef3bd9102fb91214ba3ac116cfe7fab1d05d4a1da12b6fdd9cce0"
+      "expectedHash": "6b9b14cbaf67e929f0b1e69b7880f7d7affdc019481f6a52d9d2e9a3839e0a13"
     },
     "ImageDraw_line_L_wasm_gpu": {
       "op": "ImageDraw.line",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "49ec4205c32ef3bd9102fb91214ba3ac116cfe7fab1d05d4a1da12b6fdd9cce0"
+      "expectedHash": "6b9b14cbaf67e929f0b1e69b7880f7d7affdc019481f6a52d9d2e9a3839e0a13"
     },
     "ImageDraw_rectangle_RGB_wasm": {
       "op": "ImageDraw.rectangle",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "1e66c43360dfa9773b31b82d0dfaebf5756933669cbd23ba122461bd0f561c9e"
+      "expectedHash": "980d1a94aa832c499c25577ed754e110be61cdf861c21c50f8943a0ff99c862c"
     },
     "ImageDraw_rectangle_RGB_wasm_gpu": {
       "op": "ImageDraw.rectangle",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "1e66c43360dfa9773b31b82d0dfaebf5756933669cbd23ba122461bd0f561c9e"
+      "expectedHash": "980d1a94aa832c499c25577ed754e110be61cdf861c21c50f8943a0ff99c862c"
     },
     "ImageDraw_rectangle_RGBA_wasm": {
       "op": "ImageDraw.rectangle",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "8ab6794e5dce9208813a4c832b831f82f24214f54f00838a51fc00fa6999ffd7"
+      "expectedHash": "496e37304aa887c3c6a1ae270166eb50f4210d9130c77d3ad1f1f12c43e6ba3a"
     },
     "ImageDraw_rectangle_RGBA_wasm_gpu": {
       "op": "ImageDraw.rectangle",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "8ab6794e5dce9208813a4c832b831f82f24214f54f00838a51fc00fa6999ffd7"
+      "expectedHash": "496e37304aa887c3c6a1ae270166eb50f4210d9130c77d3ad1f1f12c43e6ba3a"
     },
     "ImageDraw_rectangle_L_wasm": {
       "op": "ImageDraw.rectangle",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "a72081c813fb7e0124bebb53c8dc6d9fa6f2ebca94654b4415fa3cd75a5864fc"
+      "expectedHash": "ef64dfcdcce11b632ea5995d81f1e1a691d27378ac6b0801ffb0d51079c2b4b4"
     },
     "ImageDraw_rectangle_L_wasm_gpu": {
       "op": "ImageDraw.rectangle",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "a72081c813fb7e0124bebb53c8dc6d9fa6f2ebca94654b4415fa3cd75a5864fc"
+      "expectedHash": "ef64dfcdcce11b632ea5995d81f1e1a691d27378ac6b0801ffb0d51079c2b4b4"
     },
     "ImageDraw_ellipse_RGB_wasm": {
       "op": "ImageDraw.ellipse",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "aaec56cd39011a061d337d48a4e77cc09a5b393338be71726cc3865833e4fa35"
+      "expectedHash": "3fb2628f10458e53e5631a222bddb393d83cd8f5334e007dadddd1c5bca7b87c"
     },
     "ImageDraw_ellipse_RGB_wasm_gpu": {
       "op": "ImageDraw.ellipse",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "aaec56cd39011a061d337d48a4e77cc09a5b393338be71726cc3865833e4fa35"
+      "expectedHash": "3fb2628f10458e53e5631a222bddb393d83cd8f5334e007dadddd1c5bca7b87c"
     },
     "ImageDraw_ellipse_RGBA_wasm": {
       "op": "ImageDraw.ellipse",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "2688654d59844ec08389e99d483d6e5ae90efc28d5b54098cb2577d085966234"
+      "expectedHash": "3462b3109aed03067acb57e05b33550828761f04673755c5836d30c4e89225b9"
     },
     "ImageDraw_ellipse_RGBA_wasm_gpu": {
       "op": "ImageDraw.ellipse",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "2688654d59844ec08389e99d483d6e5ae90efc28d5b54098cb2577d085966234"
+      "expectedHash": "3462b3109aed03067acb57e05b33550828761f04673755c5836d30c4e89225b9"
     },
     "ImageDraw_ellipse_L_wasm": {
       "op": "ImageDraw.ellipse",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "c9819d38af43ffb466734084004c6ee06c7225c1891fbdaafbc730c75a8cd65f"
+      "expectedHash": "1de252c9a095b722bbfbb398e33b051895ba4f3a427c824cff368538aaca6a37"
     },
     "ImageDraw_ellipse_L_wasm_gpu": {
       "op": "ImageDraw.ellipse",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "c9819d38af43ffb466734084004c6ee06c7225c1891fbdaafbc730c75a8cd65f"
+      "expectedHash": "1de252c9a095b722bbfbb398e33b051895ba4f3a427c824cff368538aaca6a37"
     },
     "ImageDraw_polygon_RGB_wasm": {
       "op": "ImageDraw.polygon",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "a1bcec5e8a2814cb6f4e93d9f086f9643abc70eab6582ec482a0b3be45bd8142"
+      "expectedHash": "362ecd6c67e37a1b2e38efcd65d244f62cc4cb5b6641919e197e1b52b28c9178"
     },
     "ImageDraw_polygon_RGB_wasm_gpu": {
       "op": "ImageDraw.polygon",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "a1bcec5e8a2814cb6f4e93d9f086f9643abc70eab6582ec482a0b3be45bd8142"
+      "expectedHash": "362ecd6c67e37a1b2e38efcd65d244f62cc4cb5b6641919e197e1b52b28c9178"
     },
     "ImageDraw_polygon_RGBA_wasm": {
       "op": "ImageDraw.polygon",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "d85f928b02c55265af69c6fa0ef81346e97cd8c860355ed2850f848a786c66c0"
+      "expectedHash": "e56e238f0b36a50b3b738ca3a8b9b41100d284b32b243e7f972fb770be9d778c"
     },
     "ImageDraw_polygon_RGBA_wasm_gpu": {
       "op": "ImageDraw.polygon",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "d85f928b02c55265af69c6fa0ef81346e97cd8c860355ed2850f848a786c66c0"
+      "expectedHash": "e56e238f0b36a50b3b738ca3a8b9b41100d284b32b243e7f972fb770be9d778c"
     },
     "ImageDraw_polygon_L_wasm": {
       "op": "ImageDraw.polygon",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "05b357b918f3440f4916a20a7036529432b1e220390a91a0ae110c93b267d8a7"
+      "expectedHash": "fb63f5f111ace2402a65872be2675f10217c41433ed70377529b98666335fa22"
     },
     "ImageDraw_polygon_L_wasm_gpu": {
       "op": "ImageDraw.polygon",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "05b357b918f3440f4916a20a7036529432b1e220390a91a0ae110c93b267d8a7"
+      "expectedHash": "fb63f5f111ace2402a65872be2675f10217c41433ed70377529b98666335fa22"
     },
     "ImageDraw_text_RGB_wasm": {
       "op": "ImageDraw.text",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "e636ba971277185ae90eca9a6144fe5086451b7b725da8ae9e4fd90fd56e7076"
+      "expectedHash": "91d4ade846ccd35ea8d2196dbcb5518407b84ea33ffe2523b40632f198c9e823"
     },
     "ImageDraw_text_RGB_wasm_gpu": {
       "op": "ImageDraw.text",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "e636ba971277185ae90eca9a6144fe5086451b7b725da8ae9e4fd90fd56e7076"
+      "expectedHash": "91d4ade846ccd35ea8d2196dbcb5518407b84ea33ffe2523b40632f198c9e823"
     },
     "ImageDraw_text_RGBA_wasm": {
       "op": "ImageDraw.text",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "7701d151fbf5fa87d58b8e2b87685d3996876bbe158cdfe9d8abd6ffafb93201"
+      "expectedHash": "0809e6b9c91eba08e3a08083965358853e8e662ecefad3e1cef0cf8dd19d76a1"
     },
     "ImageDraw_text_RGBA_wasm_gpu": {
       "op": "ImageDraw.text",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "7701d151fbf5fa87d58b8e2b87685d3996876bbe158cdfe9d8abd6ffafb93201"
+      "expectedHash": "0809e6b9c91eba08e3a08083965358853e8e662ecefad3e1cef0cf8dd19d76a1"
     },
     "ImageDraw_text_L_wasm": {
       "op": "ImageDraw.text",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "03d1b333cf7958150ad8f13a10ec4aec476fbd8ea638ac22b3987717e4f25fe6"
+      "expectedHash": "074f8afbeadfdfbc02e00262f725a28dce7303cd79a0b62f2fed77aefe4633a8"
     },
     "ImageDraw_text_L_wasm_gpu": {
       "op": "ImageDraw.text",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "03d1b333cf7958150ad8f13a10ec4aec476fbd8ea638ac22b3987717e4f25fe6"
+      "expectedHash": "074f8afbeadfdfbc02e00262f725a28dce7303cd79a0b62f2fed77aefe4633a8"
     },
     "ImageDraw_multiline_text_RGB_wasm": {
       "op": "ImageDraw.multiline_text",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_multiline_text_RGB_wasm_gpu": {
       "op": "ImageDraw.multiline_text",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_multiline_text_RGBA_wasm": {
       "op": "ImageDraw.multiline_text",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_multiline_text_RGBA_wasm_gpu": {
       "op": "ImageDraw.multiline_text",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_multiline_text_L_wasm": {
       "op": "ImageDraw.multiline_text",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_multiline_text_L_wasm_gpu": {
       "op": "ImageDraw.multiline_text",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_circle_RGB_wasm": {
       "op": "ImageDraw.circle",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "bef8d6560c6ea6fb349fb0670da335dc8de79ff1ed2ec82fb52789fb5fca30d1"
+      "expectedHash": "b070505f58a1b89f46a1670f9bd2a9dcfc6784f78a6e22d6017838aed745fdf1"
     },
     "ImageDraw_circle_RGB_wasm_gpu": {
       "op": "ImageDraw.circle",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "bef8d6560c6ea6fb349fb0670da335dc8de79ff1ed2ec82fb52789fb5fca30d1"
+      "expectedHash": "b070505f58a1b89f46a1670f9bd2a9dcfc6784f78a6e22d6017838aed745fdf1"
     },
     "ImageDraw_circle_RGBA_wasm": {
       "op": "ImageDraw.circle",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "12f78d8eaac65ce57cf14245740973cd6a989268d35dfa9aae0182ed4a030ac1"
+      "expectedHash": "c5ca9ce2088f3913789af384b58665dc7c5e71b5f48c1a5ba6e193c8d24824f5"
     },
     "ImageDraw_circle_RGBA_wasm_gpu": {
       "op": "ImageDraw.circle",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "12f78d8eaac65ce57cf14245740973cd6a989268d35dfa9aae0182ed4a030ac1"
+      "expectedHash": "c5ca9ce2088f3913789af384b58665dc7c5e71b5f48c1a5ba6e193c8d24824f5"
     },
     "ImageDraw_circle_L_wasm": {
       "op": "ImageDraw.circle",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "8c4e541b20c781848a1bf8f406ace441389ad87302e543dff177c2c1175caded"
+      "expectedHash": "4018f7b1c37912250e203f1f18b8cda7c5947f26260e7c5a0f412309fa741439"
     },
     "ImageDraw_circle_L_wasm_gpu": {
       "op": "ImageDraw.circle",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "8c4e541b20c781848a1bf8f406ace441389ad87302e543dff177c2c1175caded"
+      "expectedHash": "4018f7b1c37912250e203f1f18b8cda7c5947f26260e7c5a0f412309fa741439"
     },
     "ImageDraw_rounded_rectangle_RGB_wasm": {
       "op": "ImageDraw.rounded_rectangle",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "b9ce440ed160bece105b8bf0d58f12748817afc4453ebb73a03312c93b7a51e8"
+      "expectedHash": "758091a6ec9540d3cad59a347252af0ec885aeaa2e0ae81814e4a5e7a44a4eb3"
     },
     "ImageDraw_rounded_rectangle_RGB_wasm_gpu": {
       "op": "ImageDraw.rounded_rectangle",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "b9ce440ed160bece105b8bf0d58f12748817afc4453ebb73a03312c93b7a51e8"
+      "expectedHash": "758091a6ec9540d3cad59a347252af0ec885aeaa2e0ae81814e4a5e7a44a4eb3"
     },
     "ImageDraw_rounded_rectangle_RGBA_wasm": {
       "op": "ImageDraw.rounded_rectangle",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "7306bc998096cfebf5afde72b63000ef7bde20353bff47e7b3f91bbb67a28cae"
+      "expectedHash": "5af6ce41944eef241191ff3c7faec8e74210dcffd35f615650a3f0f46626247b"
     },
     "ImageDraw_rounded_rectangle_RGBA_wasm_gpu": {
       "op": "ImageDraw.rounded_rectangle",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "7306bc998096cfebf5afde72b63000ef7bde20353bff47e7b3f91bbb67a28cae"
+      "expectedHash": "5af6ce41944eef241191ff3c7faec8e74210dcffd35f615650a3f0f46626247b"
     },
     "ImageDraw_rounded_rectangle_L_wasm": {
       "op": "ImageDraw.rounded_rectangle",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "72e798be6f7f5d36da0f28b45fcd666c7cc911717d67a0fe22782d7e7f3f6a44"
+      "expectedHash": "d576536ae0b337ade425add1b6bdcb0c9910588644cf35ed733fedfa51b454a2"
     },
     "ImageDraw_rounded_rectangle_L_wasm_gpu": {
       "op": "ImageDraw.rounded_rectangle",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "72e798be6f7f5d36da0f28b45fcd666c7cc911717d67a0fe22782d7e7f3f6a44"
+      "expectedHash": "d576536ae0b337ade425add1b6bdcb0c9910588644cf35ed733fedfa51b454a2"
     },
     "ImageDraw_regular_polygon_RGB_wasm": {
       "op": "ImageDraw.regular_polygon",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_regular_polygon_RGB_wasm_gpu": {
       "op": "ImageDraw.regular_polygon",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_regular_polygon_RGBA_wasm": {
       "op": "ImageDraw.regular_polygon",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_regular_polygon_RGBA_wasm_gpu": {
       "op": "ImageDraw.regular_polygon",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_regular_polygon_L_wasm": {
       "op": "ImageDraw.regular_polygon",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_regular_polygon_L_wasm_gpu": {
       "op": "ImageDraw.regular_polygon",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_chord_RGB_wasm": {
       "op": "ImageDraw.chord",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "524863c6336076336f0e7bbc89ad77f5ed2667ac29c0f0cac503d11c73705789"
+      "expectedHash": "d1f26c0e547a446d227d7ffd7b4a0c48be50553aa774465bad51ace2e92b2d3a"
     },
     "ImageDraw_chord_RGB_wasm_gpu": {
       "op": "ImageDraw.chord",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "524863c6336076336f0e7bbc89ad77f5ed2667ac29c0f0cac503d11c73705789"
+      "expectedHash": "d1f26c0e547a446d227d7ffd7b4a0c48be50553aa774465bad51ace2e92b2d3a"
     },
     "ImageDraw_chord_RGBA_wasm": {
       "op": "ImageDraw.chord",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "856c8eb109c8f9dea9331a82335f4d2e904257f07749d805a54d8dc0eb9c47a8"
+      "expectedHash": "c5e3d7eeac1ee569afdc1d4c37b02a97f0980783df1feabe8918815639c20465"
     },
     "ImageDraw_chord_RGBA_wasm_gpu": {
       "op": "ImageDraw.chord",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "856c8eb109c8f9dea9331a82335f4d2e904257f07749d805a54d8dc0eb9c47a8"
+      "expectedHash": "c5e3d7eeac1ee569afdc1d4c37b02a97f0980783df1feabe8918815639c20465"
     },
     "ImageDraw_chord_L_wasm": {
       "op": "ImageDraw.chord",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "bb63b3dca4eaff55242ea46563edbb5aaf6b0d0f611d8d3efed8643d2f81ba79"
+      "expectedHash": "d327837c45675f12a20344a488d2fdc40af1638e90819324ba5ade49ade25089"
     },
     "ImageDraw_chord_L_wasm_gpu": {
       "op": "ImageDraw.chord",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "bb63b3dca4eaff55242ea46563edbb5aaf6b0d0f611d8d3efed8643d2f81ba79"
+      "expectedHash": "d327837c45675f12a20344a488d2fdc40af1638e90819324ba5ade49ade25089"
     },
     "ImageDraw_pieslice_RGB_wasm": {
       "op": "ImageDraw.pieslice",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "524863c6336076336f0e7bbc89ad77f5ed2667ac29c0f0cac503d11c73705789"
+      "expectedHash": "d1f26c0e547a446d227d7ffd7b4a0c48be50553aa774465bad51ace2e92b2d3a"
     },
     "ImageDraw_pieslice_RGB_wasm_gpu": {
       "op": "ImageDraw.pieslice",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "524863c6336076336f0e7bbc89ad77f5ed2667ac29c0f0cac503d11c73705789"
+      "expectedHash": "d1f26c0e547a446d227d7ffd7b4a0c48be50553aa774465bad51ace2e92b2d3a"
     },
     "ImageDraw_pieslice_RGBA_wasm": {
       "op": "ImageDraw.pieslice",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "856c8eb109c8f9dea9331a82335f4d2e904257f07749d805a54d8dc0eb9c47a8"
+      "expectedHash": "c5e3d7eeac1ee569afdc1d4c37b02a97f0980783df1feabe8918815639c20465"
     },
     "ImageDraw_pieslice_RGBA_wasm_gpu": {
       "op": "ImageDraw.pieslice",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "856c8eb109c8f9dea9331a82335f4d2e904257f07749d805a54d8dc0eb9c47a8"
+      "expectedHash": "c5e3d7eeac1ee569afdc1d4c37b02a97f0980783df1feabe8918815639c20465"
     },
     "ImageDraw_pieslice_L_wasm": {
       "op": "ImageDraw.pieslice",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "bb63b3dca4eaff55242ea46563edbb5aaf6b0d0f611d8d3efed8643d2f81ba79"
+      "expectedHash": "d327837c45675f12a20344a488d2fdc40af1638e90819324ba5ade49ade25089"
     },
     "ImageDraw_pieslice_L_wasm_gpu": {
       "op": "ImageDraw.pieslice",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "bb63b3dca4eaff55242ea46563edbb5aaf6b0d0f611d8d3efed8643d2f81ba79"
+      "expectedHash": "d327837c45675f12a20344a488d2fdc40af1638e90819324ba5ade49ade25089"
     },
     "ImageDraw_bitmap_RGB_wasm": {
       "op": "ImageDraw.bitmap",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "79aa16560174c8dea4349211683bb7862f3cef36c5248583c6f3071834f0269c"
+      "expectedHash": "b2911903e092395f2097c90e957e3455500ae581a52e20cda908cc2c38aff1ca"
     },
     "ImageDraw_bitmap_RGB_wasm_gpu": {
       "op": "ImageDraw.bitmap",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "79aa16560174c8dea4349211683bb7862f3cef36c5248583c6f3071834f0269c"
+      "expectedHash": "b2911903e092395f2097c90e957e3455500ae581a52e20cda908cc2c38aff1ca"
     },
     "ImageDraw_bitmap_RGBA_wasm": {
       "op": "ImageDraw.bitmap",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "249c6dad9e4951a215231e25193a7fb38a3f29268ded315459be289faa691006"
+      "expectedHash": "1fde4f6d51dc742c71ebe9f518cd8b406edcdf6bc18e34899042cbdc17fa2913"
     },
     "ImageDraw_bitmap_RGBA_wasm_gpu": {
       "op": "ImageDraw.bitmap",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "249c6dad9e4951a215231e25193a7fb38a3f29268ded315459be289faa691006"
+      "expectedHash": "1fde4f6d51dc742c71ebe9f518cd8b406edcdf6bc18e34899042cbdc17fa2913"
     },
     "ImageDraw_bitmap_L_wasm": {
       "op": "ImageDraw.bitmap",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "1dca4d76d875b1f8cebefd754fae41589eee82e54b79beb49ab5fabf8dc7cadd"
+      "expectedHash": "99ca433dabd8bb0ae5023b7861d7afbff0c676f79bc2ba6b6de01887fefad9d8"
     },
     "ImageDraw_bitmap_L_wasm_gpu": {
       "op": "ImageDraw.bitmap",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "1dca4d76d875b1f8cebefd754fae41589eee82e54b79beb49ab5fabf8dc7cadd"
+      "expectedHash": "99ca433dabd8bb0ae5023b7861d7afbff0c676f79bc2ba6b6de01887fefad9d8"
     },
     "ImageDraw_point_RGB_wasm": {
       "op": "ImageDraw.point",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "a6d3a508525e97a06a40f997ee8aba9cdb7b9303523e360d837420fbabbf96bf"
+      "expectedHash": "622c732f982c51e576fb726456a5f57f73340c7830874647cb799e822de4fd7c"
     },
     "ImageDraw_point_RGB_wasm_gpu": {
       "op": "ImageDraw.point",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "a6d3a508525e97a06a40f997ee8aba9cdb7b9303523e360d837420fbabbf96bf"
+      "expectedHash": "622c732f982c51e576fb726456a5f57f73340c7830874647cb799e822de4fd7c"
     },
     "ImageDraw_point_RGBA_wasm": {
       "op": "ImageDraw.point",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "2e34331f064ceab706cffa0e679d40c9ef5237c6d77b3e4dd7032a12001b9d71"
+      "expectedHash": "2c7f9bf2116d8ed5c51aafcc922e10e29b064c8e82d4ea5aeb2af261fd7b9a5e"
     },
     "ImageDraw_point_RGBA_wasm_gpu": {
       "op": "ImageDraw.point",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "2e34331f064ceab706cffa0e679d40c9ef5237c6d77b3e4dd7032a12001b9d71"
+      "expectedHash": "2c7f9bf2116d8ed5c51aafcc922e10e29b064c8e82d4ea5aeb2af261fd7b9a5e"
     },
     "ImageDraw_point_L_wasm": {
       "op": "ImageDraw.point",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "47ba9d508da2543281d97afc28a40914bc6fc34b11e0d3be996a4322725c4887"
+      "expectedHash": "0c8f02d9ac3d57ff842458746adabe3ec7e845a2bb4d464c69c20f4e37858886"
     },
     "ImageDraw_point_L_wasm_gpu": {
       "op": "ImageDraw.point",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "47ba9d508da2543281d97afc28a40914bc6fc34b11e0d3be996a4322725c4887"
+      "expectedHash": "0c8f02d9ac3d57ff842458746adabe3ec7e845a2bb4d464c69c20f4e37858886"
     },
     "ImageDraw_textbbox_RGB_wasm": {
       "op": "ImageDraw.textbbox",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_textbbox_RGB_wasm_gpu": {
       "op": "ImageDraw.textbbox",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_textbbox_RGBA_wasm": {
       "op": "ImageDraw.textbbox",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_textbbox_RGBA_wasm_gpu": {
       "op": "ImageDraw.textbbox",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_textbbox_L_wasm": {
       "op": "ImageDraw.textbbox",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_textbbox_L_wasm_gpu": {
       "op": "ImageDraw.textbbox",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_multiline_textbbox_RGB_wasm": {
       "op": "ImageDraw.multiline_textbbox",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_multiline_textbbox_RGB_wasm_gpu": {
       "op": "ImageDraw.multiline_textbbox",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_multiline_textbbox_RGBA_wasm": {
       "op": "ImageDraw.multiline_textbbox",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_multiline_textbbox_RGBA_wasm_gpu": {
       "op": "ImageDraw.multiline_textbbox",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_multiline_textbbox_L_wasm": {
       "op": "ImageDraw.multiline_textbbox",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_multiline_textbbox_L_wasm_gpu": {
       "op": "ImageDraw.multiline_textbbox",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_textlength_RGB_wasm": {
       "op": "ImageDraw.textlength",
       "mode": "RGB",
       "target": "wasm",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_textlength_RGB_wasm_gpu": {
       "op": "ImageDraw.textlength",
       "mode": "RGB",
       "target": "wasm_gpu",
-      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+      "expectedHash": "d02a8da86fec6ef80c209c8437c76cf8fbecb6528cd7ba95ef93eecc52a171c7"
     },
     "ImageDraw_textlength_RGBA_wasm": {
       "op": "ImageDraw.textlength",
       "mode": "RGBA",
       "target": "wasm",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_textlength_RGBA_wasm_gpu": {
       "op": "ImageDraw.textlength",
       "mode": "RGBA",
       "target": "wasm_gpu",
-      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+      "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
     },
     "ImageDraw_textlength_L_wasm": {
       "op": "ImageDraw.textlength",
       "mode": "L",
       "target": "wasm",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     },
     "ImageDraw_textlength_L_wasm_gpu": {
       "op": "ImageDraw.textlength",
       "mode": "L",
       "target": "wasm_gpu",
-      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+      "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
     }
   }
 }

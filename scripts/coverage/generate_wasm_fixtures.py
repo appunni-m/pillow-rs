@@ -74,12 +74,14 @@ def run_pil(op_name, mode):
         else:
             return None
 
-        buf = BytesIO()
-        if hasattr(result, 'save'):
+        if hasattr(result, 'tobytes'):
+            return result.tobytes()
+        elif hasattr(result, 'save'):
+            buf = BytesIO()
             result.save(buf, format="PNG")
+            return buf.getvalue()
         else:
             return None
-        return buf.getvalue()
     except Exception:
         return None
 

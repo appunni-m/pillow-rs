@@ -2,5 +2,5 @@
   "op": "Image.crop",
   "mode": "I",
   "target": "wasm",
-  "expectedHash": "de02c07d7d1653cbac1544900d210d83065ca46aa104588b0864b239ef97c90d"
+  "expectedHash": "a5aa9ed29ac98ec87f26a39ee5c9dba6b483ebc6633de5d3a2f8881ba1ebbe25"
 }

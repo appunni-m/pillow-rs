@@ -2,5 +2,5 @@
   "op": "ImageDraw.polygon",
   "mode": "RGBA",
   "target": "wasm",
-  "expectedHash": "d85f928b02c55265af69c6fa0ef81346e97cd8c860355ed2850f848a786c66c0"
+  "expectedHash": "e56e238f0b36a50b3b738ca3a8b9b41100d284b32b243e7f972fb770be9d778c"
 }

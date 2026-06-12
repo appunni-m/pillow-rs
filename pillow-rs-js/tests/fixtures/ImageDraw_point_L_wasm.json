@@ -2,5 +2,5 @@
   "op": "ImageDraw.point",
   "mode": "L",
   "target": "wasm",
-  "expectedHash": "47ba9d508da2543281d97afc28a40914bc6fc34b11e0d3be996a4322725c4887"
+  "expectedHash": "0c8f02d9ac3d57ff842458746adabe3ec7e845a2bb4d464c69c20f4e37858886"
 }

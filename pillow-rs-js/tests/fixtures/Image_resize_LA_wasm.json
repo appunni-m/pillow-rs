@@ -2,5 +2,5 @@
   "op": "Image.resize",
   "mode": "LA",
   "target": "wasm",
-  "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+  "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
 }
