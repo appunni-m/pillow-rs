@@ -685,11 +685,9 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let h = bottom.saturating_sub(*top);
             Ok(img.crop_imm(*left, *top, w, h))
         }
-        PipelineOp::Rotate { angle, expand, fill: _f } => {
-            // Round to nearest multiple of 90 for discrete rotation
-            // Note: angle is already in degrees (passed from Python/Rust API directly)
+        PipelineOp::Rotate { angle, expand, fill } => {
             let deg = (angle.round() as i32).rem_euclid(360);
-            let _ = expand; // for discrete 90-degree rotations, PIL always swaps dimensions
+            // Fast path: exact 90-degree multiples
             let result = if (deg - 90).abs() < 2 || (deg - 90).abs() >= 358 {
                 img.rotate90()
             } else if (deg - 180).abs() < 2 {
@@ -697,8 +695,58 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             } else if (deg - 270).abs() < 2 || (deg - 270).abs() >= 358 {
                 img.rotate270()
             } else {
-                // For non-90-degree rotations, return the original (not yet implemented)
-                img.clone()
+                // Bilinear interpolation for arbitrary angles
+                let rgba = img.to_rgba8();
+                let (sw, sh) = (rgba.width() as f64, rgba.height() as f64);
+                let rad = angle.to_radians();
+                let (cos, sin) = (rad.cos(), rad.sin());
+                // Compute bounding box of rotated image
+                let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+                let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+                for &(cx, cy) in &corners {
+                    let rx = cx * cos - cy * sin;
+                    let ry = cx * sin + cy * cos;
+                    min_x = min_x.min(rx); max_x = max_x.max(rx);
+                    min_y = min_y.min(ry); max_y = max_y.max(ry);
+                }
+                let (dw, dh) = if *expand {
+                    ((max_x - min_x).ceil() as u32, (max_y - min_y).ceil() as u32)
+                } else {
+                    (rgba.width(), rgba.height())
+                };
+                let fill_color = fill.unwrap_or((0, 0, 0, 0));
+                let mut out = image::RgbaImage::from_pixel(dw, dh, image::Rgba([fill_color.0, fill_color.1, fill_color.2, fill_color.3]));
+                let (ox, oy) = if *expand { (-min_x, -min_y) } else { (0.0, 0.0) };
+                // Center rotation around image center
+                let cx_src = sw / 2.0;
+                let cy_src = sh / 2.0;
+                let cx_dst = dw as f64 / 2.0;
+                let cy_dst = dh as f64 / 2.0;
+                for dy in 0..dh {
+                    for dx in 0..dw {
+                        // Map destination pixel to source coordinate (inverse rotation)
+                        let sx_rel = (dx as f64 + ox - cx_dst) * cos + (dy as f64 + oy - cy_dst) * sin + cx_src;
+                        let sy_rel = -(dx as f64 + ox - cx_dst) * sin + (dy as f64 + oy - cy_dst) * cos + cy_src;
+                        if sx_rel >= 0.0 && sx_rel < sw - 1.0 && sy_rel >= 0.0 && sy_rel < sh - 1.0 {
+                            let sx = sx_rel.floor() as u32;
+                            let sy = sy_rel.floor() as u32;
+                            let fx = sx_rel - sx as f64;
+                            let fy = sy_rel - sy as f64;
+                            let p00 = rgba.get_pixel(sx, sy);
+                            let p10 = rgba.get_pixel(sx + 1, sy);
+                            let p01 = rgba.get_pixel(sx, sy + 1);
+                            let p11 = rgba.get_pixel(sx + 1, sy + 1);
+                            for c in 0..4 {
+                                let v = (1.0 - fx) * (1.0 - fy) * p00[c] as f64
+                                    + fx * (1.0 - fy) * p10[c] as f64
+                                    + (1.0 - fx) * fy * p01[c] as f64
+                                    + fx * fy * p11[c] as f64;
+                                out.get_pixel_mut(dx, dy)[c] = v.round() as u8;
+                            }
+                        }
+                    }
+                }
+                DynamicImage::ImageRgba8(out)
             };
             Ok(preserve_mode(img, result))
         }
