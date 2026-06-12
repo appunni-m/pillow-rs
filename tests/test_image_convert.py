@@ -29,11 +29,13 @@ class TestConvert:
         rs = Image.new("RGB", (30, 30), (200, 100, 50))
         assert_images_equal(rs.convert("LA"), pil.convert("LA"))
 
+    @pytest.mark.covers("Image.convert", mode="L", target="cpu", variant="mode_RGB")
     def test_l_to_rgb_parity(self, PIL):
         pil = PIL.Image.new("L", (40, 40), 200)
         rs = Image.new("L", (40, 40), 200)
         assert_images_equal(rs.convert("RGB"), pil.convert("RGB"))
 
+    @pytest.mark.covers("Image.convert", mode="RGB", target="cpu", variant="chain")
     def test_convert_chain_parity(self, PIL):
         """Multiple conversions produce same result."""
         pil = PIL.Image.new("RGB", (30, 30), (255, 128, 64))

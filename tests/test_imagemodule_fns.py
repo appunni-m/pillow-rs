@@ -17,6 +17,7 @@ def test_merge_rgb_parity(PIL):
     assert_images_equal(merged_rs, merged_pil)
 
 
+@pytest.mark.covers("ImageModule.blend", mode="RGB", target="cpu", variant="default")
 def test_blend_parity(PIL):
     pil1 = PIL.Image.new("RGB", (10, 10), (255, 0, 0))
     pil2 = PIL.Image.new("RGB", (10, 10), (0, 255, 0))
@@ -25,6 +26,7 @@ def test_blend_parity(PIL):
     assert_images_equal(blend(rs1, rs2, 0.5), PIL.Image.blend(pil1, pil2, 0.5))
 
 
+@pytest.mark.covers("ImageModule.composite", mode="RGB", target="cpu", variant="default")
 def test_composite_works():
     im1 = Image.new("RGB", (20, 20), (255, 0, 0))
     im2 = Image.new("RGB", (20, 20), (0, 255, 0))

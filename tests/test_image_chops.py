@@ -18,6 +18,7 @@ def test_chops_add_parity(PIL):
     )
 
 
+@pytest.mark.covers("ImageChops.subtract", mode="RGB", target="cpu", variant="default")
 def test_chops_subtract_parity(PIL):
     im1_pil = PIL.Image.new("RGB", (20, 20), (200, 150, 100))
     im2_pil = PIL.Image.new("RGB", (20, 20), (50, 50, 50))
@@ -43,6 +44,7 @@ def test_chops_multiply_parity(PIL):
     )
 
 
+@pytest.mark.covers("ImageChops.screen", mode="RGB", target="cpu", variant="default")
 def test_chops_screen_parity(PIL):
     im1_pil = PIL.Image.new("RGB", (20, 20), (100, 150, 200))
     im2_pil = PIL.Image.new("RGB", (20, 20), (50, 50, 50))
@@ -68,6 +70,7 @@ def test_chops_darker_parity(PIL):
     )
 
 
+@pytest.mark.covers("ImageChops.lighter", mode="RGB", target="cpu", variant="default")
 def test_chops_lighter_parity(PIL):
     im1_pil = PIL.Image.new("RGB", (20, 20), (200, 100, 50))
     im2_pil = PIL.Image.new("RGB", (20, 20), (100, 150, 100))
@@ -93,6 +96,7 @@ def test_chops_difference_parity(PIL):
     )
 
 
+@pytest.mark.covers("ImageChops.invert", mode="RGB", target="cpu", variant="default")
 def test_chops_invert_parity(PIL):
     pil = PIL.Image.new("RGB", (20, 20), (100, 150, 200))
     rs = Image.new("RGB", (20, 20), (100, 150, 200))

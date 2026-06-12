@@ -14,6 +14,7 @@ def test_split_rgb_parity(PIL):
         assert_images_equal(band_rs, band_pil)
 
 
+@pytest.mark.covers("Image.split", mode="RGBA", target="cpu", variant="default")
 def test_split_rgba_parity(PIL):
     pil = PIL.Image.new("RGBA", (25, 15), (255, 0, 0, 128))
     rs = Image.new("RGBA", (25, 15), (255, 0, 0, 128))
@@ -24,6 +25,7 @@ def test_split_rgba_parity(PIL):
 @pytest.mark.covers("Image.split")
 
 
+@pytest.mark.covers("Image.split", mode="L", target="cpu", variant="default")
 def test_split_grayscale_parity(PIL):
     pil = PIL.Image.new("L", (30, 20), 128)
     rs = Image.new("L", (30, 20), 128)
@@ -40,6 +42,7 @@ def test_getbands_rgb_parity(PIL):
     assert_values_equal(rs.getbands(), pil.getbands())
 
 
+@pytest.mark.covers("Image.getbands", mode="RGBA", target="cpu", variant="default")
 def test_getbands_rgba_parity(PIL):
     pil = PIL.Image.new("RGBA", (10, 10))
     rs = Image.new("RGBA", (10, 10))
@@ -49,6 +52,7 @@ def test_getbands_rgba_parity(PIL):
 @pytest.mark.covers("Image.getbands")
 
 
+@pytest.mark.covers("Image.getbands", mode="L", target="cpu", variant="default")
 def test_getbands_l_parity(PIL):
     pil = PIL.Image.new("L", (10, 10))
     rs = Image.new("L", (10, 10))

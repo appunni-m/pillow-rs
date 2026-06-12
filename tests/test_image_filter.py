@@ -14,6 +14,7 @@ def test_filter_blur_parity(PIL):
     assert_images_equal(rs.filter("BLUR"), pil_r)
 
 
+@pytest.mark.covers("Image.filter", mode="RGB", target="cpu", variant="SHARPEN")
 def test_filter_sharpen_parity(PIL):
     """SHARPEN: exact parity on uniform image."""
     rs = Image.new("RGB", (50, 50), (255, 0, 0))
@@ -31,6 +32,7 @@ def test_filter_smooth_parity(PIL):
     assert_images_equal(rs.filter("SMOOTH"), pil_r)
 
 
+@pytest.mark.covers("Image.filter", mode="RGB", target="cpu", variant="CONTOUR")
 def test_filter_contour_works(PIL):
     """CONTOUR: produces valid output image. Algorithm differs from PIL."""
     rs = Image.new("RGB", (50, 50), (255, 0, 0))
@@ -42,6 +44,7 @@ def test_filter_contour_works(PIL):
 @pytest.mark.covers("Image.filter")
 
 
+@pytest.mark.covers("Image.filter", mode="RGB", target="cpu", variant="EMBOSS")
 def test_filter_emboss_works(PIL):
     """EMBOSS: produces valid output image. Algorithm differs from PIL."""
     rs = Image.new("RGB", (50, 50), (255, 0, 0))
@@ -50,6 +53,7 @@ def test_filter_emboss_works(PIL):
     assert result.mode == "RGB"
 
 
+@pytest.mark.covers("Image.filter", mode="RGB", target="cpu", variant="FIND_EDGES")
 def test_filter_find_edges_works(PIL):
     """FIND_EDGES: produces valid output image. Algorithm differs from PIL."""
     rs = Image.new("RGB", (50, 50), (128, 128, 128))
