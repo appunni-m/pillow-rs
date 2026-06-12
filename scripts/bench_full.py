@@ -15,7 +15,7 @@ BENCH_DIR = ROOT / "target" / "benchmarks"
 REF_DIR = ROOT / "scripts" / "bench_reference_images"
 
 sys.path.insert(0, str(ROOT / "pillow-rs-py" / "python"))
-from pillow_rs import Image, ImageOps, ImageColor, ImageEnhance, _core
+from pillow_rs import Image, ImageOps, ImageColor, ImageEnhance, ImageDraw, ImageFont, _core
 
 def load(name):
     return Image.open(str(REF_DIR / name))
@@ -159,13 +159,27 @@ ALL_OPS = [
     ("ImageModule.blend", lambda: _core.image_blend(img._rust_image, img._rust_image, 0.5).tobytes()),
     ("ImageModule.composite", lambda: _core.image_composite(img._rust_image, img._rust_image, img._rust_image).tobytes()),
 
-    # ImageDraw basic (in-place on new image)
-    ("ImageDraw.arc", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.arc([50,50,200,200],0,180,fill=(255,0,0,255)), i.tobytes())),
-    ("ImageDraw.line", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.line([0,0,200,200],fill=(255,0,0,255)), i.tobytes())),
-    ("ImageDraw.rectangle", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.rectangle([50,50,200,200],fill=(255,0,0,255)), i.tobytes())),
-    ("ImageDraw.text", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.text((10,10),'Hello'), i.tobytes())),
-    ("ImageDraw.ellipse", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.ellipse([50,50,200,200],fill=(0,255,0,255)), i.tobytes())),
-    ("ImageDraw.polygon", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.polygon([(50,50),(200,50),(200,200),(50,200)],fill=(0,0,255,255)), i.tobytes())),
+    # ImageDraw (in-place on new image)
+    ("ImageDraw.line", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.line([(0,0),(200,200)],fill=(255,0,0),width=3), i.tobytes())),
+    ("ImageDraw.rectangle", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.rectangle((50,50,200,200),fill=(0,255,0)), i.tobytes())),
+    ("ImageDraw.ellipse", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.ellipse((50,50,200,200),fill=(0,0,255)), i.tobytes())),
+    ("ImageDraw.text", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), f:=ImageFont.load_default(), d.text((10,10),'Hello',fill=(255,255,255),font=f), i.tobytes())),
+    ("ImageDraw.arc", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.arc((50,50,200,200),0,180,fill=(255,0,0)), i.tobytes())),
+    ("ImageDraw.chord", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.chord((50,50,200,200),0,180,fill=(0,255,0)), i.tobytes())),
+    ("ImageDraw.pieslice", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.pieslice((50,50,200,200),0,180,fill=(0,0,255)), i.tobytes())),
+    ("ImageDraw.polygon", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.polygon([(50,50),(200,50),(200,200),(50,200)],fill=(255,0,255)), i.tobytes())),
+    ("ImageDraw.bitmap", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), bm:=Image.new('1',(50,50),(1,)), d.bitmap((10,10),bm), i.tobytes())),
+    ("ImageDraw.circle", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.circle((100,100),50,fill=(255,0,0)), i.tobytes())),
+    ("ImageDraw.rounded_rectangle", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.rounded_rectangle((50,50,200,200),radius=10,fill=(0,255,0)), i.tobytes())),
+    ("ImageDraw.regular_polygon", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.regular_polygon((100,100,50),6,fill=(0,0,255)), i.tobytes())),
+    ("ImageDraw.multiline_text", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), f:=ImageFont.load_default(), d.multiline_text((10,10),'Hello\nWorld',fill=(255,255,255),font=f), i.tobytes())),
+
+    # ImageFont
+    ("ImageFont.load_default", lambda: ImageFont.load_default()),
+    ("ImageFont.truetype", lambda: ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',20) if __import__('os').path.exists('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf') else None),
+    ("ImageFont.FreeTypeFont.getbbox", lambda: (f:=ImageFont.load_default(), f.getbbox('Hello'))),
+    ("ImageFont.FreeTypeFont.getlength", lambda: (f:=ImageFont.load_default(), f.getlength('Hello'))),
+    ("ImageFont.FreeTypeFont.getmask", lambda: (f:=ImageFont.load_default(), f.getmask('Hello'))),
 
     # ImagePalette
     ("ImagePalette.copy", lambda: img.copy()),

@@ -74,8 +74,8 @@ BENCH_TO_FULL = {
 }
 
 # Acceptable speedup range — outside this = unit-error, flagged as outlier
-MIN_VALID_RATIO = 0.01
-MAX_VALID_RATIO = 100.0
+MIN_VALID_RATIO = 0.02
+MAX_VALID_RATIO = 50.0
 
 
 def load_baseline(path):
@@ -188,33 +188,21 @@ def compute_summary(funcs, baseline_lookup, target_lookups):
 def write_row(full_name, func, baseline_lookup, target_lookups):
     pil_ms = baseline_lookup.get(full_name)
     cells = [full_name]
-    cpu_ms = target_lookups.get("native_cpu", {}).get(full_name)
-    cpu_str, cpu_valid, _ = speedup_str(cpu_ms, pil_ms)
 
     for i, target in enumerate(TARGET_NAMES):
         rs_ms = target_lookups[target].get(full_name)
-        s, is_valid, ratio = speedup_str(rs_ms, pil_ms)
+        s, is_valid, _ = speedup_str(rs_ms, pil_ms)
         is_gpu_col = (i % 2) == 1
 
-        if is_gpu_col:
-            if s == "—":
-                s = cpu_str if cpu_str != "—" else "—"
-            # GPU columns: mark outliers same as CPU
-            if "⚠️" in cpu_str and s == cpu_str:
-                s = cpu_str
-        else:
-            # CPU/WASM/Browser columns:
-            if s == "—" and cpu_str != "—" and target != "native_cpu":
-                s = cpu_str
-            elif s == "—":
-                s = "—"
+        # GPU columns: only show real GPU data, never CPU fallback
+        if is_gpu_col and s == "—":
+            s = "—"  # No GPU data = dash (honest)
+        # Non-GPU columns: only show real data for this target
+        # No cross-target estimation — every number is measured
 
-        # Outliers: replace number with ⚠️ but keep CPU column showing
-        if not is_valid and s != "—" and "⚠️" not in s:
-            if target == "native_cpu" or "⚠️" in s:
-                pass  # keep CPU column showing, or already flagged
-            else:
-                s = "⚠️"
+        # Outliers >50×: show "⚠️" instead
+        if not is_valid and s != "—":
+            s = "⚠️"
 
         cells.append(s)
     return "| " + " | ".join(cells) + " |"
