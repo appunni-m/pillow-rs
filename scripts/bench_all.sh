@@ -32,11 +32,16 @@ echo "--- WASM CPU ---"
 node scripts/bench_wasm_cpu.mjs 2>&1 | tail -3
 echo ""
 
-# Step 5: Generate BENCHMARKS.md
+# Step 5: Run PIL parity tests
+echo "--- PIL Parity Tests ---"
+PYTHONPATH="$ROOT/pillow-rs-py/python" python -m pytest tests/ -q --tb=no 2>&1 | tail -2
+echo ""
+
+# Step 6: Generate BENCHMARKS.md
 echo "--- BENCHMARKS.md ---"
 python3 scripts/bench_aggregate.py
 echo ""
 
-# Step 6: Summary
+# Step 7: Summary
 echo "=== Done ==="
-head -18 "$ROOT/BENCHMARKS.md"
+head -20 "$ROOT/BENCHMARKS.md"

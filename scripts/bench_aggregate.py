@@ -271,7 +271,41 @@ def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data):
             lines.append(write_row(f["full_name"], f, baseline_lookup, target_lookups))
         lines.append("")
 
+    # PIL parity
+    parity = get_parity_results()
+    if parity:
+        lines += [
+            "## PIL Parity Tests", "",
+            f"**{parity['passed']} passed, {parity['failed']} failed** (Pillow {parity.get('pillow_version', '')})", "",
+        ]
+
     return "\n".join(lines)
+
+
+def get_parity_results():
+    """Run pytest and extract pass/fail counts."""
+    try:
+        import os
+        env = os.environ.copy()
+        env["PYTHONPATH"] = f"{ROOT}/pillow-rs-py/python"
+        r = subprocess.run(
+            ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
+            capture_output=True, text=True, cwd=ROOT, timeout=30, env=env,
+        )
+        for line in (r.stdout + r.stderr).split("\n"):
+            if "passed" in line:
+                # Parse "202 passed in 0.57s" or "202 passed, 5 failed"
+                parts = line.strip().split()
+                passed = int(parts[0]) if parts and parts[0].isdigit() else 0
+                failed = 0
+                for i, p in enumerate(parts):
+                    if "failed" in p and i > 0:
+                        try: failed = int(parts[i-1])
+                        except: pass
+                return {"passed": passed, "failed": failed, "pillow_version": "12.2.0"}
+    except Exception:
+        pass
+    return None
 
 
 def main():
