@@ -1338,14 +1338,13 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         PipelineOp::LogicalOr { other } => channel_op_binary(img, other, |a, b| a | b),
         PipelineOp::LogicalXor { other } => channel_op_binary(img, other, |a, b| a ^ b),
         PipelineOp::Constant { value } => {
+            // PIL always returns an L-mode image for constant()
             let (w, h) = (img.width(), img.height());
-            let mut out = image::RgbImage::new(w, h);
+            let mut out = image::GrayImage::new(w, h);
             for p in out.pixels_mut() {
                 p[0] = *value;
-                p[1] = *value;
-                p[2] = *value;
             }
-            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+            Ok(DynamicImage::ImageLuma8(out))
         }
         PipelineOp::Offset { x, y } => {
             let (w, h) = (img.width(), img.height());
