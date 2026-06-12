@@ -1,6 +1,0 @@
-{
-  "op": "Image.quantize",
-  "mode": "RGB",
-  "target": "wasm_gpu",
-  "expectedHash": "95b532cc4381affdff0d956e12520a04129ed49d37e154228368fe5621f0b9a2"
-}

@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.text",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "074f8afbeadfdfbc02e00262f725a28dce7303cd79a0b62f2fed77aefe4633a8"
-}

@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.ellipse",
-  "mode": "RGB",
-  "target": "wasm_gpu",
-  "expectedHash": "3fb2628f10458e53e5631a222bddb393d83cd8f5334e007dadddd1c5bca7b87c"
-}

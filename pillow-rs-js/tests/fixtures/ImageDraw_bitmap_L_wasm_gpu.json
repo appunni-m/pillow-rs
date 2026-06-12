@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.bitmap",
-  "mode": "L",
-  "target": "wasm_gpu",
-  "expectedHash": "99ca433dabd8bb0ae5023b7861d7afbff0c676f79bc2ba6b6de01887fefad9d8"
-}

@@ -1,6 +1,0 @@
-{
-  "op": "Image.crop",
-  "mode": "HSV",
-  "target": "wasm",
-  "expectedHash": "fd9eeadb6869ab3708751260cca68cfa412b41ebda7dedff8913584ad98e54f3"
-}

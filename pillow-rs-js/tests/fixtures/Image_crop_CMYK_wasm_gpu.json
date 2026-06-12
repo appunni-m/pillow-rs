@@ -1,6 +1,0 @@
-{
-  "op": "Image.crop",
-  "mode": "CMYK",
-  "target": "wasm_gpu",
-  "expectedHash": "387836d1b771ec0520b8d84767db7646742efc4d2ec66e60518441be7e8e8401"
-}

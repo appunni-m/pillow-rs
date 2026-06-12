@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.polygon",
-  "mode": "RGBA",
-  "target": "wasm",
-  "expectedHash": "e56e238f0b36a50b3b738ca3a8b9b41100d284b32b243e7f972fb770be9d778c"
-}

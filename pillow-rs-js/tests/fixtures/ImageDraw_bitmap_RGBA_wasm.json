@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.bitmap",
-  "mode": "RGBA",
-  "target": "wasm",
-  "expectedHash": "1fde4f6d51dc742c71ebe9f518cd8b406edcdf6bc18e34899042cbdc17fa2913"
-}

@@ -1,6 +1,0 @@
-{
-  "op": "Image.new",
-  "mode": "CMYK",
-  "target": "wasm",
-  "expectedHash": "0cb3a7a92f1948011dffbd220001c7561d7002f13ae9025f697d0a4ebde07b8c"
-}

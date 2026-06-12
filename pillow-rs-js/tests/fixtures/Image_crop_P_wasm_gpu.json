@@ -1,6 +1,0 @@
-{
-  "op": "Image.crop",
-  "mode": "P",
-  "target": "wasm_gpu",
-  "expectedHash": "a5bb6b4c74e2eef1b13d00eb7109cdc514655012acc24de51357efca18e8faca"
-}

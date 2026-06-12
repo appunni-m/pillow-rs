@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(__dirname, 'fixtures');
+const FIXTURES = join(__dirname, '..', '..', 'tests', 'fixtures');
 const PKG = join(__dirname, '..', 'pkg');
 
 // Load WASM synchronously using initSync (avoids fetch issues in Node.js)

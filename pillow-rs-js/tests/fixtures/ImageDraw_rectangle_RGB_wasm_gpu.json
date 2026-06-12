@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.rectangle",
-  "mode": "RGB",
-  "target": "wasm_gpu",
-  "expectedHash": "980d1a94aa832c499c25577ed754e110be61cdf861c21c50f8943a0ff99c862c"
-}

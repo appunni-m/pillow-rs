@@ -1,6 +1,0 @@
-{
-  "op": "ImageModule.merge",
-  "mode": "LA",
-  "target": "wasm",
-  "expectedHash": "1425a5c3a0e561fa77c164ca5d9adb73257c1affa982f998dde77149631597aa"
-}

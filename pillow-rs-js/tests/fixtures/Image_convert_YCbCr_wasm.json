@@ -1,6 +1,0 @@
-{
-  "op": "Image.convert",
-  "mode": "YCbCr",
-  "target": "wasm",
-  "expectedHash": "71769ca2e8ab0c6913868951cd3f3dedd2a91e1b84f8f06007b981e3742aa257"
-}

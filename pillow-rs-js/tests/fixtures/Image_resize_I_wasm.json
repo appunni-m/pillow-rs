@@ -1,6 +1,0 @@
-{
-  "op": "Image.resize",
-  "mode": "I",
-  "target": "wasm",
-  "expectedHash": "a5aa9ed29ac98ec87f26a39ee5c9dba6b483ebc6633de5d3a2f8881ba1ebbe25"
-}

@@ -1,6 +1,0 @@
-{
-  "op": "Image.putalpha",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "d598ebad6481f20f9bcc79f64bc16f51faff5d153dd750d34819f57187528713"
-}

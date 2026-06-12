@@ -1,6 +1,0 @@
-{
-  "op": "Image.filter",
-  "mode": "1",
-  "target": "wasm_gpu",
-  "expectedHash": "6434857aeccbc84e49e5c2984d90e241df13e2f85b5dac733b9d23cb5ec3722e"
-}

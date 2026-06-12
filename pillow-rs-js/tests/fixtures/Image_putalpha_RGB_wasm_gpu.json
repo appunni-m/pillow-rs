@@ -1,6 +1,0 @@
-{
-  "op": "Image.putalpha",
-  "mode": "RGB",
-  "target": "wasm_gpu",
-  "expectedHash": "56e0bebe2b7d927add99f624802703065e2f1e34182bdd58b581d78787fe7000"
-}

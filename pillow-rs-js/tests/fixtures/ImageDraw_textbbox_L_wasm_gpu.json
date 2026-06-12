@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.textbbox",
-  "mode": "L",
-  "target": "wasm_gpu",
-  "expectedHash": "83cf1b833d01f872127f04ee5d02fad9e3375493b5370465dbfa180966e45813"
-}

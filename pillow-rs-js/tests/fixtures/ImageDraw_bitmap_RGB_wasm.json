@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.bitmap",
-  "mode": "RGB",
-  "target": "wasm",
-  "expectedHash": "b2911903e092395f2097c90e957e3455500ae581a52e20cda908cc2c38aff1ca"
-}

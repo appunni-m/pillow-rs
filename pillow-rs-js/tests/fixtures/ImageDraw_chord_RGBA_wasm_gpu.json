@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.chord",
-  "mode": "RGBA",
-  "target": "wasm_gpu",
-  "expectedHash": "c5e3d7eeac1ee569afdc1d4c37b02a97f0980783df1feabe8918815639c20465"
-}

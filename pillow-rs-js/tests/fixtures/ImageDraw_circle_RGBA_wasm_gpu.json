@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.circle",
-  "mode": "RGBA",
-  "target": "wasm_gpu",
-  "expectedHash": "c5ca9ce2088f3913789af384b58665dc7c5e71b5f48c1a5ba6e193c8d24824f5"
-}

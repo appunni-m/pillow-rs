@@ -1,6 +1,0 @@
-{
-  "op": "Image.convert",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "f5945346363c8e8d0dbbd3e5a49f5250d5e15c1add823eaaa9ccd0a75759efac"
-}

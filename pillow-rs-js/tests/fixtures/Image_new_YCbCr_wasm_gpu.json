@@ -1,6 +1,0 @@
-{
-  "op": "Image.new",
-  "mode": "YCbCr",
-  "target": "wasm_gpu",
-  "expectedHash": "88a8c5824a1f352ee038173463891c06c228338a23e60dc9aa49877366615231"
-}

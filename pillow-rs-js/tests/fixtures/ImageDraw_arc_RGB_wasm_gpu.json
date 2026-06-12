@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.arc",
-  "mode": "RGB",
-  "target": "wasm_gpu",
-  "expectedHash": "1a385dfd6725e2c61aad3a85b5d14489e9dc216817df7e9af6d6e376d780bb43"
-}

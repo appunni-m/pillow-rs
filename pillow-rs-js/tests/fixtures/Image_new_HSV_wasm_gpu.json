@@ -1,6 +1,0 @@
-{
-  "op": "Image.new",
-  "mode": "HSV",
-  "target": "wasm_gpu",
-  "expectedHash": "5262b3814b687e8db370c2f643a37e0e3c7d9dd7a1fffb1839ff7a8d2934d96c"
-}

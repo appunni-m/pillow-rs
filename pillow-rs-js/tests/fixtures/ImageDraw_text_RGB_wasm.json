@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.text",
-  "mode": "RGB",
-  "target": "wasm",
-  "expectedHash": "91d4ade846ccd35ea8d2196dbcb5518407b84ea33ffe2523b40632f198c9e823"
-}

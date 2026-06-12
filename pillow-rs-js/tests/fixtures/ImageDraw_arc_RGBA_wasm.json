@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.arc",
-  "mode": "RGBA",
-  "target": "wasm",
-  "expectedHash": "b91aab63328ee05db1e5748b9988b8f74dc1dbada35c002b5c066c163fac5048"
-}

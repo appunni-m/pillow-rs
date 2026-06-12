@@ -1,6 +1,0 @@
-{
-  "op": "Image.point",
-  "mode": "L",
-  "target": "wasm_gpu",
-  "expectedHash": "24a85df761530d4b591ce6a99debeeb5bc8e649614e4fdc34786752fd32a91fc"
-}

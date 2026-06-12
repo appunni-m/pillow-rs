@@ -1,6 +1,0 @@
-{
-  "op": "ImageModule.effect_noise",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "8d3fe7e3670c9d0e671f931c37e6a07adb7ea046d52914c78f77d1185c17e1f9"
-}

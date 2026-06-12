@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.ellipse",
-  "mode": "RGBA",
-  "target": "wasm",
-  "expectedHash": "3462b3109aed03067acb57e05b33550828761f04673755c5836d30c4e89225b9"
-}

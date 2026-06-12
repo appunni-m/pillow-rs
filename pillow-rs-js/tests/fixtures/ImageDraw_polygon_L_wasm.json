@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.polygon",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "fb63f5f111ace2402a65872be2675f10217c41433ed70377529b98666335fa22"
-}

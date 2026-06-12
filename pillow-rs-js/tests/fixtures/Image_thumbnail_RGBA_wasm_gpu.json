@@ -1,6 +1,0 @@
-{
-  "op": "Image.thumbnail",
-  "mode": "RGBA",
-  "target": "wasm_gpu",
-  "expectedHash": "558f17e4b2f182d31e6926d7374c0b40c577680aef212bc261d20530ec87c1f1"
-}

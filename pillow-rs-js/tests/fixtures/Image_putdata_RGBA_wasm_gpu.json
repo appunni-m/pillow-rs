@@ -1,6 +1,0 @@
-{
-  "op": "Image.putdata",
-  "mode": "RGBA",
-  "target": "wasm_gpu",
-  "expectedHash": "55168fd88cdfd0ad269ad477af78d8bf8c08359a128f959f5425d3f12407524c"
-}

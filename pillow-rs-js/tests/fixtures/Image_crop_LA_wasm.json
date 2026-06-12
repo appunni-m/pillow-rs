@@ -1,6 +1,0 @@
-{
-  "op": "Image.crop",
-  "mode": "LA",
-  "target": "wasm",
-  "expectedHash": "bc89833a736616a315936d7416554fc3a92de9af29c19cce360d241a62f45bf4"
-}

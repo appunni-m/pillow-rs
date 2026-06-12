@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.chord",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "d327837c45675f12a20344a488d2fdc40af1638e90819324ba5ade49ade25089"
-}

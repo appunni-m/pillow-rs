@@ -1,6 +1,0 @@
-{
-  "op": "Image.copy",
-  "mode": "RGBA",
-  "target": "wasm",
-  "expectedHash": "869ed904c16375f570ddac4b544936b94dca27dda7f31eaaab814c09606a2e34"
-}

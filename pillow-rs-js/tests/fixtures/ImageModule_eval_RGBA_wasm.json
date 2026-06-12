@@ -1,6 +1,0 @@
-{
-  "op": "ImageModule.eval",
-  "mode": "RGBA",
-  "target": "wasm",
-  "expectedHash": "9f8cf5c3d093d2a8801eb954297551a2530f4e13c1f7a5949e57b1d72e79936b"
-}

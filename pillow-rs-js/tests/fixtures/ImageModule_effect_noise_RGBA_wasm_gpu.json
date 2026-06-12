@@ -1,6 +1,0 @@
-{
-  "op": "ImageModule.effect_noise",
-  "mode": "RGBA",
-  "target": "wasm_gpu",
-  "expectedHash": "50e57a62fe2c91920e3c31a5ef98564561b4c3b7ef036e02534307fb72ed9916"
-}

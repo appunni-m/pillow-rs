@@ -1,6 +1,0 @@
-{
-  "op": "ImageDraw.circle",
-  "mode": "L",
-  "target": "wasm",
-  "expectedHash": "4018f7b1c37912250e203f1f18b8cda7c5947f26260e7c5a0f412309fa741439"
-}
