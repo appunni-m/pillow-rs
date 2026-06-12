@@ -111,3 +111,22 @@ The following operation types have no implementation in bench_unified.py exec_op
 - wasm_gpu: bench_unified.py has no WASM+WebGPU target runner
 - browser_gpu: bench_unified.py has no browser+WebGPU target runner
 - wasm_cpu: bench_unified.py has no WASM CPU target runner
+
+=== TEST STATUS (2026-06-12) ===
+294 passed, 2 failed (fromarray modes L/RGBA), 12 skipped
+
+=== TEST-DRIVEN BENCHMARK APPROACH ===
+Every test creates IDENTICAL inputs for PIL and RSPIL, runs the SAME
+operation, and asserts pixel-exact output. This PROVES the operation
+produces correct output. The benchmark MUST use the same parameters.
+
+Pattern from test_image_resize.py:
+  pil = PIL.Image.new("RGB", (100,100), (255,128,64))
+  rs  = Image.new("RGB", (100,100), (255,128,64))
+  pil_r = pil.resize((50,50), PIL.Image.BILINEAR)
+  rs_r  = rs.resize((50,50), Resampling.BILINEAR)
+  assert_images_equal(rs_r, pil_r)  # VERIFIED identical
+
+For benchmarks: use same op params, scale image to 2048x1536 for timing.
+If test passes but benchmark hash mismatches → scaling broke something.
+
