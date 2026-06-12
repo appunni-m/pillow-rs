@@ -3,7 +3,7 @@ from ._core import ImageDraw as RustDraw
 from .image import Image
 
 
-class ImageDraw:
+class Draw:
     """Draw lines, rectangles, ellipses, polygons, and text on images."""
 
     def __init__(self, image: Image, mode: str | None = None):
@@ -120,7 +120,11 @@ class ImageDraw:
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         import math
-        (cx, cy), r = bounding_circle
+        # PIL accepts both (x, y, r) and ((x, y), r)
+        if len(bounding_circle) == 3:
+            cx, cy, r = bounding_circle
+        else:
+            (cx, cy), r = bounding_circle
         points = []
         for i in range(n_sides):
             angle = math.radians(rotation + i * 360 / n_sides)
