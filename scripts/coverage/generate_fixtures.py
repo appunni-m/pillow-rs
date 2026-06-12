@@ -628,9 +628,7 @@ def main():
                         json.dump(fixture, f_out, indent=2)
                     count += 1
 
-    with open(FIXTURES_DIR / "index.json", "w") as f:
-        json.dump(index, f, indent=2)
-
+    # index.json was 51MB — skip it, test generator scans fixture files directly
     print(f"Generated {count} fixtures in {FIXTURES_DIR}")
 
 
