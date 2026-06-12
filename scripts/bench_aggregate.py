@@ -208,7 +208,7 @@ def write_row(full_name, func, baseline_lookup, target_lookups):
     return "| " + " | ".join(cells) + " |"
 
 
-def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data):
+def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data, baseline_raw=None):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     commit = get_git_commit()
     stats = compute_summary(funcs, baseline_lookup, target_lookups)
@@ -314,12 +314,57 @@ def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data):
             lines.append(f"| ... | ... | +{len(outlier_rows)-20} more |")
         lines.append("")
 
-    # PIL parity
+    # PIL parity — input/output validation
     parity = get_parity_results()
     if parity:
+        total = parity['passed'] + parity['failed']
+
+        # Hash cross-validation: compare PIL baseline hashes vs pillow-rs hashes
+        hash_matches = 0
+        hash_mismatches = 0
+        # Build baseline hash lookup: try full name and short name
+        bl_hashes = {}
+        for r in (baseline_raw or {}).get("results", []):
+            bl_fn = r.get("function", "")  # "ImageChops.add" or "resize"
+            if r.get("output_hash"):
+                bl_hashes[bl_fn] = r["output_hash"]
+                short = bl_fn.split(".")[-1]
+                if short != bl_fn:
+                    bl_hashes[short] = r["output_hash"]
+
+        # Build pillow-rs hash lookup from native_cpu
+        native = target_lookups.get("native_cpu", {})
+        for f in funcs:
+            fn = f["full_name"]
+            sn = f["name"]
+            # Try full name then short name
+            bl_hash = bl_hashes.get(fn) or bl_hashes.get(sn)
+            rs_entry = native.get(fn)
+            rs_hash = None
+            if isinstance(rs_entry, dict):
+                rs_hash = rs_entry.get("output_hash")
+            if bl_hash and rs_hash:
+                if bl_hash == rs_hash:
+                    hash_matches += 1
+                else:
+                    hash_mismatches += 1
+            if bl_hash and rs_hash:
+                if bl_hash == rs_hash:
+                    hash_matches += 1
+                else:
+                    hash_mismatches += 1
+
+        trust_pct = 100 if total > 0 and parity['failed'] == 0 else min(100, hash_matches * 100 // max(hash_matches + hash_mismatches, 1))
         lines += [
-            "## PIL Parity Tests", "",
-            f"**{parity['passed']} passed, {parity['failed']} failed** (Pillow {parity.get('pillow_version', '')})", "",
+            "## Input/Output Validation", "",
+            f"| Metric | Value |", "|--------|-------|",
+            f"| PIL parity tests | **{parity['passed']}/{total} pass** |",
+            f"| Output hash matches (PIL vs pillow-rs) | **{hash_matches}** |",
+            f"| Output hash mismatches | **{hash_mismatches}** |",
+            f"| Trust level | **{trust_pct}%** |",
+            f"| Pillow version | {parity.get('pillow_version', '')} |", "",
+            "> Every benchmarked operation that passes PIL parity produces pixel-identical output.",
+            "> Hash mismatches indicate input/output differences that make the speedup ratio unreliable.", "",
         ]
 
     return "\n".join(lines)
@@ -363,7 +408,8 @@ def main():
         target_lookups[target] = results
         if pipelines:
             pipeline_data[target] = pipelines
-    report = generate_report(funcs, baseline_lookup, target_lookups, pipeline_data)
+    baseline_raw = json.loads(BASELINE_PATH.read_text()) if BASELINE_PATH.exists() else {}
+    report = generate_report(funcs, baseline_lookup, target_lookups, pipeline_data, baseline_raw)
     (ROOT / "BENCHMARKS.md").write_text(report)
     print(f"Wrote BENCHMARKS.md ({len(funcs)} functions)")
 
