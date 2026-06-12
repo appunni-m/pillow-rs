@@ -66,8 +66,8 @@ function runOp(img, op) {
         case 'tobytes': return { toBytes: () => img.toBytes() };
         case 'split': return img.split ? img.split()[0] : null;
         case 'getbands': return img.getbands ? img.getbands() : null;
-        case 'paste': { if (!img.pasteImage) return null; const p = createImage('RGB'); img.pasteImage(p, 0, 0); return img; }
-        case 'alpha_composite': { if (!img.alphaComposite) return null; const fg = createImage('RGBA'); img.alphaComposite(fg); return img; }
+        case 'paste': { const p = createImage('RGB'); img.pasteImage(p, 0, 0); return img; }
+        case 'alpha_composite': { const fg = createImage('RGBA'); img.alphaComposite(fg); return img; }
         case 'point': { if (!img.point) return null; return img.point(new Uint8Array(Array.from({length:256}, (_,i) => Math.min(255, i+50)))); }
         case 'putalpha': img.putalpha(128); return img;
         case 'putdata': { if (!img.putdata) return null; const n = img.width * img.height; const d = new Uint8Array(n); d.fill(128); img.putdata ? img.putdata(d) : (img._putdata ? img._putdata(d) : null); return img; }
