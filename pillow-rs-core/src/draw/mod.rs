@@ -419,6 +419,7 @@ fn plot(canvas: &mut RgbaImage, x: i32, y: i32, color: (u8, u8, u8, u8), w: u32,
 }
 
 /// Midpoint ellipse outline algorithm.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn draw_ellipse_outline(canvas: &mut RgbaImage, cx: i32, cy: i32, rx: i32, ry: i32, color: (u8, u8, u8, u8), w: u32, h: u32) {
     if rx <= 0 || ry <= 0 { return; }
     let rx = rx as f64;

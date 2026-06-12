@@ -3,7 +3,6 @@ use image::{ColorType, DynamicImage};
 /// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
 /// R: 0.299, G: 0.587, B: 0.114
 /// This differs from the image crate's sRGB luminance weights (0.2126, 0.7152, 0.0722).
-
 pub fn color_type_to_mode(ct: ColorType) -> &'static str {
     match ct {
         ColorType::L8 => "L",
