@@ -1347,13 +1347,15 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(DynamicImage::ImageLuma8(out))
         }
         PipelineOp::Offset { x, y } => {
+            // PIL offset: positive (x,y) shifts content right/down.
+            // Map dest (px,py) to source (px-x, py-y) with wrapping.
             let (w, h) = (img.width(), img.height());
             let mut result = DynamicImage::new_rgba8(w, h);
             let src_rgba = img.to_rgba8();
             for py in 0..h {
                 for px in 0..w {
-                    let sx = (px as i32 + x).rem_euclid(w as i32) as u32;
-                    let sy = (py as i32 + y).rem_euclid(h as i32) as u32;
+                    let sx = (px as i32 - x).rem_euclid(w as i32) as u32;
+                    let sy = (py as i32 - y).rem_euclid(h as i32) as u32;
                     result.put_pixel(px, py, *src_rgba.get_pixel(sx, sy));
                 }
             }
