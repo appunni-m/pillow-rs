@@ -110,6 +110,13 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
+        # Handle non-standard modes at Python level
+        if mode in ("CMYK", "YCbCr", "HSV"):
+            # Convert to RGB first, then tag with explicit mode
+            rgb = self._rust_image.convert("RGB", matrix=None, dither=None, palette=palette, colors=colors)
+            img = Image(rgb)
+            img._explicit_mode = mode
+            return img
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
