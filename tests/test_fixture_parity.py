@@ -139,11 +139,15 @@ def _run_op(img, op):
     # ImageChops
     if module == 'ImageChops':
         dual_funcs = {'add','subtract','multiply','screen','darker','lighter',
-                      'difference','add_modulo','subtract_modulo','blend','composite',
+                      'difference','add_modulo','subtract_modulo',
                       'hard_light','soft_light','overlay','logical_and','logical_or',
                       'logical_xor'}
         if func in dual_funcs:
             return getattr(ImageChops, func)(img, img2)
+        if func == 'blend':
+            return ImageChops.blend(img, img2, 0.5)
+        if func == 'composite':
+            return ImageChops.composite(img, img2, img2)
         if func in ('invert', 'duplicate'):
             return getattr(ImageChops, func)(img)
         if func == 'constant':
