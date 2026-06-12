@@ -24,31 +24,34 @@ import PIL.ImageFilter as PILFilter
 import PIL.ImageEnhance as PILImageEnhance
 
 
+_REFERENCE_RGB = None
+
+def _get_reference():
+    """Load complex reference image (gradients, shapes, text — 45K unique colors)."""
+    global _REFERENCE_RGB
+    if _REFERENCE_RGB is None:
+        ref_path = ROOT / "tests" / "test_reference.png"
+        if ref_path.exists():
+            _REFERENCE_RGB = PILImage.open(ref_path).resize((100, 100), PILImage.LANCZOS)
+        else:
+            _REFERENCE_RGB = PILImage.new("RGB", (100, 100), (128, 128, 128))
+    return _REFERENCE_RGB.copy()
+
 def _make_image(mode, size=(100, 100)):
-    """Create a PIL image for the given mode."""
-    if mode == "L":
-        return PILImage.new("L", size, 128)
-    elif mode == "LA":
-        return PILImage.new("LA", size, (128, 255))
-    elif mode == "RGB":
-        return PILImage.new("RGB", size, (255, 0, 0))
-    elif mode == "RGBA":
-        return PILImage.new("RGBA", size, (255, 0, 0, 255))
-    elif mode == "1":
-        return PILImage.new("1", size, 1)
-    elif mode == "P":
-        return PILImage.new("RGB", size, (255, 0, 0)).convert("P")
-    elif mode == "CMYK":
-        return PILImage.new("RGB", size, (255, 0, 0)).convert("CMYK")
-    elif mode == "YCbCr":
-        return PILImage.new("RGB", size, (255, 0, 0)).convert("YCbCr")
-    elif mode == "HSV":
-        return PILImage.new("RGB", size, (255, 0, 0)).convert("HSV")
-    elif mode == "I":
-        return PILImage.new("I", size, 128)
-    elif mode == "F":
-        return PILImage.new("F", size, 0.5)
-    return PILImage.new("RGB", size, (255, 0, 0))
+    """Create PIL image from complex reference for realistic pixel variety."""
+    ref = _get_reference()
+    if mode == "RGB": return ref
+    if mode == "RGBA": return ref.convert("RGBA")
+    if mode == "L": return ref.convert("L")
+    if mode == "LA": return ref.convert("LA")
+    if mode == "1": return ref.convert("1")
+    if mode == "P": return ref.convert("P")
+    if mode == "CMYK": return ref.convert("CMYK")
+    if mode == "YCbCr": return ref.convert("YCbCr")
+    if mode == "HSV": return ref.convert("HSV")
+    if mode == "I": return ref.convert("I")
+    if mode == "F": return ref.convert("F")
+    return ref
 
 
 def run_pil(op_name, mode):
