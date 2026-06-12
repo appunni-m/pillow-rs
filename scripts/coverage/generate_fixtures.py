@@ -209,11 +209,17 @@ def _run_image_op(img, func, mode):
         except Exception:
             return 0, {}
     if func in ("paste",):
-        paste_img = _make_image(mode, (10, 10))
+        # Solid-color paste for deterministic cross-target comparison
+        if mode in ("RGB", "RGBA"):
+            paste_img = PILImage.new(mode, (10, 10), (0, 255, 0))
+        elif mode == "L":
+            paste_img = PILImage.new(mode, (10, 10), 128)
+        else:
+            paste_img = PILImage.new("RGB", (10, 10), (0, 255, 0)).convert(mode)
         img.paste(paste_img, (0, 0))
         return img, {"size": [10, 10], "position": [0, 0]}
     if func in ("alpha_composite",):
-        fg = _make_image("RGBA", (10, 10))
+        fg = PILImage.new("RGBA", (10, 10), (0, 255, 0, 128))
         try:
             img.alpha_composite(fg)
         except Exception:

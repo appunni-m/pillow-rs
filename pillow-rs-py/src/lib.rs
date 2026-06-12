@@ -337,6 +337,50 @@ impl PyImage {
             .map_err(map_error)
     }
 
+    #[classmethod]
+    fn blend(
+        _cls: &Bound<'_, PyType>,
+        image1: &Bound<'_, PyImage>,
+        image2: &Bound<'_, PyImage>,
+        alpha: f64,
+    ) -> PyResult<PyImage> {
+        let im1 = image1.borrow();
+        let im2 = image2.borrow();
+        pillow_rs_core::ops::module_fns::blend(&im1.inner, &im2.inner, alpha)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error)
+    }
+
+    #[classmethod]
+    fn composite(
+        _cls: &Bound<'_, PyType>,
+        image1: &Bound<'_, PyImage>,
+        image2: &Bound<'_, PyImage>,
+        mask: &Bound<'_, PyImage>,
+    ) -> PyResult<PyImage> {
+        let im1 = image1.borrow();
+        let im2 = image2.borrow();
+        let m = mask.borrow();
+        pillow_rs_core::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error)
+    }
+
+    #[classmethod]
+    fn merge(
+        _cls: &Bound<'_, PyType>,
+        mode: &str,
+        bands: Vec<&Bound<'_, PyImage>>,
+    ) -> PyResult<PyImage> {
+        let images: Vec<pillow_rs_core::image::Image> = bands
+            .iter()
+            .map(|b| b.borrow().inner.clone())
+            .collect();
+        pillow_rs_core::ops::module_fns::merge(mode, &images)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error)
+    }
+
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())
