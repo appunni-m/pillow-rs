@@ -20,7 +20,7 @@ python -m pytest tests/ -q --json-report --json-report-file=/tmp/report.json 2>&
 
 echo ""
 echo "=== trust report ==="
-python scripts/compute_coverage.py manifest.yaml /tmp/report.json 2>&1 | grep -E "TRUST|Total"
+python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json 2>&1 | grep -E "TRUST|Total"
 echo ""
 echo "=== wasm build ==="
 wasm-pack build --target web --dev 2>&1 | tail -2

@@ -36,7 +36,7 @@ Workspace with three crates:
 - Single Python test suite in `tests/` runs against both Pillow and pillow-rs
 - Tests use `@pytest.mark.covers("function_name", mode=..., variant=...)` markers
 - `manifest.yaml` is the single source of truth for the API surface
-- Coverage is computed by `scripts/compute_coverage.py` after each test run
+- Coverage is computed by `scripts/coverage/compute_coverage.py` after each test run
 
 ### Building
 - Python: `maturin develop --release` (from `pillow-rs-py/`)
@@ -61,9 +61,9 @@ All work starts from `manifest.yaml`. To add a new function:
 6. Register new module in `pillow-rs-py/python/pillow_rs/__init__.py`
 7. Update `pillow-rs-core/src/ops/mod.rs` if new module added
 8. Write PIL parity tests in `tests/` using `assert_images_equal()` or `assert_values_equal()`
-9. **CRITICAL**: Add test name → manifest function mapping in `scripts/compute_coverage.py` `func_name_map` dict — otherwise coverage won't increase
+9. **CRITICAL**: Add test name → manifest function mapping in `scripts/coverage/compute_coverage.py` `func_name_map` dict — otherwise coverage won't increase
 10. Run `python -m pytest tests/ --json-report --json-report-file=/tmp/report.json`
-11. Run `python scripts/compute_coverage.py manifest.yaml /tmp/report.json` to verify coverage increased
+11. Run `python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json` to verify coverage increased
 
 ### Building (correct commands)
 - Python: `maturin develop --manifest-path pillow-rs-py/Cargo.toml` (from repo root)
@@ -84,9 +84,9 @@ All work starts from `manifest.yaml`. To add a new function:
 **Files involved:**
 | File | Purpose |
 |------|---------|
-| `scripts/coverage_map.json` | Source of truth: 221 test→function mappings |
-| `scripts/compute_coverage.py` | Reads JSON + `manifest.yaml` + pytest report → trust report |
-| `scripts/generate_coverage_page.py` | Full COVERAGE.md generator with benchmarks |
+| `scripts/coverage/coverage_map.json` | Source of truth: 221 test→function mappings |
+| `scripts/coverage/compute_coverage.py` | Reads JSON + `manifest.yaml` + pytest report → trust report |
+| `scripts/coverage/generate_coverage_page.py` | Full COVERAGE.md generator with benchmarks |
 | `manifest.yaml` | API surface definition with status per function |
 | `tests/conftest.py` | PIL parity fixtures (`assert_images_equal`, `assert_values_equal`) |
 
@@ -94,17 +94,17 @@ All work starts from `manifest.yaml`. To add a new function:
 ```
 pytest tests/ --json-report --json-report-file=/tmp/report.json
         ↓
-python scripts/compute_coverage.py manifest.yaml /tmp/report.json
+python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
         ↓
     TRUST REPORT: 135/135 TRUSTED, 5 stubs, 0 untracked
 ```
 
 **Adding a new test:**
 1. Add test function in `tests/test_<module>.py`
-2. Add entry to `scripts/coverage_map.json`: `"test_name": ["Module.function"]`
+2. Add entry to `scripts/coverage/coverage_map.json`: `"test_name": ["Module.function"]`
 3. For tests inside classes: `"ClassName::test_name": ["Module.function"]`
 4. For name collisions across files: `"file_name::test_name": ["Module.function"]`
-5. Run coverage to verify: `python scripts/compute_coverage.py manifest.yaml /tmp/report.json`
+5. Run coverage to verify: `python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json`
 6. Verify 0 UNTRACKED tests and function is now TRUSTED
 
 **Coverage guarantees:**

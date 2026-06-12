@@ -1,14 +1,14 @@
 # pillow-rs Coverage Report
 
-> Auto-generated: 2026-06-12 11:19:29 | Pillow 12.2.0
+> Auto-generated: 2026-06-12 15:43:25 | Pillow 12.2.0
 
 ## Trust Summary
 
 | Metric | Value |
 |--------|-------|
-| **Total tests** | 256 |
-| **Passing** | 232 |
-| **Failed** | 24 |
+| **Total tests** | 296 |
+| **Passing** | 294 |
+| **Failed** | 2 |
 | **Implemented functions** | 135 |
 | **Trusted (PIL parity tested)** | 115 |
 | **Untested** | 20 |
@@ -21,33 +21,38 @@
 
 | Operation | Speedup | Faster? |
 |-----------|---------|---------|
-| resize_2k_to_1k | 34.90× | ✅ |
-| crop_2k | 0.72× | ❌ |
-| convert_2k_RGB_to_L | 2.41× | ✅ |
-| transpose_2k_FLIP | 3.69× | ✅ |
-| filter_2k_BLUR | 144.47× | ✅ |
-| paste_2k | 1.15× | ✅ |
-| invert_2k | 2.92× | ✅ |
+| resize_2k_to_1k | 31.31× | ✅ |
+| crop_2k | 0.67× | ❌ |
+| convert_2k_RGB_to_L | 2.09× | ✅ |
+| transpose_2k_FLIP | 3.29× | ✅ |
+| filter_2k_BLUR | 72.27× | ✅ |
+| paste_2k | 1.11× | ✅ |
+| invert_2k | 3.15× | ✅ |
 
-**Average speedup: 27.18×**
+**Average speedup: 16.27×**
 
 ## Module Status
 
 | Module | Implemented | Trusted | Untested | Trust % |
 |--------|------------|---------|----------|---------|
-| Image | 51 | 49 | 2 | 96% |
+| Image | 51 | 44 | 7 | 86% |
 | ImageChops | 21 | 13 | 8 | 62% |
 | ImageColor | 2 | 2 | 0 | 100% |
 | ImageDraw | 18 | 18 | 0 | 100% |
 | ImageFont | 10 | 5 | 5 | 50% |
-| ImageModule | 10 | 6 | 4 | 60% |
-| ImageOps | 18 | 17 | 1 | 94% |
+| ImageModule | 10 | 10 | 0 | 100% |
+| ImageOps | 18 | 18 | 0 | 100% |
 | ImagePalette | 5 | 5 | 0 | 100% |
 
 ## ⚠️ Untested Functions
 
+- `Image.effect_spread`
+- `Image.entropy`
+- `Image.getcolors`
+- `Image.getprojection`
+- `Image.point`
+- `Image.quantize`
 - `Image.rotate`
-- `Image.tell`
 - `ImageChops.add`
 - `ImageChops.darker`
 - `ImageChops.difference`
@@ -61,11 +66,6 @@
 - `ImageFont.getmask`
 - `ImageFont.getmetrics`
 - `ImageFont.getname`
-- `ImageModule.alpha_composite`
-- `ImageModule.frombytes`
-- `ImageModule.new`
-- `ImageModule.open`
-- `ImageOps.deform`
 
 ## ⬜ Remaining Stubs
 
@@ -97,7 +97,7 @@
 - `tests/test_error_parity.py::test_new_nonstandard_modes[YCbCr]`
 - `tests/test_error_parity.py::test_resize_nonstandard_modes[CMYK]`
 - `tests/test_error_parity.py::test_resize_nonstandard_modes[F]`
-- ... and 42 more
+- ... and 96 more
 
 ## Reverse Verification
 
@@ -119,14 +119,14 @@ Every test in the trust report validates PIL-RSPIL parity:
 | Operation | L | LA | RGB | RGBA | 1 | P | CMYK | YCbCr | HSV | I | F |
 |-----------|---|---|---|---|---|---|---|---|---|---|---|
 | `open` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `new` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `resize` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `crop` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `rotate` | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `new` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `resize` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `crop` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `rotate` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
 | `transpose` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `convert` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `paste` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `filter` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `filter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `copy` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `split` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `getbands` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
@@ -136,25 +136,25 @@ Every test in the trust report validates PIL-RSPIL parity:
 | `close` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `getbbox` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `getchannel` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `getcolors` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `getcolors` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `getdata` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `getextrema` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `getpixel` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getprojection` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `getprojection` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `histogram` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `load` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `point` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `point` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `putalpha` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `putdata` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `putpixel` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `quantize` | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `quantize` | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `reduce` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `seek` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `tell` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `tell` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `transform` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `verify` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `effect_spread` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `entropy` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `effect_spread` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `entropy` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `draft` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `remap_palette` | N/A | N/A | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `tobitmap` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
@@ -168,7 +168,7 @@ Every test in the trust report validates PIL-RSPIL parity:
 | `composite` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `eval` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `fromarray` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `frombytes` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `frombytes` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `effect_noise` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
 ### ImageDraw
@@ -194,4 +194,4 @@ Every test in the trust report validates PIL-RSPIL parity:
 | `textlength` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
 
-*Report generated by `scripts/generate_coverage_page.py`*
+*Report generated by `scripts/coverage/generate_coverage_page.py`*
