@@ -136,7 +136,7 @@ def _run_image_op(img, func, mode):
     if func in ("putpixel",):
         img.putpixel((0, 0), (255, 0, 0, 255) if len(img.getbands()) == 4 else (255, 0, 0))
         return img, {}
-    return img
+    return img, {}
 
 
 def _run_imageops(img, func, mode):
@@ -155,7 +155,7 @@ def _run_imageops(img, func, mode):
     if func in ("exif_transpose",):
         return img, {}
     if func in ("deform",): return img, {}
-    return img
+    return img, {}
 
 
 def _run_chops(img, func, mode):
@@ -172,7 +172,7 @@ def _run_chops(img, func, mode):
         if func == "constant":
             return getattr(PILImageChops, func)(img, 128), {"func": func, "value": 128}
         return getattr(PILImageChops, func)(img), {"func": func}
-    return img
+    return img, {}
 
 
 def _run_filter(img, func):
@@ -203,10 +203,10 @@ def _run_module_func(img, func, mode):
         fg = _make_image("RGBA", (10, 10))
         img2 = img.copy()
         img2.alpha_composite(fg)
-        return img2
+        return img2, {}
     if func in ("new", "open", "fromarray", "frombytes"):
-        return img  # return identity image for these
-    return img
+        return img, {}
+    return img, {}
 
 
 def _run_draw(img, func, mode):
@@ -235,8 +235,8 @@ def _run_draw(img, func, mode):
         bitmap = _make_image("L", (10, 10))
         draw.bitmap((5, 5), bitmap, fill=fill)
     elif func in ("textbbox", "multiline_textbbox", "textlength"):
-        return img  # return identity, these return values not images
-    return img
+        return img, {}
+    return img, {}
 
 
 def main():
