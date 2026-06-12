@@ -198,53 +198,6 @@ impl Image {
         }
     }
 
-    /// Materialize and return a mutable reference to the decoded image.
-    /// Used by methods that need to mutate pixel data (putpixel, putdata, etc).
-    /// This forces full materialization of any pipeline.
-    fn materialize_mut(&mut self) -> Result<&mut DynamicImage, PilError> {
-        // Convert non-Loaded variants to Loaded
-        match self {
-            Image::Loaded(_, _) => return Ok(match self {
-                Image::Loaded(ref mut img, _) => img,
-                _ => unreachable!(),
-            }),
-            Image::Path { path, format, is_paletted, .. } => {
-                let img = image::open(path).map_err(PilError::ImageError)?;
-                let mut mode = detect_format_mode(&img, *format);
-                if mode.is_none() && *is_paletted {
-                    mode = Some("P".to_string());
-                }
-                *self = Image::Loaded(img, mode);
-            }
-            Image::Bytes { data, format, is_paletted, .. } => {
-                let cursor = std::io::Cursor::new(data.as_ref());
-                let reader = image::ImageReader::new(cursor)
-                    .with_guessed_format()
-                    .map_err(PilError::Io)?;
-                let detected_fmt = reader.format().or(*format);
-                let img = reader.decode().map_err(PilError::ImageError)?;
-                let mut mode = detect_format_mode(&img, detected_fmt);
-                // Override for paletted PNG detected from PLTE chunk
-                if mode.is_none() && *is_paletted {
-                    mode = Some("P".to_string());
-                }
-                *self = Image::Loaded(img, mode);
-            }
-            Image::Pipeline { source, ops, .. } => {
-                let mut img = source.materialize()?;
-                for op in ops {
-                    img = execute_op(&img, op)?;
-                }
-                *self = Image::Loaded(img, None);
-            }
-        };
-        
-        match self {
-            Image::Loaded(ref mut img, _) => Ok(img),
-            _ => unreachable!(),
-        }
-    }
-
     // ── Pipeline ops ──
 
     /// Append an op to the pipeline chain.
@@ -279,17 +232,9 @@ impl Image {
 
     /// Set a single pixel. Mutates self in-place.
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), PilError> {
-        let img = self.materialize_mut()?;
-        if x >= img.width() || y >= img.height() {
-            return Err(PilError::ValueError(format!(
-                "pixel ({},{}) out of bounds ({}x{})",
-                x,
-                y,
-                img.width(),
-                img.height()
-            )));
-        }
-        img.put_pixel(x, y, image::Rgba([r, g, b, a]));
+        // Defer via pipeline — consistent with all other ops
+        let new_self = Image::push_op(self, PipelineOp::PutPixel { x, y, color: (r, g, b, a) });
+        *self = new_self;
         Ok(())
     }
 
@@ -424,42 +369,10 @@ impl Image {
     }
 
     /// Set pixel data from a flat byte sequence (matching image mode dimensions).
+    /// Pipelined — data is stored and applied lazily at materialize time.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
-        let img = self.materialize_mut()?;
-        let (w, h) = (img.width() as usize, img.height() as usize);
-        let expected = match img.color() {
-            image::ColorType::L8 | image::ColorType::L16 => w * h,
-            image::ColorType::La8 | image::ColorType::La16 => w * h * 2,
-            image::ColorType::Rgb8 | image::ColorType::Rgb16 => w * h * 3,
-            _ => w * h * 4,
-        };
-        if data.len() < expected {
-            return Err(PilError::ValueError(format!(
-                "putdata: expected {} bytes, got {}",
-                expected,
-                data.len()
-            )));
-        }
-        match img.color() {
-            image::ColorType::Rgb8 | image::ColorType::Rgb16 => {
-                let copy = data[..expected].to_vec();
-                let rgb = image::RgbImage::from_raw(w as u32, h as u32, copy)
-                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
-                *img = DynamicImage::ImageRgb8(rgb);
-            }
-            image::ColorType::L8 | image::ColorType::L16 => {
-                let copy = data[..expected].to_vec();
-                let gray = image::GrayImage::from_raw(w as u32, h as u32, copy)
-                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
-                *img = DynamicImage::ImageLuma8(gray);
-            }
-            _ => {
-                let copy = data[..expected].to_vec();
-                let rgba = image::RgbaImage::from_raw(w as u32, h as u32, copy)
-                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
-                *img = DynamicImage::ImageRgba8(rgba);
-            }
-        }
+        let new_self = Image::push_op(self, PipelineOp::PutData { data: data.to_vec() });
+        *self = new_self;
         Ok(())
     }
 
@@ -489,49 +402,10 @@ impl Image {
     }
 
     /// Set/replace alpha channel. Preserves mode: L→LA, RGB→RGBA, LA→LA, RGBA→RGBA.
+    /// Set alpha channel: L→LA, RGB→RGBA, LA→replace alpha. Pipelined.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
-        let img = self.materialize_mut()?;
-        match img.color() {
-            image::ColorType::L8 => {
-                let luma = img.to_luma8();
-                let mut la: image::ImageBuffer<image::LumaA<u8>, Vec<u8>> =
-                    image::ImageBuffer::new(luma.width(), luma.height());
-                for (out_px, in_px) in la.pixels_mut().zip(luma.pixels()) {
-                    out_px[0] = in_px[0];
-                    out_px[1] = alpha;
-                }
-                *img = DynamicImage::ImageLumaA8(la);
-            }
-            image::ColorType::La8 => {
-                let rgba = img.to_rgba8();
-                let mut la: image::ImageBuffer<image::LumaA<u8>, Vec<u8>> =
-                    image::ImageBuffer::new(rgba.width(), rgba.height());
-                for (out_px, in_px) in la.pixels_mut().zip(rgba.pixels()) {
-                    out_px[0] = in_px[0];
-                    out_px[1] = alpha;
-                }
-                *img = DynamicImage::ImageLumaA8(la);
-            }
-            image::ColorType::Rgb8 => {
-                let rgb = img.to_rgb8();
-                let mut rgba: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> =
-                    image::ImageBuffer::new(rgb.width(), rgb.height());
-                for (out_px, in_px) in rgba.pixels_mut().zip(rgb.pixels()) {
-                    out_px[0] = in_px[0];
-                    out_px[1] = in_px[1];
-                    out_px[2] = in_px[2];
-                    out_px[3] = alpha;
-                }
-                *img = DynamicImage::ImageRgba8(rgba);
-            }
-            _ => {
-                let mut rgba = img.to_rgba8();
-                for p in rgba.pixels_mut() {
-                    p[3] = alpha;
-                }
-                *img = DynamicImage::ImageRgba8(rgba);
-            }
-        }
+        let new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha });
+        *self = new_self;
         Ok(())
     }
 
@@ -1477,6 +1351,82 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 return Ok(img.clone());
             }
             Ok(img.blur(*distance as f32))
+        }
+        PipelineOp::PutPixel { x, y, color } => {
+            let mut rgba = img.to_rgba8();
+            let (w, h) = (rgba.width(), rgba.height());
+            if *x >= w || *y >= h {
+                return Err(PilError::ValueError(format!(
+                    "pixel ({},{}) out of bounds ({}x{})", x, y, w, h
+                )));
+            }
+            rgba.put_pixel(*x, *y, image::Rgba([color.0, color.1, color.2, color.3]));
+            Ok(preserve_mode(img, DynamicImage::ImageRgba8(rgba)))
+        }
+        PipelineOp::PutData { data } => {
+            let (w, h) = (img.width() as usize, img.height() as usize);
+            let expected = match img.color() {
+                image::ColorType::L8 => w * h,
+                image::ColorType::La8 => w * h * 2,
+                image::ColorType::Rgb8 => w * h * 3,
+                _ => w * h * 4,
+            };
+            if data.len() < expected {
+                return Err(PilError::ValueError(format!(
+                    "putdata: expected {} bytes, got {}", expected, data.len()
+                )));
+            }
+            match img.color() {
+                image::ColorType::Rgb8 => {
+                    let rgb = image::RgbImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+                        .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+                    Ok(DynamicImage::ImageRgb8(rgb))
+                }
+                image::ColorType::L8 => {
+                    let gray = image::GrayImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+                        .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+                    Ok(DynamicImage::ImageLuma8(gray))
+                }
+                _ => {
+                    let rgba = image::RgbaImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+                        .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+                    Ok(DynamicImage::ImageRgba8(rgba))
+                }
+            }
+        }
+        PipelineOp::PutAlpha { alpha } => {
+            let out = match img.color() {
+                image::ColorType::L8 => {
+                    let luma = img.to_luma8();
+                    let mut la = image::GrayAlphaImage::new(luma.width(), luma.height());
+                    for (o, i) in la.pixels_mut().zip(luma.pixels()) {
+                        o[0] = i[0]; o[1] = *alpha;
+                    }
+                    DynamicImage::ImageLumaA8(la)
+                }
+                image::ColorType::La8 => {
+                    let rgba = img.to_rgba8();
+                    let mut la = image::GrayAlphaImage::new(rgba.width(), rgba.height());
+                    for (o, i) in la.pixels_mut().zip(rgba.pixels()) {
+                        o[0] = i[0]; o[1] = *alpha;
+                    }
+                    DynamicImage::ImageLumaA8(la)
+                }
+                image::ColorType::Rgb8 => {
+                    let rgb = img.to_rgb8();
+                    let mut rgba = image::RgbaImage::new(rgb.width(), rgb.height());
+                    for (o, i) in rgba.pixels_mut().zip(rgb.pixels()) {
+                        o[0] = i[0]; o[1] = i[1]; o[2] = i[2]; o[3] = *alpha;
+                    }
+                    DynamicImage::ImageRgba8(rgba)
+                }
+                _ => {
+                    let mut rgba = img.to_rgba8();
+                    for p in rgba.pixels_mut() { p[3] = *alpha; }
+                    DynamicImage::ImageRgba8(rgba)
+                }
+            };
+            Ok(out)
         }
         PipelineOp::Paste { source, x, y, w: _w, h: _h, mask } => {
             let src_img = source.materialize()?;
