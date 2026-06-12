@@ -370,12 +370,16 @@ impl PyImage {
     fn merge(
         _cls: &Bound<'_, PyType>,
         mode: &str,
-        bands: Vec<&Bound<'_, PyImage>>,
+        bands: &Bound<'_, PyAny>,
     ) -> PyResult<PyImage> {
-        let images: Vec<pillow_rs_core::image::Image> = bands
-            .iter()
-            .map(|b| b.borrow().inner.clone())
-            .collect();
+        let mut images = Vec::new();
+        for item in bands.iter()? {
+            let obj = item?;
+            let py_img = obj.downcast::<PyImage>().map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err("bands must be a sequence of Image objects")
+            })?;
+            images.push(py_img.borrow().inner.clone());
+        }
         pillow_rs_core::ops::module_fns::merge(mode, &images)
             .map(|img| PyImage { inner: img })
             .map_err(map_error)

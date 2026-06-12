@@ -92,6 +92,11 @@ pub enum PipelineOp {
     // ── Point operations (lookup table) ──
     PointOp { lut: Vec<u8> },
     Transform { w: u32, h: u32, method: TransformMethod, data: Vec<f64>, filter: ResampleFilter, fill: Option<(u8, u8, u8, u8)> },
+
+    // ── Mutating ops (pipelined — replace self with Pipeline) ──
+    PutPixel { x: u32, y: u32, color: (u8, u8, u8, u8) },
+    PutData { data: Vec<u8> },
+    PutAlpha { alpha: u8 },
 }
 
 // ── Support types ──
