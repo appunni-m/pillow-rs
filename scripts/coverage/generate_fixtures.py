@@ -358,10 +358,26 @@ def _run_chops(img, func, mode):
 
 def _run_filter(img, func):
     """Dispatch ImageFilter operations."""
-    filt = getattr(PILFilter, func, None)
-    if filt:
-        return img.filter(filt), {"type": func}
-    return img.filter(PILFilter.BLUR), {"type": "BLUR"}
+    PARAMETRIC = {
+        "BoxBlur": lambda c: c(1),
+        "GaussianBlur": lambda c: c(1),
+        "Kernel": lambda c: c((3, 3), [1] * 9, 9, 0),
+        "RankFilter": lambda c: c(3, 1),
+        "Color3DLUT": lambda c: c(17, "RGB"),
+        "UnsharpMask": lambda c: c(2, 150, 0),
+        "MaxFilter": lambda c: c(3),
+        "MinFilter": lambda c: c(3),
+        "MedianFilter": lambda c: c(3),
+        "ModeFilter": lambda c: c(3),
+    }
+    filt_cls = getattr(PILFilter, func, None)
+    if filt_cls is None:
+        return img.filter(PILFilter.BLUR), {"type": "BLUR"}
+    if func in PARAMETRIC:
+        filt = PARAMETRIC[func](filt_cls)
+    else:
+        filt = filt_cls  # Singleton: BLUR, CONTOUR, DETAIL, etc.
+    return img.filter(filt), {"type": func}
 
 
 def _run_module_func(img, func, mode):
