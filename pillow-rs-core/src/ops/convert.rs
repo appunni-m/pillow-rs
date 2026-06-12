@@ -44,7 +44,7 @@ impl Image {
         // pixel values directly and can't be represented as a simple mode convert.
         if let Some(mat) = matrix {
             let img = self.materialize()?;
-            return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result));
+            return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result, None));
         }
 
         let mode_enum = parse_mode(mode)?;

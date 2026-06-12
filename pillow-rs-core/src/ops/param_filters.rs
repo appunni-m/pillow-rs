@@ -64,7 +64,7 @@ impl Image {
             }
         }
 
-        Ok(Image::Loaded(DynamicImage::ImageRgb8(out)))
+        Ok(Image::Loaded(DynamicImage::ImageRgb8(out), None))
     }
 
     /// Max filter: each pixel becomes the maximum in its neighborhood.
@@ -127,6 +127,6 @@ impl Image {
             }
         }
 
-        Ok(Image::Loaded(DynamicImage::ImageRgb8(out)))
+        Ok(Image::Loaded(DynamicImage::ImageRgb8(out), None))
     }
 }

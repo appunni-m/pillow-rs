@@ -11,8 +11,8 @@ use crate::pipeline::{
 
 #[derive(Debug, Clone)]
 pub enum Image {
-    /// Fully decoded, ready to process or save.
-    Loaded(DynamicImage),
+    /// Fully decoded, ready to process or save. Optional explicit PIL mode.
+    Loaded(DynamicImage, Option<String>),
     /// Path not yet decoded — lazy.
     Path {
         path: PathBuf,
@@ -66,6 +66,16 @@ impl Image {
             "1" => DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
                 width, height, image::Luma([if color.0 > 127 { 255 } else { 0 }]),
             )),
+            // Non-standard modes: stored as closest DynamicImage variant with explicit tag
+            "CMYK" => DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+                width, height, image::Rgba([color.0, color.1, color.2, color.3]),
+            )),
+            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+                width, height, image::Rgb([color.0, color.1, color.2]),
+            )),
+            "I" | "F" => DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
+                width, height, image::Luma([color.0]),
+            )),
             _ => {
                 return Err(PilError::ValueError(format!(
                     "Unsupported mode: {}",
@@ -73,7 +83,12 @@ impl Image {
                 )))
             }
         };
-        Ok(Image::Loaded(img))
+        let explicit = if matches!(mode, "CMYK" | "YCbCr" | "HSV" | "I" | "F") {
+            Some(mode.to_string())
+        } else {
+            None
+        };
+        Ok(Image::Loaded(img, explicit))
     }
 
     /// Create image from raw bytes: `Image.frombytes(mode, size, data)`.
@@ -111,7 +126,7 @@ impl Image {
             ),
             _ => DynamicImage::new_rgba8(w, h),
         };
-        Ok(Image::Loaded(img))
+        Ok(Image::Loaded(img, None))
     }
 
     pub fn open(path: &str, format: Option<&str>) -> Result<Self, PilError> {
@@ -144,7 +159,7 @@ impl Image {
     /// This is where all the lazy work gets done.
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         match self {
-            Image::Loaded(img) => Ok(img.clone()),
+            Image::Loaded(img, _) => Ok(img.clone()),
             Image::Path { path, .. } => {
                 let img = image::open(path).map_err(PilError::ImageError)?;
                 Ok(img)
@@ -172,33 +187,36 @@ impl Image {
     fn materialize_mut(&mut self) -> Result<&mut DynamicImage, PilError> {
         // Convert non-Loaded variants to Loaded
         let loaded = match self {
-            Image::Loaded(_) => return Ok(match self {
-                Image::Loaded(ref mut img) => img,
+            Image::Loaded(_, _) => return Ok(match self {
+                Image::Loaded(ref mut img, _) => img,
                 _ => unreachable!(),
             }),
-            Image::Path { path, .. } => {
+            Image::Path { path, format, .. } => {
                 let img = image::open(path).map_err(PilError::ImageError)?;
-                *self = Image::Loaded(img);
+                let mode = detect_format_mode(&img, *format);
+                *self = Image::Loaded(img, mode);
             }
-            Image::Bytes { data, .. } => {
+            Image::Bytes { data, format, .. } => {
                 let cursor = std::io::Cursor::new(data.as_ref());
                 let reader = image::ImageReader::new(cursor)
                     .with_guessed_format()
                     .map_err(PilError::Io)?;
+                let detected_fmt = reader.format().or(*format);
                 let img = reader.decode().map_err(PilError::ImageError)?;
-                *self = Image::Loaded(img);
+                let mode = detect_format_mode(&img, detected_fmt);
+                *self = Image::Loaded(img, mode);
             }
             Image::Pipeline { source, ops, .. } => {
                 let mut img = source.materialize()?;
                 for op in ops {
                     img = execute_op(&img, op)?;
                 }
-                *self = Image::Loaded(img);
+                *self = Image::Loaded(img, None);
             }
         };
         let _ = loaded;
         match self {
-            Image::Loaded(ref mut img) => Ok(img),
+            Image::Loaded(ref mut img, _) => Ok(img),
             _ => unreachable!(),
         }
     }
@@ -252,6 +270,19 @@ impl Image {
     }
 
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
+        // Check explicit mode for non-standard band names
+        if let Image::Loaded(_, Some(m)) = self {
+            let bands: Vec<String> = match m.as_str() {
+                "CMYK" => vec!["C".to_string(), "M".to_string(), "Y".to_string(), "K".to_string()],
+                "YCbCr" => vec!["Y".to_string(), "Cb".to_string(), "Cr".to_string()],
+                "HSV" => vec!["H".to_string(), "S".to_string(), "V".to_string()],
+                "I" | "F" | "P" | "1" => vec![m.clone()],
+                _ => vec![],
+            };
+            if !bands.is_empty() {
+                return Ok(bands.iter().map(|s| s.to_string()).collect());
+            }
+        }
         let img = self.materialize()?;
         let bands = match img.color().channel_count() {
             1 => vec!["L".to_string()],
@@ -295,13 +326,25 @@ impl Image {
     }
 
     pub fn mode(&self) -> Result<String, PilError> {
+        if let Image::Loaded(_, Some(m)) = self {
+            return Ok(m.clone());
+        }
+        // Check format on Path/Bytes before materializing
+        match self {
+            Image::Path { format, .. } | Image::Bytes { format, .. } => {
+                if let Some(ImageFormat::Gif) = format {
+                    return Ok("P".to_string());
+                }
+            }
+            _ => {}
+        }
         let img = self.materialize()?;
         Ok(color_type_to_mode(img.color()).to_string())
     }
 
     pub fn format_name(&self) -> Option<String> {
         match self {
-            Image::Loaded(_) => None,
+            Image::Loaded(_, _) => None,
             Image::Path { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
             Image::Bytes { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
             Image::Pipeline { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
@@ -414,7 +457,7 @@ impl Image {
         for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
             gp[0] = rp[ch.min(3)];
         }
-        Ok(Image::Loaded(DynamicImage::ImageLuma8(gray)))
+        Ok(Image::Loaded(DynamicImage::ImageLuma8(gray), None))
     }
 
     /// Set/replace alpha channel. Preserves mode: L→LA, RGB→RGBA, LA→LA, RGBA→RGBA.
@@ -576,7 +619,7 @@ impl Image {
             op[1] = *dest_map.get(ip[1] as usize).unwrap_or(&ip[1]);
             op[2] = *dest_map.get(ip[2] as usize).unwrap_or(&ip[2]);
         }
-        Ok(Image::Loaded(DynamicImage::ImageRgb8(out)))
+        Ok(Image::Loaded(DynamicImage::ImageRgb8(out), None))
     }
 }
 
@@ -604,6 +647,14 @@ fn channel_op_binary(
         }
     }
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+}
+
+/// Detect the correct PIL mode from format + color type.
+fn detect_format_mode(_img: &DynamicImage, format: Option<ImageFormat>) -> Option<String> {
+    match format {
+        Some(ImageFormat::Gif) => Some("P".to_string()),
+        _ => None,
+    }
 }
 
 /// Helper: preserve the color mode of the input image after operations
