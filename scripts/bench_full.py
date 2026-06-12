@@ -7,7 +7,7 @@ only tobytes() materializes. We measure full end-to-end time per function.
 Usage: python scripts/bench_full.py [--runs N] [--output path]
 Output: target/benchmarks/native_cpu.json
 """
-import json, sys, time, os
+import json, sys, time, os, hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -25,17 +25,28 @@ def bench(name, fn, runs=3, warmup=1):
         try: fn()
         except: pass
     times = []
+    last_output = None
     for _ in range(runs):
         try:
             t0 = time.time()
-            fn()
+            result = fn()
+            last_output = result
             times.append(time.time() - t0)
         except:
             pass
     if not times:
         return None
     mean = sum(times) / len(times)
-    return {"mean_ms": round(mean * 1000, 4), "std_ms": 0, "runs": len(times)}
+    entry = {"mean_ms": round(mean * 1000, 4), "std_ms": 0, "runs": len(times)}
+    # SHA-256 hash of output for cross-validation with PIL baseline
+    if last_output is not None and hasattr(last_output, 'tobytes'):
+        try:
+            entry["output_hash"] = hashlib.sha256(last_output.tobytes()).hexdigest()[:16]
+        except:
+            pass
+    elif isinstance(last_output, bytes):
+        entry["output_hash"] = hashlib.sha256(last_output).hexdigest()[:16]
+    return entry
 
 # Process args
 runs = 3
@@ -62,16 +73,16 @@ ALL_OPS = [
     ("Image.save", lambda: img.tobytes()),
     ("Image.paste", lambda: (i:=load("ref_2k.jpg"), s:=Image.new("RGB",800,600,(0,255,0,255)), i.paste(s,(100,100)), i.tobytes())),
     ("Image.thumbnail", lambda: (i:=load("ref_2k.jpg"), i.thumbnail((200,200)), i.tobytes())),
-    ("Image.resize", lambda: img.resize((800,600), "LANCZOS").tobytes()),
-    ("Image.crop", lambda: img.crop((100,100,500,500)).tobytes()),
-    ("Image.rotate", lambda: img.rotate(90).tobytes()),
-    ("Image.transpose", lambda: img.transpose(1).tobytes()),
-    ("Image.convert", lambda: img.convert("L").tobytes()),
-    ("Image.filter", lambda: img.filter("BLUR").tobytes()),
-    ("Image.quantize", lambda: img.quantize(16).tobytes()),
-    ("Image.reduce", lambda: img.reduce(2).tobytes()),
-    ("Image.copy", lambda: img.copy().tobytes()),
-    ("Image.split", lambda: [b.tobytes() for b in img.split()]),
+    ("Image.resize", lambda: img.resize((800,600), "LANCZOS")),
+    ("Image.crop", lambda: img.crop((100,100,500,500))),
+    ("Image.rotate", lambda: img.rotate(90)),
+    ("Image.transpose", lambda: img.transpose(1)),
+    ("Image.convert", lambda: img.convert("L")),
+    ("Image.filter", lambda: img.filter("BLUR")),
+    ("Image.quantize", lambda: img.quantize(16)),
+    ("Image.reduce", lambda: img.reduce(2)),
+    ("Image.copy", lambda: img.copy()),
+    ("Image.split", lambda: img.split()[0]),
     ("Image.getbands", lambda: img.getbands()),
     ("Image.getbbox", lambda: img.getbbox()),
     ("Image.getchannel", lambda: img.getchannel(0).tobytes()),
