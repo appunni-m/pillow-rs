@@ -17,11 +17,13 @@ pub enum Image {
     Path {
         path: PathBuf,
         format: Option<ImageFormat>,
+        is_paletted: bool,
     },
     /// Byte buffer not yet decoded — lazy.
     Bytes {
         data: Arc<Vec<u8>>,
         format: Option<ImageFormat>,
+        is_paletted: bool,
     },
     /// Lazy pipeline — operations recorded, not executed.
     /// source: the input image (loaded or another pipeline).
@@ -133,9 +135,16 @@ impl Image {
         let fmt = format
             .and_then(|f| parse_format_str(f).ok())
             .or_else(|| ImageFormat::from_path(PathBuf::from(path)).ok());
+        // Check if PNG file has palette chunk
+        let is_paletted = fmt == Some(ImageFormat::Png) && {
+            std::fs::read(path)
+                .map(|data| has_plte_chunk(&data))
+                .unwrap_or(false)
+        };
         Ok(Image::Path {
             path: PathBuf::from(path),
             format: fmt,
+            is_paletted,
         })
     }
 
@@ -148,9 +157,11 @@ impl Image {
                 .and_then(|r| r.format())
                 .or_else(|| detect_format_from_magic(&data))
         };
+        let is_paletted = format == Some(ImageFormat::Png) && has_plte_chunk(&data);
         Ok(Image::Bytes {
             data: Arc::new(data),
             format,
+            is_paletted,
         })
     }
 
@@ -192,19 +203,26 @@ impl Image {
                 Image::Loaded(ref mut img, _) => img,
                 _ => unreachable!(),
             }),
-            Image::Path { path, format, .. } => {
+            Image::Path { path, format, is_paletted, .. } => {
                 let img = image::open(path).map_err(PilError::ImageError)?;
-                let mode = detect_format_mode(&img, *format);
+                let mut mode = detect_format_mode(&img, *format);
+                if mode.is_none() && *is_paletted {
+                    mode = Some("P".to_string());
+                }
                 *self = Image::Loaded(img, mode);
             }
-            Image::Bytes { data, format, .. } => {
+            Image::Bytes { data, format, is_paletted, .. } => {
                 let cursor = std::io::Cursor::new(data.as_ref());
                 let reader = image::ImageReader::new(cursor)
                     .with_guessed_format()
                     .map_err(PilError::Io)?;
                 let detected_fmt = reader.format().or(*format);
                 let img = reader.decode().map_err(PilError::ImageError)?;
-                let mode = detect_format_mode(&img, detected_fmt);
+                let mut mode = detect_format_mode(&img, detected_fmt);
+                // Override for paletted PNG detected from PLTE chunk
+                if mode.is_none() && *is_paletted {
+                    mode = Some("P".to_string());
+                }
                 *self = Image::Loaded(img, mode);
             }
             Image::Pipeline { source, ops, .. } => {
@@ -332,12 +350,17 @@ impl Image {
         }
         let img = self.materialize()?;
         // Check format-based mode for Path/Bytes
-        let fmt = match self {
-            Image::Path { format, .. } | Image::Bytes { format, .. } => *format,
-            _ => None,
+        let (fmt, is_paletted) = match self {
+            Image::Path { format, is_paletted: ip, .. } => (*format, *ip),
+            Image::Bytes { format, is_paletted: ip, .. } => (*format, *ip),
+            _ => (None, false),
         };
-        if let Some(detected) = detect_format_mode(&img, fmt) {
-            return Ok(detected);
+        let mut detected = detect_format_mode(&img, fmt);
+        if detected.is_none() && is_paletted {
+            detected = Some("P".to_string());
+        }
+        if let Some(d) = detected {
+            return Ok(d);
         }
         Ok(color_type_to_mode(img.color()).to_string())
     }
@@ -649,6 +672,24 @@ fn channel_op_binary(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
+/// Check if PNG data contains a PLTE (palette) chunk.
+fn has_plte_chunk(data: &[u8]) -> bool {
+    if data.len() < 33 { return false; } // 8 sig + 4 len + 4 IHDR + 13 data + 4 crc = 33 min
+    let mut pos = 8; // Skip PNG signature
+    while pos + 8 <= data.len() {
+        let chunk_type = &data[pos + 4..pos + 8];
+        if chunk_type == b"PLTE" {
+            return true;
+        }
+        if chunk_type == b"IDAT" || chunk_type == b"IEND" {
+            return false; // PLTE must come before IDAT
+        }
+        let len = u32::from_be_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
+        pos += 12 + len; // length(4) + type(4) + data(len) + crc(4)
+    }
+    false
+}
+
 /// Detect image format from magic bytes.
 fn detect_format_from_magic(data: &[u8]) -> Option<ImageFormat> {
     if data.len() >= 3 && &data[..3] == b"GIF" {
@@ -687,7 +728,7 @@ fn detect_format_mode(img: &DynamicImage, format: Option<ImageFormat>) -> Option
                     Some("L".to_string())
                 }
             } else {
-                None // Can't distinguish RGB from paletted without header
+                None // Determined by caller via is_paletted flag
             }
         }
         Some(ImageFormat::Bmp) => {

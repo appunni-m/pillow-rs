@@ -101,8 +101,7 @@ def _make_test_image(mode):
     pytest.param("PNG", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="png_roundtrip")),
     pytest.param("PNG", "RGBA", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGBA", target="cpu", variant="png_roundtrip")),
     pytest.param("PNG", "1", "Image.save", marks=pytest.mark.covers("Image.save", mode="1", target="cpu", variant="png_roundtrip")),
-    pytest.param("PNG", "P", "Image.save", marks=[pytest.mark.covers("Image.save", mode="P", target="cpu", variant="png_roundtrip"),
-                                                   pytest.mark.xfail(reason="PNG mode 'P' loaded as RGBA instead of 'P'")]),
+    pytest.param("PNG", "P", "Image.save", marks=pytest.mark.covers("Image.save", mode="P", target="cpu", variant="png_roundtrip")),
     # JPEG
     pytest.param("JPEG", "L", "Image.save", marks=pytest.mark.covers("Image.save", mode="L", target="cpu", variant="jpeg_roundtrip")),
     pytest.param("JPEG", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="jpeg_roundtrip")),
