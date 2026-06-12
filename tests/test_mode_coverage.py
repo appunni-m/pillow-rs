@@ -298,3 +298,121 @@ def test_deform_works():
     img = Image.new("RGB", (50, 50), (255, 0, 0))
     result = ImageOps.deform(img, None)
     assert result.size == (50, 50)
+
+# ── Remaining mode gaps ────────────────────────────────────────────
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.reduce", mode="RGBA", target="cpu", variant="default")),
+])
+def test_reduce_rgba(PIL, mode):
+    pil_img = PIL.Image.new(mode, (40, 40), (128, 64, 32, 255))
+    rs_img = Image.new(mode, (40, 40), (128, 64, 32, 255))
+    assert_images_equal(rs_img.reduce(2), pil_img.reduce(2))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("L", marks=pytest.mark.covers("Image.open", mode="L", target="cpu", variant="bytes")),
+    pytest.param("LA", marks=pytest.mark.covers("Image.open", mode="LA", target="cpu", variant="bytes")),
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.open", mode="RGBA", target="cpu", variant="bytes")),
+])
+def test_open_modes(PIL, mode):
+    import io
+    color = 128 if mode == "L" else (128, 255) if mode == "LA" else (255, 0, 0, 255)
+    pil_img = PIL.Image.new(mode, (20, 20), color)
+    buf = io.BytesIO()
+    pil_img.save(buf, "PNG")
+    rs_img = Image.open(buf.getvalue())
+    assert rs_img.size == (20, 20)
+
+
+@pytest.mark.covers("Image.tell", target="cpu", variant="default")
+def test_tell_parity(PIL):
+    pil_img = PIL.Image.new("RGB", (20, 20), (255, 0, 0))
+    rs_img = Image.new("RGB", (20, 20), (255, 0, 0))
+    assert rs_img.tell() == pil_img.tell()
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGB", marks=pytest.mark.covers("Image.getprojection", mode="RGB", target="cpu", variant="default")),
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.getprojection", mode="RGBA", target="cpu", variant="default")),
+])
+def test_getprojection_rgb_rgba(PIL, mode):
+    color = (128, 64, 32) if mode == "RGB" else (128, 64, 32, 255)
+    pil_img = PIL.Image.new(mode, (10, 10), color)
+    rs_img = Image.new(mode, (10, 10), color)
+    h1, v1 = rs_img.getprojection()
+    h2, v2 = pil_img.getprojection()
+    assert_values_equal(h1, h2)
+    assert_values_equal(v1, v2)
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.getcolors", mode="RGBA", target="cpu", variant="default")),
+])
+def test_getcolors_rgba(PIL, mode):
+    pil_img = PIL.Image.new(mode, (10, 10), (255, 0, 0, 255))
+    rs_img = Image.new(mode, (10, 10), (255, 0, 0, 255))
+    assert rs_img.getcolors(256) is not None
+    assert_values_equal(rs_img.getcolors(256), pil_img.getcolors(256))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("L", marks=pytest.mark.covers("Image.rotate", mode="L", target="cpu", variant="default")),
+])
+def test_rotate_l(PIL, mode):
+    pil_img = PIL.Image.new(mode, (30, 30), 128)
+    rs_img = Image.new(mode, (30, 30), 128)
+    assert_images_equal(rs_img.rotate(90), pil_img.rotate(90))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.quantize", mode="RGBA", target="cpu", variant="default")),
+])
+def test_quantize_rgba(PIL, mode):
+    pil_img = PIL.Image.new(mode, (30, 30), (128, 64, 32, 255))
+    rs_img = Image.new(mode, (30, 30), (128, 64, 32, 255))
+    pil_q = pil_img.quantize(16)
+    rs_q = rs_img.quantize(16)
+    assert rs_q.size == pil_q.size
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.point", mode="RGBA", target="cpu", variant="default")),
+])
+def test_point_rgba(PIL, mode):
+    pil_img = PIL.Image.new(mode, (20, 20), (128, 64, 32, 255))
+    rs_img = Image.new(mode, (20, 20), (128, 64, 32, 255))
+    lut = bytes([min(255, i + 50) for i in range(256)])
+    assert_images_equal(rs_img.point(lut), pil_img.point(lut))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("LA", marks=pytest.mark.covers("Image.getextrema", mode="LA", target="cpu", variant="default")),
+])
+def test_getextrema_la(PIL, mode):
+    pil_img = PIL.Image.new(mode, (20, 20), (128, 255))
+    rs_img = Image.new(mode, (20, 20), (128, 255))
+    assert_values_equal(rs_img.getextrema(), pil_img.getextrema())
+
+
+@pytest.mark.covers("ImageModule.new", target="cpu", variant="default")
+def test_module_new(PIL):
+    result = pillow_rs.new("RGB", (20, 20), (255, 0, 0))
+    assert result.size == (20, 20)
+
+
+@pytest.mark.covers("ImageModule.open", target="cpu", variant="default")
+def test_module_open(PIL):
+    import io
+    pil_img = PIL.Image.new("RGB", (20, 20), (255, 0, 0))
+    buf = io.BytesIO()
+    pil_img.save(buf, "PNG")
+    result = pillow_rs.open(buf.getvalue())
+    assert result.size == (20, 20)
+
+
+@pytest.mark.covers("ImageModule.frombytes", mode="RGB", target="cpu", variant="default")
+def test_module_frombytes_rgb(PIL):
+    data = b'\x80' * 1200
+    result = pillow_rs.Image.frombytes("RGB", (20, 20), data)
+    assert result.size == (20, 20)
