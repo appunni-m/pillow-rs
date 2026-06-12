@@ -100,8 +100,7 @@ def _make_test_image(mode):
     pytest.param("PNG", "LA", "Image.save", marks=pytest.mark.covers("Image.save", mode="LA", target="cpu", variant="png_roundtrip")),
     pytest.param("PNG", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="png_roundtrip")),
     pytest.param("PNG", "RGBA", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGBA", target="cpu", variant="png_roundtrip")),
-    pytest.param("PNG", "1", "Image.save", marks=[pytest.mark.covers("Image.save", mode="1", target="cpu", variant="png_roundtrip"),
-                                                   pytest.mark.xfail(reason="PNG mode '1' loaded as RGBA instead of '1'")]),
+    pytest.param("PNG", "1", "Image.save", marks=pytest.mark.covers("Image.save", mode="1", target="cpu", variant="png_roundtrip")),
     pytest.param("PNG", "P", "Image.save", marks=[pytest.mark.covers("Image.save", mode="P", target="cpu", variant="png_roundtrip"),
                                                    pytest.mark.xfail(reason="PNG mode 'P' loaded as RGBA instead of 'P'")]),
     # JPEG
@@ -110,12 +109,10 @@ def _make_test_image(mode):
     # GIF
     pytest.param("GIF", "L", "Image.save", marks=pytest.mark.covers("Image.save", mode="L", target="cpu", variant="gif_roundtrip")),
     pytest.param("GIF", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="gif_roundtrip")),
-    pytest.param("GIF", "1", "Image.save", marks=[pytest.mark.covers("Image.save", mode="1", target="cpu", variant="gif_roundtrip"),
-                                                   pytest.mark.xfail(reason="GIF mode '1' loaded incorrectly")]),
+    pytest.param("GIF", "1", "Image.save", marks=pytest.mark.covers("Image.save", mode="1", target="cpu", variant="gif_roundtrip")),
     pytest.param("GIF", "P", "Image.save", marks=pytest.mark.covers("Image.save", mode="P", target="cpu", variant="gif_roundtrip")),
     # BMP
-    pytest.param("BMP", "L", "Image.save", marks=[pytest.mark.covers("Image.save", mode="L", target="cpu", variant="bmp_roundtrip"),
-                                                   pytest.mark.xfail(reason="BMP mode 'L' loaded incorrectly")]),
+    pytest.param("BMP", "L", "Image.save", marks=pytest.mark.covers("Image.save", mode="L", target="cpu", variant="bmp_roundtrip")),
     pytest.param("BMP", "RGB", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGB", target="cpu", variant="bmp_roundtrip")),
     pytest.param("BMP", "RGBA", "Image.save", marks=pytest.mark.covers("Image.save", mode="RGBA", target="cpu", variant="bmp_roundtrip")),
     # TIFF
