@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-12 08:32:21 | commit `8b8b1f3` | 166 functions | 6 targets
+> Auto-generated: 2026-06-12 09:39:56 | commit `82c6994` | 166 functions | 6 targets
 
 ## Summary
 
@@ -8,10 +8,10 @@
 |--------|-------|
 | Functions benchmarked | 166 |
 | Functions with GPU path | 42 |
-| Valid CPU speedups (excl. outliers) | 50 |
-| Outliers flagged ⚠️ | 11 |
-| Average CPU speedup vs Pillow | 6.52× |
-| Native CPU benchmarks run | 61 |
+| Valid CPU speedups (excl. outliers) | 81 |
+| Outliers flagged ⚠️ | 10 |
+| Average CPU speedup vs Pillow | 5.19× |
+| Native CPU benchmarks run | 91 |
 | Missing (no data yet) | 9 |
 
 ## Pipeline Benchmark — 20 Operations (Single- vs Multi-Thread)
@@ -20,24 +20,24 @@
 
 | Variant | Time (ms) | vs Pillow |
 |---------|-----------|-----------|
-| ST | 182.80ms |  |
+| ST | 168.95ms |  |
 
 ## Priority Operations (Tier 1)
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.46× | 0.46× | 1.42× | 0.46× | 1.20× | 1.94× |
-| Image.crop | 1.01× | 1.01× | 3.71× | 1.01× | 3.40× | 3.72× |
-| Image.rotate | 5.24× | 5.24× | 19.79× | 5.24× | 12.79× | 13.29× |
-| Image.transpose | 0.73× | 0.73× | 2.15× | 0.73× | 2.02× | 2.03× |
+| Image.resize | 0.53× | 0.53× | 1.42× | 0.53× | 1.20× | 1.94× |
+| Image.crop | 1.05× | 1.05× | 3.71× | 1.05× | 3.40× | 3.72× |
+| Image.rotate | 5.37× | 5.37× | 19.79× | 5.37× | 12.79× | 13.29× |
+| Image.transpose | 0.74× | 0.74× | 2.15× | 0.74× | 2.02× | 2.03× |
 | Image.thumbnail | — | — | 1.02× | — | 1.63× | 1.55× |
 | Image.new | — | — | 0.20× | — | 0.25× | 0.25× |
 | Image.paste | — | — | — | — | 0.35× | 0.37× |
-| Image.convert | 0.56× | 0.56× | 1.95× | 0.56× | 1.74× | 1.66× |
-| Image.filter | 1.17× | 1.17× | 2.25× | 1.17× | 2.59× | 2.69× |
-| Image.open | 0.53× | 0.53× | 1.98× | 0.53× | 309.90× ⚠️ | 328.40× ⚠️ |
-| Image.save | 3.09× | 3.09× | 2.99× | 3.09× | 3.48× | 3.48× |
-| Image.tobytes | 17.48× | 17.48× | 17.48× | 17.48× | 17.48× | 17.48× |
+| Image.convert | 0.68× | 0.68× | 1.95× | 0.68× | 1.74× | 1.66× |
+| Image.filter | 1.12× | 1.12× | 2.25× | 1.12× | 2.59× | 2.69× |
+| Image.open | 0.55× | 0.55× | 1.98× | 0.55× | 309.90× ⚠️ | 328.40× ⚠️ |
+| Image.save | 3.01× | 3.01× | 2.99× | 3.01× | 3.48× | 3.48× |
+| Image.tobytes | 18.51× | 18.51× | 18.51× | 18.51× | 18.51× | 18.51× |
 
 ## All Functions
 
@@ -45,90 +45,90 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.46× | 0.46× | 1.42× | 0.46× | 1.20× | 1.94× |
-| Image.crop | 1.01× | 1.01× | 3.71× | 1.01× | 3.40× | 3.72× |
-| Image.rotate | 5.24× | 5.24× | 19.79× | 5.24× | 12.79× | 13.29× |
-| Image.transpose | 0.73× | 0.73× | 2.15× | 0.73× | 2.02× | 2.03× |
+| Image.resize | 0.53× | 0.53× | 1.42× | 0.53× | 1.20× | 1.94× |
+| Image.crop | 1.05× | 1.05× | 3.71× | 1.05× | 3.40× | 3.72× |
+| Image.rotate | 5.37× | 5.37× | 19.79× | 5.37× | 12.79× | 13.29× |
+| Image.transpose | 0.74× | 0.74× | 2.15× | 0.74× | 2.02× | 2.03× |
 | Image.thumbnail | — | — | 1.02× | — | 1.63× | 1.55× |
 | Image.new | — | — | 0.20× | — | 0.25× | 0.25× |
 | Image.paste | — | — | — | — | 0.35× | 0.37× |
 | Image.alpha_composite | — | — | — | — | — | — |
-| Image.apply_transparency | 0.25× | 0.25× | 0.25× | 0.25× | 0.25× | 0.25× |
-| Image.close | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ |
-| Image.convert | 0.56× | 0.56× | 1.95× | 0.56× | 1.74× | 1.66× |
-| Image.copy | 0.78× | 0.78× | 0.78× | 0.78× | 0.78× | 0.78× |
-| Image.draft | 185.49× ⚠️ | 185.49× ⚠️ | 185.49× ⚠️ | 185.49× ⚠️ | 185.49× ⚠️ | 185.49× ⚠️ |
-| Image.effect_spread | 98.22× | 98.22× | 98.22× | 98.22× | 98.22× | 98.22× |
-| Image.entropy | 0.30× | 0.30× | 0.30× | 0.30× | 0.30× | 0.30× |
-| Image.filter | 1.17× | 1.17× | 2.25× | 1.17× | 2.59× | 2.69× |
+| Image.apply_transparency | 0.22× | 0.22× | 0.22× | 0.22× | 0.22× | 0.22× |
+| Image.close | 77.75× | 77.75× | 77.75× | 77.75× | 77.75× | 77.75× |
+| Image.convert | 0.68× | 0.68× | 1.95× | 0.68× | 1.74× | 1.66× |
+| Image.copy | 0.79× | 0.79× | 0.79× | 0.79× | 0.79× | 0.79× |
+| Image.draft | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ |
+| Image.effect_spread | 94.09× | 94.09× | 94.09× | 94.09× | 94.09× | 94.09× |
+| Image.entropy | 0.39× | 0.39× | 0.39× | 0.39× | 0.39× | 0.39× |
+| Image.filter | 1.12× | 1.12× | 2.25× | 1.12× | 2.59× | 2.69× |
 | Image.frombytes | — | — | — | — | — | — |
-| Image.get_child_images | 54.16× | 54.16× | 54.16× | 54.16× | 54.16× | 54.16× |
-| Image.get_flattened_data | 29.65× | 29.65× | 29.65× | 29.65× | 29.65× | 29.65× |
-| Image.getbands | 0.37× | 0.37× | 2.62× | 0.37× | 71.37× | 62.76× |
-| Image.getbbox | 0.70× | 0.70× | 2.73× | 0.70× | 15.74× | 14.82× |
-| Image.getchannel | 0.63× | 0.63× | 0.63× | 0.63× | 0.63× | 0.63× |
-| Image.getcolors | 0.20× | 0.20× | 0.20× | 0.20× | 0.20× | 0.20× |
-| Image.getdata | 0.66× | 0.66× | 0.66× | 0.66× | 0.66× | 0.66× |
-| Image.getexif | 237.31× ⚠️ | 237.31× ⚠️ | 237.31× ⚠️ | 237.31× ⚠️ | 237.31× ⚠️ | 237.31× ⚠️ |
-| Image.getextrema | 0.67× | 0.67× | 2.24× | 0.67× | 8.06× | 7.96× |
+| Image.get_child_images | 119.16× ⚠️ | 119.16× ⚠️ | 119.16× ⚠️ | 119.16× ⚠️ | 119.16× ⚠️ | 119.16× ⚠️ |
+| Image.get_flattened_data | 33.23× | 33.23× | 33.23× | 33.23× | 33.23× | 33.23× |
+| Image.getbands | 0.38× | 0.38× | 2.62× | 0.38× | 71.37× | 62.76× |
+| Image.getbbox | 0.75× | 0.75× | 2.73× | 0.75× | 15.74× | 14.82× |
+| Image.getchannel | 0.52× | 0.52× | 0.52× | 0.52× | 0.52× | 0.52× |
+| Image.getcolors | 0.18× | 0.18× | 0.18× | 0.18× | 0.18× | 0.18× |
+| Image.getdata | 0.67× | 0.67× | 0.67× | 0.67× | 0.67× | 0.67× |
+| Image.getexif | 118.65× ⚠️ | 118.65× ⚠️ | 118.65× ⚠️ | 118.65× ⚠️ | 118.65× ⚠️ | 118.65× ⚠️ |
+| Image.getextrema | 0.70× | 0.70× | 2.24× | 0.70× | 8.06× | 7.96× |
 | Image.getim | — | — | — | — | — | — |
-| Image.getpalette | 1025.02× ⚠️ | 1025.02× ⚠️ | 1025.02× ⚠️ | 1025.02× ⚠️ | 1025.02× ⚠️ | 1025.02× ⚠️ |
+| Image.getpalette | 395.62× ⚠️ | 395.62× ⚠️ | 395.62× ⚠️ | 395.62× ⚠️ | 395.62× ⚠️ | 395.62× ⚠️ |
 | Image.getpixel | 0.20× | 0.20× | 2.85× | 0.20× | 25114.13× ⚠️ | 22159.53× ⚠️ |
 | Image.getprojection | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
 | Image.getxmp | — | — | — | — | — | — |
 | Image.histogram | 0.75× | 0.75× | 2.59× | 0.75× | 7.66× | 7.58× |
-| Image.load | 0.70× | 0.70× | 0.70× | 0.70× | 0.70× | 0.70× |
-| Image.open | 0.53× | 0.53× | 1.98× | 0.53× | 309.90× ⚠️ | 328.40× ⚠️ |
+| Image.load | 0.72× | 0.72× | 0.72× | 0.72× | 0.72× | 0.72× |
+| Image.open | 0.55× | 0.55× | 1.98× | 0.55× | 309.90× ⚠️ | 328.40× ⚠️ |
 | Image.point | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
-| Image.putalpha | 34.09× | 34.09× | 34.09× | 34.09× | 34.09× | 34.09× |
+| Image.putalpha | 32.62× | 32.62× | 32.62× | 32.62× | 32.62× | 32.62× |
 | Image.putdata | — | — | — | — | — | — |
-| Image.putpalette | 691.02× ⚠️ | 691.02× ⚠️ | 691.02× ⚠️ | 691.02× ⚠️ | 691.02× ⚠️ | 691.02× ⚠️ |
-| Image.putpixel | 4743.98× ⚠️ | 4743.98× ⚠️ | 86.93× | 4743.98× ⚠️ | 3.86× | 3.85× |
-| Image.quantize | 1.98× | 1.98× | 1.98× | 1.98× | 1.98× | 1.98× |
-| Image.reduce | 0.41× | 0.41× | 1.20× | 0.41× | 2.32× | 1.97× |
+| Image.putpalette | 298.59× ⚠️ | 298.59× ⚠️ | 298.59× ⚠️ | 298.59× ⚠️ | 298.59× ⚠️ | 298.59× ⚠️ |
+| Image.putpixel | 1222.67× ⚠️ | 1222.67× ⚠️ | 86.93× | 1222.67× ⚠️ | 3.86× | 3.85× |
+| Image.quantize | 2.09× | 2.09× | 2.09× | 2.09× | 2.09× | 2.09× |
+| Image.reduce | 0.34× | 0.34× | 1.20× | 0.34× | 2.32× | 1.97× |
 | Image.remap_palette | 0.28× | 0.28× | 0.28× | 0.28× | 0.28× | 0.28× |
-| Image.save | 3.09× | 3.09× | 2.99× | 3.09× | 3.48× | 3.48× |
-| Image.seek | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ |
+| Image.save | 3.01× | 3.01× | 2.99× | 3.01× | 3.48× | 3.48× |
+| Image.seek | 14.88× | 14.88× | 14.88× | 14.88× | 14.88× | 14.88× |
 | Image.show | — | — | — | — | — | — |
 | Image.split | 0.31× | 0.31× | 1.20× | 0.31× | 9.45× | 9.38× |
-| Image.tell | 50.81× | 50.81× | 50.81× | 50.81× | 50.81× | 50.81× |
+| Image.tell | 84.68× | 84.68× | 84.68× | 84.68× | 84.68× | 84.68× |
 | Image.tobitmap | 0.04× | 0.04× | 0.04× | 0.04× | 0.04× | 0.04× |
-| Image.tobytes | 17.48× | 17.48× | 17.48× | 17.48× | 17.48× | 17.48× |
+| Image.tobytes | 18.51× | 18.51× | 18.51× | 18.51× | 18.51× | 18.51× |
 | Image.transform | — | — | — | — | — | — |
-| Image.verify | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× |
+| Image.verify | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× |
 
 ### ImageChops
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageChops.add | — | — | — | — | — | — |
-| ImageChops.add_modulo | — | — | — | — | — | — |
+| ImageChops.add | 0.46× | 0.46× | 0.46× | 0.46× | 0.46× | 0.46× |
+| ImageChops.add_modulo | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× |
 | ImageChops.blend | — | — | — | — | — | — |
 | ImageChops.composite | — | — | — | — | — | — |
-| ImageChops.constant | — | — | — | — | — | — |
-| ImageChops.darker | — | — | — | — | — | — |
-| ImageChops.difference | — | — | — | — | — | — |
+| ImageChops.constant | 0.53× | 0.53× | 0.53× | 0.53× | 0.53× | 0.53× |
+| ImageChops.darker | 0.35× | 0.35× | 0.35× | 0.35× | 0.35× | 0.35× |
+| ImageChops.difference | 0.31× | 0.31× | 0.31× | 0.31× | 0.31× | 0.31× |
 | ImageChops.duplicate | — | — | — | — | — | — |
-| ImageChops.hard_light | — | — | — | — | — | — |
-| ImageChops.invert | — | — | — | — | — | — |
-| ImageChops.lighter | — | — | — | — | — | — |
-| ImageChops.logical_and | — | — | — | — | — | — |
-| ImageChops.logical_or | — | — | — | — | — | — |
-| ImageChops.logical_xor | — | — | — | — | — | — |
-| ImageChops.multiply | — | — | — | — | — | — |
-| ImageChops.offset | — | — | — | — | — | — |
-| ImageChops.overlay | — | — | — | — | — | — |
-| ImageChops.screen | — | — | — | — | — | — |
-| ImageChops.soft_light | — | — | — | — | — | — |
-| ImageChops.subtract | — | — | — | — | — | — |
-| ImageChops.subtract_modulo | — | — | — | — | — | — |
+| ImageChops.hard_light | 0.44× | 0.44× | 0.44× | 0.44× | 0.44× | 0.44× |
+| ImageChops.invert | 0.57× | 0.57× | 0.57× | 0.57× | 0.57× | 0.57× |
+| ImageChops.lighter | 0.32× | 0.32× | 0.32× | 0.32× | 0.32× | 0.32× |
+| ImageChops.logical_and | 0.40× | 0.40× | 0.40× | 0.40× | 0.40× | 0.40× |
+| ImageChops.logical_or | 0.42× | 0.42× | 0.42× | 0.42× | 0.42× | 0.42× |
+| ImageChops.logical_xor | 0.38× | 0.38× | 0.38× | 0.38× | 0.38× | 0.38× |
+| ImageChops.multiply | 0.34× | 0.34× | 0.34× | 0.34× | 0.34× | 0.34× |
+| ImageChops.offset | 0.87× | 0.87× | 0.87× | 0.87× | 0.87× | 0.87× |
+| ImageChops.overlay | 0.41× | 0.41× | 0.41× | 0.41× | 0.41× | 0.41× |
+| ImageChops.screen | 0.38× | 0.38× | 0.38× | 0.38× | 0.38× | 0.38× |
+| ImageChops.soft_light | 0.41× | 0.41× | 0.41× | 0.41× | 0.41× | 0.41× |
+| ImageChops.subtract | 0.39× | 0.39× | 0.39× | 0.39× | 0.39× | 0.39× |
+| ImageChops.subtract_modulo | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× |
 
 ### ImageColor
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageColor.getcolor | 0.45× | 0.45× | 0.45× | 0.45× | 0.45× | 0.45× |
-| ImageColor.getrgb | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× |
+| ImageColor.getcolor | 0.07× | 0.07× | 0.07× | 0.07× | 0.07× | 0.07× |
+| ImageColor.getrgb | 0.16× | 0.16× | 0.16× | 0.16× | 0.16× | 0.16× |
 
 ### ImageDraw
 
@@ -157,24 +157,24 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageEnhance.Brightness | 22087.06× ⚠️ | 22087.06× ⚠️ | 2.38× | 22087.06× ⚠️ | 5.00× | 5.26× |
-| ImageEnhance.Color | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ |
-| ImageEnhance.Contrast | 21903.19× ⚠️ | 21903.19× ⚠️ | 21903.19× ⚠️ | 21903.19× ⚠️ | 21903.19× ⚠️ | 21903.19× ⚠️ |
-| ImageEnhance.Sharpness | 40336.24× ⚠️ | 40336.24× ⚠️ | 40336.24× ⚠️ | 40336.24× ⚠️ | 40336.24× ⚠️ | 40336.24× ⚠️ |
+| ImageEnhance.Brightness | 13592.03× ⚠️ | 13592.03× ⚠️ | 2.38× | 13592.03× ⚠️ | 5.00× | 5.26× |
+| ImageEnhance.Color | 12748.50× ⚠️ | 12748.50× ⚠️ | 12748.50× ⚠️ | 12748.50× ⚠️ | 12748.50× ⚠️ | 12748.50× ⚠️ |
+| ImageEnhance.Contrast | 15163.75× ⚠️ | 15163.75× ⚠️ | 15163.75× ⚠️ | 15163.75× ⚠️ | 15163.75× ⚠️ | 15163.75× ⚠️ |
+| ImageEnhance.Sharpness | 29579.91× ⚠️ | 29579.91× ⚠️ | 29579.91× ⚠️ | 29579.91× ⚠️ | 29579.91× ⚠️ | 29579.91× ⚠️ |
 
 ### ImageFilter
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageFilter.BLUR | — | — | — | — | — | — |
+| ImageFilter.BLUR | 2.15× | 2.15× | 2.15× | 2.15× | 2.15× | 2.15× |
 | ImageFilter.BoxBlur | — | — | — | — | — | — |
-| ImageFilter.CONTOUR | — | — | — | — | — | — |
+| ImageFilter.CONTOUR | 1.16× | 1.16× | 1.16× | 1.16× | 1.16× | 1.16× |
 | ImageFilter.Color3DLUT | — | — | — | — | — | — |
-| ImageFilter.DETAIL | — | — | — | — | — | — |
-| ImageFilter.EDGE_ENHANCE | — | — | — | — | — | — |
-| ImageFilter.EDGE_ENHANCE_MORE | — | — | — | — | — | — |
-| ImageFilter.EMBOSS | — | — | — | — | — | — |
-| ImageFilter.FIND_EDGES | — | — | — | — | — | — |
+| ImageFilter.DETAIL | 1.14× | 1.14× | 1.14× | 1.14× | 1.14× | 1.14× |
+| ImageFilter.EDGE_ENHANCE | 1.30× | 1.30× | 1.30× | 1.30× | 1.30× | 1.30× |
+| ImageFilter.EDGE_ENHANCE_MORE | 1.34× | 1.34× | 1.34× | 1.34× | 1.34× | 1.34× |
+| ImageFilter.EMBOSS | 1.24× | 1.24× | 1.24× | 1.24× | 1.24× | 1.24× |
+| ImageFilter.FIND_EDGES | 1.26× | 1.26× | 1.26× | 1.26× | 1.26× | 1.26× |
 | ImageFilter.GaussianBlur | — | — | 2.04× | — | 2.15× | 2.31× |
 | ImageFilter.Kernel | — | — | — | — | — | — |
 | ImageFilter.MaxFilter | — | — | — | — | — | — |
@@ -182,9 +182,9 @@
 | ImageFilter.MinFilter | — | — | — | — | — | — |
 | ImageFilter.ModeFilter | — | — | — | — | — | — |
 | ImageFilter.RankFilter | — | — | — | — | — | — |
-| ImageFilter.SHARPEN | — | — | — | — | — | — |
-| ImageFilter.SMOOTH | — | — | — | — | — | — |
-| ImageFilter.SMOOTH_MORE | — | — | — | — | — | — |
+| ImageFilter.SHARPEN | 1.29× | 1.29× | 1.29× | 1.29× | 1.29× | 1.29× |
+| ImageFilter.SMOOTH | 1.08× | 1.08× | 1.08× | 1.08× | 1.08× | 1.08× |
+| ImageFilter.SMOOTH_MORE | 2.21× | 2.21× | 2.21× | 2.21× | 2.21× | 2.21× |
 | ImageFilter.UnsharpMask | — | — | — | — | — | — |
 
 ### ImageFont
@@ -213,8 +213,8 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | ImageModule.new | — | — | — | — | — | — |
 | ImageModule.alpha_composite | — | — | — | — | — | — |
-| ImageModule.blend | — | — | — | — | — | — |
-| ImageModule.composite | — | — | — | — | — | — |
+| ImageModule.blend | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× |
+| ImageModule.composite | 0.06× | 0.06× | 0.06× | 0.06× | 0.06× | 0.06× |
 | ImageModule.effect_noise | — | — | — | — | — | — |
 | ImageModule.eval | — | — | — | — | — | — |
 | ImageModule.fromarray | — | — | — | — | — | — |
@@ -226,24 +226,24 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageOps.crop | 0.52× | 0.52× | 0.52× | 0.52× | 0.52× | 0.52× |
+| ImageOps.crop | 0.55× | 0.55× | 0.55× | 0.55× | 0.55× | 0.55× |
 | ImageOps.autocontrast | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× |
-| ImageOps.colorize | 1.03× | 1.03× | 1.03× | 1.03× | 1.03× | 1.03× |
-| ImageOps.contain | 0.93× | 0.93× | 0.93× | 0.93× | 0.93× | 0.93× |
+| ImageOps.colorize | 1.02× | 1.02× | 1.02× | 1.02× | 1.02× | 1.02× |
+| ImageOps.contain | 0.98× | 0.98× | 0.98× | 0.98× | 0.98× | 0.98× |
 | ImageOps.cover | — | — | — | — | — | — |
 | ImageOps.deform | — | — | — | — | — | — |
-| ImageOps.equalize | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× |
+| ImageOps.equalize | 0.13× | 0.13× | 0.13× | 0.13× | 0.13× | 0.13× |
 | ImageOps.exif_transpose | — | — | — | — | — | — |
-| ImageOps.expand | 0.58× | 0.58× | 0.58× | 0.58× | 0.58× | 0.58× |
+| ImageOps.expand | 0.61× | 0.61× | 0.61× | 0.61× | 0.61× | 0.61× |
 | ImageOps.fit | — | — | — | — | — | — |
-| ImageOps.flip | 4.36× | 4.36× | 4.36× | 4.36× | 4.36× | 4.36× |
-| ImageOps.grayscale | 4.05× | 4.05× | 2.07× | 4.05× | 4.49× | 4.82× |
-| ImageOps.invert | 0.62× | 0.62× | 0.30× | 0.62× | 0.94× | 0.96× |
-| ImageOps.mirror | 4.01× | 4.01× | 4.01× | 4.01× | 4.01× | 4.01× |
-| ImageOps.pad | 0.46× | 0.46× | 0.46× | 0.46× | 0.46× | 0.46× |
-| ImageOps.posterize | 0.55× | 0.55× | 0.55× | 0.55× | 0.55× | 0.55× |
+| ImageOps.flip | 4.66× | 4.66× | 4.66× | 4.66× | 4.66× | 4.66× |
+| ImageOps.grayscale | 4.04× | 4.04× | 2.07× | 4.04× | 4.49× | 4.82× |
+| ImageOps.invert | 0.63× | 0.63× | 0.30× | 0.63× | 0.94× | 0.96× |
+| ImageOps.mirror | 4.37× | 4.37× | 4.37× | 4.37× | 4.37× | 4.37× |
+| ImageOps.pad | 0.45× | 0.45× | 0.45× | 0.45× | 0.45× | 0.45× |
+| ImageOps.posterize | 0.61× | 0.61× | 0.61× | 0.61× | 0.61× | 0.61× |
 | ImageOps.scale | 0.96× | 0.96× | 0.96× | 0.96× | 0.96× | 0.96× |
-| ImageOps.solarize | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× |
+| ImageOps.solarize | 0.40× | 0.40× | 0.40× | 0.40× | 0.40× | 0.40× |
 
 ### ImagePalette
 

@@ -15,7 +15,7 @@ BENCH_DIR = ROOT / "target" / "benchmarks"
 REF_DIR = ROOT / "scripts" / "bench_reference_images"
 
 sys.path.insert(0, str(ROOT / "pillow-rs-py" / "python"))
-from pillow_rs import Image, ImageOps, ImageColor, ImageEnhance
+from pillow_rs import Image, ImageOps, ImageColor, ImageEnhance, _core
 
 def load(name):
     return Image.open(str(REF_DIR / name))
@@ -129,6 +129,49 @@ ALL_OPS = [
     # ImageColor
     ("ImageColor.getrgb", lambda: ImageColor.getrgb("red")),
     ("ImageColor.getcolor", lambda: ImageColor.getcolor("red", "RGB")),
+
+    # ImageChops (all 21 functions via _core bindings)
+    ("ImageChops.add", lambda: _core.chops_add(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.subtract", lambda: _core.chops_subtract(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.multiply", lambda: _core.chops_multiply(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.screen", lambda: _core.chops_screen(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.darker", lambda: _core.chops_darker(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.lighter", lambda: _core.chops_lighter(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.difference", lambda: _core.chops_difference(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.overlay", lambda: _core.chops_overlay(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.hard_light", lambda: _core.chops_hard_light(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.soft_light", lambda: _core.chops_soft_light(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.add_modulo", lambda: _core.chops_add_modulo(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.subtract_modulo", lambda: _core.chops_subtract_modulo(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.logical_and", lambda: _core.chops_logical_and(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.logical_or", lambda: _core.chops_logical_or(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.logical_xor", lambda: _core.chops_logical_xor(img._rust_image, img._rust_image).tobytes()),
+    ("ImageChops.constant", lambda: _core.chops_constant(img._rust_image, 128).tobytes()),
+    ("ImageChops.offset", lambda: _core.chops_offset(img._rust_image, 10, 10).tobytes()),
+    ("ImageChops.invert", lambda: _core.chops_invert(img._rust_image).tobytes()),
+
+    # ImageModule
+    ("ImageModule.blend", lambda: _core.image_blend(img._rust_image, img._rust_image, 0.5).tobytes()),
+    ("ImageModule.composite", lambda: _core.image_composite(img._rust_image, img._rust_image, img._rust_image).tobytes()),
+
+    # ImageFilter (named filters via img.filter())
+    ("ImageFilter.BLUR", lambda: img.filter("BLUR").tobytes()),
+    ("ImageFilter.CONTOUR", lambda: img.filter("CONTOUR").tobytes()),
+    ("ImageFilter.DETAIL", lambda: img.filter("DETAIL").tobytes()),
+    ("ImageFilter.EDGE_ENHANCE", lambda: img.filter("EDGE_ENHANCE").tobytes()),
+    ("ImageFilter.EDGE_ENHANCE_MORE", lambda: img.filter("EDGE_ENHANCE_MORE").tobytes()),
+    ("ImageFilter.EMBOSS", lambda: img.filter("EMBOSS").tobytes()),
+    ("ImageFilter.FIND_EDGES", lambda: img.filter("FIND_EDGES").tobytes()),
+    ("ImageFilter.SHARPEN", lambda: img.filter("SHARPEN").tobytes()),
+    ("ImageFilter.SMOOTH", lambda: img.filter("SMOOTH").tobytes()),
+    ("ImageFilter.SMOOTH_MORE", lambda: img.filter("SMOOTH_MORE").tobytes()),
+    ("ImageFilter.GaussianBlur", lambda: img.gaussian_blur(2.0).tobytes()),
+    ("ImageFilter.BoxBlur", lambda: img.box_blur(2).tobytes()),
+    ("ImageFilter.UnsharpMask", lambda: img.unsharp_mask(2.0, 150, 3).tobytes()),
+    ("ImageFilter.MaxFilter", lambda: img.max_filter(3).tobytes()),
+    ("ImageFilter.MinFilter", lambda: img.min_filter(3).tobytes()),
+    ("ImageFilter.MedianFilter", lambda: img.median_filter(3).tobytes()),
+    ("ImageFilter.ModeFilter", lambda: img.mode_filter(3).tobytes()),
 
     # Pipeline benchmarks
     ("pipeline_20_st", lambda: (
