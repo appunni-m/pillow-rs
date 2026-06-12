@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-12 09:49:31 | commit `0298942` | 166 functions | 6 targets
+> Auto-generated: 2026-06-12 10:01:07 | commit `82d640d` | 166 functions | 6 targets
 
 ## Summary
 
@@ -40,7 +40,7 @@
 | Image.save | 3.04× | 3.04× | 2.97× | 3.04× | 3.48× | 3.48× |
 | Image.tobytes | 15.80× | 15.80× | 15.80× | 15.80× | 15.80× | 15.80× |
 
-## All Functions
+## Performance-Critical Operations
 
 ### Image
 
@@ -55,30 +55,12 @@
 | Image.paste | — | — | — | — | 0.35× | 0.37× |
 | Image.alpha_composite | — | — | — | — | — | — |
 | Image.apply_transparency | 0.24× | 0.24× | 0.24× | 0.24× | 0.24× | 0.24× |
-| Image.close | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ |
 | Image.convert | 0.68× | 0.68× | 2.23× | 0.68× | 1.74× | 1.66× |
-| Image.copy | 0.77× | 0.77× | 0.77× | 0.77× | 0.77× | 0.77× |
 | Image.draft | 48.39× | 48.39× | 48.39× | 48.39× | 48.39× | 48.39× |
 | Image.effect_spread | 95.03× | 95.03× | 95.03× | 95.03× | 95.03× | 95.03× |
 | Image.entropy | 0.38× | 0.38× | 0.38× | 0.38× | 0.38× | 0.38× |
 | Image.filter | 1.04× | 1.04× | 2.54× | 1.04× | 2.59× | 2.69× |
 | Image.frombytes | — | — | — | — | — | — |
-| Image.get_child_images | 47.66× | 47.66× | 47.66× | 47.66× | 47.66× | 47.66× |
-| Image.get_flattened_data | 34.36× | 34.36× | 34.36× | 34.36× | 34.36× | 34.36× |
-| Image.getbands | 0.38× | 0.38× | 2.65× | 0.38× | 71.37× | 62.76× |
-| Image.getbbox | 0.72× | 0.72× | 2.33× | 0.72× | 15.74× | 14.82× |
-| Image.getchannel | 0.65× | 0.65× | 0.65× | 0.65× | 0.65× | 0.65× |
-| Image.getcolors | 0.19× | 0.19× | 0.19× | 0.19× | 0.19× | 0.19× |
-| Image.getdata | 0.67× | 0.67× | 0.67× | 0.67× | 0.67× | 0.67× |
-| Image.getexif | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ |
-| Image.getextrema | 0.69× | 0.69× | 2.39× | 0.69× | 8.06× | 7.96× |
-| Image.getim | — | — | — | — | — | — |
-| Image.getpalette | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ |
-| Image.getpixel | 0.20× | 0.20× | 2.35× | 0.20× | 25114.13× ⚠️ | 22159.53× ⚠️ |
-| Image.getprojection | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
-| Image.getxmp | — | — | — | — | — | — |
-| Image.histogram | 0.76× | 0.76× | 2.71× | 0.76× | 7.66× | 7.58× |
-| Image.load | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× |
 | Image.open | 0.51× | 0.51× | 1.80× | 0.51× | 309.90× ⚠️ | 328.40× ⚠️ |
 | Image.point | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
 | Image.putalpha | 33.69× | 33.69× | 33.69× | 33.69× | 33.69× | 33.69× |
@@ -89,14 +71,9 @@
 | Image.reduce | 0.42× | 0.42× | 1.30× | 0.42× | 2.32× | 1.97× |
 | Image.remap_palette | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× |
 | Image.save | 3.04× | 3.04× | 2.97× | 3.04× | 3.48× | 3.48× |
-| Image.seek | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ |
-| Image.show | — | — | — | — | — | — |
 | Image.split | 0.31× | 0.31× | 0.91× | 0.31× | 9.45× | 9.38× |
-| Image.tell | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ |
 | Image.tobitmap | 0.04× | 0.04× | 0.04× | 0.04× | 0.04× | 0.04× |
-| Image.tobytes | 15.80× | 15.80× | 15.80× | 15.80× | 15.80× | 15.80× |
 | Image.transform | — | — | — | — | — | — |
-| Image.verify | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× |
 
 ### ImageChops
 
@@ -123,36 +100,6 @@
 | ImageChops.soft_light | 0.44× | 0.44× | 0.44× | 0.44× | 0.44× | 0.44× |
 | ImageChops.subtract | 0.39× | 0.39× | 0.39× | 0.39× | 0.39× | 0.39× |
 | ImageChops.subtract_modulo | 0.31× | 0.31× | 0.31× | 0.31× | 0.31× | 0.31× |
-
-### ImageColor
-
-| Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
-| --- | --- | --- | --- | --- | --- | --- |
-| ImageColor.getcolor | 0.42× | 0.42× | 0.42× | 0.42× | 0.42× | 0.42× |
-| ImageColor.getrgb | 0.34× | 0.34× | 0.34× | 0.34× | 0.34× | 0.34× |
-
-### ImageDraw
-
-| Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
-| --- | --- | --- | --- | --- | --- | --- |
-| ImageDraw.arc | — | — | — | — | — | — |
-| ImageDraw.bitmap | — | — | — | — | — | — |
-| ImageDraw.chord | — | — | — | — | — | — |
-| ImageDraw.circle | — | — | — | — | — | — |
-| ImageDraw.ellipse | — | — | — | — | — | — |
-| ImageDraw.getfont | — | — | — | — | — | — |
-| ImageDraw.line | — | — | — | — | — | — |
-| ImageDraw.multiline_text | — | — | — | — | — | — |
-| ImageDraw.multiline_textbbox | — | — | — | — | — | — |
-| ImageDraw.pieslice | — | — | — | — | — | — |
-| ImageDraw.point | — | — | — | — | — | — |
-| ImageDraw.polygon | — | — | — | — | — | — |
-| ImageDraw.rectangle | — | — | — | — | — | — |
-| ImageDraw.regular_polygon | — | — | — | — | — | — |
-| ImageDraw.rounded_rectangle | — | — | — | — | — | — |
-| ImageDraw.text | — | — | — | — | — | — |
-| ImageDraw.textbbox | — | — | — | — | — | — |
-| ImageDraw.textlength | — | — | — | — | — | — |
 
 ### ImageEnhance
 
@@ -187,26 +134,6 @@
 | ImageFilter.SMOOTH | 1.15× | 1.15× | 1.15× | 1.15× | 1.15× | 1.15× |
 | ImageFilter.SMOOTH_MORE | 1.86× | 1.86× | 1.86× | 1.86× | 1.86× | 1.86× |
 | ImageFilter.UnsharpMask | — | — | — | — | — | — |
-
-### ImageFont
-
-| Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
-| --- | --- | --- | --- | --- | --- | --- |
-| ImageFont.FreeTypeFont | — | — | — | — | — | — |
-| ImageFont.ImageFont | — | — | — | — | — | — |
-| ImageFont.FreeTypeFont.getbbox | — | — | — | — | — | — |
-| ImageFont.ImageFont.getbbox | — | — | — | — | — | — |
-| ImageFont.FreeTypeFont.getlength | — | — | — | — | — | — |
-| ImageFont.ImageFont.getlength | — | — | — | — | — | — |
-| ImageFont.FreeTypeFont.getmask | — | — | — | — | — | — |
-| ImageFont.ImageFont.getmask | — | — | — | — | — | — |
-| ImageFont.FreeTypeFont.getmetrics | — | — | — | — | — | — |
-| ImageFont.FreeTypeFont.getname | — | — | — | — | — | — |
-| ImageFont.load | — | — | — | — | — | — |
-| ImageFont.load_default | — | — | — | — | — | — |
-| ImageFont.load_default_imagefont | — | — | — | — | — | — |
-| ImageFont.load_path | — | — | — | — | — | — |
-| ImageFont.truetype | — | — | — | — | — | — |
 
 ### ImageModule
 
@@ -246,27 +173,104 @@
 | ImageOps.scale | 0.91× | 0.91× | 0.91× | 0.91× | 0.91× | 0.91× |
 | ImageOps.solarize | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× |
 
-### ImagePalette
+## Non-Performance-Critical Operations
+
+> Metadata, I/O, analysis, drawing, and font operations. Not benchmarked for speed — 
+> use CPU path timing as reference.
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
+| Image.close | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ | 136.07× ⚠️ |
+| Image.copy | 0.77× | 0.77× | 0.77× | 0.77× | 0.77× | 0.77× |
+| Image.get_child_images | 47.66× | 47.66× | 47.66× | 47.66× | 47.66× | 47.66× |
+| Image.get_flattened_data | 34.36× | 34.36× | 34.36× | 34.36× | 34.36× | 34.36× |
+| Image.getbands | 0.38× | 0.38× | 2.65× | 0.38× | 71.37× | 62.76× |
+| Image.getbbox | 0.72× | 0.72× | 2.33× | 0.72× | 15.74× | 14.82× |
+| Image.getchannel | 0.65× | 0.65× | 0.65× | 0.65× | 0.65× | 0.65× |
+| Image.getcolors | 0.19× | 0.19× | 0.19× | 0.19× | 0.19× | 0.19× |
+| Image.getdata | 0.67× | 0.67× | 0.67× | 0.67× | 0.67× | 0.67× |
+| Image.getexif | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ | 197.76× ⚠️ |
+| Image.getextrema | 0.69× | 0.69× | 2.39× | 0.69× | 8.06× | 7.96× |
+| Image.getim | — | — | — | — | — | — |
+| Image.getpalette | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ | 2505.61× ⚠️ |
+| Image.getpixel | 0.20× | 0.20× | 2.35× | 0.20× | 25114.13× ⚠️ | 22159.53× ⚠️ |
+| Image.getprojection | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
+| Image.getxmp | — | — | — | — | — | — |
+| Image.histogram | 0.76× | 0.76× | 2.71× | 0.76× | 7.66× | 7.58× |
+| Image.load | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× |
+| Image.seek | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ | 114.10× ⚠️ |
+| Image.show | — | — | — | — | — | — |
+| Image.tell | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ | 145.16× ⚠️ |
+| Image.tobytes | 15.80× | 15.80× | 15.80× | 15.80× | 15.80× | 15.80× |
+| Image.verify | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× |
+| ImageColor.getcolor | 0.42× | 0.42× | 0.42× | 0.42× | 0.42× | 0.42× |
+| ImageColor.getrgb | 0.34× | 0.34× | 0.34× | 0.34× | 0.34× | 0.34× |
+| ImageDraw.arc | — | — | — | — | — | — |
+| ImageDraw.bitmap | — | — | — | — | — | — |
+| ImageDraw.chord | — | — | — | — | — | — |
+| ImageDraw.circle | — | — | — | — | — | — |
+| ImageDraw.ellipse | — | — | — | — | — | — |
+| ImageDraw.getfont | — | — | — | — | — | — |
+| ImageDraw.line | — | — | — | — | — | — |
+| ImageDraw.multiline_text | — | — | — | — | — | — |
+| ImageDraw.multiline_textbbox | — | — | — | — | — | — |
+| ImageDraw.pieslice | — | — | — | — | — | — |
+| ImageDraw.point | — | — | — | — | — | — |
+| ImageDraw.polygon | — | — | — | — | — | — |
+| ImageDraw.rectangle | — | — | — | — | — | — |
+| ImageDraw.regular_polygon | — | — | — | — | — | — |
+| ImageDraw.rounded_rectangle | — | — | — | — | — | — |
+| ImageDraw.text | — | — | — | — | — | — |
+| ImageDraw.textbbox | — | — | — | — | — | — |
+| ImageDraw.textlength | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont | — | — | — | — | — | — |
+| ImageFont.ImageFont | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getbbox | — | — | — | — | — | — |
+| ImageFont.ImageFont.getbbox | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getlength | — | — | — | — | — | — |
+| ImageFont.ImageFont.getlength | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getmask | — | — | — | — | — | — |
+| ImageFont.ImageFont.getmask | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getmetrics | — | — | — | — | — | — |
+| ImageFont.FreeTypeFont.getname | — | — | — | — | — | — |
+| ImageFont.load | — | — | — | — | — | — |
+| ImageFont.load_default | — | — | — | — | — | — |
+| ImageFont.load_default_imagefont | — | — | — | — | — | — |
+| ImageFont.load_path | — | — | — | — | — | — |
+| ImageFont.truetype | — | — | — | — | — | — |
 | ImagePalette.copy | — | — | — | — | — | — |
 | ImagePalette.getcolor | — | — | — | — | — | — |
 | ImagePalette.getdata | — | — | — | — | — | — |
 | ImagePalette.save | — | — | — | — | — | — |
 | ImagePalette.tobytes | 0.00× ⚠️ | 0.00× ⚠️ | 0.00× ⚠️ | 0.00× ⚠️ | 0.00× ⚠️ | 0.00× ⚠️ |
-
-### ImageSequence
-
-| Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
-| --- | --- | --- | --- | --- | --- | --- |
 | ImageSequence.Iterator | — | — | — | — | — | — |
-
-### ImageStat
-
-| Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
-| --- | --- | --- | --- | --- | --- | --- |
 | ImageStat.Stat | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× |
+
+## ⚠️ Suspicious Ratios (>5× or <0.1×)
+
+| Function | Source | Ratio |
+|----------|--------|-------|
+| Image.rotate | CPU | 5.21× |
+| Image.rotate | WASM | 20.01× |
+| Image.close | CPU | 136.07× |
+| Image.draft | CPU | 48.39× |
+| Image.effect_spread | CPU | 95.03× |
+| Image.get_child_images | CPU | 47.66× |
+| Image.get_flattened_data | CPU | 34.36× |
+| Image.getexif | CPU | 197.76× |
+| Image.getpalette | CPU | 2505.61× |
+| Image.getprojection | CPU | 0.09× |
+| Image.point | CPU | 0.09× |
+| Image.putalpha | CPU | 33.69× |
+| Image.putpalette | CPU | 711.35× |
+| Image.putpixel | CPU | 4808.09× |
+| Image.putpixel | WASM | 63.42× |
+| Image.seek | CPU | 114.10× |
+| Image.tell | CPU | 145.16× |
+| Image.tobitmap | CPU | 0.04× |
+| Image.tobytes | CPU | 15.80× |
+| ImageEnhance.Brightness | CPU | 25242.35× |
+| ... | ... | +5 more |
 
 ## PIL Parity Tests
 

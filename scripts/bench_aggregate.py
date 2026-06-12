@@ -253,22 +253,68 @@ def generate_report(funcs, baseline_lookup, target_lookups, pipeline_data):
             lines.append(f"| Pillow (reference) | {pil_pipe:.1f}ms | — |")
         lines.append("")
 
+    # Classify functions
+    NON_PERF_MODULES = {"ImageColor", "ImageDraw", "ImageFont", "ImagePalette", "ImageSequence", "ImageStat"}
+    NON_PERF_IMAGE = {"close", "copy", "getbands", "getbbox", "getchannel", "getcolors", "getdata",
+        "getextrema", "getexif", "getim", "getpalette", "getpixel", "getprojection", "getxmp",
+        "get_child_images", "get_flattened_data", "histogram", "load", "seek", "show", "tell",
+        "tobytes", "verify"}
+    perf_funcs = []
+    nonperf_funcs = []
+    for f in funcs:
+        if f["module"] in NON_PERF_MODULES or f["name"] in NON_PERF_IMAGE:
+            nonperf_funcs.append(f)
+        else:
+            perf_funcs.append(f)
+
     # Priority
     hdr = "| Function | " + " | ".join(COLUMNS) + " |"
     sep = "| " + " | ".join(["---"] * (len(COLUMNS) + 1)) + " |"
     lines += ["## Priority Operations (Tier 1)", "", hdr, sep]
-    priority_funcs = [f for f in funcs if f["full_name"] in PRIORITY_KEYS]
-    for f in priority_funcs:
+    for f in funcs:
+        if f["full_name"] in PRIORITY_KEYS:
+            lines.append(write_row(f["full_name"], f, baseline_lookup, target_lookups))
+    lines.append("")
+
+    # Performance-critical functions by module
+    lines += ["## Performance-Critical Operations", ""]
+    perf_by_module = defaultdict(list)
+    for f in perf_funcs:
+        perf_by_module[f["module"]].append(f)
+    for mod_name in sorted(perf_by_module.keys()):
+        lines += [f"### {mod_name}", "", hdr, sep]
+        for f in perf_by_module[mod_name]:
+            lines.append(write_row(f["full_name"], f, baseline_lookup, target_lookups))
+        lines.append("")
+
+    # Non-performance-critical operations
+    lines += ["## Non-Performance-Critical Operations", "",
+        "> Metadata, I/O, analysis, drawing, and font operations. Not benchmarked for speed — ",
+        "> use CPU path timing as reference.",
+        "", hdr, sep]
+    for f in nonperf_funcs:
         lines.append(write_row(f["full_name"], f, baseline_lookup, target_lookups))
     lines.append("")
 
-    # All functions by module
-    lines += ["## All Functions", ""]
-    module_map = build_module_map(funcs)
-    for mod_name in sorted(module_map.keys()):
-        lines += [f"### {mod_name}", "", hdr, sep]
-        for f in module_map[mod_name]:
-            lines.append(write_row(f["full_name"], f, baseline_lookup, target_lookups))
+    # Outlier warnings
+    outlier_rows = []
+    for f in funcs:
+        name = f["full_name"]
+        pil_ms = baseline_lookup.get(name)
+        cpu_ms = target_lookups.get("native_cpu", {}).get(name)
+        wasm_ms = target_lookups.get("wasm_cpu", {}).get(name)
+        for src, ms in [("CPU", cpu_ms), ("WASM", wasm_ms)]:
+            if ms and pil_ms and ms > 0 and pil_ms > 0:
+                ratio = pil_ms / ms
+                if ratio > 5.0 or ratio < 0.1:
+                    outlier_rows.append(f"| {name} | {src} | {ratio:.2f}× |")
+
+    if outlier_rows:
+        lines += ["## ⚠️ Suspicious Ratios (>5× or <0.1×)", "",
+            "| Function | Source | Ratio |", "|----------|--------|-------|"]
+        lines.extend(outlier_rows[:20])
+        if len(outlier_rows) > 20:
+            lines.append(f"| ... | ... | +{len(outlier_rows)-20} more |")
         lines.append("")
 
     # PIL parity
