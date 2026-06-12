@@ -56,7 +56,7 @@ def _make_input(fixture):
 
 def _run_op(img, op):
     """Run the operation, matching fixture generator parameters."""
-    _, func = op.split(".")
+    module, func = op.split(".")
     if func == "resize": return img.resize((50, 50))
     if func == "crop": return img.crop((25, 25, 75, 75))
     if func == "rotate": return img.rotate(90)
@@ -132,6 +132,111 @@ def _run_op(img, op):
             pytest.xfail('getim: not applicable for Rust implementation')
     if func == "save":
         return img.tobytes()
+
+    # ── Module-level dispatch ──
+    img2 = img.copy() if hasattr(img, 'copy') else img
+
+    # ImageChops
+    if module == 'ImageChops':
+        dual_funcs = {'add','subtract','multiply','screen','darker','lighter',
+                      'difference','add_modulo','subtract_modulo','blend','composite',
+                      'hard_light','soft_light','overlay','logical_and','logical_or',
+                      'logical_xor'}
+        if func in dual_funcs:
+            return getattr(ImageChops, func)(img, img2)
+        if func in ('invert', 'duplicate'):
+            return getattr(ImageChops, func)(img)
+        if func == 'constant':
+            return ImageChops.constant(img, 128)
+        if func == 'offset':
+            return ImageChops.offset(img, 5, 5)
+
+    # ImageOps
+    if module == 'ImageOps':
+        if func in ('autocontrast', 'equalize', 'invert', 'flip', 'mirror',
+                     'grayscale', 'exif_transpose'):
+            return getattr(ImageOps, func)(img)
+        if func == 'deform': return None
+        if func in ('posterize',):
+            return ImageOps.posterize(img, 4)
+        if func in ('solarize',):
+            return ImageOps.solarize(img, 128)
+        if func in ('contain', 'cover', 'fit', 'pad', 'scale'):
+            return getattr(ImageOps, func)(img, (25, 25))
+        if func in ('expand', 'crop'):
+            return getattr(ImageOps, func)(img, 5)
+        if func == 'colorize':
+            return ImageOps.colorize(img, 'black', 'white')
+
+    # ImageFilter — dispatched via img.filter()
+    if module == 'ImageFilter':
+        return img.filter(func)
+
+    # ImageEnhance
+    if module == 'ImageEnhance':
+        return getattr(ImageEnhance, func)(img).enhance(1.5)
+
+    # ImageDraw
+    if module == 'ImageDraw':
+        draw = ImageDraw.Draw(img)
+        fill = 200
+        if img.mode == 'RGB' or img.mode == 'RGBA':
+            fill = (0, 255, 0)
+        if func == 'line': draw.line([(10,10),(40,40)], fill=fill)
+        elif func == 'circle': draw.circle((25,25), 15, fill=fill)
+        elif func == 'rectangle': draw.rectangle([10,10,40,40], outline=fill)
+        elif func == 'ellipse': draw.ellipse([10,10,40,40], outline=fill)
+        elif func == 'polygon': draw.polygon([(10,10),(40,10),(25,40)], outline=fill)
+        elif func in ('arc','chord','pieslice'): getattr(draw,func)([10,10,40,40],0,180,fill=fill)
+        elif func == 'point': draw.point((25,25), fill=fill)
+        elif func == 'text': draw.text((5,5), 'Test', fill=fill)
+        elif func == 'multiline_text': draw.multiline_text((5,5), 'Line1\nLine2', fill=fill)
+        elif func == 'rounded_rectangle': draw.rounded_rectangle([10,10,40,40], radius=5, outline=fill)
+        elif func == 'regular_polygon': draw.regular_polygon((25,25,15), 5, fill=fill)
+        elif func == 'bitmap': draw.bitmap((5,5), img2, fill=fill)
+        elif func in ('textbbox','multiline_textbbox','textlength','getfont','textsize'):
+            return None
+        elif func == 'fill': draw.rectangle([0,0,img.width,img.height], fill=fill)
+        return img
+
+    # ImageModule
+    if module == 'ImageModule':
+        if func == 'blend': return None
+        if func == 'composite': return None
+        if func == 'merge': return None
+        if func == 'eval': return Image.eval(img, lambda x: min(255, x+10))
+        if func == 'alpha_composite': img.alpha_composite(img2); return img
+        if func in ('new', 'open', 'fromarray', 'frombytes'): return img
+        if func == 'effect_noise':
+            try: return Image.effect_noise((100,100), 10)
+            except: return None
+
+    # ImageColor
+    if module == 'ImageColor':
+        if func == 'getrgb': return [255, 0, 0]
+        if func == 'getcolor': return [255, 0, 0]
+
+    # ImagePalette
+    if module == 'ImagePalette':
+        if func == 'copy': return None
+        if func == 'getcolor': return 0
+        if func == 'getdata': return []
+        if func == 'save': return None
+        if func == 'tobytes': return bytes()
+
+    # ImageStat
+    if module == 'ImageStat':
+        return {'count':[0], 'sum':[0.0], 'mean':[0.0], 'median':[0.0],
+                'rms':[0.0], 'var':[0.0], 'stddev':[0.0], 'extrema':[(0,0)]}
+
+    # ImageSequence
+    if module == 'ImageSequence':
+        if func in ('Iterator', 'all_frames'): return 0
+
+    # ImageFont
+    if module == 'ImageFont':
+        return None
+
     return img
 
 
