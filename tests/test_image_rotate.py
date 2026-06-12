@@ -87,3 +87,25 @@ class TestTranspose:
             rs.transpose(Transpose.TRANSVERSE),
             pil.transpose(PIL.Image.TRANSVERSE),
         )
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("LA", marks=pytest.mark.covers("Image.rotate", mode="LA", target="cpu", variant="default")),
+    pytest.param("RGBA", marks=pytest.mark.covers("Image.rotate", mode="RGBA", target="cpu", variant="default")),
+])
+def test_rotate_modes(PIL, mode):
+    color = (128, 255) if mode == "LA" else (255, 0, 0, 255)
+    pil_img = PIL.Image.new(mode, (30, 30), color)
+    rs_img = Image.new(mode, (30, 30), color)
+    assert_images_equal(rs_img.rotate(90), pil_img.rotate(90))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("LA", marks=pytest.mark.covers("Image.thumbnail", mode="LA", target="cpu", variant="default")),
+])
+def test_thumbnail_modes(PIL, mode):
+    pil_img = PIL.Image.new(mode, (100, 50), (128, 255))
+    rs_img = Image.new(mode, (100, 50), (128, 255))
+    pil_img.thumbnail((30, 30))
+    rs_img.thumbnail((30, 30))
+    assert rs_img.size == pil_img.size

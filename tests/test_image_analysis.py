@@ -1,4 +1,4 @@
-"""PIL parity tests for getpixel, putpixel, getbbox, getextrema, histogram."""
+"""PIL parity tests for getpixel, putpixel, getbbox, getextrema, histogram, getcolors, getdata, getprojection, entropy."""
 import pytest
 from pillow_rs import Image
 from conftest import assert_images_equal, assert_values_equal

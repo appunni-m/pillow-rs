@@ -205,3 +205,48 @@ def test_palette_getdata_works():
     p = ImagePalette.ImagePalette()
     mode, data = p.getdata()
     assert mode == "RGB"
+
+# ── Mode-less markers restored from deleted files ──────────────────
+
+@pytest.mark.covers("Image.alpha_composite", mode="RGBA", target="cpu", variant="default")
+def test_alpha_composite_parity(PIL):
+    bg_pil = PIL.Image.new("RGBA", (50, 50), (255, 255, 255, 255))
+    fg_pil = PIL.Image.new("RGBA", (20, 20), (255, 0, 0, 128))
+    bg_rs = Image.new("RGBA", (50, 50), (255, 255, 255, 255))
+    fg_rs = Image.new("RGBA", (20, 20), (255, 0, 0, 128))
+    bg_pil.alpha_composite(fg_pil)
+    bg_rs.alpha_composite(fg_rs)
+    assert_images_equal(bg_rs, bg_pil)
+
+
+@pytest.mark.covers("Image.getdata", target="cpu", variant="default")
+def test_getdata_parity(PIL):
+    pil_img = PIL.Image.new("RGB", (5, 5), (100, 150, 200))
+    rs_img = Image.new("RGB", (5, 5), (100, 150, 200))
+    assert list(rs_img.getdata()) == list(pil_img.getdata())
+
+
+@pytest.mark.covers("ImageFont.FreeTypeFont", target="cpu", variant="default")
+def test_freetype_font_exists():
+    from pillow_rs import ImageFont
+    assert hasattr(ImageFont, 'FreeTypeFont')
+
+
+@pytest.mark.covers("ImageFont.truetype", target="cpu", variant="default")
+def test_truetype_exists():
+    from pillow_rs import ImageFont
+    assert hasattr(ImageFont, 'truetype')
+
+
+@pytest.mark.covers("ImageSequence.Iterator", target="cpu", variant="default")
+def test_iterator_exists(PIL):
+    from pillow_rs import ImageSequence
+    img = Image.new("RGB", (10, 10), (255, 0, 0))
+    it = ImageSequence.Iterator(img)
+    assert it is not None
+
+
+@pytest.mark.covers("ImageStat.Stat", target="cpu", variant="default")
+def test_stat_exists():
+    from pillow_rs import ImageStat
+    assert hasattr(ImageStat, 'Stat')

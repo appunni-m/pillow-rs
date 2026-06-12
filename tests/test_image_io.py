@@ -154,3 +154,5 @@ def test_format_mode_roundtrip(PIL, fmt, mode, op, tmp_path):
     rs_loaded = Image.open(path)
     assert rs_loaded.size == pil_loaded.size
     assert rs_loaded.mode == pil_loaded.mode
+
+

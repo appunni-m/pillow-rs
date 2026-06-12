@@ -33,3 +33,5 @@ def test_composite_works():
     mask = Image.new("L", (20, 20), 128)
     result = composite(im1, im2, mask)
     assert result.size == (20, 20)
+
+

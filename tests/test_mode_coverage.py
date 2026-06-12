@@ -416,3 +416,53 @@ def test_module_frombytes_rgb(PIL):
     data = b'\x80' * 1200
     result = pillow_rs.Image.frombytes("RGB", (20, 20), data)
     assert result.size == (20, 20)
+
+# ── RGB mode coverage (from deleted test_image_advanced.py) ────────
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGB", marks=pytest.mark.covers("Image.effect_spread", mode="RGB", target="cpu", variant="default")),
+])
+def test_effect_spread_rgb(PIL, mode):
+    pil_img = PIL.Image.new(mode, (30, 30), (255, 0, 0))
+    rs_img = Image.new(mode, (30, 30), (255, 0, 0))
+    assert_images_equal(rs_img.effect_spread(2), pil_img.effect_spread(2))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGB", marks=pytest.mark.covers("Image.entropy", mode="RGB", target="cpu", variant="default")),
+])
+def test_entropy_rgb(PIL, mode):
+    pil_img = PIL.Image.new(mode, (30, 30), (128, 64, 32))
+    rs_img = Image.new(mode, (30, 30), (128, 64, 32))
+    assert_values_equal(rs_img.entropy(), pil_img.entropy())
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGB", marks=pytest.mark.covers("Image.getcolors", mode="RGB", target="cpu", variant="default")),
+])
+def test_getcolors_rgb(PIL, mode):
+    pil_img = PIL.Image.new(mode, (10, 10), (255, 0, 0))
+    rs_img = Image.new(mode, (10, 10), (255, 0, 0))
+    assert rs_img.getcolors(256) is not None
+    assert_values_equal(rs_img.getcolors(256), pil_img.getcolors(256))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGB", marks=pytest.mark.covers("Image.point", mode="RGB", target="cpu", variant="default")),
+])
+def test_point_rgb(PIL, mode):
+    pil_img = PIL.Image.new(mode, (20, 20), (100, 150, 200))
+    rs_img = Image.new(mode, (20, 20), (100, 150, 200))
+    lut = bytes([min(255, i + 50) for i in range(256)])
+    assert_images_equal(rs_img.point(lut), pil_img.point(lut))
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param("RGB", marks=pytest.mark.covers("Image.quantize", mode="RGB", target="cpu", variant="default")),
+])
+def test_quantize_rgb(PIL, mode):
+    pil_img = PIL.Image.new(mode, (30, 30), (128, 64, 32))
+    rs_img = Image.new(mode, (30, 30), (128, 64, 32))
+    pil_q = pil_img.quantize(16)
+    rs_q = rs_img.quantize(16)
+    assert rs_q.size == pil_q.size
