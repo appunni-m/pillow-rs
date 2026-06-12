@@ -7,13 +7,7 @@ use image::GrayImage;
 /// Channel split using pre-allocation pattern.
 fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<Image> {
     let mut bufs: Vec<Vec<u8>> = (0..channels)
-        .map(|_| {
-            let mut v = Vec::with_capacity(n);
-            unsafe {
-                v.set_len(n);
-            }
-            v
-        })
+        .map(|_| vec![0u8; n])
         .collect();
 
     for (i, chunk) in raw.chunks_exact(channels).enumerate() {

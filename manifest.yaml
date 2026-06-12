@@ -32,11 +32,16 @@ modules:
     - name: new
       signature: 'new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0) -> Image'
       supported_modes:
+      - 1
+      - CMYK
+      - F
+      - HSV
+      - I
       - L
       - LA
       - RGB
       - RGBA
-      - 1
+      - YCbCr
       param_variants:
       - mode: RGB
         size:
@@ -118,12 +123,17 @@ modules:
       signature: 'resize(self, size: tuple[int,int]|list[int], resample: int|None=None, box: tuple|None=None, reducing_gap:
         float|None=None) -> Image'
       supported_modes:
+      - 1
+      - CMYK
+      - F
+      - HSV
+      - I
       - L
       - LA
+      - P
       - RGB
       - RGBA
-      - 1
-      - P
+      - YCbCr
       param_variants:
       - size:
         - 100
@@ -159,12 +169,17 @@ modules:
     - name: crop
       signature: 'crop(self, box: tuple[float,float,float,float]|None=None) -> Image'
       supported_modes:
+      - 1
+      - CMYK
+      - F
+      - HSV
+      - I
       - L
       - LA
+      - P
       - RGB
       - RGBA
-      - 1
-      - P
+      - YCbCr
       param_variants:
       - box:
         - 0
@@ -192,8 +207,11 @@ modules:
       signature: 'rotate(self, angle: float, resample: Resampling=NEAREST, expand: int|bool=False, center: tuple|None=None,
         translate: tuple|None=None, fillcolor: float|tuple|str|None=None) -> Image'
       supported_modes:
+      - '1'
+      - CMYK
       - L
       - LA
+      - P
       - RGB
       - RGBA
       param_variants:
@@ -327,8 +345,11 @@ modules:
     - name: filter
       signature: 'filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter]) -> Image'
       supported_modes:
+      - '1'
+      - CMYK
       - L
       - LA
+      - P
       - RGB
       - RGBA
       param_variants:

@@ -38,6 +38,7 @@ pub enum Image {
 impl Image {
     // ── Constructors ──
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         width: u32,
         height: u32,
@@ -198,7 +199,7 @@ impl Image {
     /// This forces full materialization of any pipeline.
     fn materialize_mut(&mut self) -> Result<&mut DynamicImage, PilError> {
         // Convert non-Loaded variants to Loaded
-        let loaded = match self {
+        match self {
             Image::Loaded(_, _) => return Ok(match self {
                 Image::Loaded(ref mut img, _) => img,
                 _ => unreachable!(),
@@ -233,7 +234,7 @@ impl Image {
                 *self = Image::Loaded(img, None);
             }
         };
-        let _ = loaded;
+        
         match self {
             Image::Loaded(ref mut img, _) => Ok(img),
             _ => unreachable!(),
@@ -335,7 +336,7 @@ impl Image {
         let img = self.materialize()?;
         let mut buf = std::io::Cursor::new(Vec::new());
         img.write_to(&mut buf, image::ImageFormat::Png)
-            .map_err(|e| PilError::ImageError(e))?;
+            .map_err(PilError::ImageError)?;
         Ok(buf.into_inner())
     }
 
@@ -1481,15 +1482,15 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let (src_w, src_h) = (src_img.width(), src_img.height());
             let paste_x = *x as i64;
             let paste_y = *y as i64;
-            let orig_color = img.color();
+            let _orig_color = img.color();
 
             if let Some(mask_img_ref) = mask {
                 let mask_img = mask_img_ref.materialize()?;
                 let mask_gray = mask_img.to_luma8();
                 let mut dest_clone = img.to_rgba8();
 
-                for py in 0..src_h.min(dest_clone.height().max(0)) {
-                    for px in 0..src_w.min(dest_clone.width().max(0)) {
+                for py in 0..src_h.min(dest_clone.height()) {
+                    for px in 0..src_w.min(dest_clone.width()) {
                         let mask_val = if px < mask_gray.width() && py < mask_gray.height() {
                             mask_gray.get_pixel(px, py)[0]
                         } else { 0 };
@@ -1554,7 +1555,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         PipelineOp::Merge { mode, bands } => {
             // Merge bands into a multi-channel image.
             // The pipeline source is the first band; remaining bands are in `bands[1..]`.
-            let n_expected = match mode {
+            let _n_expected = match mode {
                 ColorMode::RGB => 3,
                 ColorMode::RGBA => 4,
                 ColorMode::LA => 2,
@@ -1665,10 +1666,10 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
                 _ => 4,
             };
-            let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands as usize {
+            let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands {
                 (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect()
             } else {
-                vec![&lut[..]; n_bands as usize]
+                vec![&lut[..]; n_bands]
             };
             let rgba = img.to_rgba8();
             let (w, h) = rgba.dimensions();
@@ -1676,7 +1677,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
                 for b in 0..4 {
                     let idx = ip[b] as usize;
-                    let band = (b as usize).min(band_luts.len() - 1);
+                    let band = b.min(band_luts.len() - 1);
                     op[b] = *band_luts[band].get(idx).unwrap_or(&ip[b]);
                 }
             }
@@ -1688,7 +1689,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             for y in 0..h {
                 for x in 0..w {
                     let nx =
-                        (x as f64 / w as f64).sin() * *sigma as f64 * 127.0;
+                        (x as f64 / w as f64).sin() * *sigma * 127.0;
                     let v = (128.0 + nx).round().clamp(0.0, 255.0) as u8;
                     rgb.put_pixel(x, y, image::Rgb([v, v, v]));
                 }
@@ -1705,11 +1706,11 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 _ => 4,
             };
             // Per-band LUTs: if lut has 256*n_bands entries, split into per-band segments
-            let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands as usize {
+            let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands {
                 (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect()
             } else {
                 // Single LUT: apply same to all bands
-                vec![&lut[..]; n_bands as usize]
+                vec![&lut[..]; n_bands]
             };
             let rgba = img.to_rgba8();
             let (w, h) = rgba.dimensions();
@@ -1717,7 +1718,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
                 for b in 0..4 {
                     let idx = ip[b] as usize;
-                    let band = (b as usize).min(band_luts.len() - 1);
+                    let band = b.min(band_luts.len() - 1);
                     op[b] = *band_luts[band].get(idx).unwrap_or(&ip[b]);
                 }
             }

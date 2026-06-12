@@ -3,9 +3,6 @@ use image::{ColorType, DynamicImage};
 /// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
 /// R: 0.299, G: 0.587, B: 0.114
 /// This differs from the image crate's sRGB luminance weights (0.2126, 0.7152, 0.0722).
-const BT601_R: f64 = 0.299;
-const BT601_G: f64 = 0.587;
-const BT601_B: f64 = 0.114;
 
 pub fn color_type_to_mode(ct: ColorType) -> &'static str {
     match ct {
@@ -31,7 +28,6 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
 #[inline]
 /// Integer BT.601 luma: Y = (299*R + 587*G + 114*B + 500) / 1000
 /// Avoids f64 conversions — uses u32 arithmetic for SIMD-friendly performance.
-#[inline]
 pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
     (((299u32 * r as u32 + 587u32 * g as u32 + 114u32 * b as u32 + 500) / 1000) & 0xFF) as u8
 }
