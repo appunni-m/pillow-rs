@@ -140,31 +140,31 @@ async function main() {
     } catch (e) { setStatus('Failed'); showError('Failed to open images: ' + e.message); return; }
 
     // ── resize ──
-    try { runBench('resize', () => { const r = img.resize(800, 600); r.free(); }, results, () => hashImage(img.resize(800, 600))); }
+    try { runBench('resize', () => { const r = img.resize(800, 600); r.toBytes(); r.free(); }, results, () => hashImage(img.resize(800, 600))); }
     catch (e) { results.resize = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── crop ──
-    try { runBench('crop', () => { const r = img.crop(10, 10, 100, 100); r.free(); }, results); }
+    try { runBench('crop', () => { const r = img.crop(10, 10, 100, 100); r.toBytes(); r.free(); }, results); }
     catch (e) { results.crop = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── rotate ──
-    try { runBench('rotate', () => { const r = img.rotate(90); r.free(); }, results); }
+    try { runBench('rotate', () => { const r = img.rotate(90); r.toBytes(); r.free(); }, results); }
     catch (e) { results.rotate = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── transpose ──
-    try { runBench('transpose', () => { const r = img.transpose('FLIP_LEFT_RIGHT'); r.free(); }, results); }
+    try { runBench('transpose', () => { const r = img.transpose('FLIP_LEFT_RIGHT'); r.toBytes(); r.free(); }, results); }
     catch (e) { results.transpose = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── convert ──
-    try { runBench('convert', () => { const r = img.convert('L'); r.free(); }, results); }
+    try { runBench('convert', () => { const r = img.convert('L'); r.toBytes(); r.free(); }, results); }
     catch (e) { results.convert = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── filter BLUR ──
-    try { runBench('filter', () => { const r = img.filter('BLUR'); r.free(); }, results); }
+    try { runBench('filter', () => { const r = img.filter('BLUR'); r.toBytes(); r.free(); }, results); }
     catch (e) { results.filter = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── new ──
-    try { runBench('new', () => { const r = new Image('RGB', 1920, 1080, 255, 0, 0, 255); r.free(); }, results); }
+    try { runBench('new', () => { const r = new Image('RGB', 1920, 1080, 255, 0, 0, 255); r.toBytes(); r.free(); }, results); }
     catch (e) { results.new = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── getpixel ──
@@ -224,7 +224,7 @@ async function main() {
     } catch (e) { results.pasteColor = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── gaussianBlur ──
-    try { runBench('gaussianBlur', () => { const r = img.gaussianBlur(3.0); r.free(); }, results); }
+    try { runBench('gaussianBlur', () => { const r = img.gaussianBlur(3.0); r.toBytes(); r.free(); }, results); }
     catch (e) { results.gaussianBlur = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── save ──
@@ -232,19 +232,19 @@ async function main() {
     catch (e) { results.save = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── enhanceBrightness ──
-    try { runBench('enhanceBrightness', () => { const r = img.enhanceBrightness(1.5); r.free(); }, results); }
+    try { runBench('enhanceBrightness', () => { const r = img.enhanceBrightness(1.5); r.toBytes(); r.free(); }, results); }
     catch (e) { results.enhanceBrightness = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── reduce ──
-    try { runBench('reduce', () => { const r = img.reduce(2); r.free(); }, results); }
+    try { runBench('reduce', () => { const r = img.reduce(2); r.toBytes(); r.free(); }, results); }
     catch (e) { results.reduce = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── ImageOps.invert ──
-    try { runBench('ImageOps.invert', () => { const r = ImageOps.invert(img); r.free(); }, results); }
+    try { runBench('ImageOps.invert', () => { const r = ImageOps.invert(img); r.toBytes(); r.free(); }, results); }
     catch (e) { results.imageops_invert = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     // ── ImageOps.grayscale ──
-    try { runBench('ImageOps.grayscale', () => { const r = ImageOps.grayscale(img); r.free(); }, results); }
+    try { runBench('ImageOps.grayscale', () => { const r = ImageOps.grayscale(img); r.toBytes(); r.free(); }, results); }
     catch (e) { results.imageops_grayscale = { mean_ms: -1, runs: 0, error: String(e) }; }
 
     img.free(); img2k.free(); grayImg.free();
