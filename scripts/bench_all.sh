@@ -22,9 +22,19 @@ if [ ! -f "$BENCH_DIR/pillow_baseline.json" ]; then
     echo ""
 fi
 
-# Step 3: CPU benchmarks (Python E2E)
-echo "--- CPU (Python E2E) ---"
-python3 scripts/bench_full.py --runs 3 --output "$BENCH_DIR/native_cpu.json" 2>&1 | tail -3
+# Step 3: CPU benchmarks — unified runner (reads bench_spec.json)
+echo "--- CPU (Unified Runner) ---"
+python3 scripts/bench_unified.py --target rspil 2>&1 | tail -3
+echo ""
+
+# Step 3b: PIL baselines — same spec, Pillow side
+echo "--- PIL Baseline (Unified Runner) ---"
+python3 scripts/bench_unified.py --target pil 2>&1 | tail -3
+echo ""
+
+# Step 3c: Cross-validate hashes
+echo "--- Hash Validation ---"
+python3 scripts/bench_unified.py --validate 2>&1
 echo ""
 
 # Step 4: WASM benchmarks (Node.js)

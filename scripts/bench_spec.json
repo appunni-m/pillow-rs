@@ -1,0 +1,62 @@
+{
+  "_description": "SINGLE SOURCE OF TRUTH for all benchmarks. Every target reads this file.",
+  "_targets": ["python_cpu", "wasm_cpu", "wasm_gpu", "browser_cpu", "browser_gpu", "native_gpu"],
+  "inputs": {
+    "ref_2k": {"file": "scripts/bench_reference_images/ref_2k.jpg", "w": 2048, "h": 1536, "mode": "RGB"},
+    "ref_1k": {"file": "scripts/bench_reference_images/ref_1k.png", "w": 1024, "h": 1024, "mode": "RGBA"},
+    "ref_gray": {"file": "scripts/bench_reference_images/ref_grayscale.png", "w": 1024, "h": 1024, "mode": "L"},
+    "synthetic_512": {"w": 512, "h": 512, "mode": "RGB"}
+  },
+  "operations": [
+    {"name": "Image.open",            "input": "ref_2k", "op": "open",          "params": {}, "category": "io"},
+    {"name": "Image.new",             "input": "synthetic_512", "op": "new",    "params": {"mode": "RGB", "w": 1920, "h": 1080, "color": [255,0,0,255]}, "category": "io"},
+    {"name": "Image.save",            "input": "ref_2k", "op": "save",          "params": {}, "category": "io"},
+    {"name": "Image.resize",          "input": "ref_2k", "op": "resize",        "params": {"size": [800,600], "filter": "LANCZOS"}, "category": "perf"},
+    {"name": "Image.crop",            "input": "ref_2k", "op": "crop",          "params": {"box": [100,100,1100,900]}, "category": "perf"},
+    {"name": "Image.rotate",          "input": "ref_2k", "op": "rotate",        "params": {"angle": 45, "resample": "BICUBIC", "expand": true}, "category": "perf"},
+    {"name": "Image.transpose",       "input": "ref_2k", "op": "transpose",     "params": {"method": "FLIP_LEFT_RIGHT"}, "category": "perf"},
+    {"name": "Image.thumbnail",       "input": "ref_2k", "op": "thumbnail",     "params": {"size": [256,256], "filter": "LANCZOS"}, "category": "perf"},
+    {"name": "Image.tobytes",         "input": "ref_2k", "op": "tobytes",       "params": {}, "category": "io"},
+    {"name": "Image.convert",         "input": "ref_2k", "op": "convert",       "params": {"mode": "L"}, "category": "perf"},
+    {"name": "Image.paste",           "input": "ref_2k", "op": "paste",         "params": {"src_w": 512, "src_h": 512, "src_color": [255,0,0], "box": [100,100]}, "category": "perf"},
+    {"name": "Image.filter",          "input": "ref_2k", "op": "filter",        "params": {"name": "BLUR"}, "category": "perf"},
+    {"name": "Image.copy",            "input": "ref_2k", "op": "copy",          "params": {}, "category": "io"},
+    {"name": "Image.split",           "input": "ref_2k", "op": "split",         "params": {}, "category": "perf"},
+    {"name": "Image.getbands",        "input": "ref_2k", "op": "getbands",      "params": {}, "category": "nonperf"},
+    {"name": "Image.getbbox",         "input": "ref_2k", "op": "getbbox",       "params": {}, "category": "nonperf"},
+    {"name": "Image.getchannel",      "input": "ref_2k", "op": "getchannel",    "params": {"channel": 0}, "category": "nonperf"},
+    {"name": "Image.getcolors",       "input": "ref_2k", "op": "getcolors",     "params": {"maxcolors": 256}, "category": "nonperf"},
+    {"name": "Image.getextrema",      "input": "ref_2k", "op": "getextrema",    "params": {}, "category": "nonperf"},
+    {"name": "Image.getpixel",        "input": "ref_2k", "op": "getpixel",      "params": {"xy": [50,50]}, "category": "nonperf"},
+    {"name": "Image.getprojection",   "input": "ref_2k", "op": "getprojection", "params": {}, "category": "nonperf"},
+    {"name": "Image.histogram",       "input": "ref_2k", "op": "histogram",     "params": {}, "category": "nonperf"},
+    {"name": "Image.point",           "input": "ref_2k", "op": "point",         "params": {"lut": "invert"}, "category": "perf"},
+    {"name": "Image.quantize",        "input": "ref_2k", "op": "quantize",      "params": {"colors": 16}, "category": "perf"},
+    {"name": "Image.reduce",          "input": "ref_2k", "op": "reduce",        "params": {"factor": 2}, "category": "perf"},
+    {"name": "Image.entropy",         "input": "ref_2k", "op": "entropy",       "params": {}, "category": "nonperf"},
+    {"name": "Image.effect_spread",   "input": "synthetic_512", "op": "effect_spread", "params": {"distance": 3}, "category": "perf"},
+    {"name": "ImageOps.autocontrast", "input": "ref_2k", "op": "autocontrast",  "params": {}, "category": "perf"},
+    {"name": "ImageOps.equalize",     "input": "ref_2k", "op": "equalize",      "params": {}, "category": "perf"},
+    {"name": "ImageOps.invert",       "input": "ref_2k", "op": "invert",        "params": {}, "category": "perf"},
+    {"name": "ImageOps.flip",         "input": "ref_2k", "op": "flip",          "params": {}, "category": "perf"},
+    {"name": "ImageOps.mirror",       "input": "ref_2k", "op": "mirror",        "params": {}, "category": "perf"},
+    {"name": "ImageOps.posterize",    "input": "ref_2k", "op": "posterize",     "params": {"bits": 3}, "category": "perf"},
+    {"name": "ImageOps.solarize",     "input": "ref_2k", "op": "solarize",      "params": {"threshold": 128}, "category": "perf"},
+    {"name": "ImageOps.grayscale",    "input": "ref_2k", "op": "grayscale",     "params": {}, "category": "perf"},
+    {"name": "ImageEnhance.Brightness", "input": "ref_2k", "op": "enhance_brightness", "params": {"factor": 1.5}, "category": "perf"},
+    {"name": "ImageEnhance.Contrast",   "input": "ref_2k", "op": "enhance_contrast",   "params": {"factor": 1.5}, "category": "perf"},
+    {"name": "ImageEnhance.Color",      "input": "ref_2k", "op": "enhance_color",      "params": {"factor": 1.5}, "category": "perf"},
+    {"name": "ImageEnhance.Sharpness",  "input": "ref_2k", "op": "enhance_sharpness",  "params": {"factor": 2.0}, "category": "perf"},
+    {"name": "ImageColor.getrgb",    "input": "ref_2k", "op": "getrgb",  "params": {"color": "red"}, "category": "nonperf"},
+    {"name": "ImageColor.getcolor",  "input": "ref_2k", "op": "getcolor","params": {"color": "red", "mode": "RGB"}, "category": "nonperf"},
+    {"name": "pipeline_20_st",       "input": "ref_2k", "op": "pipeline", "params": {
+      "chain": [
+        {"op": "resize", "params": {"size": [800,600], "filter": "LANCZOS"}},
+        {"op": "crop", "params": {"box": [100,100,500,500]}},
+        {"op": "convert", "params": {"mode": "L"}},
+        {"op": "rotate", "params": {"angle": 90}},
+        {"op": "filter", "params": {"name": "BLUR"}}
+      ]
+    }, "category": "perf"}
+  ]
+}
