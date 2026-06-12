@@ -58,92 +58,100 @@ def run_pil(op_name, mode):
 
     try:
         if module == "Image":
-            result = _run_image_op(img, func, mode)
+            result, params = _run_image_op(img, func, mode)
         elif module == "ImageOps":
-            result = _run_imageops(img, func, mode)
+            result, params = _run_imageops(img, func, mode)
         elif module == "ImageChops":
-            result = _run_chops(img, func, mode)
+            result, params = _run_chops(img, func, mode)
         elif module == "ImageFilter":
-            result = _run_filter(img, func)
+            result, params = _run_filter(img, func)
         elif module == "ImageEnhance":
-            result = getattr(PILImageEnhance, func)(img).enhance(1.5)
+            result, params = getattr(PILImageEnhance, func)(img).enhance(1.5), {"factor": 1.5}
         elif module == "ImageModule":
-            result = _run_module_func(img, func, mode)
+            result, params = _run_module_func(img, func, mode)
         elif module == "ImageDraw":
-            result = _run_draw(img, func, mode)
+            result, params = _run_draw(img, func, mode)
         else:
             return None
 
         if hasattr(result, 'tobytes'):
-            return ('success', result.tobytes())
+            return ('success', result.tobytes(), params)
+        elif isinstance(result, bytes):
+            return ('success', result, params)
         elif hasattr(result, 'save'):
             buf = BytesIO()
             result.save(buf, format="PNG")
-            return ('success', buf.getvalue())
+            return ('success', buf.getvalue(), params)
         else:
             return None
     except Exception as e:
-        return ('error', f"{type(e).__name__}: {str(e)[:100]}")
+        return ('error', f"{type(e).__name__}: {str(e)[:100]}", {})
 
 
 def _run_image_op(img, func, mode):
-    """Dispatch Image instance method operations."""
-    if func in ("resize",): return img.resize((50, 50))
-    if func in ("crop",): return img.crop((25, 25, 75, 75))
-    if func in ("rotate",): return img.rotate(90)
-    if func in ("transpose",): return img.transpose(PILImage.FLIP_LEFT_RIGHT)
-    if func in ("filter",): return img.filter(PILFilter.BLUR)
-    if func in ("convert",): return img.convert("RGB") if img.mode != "RGB" else img.convert("L")
+    """Dispatch Image instance method operations. Returns (result, params)."""
+    if func in ("resize",): return img.resize((50, 50)), {"size": [50, 50]}
+    if func in ("crop",): return img.crop((25, 25, 75, 75)), {"box": [25, 25, 75, 75]}
+    if func in ("rotate",): return img.rotate(90), {"angle": 90}
+    if func in ("transpose",): return img.transpose(PILImage.FLIP_LEFT_RIGHT), {"method": "FLIP_LEFT_RIGHT"}
+    if func in ("filter",): return img.filter(PILFilter.BLUR), {"type": "BLUR"}
+    if func in ("convert",):
+        target = "RGB" if img.mode != "RGB" else "L"
+        return img.convert(target), {"mode": target}
     if func in ("thumbnail",):
         img.thumbnail((50, 50))
-        return img
+        return img, {"size": [50, 50]}
     if func in ("copy", "split", "getbands", "tobytes", "getbbox", "getextrema",
                 "histogram", "getpixel", "getcolors", "getdata", "getprojection",
                 "entropy", "load", "close", "verify", "seek", "tell"):
-        return getattr(img, func)()
+        return getattr(img, func)(), {}
     if func in ("paste",):
         paste_img = _make_image(mode, (10, 10))
         img.paste(paste_img, (0, 0))
-        return img
+        return img, {"size": [10, 10], "position": [0, 0]}
     if func in ("alpha_composite",):
         fg = _make_image("RGBA", (10, 10))
         img.alpha_composite(fg)
-        return img
+        return img, {"fgSize": [10, 10]}
     if func in ("point",):
         lut = bytes([min(255, i + 50) for i in range(256)])
-        return img.point(lut)
+        return img.point(lut), {"lutSize": 256, "offset": 50}
     if func in ("putalpha",):
         img.putalpha(128)
-        return img
+        return img, {"alpha": 128}
     if func in ("putdata",):
         n = img.size[0] * img.size[1]
         data = [128] * n
         img.putdata(data)
-        return img
-    if func in ("quantize",): return img.quantize(16)
-    if func in ("reduce",): return img.reduce(2)
-    if func in ("effect_spread",): return img.effect_spread(2)
-    if func in ("transform",): return img.transform((50, 50), PILImage.AFFINE, (1, 0, 0, 0, 1, 0))
+        return img, {"count": n}
+    if func in ("quantize",): return img.quantize(16), {"colors": 16}
+    if func in ("reduce",): return img.reduce(2), {"factor": 2}
+    if func in ("effect_spread",): return img.effect_spread(2), {"distance": 2}
+    if func in ("transform",): return img.transform((50, 50), PILImage.AFFINE, (1, 0, 0, 0, 1, 0)), {"size": [50, 50], "method": "AFFINE"}
+    if func in ("getchannel",):
+        return img.getchannel(0), {"channel": 0}
+    if func in ("putpixel",):
+        img.putpixel((0, 0), (255, 0, 0, 255) if len(img.getbands()) == 4 else (255, 0, 0))
+        return img, {}
     return img
 
 
 def _run_imageops(img, func, mode):
-    """Dispatch ImageOps functions."""
+    """Dispatch ImageOps functions. Returns (result, params)."""
     if func in ("autocontrast", "equalize", "invert", "flip", "mirror",
                 "grayscale", "posterize", "solarize"):
-        return getattr(PILImageOps, func)(img)
+        return getattr(PILImageOps, func)(img), {"func": func}
     if func in ("contain", "cover", "fit", "pad", "scale"):
-        return getattr(PILImageOps, func)(img, (25, 25))
+        return getattr(PILImageOps, func)(img, (25, 25)), {"size": [25, 25], "func": func}
     if func in ("expand",):
-        return getattr(PILImageOps, func)(img, 5)
+        return getattr(PILImageOps, func)(img, 5), {"border": 5, "func": func}
     if func in ("crop",):
-        return getattr(PILImageOps, func)(img, 5)
+        return getattr(PILImageOps, func)(img, 5), {"border": 5, "func": func}
     if func in ("colorize",):
-        return getattr(PILImageOps, func)(img, "black", "white")
+        return getattr(PILImageOps, func)(img, "black", "white"), {"func": func, "black": "black", "white": "white"}
     if func in ("exif_transpose",):
-        return img  # no-op for generated images
-    if func in ("deform",):
-        return img  # identity
+        return img, {}
+    if func in ("deform",): return img, {}
     return img
 
 
@@ -154,13 +162,13 @@ def _run_chops(img, func, mode):
             "add_modulo", "subtract_modulo", "blend", "composite",
             "hard_light", "soft_light", "overlay", "logical_and", "logical_or", "logical_xor")
     if func in dual:
-        return getattr(PILImageChops, func)(img, img2)
+        return getattr(PILImageChops, func)(img, img2), {"func": func}
     if func in ("invert", "constant", "duplicate", "offset"):
         if func == "offset":
-            return getattr(PILImageChops, func)(img, 5, 5)
+            return getattr(PILImageChops, func)(img, 5, 5), {"func": func, "x": 5, "y": 5}
         if func == "constant":
-            return getattr(PILImageChops, func)(img, 128)
-        return getattr(PILImageChops, func)(img)
+            return getattr(PILImageChops, func)(img, 128), {"func": func, "value": 128}
+        return getattr(PILImageChops, func)(img), {"func": func}
     return img
 
 
@@ -168,26 +176,26 @@ def _run_filter(img, func):
     """Dispatch ImageFilter operations."""
     filt = getattr(PILFilter, func, None)
     if filt:
-        return img.filter(filt)
-    return img.filter(PILFilter.BLUR)
+        return img.filter(filt), {"type": func}
+    return img.filter(PILFilter.BLUR), {"type": "BLUR"}
 
 
 def _run_module_func(img, func, mode):
     """Dispatch ImageModule functions."""
     if func == "merge":
         bands = img.split()
-        return PILImage.merge(mode, bands)
+        return PILImage.merge(mode, bands), {"func": "merge", "mode": mode}
     if func == "effect_noise":
-        return PILImage.effect_noise(img.size, 10)
+        return PILImage.effect_noise(img.size, 10), {"func": "effect_noise", "sigma": 10}
     if func in ("blend",):
         img2 = _make_image(mode, img.size)
-        return PILImage.blend(img, img2, 0.5)
+        return PILImage.blend(img, img2, 0.5), {"func": "blend", "alpha": 0.5}
     if func in ("composite",):
         img2 = _make_image(mode, img.size)
         mask = PILImage.new("L", img.size, 128)
-        return PILImage.composite(img, img2, mask)
+        return PILImage.composite(img, img2, mask), {"func": "composite"}
     if func in ("eval",):
-        return PILImage.eval(img, lambda x: min(255, x + 10))
+        return PILImage.eval(img, lambda x: min(255, x + 10)), {"func": "eval", "offset": 10}
     if func in ("alpha_composite",):
         fg = _make_image("RGBA", (10, 10))
         img2 = img.copy()
@@ -255,7 +263,7 @@ def main():
                     if result is None:
                         continue
 
-                    status, data = result
+                    status, data, params = result
                     key = f"{op_name.replace('.', '_')}_{mode}"
                     if status == 'success':
                         h = hashlib.sha256(data).hexdigest()
@@ -263,8 +271,7 @@ def main():
                             "op": op_name,
                             "mode": mode,
                             "targets": targets,
-                            "inputMode": mode,
-                            "inputSize": [100, 100],
+                            "params": params,
                             "expectedHash": h,
                         }
                     else:  # error
@@ -272,8 +279,7 @@ def main():
                             "op": op_name,
                             "mode": mode,
                             "targets": targets,
-                            "inputMode": mode,
-                            "inputSize": [100, 100],
+                            "params": params,
                             "expectedError": data,
                         }
                     index["operations"][key] = fixture
