@@ -603,7 +603,7 @@ fn channel_op_binary(
             );
         }
     }
-    Ok(DynamicImage::ImageRgb8(out))
+    Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
 /// Helper: preserve the color mode of the input image after operations
@@ -938,7 +938,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     p[c] = 255 - p[c];
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Flip => Ok(img.flipv()),
         PipelineOp::Mirror => Ok(img.fliph()),
@@ -1145,7 +1145,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 p[1] = *value;
                 p[2] = *value;
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Offset { x, y } => {
             let (w, h) = (img.width(), img.height());
@@ -1158,7 +1158,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     result.put_pixel(px, py, *src_rgba.get_pixel(sx, sy));
                 }
             }
-            Ok(result)
+            Ok(preserve_mode(img, result))
         }
         PipelineOp::Blend { other, alpha } => {
             let other_img = other.materialize()?;
@@ -1211,7 +1211,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     p[c] = 255 - p[c];
                 }
             }
-            Ok(DynamicImage::ImageRgb8(rgb))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
 
         // ── Enhance ──
