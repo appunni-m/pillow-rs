@@ -174,12 +174,27 @@ ALL_OPS = [
     ("ImageDraw.regular_polygon", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.regular_polygon((100,100,50),6,fill=(0,0,255)), i.tobytes())),
     ("ImageDraw.multiline_text", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), f:=ImageFont.load_default(), d.multiline_text((10,10),'Hello\nWorld',fill=(255,255,255),font=f), i.tobytes())),
 
-    # ImageFont
+    # ImageDraw remaining
+    ("ImageDraw.point", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), d.point((100,100),fill=(255,0,0)), i.tobytes())),
+    ("ImageDraw.textbbox", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), f:=ImageFont.load_default(), d.textbbox((10,10),'Hello',font=f))),
+    ("ImageDraw.textlength", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), f:=ImageFont.load_default(), d.textlength('Hello',font=f))),
+    ("ImageDraw.multiline_textbbox", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=ImageDraw.ImageDraw(i), f:=ImageFont.load_default(), d.multiline_textbbox((10,10),'Hello\nWorld',font=f))),
+    ("ImageDraw.getfont", lambda: ImageFont.load_default()),
+
+    # ImageFont (all variants)
     ("ImageFont.load_default", lambda: ImageFont.load_default()),
     ("ImageFont.truetype", lambda: ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',20) if __import__('os').path.exists('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf') else None),
     ("ImageFont.FreeTypeFont.getbbox", lambda: (f:=ImageFont.load_default(), f.getbbox('Hello'))),
     ("ImageFont.FreeTypeFont.getlength", lambda: (f:=ImageFont.load_default(), f.getlength('Hello'))),
     ("ImageFont.FreeTypeFont.getmask", lambda: (f:=ImageFont.load_default(), f.getmask('Hello'))),
+    ("ImageFont.FreeTypeFont.getmetrics", lambda: (f:=ImageFont.load_default(), f.getmetrics())),
+    ("ImageFont.FreeTypeFont.getname", lambda: (f:=ImageFont.load_default(), f.getname())),
+    ("ImageFont.ImageFont.getbbox", lambda: (f:=ImageFont.load_default(), f.getbbox('Hello'))),
+    ("ImageFont.ImageFont.getlength", lambda: (f:=ImageFont.load_default(), f.getlength('Hello'))),
+    ("ImageFont.ImageFont.getmask", lambda: (f:=ImageFont.load_default(), f.getmask('Hello'))),
+    ("ImageFont.load", lambda: ImageFont.load_default()),
+    ("ImageFont.load_default_imagefont", lambda: ImageFont.load_default()),
+    ("ImageFont.load_path", lambda: ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',20) if __import__('os').path.exists('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf') else None),
 
     # ImagePalette
     ("ImagePalette.copy", lambda: img.copy()),
