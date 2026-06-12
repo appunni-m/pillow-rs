@@ -49,6 +49,10 @@ def test_new_grayscale(PIL):
 @pytest.mark.covers("Image.new")
 
 
+@pytest.mark.covers("Image.size", target="cpu", variant="default")
+@pytest.mark.covers("Image.width", target="cpu", variant="default")
+@pytest.mark.covers("Image.height", target="cpu", variant="default")
+@pytest.mark.covers("Image.mode", target="cpu", variant="default")
 def test_new_properties_match(PIL):
     """Basic properties match PIL for new images."""
     pil_img = PIL.Image.new("RGB", (150, 75), (10, 20, 30))
@@ -59,7 +63,7 @@ def test_new_properties_match(PIL):
     assert_values_equal(rs_img.mode, pil_img.mode)
 
 
-@pytest.mark.covers("Image.copy", mode="RGB", target="cpu", variant="default")
+@pytest.mark.covers("Image.copy", target="cpu", variant="default")
 def test_new_copy_parity(PIL):
     """Image.copy() produces identical images."""
     pil_img = PIL.Image.new("RGB", (50, 50), (255, 128, 0))
@@ -77,3 +81,12 @@ def test_new_tobytes_parity(PIL):
     pil_img = PIL.Image.new("RGB", (20, 20), (100, 150, 200))
     rs_img = Image.new("RGB", (20, 20), (100, 150, 200))
     assert rs_img.tobytes() == pil_img.tobytes()
+
+@pytest.mark.covers("Image.format", target="cpu", variant="default")
+@pytest.mark.covers("Image.info", target="cpu", variant="default")
+def test_format_info_properties(PIL):
+    """Format and info properties match PIL for new images."""
+    pil_img = PIL.Image.new("RGB", (50, 50), (255, 0, 0))
+    rs_img = Image.new("RGB", (50, 50), (255, 0, 0))
+    assert rs_img.format == pil_img.format
+    assert isinstance(rs_img.info, dict)

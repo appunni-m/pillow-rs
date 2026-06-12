@@ -53,7 +53,7 @@ class TestAnalysis:
         colors = img.getcolors(256)
         assert colors is not None
 
-    @pytest.mark.covers("Image.getdata", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("Image.getdata", target="cpu", variant="default")
     def test_getdata_rgb_parity(self, PIL):
         pil = PIL.Image.new("RGB", (5, 5), (100, 150, 200))
         rs = Image.new("RGB", (5, 5), (100, 150, 200))

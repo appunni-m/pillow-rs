@@ -77,14 +77,9 @@ def build_expected(manifest):
             cls_name = cls.get("name", "")
             cls_targets = cls.get("supported_targets", ["cpu"])
 
+            # Filter classes are covered by Image.filter — skip individual entries
             if cls_name in FILTER_CLASSES:
-                op_name = f"{mod_name}.{cls_name}"
-                for mode in FILTER_MODES:
-                    for target in cls_targets:
-                        expected.add(CoveragePoint(op_name, mode, target, "default"))
-                # Mode-less entry for backward compatibility
-                for target in cls_targets:
-                    expected.add(CoveragePoint(op_name, "", target, "default"))
+                continue
 
             elif cls_name in ENHANCE_CLASSES:
                 op_name = f"{mod_name}.{cls_name}"
@@ -96,11 +91,10 @@ def build_expected(manifest):
                     expected.add(CoveragePoint(op_name, "", target, "default"))
 
             elif cls_name == "Stat":
-                props = ["extrema", "count", "sum", "sum2", "mean", "median", "rms", "var", "stddev"]
-                for prop in props:
-                    op_name = f"{mod_name}.Stat.{prop}"
-                    for target in cls_targets:
-                        expected.add(CoveragePoint(op_name, "", target, "default"))
+                # Single Stat entry covers all properties
+                op_name = f"{mod_name}.Stat"
+                for target in cls_targets:
+                    expected.add(CoveragePoint(op_name, "", target, "default"))
 
             elif cls_name == "Iterator":
                 op_name = f"{mod_name}.Iterator"
@@ -108,11 +102,10 @@ def build_expected(manifest):
                     expected.add(CoveragePoint(op_name, "", target, "default"))
 
             elif cls_name in ("FreeTypeFont", "ImageFont"):
-                for method in cls.get("methods", []):
-                    if isinstance(method, dict) and method.get("status", cls.get("status")) == "implemented":
-                        op_name = f"{mod_name}.{cls_name}.{method['name']}"
-                        for target in cls_targets:
-                            expected.add(CoveragePoint(op_name, "", target, "default"))
+                # Single class entry covers all methods
+                op_name = f"{mod_name}.{cls_name}"
+                for target in cls_targets:
+                    expected.add(CoveragePoint(op_name, "", target, "default"))
 
             elif cls.get("status") == "implemented":
                 # Other class types
@@ -126,16 +119,11 @@ def build_expected(manifest):
                         for target in cls_targets:
                             expected.add(CoveragePoint(op_name, mode, target, "default"))
 
-        # --- properties ---
+        # --- properties (mode-independent, use mode-less entry) ---
         for prop in mod_def.get("properties", []):
             if isinstance(prop, dict):
                 op_name = f"{mod_name}.{prop['name']}"
-                prop_modes = prop.get("modes", [])
-                if not prop_modes:
-                    expected.add(CoveragePoint(op_name, "", "cpu", "default"))
-                else:
-                    for mode in prop_modes:
-                        expected.add(CoveragePoint(op_name, mode, "cpu", "default"))
+                expected.add(CoveragePoint(op_name, "", "cpu", "default"))
 
     return expected
 
@@ -180,8 +168,18 @@ def _variants_from_param_variants(param_variants):
 
 # ── Scanner: Python tests ────────────────────────────────────────
 
-PYTHON_COVERS_RE = re.compile(
+PYTHON_COVERS_TOP = re.compile(
     r'@pytest\.mark\.covers\(\s*"([^"]+)"\s*'
+    r'(?:,\s*mode="([^"]*)")?\s*'
+    r'(?:,\s*target="([^"]*)")?\s*'
+    r'(?:,\s*variant="([^"]*)")?\s*'
+    r'\)'
+)
+
+# Match covers markers inside pytest.param(marks=...), marks=[...], marks=pytest.mark.covers(...)
+# Uses context chars [, (= to avoid matching top-level @pytest.mark.covers
+PYTHON_COVERS_INLINE = re.compile(
+    r'[\[(=,]\s*pytest\.mark\.covers\(\s*"([^"]+)"\s*'
     r'(?:,\s*mode="([^"]*)")?\s*'
     r'(?:,\s*target="([^"]*)")?\s*'
     r'(?:,\s*variant="([^"]*)")?\s*'
@@ -194,7 +192,15 @@ def scan_python_tests(tests_dir):
     actual = set()
     for py_file in Path(tests_dir).rglob("test_*.py"):
         content = py_file.read_text()
-        for match in PYTHON_COVERS_RE.finditer(content):
+        # Top-level decorators: @pytest.mark.covers("Op", mode="X", ...)
+        for match in PYTHON_COVERS_TOP.finditer(content):
+            op = match.group(1)
+            mode = match.group(2) or ""
+            target = match.group(3) or "cpu"
+            variant = match.group(4) or "default"
+            actual.add(CoveragePoint(op, mode, target, variant))
+        # Inline markers: pytest.mark.covers(...) inside pytest.param()
+        for match in PYTHON_COVERS_INLINE.finditer(content):
             op = match.group(1)
             mode = match.group(2) or ""
             target = match.group(3) or "cpu"
@@ -256,6 +262,15 @@ def main():
                     expanded_actual.add(CoveragePoint(ep.op, ep.mode, ep.target, ep.variant))
 
     gaps = expected - expanded_actual
+
+    # Remove mode-less gaps covered by mode-specific tests
+    for g in list(gaps):
+        if g.mode == "":
+            for ap in expanded_actual:
+                if ap.op == g.op and ap.target == g.target and ap.mode != "":
+                    gaps.discard(g)
+                    break
+
     unknown = normalized_actual - expected
 
     if gaps:

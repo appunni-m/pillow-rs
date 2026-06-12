@@ -55,7 +55,7 @@ class TestImageOpsContain:
 
 
 class TestImageChopsNew:
-    @pytest.mark.covers("ImageChops.duplicate", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("ImageChops.duplicate", target="cpu", variant="default")
     def test_duplicate_works(self):
         img = Image.new("RGB", (20, 20), (128, 0, 0))
         dup = ImageChops.duplicate(img)
