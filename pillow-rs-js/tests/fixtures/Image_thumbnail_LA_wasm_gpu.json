@@ -1,0 +1,6 @@
+{
+  "op": "Image.thumbnail",
+  "mode": "LA",
+  "target": "wasm_gpu",
+  "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+}

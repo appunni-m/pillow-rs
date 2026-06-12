@@ -1,0 +1,6 @@
+{
+  "op": "Image.copy",
+  "mode": "LA",
+  "target": "wasm_gpu",
+  "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+}

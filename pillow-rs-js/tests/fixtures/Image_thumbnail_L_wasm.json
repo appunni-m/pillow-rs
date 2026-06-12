@@ -1,0 +1,6 @@
+{
+  "op": "Image.thumbnail",
+  "mode": "L",
+  "target": "wasm",
+  "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+}

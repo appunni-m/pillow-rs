@@ -1,0 +1,6 @@
+{
+  "op": "Image.quantize",
+  "mode": "RGBA",
+  "target": "wasm",
+  "expectedHash": "d4137411d33ab9e181b85f0bb3f05443d88b39b680bb168b05083ce417717250"
+}

@@ -1,0 +1,6 @@
+{
+  "op": "Image.convert",
+  "mode": "RGB",
+  "target": "wasm_gpu",
+  "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+}

@@ -1,0 +1,6 @@
+{
+  "op": "Image.convert",
+  "mode": "F",
+  "target": "wasm_gpu",
+  "expectedHash": "d91acc41eb40d503d56cd97a1e9750f67928a0f2291681aece1f57de25cb96eb"
+}

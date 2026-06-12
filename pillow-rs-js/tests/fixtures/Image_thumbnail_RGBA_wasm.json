@@ -1,0 +1,6 @@
+{
+  "op": "Image.thumbnail",
+  "mode": "RGBA",
+  "target": "wasm",
+  "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+}

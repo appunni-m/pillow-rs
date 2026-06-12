@@ -1,0 +1,676 @@
+{
+  "operations": {
+    "Image_resize_L_wasm": {
+      "op": "Image.resize",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+    },
+    "Image_resize_L_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+    },
+    "Image_resize_LA_wasm": {
+      "op": "Image.resize",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+    },
+    "Image_resize_LA_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+    },
+    "Image_resize_RGB_wasm": {
+      "op": "Image.resize",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_resize_RGB_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_resize_RGBA_wasm": {
+      "op": "Image.resize",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+    },
+    "Image_resize_RGBA_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+    },
+    "Image_resize_1_wasm": {
+      "op": "Image.resize",
+      "mode": 1,
+      "target": "wasm",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_resize_1_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": 1,
+      "target": "wasm_gpu",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_resize_P_wasm": {
+      "op": "Image.resize",
+      "mode": "P",
+      "target": "wasm",
+      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+    },
+    "Image_resize_P_wasm_gpu": {
+      "op": "Image.resize",
+      "mode": "P",
+      "target": "wasm_gpu",
+      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+    },
+    "Image_crop_L_wasm": {
+      "op": "Image.crop",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+    },
+    "Image_crop_L_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+    },
+    "Image_crop_LA_wasm": {
+      "op": "Image.crop",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+    },
+    "Image_crop_LA_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+    },
+    "Image_crop_RGB_wasm": {
+      "op": "Image.crop",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_crop_RGB_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_crop_RGBA_wasm": {
+      "op": "Image.crop",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+    },
+    "Image_crop_RGBA_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+    },
+    "Image_crop_1_wasm": {
+      "op": "Image.crop",
+      "mode": 1,
+      "target": "wasm",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_crop_1_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": 1,
+      "target": "wasm_gpu",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_crop_P_wasm": {
+      "op": "Image.crop",
+      "mode": "P",
+      "target": "wasm",
+      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+    },
+    "Image_crop_P_wasm_gpu": {
+      "op": "Image.crop",
+      "mode": "P",
+      "target": "wasm_gpu",
+      "expectedHash": "eec3a6ecfacc100f7ed3ba5a13a645592fef9a5c1fc7bfacce6d525c8e7d7add"
+    },
+    "Image_rotate_L_wasm": {
+      "op": "Image.rotate",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_rotate_L_wasm_gpu": {
+      "op": "Image.rotate",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_rotate_LA_wasm": {
+      "op": "Image.rotate",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_rotate_LA_wasm_gpu": {
+      "op": "Image.rotate",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_rotate_RGB_wasm": {
+      "op": "Image.rotate",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_rotate_RGB_wasm_gpu": {
+      "op": "Image.rotate",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_rotate_RGBA_wasm": {
+      "op": "Image.rotate",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_rotate_RGBA_wasm_gpu": {
+      "op": "Image.rotate",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_transpose_L_wasm": {
+      "op": "Image.transpose",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_transpose_L_wasm_gpu": {
+      "op": "Image.transpose",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_transpose_LA_wasm": {
+      "op": "Image.transpose",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_transpose_LA_wasm_gpu": {
+      "op": "Image.transpose",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_transpose_RGB_wasm": {
+      "op": "Image.transpose",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_transpose_RGB_wasm_gpu": {
+      "op": "Image.transpose",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_transpose_RGBA_wasm": {
+      "op": "Image.transpose",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_transpose_RGBA_wasm_gpu": {
+      "op": "Image.transpose",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_transpose_1_wasm": {
+      "op": "Image.transpose",
+      "mode": 1,
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_transpose_1_wasm_gpu": {
+      "op": "Image.transpose",
+      "mode": 1,
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_transpose_P_wasm": {
+      "op": "Image.transpose",
+      "mode": "P",
+      "target": "wasm",
+      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+    },
+    "Image_transpose_P_wasm_gpu": {
+      "op": "Image.transpose",
+      "mode": "P",
+      "target": "wasm_gpu",
+      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+    },
+    "Image_convert_L_wasm": {
+      "op": "Image.convert",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+    },
+    "Image_convert_L_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+    },
+    "Image_convert_LA_wasm": {
+      "op": "Image.convert",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+    },
+    "Image_convert_LA_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+    },
+    "Image_convert_RGB_wasm": {
+      "op": "Image.convert",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+    },
+    "Image_convert_RGB_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+    },
+    "Image_convert_RGBA_wasm": {
+      "op": "Image.convert",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_RGBA_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_1_wasm": {
+      "op": "Image.convert",
+      "mode": 1,
+      "target": "wasm",
+      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+    },
+    "Image_convert_1_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": 1,
+      "target": "wasm_gpu",
+      "expectedHash": "be1026827416780bbcc9dfbe22354983066b0df482199d9f9ac7849b3d3ae808"
+    },
+    "Image_convert_P_wasm": {
+      "op": "Image.convert",
+      "mode": "P",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_P_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "P",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_CMYK_wasm": {
+      "op": "Image.convert",
+      "mode": "CMYK",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_CMYK_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "CMYK",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_YCbCr_wasm": {
+      "op": "Image.convert",
+      "mode": "YCbCr",
+      "target": "wasm",
+      "expectedHash": "10c887bf6d129381a9313e8228b41643c0e31c6994087e7039733c937019c668"
+    },
+    "Image_convert_YCbCr_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "YCbCr",
+      "target": "wasm_gpu",
+      "expectedHash": "10c887bf6d129381a9313e8228b41643c0e31c6994087e7039733c937019c668"
+    },
+    "Image_convert_HSV_wasm": {
+      "op": "Image.convert",
+      "mode": "HSV",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_HSV_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "HSV",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_convert_I_wasm": {
+      "op": "Image.convert",
+      "mode": "I",
+      "target": "wasm",
+      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+    },
+    "Image_convert_I_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "I",
+      "target": "wasm_gpu",
+      "expectedHash": "83741eed7acbc299f01cab146eff988143d5131d8815f25f831695d80787c0d1"
+    },
+    "Image_convert_F_wasm": {
+      "op": "Image.convert",
+      "mode": "F",
+      "target": "wasm",
+      "expectedHash": "d91acc41eb40d503d56cd97a1e9750f67928a0f2291681aece1f57de25cb96eb"
+    },
+    "Image_convert_F_wasm_gpu": {
+      "op": "Image.convert",
+      "mode": "F",
+      "target": "wasm_gpu",
+      "expectedHash": "d91acc41eb40d503d56cd97a1e9750f67928a0f2291681aece1f57de25cb96eb"
+    },
+    "Image_filter_L_wasm": {
+      "op": "Image.filter",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_filter_L_wasm_gpu": {
+      "op": "Image.filter",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_filter_LA_wasm": {
+      "op": "Image.filter",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_filter_LA_wasm_gpu": {
+      "op": "Image.filter",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_filter_RGB_wasm": {
+      "op": "Image.filter",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_filter_RGB_wasm_gpu": {
+      "op": "Image.filter",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_filter_RGBA_wasm": {
+      "op": "Image.filter",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_filter_RGBA_wasm_gpu": {
+      "op": "Image.filter",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_copy_L_wasm": {
+      "op": "Image.copy",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_copy_L_wasm_gpu": {
+      "op": "Image.copy",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "Image_copy_LA_wasm": {
+      "op": "Image.copy",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_copy_LA_wasm_gpu": {
+      "op": "Image.copy",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "Image_copy_RGB_wasm": {
+      "op": "Image.copy",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_copy_RGB_wasm_gpu": {
+      "op": "Image.copy",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_copy_RGBA_wasm": {
+      "op": "Image.copy",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_copy_RGBA_wasm_gpu": {
+      "op": "Image.copy",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "Image_copy_1_wasm": {
+      "op": "Image.copy",
+      "mode": 1,
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_copy_1_wasm_gpu": {
+      "op": "Image.copy",
+      "mode": 1,
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "Image_copy_P_wasm": {
+      "op": "Image.copy",
+      "mode": "P",
+      "target": "wasm",
+      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+    },
+    "Image_copy_P_wasm_gpu": {
+      "op": "Image.copy",
+      "mode": "P",
+      "target": "wasm_gpu",
+      "expectedHash": "1ed6e745c5030f4fc7a12492b5846b12cbe79afd7565e787919f1776a91f753a"
+    },
+    "Image_thumbnail_L_wasm": {
+      "op": "Image.thumbnail",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+    },
+    "Image_thumbnail_L_wasm_gpu": {
+      "op": "Image.thumbnail",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "231aff4782a1187ec3bdef6200cd35efe22ff336b85018f80836ccfb1e0af852"
+    },
+    "Image_thumbnail_LA_wasm": {
+      "op": "Image.thumbnail",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+    },
+    "Image_thumbnail_LA_wasm_gpu": {
+      "op": "Image.thumbnail",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "a0ccd313a26e305f44dd17140c6bf67779d9f5afb486d8922563a7096dfbb4a8"
+    },
+    "Image_thumbnail_RGB_wasm": {
+      "op": "Image.thumbnail",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_thumbnail_RGB_wasm_gpu": {
+      "op": "Image.thumbnail",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7bddd8b81f14df23c99fbb6a830b004cc340960da68ad7034bda0f2b16fcc242"
+    },
+    "Image_thumbnail_RGBA_wasm": {
+      "op": "Image.thumbnail",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+    },
+    "Image_thumbnail_RGBA_wasm_gpu": {
+      "op": "Image.thumbnail",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "52a4d2420211c0a69f676f4ab10ae5e1b09bc0feef876bb1b39a4af34e1849b1"
+    },
+    "Image_quantize_RGB_wasm": {
+      "op": "Image.quantize",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "3dfcacd73130f60ae8a737323330239b63a81997827cdb329fb93e93ff622770"
+    },
+    "Image_quantize_RGB_wasm_gpu": {
+      "op": "Image.quantize",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "3dfcacd73130f60ae8a737323330239b63a81997827cdb329fb93e93ff622770"
+    },
+    "Image_quantize_RGBA_wasm": {
+      "op": "Image.quantize",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "d4137411d33ab9e181b85f0bb3f05443d88b39b680bb168b05083ce417717250"
+    },
+    "Image_quantize_RGBA_wasm_gpu": {
+      "op": "Image.quantize",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "d4137411d33ab9e181b85f0bb3f05443d88b39b680bb168b05083ce417717250"
+    },
+    "ImageModule_merge_L_wasm": {
+      "op": "ImageModule.merge",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "ImageModule_merge_L_wasm_gpu": {
+      "op": "ImageModule.merge",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "7a3dc481607aa74e504de1e7f6f72f76f5551625bf6e739977be59cb536a1a8c"
+    },
+    "ImageModule_merge_LA_wasm": {
+      "op": "ImageModule.merge",
+      "mode": "LA",
+      "target": "wasm",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "ImageModule_merge_LA_wasm_gpu": {
+      "op": "ImageModule.merge",
+      "mode": "LA",
+      "target": "wasm_gpu",
+      "expectedHash": "351f8e93a72b3a7b850140b7b8e6600921dda7bfefd393cb7fccf088ee53952d"
+    },
+    "ImageModule_merge_RGB_wasm": {
+      "op": "ImageModule.merge",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "ImageModule_merge_RGB_wasm_gpu": {
+      "op": "ImageModule.merge",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "7a0e342f9e49390664a88b00bbb8370bf3084a231ab210c8ad972c2a5db20251"
+    },
+    "ImageModule_merge_RGBA_wasm": {
+      "op": "ImageModule.merge",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "ImageModule_merge_RGBA_wasm_gpu": {
+      "op": "ImageModule.merge",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "623474b4826f08b58df525c18f6da9fda69042966fa6e5d6745f2cb11d404f1a"
+    },
+    "ImageModule_effect_noise_L_wasm": {
+      "op": "ImageModule.effect_noise",
+      "mode": "L",
+      "target": "wasm",
+      "expectedHash": "731d562b8feef21f8994082c612dc521177ab9d88ae1010a2f7c35c0084fb11c"
+    },
+    "ImageModule_effect_noise_L_wasm_gpu": {
+      "op": "ImageModule.effect_noise",
+      "mode": "L",
+      "target": "wasm_gpu",
+      "expectedHash": "6c3af14c471475213a74b5e64e60d4ce3d588ed303d76465bb63c270916afec7"
+    },
+    "ImageModule_effect_noise_RGB_wasm": {
+      "op": "ImageModule.effect_noise",
+      "mode": "RGB",
+      "target": "wasm",
+      "expectedHash": "3e8d31c046d2614a0f2dbb1408f922ff5ec8f88b9ef6a958c1006c5f83f127cf"
+    },
+    "ImageModule_effect_noise_RGB_wasm_gpu": {
+      "op": "ImageModule.effect_noise",
+      "mode": "RGB",
+      "target": "wasm_gpu",
+      "expectedHash": "0d985f1c6d030ce3beeb5ae1fe415da3ee656906b5cf8f58f919e2b1b45b1d04"
+    },
+    "ImageModule_effect_noise_RGBA_wasm": {
+      "op": "ImageModule.effect_noise",
+      "mode": "RGBA",
+      "target": "wasm",
+      "expectedHash": "26b874c407804e0d81f012490db3e156c7d15070cc8d6e2e4d5ab0012160da10"
+    },
+    "ImageModule_effect_noise_RGBA_wasm_gpu": {
+      "op": "ImageModule.effect_noise",
+      "mode": "RGBA",
+      "target": "wasm_gpu",
+      "expectedHash": "e1b78540ee3c6a9db64808cc2a2219ed896893b31ac67846cdee42f00465b18d"
+    }
+  }
+}
