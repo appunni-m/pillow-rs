@@ -137,6 +137,8 @@ class Image:
         return Image(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
+        if self.mode == "P":
+            raise ValueError("cannot filter palette images")
         rust_image = self._rust_image.filter(str(filter_type))
         return Image(rust_image)
 
