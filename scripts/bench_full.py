@@ -59,7 +59,9 @@ ALL_OPS = [
     # Image methods
     ("Image.open", lambda: (i:=load("ref_2k.jpg"), i.tobytes())),
     ("Image.new", lambda: (i:=Image.new("RGB", 1920, 1080, (255,0,0,255)), i.tobytes())),
-    ("Image.save", lambda: img.tobytes()),  # tobytes == save to memory
+    ("Image.save", lambda: img.tobytes()),
+    ("Image.paste", lambda: (i:=load("ref_2k.jpg"), s:=Image.new("RGB",800,600,(0,255,0,255)), i.paste(s,(100,100)), i.tobytes())),
+    ("Image.thumbnail", lambda: (i:=load("ref_2k.jpg"), i.thumbnail((200,200)), i.tobytes())),
     ("Image.resize", lambda: img.resize((800,600), "LANCZOS").tobytes()),
     ("Image.crop", lambda: img.crop((100,100,500,500)).tobytes()),
     ("Image.rotate", lambda: img.rotate(90).tobytes()),
