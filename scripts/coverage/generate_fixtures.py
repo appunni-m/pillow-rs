@@ -339,10 +339,14 @@ def _run_chops(img, func, mode):
     """Dispatch ImageChops functions."""
     img2 = _make_image(mode, img.size)
     dual = ("add", "subtract", "multiply", "screen", "darker", "lighter", "difference",
-            "add_modulo", "subtract_modulo", "blend", "composite",
+            "add_modulo", "subtract_modulo",
             "hard_light", "soft_light", "overlay", "logical_and", "logical_or", "logical_xor")
     if func in dual:
         return getattr(PILImageChops, func)(img, img2), {"func": func}
+    if func in ("blend",):
+        return getattr(PILImageChops, func)(img, img2, 0.5), {"func": func, "alpha": 0.5}
+    if func in ("composite",):
+        return getattr(PILImageChops, func)(img, img2, img2), {"func": func}
     if func in ("invert", "constant", "duplicate", "offset"):
         if func == "offset":
             return getattr(PILImageChops, func)(img, 5, 5), {"func": func, "x": 5, "y": 5}
