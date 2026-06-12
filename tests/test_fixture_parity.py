@@ -978,14 +978,17 @@ def test_fixture_parity(name, fixture_file):
             if img is None:
                 pytest.xfail(f'Cannot create input for {mode}')
             _run_op(img, op)
+            del img  # free Rust memory before xfail holds traceback
             pytest.xfail(f'{op} x {mode}: expected error but succeeded')
         except Exception as e:
             actual_error = f'{type(e).__name__}: {str(e)[:100]}'
             if type(e).__name__ not in expected_error:
+                del img
                 pytest.xfail(
                     f"Error mismatch for {op} x {mode}: "
                     f"expected={expected_error[:40]} got={actual_error[:40]}"
                 )
+        del img
         return
 
     if "expectedValue" in fixture:
@@ -994,6 +997,7 @@ def test_fixture_parity(name, fixture_file):
         if img is None:
             pytest.xfail(f'Cannot create input for {mode}')
         result = _run_op(img, op)
+        del img  # free Rust Image memory
         if isinstance(result, (list, tuple)):
             # Deep convert tuples->lists for comparison (JSON stores lists)
             def _deep_list(v):
@@ -1002,51 +1006,52 @@ def test_fixture_parity(name, fixture_file):
                 return v
             result_list = _deep_list(result)
             if result_list == expected_val:
-                return
+                del img, result, result_list; return
             if isinstance(expected_val, (list, tuple)) and len(expected_val) <= 100 and len(result_list) > len(expected_val):
                 if result_list[:len(expected_val)] == expected_val:
-                    return
+                    del img, result, result_list; return
             if isinstance(expected_val, (list, tuple)) and len(expected_val) > 200 and len(result_list) == len(expected_val):
                 diffs = sum(1 for i in range(len(expected_val)) if result_list[i] != expected_val[i])
                 if diffs == 0:
                     return  # identical but missed by Python list equality
-            pytest.xfail(f'{op} x {mode}: value mismatch: len(e)={len(expected_val) if hasattr(expected_val, "__len__") else "?"}, got type={type(result).__name__}')
+            del result; pytest.xfail(f'{op} x {mode}: value mismatch')
         elif result == expected_val:
-            return
+            del img, result; return
         elif isinstance(result, float) and isinstance(expected_val, (int, float)):
             if abs(result - expected_val) < 0.01:
-                return
+                del img, result; return
         else:
-            pytest.xfail(f'{op} x {mode}: value mismatch: {type(result).__name__}={result!r} vs {type(expected_val).__name__}={expected_val!r}')
+            del result; pytest.xfail(f'{op} x {mode}: value mismatch')
         return
 
     # Success fixture — compare hashes
     expected_hash = fixture['expectedHash']
     img = _make_input(fixture)
     if img is None:
-        pytest.xfail(f'Cannot create input image for mode {mode}')
+        del img; pytest.xfail(f'Cannot create input image for mode {mode}')
     try:
         result = _run_op(img, op)
     except NotImplementedError as e:
-        pytest.xfail(f'{op} x {mode}: {e}')
+        del img; pytest.xfail(f'{op} x {mode}: {e}')
 
     if result is None:
-        pytest.xfail(f'{op} returned None')
+        del img; pytest.xfail(f'{op} returned None')
 
     raw = b''
     if hasattr(result, 'tobytes'):
         try:
             raw = result.tobytes()
         except NotImplementedError as e:
-            pytest.xfail(f'{op} x {mode}: {e}')
+            del img, result; pytest.xfail(f'{op} x {mode}: {e}')
     elif isinstance(result, bytes):
         raw = result
     else:
-        pytest.xfail(f'{op} x {mode}: no tobytes() on {type(result).__name__}')
+        del img, result; pytest.xfail(f'{op} x {mode}: no tobytes()')
 
     actual_hash = _hash(raw)
 
     if actual_hash == expected_hash:
+        del img, result, raw  # explicit cleanup — prevent GC buildup
         return
 
     # Non-match — real algorithmic difference
@@ -1059,8 +1064,6 @@ def test_fixture_parity(name, fixture_file):
         if len(raw) > 0:
             pct = diffs / len(raw) * 100
             if pct < 5.0:
-                return
-    pytest.xfail(
-        f'Hash mismatch for {op} x {mode}: '
-        f'expected={expected_hash[:12]} got={actual_hash[:12]}'
-    )
+                del img, result, raw; return
+    del img, result, raw  # free Rust memory before xfail keeps traceback
+    pytest.xfail(f'Hash mismatch for {op} x {mode}: expected={expected_hash[:12]} got={actual_hash[:12]}')
