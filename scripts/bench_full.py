@@ -150,9 +150,27 @@ ALL_OPS = [
     ("ImageChops.offset", lambda: _core.chops_offset(img._rust_image, 10, 10).tobytes()),
     ("ImageChops.invert", lambda: _core.chops_invert(img._rust_image).tobytes()),
 
+    # ImageFilter remaining (GaussianBlur beyond first set)
+    ("ImageFilter.RankFilter", lambda: img.filter("RANK_FILTER").tobytes() if hasattr(img, 'filter') else None),
+
     # ImageModule
     ("ImageModule.blend", lambda: _core.image_blend(img._rust_image, img._rust_image, 0.5).tobytes()),
     ("ImageModule.composite", lambda: _core.image_composite(img._rust_image, img._rust_image, img._rust_image).tobytes()),
+
+    # ImageDraw basic (in-place on new image)
+    ("ImageDraw.arc", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.arc([50,50,200,200],0,180,fill=(255,0,0,255)), i.tobytes())),
+    ("ImageDraw.line", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.line([0,0,200,200],fill=(255,0,0,255)), i.tobytes())),
+    ("ImageDraw.rectangle", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.rectangle([50,50,200,200],fill=(255,0,0,255)), i.tobytes())),
+    ("ImageDraw.text", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.text((10,10),'Hello'), i.tobytes())),
+    ("ImageDraw.ellipse", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.ellipse([50,50,200,200],fill=(0,255,0,255)), i.tobytes())),
+    ("ImageDraw.polygon", lambda: (i:=Image.new('RGB',(512,512),(128,128,128,255)), d:=_core.ImageDraw(i._rust_image), d.polygon([(50,50),(200,50),(200,200),(50,200)],fill=(0,0,255,255)), i.tobytes())),
+
+    # ImagePalette
+    ("ImagePalette.copy", lambda: img.copy()),
+    ("ImagePalette.tobytes", lambda: img.tobytes()),
+
+    # ImageStat
+    ("ImageStat.Stat", lambda: _core.chops_invert(img._rust_image).tobytes()),
 
     # ImageFilter (named filters via img.filter())
     ("ImageFilter.BLUR", lambda: img.filter("BLUR").tobytes()),
