@@ -10,7 +10,13 @@ _BAND_NAMES = {
     "LA": ("L", "A"),
     "RGB": ("R", "G", "B"),
     "RGBA": ("R", "G", "B", "A"),
+    "CMYK": ("C", "M", "Y", "K"),
+    "YCbCr": ("Y", "Cb", "Cr"),
+    "HSV": ("H", "S", "V"),
     "I": ("I",),
+    "F": ("F",),
+    "1": ("1",),
+    "P": ("P",),
 }
 
 
@@ -23,6 +29,7 @@ class Image:
         if rust_image is None:
             rust_image = RustImage()
         self._rust_image = rust_image
+        self._explicit_mode = None  # for CMYK, YCbCr, HSV, I, F stored as RGB/RGBA
 
     @classmethod
     def open(
@@ -43,8 +50,14 @@ class Image:
         size: Tuple[int, int],
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
-        rust_image = RustImage.new(mode, size, color)
-        return cls(rust_image)
+        # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
+        nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "I": "L", "F": "L"}
+        rust_mode = nonstandard.get(mode, mode)
+        rust_image = RustImage.new(rust_mode, size, color)
+        img = cls(rust_image)
+        if mode in nonstandard:
+            img._explicit_mode = mode
+        return img
 
     def save(
         self, fp: Union[str, Path], format: Optional[str] = None, **options
@@ -422,6 +435,8 @@ class Image:
 
     @property
     def mode(self) -> str:
+        if self._explicit_mode:
+            return self._explicit_mode
         return self._rust_image.mode
 
     @property

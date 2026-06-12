@@ -40,16 +40,11 @@ def _assert_error_parity(pil_fn, rs_fn):
 # ── Image.new with non-standard modes ──────────────────────────────
 
 @pytest.mark.parametrize("mode", [
-    pytest.param("CMYK", marks=[pytest.mark.covers("Image.new", mode="CMYK", target="cpu", variant="error_parity"),
-                                 pytest.mark.xfail(reason="Image.new('CMYK',...) not yet implemented")]),
-    pytest.param("YCbCr", marks=[pytest.mark.covers("Image.new", mode="YCbCr", target="cpu", variant="error_parity"),
-                                  pytest.mark.xfail(reason="Image.new('YCbCr',...) not yet implemented")]),
-    pytest.param("HSV", marks=[pytest.mark.covers("Image.new", mode="HSV", target="cpu", variant="error_parity"),
-                                pytest.mark.xfail(reason="Image.new('HSV',...) not yet implemented")]),
-    pytest.param("I", marks=[pytest.mark.covers("Image.new", mode="I", target="cpu", variant="error_parity"),
-                              pytest.mark.xfail(reason="Image.new('I',...) not yet implemented")]),
-    pytest.param("F", marks=[pytest.mark.covers("Image.new", mode="F", target="cpu", variant="error_parity"),
-                              pytest.mark.xfail(reason="Image.new('F',...) not yet implemented")]),
+    pytest.param("CMYK", marks=pytest.mark.covers("Image.new", mode="CMYK", target="cpu", variant="error_parity")),
+    pytest.param("YCbCr", marks=pytest.mark.covers("Image.new", mode="YCbCr", target="cpu", variant="error_parity")),
+    pytest.param("HSV", marks=pytest.mark.covers("Image.new", mode="HSV", target="cpu", variant="error_parity")),
+    pytest.param("I", marks=pytest.mark.covers("Image.new", mode="I", target="cpu", variant="error_parity")),
+    pytest.param("F", marks=pytest.mark.covers("Image.new", mode="F", target="cpu", variant="error_parity")),
 ])
 def test_new_nonstandard_modes(PIL, mode):
     _assert_error_parity(
