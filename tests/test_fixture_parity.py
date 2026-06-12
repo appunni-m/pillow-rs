@@ -77,15 +77,12 @@ def _run_op(img, op):
 # ── Fixture-based tests ────────────────────────────────────────────
 
 def _discover_fixtures():
-    """Discover all non-GPU wasm fixtures and return list of (name, data)."""
+    """Discover all fixtures and return list of (name, data)."""
     fixtures = []
     for f in sorted(FIXTURES_DIR.glob("*.json")):
         if f.name == "index.json":
             continue
-        data = _load_fixture(f.name)
-        if data.get("target") == "wasm_gpu":
-            continue
-        fixtures.append((f.name, data))
+        fixtures.append((f.name, _load_fixture(f.name)))
     return fixtures
 
 
