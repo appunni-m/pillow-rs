@@ -11,6 +11,8 @@ from pathlib import Path
 def pytest_addoption(parser):
     parser.addoption("--manifest", action="store", default="manifest.yaml",
                      help="Path to manifest.yaml")
+    parser.addoption("--strict-covers", action="store_true", default=False,
+                     help="Fail collection on missing or invalid @pytest.mark.covers")
 
 
 @pytest.fixture(scope="session")
@@ -22,7 +24,84 @@ def manifest(request):
 
 def pytest_configure(config):
     config.addinivalue_line("markers",
-        "covers(func, mode=None, variant=None): mark test as covering a manifest entry")
+        "covers(func, mode=None, variant=None, target=None): mark test as covering a manifest entry")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Validate @pytest.mark.covers markers against manifest.
+
+    In normal mode: prints warnings for missing/invalid markers.
+    In --strict-covers mode: raises pytest.UsageError on any issue.
+    """
+    manifest_path = Path(config.getoption("--manifest", default="manifest.yaml"))
+    with open(manifest_path) as f:
+        mf = yaml.safe_load(f)
+
+    # Build lookup: operation_name -> supported_modes set
+    op_modes = {}
+    for mod_name, mod_def in mf.get("modules", {}).items():
+        for section in ["class_methods", "methods", "functions"]:
+            for item in mod_def.get(section, []):
+                if isinstance(item, dict) and item.get("status") == "implemented":
+                    op_key = f"{mod_name}.{item['name']}"
+                    op_modes[op_key] = set(item.get("supported_modes", []))
+        for cls in mod_def.get("classes", []):
+            if isinstance(cls, dict) and cls.get("status") == "implemented":
+                cls_name = cls.get("name", "")
+                op_key = f"{mod_name}.{cls_name}"
+                op_modes[op_key] = set(cls.get("supported_modes", ["L", "RGB", "RGBA"]))
+                for method in cls.get("methods", []):
+                    if isinstance(method, dict) and method.get("status", cls.get("status")) == "implemented":
+                        m_name = method.get("name", "")
+                        op_modes[f"{mod_name}.{cls_name}.{m_name}"] = set(
+                            method.get("supported_modes", [])
+                        )
+        for prop in mod_def.get("properties", []):
+            if isinstance(prop, dict):
+                op_key = f"{mod_name}.{prop['name']}"
+                op_modes[op_key] = set(prop.get("modes", []))
+
+    warnings = []
+    valid_targets = {"cpu", "gpu", "wasm", "wasm_gpu"}
+
+    for item in items:
+        marker = item.get_closest_marker("covers")
+        if marker is None:
+            warnings.append(f"MISSING @covers: {item.nodeid}")
+            continue
+        op_name = marker.args[0] if marker.args else None
+        if op_name is None:
+            warnings.append(f"EMPTY @covers: {item.nodeid}")
+            continue
+        if op_name not in op_modes:
+            warnings.append(f"UNKNOWN op '{op_name}' in @covers: {item.nodeid}")
+            continue
+        mode = marker.kwargs.get("mode", "")
+        if mode and op_modes[op_name] and mode not in op_modes[op_name]:
+            warnings.append(
+                f"INVALID mode '{mode}' for {op_name} "
+                f"(valid: {sorted(op_modes[op_name])}): {item.nodeid}"
+            )
+        target = marker.kwargs.get("target", "cpu")
+        if target not in valid_targets:
+            warnings.append(
+                f"INVALID target '{target}' (valid: {sorted(valid_targets)}): {item.nodeid}"
+            )
+
+    if warnings:
+        msg = (
+            "\n" + "=" * 70 + "\n"
+            f"  COVERAGE WARNINGS: {len(warnings)} issue(s)\n"
+            + "=" * 70 + "\n" +
+            "\n".join(f"  • {w}" for w in warnings) +
+            "\n" + "=" * 70
+        )
+        if config.getoption("--strict-covers", False):
+            raise pytest.UsageError(msg)
+        else:
+            # Print warnings to stderr during collection
+            import sys
+            print(msg, file=sys.stderr)
 
 
 # ── PIL reference ──────────────────────────────────────────────
