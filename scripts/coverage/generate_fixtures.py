@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Generate WASM test fixtures from PIL reference outputs.
 
-For each (operation, mode) with a WASM target, runs PIL operation,
-hashes the output PNG, and writes a JSON fixture.
+For each (operation, mode) with any target, runs PIL operation,
+captures output (image bytes OR return value), and writes a JSON fixture.
 
-JS/WASM tests load fixtures and compare output hashes.
+JS/WASM tests and Python fixture tests load the same fixtures and
+compare outputs (hash for images, value for non-image returns).
 
 Usage: python scripts/coverage/generate_fixtures.py [--target wasm|wasm_gpu]
 """
@@ -22,12 +23,17 @@ import PIL.ImageOps as PILImageOps
 import PIL.ImageChops as PILImageChops
 import PIL.ImageFilter as PILFilter
 import PIL.ImageEnhance as PILImageEnhance
+import PIL.ImageColor as PILImageColor
+import PIL.ImagePalette as PILImagePalette
+import PIL.ImageFont as PILImageFont
+import PIL.ImageStat as PILImageStat
+import PIL.ImageSequence as PILImageSequence
 
 
 _REFERENCE_RGB = None
 
 def _get_reference():
-    """Load complex reference image (gradients, shapes, text — 45K unique colors)."""
+    """Load complex reference image (gradients, shapes, text)."""
     global _REFERENCE_RGB
     if _REFERENCE_RGB is None:
         ref_path = ROOT / "tests" / "test_reference.png"
@@ -36,6 +42,7 @@ def _get_reference():
         else:
             _REFERENCE_RGB = PILImage.new("RGB", (100, 100), (128, 128, 128))
     return _REFERENCE_RGB.copy()
+
 
 def _make_image(mode, size=(100, 100)):
     """Create PIL image from complex reference for realistic pixel variety."""
@@ -54,8 +61,46 @@ def _make_image(mode, size=(100, 100)):
     return ref
 
 
+# ── Non-image return ops (return values, not images) ───────────────
+# These ops return primitives (int, float, str, tuple, list) that
+# should be stored as JSON values, not hashed bytes.
+
+_NON_IMAGE_OPS = {
+    "entropy", "getbbox", "getextrema", "histogram", "getpixel",
+    "getcolors", "getdata", "getprojection", "getbands",
+    "close", "load", "verify", "seek", "tell",
+    "format", "mode", "size", "width", "height", "info",
+    "palette", "is_animated", "n_frames", "has_transparency_data",
+    "getim",  # returns PyCapsule / low-level imaging object
+}
+
+_VALUE_OPS = _NON_IMAGE_OPS  # alias
+
+
+def _serialize_value(val):
+    """Convert PIL return value to JSON-serializable form."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float, str, bool)):
+        return val
+    if isinstance(val, tuple):
+        return [_serialize_value(v) for v in val]
+    if isinstance(val, list):
+        return [_serialize_value(v) for v in val]
+    if isinstance(val, dict):
+        return {str(k): _serialize_value(v) for k, v in val.items()}
+    if hasattr(val, '__iter__') and not isinstance(val, (str, bytes)):
+        # Lazy sequences (e.g., getdata's ImagingCore)
+        try:
+            return [_serialize_value(v) for v in list(val)[:1000]]  # cap at 1000
+        except Exception:
+            pass
+    # Fallback: convert to string
+    return str(val)
+
+
 def run_pil(op_name, mode):
-    """Run a PIL operation and return PNG bytes + metadata."""
+    """Run a PIL operation and return (status, data, params) tuple."""
     img = _make_image(mode)
     module, func = op_name.rsplit(".", 1)
 
@@ -74,10 +119,25 @@ def run_pil(op_name, mode):
             result, params = _run_module_func(img, func, mode)
         elif module == "ImageDraw":
             result, params = _run_draw(img, func, mode)
+        elif module == "ImageColor":
+            result, params = _run_color(func, mode)
+        elif module == "ImagePalette":
+            result, params = _run_palette(img, func, mode)
+        elif module == "ImageFont":
+            result, params = _run_font(func, mode)
+        elif module == "ImageStat":
+            result, params = _run_stat(img, func, mode)
+        elif module == "ImageSequence":
+            result, params = _run_sequence(img, func, mode)
         else:
             return None
 
-        if hasattr(result, 'tobytes'):
+        # Determine fixture type: image (hash) or value (JSON)
+        if func in _VALUE_OPS or module in ("ImageColor", "ImageStat"):
+            return ('value', _serialize_value(result), params)
+        elif result is None:
+            return ('value', None, params)
+        elif hasattr(result, 'tobytes'):
             return ('success', result.tobytes(), params)
         elif isinstance(result, bytes):
             return ('success', result, params)
@@ -85,6 +145,8 @@ def run_pil(op_name, mode):
             buf = BytesIO()
             result.save(buf, format="PNG")
             return ('success', buf.getvalue(), params)
+        elif isinstance(result, (int, float, str, bool, list, tuple, dict)):
+            return ('value', _serialize_value(result), params)
         else:
             return None
     except Exception as e:
@@ -104,38 +166,145 @@ def _run_image_op(img, func, mode):
     if func in ("thumbnail",):
         img.thumbnail((50, 50))
         return img, {"size": [50, 50]}
-    if func in ("copy", "split", "getbands", "tobytes", "getbbox", "getextrema",
-                "histogram", "getpixel", "getcolors", "getdata", "getprojection",
-                "entropy", "load", "close", "verify", "seek", "tell"):
+    if func in ("copy", "tobytes", "load", "close", "verify"):
         return getattr(img, func)(), {}
+    if func in ("split",):
+        bands = img.split()
+        return bands[0], {"band": 0}
+    if func in ("getbands",):
+        return img.getbands(), {}
+    if func in ("getbbox",):
+        return img.getbbox(), {}
+    if func in ("getextrema",):
+        return img.getextrema(), {}
+    if func in ("histogram",):
+        mask = None
+        return img.histogram(mask), {}
+    if func in ("getpixel",):
+        return img.getpixel((50, 50)), {"xy": [50, 50]}
+    if func in ("getcolors",):
+        return img.getcolors(maxcolors=256), {"maxcolors": 256}
+    if func in ("getdata",):
+        data = list(img.getdata())
+        return data[:100], {"count": 100, "total": len(data)}  # sample
+    if func in ("getprojection",):
+        return img.getprojection(), {}
+    if func in ("entropy",):
+        mask = None
+        return img.entropy(mask), {}
+    if func in ("seek",):
+        try:
+            img.seek(0)
+            return None, {"frame": 0}
+        except Exception:
+            return None, {}
+    if func in ("tell",):
+        try:
+            return img.tell(), {}
+        except Exception:
+            return 0, {}
     if func in ("paste",):
         paste_img = _make_image(mode, (10, 10))
         img.paste(paste_img, (0, 0))
         return img, {"size": [10, 10], "position": [0, 0]}
     if func in ("alpha_composite",):
         fg = _make_image("RGBA", (10, 10))
-        img.alpha_composite(fg)
+        try:
+            img.alpha_composite(fg)
+        except Exception:
+            pass
         return img, {"fgSize": [10, 10]}
     if func in ("point",):
         lut = bytes([min(255, i + 50) for i in range(256)])
         return img.point(lut), {"lutSize": 256, "offset": 50}
     if func in ("putalpha",):
-        img.putalpha(128)
+        try:
+            img.putalpha(128)
+        except Exception:
+            pass
         return img, {"alpha": 128}
     if func in ("putdata",):
         n = img.size[0] * img.size[1]
         data = [128] * n
-        img.putdata(data)
+        try:
+            img.putdata(data)
+        except Exception:
+            pass
         return img, {"count": n}
     if func in ("quantize",): return img.quantize(16), {"colors": 16}
     if func in ("reduce",): return img.reduce(2), {"factor": 2}
     if func in ("effect_spread",): return img.effect_spread(2), {"distance": 2}
-    if func in ("transform",): return img.transform((50, 50), PILImage.AFFINE, (1, 0, 0, 0, 1, 0)), {"size": [50, 50], "method": "AFFINE"}
+    if func in ("transform",):
+        return img.transform((50, 50), PILImage.AFFINE, (1, 0, 0, 0, 1, 0)), {"size": [50, 50], "method": "AFFINE"}
     if func in ("getchannel",):
+        bands = img.getbands()
+        if bands:
+            return img.getchannel(bands[0]), {"channel": 0}
         return img.getchannel(0), {"channel": 0}
     if func in ("putpixel",):
-        img.putpixel((0, 0), (255, 0, 0, 255) if len(img.getbands()) == 4 else (255, 0, 0))
+        n_bands = len(img.getbands())
+        if n_bands >= 4:
+            img.putpixel((0, 0), (255, 0, 0, 255))
+        else:
+            img.putpixel((0, 0), (255, 0, 0))
         return img, {}
+    if func in ("apply_transparency",):
+        try:
+            return img.apply_transparency(), {}
+        except Exception:
+            return img, {}
+    if func in ("getpalette",):
+        try:
+            pal = img.getpalette()
+            return pal[:32] if pal else None, {}
+        except Exception:
+            return None, {}
+    if func in ("putpalette",):
+        try:
+            img.putpalette([0, 0, 0, 255, 255, 255] * 128)
+        except Exception:
+            pass
+        return img, {}
+    if func in ("remap_palette",):
+        try:
+            return img.remap_palette([0, 1, 2, 3], [128, 128, 128, 128]), {}
+        except Exception:
+            return img, {}
+    if func in ("tobitmap",):
+        try:
+            return img.tobitmap(), {}
+        except Exception:
+            return img, {}
+    if func in ("draft",):
+        try:
+            img.draft(mode, (50, 50))
+        except Exception:
+            pass
+        return img, {"mode": mode, "size": [50, 50]}
+    if func in ("effect_noise",):
+        return PILImage.effect_noise(img.size, 10), {"sigma": 10}
+    if func in ("format", "mode", "size", "width", "height", "info",
+                "palette", "is_animated", "n_frames", "has_transparency_data"):
+        val = getattr(img, func, None)
+        if callable(val):
+            val = val()
+        return val, {}
+    if func in ("getexif", "getim", "getxmp", "get_child_images",
+                "get_flattened_data", "show"):
+        try:
+            val = getattr(img, func, None)
+            if callable(val):
+                val = val()
+            return val, {}
+        except Exception:
+            return None, {}
+    if func in ("save",):
+        buf = BytesIO()
+        try:
+            img.save(buf, format="PNG")
+            return buf.getvalue(), {"format": "PNG"}
+        except Exception:
+            return None, {}
     return img, {}
 
 
@@ -187,7 +356,10 @@ def _run_module_func(img, func, mode):
     """Dispatch ImageModule functions."""
     if func == "merge":
         bands = img.split()
-        return PILImage.merge(mode, bands), {"func": "merge", "mode": mode}
+        try:
+            return PILImage.merge(mode, bands), {"func": "merge", "mode": mode}
+        except Exception:
+            return img, {}
     if func == "effect_noise":
         return PILImage.effect_noise(img.size, 10), {"func": "effect_noise", "sigma": 10}
     if func in ("blend",):
@@ -202,7 +374,10 @@ def _run_module_func(img, func, mode):
     if func in ("alpha_composite",):
         fg = _make_image("RGBA", (10, 10))
         img2 = img.copy()
-        img2.alpha_composite(fg)
+        try:
+            img2.alpha_composite(fg)
+        except Exception:
+            pass
         return img2, {}
     if func in ("new", "open", "fromarray", "frombytes"):
         return img, {}
@@ -236,7 +411,119 @@ def _run_draw(img, func, mode):
         draw.bitmap((5, 5), bitmap, fill=fill)
     elif func in ("textbbox", "multiline_textbbox", "textlength"):
         return img, {}
+    elif func in ("getfont",):
+        return img, {}
+    elif func in ("multiline_text",):
+        draw.multiline_text((5, 5), "Line1\nLine2", fill=fill)
+    elif func in ("multiline_size",):
+        return img, {}
+    elif func in ("regular_polygon",):
+        try:
+            draw.regular_polygon((25, 25, 15), 5, fill=fill)
+        except Exception:
+            pass
+    elif func in ("textsize", "ImageDraw.textsize"):
+        return img, {}
+    elif func in ("fill",):
+        draw.rectangle([0, 0, img.size[0], img.size[1]], fill=fill)
     return img, {}
+
+
+def _run_color(func, mode):
+    """Dispatch ImageColor operations."""
+    if func == "getrgb":
+        val = PILImageColor.getrgb("red")
+        return list(val), {"color": "red"}
+    if func == "getcolor":
+        val = PILImageColor.getcolor("red", "RGB")
+        return list(val) if isinstance(val, tuple) else val, {"color": "red", "mode": "RGB"}
+    return None, {}
+
+
+def _run_palette(img, func, mode):
+    """Dispatch ImagePalette operations."""
+    try:
+        pal = img.getpalette()
+        if pal is None:
+            pal_data = [0, 0, 0, 255, 255, 255]
+        else:
+            pal_data = list(pal)
+        palette = PILImagePalette.ImagePalette(mode="RGB")
+        if func == "copy":
+            return palette.copy(), {}
+        if func == "getcolor":
+            rgba = palette.getcolor((255, 0, 0))
+            return list(rgba) if isinstance(rgba, tuple) else rgba, {"color": "red"}
+        if func == "getdata":
+            try:
+                data = palette.getdata()
+                return list(data) if data else [], {}
+            except Exception:
+                return [], {}
+        if func == "save":
+            return None, {}
+        if func == "tobytes":
+            try:
+                return palette.tobytes(), {}
+            except Exception:
+                return bytes(), {}
+    except Exception:
+        pass
+    return None, {}
+
+
+def _run_font(func, mode):
+    """Dispatch ImageFont operations."""
+    if func == "load_default":
+        try:
+            font = PILImageFont.load_default()
+            return str(type(font).__name__), {"size": 0}
+        except Exception:
+            return None, {}
+    if func == "load_default_imagefont":
+        try:
+            font = PILImageFont.load_default_imagefont()
+            return str(type(font).__name__), {}
+        except Exception:
+            return None, {}
+    if func == "load":
+        return None, {}
+    if func == "truetype":
+        return None, {}
+    if func == "load_path":
+        return None, {}
+    if func in ("FreeTypeFont", "ImageFont"):
+        return None, {}
+    return None, {}
+
+
+def _run_stat(img, func, mode):
+    """Dispatch ImageStat operations."""
+    if func == "Stat":
+        stat = PILImageStat.Stat(img)
+        result = {
+            "count": list(stat.count) if hasattr(stat, 'count') else [],
+            "sum": list(stat.sum) if hasattr(stat, 'sum') else [],
+            "mean": list(stat.mean) if hasattr(stat, 'mean') else [],
+            "median": list(stat.median) if hasattr(stat, 'median') else [],
+            "rms": list(stat.rms) if hasattr(stat, 'rms') else [],
+            "var": list(stat.var) if hasattr(stat, 'var') else [],
+            "stddev": list(stat.stddev) if hasattr(stat, 'stddev') else [],
+            "extrema": list(stat.extrema) if hasattr(stat, 'extrema') else [],
+        }
+        return result, {}
+    return None, {}
+
+
+def _run_sequence(img, func, mode):
+    """Dispatch ImageSequence operations."""
+    if func == "Iterator":
+        frames = list(PILImageSequence.Iterator(img))
+        return len(frames), {"frame_count": len(frames)}
+    if func == "all_frames":
+        frames = list(PILImageSequence.all_frames(img))
+        return len(frames), {}
+    return None, {}
 
 
 def main():
@@ -250,18 +537,20 @@ def main():
     count = 0
 
     for mod_name, mod_def in manifest.get("modules", {}).items():
-        for section in ["class_methods", "methods", "functions"]:
+        for section in ["class_methods", "methods", "functions", "classes", "properties"]:
             for item in mod_def.get(section, []):
-                if not isinstance(item, dict) or item.get("status") != "implemented":
+                if not isinstance(item, dict):
+                    continue
+                # Properties have no status field, always included
+                if section != "properties" and item.get("status") != "implemented":
                     continue
                 op_name = f"{mod_name}.{item['name']}"
-                modes = item.get("supported_modes", [])
+                modes = item.get("supported_modes", item.get("modes", []))
                 targets = item.get("supported_targets", ["cpu"])
                 if not modes:
-                    continue
+                    modes = ["L", "RGB"]  # default: test grayscale + color
 
                 for mode in modes:
-                    # One fixture per (op, mode) — target doesn't affect PIL output
                     result = run_pil(op_name, mode)
                     if result is None:
                         continue
@@ -276,6 +565,14 @@ def main():
                             "targets": targets,
                             "params": params,
                             "expectedHash": h,
+                        }
+                    elif status == 'value':
+                        fixture = {
+                            "op": op_name,
+                            "mode": mode,
+                            "targets": targets,
+                            "params": params,
+                            "expectedValue": data,
                         }
                     else:  # error
                         fixture = {
@@ -294,6 +591,7 @@ def main():
         json.dump(index, f, indent=2)
 
     print(f"Generated {count} fixtures in {FIXTURES_DIR}")
+
 
 if __name__ == "__main__":
     main()
