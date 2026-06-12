@@ -41,7 +41,7 @@ class TestOpenSave:
 
 
 class TestThumbnail:
-    @pytest.mark.covers("Image.thumbnail", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("Image.thumbnail", target="cpu", variant="default")
     def test_thumbnail_parity(self, PIL):
         pil = PIL.Image.new("RGB", (400, 200), (128, 128, 128))
         rs = Image.new("RGB", (400, 200), (128, 128, 128))
@@ -51,23 +51,23 @@ class TestThumbnail:
 
 
 class TestBookkeeping:
-    @pytest.mark.covers("Image.close", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("Image.close", target="cpu", variant="default")
     def test_close_no_error(self):
         img = Image.new("RGB", (10, 10))
         img.close()
 
-    @pytest.mark.covers("Image.verify", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("Image.verify", target="cpu", variant="default")
     def test_verify_no_error(self):
         img = Image.new("RGB", (10, 10))
         img.verify()
 
-    @pytest.mark.covers("Image.seek", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("Image.seek", target="cpu", variant="default")
     def test_seek_tell(self):
         img = Image.new("RGB", (10, 10))
         img.seek(0)
         assert img.tell() == 0
 
-    @pytest.mark.covers("Image.load", mode="RGB", target="cpu", variant="default")
+    @pytest.mark.covers("Image.load", target="cpu", variant="default")
     def test_load_returns(self):
         img = Image.new("RGB", (10, 10))
         result = img.load()
