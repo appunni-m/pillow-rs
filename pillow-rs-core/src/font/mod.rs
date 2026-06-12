@@ -54,7 +54,7 @@ impl Font {
         for (metrics, data) in &glyphs {
             let dx = (xo as i64 + metrics.xmin as i64).max(0).min(u32::MAX as i64) as u32;
             for gy in 0..metrics.height { for gx in 0..metrics.width {
-                let a = data[(gy * metrics.width + gx)];
+                let a = data[gy * metrics.width + gx];
                 if a > 0 { let cx = dx + gx as u32; let cy = gy as u32;
                     if cx < w && cy < h { let d = (cy * w + cx) as usize; canvas[d] = canvas[d].max(a); } }
             }}
@@ -79,7 +79,7 @@ impl Font {
             total_w += metrics.advance_width;
             max_h = max_h.max(metrics.height as u32);
             // Convert coverage bitmap to RGBA
-            let mut rgba = vec![0u8; (metrics.width * metrics.height * 4)];
+            let mut rgba = vec![0u8; metrics.width * metrics.height * 4];
             for y in 0..metrics.height {
                 for x in 0..metrics.width {
                     let cov = bitmap[y * metrics.width + x];

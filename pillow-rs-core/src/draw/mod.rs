@@ -220,7 +220,7 @@ impl Draw {
 
     /// Return a clone of the current image state, converted back to original mode.
     pub fn image_clone(&self) -> Image {
-        let mut img = self.image.clone();
+        let img = self.image.clone();
         if let Some(ref orig) = self.orig_mode {
             if let Ok(current) = img.mode() {
                 if current != *orig && *orig != "RGBA" {
