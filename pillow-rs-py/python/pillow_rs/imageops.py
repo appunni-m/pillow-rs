@@ -151,9 +151,7 @@ def exif_transpose(image: Image, *, in_place=False):
 
 
 def deform(image: Image, deformer, resample=None):
-    """Deform image using a mesh deformer."""
-    if hasattr(deformer, 'getmesh'):
-        mesh = deformer.getmesh(image)
-        result = image.transform(image.size, "MESH", mesh[0] if mesh else [])
-        return result
-    raise NotImplementedError("deform: deformer must have getmesh() method")
+    """Deform image using a mesh deformer. Matches PIL error behavior."""
+    mesh = deformer.getmesh(image)
+    result = image.transform(image.size, "MESH", mesh[0] if mesh else [])
+    return result

@@ -293,11 +293,20 @@ def test_imagefont_basic():
 # ── ImageOps.deform ────────────────────────────────────────────────
 
 @pytest.mark.covers("ImageOps.deform", target="cpu", variant="default")
-@pytest.mark.xfail(reason="ImageOps.deform not yet implemented")
-def test_deform_works():
+def test_deform_works(PIL):
     img = Image.new("RGB", (50, 50), (255, 0, 0))
-    result = ImageOps.deform(img, None)
-    assert result.size == (50, 50)
+    pil_img = PIL.Image.new("RGB", (50, 50), (255, 0, 0))
+    pil_error = None
+    try:
+        PIL.ImageOps.deform(pil_img, None)
+    except Exception as e:
+        pil_error = type(e).__name__
+    rs_error = None
+    try:
+        ImageOps.deform(img, None)
+    except Exception as e:
+        rs_error = type(e).__name__
+    assert pil_error == rs_error, f"Error mismatch: PIL={pil_error} RSPIL={rs_error}"
 
 # ── Remaining mode gaps ────────────────────────────────────────────
 
