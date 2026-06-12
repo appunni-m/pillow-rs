@@ -1,6 +1,6 @@
 # pillow-rs Benchmarks
 
-> Auto-generated: 2026-06-12 07:46:01 | commit `e7f3e71` | 166 functions | 6 targets
+> Auto-generated: 2026-06-12 08:10:12 | commit `23148b4` | 166 functions | 6 targets
 
 ## Summary
 
@@ -8,28 +8,36 @@
 |--------|-------|
 | Functions benchmarked | 166 |
 | Functions with GPU path | 42 |
-| Valid CPU speedups (excl. outliers) | 32 |
-| Outliers flagged ⚠️ | 0 |
-| Average CPU speedup vs Pillow | 1.95× |
-| Native CPU benchmarks run | 32 |
+| Valid CPU speedups (excl. outliers) | 52 |
+| Outliers flagged ⚠️ | 9 |
+| Average CPU speedup vs Pillow | 10.93× |
+| Native CPU benchmarks run | 61 |
 | Missing (no data yet) | 9 |
+
+## Pipeline Benchmark — 20 Operations (Single- vs Multi-Thread)
+
+> Chaining 20 image operations end-to-end. Measures scheduling, coherence, and clone avoidance.
+
+| Variant | Time (ms) | vs Pillow |
+|---------|-----------|-----------|
+| ST | 189.98ms |  |
 
 ## Priority Operations (Tier 1)
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.50× | 0.50× | 1.41× | 0.50× | 0.50× | 0.50× |
-| Image.crop | 0.94× | 0.94× | 3.78× | 0.94× | 0.94× | 0.94× |
-| Image.rotate | 4.97× | 4.97× | 18.86× | 4.97× | 4.97× | 4.97× |
-| Image.transpose | 0.70× | 0.70× | 1.80× | 0.70× | 0.70× | 0.70× |
-| Image.thumbnail | — | — | 1.05× | — | — | — |
+| Image.resize | 0.46× | 0.46× | 1.49× | 0.46× | 0.46× | 0.46× |
+| Image.crop | 1.04× | 1.04× | 3.50× | 1.04× | 1.04× | 1.04× |
+| Image.rotate | 5.14× | 5.14× | 19.82× | 5.14× | 5.14× | 5.14× |
+| Image.transpose | 0.65× | 0.65× | 2.20× | 0.65× | 0.65× | 0.65× |
+| Image.thumbnail | — | — | 1.08× | — | — | — |
 | Image.new | — | — | 0.23× | — | — | — |
 | Image.paste | — | — | — | — | — | — |
-| Image.convert | 0.67× | 0.67× | 2.14× | 0.67× | 0.67× | 0.67× |
-| Image.filter | 1.07× | 1.07× | 2.27× | 1.07× | 1.07× | 1.07× |
-| Image.open | — | — | 1.86× | — | — | — |
-| Image.save | — | — | 2.85× | — | — | — |
-| Image.tobytes | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× |
+| Image.convert | 0.64× | 0.64× | 2.03× | 0.64× | 0.64× | 0.64× |
+| Image.filter | 1.18× | 1.18× | 2.42× | 1.18× | 1.18× | 1.18× |
+| Image.open | 0.57× | 0.57× | 1.94× | 0.57× | 0.57× | 0.57× |
+| Image.save | 3.06× | 3.06× | 2.84× | 3.06× | 3.06× | 3.06× |
+| Image.tobytes | 16.13× | 16.13× | 16.13× | 16.13× | 16.13× | 16.13× |
 
 ## All Functions
 
@@ -37,57 +45,57 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| Image.resize | 0.50× | 0.50× | 1.41× | 0.50× | 0.50× | 0.50× |
-| Image.crop | 0.94× | 0.94× | 3.78× | 0.94× | 0.94× | 0.94× |
-| Image.rotate | 4.97× | 4.97× | 18.86× | 4.97× | 4.97× | 4.97× |
-| Image.transpose | 0.70× | 0.70× | 1.80× | 0.70× | 0.70× | 0.70× |
-| Image.thumbnail | — | — | 1.05× | — | — | — |
+| Image.resize | 0.46× | 0.46× | 1.49× | 0.46× | 0.46× | 0.46× |
+| Image.crop | 1.04× | 1.04× | 3.50× | 1.04× | 1.04× | 1.04× |
+| Image.rotate | 5.14× | 5.14× | 19.82× | 5.14× | 5.14× | 5.14× |
+| Image.transpose | 0.65× | 0.65× | 2.20× | 0.65× | 0.65× | 0.65× |
+| Image.thumbnail | — | — | 1.08× | — | — | — |
 | Image.new | — | — | 0.23× | — | — | — |
 | Image.paste | — | — | — | — | — | — |
 | Image.alpha_composite | — | — | — | — | — | — |
-| Image.apply_transparency | — | — | — | — | — | — |
-| Image.close | — | — | — | — | — | — |
-| Image.convert | 0.67× | 0.67× | 2.14× | 0.67× | 0.67× | 0.67× |
-| Image.copy | 0.73× | 0.73× | 0.73× | 0.73× | 0.73× | 0.73× |
-| Image.draft | — | — | — | — | — | — |
-| Image.effect_spread | 23.73× | 23.73× | 23.73× | 23.73× | 23.73× | 23.73× |
-| Image.entropy | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× | 0.33× |
-| Image.filter | 1.07× | 1.07× | 2.27× | 1.07× | 1.07× | 1.07× |
+| Image.apply_transparency | 0.22× | 0.22× | 0.22× | 0.22× | 0.22× | 0.22× |
+| Image.close | 90.71× | 90.71× | 90.71× | 90.71× | 90.71× | 90.71× |
+| Image.convert | 0.64× | 0.64× | 2.03× | 0.64× | 0.64× | 0.64× |
+| Image.copy | 0.77× | 0.77× | 0.77× | 0.77× | 0.77× | 0.77× |
+| Image.draft | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ | 158.99× ⚠️ |
+| Image.effect_spread | 96.48× | 96.48× | 96.48× | 96.48× | 96.48× | 96.48× |
+| Image.entropy | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× |
+| Image.filter | 1.18× | 1.18× | 2.42× | 1.18× | 1.18× | 1.18× |
 | Image.frombytes | — | — | — | — | — | — |
-| Image.get_child_images | — | — | — | — | — | — |
-| Image.get_flattened_data | — | — | — | — | — | — |
-| Image.getbands | 0.38× | 0.38× | 2.46× | 0.38× | 0.38× | 0.38× |
-| Image.getbbox | 0.74× | 0.74× | 2.65× | 0.74× | 0.74× | 0.74× |
-| Image.getchannel | 0.63× | 0.63× | 0.63× | 0.63× | 0.63× | 0.63× |
-| Image.getcolors | 0.18× | 0.18× | 0.18× | 0.18× | 0.18× | 0.18× |
-| Image.getdata | — | — | — | — | — | — |
-| Image.getexif | — | — | — | — | — | — |
-| Image.getextrema | 0.67× | 0.67× | 2.05× | 0.67× | 0.67× | 0.67× |
+| Image.get_child_images | 99.30× | 99.30× | 99.30× | 99.30× | 99.30× | 99.30× |
+| Image.get_flattened_data | 38.25× | 38.25× | 38.25× | 38.25× | 38.25× | 38.25× |
+| Image.getbands | 0.38× | 0.38× | 2.67× | 0.38× | 0.38× | 0.38× |
+| Image.getbbox | 0.72× | 0.72× | 2.62× | 0.72× | 0.72× | 0.72× |
+| Image.getchannel | 0.66× | 0.66× | 0.66× | 0.66× | 0.66× | 0.66× |
+| Image.getcolors | 0.19× | 0.19× | 0.19× | 0.19× | 0.19× | 0.19× |
+| Image.getdata | 0.65× | 0.65× | 0.65× | 0.65× | 0.65× | 0.65× |
+| Image.getexif | 98.88× | 98.88× | 98.88× | 98.88× | 98.88× | 98.88× |
+| Image.getextrema | 0.68× | 0.68× | 2.44× | 0.68× | 0.68× | 0.68× |
 | Image.getim | — | — | — | — | — | — |
-| Image.getpalette | — | — | — | — | — | — |
-| Image.getpixel | 0.20× | 0.20× | 2.75× | 0.20× | 0.20× | 0.20× |
-| Image.getprojection | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× |
+| Image.getpalette | 1610.75× ⚠️ | 1610.75× ⚠️ | 1610.75× ⚠️ | 1610.75× ⚠️ | 1610.75× ⚠️ | 1610.75× ⚠️ |
+| Image.getpixel | 0.19× | 0.19× | 2.98× | 0.19× | 0.19× | 0.19× |
+| Image.getprojection | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
 | Image.getxmp | — | — | — | — | — | — |
-| Image.histogram | 0.64× | 0.64× | 2.56× | 0.64× | 0.64× | 0.64× |
-| Image.load | — | — | — | — | — | — |
-| Image.open | — | — | 1.86× | — | — | — |
-| Image.point | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× | 0.08× |
-| Image.putalpha | 3.32× | 3.32× | 3.32× | 3.32× | 3.32× | 3.32× |
+| Image.histogram | 0.71× | 0.71× | 2.71× | 0.71× | 0.71× | 0.71× |
+| Image.load | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× | 0.71× |
+| Image.open | 0.57× | 0.57× | 1.94× | 0.57× | 0.57× | 0.57× |
+| Image.point | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× | 0.09× |
+| Image.putalpha | 14.72× | 14.72× | 14.72× | 14.72× | 14.72× | 14.72× |
 | Image.putdata | — | — | — | — | — | — |
-| Image.putpalette | — | — | — | — | — | — |
-| Image.putpixel | 0.74× | 0.74× | 70.74× | 0.74× | 0.74× | 0.74× |
-| Image.quantize | 2.25× | 2.25× | 2.25× | 2.25× | 2.25× | 2.25× |
-| Image.reduce | 0.32× | 0.32× | 1.25× | 0.32× | 0.32× | 0.32× |
-| Image.remap_palette | — | — | — | — | — | — |
-| Image.save | — | — | 2.85× | — | — | — |
-| Image.seek | — | — | — | — | — | — |
+| Image.putpalette | 483.72× ⚠️ | 483.72× ⚠️ | 483.72× ⚠️ | 483.72× ⚠️ | 483.72× ⚠️ | 483.72× ⚠️ |
+| Image.putpixel | 1752.70× ⚠️ | 1752.70× ⚠️ | 92.51× | 1752.70× ⚠️ | 1752.70× ⚠️ | 1752.70× ⚠️ |
+| Image.quantize | 2.10× | 2.10× | 2.10× | 2.10× | 2.10× | 2.10× |
+| Image.reduce | 0.41× | 0.41× | 1.23× | 0.41× | 0.41× | 0.41× |
+| Image.remap_palette | 0.30× | 0.30× | 0.30× | 0.30× | 0.30× | 0.30× |
+| Image.save | 3.06× | 3.06× | 2.84× | 3.06× | 3.06× | 3.06× |
+| Image.seek | 73.35× | 73.35× | 73.35× | 73.35× | 73.35× | 73.35× |
 | Image.show | — | — | — | — | — | — |
-| Image.split | 0.29× | 0.29× | 1.12× | 0.29× | 0.29× | 0.29× |
-| Image.tell | — | — | — | — | — | — |
-| Image.tobitmap | — | — | — | — | — | — |
-| Image.tobytes | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× | 4.89× |
+| Image.split | 0.30× | 0.30× | 1.09× | 0.30× | 0.30× | 0.30× |
+| Image.tell | 101.61× ⚠️ | 101.61× ⚠️ | 101.61× ⚠️ | 101.61× ⚠️ | 101.61× ⚠️ | 101.61× ⚠️ |
+| Image.tobitmap | 0.04× | 0.04× | 0.04× | 0.04× | 0.04× | 0.04× |
+| Image.tobytes | 16.13× | 16.13× | 16.13× | 16.13× | 16.13× | 16.13× |
 | Image.transform | — | — | — | — | — | — |
-| Image.verify | — | — | — | — | — | — |
+| Image.verify | 0.13× | 0.13× | 0.13× | 0.13× | 0.13× | 0.13× |
 
 ### ImageChops
 
@@ -119,8 +127,8 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageColor.getcolor | — | — | — | — | — | — |
-| ImageColor.getrgb | — | — | — | — | — | — |
+| ImageColor.getcolor | 0.32× | 0.32× | 0.32× | 0.32× | 0.32× | 0.32× |
+| ImageColor.getrgb | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× | 0.29× |
 
 ### ImageDraw
 
@@ -149,10 +157,10 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageEnhance.Brightness | — | — | 2.38× | — | — | — |
-| ImageEnhance.Color | — | — | — | — | — | — |
-| ImageEnhance.Contrast | — | — | — | — | — | — |
-| ImageEnhance.Sharpness | — | — | — | — | — | — |
+| ImageEnhance.Brightness | 12399.75× ⚠️ | 12399.75× ⚠️ | 2.26× | 12399.75× ⚠️ | 12399.75× ⚠️ | 12399.75× ⚠️ |
+| ImageEnhance.Color | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ | 16998.00× ⚠️ |
+| ImageEnhance.Contrast | 19232.07× ⚠️ | 19232.07× ⚠️ | 19232.07× ⚠️ | 19232.07× ⚠️ | 19232.07× ⚠️ | 19232.07× ⚠️ |
+| ImageEnhance.Sharpness | 36974.88× ⚠️ | 36974.88× ⚠️ | 36974.88× ⚠️ | 36974.88× ⚠️ | 36974.88× ⚠️ | 36974.88× ⚠️ |
 
 ### ImageFilter
 
@@ -167,7 +175,7 @@
 | ImageFilter.EDGE_ENHANCE_MORE | — | — | — | — | — | — |
 | ImageFilter.EMBOSS | — | — | — | — | — | — |
 | ImageFilter.FIND_EDGES | — | — | — | — | — | — |
-| ImageFilter.GaussianBlur | — | — | 1.94× | — | — | — |
+| ImageFilter.GaussianBlur | — | — | 2.01× | — | — | — |
 | ImageFilter.Kernel | — | — | — | — | — | — |
 | ImageFilter.MaxFilter | — | — | — | — | — | — |
 | ImageFilter.MedianFilter | — | — | — | — | — | — |
@@ -218,24 +226,24 @@
 
 | Function | CPU | GPU | WASM CPU | WASM GPU | Browser CPU | Browser GPU |
 | --- | --- | --- | --- | --- | --- | --- |
-| ImageOps.crop | — | — | — | — | — | — |
+| ImageOps.crop | 0.44× | 0.44× | 0.44× | 0.44× | 0.44× | 0.44× |
 | ImageOps.autocontrast | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× | 0.11× |
-| ImageOps.colorize | — | — | — | — | — | — |
-| ImageOps.contain | — | — | — | — | — | — |
+| ImageOps.colorize | 0.93× | 0.93× | 0.93× | 0.93× | 0.93× | 0.93× |
+| ImageOps.contain | 0.82× | 0.82× | 0.82× | 0.82× | 0.82× | 0.82× |
 | ImageOps.cover | — | — | — | — | — | — |
 | ImageOps.deform | — | — | — | — | — | — |
-| ImageOps.equalize | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× | 0.12× |
+| ImageOps.equalize | 0.13× | 0.13× | 0.13× | 0.13× | 0.13× | 0.13× |
 | ImageOps.exif_transpose | — | — | — | — | — | — |
-| ImageOps.expand | — | — | — | — | — | — |
+| ImageOps.expand | 0.51× | 0.51× | 0.51× | 0.51× | 0.51× | 0.51× |
 | ImageOps.fit | — | — | — | — | — | — |
-| ImageOps.flip | 4.27× | 4.27× | 4.27× | 4.27× | 4.27× | 4.27× |
-| ImageOps.grayscale | 3.72× | 3.72× | 2.28× | 3.72× | 3.72× | 3.72× |
-| ImageOps.invert | 0.57× | 0.57× | 0.31× | 0.57× | 0.57× | 0.57× |
-| ImageOps.mirror | 3.74× | 3.74× | 3.74× | 3.74× | 3.74× | 3.74× |
-| ImageOps.pad | — | — | — | — | — | — |
-| ImageOps.posterize | 0.51× | 0.51× | 0.51× | 0.51× | 0.51× | 0.51× |
-| ImageOps.scale | — | — | — | — | — | — |
-| ImageOps.solarize | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× | 0.36× |
+| ImageOps.flip | 3.89× | 3.89× | 3.89× | 3.89× | 3.89× | 3.89× |
+| ImageOps.grayscale | 3.83× | 3.83× | 2.27× | 3.83× | 3.83× | 3.83× |
+| ImageOps.invert | 0.59× | 0.59× | 0.31× | 0.59× | 0.59× | 0.59× |
+| ImageOps.mirror | 4.09× | 4.09× | 4.09× | 4.09× | 4.09× | 4.09× |
+| ImageOps.pad | 0.40× | 0.40× | 0.40× | 0.40× | 0.40× | 0.40× |
+| ImageOps.posterize | 0.54× | 0.54× | 0.54× | 0.54× | 0.54× | 0.54× |
+| ImageOps.scale | 0.84× | 0.84× | 0.84× | 0.84× | 0.84× | 0.84× |
+| ImageOps.solarize | 0.32× | 0.32× | 0.32× | 0.32× | 0.32× | 0.32× |
 
 ### ImagePalette
 
