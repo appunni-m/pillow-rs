@@ -1,35 +1,28 @@
-// Generic 3x3 convolution shader (filter kernels: BLUR, CONTOUR, DETAIL, etc.)
+// 3x3 convolution — storage buffer version (wgpu + WebGPU)
+struct Uniforms { kernel: array<f32,9>, scale: f32, offset: f32, width: u32, height: u32 }
+@group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var<storage, read> input: array<f32>;
+@group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
-@group(0) @binding(0) var<uniform> kernel: array<f32, 9>;
-@group(0) @binding(1) var<uniform> scale: f32;
-@group(0) @binding(2) var<uniform> offset: f32;
-@group(0) @binding(3) var<uniform> width: u32;
-@group(0) @binding(4) var<uniform> height: u32;
-@group(0) @binding(5) var input: texture_2d<f32>;
-@group(0) @binding(6) var output: texture_storage_2d<rgba8unorm, write>;
+fn get_px(x: i32, y: i32) -> vec4<f32> {
+    let sx = clamp(x, 0, i32(u.width)-1);
+    let sy = clamp(y, 0, i32(u.height)-1);
+    let i = (u32(sy)*u.width+u32(sx))*4u;
+    return vec4<f32>(input[i],input[i+1u],input[i+2u],input[i+3u]);
+}
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if gid.x == 0u || gid.y == 0u || gid.x >= width - 1u || gid.y >= height - 1u {
-        textureStore(output, gid.xy, textureLoad(input, gid.xy, 0));
-        return;
-    }
-
+    if gid.x >= u.width || gid.y >= u.height { return; }
     var sum = vec4<f32>(0.0);
-    for (var dy = 0u; dy < 3u; dy++) {
-        for (var dx = 0u; dx < 3u; dx++) {
-            let sx = gid.x + dx - 1u;
-            let sy = gid.y + dy - 1u;
-            let k = kernel[dy * 3u + dx];
-            sum += textureLoad(input, vec2<u32>(sx, sy), 0) * k;
+    for (var dy=0u; dy<3u; dy++) {
+        for (var dx=0u; dx<3u; dx++) {
+            let k = u.kernel[dy*3u+dx];
+            sum += get_px(i32(gid.x)+i32(dx)-1, i32(gid.y)+i32(dy)-1) * k;
         }
     }
-
-    let result = sum / scale + offset;
-    textureStore(output, gid.xy, vec4<f32>(
-        clamp(result.r, 0.0, 1.0),
-        clamp(result.g, 0.0, 1.0),
-        clamp(result.b, 0.0, 1.0),
-        clamp(result.a, 0.0, 1.0),
-    ));
+    let r = sum/u.scale+u.offset;
+    let o = (gid.y*u.width+gid.x)*4u;
+    output[o]=clamp(r.r,0.0,1.0); output[o+1u]=clamp(r.g,0.0,1.0);
+    output[o+2u]=clamp(r.b,0.0,1.0); output[o+3u]=clamp(r.a,0.0,1.0);
 }

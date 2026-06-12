@@ -1,21 +1,28 @@
-// Bilinear resampling compute shader (resize/thumbnail)
+// Bilinear resampling — storage buffer version (wgpu + WebGPU compatible)
+// Manual bilinear interpolation (no hardware sampler needed)
+struct Uniforms { src_w: u32, src_h: u32, dst_w: u32, dst_h: u32 }
+@group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var<storage, read> input: array<f32>;
+@group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
-@group(0) @binding(0) var<uniform> src_width: u32;
-@group(0) @binding(1) var<uniform> src_height: u32;
-@group(0) @binding(2) var<uniform> dst_width: u32;
-@group(0) @binding(3) var<uniform> dst_height: u32;
-@group(0) @binding(4) var input: texture_2d<f32>;
-@group(0) @binding(5) var output: texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(6) var sampler_: sampler;
+fn get_px(x: f32, y: f32) -> vec4<f32> {
+    let x0 = u32(clamp(x, 0.0, f32(u.src_w)-1.0));
+    let y0 = u32(clamp(y, 0.0, f32(u.src_h)-1.0));
+    let i = (y0*u.src_w+x0)*4u;
+    return vec4<f32>(input[i],input[i+1u],input[i+2u],input[i+3u]);
+}
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if gid.x >= dst_width || gid.y >= dst_height { return; }
-
-    let u = (f32(gid.x) + 0.5) * f32(src_width) / f32(dst_width) - 0.5;
-    let v = (f32(gid.y) + 0.5) * f32(src_height) / f32(dst_height) - 0.5;
-    let tc = vec2<f32>(u / f32(src_width), v / f32(src_height));
-
-    let color = textureSampleLevel(input, sampler_, tc, 0.0);
-    textureStore(output, gid.xy, color);
+    if gid.x >= u.dst_w || gid.y >= u.dst_h { return; }
+    let sx = f32(gid.x)*f32(u.src_w)/f32(u.dst_w);
+    let sy = f32(gid.y)*f32(u.src_h)/f32(u.dst_h);
+    let fx = fract(sx); let fy = fract(sy);
+    let p00 = get_px(sx, sy);
+    let p10 = get_px(sx+1.0, sy);
+    let p01 = get_px(sx, sy+1.0);
+    let p11 = get_px(sx+1.0, sy+1.0);
+    let r = mix(mix(p00,p10,fx), mix(p01,p11,fx), fy);
+    let o = (gid.y*u.dst_w+gid.x)*4u;
+    output[o]=r.r; output[o+1u]=r.g; output[o+2u]=r.b; output[o+3u]=r.a;
 }

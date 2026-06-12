@@ -1,26 +1,19 @@
-// Box blur compute shader — separable 2-pass (horizontal + vertical)
-// Shared between native wgpu and browser WebGPU
-
-@group(0) @binding(0) var<uniform> radius: u32;
-@group(0) @binding(1) var<uniform> width: u32;
-@group(0) @binding(2) var<uniform> height: u32;
-@group(0) @binding(3) var input: texture_2d<f32>;
-@group(0) @binding(4) var output: texture_storage_2d<rgba8unorm, write>;
+// Box blur — storage buffer version (wgpu + WebGPU compatible)
+struct Uniforms { radius: u32, width: u32, height: u32 }
+@group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var<storage, read> input: array<f32>;
+@group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if gid.x >= width || gid.y >= height { return; }
-
-    let r = i32(radius);
-    var sum = vec4<f32>(0.0);
-    var count: u32 = 0u;
-
+    if gid.x >= u.width || gid.y >= u.height { return; }
+    let r = i32(u.radius);
+    var sr=0.0; var sg=0.0; var sb=0.0; var sa=0.0; var n: u32 = 0u;
     for (var dx = -r; dx <= r; dx++) {
-        let sx = min(max(i32(gid.x) + dx, 0), i32(width) - 1);
-        sum += textureLoad(input, vec2<u32>(u32(sx), gid.y), 0);
-        count++;
+        let sx = clamp(i32(gid.x)+dx, 0, i32(u.width)-1);
+        let i = (u32(sx) + gid.y * u.width) * 4u;
+        sr+=input[i]; sg+=input[i+1u]; sb+=input[i+2u]; sa+=input[i+3u]; n++;
     }
-
-    let avg = sum / f32(count);
-    textureStore(output, gid.xy, avg);
+    let fn = f32(n); let o = (gid.y*u.width+gid.x)*4u;
+    output[o]=sr/fn; output[o+1u]=sg/fn; output[o+2u]=sb/fn; output[o+3u]=sa/fn;
 }
