@@ -127,6 +127,10 @@ impl Image {
                 image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
+            "LA" => DynamicImage::ImageLumaA8(
+                image::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+            ),
             _ => DynamicImage::new_rgba8(w, h),
         };
         Ok(Image::Loaded(img, None))
