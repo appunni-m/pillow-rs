@@ -533,6 +533,7 @@ impl Image {
 
     /// Get unique colors and their counts.
     /// Returns (count, color) pairs. Color is Vec<u8> matching the image mode.
+    #[allow(clippy::type_complexity)]
     pub fn getcolors(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
         let img = self.materialize()?;
         let n_bands = match img.color() {
@@ -591,12 +592,10 @@ impl Image {
         let mut h_proj = vec![0u32; w];
         let mut v_proj = vec![0u32; h];
         let luma = img.to_luma8();
-        for y in 0..h {
-            for x in 0..w {
-                if luma.get_pixel(x as u32, y as u32)[0] != 0 {
-                    h_proj[x] = 1;
-                    v_proj[y] = 1;
-                }
+        for (x, y, px) in luma.enumerate_pixels() {
+            if px[0] != 0 {
+                h_proj[x as usize] = 1;
+                v_proj[y as usize] = 1;
             }
         }
         Ok((h_proj, v_proj))
@@ -1230,18 +1229,6 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
         }
-        PipelineOp::Contain { .. } => Err(PilError::NotImplementedError(
-            "Contain not yet implemented".into(),
-        )),
-        PipelineOp::Cover { .. } => Err(PilError::NotImplementedError(
-            "Cover not yet implemented".into(),
-        )),
-        PipelineOp::Fit { .. } => Err(PilError::NotImplementedError(
-            "Fit not yet implemented".into(),
-        )),
-        PipelineOp::Pad { .. } => Err(PilError::NotImplementedError(
-            "Pad not yet implemented".into(),
-        )),
         PipelineOp::Scale { factor, filter } => {
             let f = match filter {
                 ResampleFilter::Lanczos => image::imageops::FilterType::Lanczos3,
@@ -1269,10 +1256,6 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             image::imageops::overlay(&mut expanded, &img.to_rgba8(), *border as i64, *border as i64);
             Ok(preserve_mode(img, expanded))
         }
-        PipelineOp::CropBorder { .. } => Err(PilError::NotImplementedError(
-            "CropBorder not yet implemented".into(),
-        )),
-
         // ── ImageChops ──
         PipelineOp::Add { other, scale, offset } => {
             channel_op_binary(img, other, |a, b| {

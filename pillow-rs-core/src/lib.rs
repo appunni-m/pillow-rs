@@ -1,3 +1,6 @@
+// PIL API compatibility — many functions have 8+ parameters matching PIL signatures
+#![allow(clippy::too_many_arguments)]
+
 pub mod color;
 pub mod draw;
 pub mod error;
