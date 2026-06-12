@@ -124,23 +124,19 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
 
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
-    """Colorize grayscale image."""
+    """Colorize grayscale image — delegates to Rust via PipelineOp."""
     if image.mode != "L":
         image = image.convert("L")
-    # Map black→black color, white→white color
-    result = Image.new("RGB", image.size)
-    for y in range(image.height):
-        for x in range(image.width):
-            gray = image.getpixel((x, y)) if isinstance(image.getpixel((x, y)), int) else image.getpixel((x, y))[0]
-            t = (gray - blackpoint) / max(whitepoint - blackpoint, 1)
-            t = max(0.0, min(1.0, t))
-            if isinstance(black, str): black = (0, 0, 0)
-            if isinstance(white, str): white = (255, 255, 255)
-            r = int(black[0] + t * (white[0] - black[0]))
-            g = int(black[1] + t * (white[1] - black[1]))
-            b = int(black[2] + t * (white[2] - black[2]))
-            result.putpixel((x, y), (r, g, b))
-    return result
+    # Resolve color strings to tuples
+    if isinstance(black, str):
+        from PIL.ImageColor import getrgb
+        black = getrgb(black)
+    if isinstance(white, str):
+        from PIL.ImageColor import getrgb
+        white = getrgb(white)
+    # Delegate to Rust via core binding
+    rust_image = _core.ops_colorize(image._rust_image, black[:3], white[:3])
+    return Image(rust_image)
 
 
 def exif_transpose(image: Image, *, in_place=False):

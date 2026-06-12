@@ -476,6 +476,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_posterize, m)?)?;
     m.add_function(wrap_pyfunction!(ops_solarize, m)?)?;
     m.add_function(wrap_pyfunction!(ops_grayscale, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_colorize, m)?)?;
 
     // ImageChops functions
     m.add_function(wrap_pyfunction!(chops_add, m)?)?;
@@ -763,6 +764,15 @@ fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::grayscale(&inner))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_colorize(image: &Bound<'_, PyImage>, black: (u8, u8, u8), white: (u8, u8, u8)) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::colorize(&inner, black, white))
     }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

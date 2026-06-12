@@ -912,9 +912,69 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         PipelineOp::Grayscale => {
             Ok(DynamicImage::ImageLuma8(crate::color::pil_grayscale(img)))
         }
-        PipelineOp::Colorize { .. } => Err(PilError::NotImplementedError(
-            "Colorize not yet implemented".into(),
-        )),
+        PipelineOp::Colorize { black, white } => {
+            let gray = img.to_luma8();
+            let (w, h) = gray.dimensions();
+            let mut out = image::RgbImage::new(w, h);
+            let &(br, bg, bb) = black;
+            let &(wr, wg, wb) = white;
+            for y in 0..h {
+                for x in 0..w {
+                    let g = gray.get_pixel(x, y)[0] as f64 / 255.0;
+                    let r = (br as f64 + g * (wr as f64 - br as f64)) as u8;
+                    let gv = (bg as f64 + g * (wg as f64 - bg as f64)) as u8;
+                    let b = (bb as f64 + g * (wb as f64 - bb as f64)) as u8;
+                    out.put_pixel(x, y, image::Rgb([r, gv, b]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(out))
+        }
+        PipelineOp::Contain { w, h, .. } => {
+            let (w, h) = (*w, *h);
+            let (iw, ih) = (img.width(), img.height());
+            let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
+            let nw = (iw as f64 * ratio) as u32;
+            let nh = (ih as f64 * ratio) as u32;
+            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::Triangle))
+        }
+        PipelineOp::Cover { w, h, .. } => {
+            let (w, h) = (*w, *h);
+            let (iw, ih) = (img.width(), img.height());
+            let ratio = (w as f64 / iw as f64).max(h as f64 / ih as f64);
+            let nw = (iw as f64 * ratio) as u32;
+            let nh = (ih as f64 * ratio) as u32;
+            let resized = img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::Triangle);
+            let x = (nw.saturating_sub(w)) / 2;
+            let y = (nh.saturating_sub(h)) / 2;
+            Ok(resized.crop_imm(x, y, w, h))
+        }
+        PipelineOp::Fit { w, h, .. } => {
+            let (w, h) = (*w, *h);
+            let (iw, ih) = (img.width(), img.height());
+            let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
+            let nw = (iw as f64 * ratio) as u32;
+            let nh = (ih as f64 * ratio) as u32;
+            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::Triangle))
+        }
+        PipelineOp::Pad { w, h, color, .. } => {
+            let (w, h) = (*w, *h);
+            let fill = color.unwrap_or((0, 0, 0, 255));
+            let (iw, ih) = (img.width(), img.height());
+            let mut padded = DynamicImage::new_rgba8(w, h);
+            for py in 0..h { for px in 0..w { padded.put_pixel(px, py, image::Rgba([fill.0, fill.1, fill.2, fill.3])); } }
+            let x = (w.saturating_sub(iw)) / 2;
+            let y = (h.saturating_sub(ih)) / 2;
+            image::imageops::overlay(&mut padded, &img.to_rgba8(), x as i64, y as i64);
+            Ok(padded)
+        }
+        PipelineOp::CropBorder { border } => {
+            let b = *border;
+            let (w, h) = (img.width(), img.height());
+            if 2 * b >= w || 2 * b >= h {
+                return Err(PilError::ValueError("crop border exceeds image dimensions".into()));
+            }
+            Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
+        }
         PipelineOp::Contain { .. } => Err(PilError::NotImplementedError(
             "Contain not yet implemented".into(),
         )),
