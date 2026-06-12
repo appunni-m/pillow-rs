@@ -100,8 +100,12 @@ def _serialize_value(val):
 
 
 def run_pil(op_name, mode):
-    """Run a PIL operation and return (status, data, params) tuple."""
+    """Run a PIL operation and return (status, data, params, input_bytes, input_size, input_bytes_rgb) tuple."""
+    ref_rgb = _get_reference()
+    input_size = list(ref_rgb.size)
+    input_bytes_rgb = ref_rgb.tobytes()
     img = _make_image(mode)
+    input_bytes = img.tobytes()  # bytes in target mode
     module, func = op_name.rsplit(".", 1)
 
     try:
@@ -134,23 +138,23 @@ def run_pil(op_name, mode):
 
         # Determine fixture type: image (hash) or value (JSON)
         if func in _VALUE_OPS or module in ("ImageColor", "ImageStat"):
-            return ('value', _serialize_value(result), params)
+            return ('value', _serialize_value(result), params, input_bytes, input_size, input_bytes_rgb)
         elif result is None:
-            return ('value', None, params)
+            return ('value', None, params, input_bytes, input_size, input_bytes_rgb)
         elif hasattr(result, 'tobytes'):
-            return ('success', result.tobytes(), params)
+            return ('success', result.tobytes(), params, input_bytes, input_size, input_bytes_rgb)
         elif isinstance(result, bytes):
-            return ('success', result, params)
+            return ('success', result, params, input_bytes, input_size, input_bytes_rgb)
         elif hasattr(result, 'save'):
             buf = BytesIO()
             result.save(buf, format="PNG")
-            return ('success', buf.getvalue(), params)
+            return ('success', buf.getvalue(), params, input_bytes, input_size, input_bytes_rgb)
         elif isinstance(result, (int, float, str, bool, list, tuple, dict)):
-            return ('value', _serialize_value(result), params)
+            return ('value', _serialize_value(result), params, input_bytes, input_size, input_bytes_rgb)
         else:
             return None
     except Exception as e:
-        return ('error', f"{type(e).__name__}: {str(e)[:100]}", {})
+        return ('error', f"{type(e).__name__}: {str(e)[:100]}", {}, b"", [100, 100], b"")
 
 
 def _run_image_op(img, func, mode):
@@ -545,7 +549,7 @@ def main():
                 if section != "properties" and item.get("status") != "implemented":
                     continue
                 op_name = f"{mod_name}.{item['name']}"
-                modes = item.get("supported_modes", item.get("modes", []))
+                modes = [str(m) for m in item.get("supported_modes", item.get("modes", []))]
                 targets = item.get("supported_targets", ["cpu"])
                 if not modes:
                     modes = ["L", "RGB"]  # default: test grayscale + color
@@ -555,7 +559,7 @@ def main():
                     if result is None:
                         continue
 
-                    status, data, params = result
+                    status, data, params, input_bytes, input_size, input_bytes_rgb = result
                     key = f"{op_name.replace('.', '_')}_{mode}"
                     if status == 'success':
                         h = hashlib.sha256(data).hexdigest()
@@ -565,6 +569,10 @@ def main():
                             "targets": targets,
                             "params": params,
                             "expectedHash": h,
+                            "inputMode": mode,
+                            "inputSize": input_size,
+                            "inputBytes": input_bytes.hex() if input_bytes else "",
+                            "inputBytesRgb": input_bytes_rgb.hex() if input_bytes_rgb else "",
                         }
                     elif status == 'value':
                         fixture = {
@@ -573,6 +581,10 @@ def main():
                             "targets": targets,
                             "params": params,
                             "expectedValue": data,
+                            "inputMode": mode,
+                            "inputSize": input_size,
+                            "inputBytes": input_bytes.hex() if input_bytes else "",
+                            "inputBytesRgb": input_bytes_rgb.hex() if input_bytes_rgb else "",
                         }
                     else:  # error
                         fixture = {
@@ -581,6 +593,10 @@ def main():
                             "targets": targets,
                             "params": params,
                             "expectedError": data,
+                            "inputMode": mode,
+                            "inputSize": input_size,
+                            "inputBytes": input_bytes.hex() if input_bytes else "",
+                            "inputBytesRgb": input_bytes_rgb.hex() if input_bytes_rgb else "",
                         }
                     index["operations"][key] = fixture
                     with open(FIXTURES_DIR / f"{key}.json", "w") as f_out:
