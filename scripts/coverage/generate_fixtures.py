@@ -250,39 +250,36 @@ def main():
                     continue
 
                 for mode in modes:
-                    for target in targets:
-                        if target_filter and target != target_filter:
-                            continue
+                    # One fixture per (op, mode) — target doesn't affect PIL output
+                    result = run_pil(op_name, mode)
+                    if result is None:
+                        continue
 
-                        result = run_pil(op_name, mode)
-                        if result is None:
-                            continue
-
-                        status, data = result
-                        key = f"{op_name.replace('.', '_')}_{mode}_{target}"
-                        if status == 'success':
-                            h = hashlib.sha256(data).hexdigest()
-                            fixture = {
-                                "op": op_name,
-                                "mode": mode,
-                                "target": target,
-                                "inputMode": mode,
-                                "inputSize": [100, 100],
-                                "expectedHash": h,
-                            }
-                        else:  # error
-                            fixture = {
-                                "op": op_name,
-                                "mode": mode,
-                                "target": target,
-                                "inputMode": mode,
-                                "inputSize": [100, 100],
-                                "expectedError": data,
-                            }
-                        index["operations"][key] = fixture
-                        with open(FIXTURES_DIR / f"{key}.json", "w") as f_out:
-                            json.dump(fixture, f_out, indent=2)
-                        count += 1
+                    status, data = result
+                    key = f"{op_name.replace('.', '_')}_{mode}"
+                    if status == 'success':
+                        h = hashlib.sha256(data).hexdigest()
+                        fixture = {
+                            "op": op_name,
+                            "mode": mode,
+                            "targets": targets,
+                            "inputMode": mode,
+                            "inputSize": [100, 100],
+                            "expectedHash": h,
+                        }
+                    else:  # error
+                        fixture = {
+                            "op": op_name,
+                            "mode": mode,
+                            "targets": targets,
+                            "inputMode": mode,
+                            "inputSize": [100, 100],
+                            "expectedError": data,
+                        }
+                    index["operations"][key] = fixture
+                    with open(FIXTURES_DIR / f"{key}.json", "w") as f_out:
+                        json.dump(fixture, f_out, indent=2)
+                    count += 1
 
     with open(FIXTURES_DIR / "index.json", "w") as f:
         json.dump(index, f, indent=2)
