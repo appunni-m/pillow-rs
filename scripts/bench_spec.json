@@ -1,62 +1,1891 @@
 {
-  "_description": "SINGLE SOURCE OF TRUTH for all benchmarks. Every target reads this file.",
-  "_targets": ["python_cpu", "wasm_cpu", "wasm_gpu", "browser_cpu", "browser_gpu", "native_gpu"],
+  "_description": "Generated from manifest.yaml \u2014 single source of truth for ALL benchmarks",
+  "_targets": [
+    "python_cpu",
+    "wasm_cpu",
+    "wasm_gpu",
+    "browser_cpu",
+    "browser_gpu",
+    "native_gpu"
+  ],
   "inputs": {
-    "ref_2k": {"file": "scripts/bench_reference_images/ref_2k.jpg", "w": 2048, "h": 1536, "mode": "RGB"},
-    "ref_1k": {"file": "scripts/bench_reference_images/ref_1k.png", "w": 1024, "h": 1024, "mode": "RGBA"},
-    "ref_gray": {"file": "scripts/bench_reference_images/ref_grayscale.png", "w": 1024, "h": 1024, "mode": "L"},
-    "synthetic_512": {"w": 512, "h": 512, "mode": "RGB"}
+    "ref_2k": {
+      "file": "scripts/bench_reference_images/ref_2k.jpg",
+      "w": 2048,
+      "h": 1536,
+      "mode": "RGB"
+    },
+    "ref_1k": {
+      "file": "scripts/bench_reference_images/ref_1k.png",
+      "w": 1024,
+      "h": 1024,
+      "mode": "RGBA"
+    },
+    "ref_gray": {
+      "file": "scripts/bench_reference_images/ref_grayscale.png",
+      "w": 1024,
+      "h": 1024,
+      "mode": "L"
+    },
+    "synthetic_512": {
+      "w": 512,
+      "h": 512,
+      "mode": "RGB",
+      "color": [
+        128,
+        128,
+        128,
+        255
+      ]
+    }
   },
   "operations": [
-    {"name": "Image.open",            "input": "ref_2k", "op": "open",          "params": {}, "category": "io"},
-    {"name": "Image.new",             "input": "synthetic_512", "op": "new",    "params": {"mode": "RGB", "w": 1920, "h": 1080, "color": [255,0,0,255]}, "category": "io"},
-    {"name": "Image.save",            "input": "ref_2k", "op": "save",          "params": {}, "category": "io"},
-    {"name": "Image.resize",          "input": "ref_2k", "op": "resize",        "params": {"size": [800,600], "filter": "LANCZOS"}, "category": "perf"},
-    {"name": "Image.crop",            "input": "ref_2k", "op": "crop",          "params": {"box": [100,100,1100,900]}, "category": "perf"},
-    {"name": "Image.rotate",          "input": "ref_2k", "op": "rotate",        "params": {"angle": 45, "resample": "BICUBIC", "expand": true}, "category": "perf"},
-    {"name": "Image.transpose",       "input": "ref_2k", "op": "transpose",     "params": {"method": "FLIP_LEFT_RIGHT"}, "category": "perf"},
-    {"name": "Image.thumbnail",       "input": "ref_2k", "op": "thumbnail",     "params": {"size": [256,256], "filter": "LANCZOS"}, "category": "perf"},
-    {"name": "Image.tobytes",         "input": "ref_2k", "op": "tobytes",       "params": {}, "category": "io"},
-    {"name": "Image.convert",         "input": "ref_2k", "op": "convert",       "params": {"mode": "L"}, "category": "perf"},
-    {"name": "Image.paste",           "input": "ref_2k", "op": "paste",         "params": {"src_w": 512, "src_h": 512, "src_color": [255,0,0], "box": [100,100]}, "category": "perf"},
-    {"name": "Image.filter",          "input": "ref_2k", "op": "filter",        "params": {"name": "BLUR"}, "category": "perf"},
-    {"name": "Image.copy",            "input": "ref_2k", "op": "copy",          "params": {}, "category": "io"},
-    {"name": "Image.split",           "input": "ref_2k", "op": "split",         "params": {}, "category": "perf"},
-    {"name": "Image.getbands",        "input": "ref_2k", "op": "getbands",      "params": {}, "category": "nonperf"},
-    {"name": "Image.getbbox",         "input": "ref_2k", "op": "getbbox",       "params": {}, "category": "nonperf"},
-    {"name": "Image.getchannel",      "input": "ref_2k", "op": "getchannel",    "params": {"channel": 0}, "category": "nonperf"},
-    {"name": "Image.getcolors",       "input": "ref_2k", "op": "getcolors",     "params": {"maxcolors": 256}, "category": "nonperf"},
-    {"name": "Image.getextrema",      "input": "ref_2k", "op": "getextrema",    "params": {}, "category": "nonperf"},
-    {"name": "Image.getpixel",        "input": "ref_2k", "op": "getpixel",      "params": {"xy": [50,50]}, "category": "nonperf"},
-    {"name": "Image.getprojection",   "input": "ref_2k", "op": "getprojection", "params": {}, "category": "nonperf"},
-    {"name": "Image.histogram",       "input": "ref_2k", "op": "histogram",     "params": {}, "category": "nonperf"},
-    {"name": "Image.point",           "input": "ref_2k", "op": "point",         "params": {"lut": "invert"}, "category": "perf"},
-    {"name": "Image.quantize",        "input": "ref_2k", "op": "quantize",      "params": {"colors": 16}, "category": "perf"},
-    {"name": "Image.reduce",          "input": "ref_2k", "op": "reduce",        "params": {"factor": 2}, "category": "perf"},
-    {"name": "Image.entropy",         "input": "ref_2k", "op": "entropy",       "params": {}, "category": "nonperf"},
-    {"name": "Image.effect_spread",   "input": "synthetic_512", "op": "effect_spread", "params": {"distance": 3}, "category": "perf"},
-    {"name": "ImageOps.autocontrast", "input": "ref_2k", "op": "autocontrast",  "params": {}, "category": "perf"},
-    {"name": "ImageOps.equalize",     "input": "ref_2k", "op": "equalize",      "params": {}, "category": "perf"},
-    {"name": "ImageOps.invert",       "input": "ref_2k", "op": "invert",        "params": {}, "category": "perf"},
-    {"name": "ImageOps.flip",         "input": "ref_2k", "op": "flip",          "params": {}, "category": "perf"},
-    {"name": "ImageOps.mirror",       "input": "ref_2k", "op": "mirror",        "params": {}, "category": "perf"},
-    {"name": "ImageOps.posterize",    "input": "ref_2k", "op": "posterize",     "params": {"bits": 3}, "category": "perf"},
-    {"name": "ImageOps.solarize",     "input": "ref_2k", "op": "solarize",      "params": {"threshold": 128}, "category": "perf"},
-    {"name": "ImageOps.grayscale",    "input": "ref_2k", "op": "grayscale",     "params": {}, "category": "perf"},
-    {"name": "ImageEnhance.Brightness", "input": "ref_2k", "op": "enhance_brightness", "params": {"factor": 1.5}, "category": "perf"},
-    {"name": "ImageEnhance.Contrast",   "input": "ref_2k", "op": "enhance_contrast",   "params": {"factor": 1.5}, "category": "perf"},
-    {"name": "ImageEnhance.Color",      "input": "ref_2k", "op": "enhance_color",      "params": {"factor": 1.5}, "category": "perf"},
-    {"name": "ImageEnhance.Sharpness",  "input": "ref_2k", "op": "enhance_sharpness",  "params": {"factor": 2.0}, "category": "perf"},
-    {"name": "ImageColor.getrgb",    "input": "ref_2k", "op": "getrgb",  "params": {"color": "red"}, "category": "nonperf"},
-    {"name": "ImageColor.getcolor",  "input": "ref_2k", "op": "getcolor","params": {"color": "red", "mode": "RGB"}, "category": "nonperf"},
-    {"name": "pipeline_20_st",       "input": "ref_2k", "op": "pipeline", "params": {
-      "chain": [
-        {"op": "resize", "params": {"size": [800,600], "filter": "LANCZOS"}},
-        {"op": "crop", "params": {"box": [100,100,500,500]}},
-        {"op": "convert", "params": {"mode": "L"}},
-        {"op": "rotate", "params": {"angle": 90}},
-        {"op": "filter", "params": {"name": "BLUR"}}
-      ]
-    }, "category": "perf"}
+    {
+      "name": "Image.open",
+      "input": "ref_2k",
+      "op": "open",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.new",
+      "input": "ref_2k",
+      "op": "new",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.save",
+      "input": "ref_2k",
+      "op": "save",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.resize",
+      "input": "ref_2k",
+      "op": "resize",
+      "params": {
+        "size": [
+          800,
+          600
+        ],
+        "filter": "LANCZOS"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.crop",
+      "input": "ref_2k",
+      "op": "crop",
+      "params": {
+        "box": [
+          100,
+          100,
+          1100,
+          900
+        ]
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.rotate",
+      "input": "ref_2k",
+      "op": "rotate",
+      "params": {
+        "angle": 45,
+        "resample": "BICUBIC",
+        "expand": true
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.transpose",
+      "input": "ref_2k",
+      "op": "transpose",
+      "params": {
+        "method": "FLIP_LEFT_RIGHT"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.convert",
+      "input": "ref_2k",
+      "op": "convert",
+      "params": {
+        "mode": "L"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.paste",
+      "input": "ref_2k",
+      "op": "paste",
+      "params": {
+        "src_w": 512,
+        "src_h": 512,
+        "src_color": [
+          255,
+          0,
+          0
+        ],
+        "box": [
+          100,
+          100
+        ]
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.filter",
+      "input": "ref_2k",
+      "op": "filter",
+      "params": {
+        "name": "BLUR"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.copy",
+      "input": "ref_2k",
+      "op": "copy",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.split",
+      "input": "ref_2k",
+      "op": "split",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getbands",
+      "input": "ref_2k",
+      "op": "getbands",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.thumbnail",
+      "input": "ref_2k",
+      "op": "thumbnail",
+      "params": {
+        "size": [
+          256,
+          256
+        ],
+        "filter": "LANCZOS"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.tobytes",
+      "input": "ref_2k",
+      "op": "tobytes",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.alpha_composite",
+      "input": "ref_1k",
+      "op": "alpha_composite",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.close",
+      "input": "ref_2k",
+      "op": "close",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getbbox",
+      "input": "ref_2k",
+      "op": "getbbox",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getchannel",
+      "input": "ref_2k",
+      "op": "getchannel",
+      "params": {
+        "channel": 0
+      },
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getcolors",
+      "input": "ref_2k",
+      "op": "getcolors",
+      "params": {
+        "maxcolors": 256
+      },
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getdata",
+      "input": "ref_2k",
+      "op": "getdata",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getextrema",
+      "input": "ref_2k",
+      "op": "getextrema",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getpixel",
+      "input": "ref_2k",
+      "op": "getpixel",
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      },
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getprojection",
+      "input": "ref_2k",
+      "op": "getprojection",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.histogram",
+      "input": "ref_2k",
+      "op": "histogram",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.load",
+      "input": "ref_2k",
+      "op": "load",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.point",
+      "input": "ref_2k",
+      "op": "point",
+      "params": {
+        "lut": "invert"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.putalpha",
+      "input": "ref_1k",
+      "op": "putalpha",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.putdata",
+      "input": "ref_2k",
+      "op": "putdata",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.putpixel",
+      "input": "ref_2k",
+      "op": "putpixel",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.quantize",
+      "input": "ref_2k",
+      "op": "quantize",
+      "params": {
+        "colors": 16
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.reduce",
+      "input": "ref_2k",
+      "op": "reduce",
+      "params": {
+        "factor": 2
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.seek",
+      "input": "ref_2k",
+      "op": "seek",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.tell",
+      "input": "ref_2k",
+      "op": "tell",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.transform",
+      "input": "ref_2k",
+      "op": "transform",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.verify",
+      "input": "ref_2k",
+      "op": "verify",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.effect_spread",
+      "input": "synthetic_512",
+      "op": "effect_spread",
+      "params": {
+        "distance": 3
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": false
+    },
+    {
+      "name": "Image.entropy",
+      "input": "ref_2k",
+      "op": "entropy",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.draft",
+      "input": "ref_2k",
+      "op": "draft",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.remap_palette",
+      "input": "ref_2k",
+      "op": "remap_palette",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.tobitmap",
+      "input": "ref_2k",
+      "op": "tobitmap",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.apply_transparency",
+      "input": "ref_1k",
+      "op": "apply_transparency",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.get_child_images",
+      "input": "ref_2k",
+      "op": "get_child_images",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": true
+    },
+    {
+      "name": "Image.get_flattened_data",
+      "input": "ref_2k",
+      "op": "get_flattened_data",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getexif",
+      "input": "ref_2k",
+      "op": "getexif",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getim",
+      "input": "ref_2k",
+      "op": "getim",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getpalette",
+      "input": "ref_2k",
+      "op": "getpalette",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "Image.getxmp",
+      "input": "ref_2k",
+      "op": "getxmp",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": true
+    },
+    {
+      "name": "Image.putpalette",
+      "input": "ref_2k",
+      "op": "putpalette",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": false,
+      "browser_available": true
+    },
+    {
+      "name": "Image.show",
+      "input": "ref_2k",
+      "op": "show",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": false
+    },
+    {
+      "name": "Image.frombytes",
+      "input": "ref_2k",
+      "op": "frombytes",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.merge",
+      "input": "ref_2k",
+      "op": "merge",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.blend",
+      "input": "ref_2k",
+      "op": "blend",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.composite",
+      "input": "ref_2k",
+      "op": "composite",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.eval",
+      "input": "ref_2k",
+      "op": "eval",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.fromarray",
+      "input": "ref_2k",
+      "op": "fromarray",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.frombytes",
+      "input": "ref_2k",
+      "op": "frombytes",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.effect_noise",
+      "input": "ref_2k",
+      "op": "effect_noise",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.alpha_composite",
+      "input": "ref_1k",
+      "op": "alpha_composite",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.new",
+      "input": "ref_2k",
+      "op": "new",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageModule.open",
+      "input": "ref_2k",
+      "op": "open",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.arc",
+      "input": "ref_2k",
+      "op": "arc",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.line",
+      "input": "ref_2k",
+      "op": "line",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.rectangle",
+      "input": "ref_2k",
+      "op": "rectangle",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.ellipse",
+      "input": "ref_2k",
+      "op": "ellipse",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.polygon",
+      "input": "ref_2k",
+      "op": "polygon",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.text",
+      "input": "ref_2k",
+      "op": "text",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.multiline_text",
+      "input": "ref_2k",
+      "op": "multiline_text",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.circle",
+      "input": "ref_2k",
+      "op": "circle",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.rounded_rectangle",
+      "input": "ref_2k",
+      "op": "rounded_rectangle",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.regular_polygon",
+      "input": "ref_2k",
+      "op": "regular_polygon",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.chord",
+      "input": "ref_2k",
+      "op": "chord",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.pieslice",
+      "input": "ref_2k",
+      "op": "pieslice",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.bitmap",
+      "input": "ref_2k",
+      "op": "bitmap",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.point",
+      "input": "ref_2k",
+      "op": "point",
+      "params": {
+        "lut": "invert"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.textbbox",
+      "input": "ref_2k",
+      "op": "textbbox",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.multiline_textbbox",
+      "input": "ref_2k",
+      "op": "multiline_textbbox",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.textlength",
+      "input": "ref_2k",
+      "op": "textlength",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageDraw.getfont",
+      "input": "ref_2k",
+      "op": "getfont",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.BLUR",
+      "input": "ref_2k",
+      "op": "blur",
+      "params": {
+        "name": "BLUR"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.CONTOUR",
+      "input": "ref_2k",
+      "op": "contour",
+      "params": {
+        "name": "CONTOUR"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.DETAIL",
+      "input": "ref_2k",
+      "op": "detail",
+      "params": {
+        "name": "DETAIL"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.EDGE_ENHANCE",
+      "input": "ref_2k",
+      "op": "edge_enhance",
+      "params": {
+        "name": "EDGE_ENHANCE"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.EDGE_ENHANCE_MORE",
+      "input": "ref_2k",
+      "op": "edge_enhance_more",
+      "params": {
+        "name": "EDGE_ENHANCE_MORE"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.EMBOSS",
+      "input": "ref_2k",
+      "op": "emboss",
+      "params": {
+        "name": "EMBOSS"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.FIND_EDGES",
+      "input": "ref_2k",
+      "op": "find_edges",
+      "params": {
+        "name": "FIND_EDGES"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.SHARPEN",
+      "input": "ref_2k",
+      "op": "sharpen",
+      "params": {
+        "name": "SHARPEN"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.SMOOTH",
+      "input": "ref_2k",
+      "op": "smooth",
+      "params": {
+        "name": "SMOOTH"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.SMOOTH_MORE",
+      "input": "ref_2k",
+      "op": "smooth_more",
+      "params": {
+        "name": "SMOOTH_MORE"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.GaussianBlur",
+      "input": "ref_2k",
+      "op": "gaussianblur",
+      "params": {
+        "name": "GaussianBlur"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.BoxBlur",
+      "input": "ref_2k",
+      "op": "boxblur",
+      "params": {
+        "name": "BoxBlur"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.UnsharpMask",
+      "input": "ref_2k",
+      "op": "unsharpmask",
+      "params": {
+        "name": "UnsharpMask"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.Kernel",
+      "input": "ref_2k",
+      "op": "kernel",
+      "params": {
+        "name": "Kernel"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.MaxFilter",
+      "input": "ref_2k",
+      "op": "maxfilter",
+      "params": {
+        "name": "MaxFilter"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.MinFilter",
+      "input": "ref_2k",
+      "op": "minfilter",
+      "params": {
+        "name": "MinFilter"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.MedianFilter",
+      "input": "ref_2k",
+      "op": "medianfilter",
+      "params": {
+        "name": "MedianFilter"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.ModeFilter",
+      "input": "ref_2k",
+      "op": "modefilter",
+      "params": {
+        "name": "ModeFilter"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.RankFilter",
+      "input": "ref_2k",
+      "op": "rankfilter",
+      "params": {
+        "name": "RankFilter"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFilter.Color3DLUT",
+      "input": "ref_2k",
+      "op": "color3dlut",
+      "params": {
+        "name": "Color3DLUT"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageEnhance.Brightness",
+      "input": "ref_2k",
+      "op": "brightness",
+      "params": {
+        "name": "Brightness"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageEnhance.Color",
+      "input": "ref_2k",
+      "op": "color",
+      "params": {
+        "name": "Color"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageEnhance.Contrast",
+      "input": "ref_2k",
+      "op": "contrast",
+      "params": {
+        "name": "Contrast"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageEnhance.Sharpness",
+      "input": "ref_2k",
+      "op": "sharpness",
+      "params": {
+        "name": "Sharpness"
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.autocontrast",
+      "input": "ref_gray",
+      "op": "autocontrast",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.colorize",
+      "input": "ref_2k",
+      "op": "colorize",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.contain",
+      "input": "ref_2k",
+      "op": "contain",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.cover",
+      "input": "ref_2k",
+      "op": "cover",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.crop",
+      "input": "ref_2k",
+      "op": "crop",
+      "params": {
+        "box": [
+          100,
+          100,
+          1100,
+          900
+        ]
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.equalize",
+      "input": "ref_gray",
+      "op": "equalize",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.expand",
+      "input": "ref_2k",
+      "op": "expand",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.fit",
+      "input": "ref_2k",
+      "op": "fit",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.flip",
+      "input": "ref_2k",
+      "op": "flip",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.grayscale",
+      "input": "ref_2k",
+      "op": "grayscale",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.invert",
+      "input": "ref_2k",
+      "op": "invert",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.mirror",
+      "input": "ref_2k",
+      "op": "mirror",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.pad",
+      "input": "ref_2k",
+      "op": "pad",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.posterize",
+      "input": "ref_2k",
+      "op": "posterize",
+      "params": {
+        "bits": 3
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.scale",
+      "input": "ref_2k",
+      "op": "scale",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.solarize",
+      "input": "ref_2k",
+      "op": "solarize",
+      "params": {
+        "threshold": 128
+      },
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.exif_transpose",
+      "input": "ref_2k",
+      "op": "exif_transpose",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageOps.deform",
+      "input": "ref_2k",
+      "op": "deform",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.add",
+      "input": "ref_2k",
+      "op": "add",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.add_modulo",
+      "input": "ref_2k",
+      "op": "add_modulo",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.blend",
+      "input": "ref_2k",
+      "op": "blend",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.composite",
+      "input": "ref_2k",
+      "op": "composite",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.constant",
+      "input": "ref_2k",
+      "op": "constant",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.darker",
+      "input": "ref_2k",
+      "op": "darker",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.difference",
+      "input": "ref_2k",
+      "op": "difference",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.duplicate",
+      "input": "ref_2k",
+      "op": "duplicate",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.hard_light",
+      "input": "ref_2k",
+      "op": "hard_light",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.invert",
+      "input": "ref_2k",
+      "op": "invert",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.lighter",
+      "input": "ref_2k",
+      "op": "lighter",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.logical_and",
+      "input": "ref_2k",
+      "op": "logical_and",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.logical_or",
+      "input": "ref_2k",
+      "op": "logical_or",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.logical_xor",
+      "input": "ref_2k",
+      "op": "logical_xor",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.multiply",
+      "input": "ref_2k",
+      "op": "multiply",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.offset",
+      "input": "ref_2k",
+      "op": "offset",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.overlay",
+      "input": "ref_2k",
+      "op": "overlay",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.screen",
+      "input": "ref_2k",
+      "op": "screen",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.soft_light",
+      "input": "ref_2k",
+      "op": "soft_light",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.subtract",
+      "input": "ref_2k",
+      "op": "subtract",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageChops.subtract_modulo",
+      "input": "ref_2k",
+      "op": "subtract_modulo",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": true,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageColor.getrgb",
+      "input": "ref_2k",
+      "op": "getrgb",
+      "params": {
+        "color": "red"
+      },
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageColor.getcolor",
+      "input": "ref_2k",
+      "op": "getcolor",
+      "params": {
+        "color": "red",
+        "mode": "RGB"
+      },
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImagePalette.copy",
+      "input": "ref_2k",
+      "op": "copy",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImagePalette.getcolor",
+      "input": "ref_2k",
+      "op": "getcolor",
+      "params": {
+        "color": "red",
+        "mode": "RGB"
+      },
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImagePalette.getdata",
+      "input": "ref_2k",
+      "op": "getdata",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImagePalette.save",
+      "input": "ref_2k",
+      "op": "save",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImagePalette.tobytes",
+      "input": "ref_2k",
+      "op": "tobytes",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.load",
+      "input": "ref_2k",
+      "op": "load",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.load_default",
+      "input": "ref_2k",
+      "op": "load_default",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.truetype",
+      "input": "ref_2k",
+      "op": "truetype",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.load_default_imagefont",
+      "input": "ref_2k",
+      "op": "load_default_imagefont",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.load_path",
+      "input": "ref_2k",
+      "op": "load_path",
+      "params": {},
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.FreeTypeFont",
+      "input": "ref_2k",
+      "op": "freetypefont",
+      "params": {
+        "name": "FreeTypeFont"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.FreeTypeFont.getbbox",
+      "input": "ref_2k",
+      "op": "getbbox",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.FreeTypeFont.getlength",
+      "input": "ref_2k",
+      "op": "getlength",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.FreeTypeFont.getmask",
+      "input": "ref_2k",
+      "op": "getmask",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.FreeTypeFont.getmetrics",
+      "input": "ref_2k",
+      "op": "getmetrics",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.FreeTypeFont.getname",
+      "input": "ref_2k",
+      "op": "getname",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.ImageFont",
+      "input": "ref_2k",
+      "op": "imagefont",
+      "params": {
+        "name": "ImageFont"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.ImageFont.getbbox",
+      "input": "ref_2k",
+      "op": "getbbox",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.ImageFont.getlength",
+      "input": "ref_2k",
+      "op": "getlength",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageFont.ImageFont.getmask",
+      "input": "ref_2k",
+      "op": "getmask",
+      "params": {},
+      "category": "nonperf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageStat.Stat",
+      "input": "ref_2k",
+      "op": "stat",
+      "params": {
+        "name": "Stat"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "ImageSequence.Iterator",
+      "input": "ref_2k",
+      "op": "iterator",
+      "params": {
+        "name": "Iterator"
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    },
+    {
+      "name": "pipeline_20_st",
+      "input": "ref_2k",
+      "op": "pipeline",
+      "params": {
+        "chain": [
+          {
+            "op": "resize",
+            "params": {
+              "size": [
+                800,
+                600
+              ],
+              "filter": "LANCZOS"
+            }
+          },
+          {
+            "op": "crop",
+            "params": {
+              "box": [
+                100,
+                100,
+                500,
+                500
+              ]
+            }
+          },
+          {
+            "op": "convert",
+            "params": {
+              "mode": "L"
+            }
+          },
+          {
+            "op": "rotate",
+            "params": {
+              "angle": 90
+            }
+          },
+          {
+            "op": "filter",
+            "params": {
+              "name": "BLUR"
+            }
+          }
+        ]
+      },
+      "category": "perf",
+      "gpu_applicable": false,
+      "wasm_available": true,
+      "browser_available": true
+    }
   ]
 }

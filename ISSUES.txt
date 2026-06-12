@@ -1,0 +1,113 @@
+# pillow-rs Benchmark Issues
+# Generated: 2026-06-12 from manifest.yaml → bench_spec.json → bench_unified.py
+# 153 RSPIL results, 154 PIL baselines, 1 hash match, 25 hash mismatches
+
+=== HASH MISMATCHES (PIL vs RSPIL output differs) ===
+ 1. Image.copy — rs=ebc3c1db96ef43fc pil=4106aff3e8b4d7e6 (pil hash = raw image decode, op not executing)
+ 2. Image.split — rs=20556551bdf44a20 pil=de00ec3400226849
+ 3. Image.thumbnail — rs=31b3693fa897a324 pil=0e15880a3ce73eec
+ 4. Image.tobytes — rs=31b3693fa897a324 pil=4106aff3e8b4d7e6
+ 5. Image.getchannel — rs=f1b68fd314da1d86 pil=de00ec3400226849
+ 6. Image.point — rs=c9c457f3391ce442 pil=38e0e0e7280d7c0c
+ 7. Image.quantize — rs=d33981dbd65e6911 pil=9983e33d73e7f0d0 (color palette differs)
+ 8. Image.reduce — rs=9fd9482d5bb76b70 pil=64d76c0a6783b9d0
+ 9. ImageOps.autocontrast — rs=2fa8ca53a0a72452 pil=9fd1ca9cc49dab1b
+10. ImageOps.equalize — rs=f4b3d7a8c459a5ee pil=9fd1ca9cc49dab1b
+11. ImageOps.expand — rs=31b3693fa897a324 pil=4106aff3e8b4d7e6 (pil hash = raw decode, op not executing)
+12. ImageOps.flip — rs=fb6121407911e10d pil=5ca74e7bdd53ba92
+13. ImageOps.grayscale — rs=7ceb677901e8c151 pil=aa58811ee1542a14
+14. ImageOps.invert — rs=c9c457f3391ce442 pil=38e0e0e7280d7c0c
+15. ImageOps.mirror — rs=23784adec7c71f96 pil=fdf5c6ace9fd0462
+16. ImageOps.solarize — rs=8795a84d0775a8d8 pil=edf69f74145b7394
+17. ImageOps.exif_transpose — rs=49eb029f58302688 pil=4106aff3e8b4d7e6
+18-25. (additional mismatches from full manifest run)
+
+=== ROOT CAUSE: PIL hash 4106aff3e8b4d7e6 appears repeatedly ===
+This is the raw ref_2k.jpg decode bytes — the PIL operation is NOT executing.
+PIL exec_op_pil() returns the input image without applying the operation.
+Likely cause: PIL Image objects are being reused/modified in-place after first
+operation, and subsequent ops return stale data.
+
+=== 0ms TIMING ISSUES ===
+Many operations show 0.0ms timing:
+- Image.open, Image.new, Image.save: 0.0ms (IO operations not materializing)
+- Image.getbands, getbbox, getcolors, getdata, getextrema, getpixel: 0.0ms
+- Image.histogram, load, point, entropy, getprojection: 0.0ms
+- Image.putalpha, putpixel, effect_spread: 0.0ms
+- All ImageEnhance ops: 0.0ms (enhance returns lazy pipeline, not materialized)
+- All ImageFont ops: 0.0ms (metadata operations)
+- All ImageDraw ops: timing not captured (returns None/void)
+- ImageChops.*, ImageFilter.*, ImageModule.*: 0.0ms
+- ImageColor.*, ImagePalette.*, ImageStat.*: 0.0ms
+
+Root cause: bench_unified.py calls 'tobytes()' after timer — but many ops
+return non-Image types (lists, tuples, dicts) or lazy Pipeline that materializes
+outside the timing window.
+
+=== MISSING exec_op HANDLERS ===
+The following operation types have no implementation in bench_unified.py exec_op():
+- ImageChops.* (add, subtract, multiply, screen, darker, lighter, etc.)
+- ImageFilter.* (BLUR, CONTOUR, DETAIL, etc.) — not handled as separate ops
+- ImageModule.* (merge, blend, composite, eval, effect_noise)
+- ImageDraw.* (arc, line, rectangle, ellipse, text, etc.)
+- ImageFont.* (FreeTypeFont, ImageFont, getbbox, getlength, getmask)
+- ImagePalette.* (copy, getcolor, getdata, save, tobytes)
+- ImageStat.Stat
+- ImageSequence.Iterator
+- Image.getexif, getim, getpalette, getxmp, putpalette
+- Image.get_child_images, get_flattened_data, putdata
+- Image.show, verify, seek, tell, close, draft
+- Image.tobitmap, remap_palette, frombytes, transform
+- Image.effect_noise, fromarray
+- ImageModule.frombytes, Module.open, Module.new
+
+=== PARAMETER FORMAT MISMATCHES ===
+- Image.crop: PIL uses (left,top,right,bottom), RSPIL uses (x,y,w,h)
+  Spec says [100,100,1100,900] — needs conversion based on target
+- Image.thumbnail: PIL mutates in-place (returns None), RSPIL returns Image
+  Spec needs to handle mutating vs returning ops differently
+- Image.paste: PIL mutates in-place, RSPIL uses &mut self via paste(source, box)
+  Spec params need (src image, position box)
+
+=== INPUT FORMAT ISSUES ===
+- ref_2k.jpg is JPEG (lossy) — different decoders produce slightly different pixels
+  PIL JPEG decoder vs image crate JPEG decoder differ
+  Fix: use ref_1k.png (PNG, lossless) for all benchmarks
+- synthetic_512 has no file — created in-memory, may differ between runs
+
+=== GPU COLUMNS ===
+- 42 functions marked gpu_applicable but no GPU harness connected to unified spec
+- WGSL shaders rewritten to storage buffers but wgpu pipeline compilation not wired
+- GpuEngine::execute_op() returns NotImplementedError for all ops
+- No GPU benchmark data generated
+
+=== WASM TARGET ===
+- bench_wasm_cpu.mjs not connected to bench_spec.json
+- Uses hardcoded operation list instead of reading spec
+- "lazy pipeline" fix applied (toBytes) but params may not match spec
+
+=== BROWSER TARGET ===
+- bench_browser.mjs + bench_runner.js not connected to bench_spec.json
+- Puppeteer harness works but uses own hardcoded op list
+
+=== AGGREGATOR ISSUES ===
+- BENCHMARKS.md generated from old bench_full.py data, not unified runner
+- Name mapping (BENCH_TO_FULL) needed for every target's output format
+- Output hash validation not yet integrated into BENCHMARKS.md
+
+=== CLASSIFICATION ISSUES ===
+- Image.copy, split, getbands classified inconsistently (perf vs nonperf)
+- Image.open, new, save classified as "perf" but are IO ops
+- ImageDraw.* classified as "perf" but are in-place mutations
+- ImageFont.* classified as "perf" but are metadata ops
+
+=== PIPELINE BENCHMARK ===
+- pipeline_20_st: 153ms RSPIL, 0.0ms PIL (not executing)
+- PIL pipeline chain not running correctly — returns too fast
+- Pipeline vs Pillow comparison invalid until PIL hash matches
+
+=== MISSING TARGETS ===
+- native_gpu: bench_unified.py has no GPU target runner
+- wasm_gpu: bench_unified.py has no WASM+WebGPU target runner
+- browser_gpu: bench_unified.py has no browser+WebGPU target runner
+- wasm_cpu: bench_unified.py has no WASM CPU target runner
