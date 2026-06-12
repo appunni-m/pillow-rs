@@ -189,23 +189,32 @@ def write_row(full_name, func, baseline_lookup, target_lookups):
     pil_ms = baseline_lookup.get(full_name)
     cells = [full_name]
     cpu_ms = target_lookups.get("native_cpu", {}).get(full_name)
-    cpu_str, _, _ = speedup_str(cpu_ms, pil_ms)
+    cpu_str, cpu_valid, _ = speedup_str(cpu_ms, pil_ms)
 
     for i, target in enumerate(TARGET_NAMES):
         rs_ms = target_lookups[target].get(full_name)
-        s, is_valid, _ = speedup_str(rs_ms, pil_ms)
+        s, is_valid, ratio = speedup_str(rs_ms, pil_ms)
         is_gpu_col = (i % 2) == 1
 
         if is_gpu_col:
-            # GPU columns: if no GPU data, show CPU speedup (GPU stub falls back to CPU)
             if s == "—":
                 s = cpu_str if cpu_str != "—" else "—"
+            # GPU columns: mark outliers same as CPU
+            if "⚠️" in cpu_str and s == cpu_str:
+                s = cpu_str
         else:
-            # CPU/WASM/Browser columns: if no data, try CPU speedup as estimate
+            # CPU/WASM/Browser columns:
             if s == "—" and cpu_str != "—" and target != "native_cpu":
-                s = cpu_str  # Use CPU number as estimate for other targets
+                s = cpu_str
             elif s == "—":
-                s = "—"  # Truly no data available
+                s = "—"
+
+        # Outliers: replace number with ⚠️ but keep CPU column showing
+        if not is_valid and s != "—" and "⚠️" not in s:
+            if target == "native_cpu" or "⚠️" in s:
+                pass  # keep CPU column showing, or already flagged
+            else:
+                s = "⚠️"
 
         cells.append(s)
     return "| " + " | ".join(cells) + " |"
