@@ -417,24 +417,67 @@ impl Image {
         Ok(Image::Loaded(DynamicImage::ImageLuma8(gray)))
     }
 
-    /// Set/replace alpha channel.
+    /// Set/replace alpha channel. Preserves mode: L→LA, RGB→RGBA, LA→LA, RGBA→RGBA.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let img = self.materialize_mut()?;
-        let mut rgba = img.to_rgba8();
-        for p in rgba.pixels_mut() {
-            p[3] = alpha;
+        match img.color() {
+            image::ColorType::L8 => {
+                let luma = img.to_luma8();
+                let mut la: image::ImageBuffer<image::LumaA<u8>, Vec<u8>> =
+                    image::ImageBuffer::new(luma.width(), luma.height());
+                for (out_px, in_px) in la.pixels_mut().zip(luma.pixels()) {
+                    out_px[0] = in_px[0];
+                    out_px[1] = alpha;
+                }
+                *img = DynamicImage::ImageLumaA8(la);
+            }
+            image::ColorType::La8 => {
+                let rgba = img.to_rgba8();
+                let mut la: image::ImageBuffer<image::LumaA<u8>, Vec<u8>> =
+                    image::ImageBuffer::new(rgba.width(), rgba.height());
+                for (out_px, in_px) in la.pixels_mut().zip(rgba.pixels()) {
+                    out_px[0] = in_px[0];
+                    out_px[1] = alpha;
+                }
+                *img = DynamicImage::ImageLumaA8(la);
+            }
+            image::ColorType::Rgb8 => {
+                let rgb = img.to_rgb8();
+                let mut rgba: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+                    image::ImageBuffer::new(rgb.width(), rgb.height());
+                for (out_px, in_px) in rgba.pixels_mut().zip(rgb.pixels()) {
+                    out_px[0] = in_px[0];
+                    out_px[1] = in_px[1];
+                    out_px[2] = in_px[2];
+                    out_px[3] = alpha;
+                }
+                *img = DynamicImage::ImageRgba8(rgba);
+            }
+            _ => {
+                let mut rgba = img.to_rgba8();
+                for p in rgba.pixels_mut() {
+                    p[3] = alpha;
+                }
+                *img = DynamicImage::ImageRgba8(rgba);
+            }
         }
-        *img = DynamicImage::ImageRgba8(rgba);
         Ok(())
     }
 
     /// Get unique colors and their counts.
+    /// Returns (count, color) pairs. Color is Vec<u8> matching the image mode.
     pub fn getcolors(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
         let img = self.materialize()?;
-        let rgb = img.to_rgb8();
+        let n_bands = match img.color() {
+            image::ColorType::L8 | image::ColorType::L16 => 1,
+            image::ColorType::La8 | image::ColorType::La16 => 2,
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+            _ => 4,
+        };
+        let rgba = img.to_rgba8();
         let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
-        for p in rgb.pixels() {
-            let key = vec![p[0], p[1], p[2]];
+        for p in rgba.pixels() {
+            let key: Vec<u8> = p.0[..n_bands].to_vec();
             *counts.entry(key).or_insert(0) += 1;
         }
         if counts.len() > maxcolors as usize {
@@ -444,37 +487,49 @@ impl Image {
         Ok(Some(result))
     }
 
-    /// Get entropy of the image.
+    /// Get entropy of the image. Uses per-band histogram matching PIL.
     pub fn entropy(&self) -> Result<f64, PilError> {
         let img = self.materialize()?;
-        let gray = img.to_luma8();
-        let mut hist = [0u32; 256];
-        for &p in gray.iter() {
-            hist[p as usize] += 1;
+        let rgba = img.to_rgba8();
+        let n_bands = match img.color() {
+            image::ColorType::L8 | image::ColorType::L16 => 1,
+            image::ColorType::La8 | image::ColorType::La16 => 2,
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+            _ => 4,
+        };
+        let mut hists = vec![[0u32; 256]; n_bands];
+        for px in rgba.pixels() {
+            for b in 0..n_bands {
+                hists[b][px[b] as usize] += 1;
+            }
         }
-        let total = gray.len() as f64;
+        let total = (rgba.width() * rgba.height() * n_bands as u32) as f64;
         let mut entropy = 0.0f64;
-        for &h in &hist {
-            if h > 0 {
-                let p = h as f64 / total;
-                entropy -= p * p.log2();
+        for band_hist in &hists {
+            for &h in band_hist {
+                if h > 0 {
+                    let p = h as f64 / total;
+                    entropy -= p * p.log2();
+                }
             }
         }
         Ok(entropy)
     }
 
     /// Get horizontal and vertical projections.
+    /// PIL returns 1 if the column/row contains any non-zero pixel, 0 otherwise.
     pub fn getprojection(&self) -> Result<(Vec<u32>, Vec<u32>), PilError> {
         let img = self.materialize()?;
-        let gray = img.to_luma8();
-        let (w, h) = (gray.width() as usize, gray.height() as usize);
+        let (w, h) = (img.width() as usize, img.height() as usize);
         let mut h_proj = vec![0u32; w];
         let mut v_proj = vec![0u32; h];
+        let luma = img.to_luma8();
         for y in 0..h {
             for x in 0..w {
-                let v = gray.get_pixel(x as u32, y as u32)[0] as u32;
-                h_proj[x] += v;
-                v_proj[y] += v;
+                if luma.get_pixel(x as u32, y as u32)[0] != 0 {
+                    h_proj[x] = 1;
+                    v_proj[y] = 1;
+                }
             }
         }
         Ok((h_proj, v_proj))
@@ -1379,7 +1434,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     ]));
                 }
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::CompositeModule { other, mask } => {
             let other_img = other.materialize()?;
@@ -1402,30 +1457,31 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     ]));
                 }
             }
-            Ok(DynamicImage::ImageRgb8(out))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Eval { lut } => {
-            let is_luma =
-                matches!(img.color(), image::ColorType::L8 | image::ColorType::La8);
-            if is_luma {
-                let gray = img.to_luma8();
-                let (w, h) = gray.dimensions();
-                let mut out = image::GrayImage::new(w, h);
-                for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
-                    op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
-                }
-                Ok(DynamicImage::ImageLuma8(out))
+            let n_bands = match img.color() {
+                image::ColorType::L8 | image::ColorType::L16 => 1,
+                image::ColorType::La8 | image::ColorType::La16 => 2,
+                image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+                _ => 4,
+            };
+            let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands as usize {
+                (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect()
             } else {
-                let rgb = img.to_rgb8();
-                let (w, h) = rgb.dimensions();
-                let mut out = image::RgbImage::new(w, h);
-                for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-                    op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
-                    op[1] = *lut.get(ip[1] as usize).unwrap_or(&ip[1]);
-                    op[2] = *lut.get(ip[2] as usize).unwrap_or(&ip[2]);
+                vec![&lut[..]; n_bands as usize]
+            };
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            let mut out = image::RgbaImage::new(w, h);
+            for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+                for b in 0..4 {
+                    let idx = ip[b] as usize;
+                    let band = (b as usize).min(band_luts.len() - 1);
+                    op[b] = *band_luts[band].get(idx).unwrap_or(&ip[b]);
                 }
-                Ok(DynamicImage::ImageRgb8(out))
             }
+            Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
         }
         PipelineOp::EffectNoise { sigma } => {
             let (w, h) = (img.width(), img.height());
@@ -1443,27 +1499,30 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
 
         // ── Point operations (lookup table) ──
         PipelineOp::PointOp { lut } => {
-            let is_luma =
-                matches!(img.color(), image::ColorType::L8 | image::ColorType::La8);
-            if is_luma {
-                let gray = img.to_luma8();
-                let (w, h) = gray.dimensions();
-                let mut out = image::GrayImage::new(w, h);
-                for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
-                    op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
-                }
-                Ok(DynamicImage::ImageLuma8(out))
+            let n_bands = match img.color() {
+                image::ColorType::L8 | image::ColorType::L16 => 1,
+                image::ColorType::La8 | image::ColorType::La16 => 2,
+                image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+                _ => 4,
+            };
+            // Per-band LUTs: if lut has 256*n_bands entries, split into per-band segments
+            let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands as usize {
+                (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect()
             } else {
-                let rgb = img.to_rgb8();
-                let (w, h) = rgb.dimensions();
-                let mut out = image::RgbImage::new(w, h);
-                for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-                    op[0] = *lut.get(ip[0] as usize).unwrap_or(&ip[0]);
-                    op[1] = *lut.get(ip[1] as usize).unwrap_or(&ip[1]);
-                    op[2] = *lut.get(ip[2] as usize).unwrap_or(&ip[2]);
+                // Single LUT: apply same to all bands
+                vec![&lut[..]; n_bands as usize]
+            };
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            let mut out = image::RgbaImage::new(w, h);
+            for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+                for b in 0..4 {
+                    let idx = ip[b] as usize;
+                    let band = (b as usize).min(band_luts.len() - 1);
+                    op[b] = *band_luts[band].get(idx).unwrap_or(&ip[b]);
                 }
-                Ok(DynamicImage::ImageRgb8(out))
             }
+            Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
         }
         PipelineOp::Transform { w, h, method, data, filter: _f, fill } => {
             match method {

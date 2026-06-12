@@ -235,11 +235,39 @@ class Image:
 
     def getcolors(self, maxcolors=256):
         """Return list of (count, color) tuples or None if too many colors."""
-        return self._rust_image.getcolors(maxcolors)
+        result = self._rust_image.getcolors(maxcolors)
+        if result is None:
+            return None
+        # Convert raw bytes to proper tuples (matching PIL format)
+        n_bands = len(self.getbands())
+        out = []
+        for count, raw_color in result:
+            if n_bands == 1:
+                color = raw_color[0]
+            else:
+                color = tuple(raw_color)
+            out.append((count, color))
+        return out
 
     def getdata(self, band=None):
-        """Return pixel data as sequence."""
-        return self._rust_image.getdata(band if band is not None else -1)
+        """Return pixel data as sequence of tuples (matching PIL)."""
+        raw = self._rust_image.getdata(band if band is not None else -1)
+        n_bands = len(self.getbands())
+        if n_bands == 1:
+            return raw
+        # Group flat bytes into tuples
+        return [tuple(raw[i:i+n_bands]) for i in range(0, len(raw), n_bands)]
+
+    def putdata(self, data, scale=1.0, offset=0.0):
+        """Replace pixel data from a sequence."""
+        # Flatten sequence into bytes
+        flat = []
+        for item in data:
+            if isinstance(item, (tuple, list)):
+                flat.extend(int(v) for v in item)
+            else:
+                flat.append(int(item))
+        self._rust_image.putdata(flat)
 
     def getprojection(self):
         """Return horizontal and vertical projections."""
@@ -344,8 +372,13 @@ class Image:
 
     @staticmethod
     def eval(image, *args):
-        """Apply function to each pixel. Not yet implemented."""
-        raise NotImplementedError("Image.eval not yet implemented")
+        """Apply function to each pixel via LUT."""
+        if args:
+            func = args[0]
+            table = [func(i) & 0xFF for i in range(256)]
+            lut = bytes(table)
+            return Image(image._rust_image.point(list(lut)))
+        raise ValueError("eval requires a function argument")
 
     def draft(self, mode, size):
         """Configure decoder for draft mode."""
