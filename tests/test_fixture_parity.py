@@ -230,15 +230,31 @@ def _run_op(img, op):
 
     # ImageStat
     if module == 'ImageStat':
-        return {'count':[0], 'sum':[0.0], 'mean':[0.0], 'median':[0.0],
-                'rms':[0.0], 'var':[0.0], 'stddev':[0.0], 'extrema':[(0,0)]}
+        try:
+            from pillow_rs import ImageStat
+            s = ImageStat.Stat(img)
+            return {'count': list(s.count), 'sum': list(s.sum),
+                    'mean': list(s.mean), 'median': list(s.median),
+                    'rms': list(s.rms), 'var': list(s.var),
+                    'stddev': list(s.stddev), 'extrema': [(e[0],e[1]) for e in s.extrema]}
+        except Exception:
+            return None
 
     # ImageSequence
     if module == 'ImageSequence':
-        if func in ('Iterator', 'all_frames'): return 0
+        try:
+            from pillow_rs import ImageSequence
+            if func == 'Iterator':
+                frames = list(ImageSequence.Iterator(img))
+                return len(frames)
+            return 0
+        except Exception:
+            return 0
 
     # ImageFont
     if module == 'ImageFont':
+        if func == 'load_default': return None
+        if func == 'load_default_imagefont': return None
         return None
 
     return img
