@@ -80,6 +80,39 @@ class Image:
             img._explicit_mode = mode
         return img
 
+    @classmethod
+    def blend(
+        cls, im1: "Image", im2: "Image", alpha: float
+    ) -> "Image":
+        """Blend two images using constant alpha."""
+        rust_image = RustImage.blend(im1._rust_image, im2._rust_image, alpha)
+        return cls(rust_image)
+
+    @classmethod
+    def composite(
+        cls, image1: "Image", image2: "Image", mask: "Image"
+    ) -> "Image":
+        """Composite image2 onto image1 using mask."""
+        rust_image = RustImage.composite(
+            image1._rust_image, image2._rust_image, mask._rust_image
+        )
+        return cls(rust_image)
+
+    @classmethod
+    def merge(cls, mode: str, bands: Tuple["Image", ...]) -> "Image":
+        """Merge a set of single-band images into a new multi-band image."""
+        rust_bands = [b._rust_image for b in bands]
+        rust_image = RustImage.merge(mode, rust_bands)
+        return cls(rust_image)
+
+    @classmethod
+    def effect_noise(cls, size: Tuple[int, int], sigma: float) -> "Image":
+        """Generate Gaussian noise image."""
+        # Create blank L-mode image, then apply noise
+        blank = RustImage.new("L", size, 0)
+        rust_image = blank.effect_noise(sigma)
+        return cls(rust_image)
+
     def save(
         self, fp: Union[str, Path], format: Optional[str] = None, **options
     ) -> None:

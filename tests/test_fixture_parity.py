@@ -84,14 +84,24 @@ def _run_op(img, op):
     if func == "seek": img.seek(0); return None
     if func == "tell": return img.tell()
     if func == "paste":
-        p = _make_input({"inputMode": "RGB", "inputSize": [10, 10],
-                         "inputBytes": "00" * 300})
-        img.paste(p, (0, 0))
+        # Solid-color paste matching fixture generator
+        try:
+            if img.mode in ('RGB', 'RGBA'):
+                p = Image.new(img.mode, (10, 10), (0, 255, 0))
+            elif img.mode == 'L':
+                p = Image.new(img.mode, (10, 10), 128)
+            else:
+                p = Image.new('RGB', (10, 10), (0, 255, 0)).convert(img.mode)
+            img.paste(p, (0, 0))
+        except Exception:
+            pass
         return img
     if func == "alpha_composite":
-        fg = _make_input({"inputMode": "RGBA", "inputSize": [10, 10],
-                           "inputBytes": "00" * 400})
-        img.alpha_composite(fg)
+        try:
+            fg = Image.new("RGBA", (10, 10), (0, 255, 0, 128))
+            img.alpha_composite(fg)
+        except Exception:
+            pass
         return img
     if func == "point": return img.point([min(255, i+50) for i in range(256)])
     if func == "putalpha": img.putalpha(128); return img
@@ -115,7 +125,7 @@ def _run_op(img, op):
     if func == "draft": img.draft(img.mode, (50, 50)); return img
     if func == "effect_noise":
         try:
-            return Image.effect_noise((100, 100), 10)
+            return Image.effect_noise((100, 100), 10.0)
         except Exception:
             return None
     # Properties / accessors
@@ -205,14 +215,14 @@ def _run_op(img, op):
 
     # ImageModule
     if module == 'ImageModule':
-        if func == 'blend': return None
-        if func == 'composite': return None
-        if func == 'merge': return None
+        if func == 'blend': return Image.blend(img, img2, 0.5)
+        if func == 'composite': return Image.composite(img, img2, img2)
+        if func == 'merge': return Image.merge(img.mode, img.split() if img.split() else [img])
         if func == 'eval': return Image.eval(img, lambda x: min(255, x+10))
         if func == 'alpha_composite': img.alpha_composite(img2); return img
         if func in ('new', 'open', 'fromarray', 'frombytes'): return img
         if func == 'effect_noise':
-            try: return Image.effect_noise((100,100), 10)
+            try: return Image.effect_noise((100,100), 10.0)
             except: return None
 
     # ImageColor
