@@ -382,7 +382,7 @@ def test_quantize_rgba(PIL, mode):
 def test_point_rgba(PIL, mode):
     pil_img = PIL.Image.new(mode, (20, 20), (128, 64, 32, 255))
     rs_img = Image.new(mode, (20, 20), (128, 64, 32, 255))
-    lut = bytes([min(255, i + 50) for i in range(256)])
+    lut = bytes([min(255, i + 50) for i in range(256)] * 4)
     assert_images_equal(rs_img.point(lut), pil_img.point(lut))
 
 
@@ -453,7 +453,7 @@ def test_getcolors_rgb(PIL, mode):
 def test_point_rgb(PIL, mode):
     pil_img = PIL.Image.new(mode, (20, 20), (100, 150, 200))
     rs_img = Image.new(mode, (20, 20), (100, 150, 200))
-    lut = bytes([min(255, i + 50) for i in range(256)])
+    lut = bytes([min(255, i + 50) for i in range(256)] * 3)
     assert_images_equal(rs_img.point(lut), pil_img.point(lut))
 
 

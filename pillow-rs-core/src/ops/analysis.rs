@@ -53,7 +53,6 @@ impl Image {
     /// PIL: `getextrema() -> tuple[float, float] | tuple[tuple[int,int],...]`
     pub fn getextrema(&self) -> Result<Vec<(u8, u8)>, PilError> {
         let img = self.materialize()?;
-        let rgba = img.to_rgba8();
 
         let bands = match img.color() {
             image::ColorType::L8 | image::ColorType::L16 => 1,
@@ -63,10 +62,32 @@ impl Image {
         };
 
         let mut extrema = vec![(255u8, 0u8); bands];
-        for px in rgba.pixels() {
-            for b in 0..bands {
-                extrema[b].0 = extrema[b].0.min(px[b]);
-                extrema[b].1 = extrema[b].1.max(px[b]);
+        // Use the appropriate pixel reader based on color type
+        match img.color() {
+            image::ColorType::L8 => {
+                let luma = img.to_luma8();
+                for px in luma.pixels() {
+                    extrema[0].0 = extrema[0].0.min(px[0]);
+                    extrema[0].1 = extrema[0].1.max(px[0]);
+                }
+            }
+            image::ColorType::La8 => {
+                let la = img.to_luma_alpha8();
+                for px in la.pixels() {
+                    extrema[0].0 = extrema[0].0.min(px[0]);
+                    extrema[0].1 = extrema[0].1.max(px[0]);
+                    extrema[1].0 = extrema[1].0.min(px[1]);
+                    extrema[1].1 = extrema[1].1.max(px[1]);
+                }
+            }
+            _ => {
+                let rgba = img.to_rgba8();
+                for px in rgba.pixels() {
+                    for b in 0..bands.min(4) {
+                        extrema[b].0 = extrema[b].0.min(px[b]);
+                        extrema[b].1 = extrema[b].1.max(px[b]);
+                    }
+                }
             }
         }
         Ok(extrema)

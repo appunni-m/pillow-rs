@@ -22,15 +22,16 @@ impl PyImage {
     #[pyo3(signature = (mode, size, color=None))]
     fn new(_cls: &Bound<'_, PyType>, mode: &str, size: (u32, u32), color: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         // Thin binding: extract Python types, delegate logic to core
-        let (hex, single, rgb, rgba) = if let Some(val) = color {
+        let (hex, single, rgb, rgba, la) = if let Some(val) = color {
             (
                 val.extract::<String>().ok(),
                 val.extract::<u8>().ok(),
                 val.extract::<(u8, u8, u8)>().ok(),
                 val.extract::<(u8, u8, u8, u8)>().ok(),
+                val.extract::<(u8, u8)>().ok(),
             )
-        } else { (None, None, None, None) };
-        let c = pillow_rs_core::color::resolve_new_color(mode, hex.as_deref(), single, rgb, rgba)
+        } else { (None, None, None, None, None) };
+        let c = pillow_rs_core::color::resolve_new_color(mode, hex.as_deref(), single, rgb, rgba, la)
             .map_err(map_error)?;
         let img = RsImage::new(size.0, size.1, mode, c).map_err(map_error)?;
         Ok(PyImage { inner: img })

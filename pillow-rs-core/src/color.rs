@@ -72,6 +72,7 @@ pub fn resolve_new_color(
     single_value: Option<u8>,
     rgb: Option<(u8, u8, u8)>,
     rgba: Option<(u8, u8, u8, u8)>,
+    la: Option<(u8, u8)>,
 ) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
     if let Some(s) = hex_str {
         return parse_color_str(s);
@@ -80,6 +81,9 @@ pub fn resolve_new_color(
     if let Some(v) = single_value {
         if is_luma { return Ok((v, v, v, 255)); }
         else { return Ok((v, 0, 0, 255)); } // PIL: single int to RGB = (R,0,0)
+    }
+    if let Some((l, a)) = la {
+        return Ok((l, l, l, a));
     }
     if let Some((r, g, b)) = rgb { return Ok((r, g, b, 255)); }
     if let Some(rgba) = rgba { return Ok(rgba); }
