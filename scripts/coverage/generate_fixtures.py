@@ -154,7 +154,8 @@ def run_pil(op_name, mode):
         else:
             return None
     except Exception as e:
-        return ('error', f"{type(e).__name__}: {str(e)[:100]}", {}, b"", [100, 100], b"")
+        return ('error', f"{type(e).__name__}: {str(e)[:100]}", {},
+                input_bytes, input_size, input_bytes_rgb)
 
 
 def _run_image_op(img, func, mode):
