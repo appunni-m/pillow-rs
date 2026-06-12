@@ -51,7 +51,7 @@ impl Draw {
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -102,7 +102,7 @@ impl Draw {
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -150,7 +150,7 @@ impl Draw {
             draw_ellipse_outline(&mut canvas, cx as i32, cy as i32, rx as i32, ry as i32, oc, img_w, img_h);
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -202,7 +202,7 @@ impl Draw {
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -214,7 +214,7 @@ impl Draw {
         for &(x, y) in points {
             plot(&mut canvas, x, y, fill, img_w, img_h);
         }
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -233,7 +233,7 @@ impl Draw {
                             ),
                             _ => img_loaded,
                         };
-                        return Image::Loaded(converted);
+                        return Image::Loaded(converted, None);
                     }
                 }
             }
@@ -257,7 +257,7 @@ impl Draw {
             let y = (cy + ry * angle.sin()).round() as i32;
             plot(&mut canvas, x, y, fill, img_w, img_h);
         }
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -318,7 +318,7 @@ impl Draw {
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 
@@ -365,7 +365,7 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas));
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
 

@@ -125,8 +125,7 @@ def test_rotate_nonstandard_modes(PIL, mode):
 
 @pytest.mark.parametrize("mode", [
     pytest.param("1", marks=pytest.mark.covers("Image.filter", mode="1", target="cpu", variant="error_parity")),
-    pytest.param("P", marks=[pytest.mark.covers("Image.filter", mode="P", target="cpu", variant="error_parity"),
-                              pytest.mark.xfail(reason="P-mode conversion not yet implemented")]),
+    pytest.param("P", marks=pytest.mark.covers("Image.filter", mode="P", target="cpu", variant="error_parity")),
     pytest.param("CMYK", marks=pytest.mark.covers("Image.filter", mode="CMYK", target="cpu", variant="error_parity")),
 ])
 def test_filter_nonstandard_modes(PIL, mode):

@@ -27,7 +27,7 @@ fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<
         .map(|buf| {
             Image::Loaded(image::DynamicImage::ImageLuma8(
                 GrayImage::from_raw(w, h, buf).expect("split: buffer size mismatch"),
-            ))
+            ), None)
         })
         .collect()
 }
@@ -43,7 +43,7 @@ impl Image {
             image::DynamicImage::ImageLuma8(gray) => {
                 vec![Image::Loaded(image::DynamicImage::ImageLuma8(
                     gray.clone(),
-                ))]
+                ), None)]
             }
             image::DynamicImage::ImageLumaA8(ga) => {
                 split_channels(ga.as_raw(), 2, n, w, h)

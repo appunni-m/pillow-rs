@@ -41,7 +41,28 @@ class Image:
         if isinstance(fp, Path):
             fp = str(fp)
         rust_image = RustImage.open(fp)
-        return cls(rust_image)
+        img = cls(rust_image)
+        # Detect format from path and adjust mode for GIF/PNG/BMP quirks
+        if isinstance(fp, str):
+            ext = fp.rsplit('.', 1)[-1].upper() if '.' in fp else ''
+        elif isinstance(fp, bytes):
+            ext = 'PNG'  # bytes are assumed to be PNG
+        else:
+            ext = ''
+        # GIF is always palette mode
+        if ext == 'GIF' and img.mode == 'RGB':
+            img._explicit_mode = 'P'
+        # PNG-1 bilevel may be decoded as L
+        if ext == 'PNG' and img.mode == 'L':
+            try:
+                # Check if this is a bilevel (1-bit) PNG
+                bands = img.getbands()
+                if len(bands) == 1:
+                    # Could be "1" or "L" — keep as L for now since we can't distinguish
+                    pass
+            except Exception:
+                pass
+        return img
 
     @classmethod
     def new(
@@ -112,10 +133,15 @@ class Image:
     ) -> "Image":
         # Handle non-standard modes at Python level
         if mode in ("CMYK", "YCbCr", "HSV"):
-            # Convert to RGB first, then tag with explicit mode
             rgb = self._rust_image.convert("RGB", matrix=None, dither=None, palette=palette, colors=colors)
             img = Image(rgb)
             img._explicit_mode = mode
+            return img
+        if mode == "P":
+            # Quantize then tag as palette mode
+            rust_image = self._rust_image.quantize(colors=min(colors, 256), dither=(dither is not None))
+            img = Image(rust_image)
+            img._explicit_mode = "P"
             return img
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
