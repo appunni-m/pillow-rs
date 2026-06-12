@@ -77,10 +77,10 @@ def pytest_collection_modifyitems(config, items):
             warnings.append(f"UNKNOWN op '{op_name}' in @covers: {item.nodeid}")
             continue
         mode = marker.kwargs.get("mode", "")
-        if mode and op_modes[op_name] and mode not in op_modes[op_name]:
+        if mode and op_modes[op_name] and str(mode) not in {str(m) for m in op_modes[op_name]}:
             warnings.append(
                 f"INVALID mode '{mode}' for {op_name} "
-                f"(valid: {sorted(op_modes[op_name])}): {item.nodeid}"
+                f"(valid: {sorted(str(m) for m in op_modes[op_name])}): {item.nodeid}"
             )
         target = marker.kwargs.get("target", "cpu")
         if target not in valid_targets:
