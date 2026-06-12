@@ -843,12 +843,14 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         PipelineOp::Rotate { angle, expand, fill } => {
             let deg = (angle.round() as i32).rem_euclid(360);
             // Fast path: exact 90-degree multiples
+            // PIL rotates counterclockwise; image crate rotates clockwise.
+            // PIL 90° CCW = image crate 270° CW, PIL 270° CCW = image crate 90° CW.
             let result = if (deg - 90).abs() < 2 || (deg - 90).abs() >= 358 {
-                img.rotate90()
+                img.rotate270()  // 270° CW = 90° CCW (PIL)
             } else if (deg - 180).abs() < 2 {
                 img.rotate180()
             } else if (deg - 270).abs() < 2 || (deg - 270).abs() >= 358 {
-                img.rotate270()
+                img.rotate90()   // 90° CW = 270° CCW (PIL)
             } else {
                 // Bilinear interpolation for arbitrary angles
                 let rgba = img.to_rgba8();
