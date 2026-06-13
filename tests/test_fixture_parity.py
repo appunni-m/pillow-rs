@@ -163,6 +163,10 @@ def _run_op(img, op):
             return ImageChops.composite(img, img2, img2)
         if func in ('invert', 'duplicate'):
             return getattr(ImageChops, func)(img)
+        # Logical ops require mode '1'
+        if func in ('logical_and', 'logical_or', 'logical_xor'):
+            img1 = img.convert('1') if hasattr(img, 'convert') else img
+            return getattr(ImageChops, func)(img1, img1)
         if func == 'constant':
             return ImageChops.constant(img, 128)
         if func == 'offset':

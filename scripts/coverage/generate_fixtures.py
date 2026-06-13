@@ -352,10 +352,16 @@ def _run_imageops(img, func, mode):
 
 def _run_chops(img, func, mode):
     """Dispatch ImageChops functions."""
+    # Logical ops require mode "1" in PIL
+    logical_ops = {"logical_and", "logical_or", "logical_xor"}
+    if func in logical_ops:
+        img = img.convert("1")
+        img2 = img.convert("1")  # same image for both
+        return getattr(PILImageChops, func)(img, img2), {"func": func}
     img2 = _make_image(mode, img.size)
     dual = ("add", "subtract", "multiply", "screen", "darker", "lighter", "difference",
             "add_modulo", "subtract_modulo",
-            "hard_light", "soft_light", "overlay", "logical_and", "logical_or", "logical_xor")
+            "hard_light", "soft_light", "overlay")
     if func in dual:
         return getattr(PILImageChops, func)(img, img2), {"func": func}
     if func in ("blend",):
