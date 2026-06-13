@@ -1069,26 +1069,28 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Equalize => {
-            let luma = img.to_luma8();
-            let mut hist = [0u32; 256];
-            for &p in luma.iter() {
-                hist[p as usize] += 1;
-            }
-            let mut cdf = [0u32; 256];
-            let mut acc = 0u32;
-            for i in 0..256 {
-                acc += hist[i];
-                cdf[i] = acc;
-            }
-            let n = luma.len() as f64;
-            let mut rgb = img.to_rgb8();
-            for (px, lp) in rgb.pixels_mut().zip(luma.pixels()) {
-                let mapped = (cdf[lp[0] as usize] as f64 * 255.0 / n).clamp(0.0, 255.0) as u8;
-                for c in 0..3 {
-                    px[c] = ((px[c] as f64 * mapped as f64 / 255.0).clamp(0.0, 255.0)) as u8;
+            // PIL: per-channel histogram equalization
+            // For each channel: histogram → CDF → lut[v] = cdf[v]*255/total
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let n = (w * h) as f64;
+            let mut out = image::RgbImage::new(w, h);
+            for ch in 0..3 {
+                let mut hist = [0u32; 256];
+                for px in rgb.pixels() { hist[px[ch] as usize] += 1; }
+                let mut cdf = [0u32; 256];
+                let mut acc = 0u32;
+                for i in 0..256 { acc += hist[i]; cdf[i] = acc; }
+                let cdf_min = hist.iter().position(|&c| c > 0).map(|p| cdf[p] - hist[p]).unwrap_or(0) as f64;
+                let denom = (n - cdf_min).max(1.0);
+                let lut: Vec<u8> = (0..256)
+                    .map(|v| ((cdf[v] as f64 - cdf_min) * 255.0 / denom).round().clamp(0.0, 255.0) as u8)
+                    .collect();
+                for (opx, ipx) in out.pixels_mut().zip(rgb.pixels()) {
+                    opx[ch] = lut[ipx[ch] as usize];
                 }
             }
-            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Invert => {
             let mut rgb = img.to_rgb8();
