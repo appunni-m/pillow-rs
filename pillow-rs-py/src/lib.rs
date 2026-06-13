@@ -203,6 +203,37 @@ impl PyImage {
         self.inner.stat().map_err(map_error)
     }
 
+    fn stat_formatted(&self) -> PyResult<PyObject> {
+        use pillow_rs_core::image::StatValue;
+        let result = self.inner.stat_formatted().map_err(map_error)?;
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            macro_rules! set {
+                ($key:expr, $field:ident) => {
+                    let v = match &result.$field {
+                        StatValue::Int(v) => v.to_object(py),
+                        StatValue::Float(v) => v.to_object(py),
+                        StatValue::IntList(v) => v.to_object(py),
+                        StatValue::FloatList(v) => v.to_object(py),
+                        StatValue::ExtremaSingle(v) => v.to_object(py),
+                        StatValue::ExtremaList(v) => v.to_object(py),
+                    };
+                    dict.set_item($key, v)?;
+                };
+            }
+            set!("count", count);
+            set!("sum", sum);
+            set!("sum2", sum2);
+            set!("mean", mean);
+            set!("median", median);
+            set!("rms", rms);
+            set!("var", var);
+            set!("stddev", stddev);
+            set!("extrema", extrema);
+            Ok(dict.to_object(py))
+        })
+    }
+
     fn histogram(&self) -> PyResult<Vec<u32>> {
         self.inner.histogram().map_err(map_error)
     }

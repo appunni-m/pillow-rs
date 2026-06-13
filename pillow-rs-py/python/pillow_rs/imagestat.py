@@ -7,26 +7,16 @@ class Stat:
 
     def __init__(self, image_or_list, mask=None):
         if isinstance(image_or_list, Image):
-            bands = image_or_list._rust_image.stat()
-            n = len(bands)
-            self.count = [int(b[0]) for b in bands]
-            self.sum = [b[1] for b in bands]
-            self.sum2 = [b[2] for b in bands]
-            self.mean = [b[3] for b in bands]
-            self.median = [b[4] for b in bands]
-            self.rms = [b[5] for b in bands]
-            self.var = [b[6] for b in bands]
-            self.stddev = [b[7] for b in bands]
-            self.extrema = [(b[8], b[9]) for b in bands]
-            if n == 1:
-                self.count = self.count[0]
-                self.sum = self.sum[0]
-                self.mean = self.mean[0]
-                self.median = self.median[0]
-                self.rms = self.rms[0]
-                self.var = self.var[0]
-                self.stddev = self.stddev[0]
-                self.extrema = self.extrema[0]
+            result = image_or_list._rust_image.stat_formatted()
+            self.count = result['count']
+            self.sum = result['sum']
+            self.sum2 = result['sum2']
+            self.mean = result['mean']
+            self.median = result['median']
+            self.rms = result['rms']
+            self.var = result['var']
+            self.stddev = result['stddev']
+            self.extrema = result['extrema']
         else:
             # List-based stat (fallback)
             data = list(image_or_list)

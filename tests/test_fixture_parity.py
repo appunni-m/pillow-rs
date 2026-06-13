@@ -271,10 +271,12 @@ def _run_op(img, op):
         try:
             from pillow_rs import ImageStat
             s = ImageStat.Stat(img)
-            return {'count': list(s.count), 'sum': list(s.sum),
-                    'mean': list(s.mean), 'median': list(s.median),
-                    'rms': list(s.rms), 'var': list(s.var),
-                    'stddev': list(s.stddev), 'extrema': [(e[0],e[1]) for e in s.extrema]}
+            to_list = lambda v: v if isinstance(v, list) else [v]
+            return {'count': to_list(s.count), 'sum': to_list(s.sum),
+                    'mean': to_list(s.mean), 'median': to_list(s.median),
+                    'rms': to_list(s.rms), 'var': to_list(s.var),
+                    'stddev': to_list(s.stddev),
+                    'extrema': [(e[0],e[1]) for e in (s.extrema if isinstance(s.extrema, list) else [s.extrema])]}
         except Exception:
             return None
 

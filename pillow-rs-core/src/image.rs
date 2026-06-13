@@ -35,6 +35,60 @@ pub enum Image {
     },
 }
 
+/// PIL-compatible statistics result. Scalars for single-band, Vecs for multi-band.
+#[derive(Debug, Clone)]
+pub struct StatResult {
+    pub count: StatValue,
+    pub sum: StatValue,
+    pub sum2: StatValue,
+    pub mean: StatValue,
+    pub median: StatValue,
+    pub rms: StatValue,
+    pub var: StatValue,
+    pub stddev: StatValue,
+    pub extrema: StatValue,
+}
+
+#[derive(Debug, Clone)]
+pub enum StatValue {
+    Int(i64),
+    Float(f64),
+    IntList(Vec<i64>),
+    FloatList(Vec<f64>),
+    ExtremaSingle((i64, i64)),
+    ExtremaList(Vec<(i64, i64)>),
+}
+
+impl StatResult {
+    fn from_bands(bands: &[Vec<f64>]) -> Self {
+        let n = bands.len();
+        let single = n == 1;
+        let fi = |idx: usize| -> StatValue {
+            if single { StatValue::Int(bands[0][idx] as i64) }
+            else { StatValue::IntList(bands.iter().map(|b| b[idx] as i64).collect()) }
+        };
+        let ff = |idx: usize| -> StatValue {
+            if single { StatValue::Float(bands[0][idx]) }
+            else { StatValue::FloatList(bands.iter().map(|b| b[idx]).collect()) }
+        };
+        let extrema = |min_idx, max_idx| -> StatValue {
+            if single { StatValue::ExtremaSingle((bands[0][min_idx] as i64, bands[0][max_idx] as i64)) }
+            else { StatValue::ExtremaList(bands.iter().map(|b| (b[min_idx] as i64, b[max_idx] as i64)).collect()) }
+        };
+        StatResult {
+            count: fi(0),
+            sum: ff(1),
+            sum2: ff(2),
+            mean: ff(3),
+            median: fi(4),
+            rms: ff(5),
+            var: ff(6),
+            stddev: ff(7),
+            extrema: extrema(8, 9),
+        }
+    }
+}
+
 impl Image {
     // ── Constructors ──
 
@@ -236,6 +290,12 @@ impl Image {
         let new_self = Image::push_op(self, PipelineOp::PutPixel { x, y, color: (r, g, b, a) });
         *self = new_self;
         Ok(())
+    }
+
+    /// PIL-compatible statistics result. Single-band: scalars. Multi-band: vectors.
+    pub fn stat_formatted(&self) -> Result<StatResult, PilError> {
+        let bands = self.stat()?;
+        Ok(StatResult::from_bands(&bands))
     }
 
     /// Compute per-band statistics: count, sum, sum2, mean, rms, var, stddev, extrema.
