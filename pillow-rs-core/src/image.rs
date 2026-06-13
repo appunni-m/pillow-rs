@@ -922,25 +922,24 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
 }
 
 /// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
-/// PIL skips border pixels (keeps originals), matching the BoxBlur behavior.
+/// PIL uses clamping for border pixels.
 fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicImage, PilError> {
     let rgb = img.to_rgb8();
     let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-    // Keep original border pixels — only process interior with full neighborhood
-    let mut out = rgb.clone();
+    let mut out = image::RgbImage::new(w as u32, h as u32);
     let half = (size / 2) as i32;
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
 
-    for y in half..h - half {
-        for x in half..w - half {
+    for y in 0..h {
+        for x in 0..w {
             let mut r_vals = Vec::with_capacity(area);
             let mut g_vals = Vec::with_capacity(area);
             let mut b_vals = Vec::with_capacity(area);
             for dy in -half..=half {
                 for dx in -half..=half {
-                    let sx = (x + dx) as u32;
-                    let sy = (y + dy) as u32;
+                    let sx = (x + dx).clamp(0, w - 1) as u32;
+                    let sy = (y + dy).clamp(0, h - 1) as u32;
                     let p = rgb.get_pixel(sx, sy);
                     r_vals.push(p[0]);
                     g_vals.push(p[1]);
@@ -1294,32 +1293,34 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         }
         PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
         PipelineOp::BoxBlur { radius } => {
-            // PIL BoxBlur: average pixels in (2*radius+1)×(2*radius+1) neighborhood
-            // Uses truncation (floor), keeps original border pixels
+            // PIL BoxBlur: ceiling division, filters ALL pixels (clamping at borders)
             let r = *radius as i32;
             if r <= 0 { return Ok(img.clone()); }
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let mut out = rgb.clone();
+            let mut out = image::RgbImage::new(w as u32, h as u32);
             let size = (2 * r + 1) as u32;
             let area = (size * size) as u32;
-            for y in r..h - r {
-                for x in r..w - r {
+            let area_minus_1 = area - 1;
+            for y in 0..h {
+                for x in 0..w {
                     let mut sum_r: u32 = 0;
                     let mut sum_g: u32 = 0;
                     let mut sum_b: u32 = 0;
                     for dy in -r..=r {
                         for dx in -r..=r {
-                            let p = rgb.get_pixel((x + dx) as u32, (y + dy) as u32);
+                            let sx = (x + dx).clamp(0, w - 1) as u32;
+                            let sy = (y + dy).clamp(0, h - 1) as u32;
+                            let p = rgb.get_pixel(sx, sy);
                             sum_r += p[0] as u32;
                             sum_g += p[1] as u32;
                             sum_b += p[2] as u32;
                         }
                     }
                     out.put_pixel(x as u32, y as u32, image::Rgb([
-                        (sum_r / area) as u8,
-                        (sum_g / area) as u8,
-                        (sum_b / area) as u8,
+                        ((sum_r + area_minus_1) / area) as u8,
+                        ((sum_g + area_minus_1) / area) as u8,
+                        ((sum_b + area_minus_1) / area) as u8,
                     ]));
                 }
             }
