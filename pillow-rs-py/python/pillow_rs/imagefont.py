@@ -24,12 +24,7 @@ class FreeTypeFont:
             self._rust_font = RustFont.truetype(font, float(size))
         elif hasattr(font, 'read'):
             data = font.read()
-            import tempfile, os
-            with tempfile.NamedTemporaryFile(suffix='.ttf', delete=False) as f:
-                f.write(data)
-                f.flush()
-                self._rust_font = RustFont.truetype(f.name, float(size))
-            os.unlink(f.name)
+            self._rust_font = RustFont.truetype_from_bytes(data, float(size))
         else:
             raise TypeError("font must be a file path or file-like object")
 
@@ -43,15 +38,10 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        w, h, alpha = self._rust_font.getmask_alpha(str(text))
+        """Return glyph mask as L-mode Image. Pixel compositing done in Rust."""
         from .image import Image as PILImage
-        img = PILImage.new("L", (w, h), 0)
-        for y in range(h):
-            for x in range(w):
-                a = alpha[y * w + x]
-                if a > 0:
-                    img.putpixel((x, y), a if ink == 0 else ink)
-        return img
+        w, h, alpha = self._rust_font.getmask_alpha(str(text))
+        return PILImage.frombytes("L", (w, h), bytes(alpha))
 
     def getmetrics(self):
         sz = self._rust_font.get_size()
