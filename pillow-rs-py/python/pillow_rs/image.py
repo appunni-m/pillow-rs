@@ -217,17 +217,8 @@ class Image:
         return self._rust_image.tobytes()
 
     def getpixel(self, xy: Tuple[int, int]):
-        """Get pixel value at (x, y). Returns tuple matching image mode."""
-        r, g, b, a = self._rust_image.getpixel(xy)
-        if self.mode == "L":
-            return r
-        elif self.mode == "LA":
-            return (r, a)
-        elif self.mode == "RGB":
-            return (r, g, b)
-        elif self.mode == "RGBA":
-            return (r, g, b, a)
-        return (r, g, b)
+        """Get pixel value at (x, y). Mode dispatch done in Rust."""
+        return self._rust_image.getpixel_formatted(xy, self.mode)
 
     def putpixel(self, xy: Tuple[int, int], value):
         """Set pixel value at (x, y). Accepts int, tuple, or list."""

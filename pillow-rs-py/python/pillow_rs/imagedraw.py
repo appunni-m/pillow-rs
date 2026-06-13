@@ -10,6 +10,7 @@ class Draw:
         self._orig_mode = image.mode
         self._draw = RustDraw(image._rust_image)
         self._image = image
+        self._font = None  # current font for text
 
     def _sync(self):
         """Sync drawing output back to the Python Image, preserving original mode."""
@@ -106,7 +107,7 @@ class Draw:
 
     def getfont(self):
         """Return the current font."""
-        return None
+        return self._font
 
     def shape(self, shape, fill=None, outline=None):
         """Draw a shape outline."""
@@ -121,6 +122,8 @@ class Draw:
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):
         if font is None:
+            font = self._font
+        if font is None:
             raise NotImplementedError("ImageDraw.text requires a font: use ImageFont.truetype()")
         if hasattr(font, '_rust_font'):
             self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font._rust_font)
@@ -129,3 +132,4 @@ class Draw:
         else:
             self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font)
         self._sync()
+        self._font = font

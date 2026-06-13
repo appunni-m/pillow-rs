@@ -467,6 +467,19 @@ impl PyImage {
         self.inner.getpixel(xy.0, xy.1).map_err(map_error)
     }
 
+    fn getpixel_formatted(&mut self, xy: (u32, u32), mode: &str) -> PyResult<PyObject> {
+        let (r, g, b, a) = self.inner.getpixel(xy.0, xy.1).map_err(map_error)?;
+        Python::with_gil(|py| {
+            Ok(match mode {
+                "L" => r.to_object(py),
+                "LA" => (r, a).to_object(py),
+                "RGB" => (r, g, b).to_object(py),
+                "RGBA" => (r, g, b, a).to_object(py),
+                _ => (r, g, b).to_object(py),
+            })
+        })
+    }
+
     fn putdata(&mut self, data: &Bound<'_, PyAny>) -> PyResult<()> {
         // Flatten sequence in Rust — handles ints and tuples
         let mut flat: Vec<u8> = Vec::new();
