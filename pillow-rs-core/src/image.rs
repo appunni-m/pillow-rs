@@ -1212,7 +1212,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::Triangle))
+            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::CatmullRom))
         }
         PipelineOp::Cover { w, h, .. } => {
             let (w, h) = (*w, *h);
@@ -1220,7 +1220,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let ratio = (w as f64 / iw as f64).max(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            let resized = img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::Triangle);
+            let resized = img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::CatmullRom);
             let x = (nw.saturating_sub(w)) / 2;
             let y = (nh.saturating_sub(h)) / 2;
             Ok(resized.crop_imm(x, y, w, h))
@@ -1231,7 +1231,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::Triangle))
+            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::CatmullRom))
         }
         PipelineOp::Pad { w, h, color, .. } => {
             let (w, h) = (*w, *h);
