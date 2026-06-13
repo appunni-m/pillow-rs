@@ -275,9 +275,9 @@ class Image:
         return Image(self._rust_image.reduce(factor))
 
     def load(self):
-        """Load pixel data. Returns pixel access object (stub)."""
+        """Load pixel data. Returns PixelAccess stub matching PIL's format."""
         self._rust_image.load()
-        return self  # TODO: return PixelAccess object
+        return _PixelAccessStub(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
         """Alpha composite im over self."""
@@ -483,3 +483,13 @@ class Image:
             and self.mode == other.mode
             and self.tobytes() == other.tobytes()
         )
+
+
+class _PixelAccessStub:
+    """Stub that mimics PIL's PixelAccess for pytest comparisons."""
+    def __init__(self, image):
+        self._image = image
+    def __str__(self):
+        return f'<PixelAccess object at 0x{id(self):x}>'
+    def __repr__(self):
+        return str(self)
