@@ -612,7 +612,9 @@ impl Image {
         if counts.len() > maxcolors as usize {
             return Ok(None);
         }
-        let result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
+        let mut result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
+        // PIL sorts by color value ascending
+        result.sort_by(|a, b| a.1.cmp(&b.1));
         Ok(Some(result))
     }
 
