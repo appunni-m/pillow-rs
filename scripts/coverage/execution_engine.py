@@ -39,7 +39,7 @@ def execute(backend, op_def, img, img2=None):
         return backend.call_enhance(img, module, target, params)
 
     elif typ == "classmethod":
-        return backend.call_classmethod(module, target, params)
+        return backend.call_classmethod(module, target, params, img)
 
     elif typ == "value":
         return backend.call_value(img, module, target, params)

@@ -420,10 +420,6 @@ class Image:
             return Image(image._rust_image.point(list(lut)))
         raise ValueError("eval requires a function argument")
 
-    def draft(self, mode, size):
-        """Configure decoder for draft mode."""
-        raise NotImplementedError("Image.draft")
-
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""
         return self._rust_image.tobitmap()
@@ -433,8 +429,8 @@ class Image:
         return Image(self._rust_image.remap_palette(list(dest_map)))
 
     def draft(self, mode, size):
-        """Configure decoder for draft mode. Returns self for compatibility."""
-        return self
+        """Configure decoder for draft mode. Returns None matching PIL."""
+        return None
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
         """General affine/perspective transform."""
