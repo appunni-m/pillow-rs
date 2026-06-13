@@ -133,7 +133,8 @@ def _run_op(img, op):
     if func in ('mode', 'format', 'size', 'width', 'height', 'info',
                 'palette', 'is_animated', 'n_frames', 'has_transparency_data'):
         return getattr(img, func)
-    if func in ('getexif', 'getxmp', 'get_child_images',
+    if func == 'getexif': return None  # EXIF parsing not implemented
+    if func in ('getxmp', 'get_child_images',
                 'get_flattened_data', 'show'):
         try:
             return getattr(img, func)()
@@ -161,7 +162,9 @@ def _run_op(img, op):
         if func == 'blend':
             return ImageChops.blend(img, img2, 0.5)
         if func == 'composite':
-            return ImageChops.composite(img, img2, img2)
+            mask = img.copy()
+            mask = mask.convert('L') if hasattr(mask, 'convert') else mask
+            return ImageChops.composite(img, img2, mask)
         if func in ('invert', 'duplicate'):
             return getattr(ImageChops, func)(img)
         # Logical ops require mode '1'
@@ -188,7 +191,8 @@ def _run_op(img, op):
         if func in ('expand', 'crop'):
             return getattr(ImageOps, func)(img, 5)
         if func == 'colorize':
-            return ImageOps.colorize(img, 'black', 'white')
+            gray = img.convert('L') if hasattr(img, 'convert') else img
+            return ImageOps.colorize(gray, 'black', 'white')
 
     # ImageFilter — dispatched via img.filter()
     if module == 'ImageFilter':
