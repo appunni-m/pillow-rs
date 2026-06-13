@@ -238,7 +238,9 @@ def _run_image_op(img, func, mode):
             pass
         return img, {"alpha": 128}
     if func in ("putdata",):
-        n = img.size[0] * img.size[1]
+        n_pixels = img.size[0] * img.size[1]
+        n_bands = len(img.getbands())
+        n = n_pixels * n_bands
         data = [128] * n
         try:
             img.putdata(data)
