@@ -84,16 +84,12 @@ class Draw:
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
                        align="left", direction=None, features=None, language=None,
                        stroke_width=0, stroke_fill=None, embedded_color=False, **kwargs):
-        lines = str(text).split('\n')
-        x, y = xy
-        for line in lines:
-            self.text((x, y), line, fill=fill, font=font, anchor=anchor, spacing=spacing,
-                      align=align, stroke_width=stroke_width, stroke_fill=stroke_fill)
-            if font:
-                _, h = font.getbbox(line)
-                y += int(h * 1.2)
-            else:
-                y += 12
+        """Draw multiple lines of text. Text layout done in Rust."""
+        if font is not None:
+            rust_font = font._rust_font if hasattr(font, '_rust_font') else font
+            self._draw.multiline_text((float(xy[0]), float(xy[1])), str(text), fill, rust_font, int(spacing))
+        else:
+            self._draw.multiline_text((float(xy[0]), float(xy[1])), str(text), fill, None, int(spacing))
         self._sync()
 
     def textbbox(self, xy, text, font=None, **kwargs):

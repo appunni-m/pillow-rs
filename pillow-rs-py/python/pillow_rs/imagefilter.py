@@ -1,4 +1,4 @@
-"""ImageFilter — convolution kernels and filter classes. Pillow-compatible."""
+"""ImageFilter — convolution kernels and filter classes. Pillow-compatible module."""
 from ._core import Image as RustImage
 from .image import Image
 
@@ -16,82 +16,80 @@ SMOOTH = "SMOOTH"
 SMOOTH_MORE = "SMOOTH_MORE"
 
 
-class _Filter:
-    """Base class for parameterized filters."""
-    def __init__(self, *args, **kwargs):
-        self._args = args
-        self._kwargs = kwargs
-
-    def _apply(self, rust_image: RustImage) -> Image:
-        raise NotImplementedError
-
-
-class GaussianBlur(_Filter):
-    """Gaussian blur with given radius."""
+class GaussianBlur:
+    def __init__(self, radius=2):
+        self.radius = float(radius)
     def _apply(self, rust_image):
-        radius = self._kwargs.get('radius', self._args[0] if self._args else 2)
-        return Image(rust_image.gaussian_blur(float(radius)))
+        return Image(rust_image.gaussian_blur(self.radius))
 
 
-class BoxBlur(_Filter):
-    """Box blur with given radius."""
+class BoxBlur:
+    def __init__(self, radius=2):
+        self.radius = float(radius)
     def _apply(self, rust_image):
-        radius = self._kwargs.get('radius', self._args[0] if self._args else 2)
-        return Image(rust_image.gaussian_blur(float(radius) * 0.5))
+        return Image(rust_image.gaussian_blur(self.radius * 0.5))
 
 
-class UnsharpMask(_Filter):
-    """Unsharp mask for sharpening."""
+class UnsharpMask:
+    def __init__(self, radius=2, percent=150, threshold=3):
+        self.radius = float(radius)
+        self.percent = int(percent)
+        self.threshold = int(threshold)
     def _apply(self, rust_image):
-        radius = self._kwargs.get('radius', self._args[0] if len(self._args) > 0 else 2)
-        percent = self._kwargs.get('percent', self._args[1] if len(self._args) > 1 else 150)
-        threshold = self._kwargs.get('threshold', self._args[2] if len(self._args) > 2 else 3)
-        return Image(rust_image.unsharp_mask(float(radius), int(percent), int(threshold)))
+        return Image(rust_image.unsharp_mask(self.radius, self.percent, self.threshold))
 
 
-class MaxFilter(_Filter):
-    """Maximum filter with given size."""
+class MaxFilter:
+    def __init__(self, size=3):
+        self.size = int(size)
     def _apply(self, rust_image):
-        size = self._kwargs.get('size', self._args[0] if self._args else 3)
-        return Image(rust_image.max_filter(int(size)))
+        return Image(rust_image.max_filter(self.size))
 
 
-class MinFilter(_Filter):
-    """Minimum filter with given size."""
+class MinFilter:
+    def __init__(self, size=3):
+        self.size = int(size)
     def _apply(self, rust_image):
-        size = self._kwargs.get('size', self._args[0] if self._args else 3)
-        return Image(rust_image.min_filter(int(size)))
+        return Image(rust_image.min_filter(self.size))
 
 
-class MedianFilter(_Filter):
-    """Median filter with given size."""
+class MedianFilter:
+    def __init__(self, size=3):
+        self.size = int(size)
     def _apply(self, rust_image):
-        size = self._kwargs.get('size', self._args[0] if self._args else 3)
-        return Image(rust_image.median_filter(int(size)))
+        return Image(rust_image.median_filter(self.size))
 
 
-class ModeFilter(_Filter):
-    """Mode filter with given size."""
+class ModeFilter:
+    def __init__(self, size=3):
+        self.size = int(size)
     def _apply(self, rust_image):
-        size = self._kwargs.get('size', self._args[0] if self._args else 3)
-        # Mode filter is implemented via Rust's mode_filter
-        return Image(rust_image.median_filter(int(size)))  # fallback
+        return Image(rust_image.median_filter(self.size))  # fallback
 
 
-class RankFilter(_Filter):
-    """Rank filter."""
+class RankFilter:
+    def __init__(self, size=3, rank=0):
+        self.size = int(size)
+        self.rank = int(rank)
     def _apply(self, rust_image):
         raise NotImplementedError("RankFilter")
 
 
-class Kernel(_Filter):
-    """Custom convolution kernel."""
+class Kernel:
+    def __init__(self, size=(3, 3), kernel=None, scale=None, offset=0):
+        self.size = size
+        self.kernel = kernel
+        self.scale = scale
+        self.offset = offset
     def _apply(self, rust_image):
         raise NotImplementedError("Kernel")
 
 
-class Color3DLUT(_Filter):
-    """3D color lookup table."""
+class Color3DLUT:
+    def __init__(self, size, table=None, channels=3, **kwargs):
+        self.size = size
+        self.table = table
+        self.channels = channels
     def _apply(self, rust_image):
         raise NotImplementedError("Color3DLUT")
 
@@ -101,7 +99,6 @@ def apply_filter(image: Image, filter_obj) -> Image:
     """Apply a filter to an image."""
     if isinstance(filter_obj, str):
         return image.filter(filter_obj)
-    if isinstance(filter_obj, _Filter):
+    if hasattr(filter_obj, '_apply'):
         return filter_obj._apply(image._rust_image)
-    # Assume it's a built-in name
     return image.filter(str(filter_obj))

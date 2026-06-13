@@ -783,6 +783,28 @@ impl PyDraw {
         }
     }
 
+    fn multiline_text(&mut self, xy: (f64, f64), text: &str,
+                      fill: Option<&Bound<'_, PyAny>>,
+                      font: Option<&Bound<'_, PyFont>>,
+                      spacing: Option<i32>) -> PyResult<()> {
+        let color = parse_draw_color(fill)?;
+        let sp = spacing.unwrap_or(4) as f64;
+        let mut y = xy.1;
+        for line in text.split('\n') {
+            if line.is_empty() { y += sp + 10.0; continue; }
+            if let Some(ref pyfont) = font {
+                let borrowed = pyfont.borrow();
+                self.draw.text(xy.0 as i32, y as i32, line, &borrowed.inner, color)
+                    .map_err(map_error)?;
+                let (_, h) = borrowed.getbbox(line)?;
+                y += h as f64 + sp;
+            } else {
+                return Err(pyo3::exceptions::PyNotImplementedError::new_err("text() requires a font"));
+            }
+        }
+        Ok(())
+    }
+
     #[getter]
     fn image(&self) -> PyImage {
         // Return a copy of the current image state

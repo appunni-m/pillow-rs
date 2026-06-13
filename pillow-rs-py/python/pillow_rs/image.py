@@ -227,18 +227,8 @@ class Image:
         size: Tuple[int, int],
         resample: Union[int, str] = Resampling.BICUBIC,
     ) -> None:
-        if isinstance(resample, int):
-            resample = Resampling.from_int(resample)
-        current_width, current_height = self.size
-        max_width, max_height = size
-        width_ratio = max_width / current_width
-        height_ratio = max_height / current_height
-        scale = min(width_ratio, height_ratio)
-        new_width = int(current_width * scale)
-        new_height = int(current_height * scale)
-        self._rust_image = self._rust_image.resize(
-            (new_width, new_height), resample
-        )
+        """Scale image to fit within size. Aspect ratio handled in Rust."""
+        self._rust_image.thumbnail(size, None)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
         return self._rust_image.tobytes()
