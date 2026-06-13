@@ -153,7 +153,7 @@ class PilBackend:
         enh = getattr(PIL.ImageEnhance, target)(img)
         return enh.enhance(float(params.get("factor", 1.5)))
 
-    def call_classmethod(self, module, target, params):
+    def call_classmethod(self, module, target, params, img=None):
         if target == "new":
             return PIL.Image.new(params.get("mode", "RGB"),
                                  tuple(params.get("size", [100, 100])),

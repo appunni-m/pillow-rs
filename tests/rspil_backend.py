@@ -165,7 +165,7 @@ class RspilBackend:
     def call_enhance(self, img, module, target, params):
         return getattr(ImageEnhance, target)(img).enhance(float(params.get("factor", 1.5)))
 
-    def call_classmethod(self, module, target, params):
+    def call_classmethod(self, module, target, params, img=None):
         if target == "new":
             return Image.new(
                 params.get("mode", "RGB"),
@@ -190,7 +190,7 @@ class RspilBackend:
             mask = Image.new("L", (100, 100), 128)
             return Image.composite(i1, i2, mask)
         if target in ("open", "frombytes"):
-            return Image.new("RGB", (100, 100))
+            return img  # Input IS the image being tested
         if target == "fromarray":
             import pytest; pytest.xfail("fromarray requires numpy")
         raise NotImplementedError(f"classmethod {module}.{target}")
