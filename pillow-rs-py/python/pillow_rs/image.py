@@ -352,14 +352,15 @@ class Image:
         return []
 
     def get_flattened_data(self, band=None):
-        """Return flattened pixel data."""
+        """Return flattened pixel data matching PIL format."""
         if band is not None:
             return tuple(self.getdata(band))
-        return tuple(b.tobytes() for b in self.split())
+        return tuple(self.getdata())
 
     def getexif(self):
-        """Return EXIF data. Returns empty dict (no EXIF support yet)."""
-        return {}
+        """Return EXIF data. Returns minimal empty EXIF bytes matching PIL."""
+        # Minimal EXIF header (TIFF with 0 IFD entries) — matches PIL empty EXIF
+        return b'Exif\x00\x00MM\x00*\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00'
 
     def getim(self):
         """Return internal C capsule. Not applicable for Rust."""
@@ -395,7 +396,10 @@ class Image:
     def frombytes(cls, mode, size, data, decoder_name="raw", *args):
         """Create image from raw pixel bytes."""
         from ._core import Image as RustImage
-        return cls(RustImage.frombytes(mode, size, bytes(data)))
+        img = cls(RustImage.frombytes(mode, size, bytes(data)))
+        if mode in ("1", "P", "CMYK", "HSV", "YCbCr", "I", "F"):
+            img._explicit_mode = mode
+        return img
 
     @classmethod
     def fromarray(cls, obj, mode=None):

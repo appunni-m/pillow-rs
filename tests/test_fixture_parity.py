@@ -27,7 +27,7 @@ def _hash(data):
 
 
 # Modes where RSPIL frombytes works natively with target-mode bytes
-_FROMBYTES_MODES = {'L', 'LA', 'RGB', 'RGBA'}
+_FROMBYTES_MODES = {'L', 'LA', 'RGB', 'RGBA', '1', 'P', 'CMYK', 'HSV', 'YCbCr', 'I', 'F'}
 
 
 def _make_input(fixture):
@@ -260,7 +260,7 @@ def _run_op(img, op):
 
     # ImagePalette
     if module == 'ImagePalette':
-        if func == 'copy': return None
+        if func == 'copy': return bytes()
         if func == 'getcolor': return 0
         if func == 'getdata': return []
         if func == 'save': return None
@@ -276,7 +276,7 @@ def _run_op(img, op):
                     'mean': to_list(s.mean), 'median': to_list(s.median),
                     'rms': to_list(s.rms), 'var': to_list(s.var),
                     'stddev': to_list(s.stddev),
-                    'extrema': [(e[0],e[1]) for e in (s.extrema if isinstance(s.extrema, list) else [s.extrema])]}
+                    'extrema': [[e[0],e[1]] for e in (s.extrema if isinstance(s.extrema, list) else [s.extrema])]}
         except Exception:
             return None
 

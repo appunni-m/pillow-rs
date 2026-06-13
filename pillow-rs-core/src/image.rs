@@ -28,10 +28,12 @@ pub enum Image {
     /// Lazy pipeline — operations recorded, not executed.
     /// source: the input image (loaded or another pipeline).
     /// ops: the operations to apply, in order.
+    /// explicit_mode: PIL mode override (e.g. "1", "P") preserved from source.
     Pipeline {
         source: Arc<Image>,
         ops: Vec<PipelineOp>,
         format: Option<ImageFormat>,
+        explicit_mode: Option<String>,
     },
 }
 
@@ -72,8 +74,8 @@ impl StatResult {
             else { StatValue::FloatList(bands.iter().map(|b| b[idx]).collect()) }
         };
         let extrema = |min_idx, max_idx| -> StatValue {
-            if single { StatValue::ExtremaSingle((bands[0][min_idx] as i64, bands[0][max_idx] as i64)) }
-            else { StatValue::ExtremaList(bands.iter().map(|b| (b[min_idx] as i64, b[max_idx] as i64)).collect()) }
+            // Always use list format for extrema: [[min, max]] for single, [[min,max], ...] for multi
+            StatValue::ExtremaList(bands.iter().map(|b| (b[min_idx] as i64, b[max_idx] as i64)).collect())
         };
         StatResult {
             count: fi(0),
@@ -157,8 +159,10 @@ impl Image {
         let expected = match mode {
             "L" => (w * h) as usize,
             "LA" => (w * h * 2) as usize,
-            "RGB" => (w * h * 3) as usize,
-            "RGBA" => (w * h * 4) as usize,
+            "RGB" | "HSV" | "YCbCr" => (w * h * 3) as usize,
+            "RGBA" | "CMYK" | "I" | "F" => (w * h * 4) as usize,
+            "P" => (w * h) as usize,
+            "1" => ((w as usize + 7) / 8 * h as usize),
             _ => return Err(PilError::ValueError(format!("frombytes: unsupported mode {}", mode))),
         };
         if data.len() < expected {
@@ -185,9 +189,42 @@ impl Image {
                 image::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
+            "P" => DynamicImage::ImageLuma8(
+                image::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+            ),
+            "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
+                image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+            ),
+            "HSV" | "YCbCr" => DynamicImage::ImageRgb8(
+                image::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+            ),
+            "1" => {
+                // PIL packs 8 pixels per byte, MSB first, rows padded to byte boundary
+                let row_bytes = (w as usize + 7) / 8;
+                let mut pixels = vec![0u8; (w * h) as usize];
+                for y in 0..h as usize {
+                    for x in 0..w as usize {
+                        let byte_idx = y * row_bytes + x / 8;
+                        let bit_idx = 7 - (x % 8); // MSB first
+                        let val = if byte_idx < data.len() && (data[byte_idx] >> bit_idx) & 1 != 0 { 255 } else { 0 };
+                        pixels[y * w as usize + x] = val;
+                    }
+                }
+                DynamicImage::ImageLuma8(
+                    image::GrayImage::from_raw(w, h, pixels)
+                        .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+                )
+            }
             _ => DynamicImage::new_rgba8(w, h),
         };
-        Ok(Image::Loaded(img, None))
+        let explicit_mode = match mode {
+            "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
+            _ => None,
+        };
+        Ok(Image::Loaded(img, explicit_mode))
     }
 
     pub fn open(path: &str, format: Option<&str>) -> Result<Self, PilError> {
@@ -258,21 +295,30 @@ impl Image {
     /// If the current Image is already a Pipeline, appends to its ops vec.
     /// Otherwise wraps in a new Pipeline.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
+        let explicit_mode = source.explicit_mode().map(|s| s.to_string());
         match source {
-            Image::Pipeline { source, ops, format } => {
+            Image::Pipeline { source, ops, format, .. } => {
                 let mut new_ops = ops.clone();
                 new_ops.push(op);
                 Image::Pipeline {
                     source: Arc::clone(source),
                     ops: new_ops,
                     format: *format,
+                    explicit_mode,
                 }
             }
-            other => Image::Pipeline {
-                source: Arc::new(other.clone()),
-                ops: vec![op],
-                format: None,
-            },
+            other => {
+                let fmt = match other {
+                    Image::Pipeline { format, .. } => *format,
+                    _ => None,
+                };
+                Image::Pipeline {
+                    source: Arc::new(other.clone()),
+                    ops: vec![op],
+                    format: fmt,
+                    explicit_mode,
+                }
+            }
         }
     }
 
@@ -329,8 +375,10 @@ impl Image {
             let sum2: f64 = band.iter().map(|&x| (x as f64) * (x as f64)).sum();
             let mean = sum / count;
             let rms = (sum2 / count).sqrt();
-            let var = rms * rms - mean * mean;
-            let stddev = var.max(0.0).sqrt();
+            // PIL computes variance as: (sum2 - sum*sum/count) / count — avoids rms rounding
+            let var = (sum2 - sum * sum / count) / count;
+            let var = if var < 0.0 { 0.0 } else { var };
+            let stddev = var.sqrt();
             let min = band[0] as f64;
             let max = band[band.len() - 1] as f64;
             let median = band[band.len() / 2] as f64;
@@ -378,7 +426,38 @@ impl Image {
     }
 
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
-        Ok(self.materialize()?.as_bytes().to_vec())
+        let img = self.materialize()?;
+        // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
+        // Only when the materialized image is still grayscale (not after convert etc.)
+        if let Some(mode) = self.explicit_mode() {
+            if mode == "1" && img.color() == image::ColorType::L8 {
+                let gray = img.to_luma8();
+                let (w, h) = gray.dimensions();
+                let row_bytes = ((w + 7) / 8) as usize;
+                let mut packed = vec![0u8; row_bytes * h as usize];
+                for y in 0..h as usize {
+                    for x in 0..w as usize {
+                        let pixel = gray.get_pixel(x as u32, y as u32)[0];
+                        if pixel >= 128 {
+                            let byte_idx = y * row_bytes + x / 8;
+                            let bit_idx = 7 - (x % 8);
+                            packed[byte_idx] |= 1 << bit_idx;
+                        }
+                    }
+                }
+                return Ok(packed);
+            }
+        }
+        Ok(img.as_bytes().to_vec())
+    }
+
+    /// Return the explicit mode override if set (e.g. "1", "P")
+    fn explicit_mode(&self) -> Option<&str> {
+        match self {
+            Image::Loaded(_, Some(m)) => Some(m.as_str()),
+            Image::Pipeline { explicit_mode: Some(m), .. } => Some(m.as_str()),
+            _ => None,
+        }
     }
 
     /// Encode image to PNG bytes.
@@ -397,6 +476,9 @@ impl Image {
 
     pub fn mode(&self) -> Result<String, PilError> {
         if let Image::Loaded(_, Some(m)) = self {
+            return Ok(m.clone());
+        }
+        if let Image::Pipeline { explicit_mode: Some(m), .. } = self {
             return Ok(m.clone());
         }
         let img = self.materialize()?;
@@ -586,18 +668,41 @@ impl Image {
         let gray = img.to_luma8();
         let (w, h) = (gray.width(), gray.height());
         let row_bytes = w.div_ceil(8) as usize;
-        let mut bmp = vec![0u8; row_bytes * h as usize];
+        let mut bits = vec![0u8; row_bytes * h as usize];
         for y in 0..h {
             for x in 0..w {
                 let v = gray.get_pixel(x, y)[0];
-                if v < 128 {
+                if v >= 128 {
+                    // PIL XBM: 1 = white, 0 = black; LSB = leftmost pixel
                     let byte_idx = (x / 8) as usize;
                     let bit_idx = x % 8;
-                    bmp[(y as usize) * row_bytes + byte_idx] |= 1u8 << bit_idx;
+                    bits[(y as usize) * row_bytes + byte_idx] |= 1u8 << bit_idx;
                 }
             }
         }
-        Ok(bmp)
+        // PIL tobitmap format: XBM C source, 15 hex values per line
+        let mut xbm = String::new();
+        xbm.push_str(&format!("#define image_width {}\n", w));
+        xbm.push_str(&format!("#define image_height {}\n", h));
+        xbm.push_str("static char image_bits[] = {\n");
+        let hexes: Vec<String> = bits.iter().map(|b| format!("0x{:02x}", b)).collect();
+        let total = hexes.len();
+        for (i, chunk) in hexes.chunks(15).enumerate() {
+            let start = i * 15;
+            let end = (start + chunk.len()).min(total);
+            let is_last = end >= total;
+            if is_last {
+                // Last line: no trailing comma
+                xbm.push_str(&chunk.join(","));
+            } else {
+                // Full line: trailing comma
+                xbm.push_str(&chunk.join(","));
+                xbm.push(',');
+            }
+            xbm.push('\n');
+        }
+        xbm.push_str("};");
+        Ok(xbm.into_bytes())
     }
 
     /// Seek to frame in multi-frame image. Stub for now (no multi-frame support).
@@ -940,8 +1045,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
             ColorMode::Mode1 => {
-                // PIL convert("1", dither=NONE): simple threshold at 128
-                let gray = crate::color::pil_grayscale(img);
+                // PIL convert("1", dither=NONE): truncate grayscale, then threshold at 128
+                let gray = crate::color::pil_grayscale_truncate(img);
                 let (w, h) = gray.dimensions();
                 let mut out = image::GrayImage::new(w, h);
                 for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
@@ -1303,37 +1408,45 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             (a as i16 - b as i16).unsigned_abs() as u8
         }),
         PipelineOp::Overlay { other } => channel_op_binary(img, other, |base, blend| {
-            // PIL uses float math with rounding
-            let b = base as f64 / 255.0;
-            let bl = blend as f64 / 255.0;
-            if b < 0.5 {
-                (2.0 * b * bl * 255.0).round() as u8
+            // PIL integer formula: if base < 128: 2*base*blend/255; else: 255-2*(255-base)*(255-blend)/255
+            let b = base as u32;
+            let bl = blend as u32;
+            if b < 128 {
+                ((2 * b * bl) / 255) as u8
             } else {
-                (255.0 - 2.0 * (1.0 - b) * (1.0 - bl) * 255.0).round() as u8
+                (255 - (2 * (255 - b) * (255 - bl)) / 255) as u8
             }
         }),
         PipelineOp::HardLight { other } => channel_op_binary(img, other, |base, blend| {
-            // PIL: HardLight mirrors Overlay with swapped roles
-            let b = base as f64 / 255.0;
-            let bl = blend as f64 / 255.0;
-            if bl <= 0.5 {
-                (2.0 * b * bl * 255.0).round() as u8
+            // PIL: HardLight mirrors Overlay with blend as the decision variable
+            let b = base as u32;
+            let bl = blend as u32;
+            if bl <= 128 {
+                ((2 * b * bl) / 255) as u8
             } else {
-                (255.0 - 2.0 * (1.0 - b) * (1.0 - bl) * 255.0).round() as u8
+                (255 - (2 * (255 - b) * (255 - bl)) / 255) as u8
             }
         }),
         PipelineOp::SoftLight { other } => channel_op_binary(img, other, |base, blend| {
-            // W3C soft-light formula (close to PIL, needs verification)
-            let b = base as f64 / 255.0;
-            let bl = blend as f64 / 255.0;
-            let r = if bl <= 0.5 {
-                b - (1.0 - 2.0 * bl) * b * (1.0 - b)
-            } else if b <= 0.25 {
-                b + (2.0 * bl - 1.0) * (((16.0 * b - 12.0) * b + 4.0) * b - b)
+            // PIL SoftLight: uses integer arithmetic
+            let b = base as u32;
+            let bl = blend as u32;
+            if bl <= 128 {
+                // (base * blend) / 255 + base * (255 - ((255-base)*(255-blend))/255 - blend) / 255
+                let r = (b * bl) / 255;
+                let t = (255 - ((255 - b) * (255 - bl)) / 255).saturating_sub(bl);
+                (r + b * t / 255).min(255) as u8
             } else {
-                b + (2.0 * bl - 1.0) * (b.sqrt() - b)
-            };
-            (r * 255.0).round().clamp(0.0, 255.0) as u8
+                // Based on PIL's implementation
+                let r = if b <= 64 {
+                    let t = (2 * b).saturating_sub(255);
+                    ((255 - ((255 - t) * (255 - bl)) / 255) * b) / 255
+                } else {
+                    let t = (((b as f64 / 255.0).sqrt() * 255.0) as u32).saturating_sub(b);
+                    ((255 - ((255 - t) * (255 - bl)) / 255) * b) / 255
+                };
+                r.min(255) as u8
+            }
         }),
         PipelineOp::AddModulo { other } => {
             channel_op_binary(img, other, |a, b| a.wrapping_add(b))
@@ -1483,7 +1596,29 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             if *distance == 0 {
                 return Ok(img.clone());
             }
-            Ok(img.blur(*distance as f32))
+            let d = *distance as i32;
+            let rgb = img.to_rgb8();
+            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
+            let mut out = image::RgbImage::new(w as u32, h as u32);
+            // PIL uses C rand() with default seed (1 on glibc), which is deterministic
+            // We use a simple LCG matching glibc's rand(): next = state * 1103515245 + 12345; rand = (next >> 16) & 0x7FFF
+            let mut rng_state: u32 = 1; // default glibc seed
+            fn glibc_rand(state: &mut u32) -> i32 {
+                *state = state.wrapping_mul(1103515245).wrapping_add(12345);
+                ((*state >> 16) & 0x7FFF) as i32
+            }
+            let range = 2 * d + 1;
+            for y in 0..h {
+                for x in 0..w {
+                    let rx = glibc_rand(&mut rng_state) % range - d;
+                    let ry = glibc_rand(&mut rng_state) % range - d;
+                    let sx = ((x + rx) % w + w) % w;
+                    let sy = ((y + ry) % h + h) % h;
+                    let p = rgb.get_pixel(sx as u32, sy as u32);
+                    out.put_pixel(x as u32, y as u32, *p);
+                }
+            }
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::PutPixel { x, y, color } => {
             let mut rgba = img.to_rgba8();

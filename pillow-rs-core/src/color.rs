@@ -37,13 +37,24 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
 /// Uses precomputed lookup tables — no per-pixel multiplication or division.
 /// Tight single loop, no rayon overhead, no bounds checks.
 pub fn pil_grayscale(img: &DynamicImage) -> image::GrayImage {
+    pil_grayscale_inner(img, true)
+}
+
+/// Non-rounded BT.601 grayscale for mode "1" conversion.
+/// PIL convert("1") uses truncation (no +32768), while convert("L") uses rounding.
+pub fn pil_grayscale_truncate(img: &DynamicImage) -> image::GrayImage {
+    pil_grayscale_inner(img, false)
+}
+
+fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> image::GrayImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     let n = (w as usize) * (h as usize);
     let rgb_data = rgb.as_raw().as_slice();
 
     // PIL-identical 16-bit fixed-point BT.601:
-    // Y = (19595*R + 38470*G + 7471*B + 32768) >> 16
+    // Y = (19595*R + 38470*G + 7471*B + [32768]) >> 16
+    let rounding = if round { 32768u32 } else { 0u32 };
     let mut gray = vec![0u8; n];
     let len = rgb_data.len().min(n * 3);
     let mut i = 0;
@@ -51,7 +62,7 @@ pub fn pil_grayscale(img: &DynamicImage) -> image::GrayImage {
         let r = rgb_data[i] as u32;
         let g = rgb_data[i + 1] as u32;
         let b = rgb_data[i + 2] as u32;
-        let y = (19595u32 * r + 38470u32 * g + 7471u32 * b + 32768) >> 16;
+        let y = (19595u32 * r + 38470u32 * g + 7471u32 * b + rounding) >> 16;
         gray[i / 3] = y.min(255) as u8;
         i += 3;
     }

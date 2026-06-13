@@ -471,10 +471,11 @@ impl PyImage {
         let (r, g, b, a) = self.inner.getpixel(xy.0, xy.1).map_err(map_error)?;
         Python::with_gil(|py| {
             Ok(match mode {
-                "L" => r.to_object(py),
+                "L" | "1" => r.to_object(py),
                 "LA" => (r, a).to_object(py),
                 "RGB" => (r, g, b).to_object(py),
                 "RGBA" => (r, g, b, a).to_object(py),
+                "P" => r.to_object(py),  // P mode stored as RGB; r is the palette index proxy
                 _ => (r, g, b).to_object(py),
             })
         })
