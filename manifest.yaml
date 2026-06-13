@@ -969,7 +969,7 @@ modules:
       - cpu
     - name: show
       signature: show(*args, **kwargs)
-      status: implemented
+      status: ignored
       param_variants:
       - {}
       edge_cases: []
