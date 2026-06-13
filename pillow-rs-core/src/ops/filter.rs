@@ -23,7 +23,7 @@ impl FilterKernel {
 const BLUR_5X5: [f32; 25] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
 const BLUR_5X5_SCALE: f32 = 16.0;
 
-/// SMOOTH_MORE: 5x5 Gaussian-like blur
+/// SMOOTH_MORE: 5x5 Gaussian-like (PIL 12.2.0 runtime filterargs)
 const SMOOTH_MORE_5X5: [f32; 25] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 1.0, 1.0, 5.0, 44.0, 5.0, 1.0, 1.0, 5.0, 5.0, 5.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
 const SMOOTH_MORE_5X5_SCALE: f32 = 100.0;
 
@@ -47,6 +47,7 @@ const EDGE_ENHANCE_MORE: FilterKernel = FilterKernel::new(
     1.0, 0,
 );
 
+// PIL 12.2.0 filterargs at runtime: ((-1, 0, 0), (0, 1, 0), (0, 0, 0))
 const EMBOSS: FilterKernel = FilterKernel::new(
     [-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
     1.0, 128,

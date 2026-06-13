@@ -1229,19 +1229,20 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             scale,
             offset,
         } => {
+            // PIL C code: bottom-to-top row order (ky=0→row y+1, ky=2→row y-1)
+            // Uses float accumulation with offset+0.5 for rounding, then clip8 truncation
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let inv_scale = 1.0 / scale;
+            let inv_scale = 1.0f32 / scale;
             let mut out = rgb.clone();
             for y in 1..h-1 {
                 for x in 1..w-1 {
-                    let mut r = 0f32;
-                    let mut g = 0f32;
-                    let mut b = 0f32;
+                    let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
                     for ky in 0..3i32 {
                         for kx in 0..3i32 {
+                            // PIL order: ky=0→y+1 (bottom), ky=1→y (middle), ky=2→y-1 (top)
+                            let sy = (y + 1 - ky) as u32;
                             let sx = (x + kx - 1) as u32;
-                            let sy = (y + ky - 1) as u32;
                             let px = rgb.get_pixel(sx, sy);
                             let ki = (ky * 3 + kx) as usize;
                             r += px[0] as f32 * kernel[ki];
@@ -1249,32 +1250,32 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                             b += px[2] as f32 * kernel[ki];
                         }
                     }
-                    out.put_pixel(
-                        x as u32,
-                        y as u32,
-                        image::Rgb([
-                            (r * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
-                            (g * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
-                            (b * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
-                        ]),
-                    );
+                    // PIL: offset += 0.5 (integer rounding via float), then clip8 truncation
+                    let off = *offset as f32 + 0.5;
+                    out.put_pixel(x as u32, y as u32, image::Rgb([
+                        ((r * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((g * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((b * inv_scale + off) as i32).clamp(0, 255) as u8,
+                    ]));
                 }
             }
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::Filter5x5 { kernel, scale, offset } => {
+            // PIL C code: bottom-to-top row order, float accumulation
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let inv_scale = 1.0 / scale;
+            let inv_scale = 1.0f32 / scale;
             let mut out = rgb.clone();
-            // 5×5: only filter interior pixels with complete neighborhood
+            let off = *offset as f32 + 0.5;
             for y in 2..h-2 {
                 for x in 2..w-2 {
                     let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
                     for ky in 0..5i32 {
                         for kx in 0..5i32 {
+                            // PIL order: ky=0→y+2 (bottom row), ky=4→y-2 (top row)
+                            let sy = (y + 2 - ky) as u32;
                             let sx = (x + kx - 2) as u32;
-                            let sy = (y + ky - 2) as u32;
                             let px = rgb.get_pixel(sx, sy);
                             let ki = (ky * 5 + kx) as usize;
                             r += px[0] as f32 * kernel[ki];
@@ -1283,9 +1284,9 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                         }
                     }
                     out.put_pixel(x as u32, y as u32, image::Rgb([
-                        (r * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
-                        (g * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
-                        (b * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
+                        ((r * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((g * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((b * inv_scale + off) as i32).clamp(0, 255) as u8,
                     ]));
                 }
             }
