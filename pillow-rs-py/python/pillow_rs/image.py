@@ -29,12 +29,8 @@ class Image:
         if rust_image is None:
             rust_image = RustImage()
         self._rust_image = rust_image
-        # Inherit explicit mode from Rust pipeline (e.g. "1", "P", etc.)
-        try:
-            em = rust_image.explicit_mode()
-            self._explicit_mode = em if em else None
-        except Exception:
-            self._explicit_mode = None
+        # Inherit explicit mode from Rust pipeline (e.g. "1", "P", "CMYK")
+        self._explicit_mode = getattr(rust_image, 'explicit_mode', lambda: None)()
 
     @classmethod
     def open(

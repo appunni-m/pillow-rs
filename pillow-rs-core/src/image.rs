@@ -758,6 +758,67 @@ fn channel_op_binary(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
+/// Per-channel binary operation using a precomputed 256×256 lookup table.
+/// The LUT is indexed as LUT[base * 256 + blend] for each channel.
+fn channel_op_binary_lut(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    lut: &[u8; 65536],
+) -> Result<DynamicImage, PilError> {
+    let other_img = other.materialize()?;
+    let a = img.to_rgb8();
+    let b = other_img.to_rgb8();
+    let (w, h) = (a.width().min(b.width()), a.height().min(b.height()));
+    let mut out = image::RgbImage::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let pa = a.get_pixel(x, y);
+            let pb = b.get_pixel(x, y);
+            out.put_pixel(x, y, image::Rgb([
+                lut[pa[0] as usize * 256 + pb[0] as usize],
+                lut[pa[1] as usize * 256 + pb[1] as usize],
+                lut[pa[2] as usize * 256 + pb[2] as usize],
+            ]));
+        }
+    }
+    Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+}
+
+// ── Blend mode lookup tables (generated from PIL C implementation) ──
+
+static OVERLAY_LUT: [u8; 65536] = {
+    let bytes = include_bytes!("ops/lut_overlay.bin");
+    let mut arr = [0u8; 65536];
+    let mut i = 0;
+    while i < 65536 {
+        arr[i] = bytes[i];
+        i += 1;
+    }
+    arr
+};
+
+static HARD_LIGHT_LUT: [u8; 65536] = {
+    let bytes = include_bytes!("ops/lut_hardlight.bin");
+    let mut arr = [0u8; 65536];
+    let mut i = 0;
+    while i < 65536 {
+        arr[i] = bytes[i];
+        i += 1;
+    }
+    arr
+};
+
+static SOFT_LIGHT_LUT: [u8; 65536] = {
+    let bytes = include_bytes!("ops/lut_softlight.bin");
+    let mut arr = [0u8; 65536];
+    let mut i = 0;
+    while i < 65536 {
+        arr[i] = bytes[i];
+        i += 1;
+    }
+    arr
+};
+
 /// Check if PNG data contains a PLTE (palette) chunk.
 fn has_plte_chunk(data: &[u8]) -> bool {
     if data.len() < 33 { return false; } // 8 sig + 4 len + 4 IHDR + 13 data + 4 crc = 33 min
@@ -861,23 +922,25 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
 }
 
 /// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
+/// PIL skips border pixels (keeps originals), matching the BoxBlur behavior.
 fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicImage, PilError> {
     let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    let mut out = image::RgbImage::new(w, h);
+    let (w, h) = (rgb.width() as i32, rgb.height() as i32);
+    // Keep original border pixels — only process interior with full neighborhood
+    let mut out = rgb.clone();
     let half = (size / 2) as i32;
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
 
-    for y in 0..h {
-        for x in 0..w {
+    for y in half..h - half {
+        for x in half..w - half {
             let mut r_vals = Vec::with_capacity(area);
             let mut g_vals = Vec::with_capacity(area);
             let mut b_vals = Vec::with_capacity(area);
             for dy in -half..=half {
                 for dx in -half..=half {
-                    let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
-                    let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
+                    let sx = (x + dx) as u32;
+                    let sy = (y + dy) as u32;
                     let p = rgb.get_pixel(sx, sy);
                     r_vals.push(p[0]);
                     g_vals.push(p[1]);
@@ -887,7 +950,7 @@ fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicI
             r_vals.sort_unstable();
             g_vals.sort_unstable();
             b_vals.sort_unstable();
-            out.put_pixel(x, y, image::Rgb([r_vals[rank], g_vals[rank], b_vals[rank]]));
+            out.put_pixel(x as u32, y as u32, image::Rgb([r_vals[rank], g_vals[rank], b_vals[rank]]));
         }
     }
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
@@ -1482,47 +1545,9 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         PipelineOp::Difference { other } => channel_op_binary(img, other, |a, b| {
             (a as i16 - b as i16).unsigned_abs() as u8
         }),
-        PipelineOp::Overlay { other } => channel_op_binary(img, other, |base, blend| {
-            // PIL integer formula: if base < 128: 2*base*blend/255; else: 255-2*(255-base)*(255-blend)/255
-            let b = base as u32;
-            let bl = blend as u32;
-            if b < 128 {
-                ((2 * b * bl) / 255) as u8
-            } else {
-                (255 - (2 * (255 - b) * (255 - bl)) / 255) as u8
-            }
-        }),
-        PipelineOp::HardLight { other } => channel_op_binary(img, other, |base, blend| {
-            // PIL: HardLight mirrors Overlay with blend as the decision variable
-            let b = base as u32;
-            let bl = blend as u32;
-            if bl <= 128 {
-                ((2 * b * bl) / 255) as u8
-            } else {
-                (255 - (2 * (255 - b) * (255 - bl)) / 255) as u8
-            }
-        }),
-        PipelineOp::SoftLight { other } => channel_op_binary(img, other, |base, blend| {
-            // PIL SoftLight: uses integer arithmetic
-            let b = base as u32;
-            let bl = blend as u32;
-            if bl <= 128 {
-                // (base * blend) / 255 + base * (255 - ((255-base)*(255-blend))/255 - blend) / 255
-                let r = (b * bl) / 255;
-                let t = (255 - ((255 - b) * (255 - bl)) / 255).saturating_sub(bl);
-                (r + b * t / 255).min(255) as u8
-            } else {
-                // Based on PIL's implementation
-                let r = if b <= 64 {
-                    let t = (2 * b).saturating_sub(255);
-                    ((255 - ((255 - t) * (255 - bl)) / 255) * b) / 255
-                } else {
-                    let t = (((b as f64 / 255.0).sqrt() * 255.0) as u32).saturating_sub(b);
-                    ((255 - ((255 - t) * (255 - bl)) / 255) * b) / 255
-                };
-                r.min(255) as u8
-            }
-        }),
+        PipelineOp::Overlay { other } => channel_op_binary_lut(img, other, &OVERLAY_LUT),
+        PipelineOp::HardLight { other } => channel_op_binary_lut(img, other, &HARD_LIGHT_LUT),
+        PipelineOp::SoftLight { other } => channel_op_binary_lut(img, other, &SOFT_LIGHT_LUT),
         PipelineOp::AddModulo { other } => {
             channel_op_binary(img, other, |a, b| a.wrapping_add(b))
         }
