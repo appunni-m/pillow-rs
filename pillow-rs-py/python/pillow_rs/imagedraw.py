@@ -77,9 +77,13 @@ class Draw:
         if fill is None:
             fill = (0, 0, 0)
         bmp = bitmap.convert("1")
-        for y in range(min(bitmap.height, self._image.height - int(xy[1]))):
-            for x in range(min(bitmap.width, self._image.width - int(xy[0]))):
-                if bmp.getpixel((x, y)) == 0:
+        max_y = min(bitmap.height, self._image.height - int(xy[1]))
+        max_x = min(bitmap.width, self._image.width - int(xy[0]))
+        for y in range(max_y):
+            for x in range(max_x):
+                px = bmp.getpixel((x, y))
+                val = px[0] if isinstance(px, (tuple, list)) else px
+                if val == 0:
                     self.point([(int(xy[0]) + x, int(xy[1]) + y)], fill=fill)
         self._sync()
 
