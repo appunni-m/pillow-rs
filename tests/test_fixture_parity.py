@@ -103,7 +103,7 @@ def _run_op(img, op):
         except Exception:
             pass
         return img
-    if func == "point": return img.point([min(255, i+50) for i in range(256)])
+    if func == "point" and module == "Image": return img.point([min(255, i+50) for i in range(256)])
     if func == "putalpha": img.putalpha(128); return img
     if func == "putdata":
         bands = len(img.getbands()) if hasattr(img, 'getbands') else 1
