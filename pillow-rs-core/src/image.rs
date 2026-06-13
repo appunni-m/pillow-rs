@@ -238,6 +238,47 @@ impl Image {
         Ok(())
     }
 
+    /// Compute per-band statistics: count, sum, sum2, mean, rms, var, stddev, extrema.
+    /// Returns vectors indexed by band: [band0_stats, band1_stats, ...].
+    /// Each band is: [count, sum, sum2, mean, median, rms, var, stddev, min, max]
+    pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {
+        let img = self.materialize()?;
+        let rgba = img.to_rgba8();
+        let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+        let n_pixels = w * h;
+        let n_bands = img.color().channel_count() as usize;
+        let mut bands: Vec<Vec<u8>> = vec![Vec::with_capacity(n_pixels); n_bands];
+
+        for px in rgba.pixels() {
+            for b in 0..n_bands {
+                bands[b].push(px[b]);
+            }
+        }
+        for b in bands.iter_mut() {
+            b.sort_unstable();
+        }
+
+        let mut results = Vec::with_capacity(n_bands);
+        for band in &bands {
+            let count = band.len() as f64;
+            if count == 0.0 {
+                results.push(vec![0.0; 10]);
+                continue;
+            }
+            let sum: f64 = band.iter().map(|&x| x as f64).sum();
+            let sum2: f64 = band.iter().map(|&x| (x as f64) * (x as f64)).sum();
+            let mean = sum / count;
+            let rms = (sum2 / count).sqrt();
+            let var = rms * rms - mean * mean;
+            let stddev = var.max(0.0).sqrt();
+            let min = band[0] as f64;
+            let max = band[band.len() - 1] as f64;
+            let median = band[band.len() / 2] as f64;
+            results.push(vec![count, sum, sum2, mean, median, rms, var, stddev, min, max]);
+        }
+        Ok(results)
+    }
+
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
         // Check explicit mode for non-standard band names
         if let Image::Loaded(_, Some(m)) = self {
