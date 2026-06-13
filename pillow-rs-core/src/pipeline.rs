@@ -21,8 +21,9 @@ pub enum PipelineOp {
     Quantize { colors: u32, dither: bool },
     RemapPalette { dest_map: Vec<u8> },
 
-    // ── Filters (3×3 convolution) ──
+    // ── Filters (3×3 and 5×5 convolution) ──
     Filter3x3 { kernel: [f32; 9], scale: f32, offset: i32 },
+    Filter5x5 { kernel: [f32; 25], scale: f32, offset: i32 },
     GaussianBlur { sigma: f32 },
     BoxBlur { radius: u32 },
     MedianFilter { size: u32 },
