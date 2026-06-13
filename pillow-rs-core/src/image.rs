@@ -969,8 +969,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
             let inv_scale = 1.0 / scale;
-            let mut out = rgb.clone();  // start with original (border pixels unchanged)
-            // Only filter interior pixels with complete 3×3 neighborhood (matching PIL)
+            let mut out = rgb.clone();
             for y in 1..h-1 {
                 for x in 1..w-1 {
                     let mut r = 0f32;
