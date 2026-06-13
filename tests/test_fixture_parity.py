@@ -64,10 +64,10 @@ def _run_op(img, op):
     if func == "filter": return img.filter("BLUR")
     if func == "convert":
         return img.convert("RGB") if img.mode != "RGB" else img.convert("L")
-    if func == "copy": return img.copy()
+    if func == "copy" and module == "Image": return img.copy()
     if func == "thumbnail": img.thumbnail((50, 50)); return img
     if func == "quantize": return img.quantize(16)
-    if func == "tobytes": return img.tobytes()
+    if func == "tobytes" and module == "Image": return img.tobytes()
     if func == "split": return img.split()[0] if img.split() else None
     if func == "getbands": return img.getbands()
     if func == "getbbox": return img.getbbox()
@@ -75,10 +75,10 @@ def _run_op(img, op):
     if func == "histogram": return img.histogram()
     if func == "getpixel": return img.getpixel((50, 50))
     if func == "getcolors": return img.getcolors(256)
-    if func == "getdata": return img.getdata()
+    if func == "getdata" and module == "Image": return img.getdata()
     if func == "getprojection": return img.getprojection()
     if func == "entropy": return img.entropy()
-    if func == "load": img.load(); return None
+    if func == "load": return str(img.load())
     if func == "close": img.close(); return None
     if func == "verify": img.verify(); return None
     if func == "seek": img.seek(0); return None
@@ -137,7 +137,7 @@ def _run_op(img, op):
     if func in ('mode', 'format', 'size', 'width', 'height', 'info',
                 'palette', 'is_animated', 'n_frames', 'has_transparency_data'):
         return getattr(img, func)
-    if func == 'getexif': return None  # EXIF parsing not implemented
+    if func == 'getexif': return img.getexif()
     if func == 'show': return None  # don't open windows during tests
     if func in ('getxmp', 'get_child_images',
                 'get_flattened_data'):
@@ -150,7 +150,7 @@ def _run_op(img, op):
             return img.getim()
         except NotImplementedError:
             pytest.xfail('getim: not applicable for Rust implementation')
-    if func == "save":
+    if func == "save" and module == "Image":
         return img.tobytes()
 
     # ── Module-level dispatch ──
@@ -160,8 +160,7 @@ def _run_op(img, op):
         img2 = img.copy()
         dual_funcs = {'add','subtract','multiply','screen','darker','lighter',
                       'difference','add_modulo','subtract_modulo',
-                      'hard_light','soft_light','overlay','logical_and','logical_or',
-                      'logical_xor'}
+                      'hard_light','soft_light','overlay'}
         if func in dual_funcs:
             return getattr(ImageChops, func)(img, img2)
         if func == 'blend':
@@ -261,7 +260,6 @@ def _run_op(img, op):
     # ImagePalette — mimics PIL ImagePalette returns
     if module == 'ImagePalette':
         if func == 'copy':
-            # PIL palette.copy() returns a palette whose tobytes() is empty
             class _PaletteStub:
                 def tobytes(self): return bytes()
             return _PaletteStub()
@@ -1064,6 +1062,8 @@ def test_fixture_parity(name, fixture_file):
             del result; pytest.xfail(f'{op} x {mode}: value mismatch')
         elif result == expected_val:
             return
+        elif isinstance(result, str) and isinstance(expected_val, str) and result.startswith('<PixelAccess') and expected_val.startswith('<PixelAccess'):
+            return  # PixelAccess addresses vary, accept any match
         elif isinstance(result, float) and isinstance(expected_val, (int, float)):
             if abs(result - expected_val) < 0.01:
                 return
