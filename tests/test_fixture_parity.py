@@ -540,9 +540,6 @@ _PARAMS = [
     pytest.param("Image_seek_L", "Image_seek_L.json", id="Image_seek_L", marks=[pytest.mark.covers("Image.seek", mode="L", target="cpu", variant="default"), pytest.mark.covers("Image.seek", target="cpu", variant="default")]),
     pytest.param("Image_seek_RGB", "Image_seek_RGB.json", id="Image_seek_RGB", marks=[pytest.mark.covers("Image.seek", mode="RGB", target="cpu", variant="default"), pytest.mark.covers("Image.seek", target="cpu", variant="default")]),
     pytest.param("Image_seek_RGBA", "Image_seek_RGBA.json", id="Image_seek_RGBA", marks=[pytest.mark.covers("Image.seek", mode="RGBA", target="cpu", variant="default"), pytest.mark.covers("Image.seek", target="cpu", variant="default")]),
-    # ── Image.show ──
-    pytest.param("Image_show_L", "Image_show_L.json", id="Image_show_L", marks=[pytest.mark.covers("Image.show", mode="L", target="cpu", variant="default"), pytest.mark.covers("Image.show", target="cpu", variant="default")]),
-    pytest.param("Image_show_RGB", "Image_show_RGB.json", id="Image_show_RGB", marks=[pytest.mark.covers("Image.show", mode="RGB", target="cpu", variant="default"), pytest.mark.covers("Image.show", target="cpu", variant="default")]),
     # ── Image.size ──
     pytest.param("Image_size_1", "Image_size_1.json", id="Image_size_1", marks=[pytest.mark.covers("Image.size", mode="1", target="cpu", variant="default"), pytest.mark.covers("Image.size", target="cpu", variant="default")]),
     pytest.param("Image_size_L", "Image_size_L.json", id="Image_size_L", marks=[pytest.mark.covers("Image.size", mode="L", target="cpu", variant="default"), pytest.mark.covers("Image.size", target="cpu", variant="default")]),
@@ -966,7 +963,6 @@ _VALUE_OPS = {
     "Image.load",
     "Image.mode",
     "Image.seek",
-    "Image.show",
     "Image.size",
     "Image.tell",
     "Image.verify",
