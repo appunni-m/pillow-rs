@@ -1000,6 +1000,35 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
+        PipelineOp::Filter5x5 { kernel, scale, offset } => {
+            let rgb = img.to_rgb8();
+            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
+            let inv_scale = 1.0 / scale;
+            let mut out = rgb.clone();
+            // 5×5: only filter interior pixels with complete neighborhood
+            for y in 2..h-2 {
+                for x in 2..w-2 {
+                    let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
+                    for ky in 0..5i32 {
+                        for kx in 0..5i32 {
+                            let sx = (x + kx - 2) as u32;
+                            let sy = (y + ky - 2) as u32;
+                            let px = rgb.get_pixel(sx, sy);
+                            let ki = (ky * 5 + kx) as usize;
+                            r += px[0] as f32 * kernel[ki];
+                            g += px[1] as f32 * kernel[ki];
+                            b += px[2] as f32 * kernel[ki];
+                        }
+                    }
+                    out.put_pixel(x as u32, y as u32, image::Rgb([
+                        (r * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
+                        (g * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
+                        (b * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
+                    ]));
+                }
+            }
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+        }
         PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
         PipelineOp::BoxBlur { radius } => Ok(img.blur(*radius as f32)),
         PipelineOp::MedianFilter { size } => {
