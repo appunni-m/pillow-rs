@@ -27,7 +27,7 @@ def _hash(data):
 
 
 # Modes where RSPIL frombytes works natively with target-mode bytes
-_FROMBYTES_MODES = {'L', 'LA', 'RGB', 'RGBA'}
+_FROMBYTES_MODES = {'L', 'LA', 'RGB', 'RGBA', '1'}
 
 
 def _make_input(fixture):
