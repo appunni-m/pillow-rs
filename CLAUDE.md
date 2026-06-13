@@ -146,3 +146,7 @@ Before committing, verify:
 never leave commit message as anthropic or fable \
 
 run only failing test remove show function
+
+don't give any task back to user, do it all yourself
+add to tasklist whenever you get task and don't stop until it's done
+always set timeout for tests (3min)
