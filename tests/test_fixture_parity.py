@@ -293,9 +293,26 @@ def _run_op(img, op):
 
     # ImageFont
     if module == 'ImageFont':
-        if func == 'load_default': return None
-        if func == 'load_default_imagefont': return None
-        return None
+        try:
+            from pillow_rs import ImageFont as RsImageFont
+            if func == 'load_default':
+                font = RsImageFont.load_default()
+                return type(font).__name__
+            if func == 'load_default_imagefont':
+                font = RsImageFont.ImageFont()
+                return type(font).__name__
+            if func == 'load':
+                return None  # load() requires a font file path
+            if func == 'load_path':
+                return None
+            if func == 'truetype':
+                return None
+            if func == 'FreeTypeFont':
+                return None
+            if func == 'ImageFont':
+                return 'ImageFont'
+        except Exception:
+            return None
 
     return img
 
