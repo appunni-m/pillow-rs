@@ -74,17 +74,11 @@ class Draw:
         self._sync()
 
     def bitmap(self, xy, bitmap, fill=None):
+        """Draw a bitmap. Pixel iteration done in Rust."""
         if fill is None:
             fill = (0, 0, 0)
         bmp = bitmap.convert("1")
-        max_y = min(bitmap.height, self._image.height - int(xy[1]))
-        max_x = min(bitmap.width, self._image.width - int(xy[0]))
-        for y in range(max_y):
-            for x in range(max_x):
-                px = bmp.getpixel((x, y))
-                val = px[0] if isinstance(px, (tuple, list)) else px
-                if val == 0:
-                    self.point([(int(xy[0]) + x, int(xy[1]) + y)], fill=fill)
+        self._draw.bitmap((float(xy[0]), float(xy[1])), bmp._rust_image, fill)
         self._sync()
 
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,

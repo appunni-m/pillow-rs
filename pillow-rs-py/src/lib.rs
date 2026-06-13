@@ -661,6 +661,27 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    fn bitmap(&mut self, xy: (f64, f64), bitmap: &Bound<'_, PyImage>,
+              fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let fill_color = parse_draw_color(fill)?;
+        let bmp = bitmap.borrow();
+        let bmp_img = bmp.inner.materialize().map_err(map_error)?;
+        let gray = bmp_img.to_luma8();
+        let (bw, bh) = gray.dimensions();
+        let (x0, y0) = (xy.0 as i32, xy.1 as i32);
+        // Get image dimensions from draw context
+        let max_x = bw.min(2048); // safe upper bound — draw clips internally
+        let max_y = bh.min(2048);
+        for y in 0..max_y {
+            for x in 0..max_x {
+                if gray.get_pixel(x, y)[0] == 0 {
+                    self.draw.point(&[(x0 + x as i32, y0 + y as i32)], fill_color).map_err(map_error)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn regular_polygon(&mut self, bounding_circle: &Bound<'_, PyAny>,
                         n_sides: u32, rotation: Option<f64>,
                         fill: Option<&Bound<'_, PyAny>>,
