@@ -240,13 +240,12 @@ def _run_image_op(img, func, mode):
     if func in ("putdata",):
         n_pixels = img.size[0] * img.size[1]
         n_bands = len(img.getbands())
-        n = n_pixels * n_bands
-        data = [128] * n
-        try:
-            img.putdata(data)
-        except Exception:
-            pass
-        return img, {"count": n}
+        if n_bands == 1:
+            data = [128] * n_pixels
+        else:
+            data = [(128,) * n_bands] * n_pixels
+        img.putdata(data)
+        return img, {"count": n_pixels * n_bands}
     if func in ("quantize",): return img.quantize(16), {"colors": 16}
     if func in ("reduce",): return img.reduce(2), {"factor": 2}
     if func in ("effect_spread",): return img.effect_spread(2), {"distance": 2}

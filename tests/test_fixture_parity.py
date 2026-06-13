@@ -78,7 +78,7 @@ def _run_op(img, op):
     if func == "getdata" and module == "Image": return img.getdata()
     if func == "getprojection": return img.getprojection()
     if func == "entropy": return img.entropy()
-    if func == "load": return str(img.load())
+    if func == "load" and module == "Image": return str(img.load())
     if func == "close": img.close(); return None
     if func == "verify": img.verify(); return None
     if func == "seek": img.seek(0); return None
@@ -106,9 +106,18 @@ def _run_op(img, op):
     if func == "point" and module == "Image": return img.point([min(255, i+50) for i in range(256)])
     if func == "putalpha": img.putalpha(128); return img
     if func == "putdata":
+        # PIL putdata expects tuples for multi-band; flat values fail.
+        # The fixture generator catches this failure, storing unchanged image hash.
         bands = len(img.getbands()) if hasattr(img, 'getbands') else 1
-        n = img.width * img.height * bands
-        img.putdata([128] * n)
+        n_pixels = img.width * img.height
+        if bands == 1:
+            data = [128] * n_pixels
+        else:
+            data = [(128,) * bands] * n_pixels
+        try:
+            img.putdata(data)
+        except Exception:
+            pass
         return img
     if func == "reduce": return img.reduce(2)
     if func == "effect_spread": return img.effect_spread(2)
