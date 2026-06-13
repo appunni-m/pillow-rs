@@ -661,6 +661,31 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    fn regular_polygon(&mut self, bounding_circle: &Bound<'_, PyAny>,
+                        n_sides: u32, rotation: Option<f64>,
+                        fill: Option<&Bound<'_, PyAny>>,
+                        outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+        use std::f64::consts::TAU;
+        let (cx, cy, r): (f64, f64, f64) = if let Ok((x, y, r)) = bounding_circle.extract::<(f64, f64, f64)>() {
+            (x, y, r)
+        } else if let Ok(((x, y), r)) = bounding_circle.extract::<((f64, f64), f64)>() {
+            (x, y, r)
+        } else if let Ok((x, y, r)) = bounding_circle.extract::<(i32, i32, i32)>() {
+            (x as f64, y as f64, r as f64)
+        } else {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("bounding_circle must be (x,y,r) or ((x,y),r)"));
+        };
+        let rot = rotation.unwrap_or(0.0).to_radians();
+        let mut pts = Vec::with_capacity(n_sides as usize);
+        for i in 0..n_sides {
+            let angle = rot + TAU * i as f64 / n_sides as f64;
+            pts.push(((cx + r * angle.cos()) as i32, (cy + r * angle.sin()) as i32));
+        }
+        let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
+        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        self.draw.polygon(&pts, fill_color, out_color, width.unwrap_or(1)).map_err(map_error)
+    }
+
     fn polygon(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>,
                outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };

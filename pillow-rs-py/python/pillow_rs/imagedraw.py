@@ -123,17 +123,8 @@ class Draw:
         raise NotImplementedError("ImageDraw.shape")
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
-        import math
-        # PIL accepts both (x, y, r) and ((x, y), r)
-        if len(bounding_circle) == 3:
-            cx, cy, r = bounding_circle
-        else:
-            (cx, cy), r = bounding_circle
-        points = []
-        for i in range(n_sides):
-            angle = math.radians(rotation + i * 360 / n_sides)
-            points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
-        self.polygon(points, fill=fill, outline=outline, width=width)
+        """Draw a regular polygon. Vertex computation done in Rust."""
+        self._draw.regular_polygon(bounding_circle, n_sides, float(rotation), fill, outline, width)
         self._sync()
 
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
