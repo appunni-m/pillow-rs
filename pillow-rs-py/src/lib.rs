@@ -546,6 +546,13 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_solarize, m)?)?;
     m.add_function(wrap_pyfunction!(ops_grayscale, m)?)?;
     m.add_function(wrap_pyfunction!(ops_colorize, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_contain, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_cover, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_fit, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_pad, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_scale, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_expand, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_crop_border, m)?)?;
 
     // ImageChops functions
     m.add_function(wrap_pyfunction!(chops_add, m)?)?;
@@ -888,6 +895,69 @@ fn ops_colorize(image: &Bound<'_, PyImage>, black: (u8, u8, u8), white: (u8, u8,
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::colorize(&inner, black, white))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_contain(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::contain(&inner, size.0, size.1, filter.as_deref()))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_cover(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::cover(&inner, size.0, size.1, filter.as_deref()))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_fit(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>, bleed: Option<f64>, centering: Option<(f64, f64)>) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::fit(&inner, size.0, size.1, filter.as_deref(), bleed.unwrap_or(0.0), centering.unwrap_or((0.5, 0.5))))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_pad(image: &Bound<'_, PyImage>, size: (u32, u32), color: Option<(u8, u8, u8, u8)>, centering: Option<(f64, f64)>) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::pad(&inner, size.0, size.1, color, centering.unwrap_or((0.5, 0.5))))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_scale(image: &Bound<'_, PyImage>, factor: f64, filter: Option<String>) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::scale(&inner, factor, filter.as_deref()))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_expand(image: &Bound<'_, PyImage>, border: u32, fill: Option<(u8, u8, u8, u8)>) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::expand(&inner, border, fill.unwrap_or((0, 0, 0, 255))))
+    }).map_err(map_error)?;
+    Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage> {
+    let inner = image.borrow().inner.clone();
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs_core::ops::imageops::crop(&inner, border))
     }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
