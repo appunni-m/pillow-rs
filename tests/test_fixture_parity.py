@@ -144,10 +144,10 @@ def _run_op(img, op):
         return img.tobytes()
 
     # ── Module-level dispatch ──
-    img2 = img.copy() if hasattr(img, 'copy') else img
 
     # ImageChops
     if module == 'ImageChops':
+        img2 = img.copy()
         dual_funcs = {'add','subtract','multiply','screen','darker','lighter',
                       'difference','add_modulo','subtract_modulo',
                       'hard_light','soft_light','overlay','logical_and','logical_or',
@@ -192,6 +192,7 @@ def _run_op(img, op):
 
     # ImageDraw
     if module == 'ImageDraw':
+        img2 = img.copy()
         draw = ImageDraw.Draw(img)
         fill = 200
         if img.mode == 'RGB' or img.mode == 'RGBA':
@@ -215,6 +216,7 @@ def _run_op(img, op):
 
     # ImageModule
     if module == 'ImageModule':
+        img2 = img.copy()
         if func == 'blend': return Image.blend(img, img2, 0.5)
         if func == 'composite': return Image.composite(img, img2, img2)
         if func == 'merge': return Image.merge(img.mode, img.split() if img.split() else [img])
@@ -1006,17 +1008,17 @@ def test_fixture_parity(name, fixture_file):
                 return v
             result_list = _deep_list(result)
             if result_list == expected_val:
-                del img, result, result_list; return
+                return
             if isinstance(expected_val, (list, tuple)) and len(expected_val) <= 100 and len(result_list) > len(expected_val):
                 if result_list[:len(expected_val)] == expected_val:
-                    del img, result, result_list; return
+                    return
             if isinstance(expected_val, (list, tuple)) and len(expected_val) > 200 and len(result_list) == len(expected_val):
                 diffs = sum(1 for i in range(len(expected_val)) if result_list[i] != expected_val[i])
                 if diffs == 0:
                     return  # identical but missed by Python list equality
             del result; pytest.xfail(f'{op} x {mode}: value mismatch')
         elif result == expected_val:
-            del img, result; return
+            return
         elif isinstance(result, float) and isinstance(expected_val, (int, float)):
             if abs(result - expected_val) < 0.01:
                 del img, result; return
@@ -1051,7 +1053,7 @@ def test_fixture_parity(name, fixture_file):
     actual_hash = _hash(raw)
 
     if actual_hash == expected_hash:
-        del img, result, raw  # explicit cleanup — prevent GC buildup
+        # cleanup handled by conftest pytest_runtest_teardown hook — prevent GC buildup
         return
 
     # Non-match — real algorithmic difference
