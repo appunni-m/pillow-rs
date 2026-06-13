@@ -227,7 +227,10 @@ def _run_image_op(img, func, mode):
         return img, {"fgSize": [10, 10]}
     if func in ("point",):
         lut = bytes([min(255, i + 50) for i in range(256)])
-        return img.point(lut), {"lutSize": 256, "offset": 50}
+        try:
+            return img.point(lut), {"lutSize": 256, "offset": 50}
+        except Exception:
+            return img.point(lambda x: min(255, x + 50)), {"lutSize": 256, "offset": 50}
     if func in ("putalpha",):
         try:
             img.putalpha(128)
@@ -256,8 +259,12 @@ def _run_image_op(img, func, mode):
         n_bands = len(img.getbands())
         if n_bands >= 4:
             img.putpixel((0, 0), (255, 0, 0, 255))
-        else:
+        elif n_bands == 3:
             img.putpixel((0, 0), (255, 0, 0))
+        elif n_bands == 2:
+            img.putpixel((0, 0), (255, 255))
+        else:
+            img.putpixel((0, 0), 255)
         return img, {}
     if func in ("apply_transparency",):
         try:
