@@ -436,8 +436,24 @@ impl PyImage {
         self.inner.getpixel(xy.0, xy.1).map_err(map_error)
     }
 
-    fn putdata(&mut self, data: Vec<u8>) -> PyResult<()> {
-        self.inner.putdata(&data).map_err(map_error)
+    fn putdata(&mut self, data: &Bound<'_, PyAny>) -> PyResult<()> {
+        // Flatten sequence in Rust — handles ints and tuples
+        let mut flat: Vec<u8> = Vec::new();
+        for item in data.iter()? {
+            let obj = item?;
+            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
+            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1, t.2]);
+            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1]);
+            } else if let Ok(v) = obj.extract::<u8>() {
+                flat.push(v);
+            } else if let Ok(v) = obj.extract::<i64>() {
+                flat.push(v.clamp(0, 255) as u8);
+            }
+        }
+        self.inner.putdata(&flat).map_err(map_error)
     }
 
     fn putpixel(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -1040,4 +1056,26 @@ fn getrgb(color: &str) -> PyResult<(u8, u8, u8)> {
     pillow_rs_core::color::parse_color_str(color)
         .map(|(r, g, b, _a)| (r, g, b))
         .map_err(map_error)
+}
+
+#[pyfunction]
+fn palette_search(palette: Vec<u8>, r: u8, g: u8, b: u8) -> Option<usize> {
+    pillow_rs_core::color::palette_getcolor(&palette, r, g, b)
+}
+
+#[pyfunction]
+fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
+    let (r, g, b) = pillow_rs_core::color::parse_color_str(color)
+        .map(|(r, g, b, _a)| (r, g, b))
+        .map_err(map_error)?;
+    let result = pillow_rs_core::color::getcolor(r, g, b, mode).map_err(map_error)?;
+    Python::with_gil(|py| {
+        match mode {
+            "L" | "1" => Ok(result.0.to_object(py)),
+            "LA" => Ok((result.0, result.3).to_object(py)),
+            "RGB" => Ok((result.0, result.1, result.2).to_object(py)),
+            "RGBA" => Ok((result.0, result.1, result.2, result.3).to_object(py)),
+            _ => Ok((result.0, result.1, result.2).to_object(py)),
+        }
+    })
 }

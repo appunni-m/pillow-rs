@@ -51,7 +51,7 @@ def _make_image(mode, size=(100, 100)):
     if mode == "RGBA": return ref.convert("RGBA")
     if mode == "L": return ref.convert("L")
     if mode == "LA": return ref.convert("LA")
-    if mode == "1": return ref.convert("1")
+    if mode == "1": return ref.convert("1", dither=PILImage.NONE)
     if mode == "P": return ref.convert("P")
     if mode == "CMYK": return ref.convert("CMYK")
     if mode == "YCbCr": return ref.convert("YCbCr")

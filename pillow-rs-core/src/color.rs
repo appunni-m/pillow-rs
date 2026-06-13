@@ -86,6 +86,38 @@ pub fn resolve_new_color(
     Ok((0, 0, 0, 0)) // default: black
 }
 
+/// Resolve a color value for a given mode (like PIL's ImageColor.getcolor).
+/// Takes RGB tuple and mode string, returns mode-appropriate value.
+pub fn getcolor(r: u8, g: u8, b: u8, mode: &str) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
+    match mode {
+        "L" | "1" => {
+            let luma = rgb_to_luma_u8(r, g, b);
+            if mode == "1" {
+                Ok((if luma >= 128 { 255 } else { 0 }, 0, 0, 255))
+            } else {
+                Ok((luma, luma, luma, 255))
+            }
+        }
+        "RGB" => Ok((r, g, b, 255)),
+        "RGBA" => Ok((r, g, b, 255)),
+        "LA" => {
+            let luma = rgb_to_luma_u8(r, g, b);
+            Ok((luma, luma, luma, 255))
+        }
+        _ => Ok((r, g, b, 255)),
+    }
+}
+
+/// Search a flat palette [r,g,b, r,g,b, ...] for a color, return index.
+pub fn palette_getcolor(palette: &[u8], r: u8, g: u8, b: u8) -> Option<usize> {
+    for i in (0..palette.len()).step_by(3) {
+        if i + 2 < palette.len() && palette[i] == r && palette[i+1] == g && palette[i+2] == b {
+            return Some(i / 3);
+        }
+    }
+    None
+}
+
 /// Convert an RGB image to LA using PIL's BT.601 formula + opaque alpha.
 pub fn pil_grayscale_alpha(img: &DynamicImage) -> image::GrayAlphaImage {
     let gray = pil_grayscale(img);
