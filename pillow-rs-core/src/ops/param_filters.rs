@@ -95,8 +95,9 @@ impl Image {
     }
 
     /// Mode filter: each pixel becomes the most common value in its neighborhood.
-    /// NOTE: Not yet a PipelineOp variant; executes immediately.
+    /// Per-channel mode (matching PIL), not grayscale.
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
+        let size = size.max(3) | 1; // ensure odd, at least 3
         let img = self.materialize()?;
         let rgb = img.to_rgb8();
         let (w, h) = rgb.dimensions();
@@ -105,28 +106,37 @@ impl Image {
 
         for y in 0..h {
             for x in 0..w {
-                let mut hist = [0u32; 256];
+                let mut r_hist = [0u32; 256];
+                let mut g_hist = [0u32; 256];
+                let mut b_hist = [0u32; 256];
                 for dy in -half..=half {
                     for dx in -half..=half {
                         let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
                         let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
                         let p = rgb.get_pixel(sx, sy);
-                        let l = crate::color::rgb_to_luma_u8(p[0], p[1], p[2]);
-                        hist[l as usize] += 1;
+                        r_hist[p[0] as usize] += 1;
+                        g_hist[p[1] as usize] += 1;
+                        b_hist[p[2] as usize] += 1;
                     }
                 }
-                let mut mode_val = 0u8;
-                let mut max_count = 0u32;
-                for (v, &count) in hist.iter().enumerate() {
-                    if count > max_count {
-                        max_count = count;
-                        mode_val = v as u8;
-                    }
+                let mut r_mode = 0u8; let mut g_mode = 0u8; let mut b_mode = 0u8;
+                let mut r_max = 0u32; let mut g_max = 0u32; let mut b_max = 0u32;
+                for v in 0..256 {
+                    if r_hist[v] > r_max { r_max = r_hist[v]; r_mode = v as u8; }
+                    if g_hist[v] > g_max { g_max = g_hist[v]; g_mode = v as u8; }
+                    if b_hist[v] > b_max { b_max = b_hist[v]; b_mode = v as u8; }
                 }
-                out.put_pixel(x, y, image::Rgb([mode_val, mode_val, mode_val]));
+                out.put_pixel(x, y, image::Rgb([r_mode, g_mode, b_mode]));
             }
         }
 
-        Ok(Image::Loaded(DynamicImage::ImageRgb8(out), None))
+        let result = crate::image::preserve_mode(&DynamicImage::ImageRgb8(img.to_rgb8()), DynamicImage::ImageRgb8(out));
+        Ok(Image::Loaded(result, None))
+    }
+
+    /// Rank filter: each pixel becomes the k-th smallest value in its neighborhood.
+    pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
+        let size = size.max(3) | 1; // ensure odd, at least 3
+        Ok(Image::push_op(self, PipelineOp::RankFilter { size, rank }))
     }
 }

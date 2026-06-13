@@ -29,7 +29,12 @@ class Image:
         if rust_image is None:
             rust_image = RustImage()
         self._rust_image = rust_image
-        self._explicit_mode = None  # for CMYK, YCbCr, HSV, I, F stored as RGB/RGBA
+        # Inherit explicit mode from Rust pipeline (e.g. "1", "P", etc.)
+        try:
+            em = rust_image.explicit_mode()
+            self._explicit_mode = em if em else None
+        except Exception:
+            self._explicit_mode = None
 
     @classmethod
     def open(
@@ -202,6 +207,9 @@ class Image:
     def filter(self, filter_type) -> "Image":
         if self.mode == "P":
             raise ValueError("cannot filter palette images")
+        # Parametric filter objects have _apply(); string names go to Rust
+        if hasattr(filter_type, '_apply'):
+            return filter_type._apply(self._rust_image)
         rust_image = self._rust_image.filter(str(filter_type))
         return Image(rust_image)
 

@@ -272,6 +272,24 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn box_blur(&self, radius: Option<f64>) -> PyResult<PyImage> {
+        let rs = self.inner.box_blur(radius.unwrap_or(2.0) as f32)
+            .map_err(map_error)?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn mode_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
+        let rs = self.inner.mode_filter(size.unwrap_or(3))
+            .map_err(map_error)?;
+        Ok(PyImage { inner: rs })
+    }
+
+    fn rank_filter(&self, size: Option<u32>, rank: Option<u32>) -> PyResult<PyImage> {
+        let rs = self.inner.rank_filter(size.unwrap_or(3), rank.unwrap_or(0))
+            .map_err(map_error)?;
+        Ok(PyImage { inner: rs })
+    }
+
     fn getchannel(&mut self, channel: i32) -> PyResult<PyImage> {
         let rs = self.inner.getchannel(channel).map_err(map_error)?;
         Ok(PyImage { inner: rs })
@@ -538,6 +556,10 @@ impl PyImage {
     #[getter]
     fn mode(&mut self) -> PyResult<String> {
         self.inner.mode().map_err(map_error)
+    }
+
+    fn explicit_mode(&self) -> PyResult<Option<String>> {
+        Ok(self.inner.explicit_mode().map(|s| s.to_string()))
     }
 
     #[getter]

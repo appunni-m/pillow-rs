@@ -845,7 +845,7 @@ fn is_grayscale_rgb(img: &DynamicImage) -> bool {
 
 /// Helper: preserve the color mode of the input image after operations
 /// that may convert to RGBA (e.g., the `image` crate's resize always returns RGBA).
-fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicImage {
+pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicImage {
     let orig_color = original.color();
     let res_color = result.color();
     if orig_color == res_color {
@@ -1230,7 +1230,38 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
         PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
-        PipelineOp::BoxBlur { radius } => Ok(img.blur(*radius as f32)),
+        PipelineOp::BoxBlur { radius } => {
+            // PIL BoxBlur: average pixels in (2*radius+1)×(2*radius+1) neighborhood
+            // Uses truncation (floor), keeps original border pixels
+            let r = *radius as i32;
+            if r <= 0 { return Ok(img.clone()); }
+            let rgb = img.to_rgb8();
+            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
+            let mut out = rgb.clone();
+            let size = (2 * r + 1) as u32;
+            let area = (size * size) as u32;
+            for y in r..h - r {
+                for x in r..w - r {
+                    let mut sum_r: u32 = 0;
+                    let mut sum_g: u32 = 0;
+                    let mut sum_b: u32 = 0;
+                    for dy in -r..=r {
+                        for dx in -r..=r {
+                            let p = rgb.get_pixel((x + dx) as u32, (y + dy) as u32);
+                            sum_r += p[0] as u32;
+                            sum_g += p[1] as u32;
+                            sum_b += p[2] as u32;
+                        }
+                    }
+                    out.put_pixel(x as u32, y as u32, image::Rgb([
+                        (sum_r / area) as u8,
+                        (sum_g / area) as u8,
+                        (sum_b / area) as u8,
+                    ]));
+                }
+            }
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+        }
         PipelineOp::MedianFilter { size } => {
             rank_filter_impl(img, *size, *size * *size / 2)
         }
