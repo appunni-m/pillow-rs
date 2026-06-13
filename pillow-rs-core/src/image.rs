@@ -1293,34 +1293,56 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         }
         PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
         PipelineOp::BoxBlur { radius } => {
-            // PIL BoxBlur: ceiling division, filters ALL pixels (clamping at borders)
+            // PIL BoxBlur: separable 2-pass with 24-bit fixed-point arithmetic
+            // Uses clamping at borders (repeating edge pixels)
             let r = *radius as i32;
             if r <= 0 { return Ok(img.clone()); }
             let rgb = img.to_rgb8();
-            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let mut out = image::RgbImage::new(w as u32, h as u32);
-            let size = (2 * r + 1) as u32;
-            let area = (size * size) as u32;
-            let area_minus_1 = area - 1;
+            let (w, h) = (rgb.width() as u32, rgb.height() as u32);
+            let window = (2 * r + 1) as u32;
+            // Fixed-point: ww = 2^24 / window_size, bias = 2^23
+            let ww: u32 = ((1u64 << 24) / window as u64) as u32;
+            let bias: u32 = 1u32 << 23;
+
+            // Horizontal pass
+            let mut hpass = image::RgbImage::new(w, h);
             for y in 0..h {
                 for x in 0..w {
-                    let mut sum_r: u32 = 0;
-                    let mut sum_g: u32 = 0;
-                    let mut sum_b: u32 = 0;
-                    for dy in -r..=r {
-                        for dx in -r..=r {
-                            let sx = (x + dx).clamp(0, w - 1) as u32;
-                            let sy = (y + dy).clamp(0, h - 1) as u32;
-                            let p = rgb.get_pixel(sx, sy);
-                            sum_r += p[0] as u32;
-                            sum_g += p[1] as u32;
-                            sum_b += p[2] as u32;
-                        }
+                    let mut acc_r: u64 = 0;
+                    let mut acc_g: u64 = 0;
+                    let mut acc_b: u64 = 0;
+                    for dx in -r..=r {
+                        let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
+                        let p = rgb.get_pixel(sx, y);
+                        acc_r += p[0] as u64;
+                        acc_g += p[1] as u64;
+                        acc_b += p[2] as u64;
                     }
-                    out.put_pixel(x as u32, y as u32, image::Rgb([
-                        ((sum_r + area_minus_1) / area) as u8,
-                        ((sum_g + area_minus_1) / area) as u8,
-                        ((sum_b + area_minus_1) / area) as u8,
+                    hpass.put_pixel(x, y, image::Rgb([
+                        ((acc_r * ww as u64 + bias as u64) >> 24) as u8,
+                        ((acc_g * ww as u64 + bias as u64) >> 24) as u8,
+                        ((acc_b * ww as u64 + bias as u64) >> 24) as u8,
+                    ]));
+                }
+            }
+            // Vertical pass
+            let mut out = image::RgbImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let mut acc_r: u64 = 0;
+                    let mut acc_g: u64 = 0;
+                    let mut acc_b: u64 = 0;
+                    for dy in -r..=r {
+                        let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
+                        let p = hpass.get_pixel(x, sy);
+                        acc_r += p[0] as u64;
+                        acc_g += p[1] as u64;
+                        acc_b += p[2] as u64;
+                    }
+                    out.put_pixel(x, y, image::Rgb([
+                        ((acc_r * ww as u64 + bias as u64) >> 24) as u8,
+                        ((acc_g * ww as u64 + bias as u64) >> 24) as u8,
+                        ((acc_b * ww as u64 + bias as u64) >> 24) as u8,
                     ]));
                 }
             }
