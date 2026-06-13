@@ -125,7 +125,8 @@ def _run_op(img, op):
     if func == "draft": img.draft(img.mode, (50, 50)); return img
     if func == "effect_noise":
         try:
-            return Image.effect_noise((100, 100), 10.0)
+            import pillow_rs
+            return pillow_rs.Image.effect_noise((100, 100), 10.0)
         except Exception:
             return None
     # Properties / accessors
@@ -177,7 +178,7 @@ def _run_op(img, op):
         if func in ('autocontrast', 'equalize', 'invert', 'flip', 'mirror',
                      'grayscale', 'exif_transpose'):
             return getattr(ImageOps, func)(img)
-        if func == 'deform': return None
+        if func == 'deform': return img  # fixture returns img unchanged
         if func in ('posterize',):
             return ImageOps.posterize(img, 4)
         if func in ('solarize',):
@@ -217,7 +218,7 @@ def _run_op(img, op):
         elif func == 'regular_polygon': draw.regular_polygon((25,25,15), 5, fill=fill)
         elif func == 'bitmap': draw.bitmap((5,5), img2, fill=fill)
         elif func in ('textbbox','multiline_textbbox','textlength','getfont','textsize'):
-            return None
+            return img  # no-op: fixture generator also returns img unchanged
         elif func == 'fill': draw.rectangle([0,0,img.width,img.height], fill=fill)
         return img
 
@@ -231,8 +232,11 @@ def _run_op(img, op):
         if func == 'alpha_composite': img.alpha_composite(img2); return img
         if func in ('new', 'open', 'fromarray', 'frombytes'): return img
         if func == 'effect_noise':
-            try: return Image.effect_noise((100,100), 10.0)
-            except: return None
+            try:
+                import pillow_rs
+                return pillow_rs.Image.effect_noise((100, 100), 10.0)
+            except Exception:
+                return None
 
     # ImageColor
     if module == 'ImageColor':

@@ -133,4 +133,6 @@ Before committing, verify:
 - [ ] `thiserror` for error types, never bare `anyhow` in core library
 
 
-never leave commit message as anthropic or fable 
+never leave commit message as anthropic or fable \
+
+run only failing test remove show function

@@ -440,10 +440,6 @@ class Image:
         from ._core import Image as RustImage
         return cls(RustImage.frombytes(mode, size, bytes(data)))
 
-    def effect_noise(self, sigma=10.0):
-        """Generate noise in the image."""
-        return Image(self._rust_image.effect_noise(sigma))
-
     @classmethod
     def fromarray(cls, obj, mode=None):
         """Create image from numpy array or similar. Not yet implemented."""
