@@ -880,28 +880,13 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
             ColorMode::Mode1 => {
-                // PIL convert to "1": Floyd-Steinberg dithering
+                // PIL convert("1", dither=NONE): simple threshold at 128
                 let gray = crate::color::pil_grayscale(img);
-                let (w, h) = (gray.width() as usize, gray.height() as usize);
-                let mut pixels: Vec<f32> = gray.pixels().map(|p| p[0] as f32).collect();
-                for y in 0..h {
-                    for x in 0..w {
-                        let idx = y * w + x;
-                        let old = pixels[idx];
-                        let new = if old >= 128.0 { 255.0 } else { 0.0 };
-                        pixels[idx] = new;
-                        let error = old - new;
-                        if x + 1 < w { pixels[idx + 1] += error * 7.0 / 16.0; }
-                        if y + 1 < h {
-                            if x > 0 { pixels[idx + w - 1] += error * 3.0 / 16.0; }
-                            pixels[idx + w] += error * 5.0 / 16.0;
-                            if x + 1 < w { pixels[idx + w + 1] += error * 1.0 / 16.0; }
-                        }
-                    }
+                let (w, h) = gray.dimensions();
+                let mut out = image::GrayImage::new(w, h);
+                for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
+                    op[0] = if gp[0] >= 128 { 255 } else { 0 };
                 }
-                let data: Vec<u8> = pixels.iter().map(|&p| p as u8).collect();
-                let out = image::GrayImage::from_raw(w as u32, h as u32, data)
-                    .ok_or_else(|| PilError::ValueError("convert to 1: buffer error".into()))?;
                 Ok(DynamicImage::ImageLuma8(out))
             }
             _ => Err(PilError::NotImplementedError(format!(

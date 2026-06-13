@@ -1,5 +1,5 @@
-"""ImagePalette — color palette for 'P' mode images. Pillow-compatible stub."""
-from .image import Image
+"""ImagePalette — color palette for 'P' mode images. Pillow-compatible module."""
+from . import _core
 
 
 class ImagePalette:
@@ -16,14 +16,14 @@ class ImagePalette:
         return p
 
     def getcolor(self, color, image=None):
-        """Get palette index for a color."""
+        """Get palette index for a color. Thin wrapper over Rust search."""
         if not self.palette:
             raise ValueError("empty palette")
         if isinstance(color, (tuple, list)) and len(color) >= 3:
             r, g, b = color[0], color[1], color[2]
-            for i in range(0, len(self.palette), 3):
-                if self.palette[i] == r and self.palette[i+1] == g and self.palette[i+2] == b:
-                    return i // 3
+            idx = _core.palette_search(self.palette, r, g, b)
+            if idx is not None:
+                return idx
         return 0
 
     def getdata(self):

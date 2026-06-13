@@ -211,7 +211,10 @@ class Image:
         return _BAND_NAMES.get(self.mode, (self.mode,))
 
     def copy(self) -> "Image":
-        return Image(self._rust_image.copy())
+        new = Image(self._rust_image.copy())
+        if hasattr(self, '_explicit_mode'):
+            new._explicit_mode = self._explicit_mode
+        return new
 
     def filter(self, filter_type) -> "Image":
         if self.mode == "P":
@@ -338,15 +341,8 @@ class Image:
         return [tuple(raw[i:i+n_bands]) for i in range(0, len(raw), n_bands)]
 
     def putdata(self, data, scale=1.0, offset=0.0):
-        """Replace pixel data from a sequence."""
-        # Flatten sequence into bytes
-        flat = []
-        for item in data:
-            if isinstance(item, (tuple, list)):
-                flat.extend(int(v) for v in item)
-            else:
-                flat.append(int(item))
-        self._rust_image.putdata(flat)
+        """Replace pixel data from a sequence. Flattening done in Rust."""
+        self._rust_image.putdata(data)
 
     def getprojection(self):
         """Return horizontal and vertical projections."""
