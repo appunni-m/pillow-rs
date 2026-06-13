@@ -1023,10 +1023,44 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             if *factor < 2 {
                 return Ok(img.clone());
             }
-            let new_w = img.width() / factor;
-            let new_h = img.height() / factor;
-            let result = DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), image::imageops::FilterType::Nearest));
-            Ok(preserve_mode(img, result))
+            // PIL reduce: average each factor×factor block (no overlap, no resampling)
+            let f = *factor;
+            let rgb = img.to_rgb8();
+            let (w, h) = (rgb.width(), rgb.height());
+            let new_w = w / f;
+            let new_h = h / f;
+            let mut out = image::RgbImage::new(new_w, new_h);
+            for y in 0..new_h {
+                for x in 0..new_w {
+                    let mut sum_r: u32 = 0;
+                    let mut sum_g: u32 = 0;
+                    let mut sum_b: u32 = 0;
+                    let mut count: u32 = 0;
+                    for dy in 0..f {
+                        for dx in 0..f {
+                            let px = x * f + dx;
+                            let py = y * f + dy;
+                            if px < w && py < h {
+                                let p = rgb.get_pixel(px, py);
+                                sum_r += p[0] as u32;
+                                sum_g += p[1] as u32;
+                                sum_b += p[2] as u32;
+                                count += 1;
+                            }
+                        }
+                    }
+                    if count > 0 {
+                        // PIL reduce uses rounding: (sum + count/2) / count
+                        let half = count / 2;
+                        out.put_pixel(x, y, image::Rgb([
+                            ((sum_r + half) / count) as u8,
+                            ((sum_g + half) / count) as u8,
+                            ((sum_b + half) / count) as u8,
+                        ]));
+                    }
+                }
+            }
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
 
         // ── Color/Convert ──
