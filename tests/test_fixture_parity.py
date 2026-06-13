@@ -83,7 +83,7 @@ def test_fixture_parity(fixture_file):
     except NotImplementedError as e:
         pytest.xfail(f'{op_def["module"]}.{op_def["target"]}: {e}')
 
-    if result is None:
+    if result is None and fixture["expected"]["result_type"] != "value":
         pytest.xfail("result is None")
 
     expected = fixture["expected"]
