@@ -1250,12 +1250,13 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                             b += px[2] as f32 * kernel[ki];
                         }
                     }
-                    // PIL: offset += 0.5 (integer rounding via float), then clip8 truncation
-                    let off = *offset as f32 + 0.5;
+                    // PIL uses f64/double internally; match precision with f64
+                    let inv_scale = 1.0f64 / *scale as f64;
+                    let off = *offset as f64 + 0.5;
                     out.put_pixel(x as u32, y as u32, image::Rgb([
-                        ((r * inv_scale + off) as i32).clamp(0, 255) as u8,
-                        ((g * inv_scale + off) as i32).clamp(0, 255) as u8,
-                        ((b * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((r as f64 * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((g as f64 * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        ((b as f64 * inv_scale + off) as i32).clamp(0, 255) as u8,
                     ]));
                 }
             }
