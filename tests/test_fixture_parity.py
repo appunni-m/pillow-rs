@@ -252,7 +252,14 @@ def _run_op(img, op):
         if func == 'composite': return Image.composite(img, img2, img2)
         if func == 'merge': return Image.merge(img.mode, img.split() if img.split() else [img])
         if func == 'eval': return Image.eval(img, lambda x: min(255, x+10))
-        if func == 'alpha_composite': img.alpha_composite(img2); return img
+        if func == 'alpha_composite':
+            fg = img.copy()
+            try:
+                fg.putalpha(128)
+            except Exception:
+                pass
+            img.alpha_composite(fg)
+            return img
         if func in ('new', 'open', 'fromarray', 'frombytes'): return img
         if func == 'effect_noise':
             try:
