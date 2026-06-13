@@ -967,18 +967,19 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             offset,
         } => {
             let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
+            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
             let inv_scale = 1.0 / scale;
-            let mut out = image::RgbImage::new(w, h);
-            for y in 0..h {
-                for x in 0..w {
+            let mut out = rgb.clone();  // start with original (border pixels unchanged)
+            // Only filter interior pixels with complete 3×3 neighborhood (matching PIL)
+            for y in 1..h-1 {
+                for x in 1..w-1 {
                     let mut r = 0f32;
                     let mut g = 0f32;
                     let mut b = 0f32;
                     for ky in 0..3i32 {
                         for kx in 0..3i32 {
-                            let sx = (x as i32 + kx - 1).clamp(0, w as i32 - 1) as u32;
-                            let sy = (y as i32 + ky - 1).clamp(0, h as i32 - 1) as u32;
+                            let sx = (x + kx - 1) as u32;
+                            let sy = (y + ky - 1) as u32;
                             let px = rgb.get_pixel(sx, sy);
                             let ki = (ky * 3 + kx) as usize;
                             r += px[0] as f32 * kernel[ki];
@@ -987,8 +988,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                         }
                     }
                     out.put_pixel(
-                        x,
-                        y,
+                        x as u32,
+                        y as u32,
                         image::Rgb([
                             (r * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,
                             (g * inv_scale + *offset as f32).clamp(0.0, 255.0).round() as u8,

@@ -13,6 +13,16 @@ Workspace with three crates:
 
 **Iron rule:** Core never touches Python objects, JS objects, file paths, or network. Core takes Rust primitives, returns Rust primitives. All I/O and type conversion in binding crates.
 
+### Python Binding Rules (THIN CLIENTS)
+Binding files in `pillow-rs-py/python/pillow_rs/` MUST be thin wrappers:
+- **NO** `for`/`while` loops
+- **NO** list comprehensions `[x for x in y]`
+- **NO** `import math`, `import tempfile`, `import os`, `import subprocess`
+- **NO** arithmetic (`+`, `-`, `*`, `/`, `min`, `max`, `sorted`, `sum`)
+- **NO** `if/elif/else` beyond isinstance checks, None defaults, or mode dispatch
+- All logic lives in `pillow-rs-core/src/`; bindings delegate via `_core.xxx()` or `_rust_image.xxx()`
+- Coordinate parsing, font dispatch, text layout, palette search → ALL in Rust
+
 ## Reference Code
 
 - **Puhu** (`puhu/` in this repo) — Rust-based Pillow subset. Reference for algorithms, Pillow compatibility quirks, lazy loading pattern. NOT for architecture (Puhu is monolithic PyO3-only).
