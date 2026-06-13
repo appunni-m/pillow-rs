@@ -1387,31 +1387,32 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Equalize => {
-            // PIL: per-channel CDF-based histogram equalization (no clipping in PIL 12)
+            // PIL 12 equalize: build LUT from non-zero histogram bins
+            // step = (sum(non_zero_bins) - last_bin_count) / 255
+            // lut[i] = floor(accumulator / step) where accumulator tracks step/2 + cumulative hist
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
-            let n = (w * h) as f64;
             let mut out = image::RgbImage::new(w, h);
             for ch in 0..3 {
                 let mut hist = [0u32; 256];
                 for px in rgb.pixels() { hist[px[ch] as usize] += 1; }
-                // Find cdf_min: cumulative count before the first non-zero bin
-                let mut cdf_min = 0u32;
-                for i in 0..256 {
-                    if hist[i] > 0 { break; }
-                    cdf_min += hist[i]; // always 0 since hist[i]==0 here
+                // Collect non-zero bins
+                let nonzero: Vec<u32> = hist.iter().filter(|&&c| c > 0).copied().collect();
+                if nonzero.len() <= 1 {
+                    // Identity LUT
+                    continue; // out already has original pixels from the RgbImage
                 }
-                // Actually PIL uses the first populated bin as cdf_min
-                for i in 0..256 {
-                    if hist[i] > 0 { cdf_min = if i > 0 { hist[0..i].iter().sum() } else { 0 }; break; }
+                let total: u32 = nonzero.iter().sum();
+                let step = (total - nonzero[nonzero.len() - 1]) / 255;
+                if step == 0 {
+                    continue; // Identity LUT
                 }
-                let mut cdf = [0u32; 256];
-                let mut acc = 0u32;
-                for i in 0..256 { acc += hist[i]; cdf[i] = acc; }
-                let denom = (n - cdf_min as f64).max(1.0);
-                let lut: Vec<u8> = (0..256)
-                    .map(|v| ((cdf[v] as f64 - cdf_min as f64) * 255.0 / denom).round().clamp(0.0, 255.0) as u8)
-                    .collect();
+                let mut n = step / 2;
+                let mut lut = [0u8; 256];
+                for i in 0..256 {
+                    lut[i] = (n / step).min(255) as u8;
+                    n += hist[i];
+                }
                 for (opx, ipx) in out.pixels_mut().zip(rgb.pixels()) {
                     opx[ch] = lut[ipx[ch] as usize];
                 }
