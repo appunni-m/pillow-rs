@@ -5,138 +5,93 @@ from . import _core
 
 def autocontrast(image: Image, cutoff: float = 0, ignore=None, mask=None,
                  preserve_tone: bool = False) -> Image:
-    """Normalize image contrast."""
     return Image(_core.ops_autocontrast(image._rust_image, cutoff))
 
 
 def equalize(image: Image, mask=None) -> Image:
-    """Equalize the image histogram."""
     return Image(_core.ops_equalize(image._rust_image))
 
 
 def invert(image: Image) -> Image:
-    """Invert all pixel values (negative)."""
     return Image(_core.ops_invert(image._rust_image))
 
 
 def flip(image: Image) -> Image:
-    """Flip image vertically (top to bottom)."""
     return Image(_core.ops_flip(image._rust_image))
 
 
 def mirror(image: Image) -> Image:
-    """Mirror image horizontally (left to right)."""
     return Image(_core.ops_mirror(image._rust_image))
 
 
 def posterize(image: Image, bits: int) -> Image:
-    """Reduce number of bits per color channel."""
     return Image(_core.ops_posterize(image._rust_image, bits))
 
 
 def solarize(image: Image, threshold: int = 128) -> Image:
-    """Invert all pixel values above threshold."""
     return Image(_core.ops_solarize(image._rust_image, threshold))
 
 
 def grayscale(image: Image) -> Image:
-    """Convert image to grayscale."""
     return Image(_core.ops_grayscale(image._rust_image))
 
 
 def expand(image: Image, border=0, fill=0) -> Image:
-    """Add a border around the image."""
+    """Add a border around the image. Delegates to Rust pipeline."""
     if isinstance(border, int):
         border = (border, border, border, border)
-    w, h = image.size
-    new_w = w + border[0] + border[2]
-    new_h = h + border[1] + border[3]
     if isinstance(fill, int):
-        fill = (fill, fill, fill)
-    expanded = Image.new(image.mode, (new_w, new_h), fill)
-    expanded.paste(image, (border[0], border[1]))
-    return expanded
+        fill = (fill, fill, fill, 255)
+    elif isinstance(fill, tuple) and len(fill) == 3:
+        fill = (fill[0], fill[1], fill[2], 255)
+    return Image(_core.ops_expand(image._rust_image, max(border), fill))
 
 
 def crop(image: Image, border: int = 0) -> Image:
-    """Crop border off image edges."""
-    w, h = image.size
-    return image.crop((border, border, w - border, h - border))
+    """Crop border off image edges. Delegates to Rust pipeline."""
+    return Image(_core.ops_crop_border(image._rust_image, border))
 
 
 def scale(image: Image, factor: float, resample=None) -> Image:
-    """Scale image by factor."""
-    w, h = image.size
-    return image.resize((int(w * factor), int(h * factor)), resample)
+    """Scale image by factor. Delegates to Rust pipeline."""
+    return Image(_core.ops_scale(image._rust_image, factor, None))
 
 
 def contain(image: Image, size, method=None) -> Image:
-    """Resize to fit within size, preserving aspect ratio."""
-    from .enums import Resampling
-    if method is None:
-        method = Resampling.BICUBIC
-    w, h = image.size
-    tw, th = size
-    scale = min(tw / w, th / h)
-    return image.resize((int(w * scale), int(h * scale)), method)
+    """Resize to fit within size. Delegates to Rust pipeline."""
+    return Image(_core.ops_contain(image._rust_image, (size[0], size[1]), None))
 
 
 def cover(image: Image, size, method=None) -> Image:
-    """Resize to cover size (scale so smallest dimension matches target). PIL-compatible."""
-    from .enums import Resampling
-    if method is None:
-        method = Resampling.BICUBIC
-    w, h = image.size
-    tw, th = size
-    scale = max(tw / w, th / h)
-    return image.resize((int(w * scale + 0.5), int(h * scale + 0.5)), method)
+    """Resize to cover size. Delegates to Rust pipeline."""
+    return Image(_core.ops_cover(image._rust_image, (size[0], size[1]), None))
 
 
 def fit(image: Image, size, method=None, bleed=0.0, centering=(0.5, 0.5)):
-    """Resize and crop to fit exact dimensions."""
-    from .enums import Resampling
-    if method is None:
-        method = Resampling.BICUBIC
-    w, h = image.size
-    tw, th = size
-    scale = max(tw / w, th / h)
-    rw, rh = int(w * scale + 0.5), int(h * scale + 0.5)
-    resized = image.resize((rw, rh), method)
-    left = (rw - tw) // 2
-    top = (rh - th) // 2
-    return resized.crop((left, top, left + tw, top + th))
+    """Resize and crop to fit exact dimensions. Delegates to Rust pipeline."""
+    return Image(_core.ops_fit(image._rust_image, (size[0], size[1]), None, bleed, centering))
 
 
 def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
-    """Pad image to given size."""
-    from .enums import Resampling
-    if method is None:
-        method = Resampling.BICUBIC
-    if color is None:
-        color = 0
-    w, h = image.size
-    tw, th = size
-    result = Image.new(image.mode, (tw, th), color)
-    x = int((tw - w) * centering[0])
-    y = int((th - h) * centering[1])
-    result.paste(image, (x, y))
-    return result
+    """Pad image to given size. Delegates to Rust pipeline."""
+    c = (0, 0, 0, 255) if color is None else (
+        (color, color, color, 255) if isinstance(color, int) else
+        (color[0], color[1], color[2], 255) if len(color) == 3 else color
+    )
+    return Image(_core.ops_pad(image._rust_image, (size[0], size[1]), c, centering))
 
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
-    """Colorize grayscale image — delegates to Rust via PipelineOp."""
+    """Colorize grayscale image — delegates to Rust."""
     if image.mode != "L":
         image = image.convert("L")
-    # Resolve color strings to tuples
     if isinstance(black, str):
         from PIL.ImageColor import getrgb
         black = getrgb(black)
     if isinstance(white, str):
         from PIL.ImageColor import getrgb
         white = getrgb(white)
-    # Delegate to Rust via core binding
-    rust_image = _core.ops_colorize(image._rust_image, black[:3], white[:3])
-    return Image(rust_image)
+    return Image(_core.ops_colorize(image._rust_image, black[:3], white[:3]))
 
 
 def exif_transpose(image: Image, *, in_place=False):
