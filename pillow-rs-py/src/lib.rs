@@ -606,6 +606,13 @@ impl PyFont {
     }
 
     #[staticmethod]
+    fn truetype_from_bytes(data: Vec<u8>, size: f64) -> PyResult<Self> {
+        let font = pillow_rs_core::font::Font::from_bytes(data, size as f32)
+            .map_err(map_error)?;
+        Ok(PyFont { inner: font })
+    }
+
+    #[staticmethod]
     fn load_default() -> PyResult<Self> {
         Err(pyo3::exceptions::PyNotImplementedError::new_err(
             "load_default(): use ImageFont.truetype('path.ttf', size) instead"

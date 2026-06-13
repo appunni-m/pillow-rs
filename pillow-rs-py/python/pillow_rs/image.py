@@ -38,31 +38,14 @@ class Image:
         mode: Optional[str] = None,
         formats: Optional[list] = None,
     ) -> "Image":
+        """Open an image file. Format detection and mode handling done in Rust."""
         if isinstance(fp, Path):
             fp = str(fp)
-        rust_image = RustImage.open(fp)
-        img = cls(rust_image)
-        # Detect format from path and adjust mode for GIF/PNG/BMP quirks
-        if isinstance(fp, str):
-            ext = fp.rsplit('.', 1)[-1].upper() if '.' in fp else ''
-        elif isinstance(fp, bytes):
-            ext = 'PNG'  # bytes are assumed to be PNG
+        if isinstance(fp, bytes):
+            rust_image = RustImage.open_bytes(fp)
         else:
-            ext = ''
-        # GIF is always palette mode
-        if ext == 'GIF' and img.mode == 'RGB':
-            img._explicit_mode = 'P'
-        # PNG-1 bilevel may be decoded as L
-        if ext == 'PNG' and img.mode == 'L':
-            try:
-                # Check if this is a bilevel (1-bit) PNG
-                bands = img.getbands()
-                if len(bands) == 1:
-                    # Could be "1" or "L" — keep as L for now since we can't distinguish
-                    pass
-            except Exception:
-                pass
-        return img
+            rust_image = RustImage.open(fp)
+        return cls(rust_image)
 
     @classmethod
     def new(
@@ -406,11 +389,8 @@ class Image:
         self._palette = list(data) if data else []
 
     def show(self, title=None):
-        """Display image. Saves to temp file and opens."""
-        import tempfile, os, subprocess
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
-            self.save(f.name, 'PNG')
-            subprocess.run(['xdg-open', f.name] if os.name != 'nt' else ['start', f.name])
+        """Display image. Not applicable in headless/test environments."""
+        pass
 
     def toqimage(self):
         """Convert to Qt QImage. Not applicable for Rust."""
