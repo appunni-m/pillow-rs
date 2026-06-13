@@ -1268,8 +1268,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Equalize => {
-            // PIL: per-channel histogram equalization
-            // For each channel: histogram → CDF → lut[v] = cdf[v]*255/total
+            // PIL: per-channel CDF-based histogram equalization (no clipping in PIL 12)
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             let n = (w * h) as f64;
@@ -1277,13 +1276,22 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             for ch in 0..3 {
                 let mut hist = [0u32; 256];
                 for px in rgb.pixels() { hist[px[ch] as usize] += 1; }
+                // Find cdf_min: cumulative count before the first non-zero bin
+                let mut cdf_min = 0u32;
+                for i in 0..256 {
+                    if hist[i] > 0 { break; }
+                    cdf_min += hist[i]; // always 0 since hist[i]==0 here
+                }
+                // Actually PIL uses the first populated bin as cdf_min
+                for i in 0..256 {
+                    if hist[i] > 0 { cdf_min = if i > 0 { hist[0..i].iter().sum() } else { 0 }; break; }
+                }
                 let mut cdf = [0u32; 256];
                 let mut acc = 0u32;
                 for i in 0..256 { acc += hist[i]; cdf[i] = acc; }
-                let cdf_min = hist.iter().position(|&c| c > 0).map(|p| cdf[p] - hist[p]).unwrap_or(0) as f64;
-                let denom = (n - cdf_min).max(1.0);
+                let denom = (n - cdf_min as f64).max(1.0);
                 let lut: Vec<u8> = (0..256)
-                    .map(|v| ((cdf[v] as f64 - cdf_min) * 255.0 / denom).round().clamp(0.0, 255.0) as u8)
+                    .map(|v| ((cdf[v] as f64 - cdf_min as f64) * 255.0 / denom).round().clamp(0.0, 255.0) as u8)
                     .collect();
                 for (opx, ipx) in out.pixels_mut().zip(rgb.pixels()) {
                     opx[ch] = lut[ipx[ch] as usize];
