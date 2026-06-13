@@ -115,7 +115,11 @@ def _run_op(img, op):
     if func == "transform": return img.transform((50, 50), 0, [1, 0, 0, 0, 1, 0])
     if func == "getchannel": return img.getchannel(0)
     if func == "putpixel":
-        img.putpixel((0, 0), (255, 0, 0))
+        n_bands = len(img.getbands()) if hasattr(img, 'getbands') else 1
+        if n_bands >= 4: img.putpixel((0, 0), (255, 0, 0, 255))
+        elif n_bands == 3: img.putpixel((0, 0), (255, 0, 0))
+        elif n_bands == 2: img.putpixel((0, 0), (255, 255))
+        else: img.putpixel((0, 0), 255)
         return img
     if func == "apply_transparency": return img.apply_transparency()
     if func == "getpalette": return img.getpalette()
