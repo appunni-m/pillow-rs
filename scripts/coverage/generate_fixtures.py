@@ -343,7 +343,8 @@ def _run_imageops(img, func, mode):
     if func in ("crop",):
         return getattr(PILImageOps, func)(img, 5), {"border": 5, "func": func}
     if func in ("colorize",):
-        return getattr(PILImageOps, func)(img, "black", "white"), {"func": func, "black": "black", "white": "white"}
+        gray = img.convert("L")
+        return getattr(PILImageOps, func)(gray, "black", "white"), {"func": func, "black": "black", "white": "white"}
     if func in ("exif_transpose",):
         return img, {}
     if func in ("deform",): return img, {}
@@ -367,7 +368,8 @@ def _run_chops(img, func, mode):
     if func in ("blend",):
         return getattr(PILImageChops, func)(img, img2, 0.5), {"func": func, "alpha": 0.5}
     if func in ("composite",):
-        return getattr(PILImageChops, func)(img, img2, img2), {"func": func}
+        mask = PILImage.new("L", img.size, 128)
+        return getattr(PILImageChops, func)(img, img2, mask), {"func": func}
     if func in ("invert", "constant", "duplicate", "offset"):
         if func == "offset":
             return getattr(PILImageChops, func)(img, 5, 5), {"func": func, "x": 5, "y": 5}
