@@ -29,7 +29,13 @@ impl Image {
                 "resize dimensions must be > 0".into(),
             ));
         }
-        let filter = parse_resample(filter)?;
+        let mut filter = parse_resample(filter)?;
+        // PIL forces NEAREST for mode "1" and "P" to avoid non-binary gray values
+        if let Some(m) = self.explicit_mode() {
+            if m == "1" || m == "P" {
+                filter = ResampleFilter::Nearest;
+            }
+        }
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
     }
 
