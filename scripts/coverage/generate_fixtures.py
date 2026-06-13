@@ -319,10 +319,9 @@ def _run_image_op(img, func, mode):
         except Exception:
             return None, {}
     if func in ("save",):
-        buf = BytesIO()
+        # Compare raw bytes — PNG encoding differs by implementation
         try:
-            img.save(buf, format="PNG")
-            return buf.getvalue(), {"format": "PNG"}
+            return img.tobytes(), {"format": "raw"}
         except Exception:
             return None, {}
     return img, {}
