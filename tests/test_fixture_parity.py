@@ -134,8 +134,9 @@ def _run_op(img, op):
                 'palette', 'is_animated', 'n_frames', 'has_transparency_data'):
         return getattr(img, func)
     if func == 'getexif': return None  # EXIF parsing not implemented
+    if func == 'show': return None  # don't open windows during tests
     if func in ('getxmp', 'get_child_images',
-                'get_flattened_data', 'show'):
+                'get_flattened_data'):
         try:
             return getattr(img, func)()
         except Exception:
