@@ -452,7 +452,7 @@ impl Image {
     }
 
     /// Return the explicit mode override if set (e.g. "1", "P")
-    fn explicit_mode(&self) -> Option<&str> {
+    pub fn explicit_mode(&self) -> Option<&str> {
         match self {
             Image::Loaded(_, Some(m)) => Some(m.as_str()),
             Image::Pipeline { explicit_mode: Some(m), .. } => Some(m.as_str()),
