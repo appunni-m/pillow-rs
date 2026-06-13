@@ -27,6 +27,12 @@ def pytest_configure(config):
         "covers(func, mode=None, variant=None, target=None): mark test as covering a manifest entry")
 
 
+def pytest_runtest_teardown(item, nextitem):
+    """Force GC after every test — Rust Image objects aren't tracked by Python's GC."""
+    import gc
+    gc.collect()
+
+
 def pytest_collection_modifyitems(config, items):
     """Validate @pytest.mark.covers markers against manifest.
 
