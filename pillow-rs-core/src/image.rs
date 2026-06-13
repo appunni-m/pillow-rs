@@ -1127,7 +1127,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                     out.put_pixel(x, y, image::Rgb([r, gv, b]));
                 }
             }
-            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+            // Colorize always outputs RGB (PIL behavior)
+            Ok(DynamicImage::ImageRgb8(out))
         }
         PipelineOp::Contain { w, h, .. } => {
             let (w, h) = (*w, *h);

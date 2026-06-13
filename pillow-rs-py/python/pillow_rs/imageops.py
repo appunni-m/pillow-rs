@@ -140,14 +140,10 @@ def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255,
 
 
 def exif_transpose(image: Image, *, in_place=False):
-    """Transpose based on EXIF orientation. Applies all possible transpositions."""
-    result = image
-    for method in [0, 1]:  # FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM
-        result = result.transpose(method)
+    """Transpose based on EXIF orientation. Returns unchanged (no EXIF parsing yet)."""
     if in_place:
-        image._rust_image = result._rust_image
         return None
-    return result
+    return image.copy()
 
 
 def deform(image: Image, deformer, resample=None):
