@@ -1032,7 +1032,7 @@ def test_fixture_parity(name, fixture_file):
             return
         elif isinstance(result, float) and isinstance(expected_val, (int, float)):
             if abs(result - expected_val) < 0.01:
-                del img, result; return
+                return
         else:
             del result; pytest.xfail(f'{op} x {mode}: value mismatch')
         return
@@ -1077,6 +1077,6 @@ def test_fixture_parity(name, fixture_file):
         if len(raw) > 0:
             pct = diffs / len(raw) * 100
             if pct < 5.0:
-                del img, result, raw; return
+                return
     del img, result, raw  # free Rust memory before xfail keeps traceback
     pytest.xfail(f'Hash mismatch for {op} x {mode}: expected={expected_hash[:12]} got={actual_hash[:12]}')
