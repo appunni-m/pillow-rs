@@ -27,7 +27,7 @@ class BoxBlur:
     def __init__(self, radius=2):
         self.radius = float(radius)
     def _apply(self, rust_image):
-        return Image(rust_image.gaussian_blur(self.radius * 0.5))
+        return Image(rust_image.box_blur(self.radius))
 
 
 class UnsharpMask:
@@ -64,7 +64,7 @@ class ModeFilter:
     def __init__(self, size=3):
         self.size = int(size)
     def _apply(self, rust_image):
-        return Image(rust_image.median_filter(self.size))  # fallback
+        return Image(rust_image.mode_filter(self.size))
 
 
 class RankFilter:
@@ -72,7 +72,7 @@ class RankFilter:
         self.size = int(size)
         self.rank = int(rank)
     def _apply(self, rust_image):
-        raise NotImplementedError("RankFilter")
+        return Image(rust_image.rank_filter(self.size, self.rank))
 
 
 class Kernel:

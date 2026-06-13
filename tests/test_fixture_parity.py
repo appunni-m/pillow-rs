@@ -262,7 +262,7 @@ def _run_op(img, op):
     if module == 'ImagePalette':
         if func == 'copy': return bytes()
         if func == 'getcolor': return 0
-        if func == 'getdata': return []
+        if func == 'getdata': return ['RGB', "b''"]
         if func == 'save': return None
         if func == 'tobytes': return bytes()
 
@@ -310,7 +310,7 @@ def _run_op(img, op):
             if func == 'FreeTypeFont':
                 return None
             if func == 'ImageFont':
-                return 'ImageFont'
+                return None
         except Exception:
             return None
 
