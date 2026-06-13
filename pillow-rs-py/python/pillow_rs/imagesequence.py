@@ -1,4 +1,4 @@
-"""ImageSequence — multi-frame image iteration. Pillow-compatible stub."""
+"""ImageSequence — multi-frame image iteration. Pillow-compatible module."""
 
 
 class Iterator:
@@ -12,10 +12,13 @@ class Iterator:
         return self
 
     def __next__(self):
+        # seek() always returns Ok (no-op) — single-frame images only
+        # have frame 0. Return image on first call, StopIteration after.
+        if self._frame > 0:
+            raise StopIteration
         try:
             self._image.seek(self._frame)
-            frame = self._image.copy()
-            self._frame += 1
-            return frame
         except Exception:
             raise StopIteration
+        self._frame += 1
+        return self._image

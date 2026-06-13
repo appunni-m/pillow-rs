@@ -199,6 +199,10 @@ impl PyImage {
         self.inner.getextrema().map_err(map_error)
     }
 
+    fn stat(&self) -> PyResult<Vec<Vec<f64>>> {
+        self.inner.stat().map_err(map_error)
+    }
+
     fn histogram(&self) -> PyResult<Vec<u32>> {
         self.inner.histogram().map_err(map_error)
     }
