@@ -333,7 +333,7 @@ class Image:
         raw = self._rust_image.getdata(band if band is not None else -1)
         n_bands = len(self.getbands())
         if n_bands == 1:
-            return raw
+            return list(raw)  # PIL returns flat list of ints
         # Group flat bytes into tuples
         return [tuple(raw[i:i+n_bands]) for i in range(0, len(raw), n_bands)]
 
