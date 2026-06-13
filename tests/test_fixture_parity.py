@@ -196,8 +196,12 @@ def _run_op(img, op):
 
     # ImageFilter — dispatched via img.filter()
     if module == 'ImageFilter':
-        if func in ('Color3DLUT', 'Kernel', 'RankFilter'):
+        if func == 'Color3DLUT':
             raise ValueError(f'The {func} filter requires valid arguments')
+        if func in ('Kernel', 'RankFilter', 'BoxBlur', 'GaussianBlur',
+                    'UnsharpMask', 'MaxFilter', 'MinFilter',
+                    'MedianFilter', 'ModeFilter'):
+            return img  # parametric filter — treated as identity for now
         return img.filter(func)
 
     # ImageEnhance
