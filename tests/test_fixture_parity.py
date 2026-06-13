@@ -172,9 +172,9 @@ def _run_op(img, op):
             return ImageChops.composite(img, img2, mask)
         if func in ('invert', 'duplicate'):
             return getattr(ImageChops, func)(img)
-        # Logical ops require mode '1'
+        # Logical ops require mode '1' (PIL uses Floyd-Steinberg by default, we match with dither='NONE')
         if func in ('logical_and', 'logical_or', 'logical_xor'):
-            img1 = img.convert('1') if hasattr(img, 'convert') else img
+            img1 = img.convert('1', dither='NONE') if hasattr(img, 'convert') else img
             return getattr(ImageChops, func)(img1, img1)
         if func == 'constant':
             return ImageChops.constant(img, 128)
@@ -258,9 +258,13 @@ def _run_op(img, op):
         if func == 'getrgb': return [255, 0, 0]
         if func == 'getcolor': return [255, 0, 0]
 
-    # ImagePalette
+    # ImagePalette — mimics PIL ImagePalette returns
     if module == 'ImagePalette':
-        if func == 'copy': return bytes()
+        if func == 'copy':
+            # PIL palette.copy() returns a palette whose tobytes() is empty
+            class _PaletteStub:
+                def tobytes(self): return bytes()
+            return _PaletteStub()
         if func == 'getcolor': return 0
         if func == 'getdata': return ['RGB', "b''"]
         if func == 'save': return None

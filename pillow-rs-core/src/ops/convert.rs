@@ -44,19 +44,33 @@ impl Image {
         // pixel values directly and can't be represented as a simple mode convert.
         if let Some(mat) = matrix {
             let img = self.materialize()?;
-            return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result, None));
+            return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result, explicit_mode_for(mode)));
         }
 
         let mode_enum = parse_mode(mode)?;
         let dither_enum = parse_dither(dither);
-        Ok(Image::push_op(
+        let mut result = Image::push_op(
             self,
             PipelineOp::Convert {
                 mode: mode_enum,
                 matrix: None,
                 dither: dither_enum,
             },
-        ))
+        );
+        // Set explicit_mode on the pipeline for non-standard modes
+        if let Some(em) = explicit_mode_for(mode) {
+            if let Image::Pipeline { explicit_mode: ref mut em_field, .. } = &mut result {
+                *em_field = Some(em.to_string());
+            }
+        }
+        Ok(result)
+    }
+}
+
+fn explicit_mode_for(mode: &str) -> Option<String> {
+    match mode {
+        "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
+        _ => None,
     }
 }
 

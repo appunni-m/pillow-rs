@@ -356,8 +356,8 @@ def _run_chops(img, func, mode):
     # Logical ops require mode "1" in PIL
     logical_ops = {"logical_and", "logical_or", "logical_xor"}
     if func in logical_ops:
-        img = img.convert("1")
-        img2 = img.convert("1")  # same image for both
+        img = img.convert("1", dither=PILImage.NONE)
+        img2 = img.convert("1", dither=PILImage.NONE)  # same image for both
         return getattr(PILImageChops, func)(img, img2), {"func": func}
     img2 = _make_image(mode, img.size)
     dual = ("add", "subtract", "multiply", "screen", "darker", "lighter", "difference",
