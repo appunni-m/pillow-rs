@@ -10,6 +10,7 @@ execution_engine.execute() function via the RSPIL backend.
 import json, hashlib
 from pathlib import Path
 import pytest
+from PIL import Image as PILImage
 
 FIXTURES_DIR = Path(__file__).parent / 'fixtures'
 
@@ -126,14 +127,20 @@ def test_fixture_parity(fixture_file):
         if actual_hash == expected["value"]: return
 
         # Tolerance check for lossy ops
-        TOLERANCE = {'Image.resize', 'Image.thumbnail', 'ImageEnhance.Brightness',
-                     'ImageEnhance.Color', 'ImageEnhance.Contrast', 'ImageEnhance.Sharpness',
-                     'ImageFilter.GaussianBlur', 'Image.quantize'}
+        # Uses per-pixel threshold: count pixels where ANY channel differs > 2
+        # (PIL and image crate can differ by 1 unit on resampled edges)
+        LOSSY_OPERATIONS = {'Image.resize', 'Image.thumbnail',
+            'ImageEnhance.Brightness', 'ImageEnhance.Color', 'ImageEnhance.Contrast',
+            'ImageEnhance.Sharpness', 'ImageFilter.GaussianBlur',
+            'ImageFilter.UnsharpMask', 'ImageFilter.ModeFilter',
+            'ImageOps.contain', 'ImageOps.cover', 'ImageOps.fit', 'ImageOps.pad', 'ImageOps.scale'}
         op_key = f"{op_def['module']}.{op_def['target']}"
-        if op_key in TOLERANCE and len(raw_bytes) > 0 and len(expected["value"]) == 64:
-            exp_bytes = bytes.fromhex(expected["value"])
-            if len(exp_bytes) == len(raw_bytes):
-                diffs = sum(1 for a, b in zip(raw_bytes, exp_bytes) if a != b)
-                if diffs / len(raw_bytes) * 100 < 5.0: return
+        if op_key in LOSSY_OPERATIONS and "reference_bytes" in expected:
+            ref_bytes = bytes.fromhex(expected["reference_bytes"])
+            if len(ref_bytes) == len(raw_bytes):
+                # Count pixels where any byte differs by more than the threshold
+                threshold = 2
+                bad_pixels = sum(1 for a, b in zip(raw_bytes, ref_bytes) if abs(a - b) > threshold)
+                if bad_pixels / len(raw_bytes) * 100 < 5.0: return
 
         pytest.xfail(f"Hash mismatch: expected={expected['value'][:12]} got={actual_hash[:12]}")

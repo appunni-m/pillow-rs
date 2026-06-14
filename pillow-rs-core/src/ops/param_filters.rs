@@ -47,7 +47,7 @@ impl Image {
     /// Unsharp mask: sharpen by subtracting a blurred version.
     /// `radius` controls blur amount, `percent` controls strength (150 = 150%),
     /// `threshold` is minimum difference to apply.
-    /// NOTE: Not yet a PipelineOp variant; executes immediately.
+    /// Uses PIL-style GaussianBlur for the blurred version.
     pub fn unsharp_mask(
         &self,
         radius: f32,
@@ -55,30 +55,53 @@ impl Image {
         threshold: u8,
     ) -> Result<Image, PilError> {
         let img = self.materialize()?;
-        let blurred = img.blur(radius);
+        // Use PIL-style GaussianBlur via the pipeline (sigma→box radius conversion)
+        let blurred = Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius });
+        let blurred = blurred.materialize()?;
 
         let (w, h) = (img.width(), img.height());
+        let amount = percent as f64 / 100.0;
+
+        // For L mode, process grayscale directly to avoid RGB conversion issues
+        if img.color().channel_count() == 1 {
+            let gray = img.to_luma8();
+            let blur_gray = blurred.to_luma8();
+            let mut out = image::GrayImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let p = gray.get_pixel(x, y)[0] as i32;
+                    let b = blur_gray.get_pixel(x, y)[0] as i32;
+                    let diff = p - b;
+                    let val = if diff.unsigned_abs() > threshold as u32 {
+                        (p as f64 + diff as f64 * amount).clamp(0.0, 255.0) as u8
+                    } else {
+                        p as u8
+                    };
+                    out.put_pixel(x, y, image::Luma([val]));
+                }
+            }
+            return Ok(Image::Loaded(DynamicImage::ImageLuma8(out), None));
+        }
+
+        // RGB mode: process per-channel
         let rgb = img.to_rgb8();
         let blur_rgb = blurred.to_rgb8();
         let mut out = image::RgbImage::new(w, h);
-
-        let amount = percent as f64 / 100.0;
-
         for y in 0..h {
             for x in 0..w {
                 let p = rgb.get_pixel(x, y);
                 let b = blur_rgb.get_pixel(x, y);
-                let mut r = [0u8; 3];
+                let mut pix = [0u8; 3];
                 for c in 0..3 {
                     let diff = p[c] as i32 - b[c] as i32;
                     if diff.unsigned_abs() > threshold as u32 {
                         let v = (p[c] as f64 + diff as f64 * amount).clamp(0.0, 255.0);
-                        r[c] = v as u8;
+                        pix[c] = v as u8;
                     } else {
-                        r[c] = p[c];
+                        pix[c] = p[c];
                     }
                 }
-                out.put_pixel(x, y, image::Rgb(r));
+                out.put_pixel(x, y, image::Rgb(pix));
             }
         }
 

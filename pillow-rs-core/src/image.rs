@@ -977,7 +977,7 @@ fn clip8_filter(v: f32) -> u8 {
 /// PIL-style box blur with fractional radius support.
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
 /// Repeats `passes` times (horizontal + vertical per pass).
-fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicImage, PilError> {
+pub fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicImage, PilError> {
     if radius <= 0.0 {
         return Ok(img.clone());
     }
@@ -991,7 +991,7 @@ fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicI
     // Number of pixels in the integer window
     let window_pixels = (2 * r_int + 1) as u32;
     // Fixed-point weight (PIL: ww = (UINT32)((1 << 24) / (floatRadius * 2 + 1)))
-    let ww = ((1u64 << 24) as f32 / (radius * 2.0 + 1.0)) as u32;
+    let ww = ((1u64 << 24) as f64 / (radius as f64 * 2.0 + 1.0)) as u32;
     // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2)
     let fw = ((1u64 << 24) - window_pixels as u64 * ww as u64) as u32 / 2;
     let bias = 1u32 << 23;
@@ -1495,18 +1495,20 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         PipelineOp::GaussianBlur { sigma } => {
             // PIL GaussianBlur: 3 passes of BoxBlur with computed fractional radius.
             // Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al. 2011).
+            // PIL's ImagingGaussianBlur uses f32 parameters but f64 in sqrt/promotion.
             if *sigma <= 0.0 {
                 return Ok(img.clone());
             }
-            let passes = 3.0f32; // PIL uses exactly 3 passes
-            let sigma2 = *sigma * *sigma / passes;
+            let passes = 3.0f64;
+            let sigma2 = *sigma as f64 * *sigma as f64 / passes;
             let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
             let l = l_val.floor();
-            let a_num = (2.0 * l + 1.0) * (l * (l + 1.0) - 3.0 * sigma2);
-            let a_den = 6.0 * (sigma2 - (l + 1.0) * (l + 1.0));
+            let l1 = l + 1.0;
+            let a_num = (2.0 * l + 1.0) * (l * l1 - 3.0 * sigma2);
+            let a_den = 6.0 * (sigma2 - l1 * l1);
             let a = if a_den.abs() > 1e-10 { a_num / a_den } else { 0.0 };
-            let blur_radius = l + a;
-            // Apply 3 passes of PIL-style box blur
+            // Assign back to f32 (PIL: result is float)
+            let blur_radius = (l + a) as f32;
             pil_box_blur(img, blur_radius, 3)
         }
         PipelineOp::BoxBlur { radius } => {
@@ -2004,32 +2006,73 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
 
         // ── Effects ──
         PipelineOp::EffectSpread { distance } => {
+            // PIL's ImagingEffectSpread:
+            // Creates a new output image. For each pixel (x,y) in the input:
+            //   Compute (xx,yy) = (x + rand()%d - d/2, y + rand()%d - d/2)
+            //   If (xx,yy) is in bounds:
+            //     output[yy][xx] = input[y][x]
+            //     output[y][x] = input[yy][xx]
+            //   Else:
+            //     output[y][x] = input[y][x]
+            // Input is NEVER modified; output is a new image.
+            // Multiple pixels CAN map to the same (xx,yy); last write wins.
             if *distance == 0 {
                 return Ok(img.clone());
             }
             let d = *distance as i32;
+            let half_d = d / 2;
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let mut out = image::RgbImage::new(w as u32, h as u32);
-            // PIL uses C rand() with default seed (1 on glibc), which is deterministic
-            // We use a simple LCG matching glibc's rand(): next = state * 1103515245 + 12345; rand = (next >> 16) & 0x7FFF
-            let mut rng_state: u32 = 1; // default glibc seed
-            fn glibc_rand(state: &mut u32) -> i32 {
-                *state = state.wrapping_mul(1103515245).wrapping_add(12345);
-                ((*state >> 16) & 0x7FFF) as i32
-            }
-            let range = 2 * d + 1;
-            for y in 0..h {
-                for x in 0..w {
-                    let rx = glibc_rand(&mut rng_state) % range - d;
-                    let ry = glibc_rand(&mut rng_state) % range - d;
-                    let sx = ((x + rx) % w + w) % w;
-                    let sy = ((y + ry) % h + h) % h;
-                    let p = rgb.get_pixel(sx as u32, sy as u32);
-                    out.put_pixel(x as u32, y as u32, *p);
+            let input_pixels = rgb.into_raw();
+            let stride = 3;
+            let mut out_pixels = input_pixels.clone();
+
+            // PIL uses C rand() with default seed (1 on glibc, which is also
+            // the default when no srand() is called). We call libc's rand()
+            // directly via FFI.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                extern "C" {
+                    fn srand(seed: u32);
+                    fn rand() -> i32;
+                }
+                unsafe { srand(1) };
+                for y in 0..h {
+                    for x in 0..w {
+                        let src_idx = (y * w + x) as usize;
+                        let src_base = src_idx * stride;
+                        unsafe {
+                            let xx = x + (rand() % d) - half_d;
+                            let yy = y + (rand() % d) - half_d;
+                            if xx >= 0 && xx < w && yy >= 0 && yy < h {
+                                let dst_idx = (yy * w + xx) as usize;
+                                let dst_base = dst_idx * stride;
+                                // Read from INPUT (never modified), write to OUTPUT
+                                for c in 0..stride {
+                                    out_pixels[dst_base + c] = input_pixels[src_base + c];
+                                    out_pixels[src_base + c] = input_pixels[dst_base + c];
+                                }
+                            } else {
+                                // Copy pixel as-is
+                                for c in 0..stride {
+                                    out_pixels[src_base + c] = input_pixels[src_base + c];
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
+            #[cfg(target_arch = "wasm32")]
+            {
+                // WASM fallback: simple copy
+                out_pixels.copy_from_slice(&input_pixels);
+                let _ = (d, half_d);
+            }
+            let result = DynamicImage::ImageRgb8(
+                image::RgbImage::from_raw(w as u32, h as u32, out_pixels)
+                    .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "effect_spread buffer error"))))?,
+            );
+            Ok(preserve_mode(img, result))
         }
         PipelineOp::PutPixel { x, y, color } => {
             let mut rgba = img.to_rgba8();
