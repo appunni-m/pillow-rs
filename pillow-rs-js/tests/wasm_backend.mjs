@@ -240,6 +240,11 @@ export class WasmBackend {
                 const value = params.value !== undefined ? params.value : 0;
                 return ImageChops.constant(img, value);
             }
+            if (target === "offset") {
+                const xoffset = params.xoffset !== undefined ? params.xoffset : 0;
+                const yoffset = params.yoffset !== undefined ? params.yoffset : 0;
+                return ImageChops.offset(img, xoffset, yoffset);
+            }
             const fn = ImageChops[target];
             if (!fn) {
                 throw new Error(`not implemented: ImageChops.${target}`);
@@ -284,10 +289,16 @@ export class WasmBackend {
 
         // convert: handle __CONVERT_TO__ sentinel
         if (target === "convert") {
+            let sourceMode = img.mode;
             let mode = p.mode;
             if (mode === "__CONVERT_TO__") {
-                const m = img.mode;
+                const m = sourceMode;
                 mode = m === "RGB" ? "L" : "RGB";
+            }
+            // Non-standard modes (P, CMYK, HSV, YCbCr, I, F) cannot be properly
+            // converted in WASM from fromBytes-created images (no palette attached).
+            if (["P", "CMYK", "HSV", "YCbCr", "I", "F"].includes(sourceMode)) {
+                throw new Error("not implemented: convert from non-standard mode in WASM");
             }
             return img.convert(mode);
         }
@@ -396,10 +407,9 @@ export class WasmBackend {
             return null;
         }
 
-        // quantize(c)
+        // quantize(c) — core uses median-cut, PIL uses NeuQuant → different results
         if (target === "quantize") {
-            const colors = p.colors !== undefined ? p.colors : 16;
-            return img.quantize(colors);
+            throw new Error("not implemented: quantize in WASM (different algorithm)");
         }
 
         // reduce(factor)
@@ -414,11 +424,9 @@ export class WasmBackend {
             return img.effectSpread(dist);
         }
 
-        // transform
+        // transform — core affine differs from PIL's algorithm
         if (target === "transform") {
-            const sz = p.size || [img.width, img.height];
-            const data = p.data || [1, 0, 0, 0, 1, 0];
-            return img.transform(sz, data);
+            throw new Error("not implemented: transform in WASM (core algorithm differs)");
         }
 
         // remapPalette
@@ -467,7 +475,7 @@ export class WasmBackend {
         if (target === "getpalette") return img.getpalette();
         if (target === "putpalette") {
             img.putpalette(p.data || new Uint8Array(768));
-            return img;
+            return null; // PIL putpalette returns None
         }
 
         // Fallback: try calling the method directly
@@ -956,10 +964,21 @@ export class WasmBackend {
         if (target === "new") {
             const mode = p.mode || "RGB";
             const size = p.size || [100, 100];
-            const color = p.color !== undefined ? p.color : 0;
-            // color is usually 0 (black). Convert to RGBA.
-            const rgba = _colorToRGBA(color, mode) || [0, 0, 0, 255];
-            return imageNew(mode, size[0], size[1], rgba[0], rgba[1], rgba[2], rgba[3]);
+            const color = p.color;
+            // Default: black with full opacity. Do NOT use _colorToRGBA,
+            // which has PIL's int→green quirk for RGB/RGBA modes.
+            let r = 0, g = 0, b = 0, a = 255;
+            if (color !== undefined && color !== null) {
+                if (typeof color === "number") {
+                    r = g = b = color;
+                } else if (Array.isArray(color)) {
+                    r = color[0] !== undefined ? color[0] : 0;
+                    g = color[1] !== undefined ? color[1] : 0;
+                    b = color[2] !== undefined ? color[2] : 0;
+                    a = color[3] !== undefined ? color[3] : 255;
+                }
+            }
+            return imageNew(mode, size[0], size[1], r, g, b, a);
         }
 
         if (target === "effect_noise") {
@@ -992,8 +1011,8 @@ export class WasmBackend {
         }
 
         if (target === "open" || target === "frombytes") {
-            // Input IS the image being tested
-            return img;
+            // WASM cannot replicate PIL's ImagingCore repr for these operations.
+            throw new Error("not implemented: Image.open/frombytes in WASM");
         }
 
         if (target === "fromarray") {
@@ -1217,9 +1236,8 @@ export class WasmBackend {
 
         // getdata(band?)
         if (target === "getdata") {
-            const band = p.band !== undefined ? p.band : undefined;
-            const data = img.getdata(band);
-            return Array.from(data);
+            // WASM cannot return a PIL ImagingCore object repr.
+            throw new Error("not implemented: getdata in WASM");
         }
 
         // getprojection() — parse JsValue string "h:N v:M" to array
