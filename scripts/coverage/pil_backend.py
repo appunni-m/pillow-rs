@@ -103,8 +103,13 @@ class PilBackend:
             return getattr(PIL.ImageChops, target)(img, **params)
         if module == "ImageModule" and target == "alpha_composite":
             fg = make_image(img.mode); fg.putalpha(128)
-            try: img.alpha_composite(fg)
-            except: pass
+            # Both images must be RGBA for PIL's alpha_composite
+            if img.mode != "RGBA":
+                img_rgba = img.convert("RGBA")
+                fg_rgba = fg.convert("RGBA") if fg.mode != "RGBA" else fg
+                img_rgba.alpha_composite(fg_rgba)
+                return img_rgba.convert(img.mode)
+            img.alpha_composite(fg)
             return img
         raise NotImplementedError(f"method {module}.{target}")
 
@@ -163,10 +168,9 @@ class PilBackend:
         if target in ("open", "frombytes"):
             return make_image("RGB")  # placeholder
         if target == "eval":
-            return PIL.Image.eval(make_image("L"), lambda x: min(255, x + 10))
+            return PIL.Image.eval(img, lambda x: min(255, x + 10))
         if target == "merge":
-            img = make_image("RGB")
-            return PIL.Image.merge("RGB", img.split())
+            return PIL.Image.merge(img.mode, img.split() or [img])
         if target == "blend":
             i1, i2 = make_image(params.get("mode", "L")), make_image(params.get("mode", "L"))
             return PIL.Image.blend(i1, i2, float(params.get("alpha", 0.5)))

@@ -8,6 +8,7 @@ pub mod imageops;
 pub mod module_fns;
 pub mod param_filters;
 pub mod paste;
+pub mod pil_resize;
 pub mod quantize;
 pub mod resize;
 pub mod rotate;

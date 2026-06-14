@@ -125,14 +125,17 @@ pub fn pad(
     image: &Image,
     w: u32,
     h: u32,
+    filter: Option<&str>,
     color: Option<(u8, u8, u8, u8)>,
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
+    let filter = parse_resample(filter)?;
     Ok(Image::push_op(
         image,
         PipelineOp::Pad {
             w,
             h,
+            filter,
             color,
             centering,
         },
