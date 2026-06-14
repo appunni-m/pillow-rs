@@ -2007,6 +2007,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         // ── Effects ──
         PipelineOp::EffectSpread { distance } => {
             // PIL's ImagingEffectSpread:
+            // For image8 (L, P, 1): 1 byte per pixel, SPREAD(UINT8, image8)
+            // For image32 (RGB, RGBA, etc): 4 bytes per pixel, SPREAD(INT32, image32)
             // Creates a new output image. For each pixel (x,y) in the input:
             //   Compute (xx,yy) = (x + rand()%d - d/2, y + rand()%d - d/2)
             //   If (xx,yy) is in bounds:
@@ -2021,22 +2023,35 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
             let d = *distance as i32;
             let half_d = d / 2;
-            let rgb = img.to_rgb8();
-            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let input_pixels = rgb.into_raw();
-            let stride = 3;
+            // Determine pixel stride based on color type (PIL uses 1-byte image8 for L, 4-byte image32 for RGB/RGBA)
+            let (pixels, w, h, stride) = match img.color() {
+                image::ColorType::L8 => {
+                    let luma = img.to_luma8();
+                    let (w, h) = luma.dimensions();
+                    (luma.into_raw(), w as i32, h as i32, 1usize)
+                }
+                image::ColorType::Rgb8 => {
+                    let rgb = img.to_rgb8();
+                    let (w, h) = rgb.dimensions();
+                    (rgb.into_raw(), w as i32, h as i32, 3usize)
+                }
+                _ => {
+                    // RGBA8, or any other 4-channel mode
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    (rgba.into_raw(), w as i32, h as i32, 4usize)
+                }
+            };
+            let input_pixels = pixels;
             let mut out_pixels = input_pixels.clone();
 
-            // PIL uses C rand() with default seed (1 on glibc, which is also
-            // the default when no srand() is called). We call libc's rand()
-            // directly via FFI.
+            // PIL uses C rand() WITHOUT calling srand(). We call libc's rand()
+            // directly via FFI, matching PIL's behavior on glibc.
             #[cfg(not(target_arch = "wasm32"))]
             {
                 extern "C" {
-                    fn srand(seed: u32);
                     fn rand() -> i32;
                 }
-                unsafe { srand(1) };
                 for y in 0..h {
                     for x in 0..w {
                         let src_idx = (y * w + x) as usize;
@@ -2068,11 +2083,22 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                 out_pixels.copy_from_slice(&input_pixels);
                 let _ = (d, half_d);
             }
-            let result = DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w as u32, h as u32, out_pixels)
-                    .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "effect_spread buffer error"))))?,
-            );
-            Ok(preserve_mode(img, result))
+            // Reconstruct DynamicImage from the output pixel data
+            let result = match stride {
+                1 => DynamicImage::ImageLuma8(
+                    image::GrayImage::from_raw(w as u32, h as u32, out_pixels)
+                        .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "effect_spread buffer error"))))?,
+                ),
+                3 => DynamicImage::ImageRgb8(
+                    image::RgbImage::from_raw(w as u32, h as u32, out_pixels)
+                        .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "effect_spread buffer error"))))?,
+                ),
+                _ => DynamicImage::ImageRgba8(
+                    image::RgbaImage::from_raw(w as u32, h as u32, out_pixels)
+                        .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "effect_spread buffer error"))))?,
+                ),
+            };
+            Ok(result)
         }
         PipelineOp::PutPixel { x, y, color } => {
             let mut rgba = img.to_rgba8();

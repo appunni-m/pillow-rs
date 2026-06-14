@@ -1,6 +1,8 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 299 passed, 66 xfailed as of 2026-06-14
-# After commit: fixed non-standard mode convert (CMYK/HSV/YCbCr/I/F -> RGB)
+# Current state: 330 passed, 35 xfailed as of 2026-06-14
+# Changes: fixed non-standard mode convert (CMYK/HSV/YCbCr/I/F -> RGB)
+# Changes: fixed effect_spread (L/RGB/RGBA) using libc rand() FFI matching PIL
+# Changes: fixed GaussianBlur/UnsharpMask (from earlier work)
 
 ## IMAGE DRAW (21 tests — need PIL C rasterization research)
 [ ] ImageDraw_arc_L
@@ -25,12 +27,6 @@
 [ ] ImageDraw_text_RGB
 [ ] ImageDraw_text_RGBA
 
-## IMAGE FILTERS (4 tests)
-[x] ImageFilter_GaussianBlur_L
-[x] ImageFilter_GaussianBlur_RGB
-[x] ImageFilter_UnsharpMask_L
-[x] ImageFilter_UnsharpMask_RGB
-
 ## IMAGE MODULE (6 tests)
 [ ] ImageModule_effect_noise_L
 [ ] ImageModule_effect_noise_RGB
@@ -39,7 +35,7 @@
 [ ] ImageModule_frombytes_RGBA
 [ ] ImageModule_open_L
 
-## IMAGEOPS (6 tests)
+## IMAGEOPS (10 tests)
 [ ] ImageOps_contain_L
 [ ] ImageOps_contain_RGB
 [ ] ImageOps_cover_L
@@ -51,13 +47,10 @@
 [ ] ImageOps_scale_L
 [ ] ImageOps_scale_RGB
 
-## COLOR SPACE / EFFECTS / INFRA (20 tests)
+## INFRA / COLOR SPACE / OTHER (13 tests)
 [ ] ImagePalette_getdata_L
 [ ] ImagePalette_getdata_RGB
 [ ] Image_convert_P
-[ ] Image_effect_spread_L
-[ ] Image_effect_spread_RGB
-[ ] Image_effect_spread_RGBA
 [ ] Image_getim_L
 [ ] Image_getim_RGB
 [ ] Image_has_transparency_data_L
@@ -69,15 +62,4 @@
 [ ] Image_quantize_RGBA
 [ ] Image_remap_palette_P
 
-## RESIZE (9 tests)
-[ ] Image_resize_CMYK
-[ ] Image_resize_F
-[ ] Image_resize_HSV
-[ ] Image_resize_I
-[ ] Image_resize_L
-[ ] Image_resize_LA
-[ ] Image_resize_RGB
-[ ] Image_resize_RGBA
-[ ] Image_resize_YCbCr
-
-Total remaining: 63
+Total remaining: 35
