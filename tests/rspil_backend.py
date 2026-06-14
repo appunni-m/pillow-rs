@@ -168,7 +168,7 @@ class RspilBackend:
         p = _coerce_coords(params, ("xy", "bbox", "bounding_circle"))
         p = _to_rgb_fill(img.mode, p, ("fill", "outline"))
         if target == "bitmap":
-            bmp = img.convert("1")
+            bmp = img.convert("1", dither="NONE")
             draw.bitmap(p.get("xy", (5, 5)), bmp, fill=p.get("fill", 200))
         else:
             getattr(draw, target)(**p)

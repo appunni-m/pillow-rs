@@ -1,38 +1,40 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 333 passed, 32 xfailed as of 2026-06-14
+# Current state: 345 passed, 20 xfailed as of 2026-06-14
 #
 # Fixed in this session:
-# - Non-standard mode convert (CMYK/HSV/YCbCr/I/F -> RGB) with PIL-exact tables
-# - PIL-compatible Image.effect_spread (L/RGB/RGBA) using libc rand() FFI
-# - Box-Muller gaussian noise for Image.effect_noise (fixtures need regen)
+# - ImageDraw.arc/ellipse/bitmap/rounded_rectangle: Bresenham-based algorithms
+#   matching PIL's libImaging/Draw.c (pixel-perfect: 0 diff across L/RGB/RGBA)
+# - Floyd-Steinberg dither for convert("1") with truncation-based grayscale
+# - Rectangle inclusive range fix (was missing last row/column)
+# - Polygon: scanline fill with horizontal edge handling
 #
 # Previously fixed:
 # - GaussianBlur, UnsharpMask, DETAIL, EMBOSS, Kernel, ModeFilter, SMOOTH_MORE
 # - ImageEnhance (Color, Contrast, Sharpness)
 # - eval, merge, split, alpha_composite, putalpha, putdata, putpixel
 
-## IMAGE DRAW (21 tests — need PIL C rasterization research)
-[ ] ImageDraw_arc_L
-[ ] ImageDraw_arc_RGB
-[ ] ImageDraw_arc_RGBA
-[ ] ImageDraw_bitmap_L
-[ ] ImageDraw_bitmap_RGB
-[ ] ImageDraw_bitmap_RGBA
-[ ] ImageDraw_ellipse_L
-[ ] ImageDraw_ellipse_RGB
-[ ] ImageDraw_ellipse_RGBA
-[ ] ImageDraw_multiline_text_L
-[ ] ImageDraw_multiline_text_RGB
-[ ] ImageDraw_multiline_text_RGBA
+## IMAGE DRAW (9 remaining — needed PIL C rasterization research, now mostly done)
+[x] ImageDraw_arc_L
+[x] ImageDraw_arc_RGB
+[x] ImageDraw_arc_RGBA
+[x] ImageDraw_bitmap_L
+[x] ImageDraw_bitmap_RGB
+[x] ImageDraw_bitmap_RGBA
+[x] ImageDraw_ellipse_L
+[x] ImageDraw_ellipse_RGB
+[x] ImageDraw_ellipse_RGBA
+[ ] ImageDraw_multiline_text_L (requires font support)
+[ ] ImageDraw_multiline_text_RGB (requires font support)
+[ ] ImageDraw_multiline_text_RGBA (requires font support)
 [ ] ImageDraw_regular_polygon_L
 [ ] ImageDraw_regular_polygon_RGB
 [ ] ImageDraw_regular_polygon_RGBA
-[ ] ImageDraw_rounded_rectangle_L
-[ ] ImageDraw_rounded_rectangle_RGB
-[ ] ImageDraw_rounded_rectangle_RGBA
-[ ] ImageDraw_text_L
-[ ] ImageDraw_text_RGB
-[ ] ImageDraw_text_RGBA
+[x] ImageDraw_rounded_rectangle_L
+[x] ImageDraw_rounded_rectangle_RGB
+[x] ImageDraw_rounded_rectangle_RGBA
+[ ] ImageDraw_text_L (requires font support)
+[ ] ImageDraw_text_RGB (requires font support)
+[ ] ImageDraw_text_RGBA (requires font support)
 
 ## INFRA / VALUE RETURNS (8 tests — stub fixes)
 [ ] ImageModule_frombytes_L
@@ -80,4 +82,4 @@
 [ ] ImageOps_scale_L
 [ ] ImageOps_scale_RGB
 
-Total remaining: 32
+Total remaining: 20

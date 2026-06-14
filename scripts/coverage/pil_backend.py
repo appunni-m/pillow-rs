@@ -148,7 +148,7 @@ class PilBackend:
         draw = PIL.ImageDraw.Draw(img)
         p = _to_rgb_fill(img.mode, params, ("fill", "outline"))
         if target == "bitmap":
-            bmp = img.convert("1") if img.mode != "1" else make_image("1")
+            bmp = img.convert("1", dither=PIL.Image.Dither.NONE) if img.mode != "1" else make_image("1")
             draw.bitmap(tuple(p.get("xy", [5, 5])), bmp, fill=p.get("fill", 200))
         else:
             getattr(draw, target)(**p)
