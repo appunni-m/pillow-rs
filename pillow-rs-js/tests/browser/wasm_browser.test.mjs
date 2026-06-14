@@ -143,7 +143,7 @@ async function main() {
     console.log('WASM loaded in browser');
 
     // Load all fixture filenames
-    const files = readdirSync(FIXTURES).filter(f => f.endsWith('.json'));
+    const files = readdirSync(FIXTURES).filter(f => f.endsWith('.json') && f !== 'index.json');
 
     let passed = 0;
     let failed = 0;
