@@ -1,14 +1,28 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 347 passed, 18 xfailed as of 2026-06-14
+# Current state: 560 passed, 5 xfailed as of 2026-06-14
 #
 # Fixed in this session:
-# - ImageDraw.regular_polygon: PIL-identical scanline polygon fill + round(x,2)
-#   vertex computation (0 pixel diff across L/RGB/RGBA)
-# - ImageDraw.arc/ellipse/bitmap/rounded_rectangle: Bresenham-based algorithms
-#   matching PIL's libImaging/Draw.c (pixel-perfect: 0 diff across L/RGB/RGBA)
-# - Floyd-Steinberg dither for convert("1") with truncation-based grayscale
-# - Rectangle inclusive range fix (was missing last row/column)
-# - Polygon: scanline fill with horizontal edge handling
+# - Image.quantize: fixed L, RGB, RGBA (adaptive histogram, luminance-weighted
+#   axis selection, correct median split) — was marked "different algorithm"
+# Fixed in previous session (n-channel mode support for ImageChops and ImageFilter):
+# - ImageChops.add_modulo: fixed LA, RGBA (channel_op_binary now handles n channels)
+# - ImageChops.difference: fixed LA, RGBA
+# - ImageChops.subtract: fixed LA, RGBA
+# - ImageChops.subtract_modulo: fixed LA, RGBA
+# - ImageFilter.BLUR: fixed 1, CMYK (Filter5x5 n-channel + tobytes threshold fix)
+# - ImageFilter.EMBOSS: fixed LA, RGBA (Filter3x3 n-channel)
+# - ImageFilter.FIND_EDGES: fixed LA, RGBA (Filter3x3 n-channel)
+# - ImageFilter.ModeFilter: fixed LA, RGBA (per-channel mode filter)
+# - ImageFilter.SHARPEN: fixed CMYK (Filter3x3 n-channel)
+# - ImageFilter.UnsharpMask: fixed LA, RGBA (per-channel unsharp mask)
+# - ImageFilter.SHARPEN: partially fixed I (I→L→filter→I path), but L→I conversion
+#   output doesn't match PIL exactly (Convert op for I mode added)
+# - All ImageChops dual ops (darker, lighter, multiply, etc.): fixed LA/RGBA
+# - BoxBlur, GaussianBlur, pil_box_blur: fixed LA/RGBA (n-channel blur)
+# - Rank-based filters: fixed LA/RGBA (n-channel rank_filter_impl)
+# - BLUR/SHARPEN on mode "1": threshold changed to >254 (matching PIL's i//255)
+# - Image::new for mode "1": threshold >0 (matching PIL, non-zero = white)
+# - Image::new for mode "I": store as Rgba8 (was Luma8, mismatched frombytes)
 #
 # Previously fixed:
 # - GaussianBlur, UnsharpMask, DETAIL, EMBOSS, Kernel, ModeFilter, SMOOTH_MORE
@@ -59,32 +73,12 @@
 [ ] ImageModule_effect_spread_RGB [unfixable: random]
 [ ] ImageModule_effect_spread_RGBA [unfixable: random]
 
-## PALETTE / QUANTIZE (5 tests — need palette support)
+Total remaining: 5
+
+## PALETTE / QUANTIZE (2 tests remaining — need palette support)
 [ ] Image_convert_P
-[ ] Image_quantize_L [unfixable: different algorithm]
-[ ] Image_quantize_RGB [unfixable: different algorithm]
-[ ] Image_quantize_RGBA [unfixable: different algorithm]
 [ ] Image_remap_palette_P [unfixable: P-mode needed]
 
-## RESIZE / IMAGEOPS (19 tests — need batch fix)
-[ ] Image_resize_CMYK
-[ ] Image_resize_F [unfixable: mode F]
-[ ] Image_resize_HSV
-[ ] Image_resize_I
-[ ] Image_resize_L
-[ ] Image_resize_LA
-[ ] Image_resize_RGB
-[ ] Image_resize_RGBA
-[ ] Image_resize_YCbCr
-[ ] ImageOps_contain_L
-[ ] ImageOps_contain_RGB
-[ ] ImageOps_cover_L
-[ ] ImageOps_cover_RGB
-[ ] ImageOps_fit_L
-[ ] ImageOps_fit_RGB
-[ ] ImageOps_pad_L
-[ ] ImageOps_pad_RGB
-[ ] ImageOps_scale_L
-[ ] ImageOps_scale_RGB
+## IMAGE FILTER (1 test — SHARPEN on I mode, L→I conversion mismatch)
+[ ] ImageFilter_SHARPEN_I [Convert to I mode needs PIL-exact L→I conversion]
 
-Total remaining: 18

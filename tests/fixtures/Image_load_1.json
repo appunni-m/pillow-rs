@@ -22,6 +22,6 @@
   },
   "expected": {
     "result_type": "value",
-    "value": "<PixelAccess object at 0x74baf0acdb30>"
+    "value": "<PixelAccess object at 0x7624d64cdb30>"
   }
 }

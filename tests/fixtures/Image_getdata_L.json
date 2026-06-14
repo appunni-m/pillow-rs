@@ -24,6 +24,6 @@
   },
   "expected": {
     "result_type": "value",
-    "value": "<ImagingCore object at 0x74baf0acfbd0>"
+    "value": "<ImagingCore object at 0x7624d64cfbd0>"
   }
 }

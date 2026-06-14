@@ -93,6 +93,10 @@ impl Image {
             let filtered = l_img.filter(filter_type)?;
             return filtered.convert("F", None, None, None, None);
         }
+        // PIL: for mode "1" (binary), filter applies on L, converts back
+        // Mode "1" is stored as Luma8 (0/255), same as PIL after *255 conversion.
+        // The tobytes() method applies the i//255 threshold for bit packing.
+        // No conversion needed here - just apply filter directly on the Luma8 data.
         match filter_type {
             "BLUR" => Ok(Image::push_op(
                 self,

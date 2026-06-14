@@ -431,8 +431,7 @@ impl Draw {
                             }
                             "1" => {
                                 // No dither: just threshold at 128 (matching PIL's fill behavior)
-                                let gray =
-                                    crate::color::pil_grayscale_truncate(&img_loaded);
+                                let gray = crate::color::pil_grayscale_truncate(&img_loaded);
                                 let (w, h) = gray.dimensions();
                                 let mut out = image::GrayImage::new(w, h);
                                 for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
@@ -444,8 +443,7 @@ impl Draw {
                                 // Use alpha from the RGBA image directly (PIL int fill
                                 // writes A=0, which comes from fill=(*,*,*,0) in our
                                 // draw pipeline, preserving the RGBA alpha channel)
-                                let gray =
-                                    crate::color::pil_grayscale(&img_loaded);
+                                let gray = crate::color::pil_grayscale(&img_loaded);
                                 let (w, h) = gray.dimensions();
                                 let mut ga = image::GrayAlphaImage::new(w, h);
                                 let rgba = img_loaded.to_rgba8();
@@ -462,17 +460,12 @@ impl Draw {
                                 // Without the palette we cannot recover exact indices,
                                 // but PIL's default palette is grayscale, and the
                                 // test fixture fill=200 maps to value ~200.
-                                DynamicImage::ImageLuma8(
-                                    crate::color::pil_grayscale(&img_loaded),
-                                )
+                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded))
                             }
                             "CMYK" => {
                                 // Identity: RGBA pixel values ARE CMYK pixel values
                                 // (C→R, M→G, Y→B, K→A). Just tag the buffer as CMYK.
-                                return Image::Loaded(
-                                    img_loaded,
-                                    Some("CMYK".to_string()),
-                                );
+                                return Image::Loaded(img_loaded, Some("CMYK".to_string()));
                             }
                             _ => img_loaded,
                         };

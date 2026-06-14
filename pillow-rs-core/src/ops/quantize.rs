@@ -7,9 +7,12 @@
 //! 4. Compute palette centroids as weighted averages
 //! 5. Map each pixel to nearest palette color
 
+use std::sync::Arc;
+
+use image::DynamicImage;
+
 use crate::error::PilError;
 use crate::image::Image;
-use crate::pipeline::PipelineOp;
 
 /// Histogram bucket index for 5-bit channels.
 fn hist_index(r5: u8, g5: u8, b5: u8) -> usize {
@@ -460,22 +463,27 @@ impl Image {
         _palette: Option<&Image>,
         _dither: bool,
     ) -> Result<Image, PilError> {
-        let colors = colors.clamp(2, 256);
-        let mut result = Image::push_op(
-            self,
-            PipelineOp::Quantize {
-                colors,
-                dither: _dither,
-            },
-        );
-        // Set explicit_mode to "P" for quantize output (matches PIL)
-        if let Image::Pipeline {
-            explicit_mode: ref mut em_field,
-            ..
-        } = &mut result
-        {
-            *em_field = Some("P".to_string());
+        let n_colors = colors.clamp(2, 256) as usize;
+        let img = self.materialize()?;
+        let rgb = img.to_rgb8();
+        let (w, h) = rgb.dimensions();
+        let rgb_raw = rgb.into_raw();
+        let (indices, palette) = median_cut_quantize_rgb(&rgb_raw, n_colors);
+        let mut out = image::GrayImage::new(w, h);
+        for (i, pixel) in out.pixels_mut().enumerate() {
+            pixel[0] = indices.get(i).copied().unwrap_or(0);
         }
-        Ok(result)
+        let palette_bytes: Vec<u8> = palette.iter().flat_map(|c| [c[0], c[1], c[2]]).collect();
+        Ok(Image::Pipeline {
+            source: Arc::new(Image::Loaded(
+                DynamicImage::ImageLuma8(out),
+                Some("P".to_string()),
+            )),
+            ops: vec![],
+            format: None,
+            explicit_mode: Some("P".to_string()),
+            backend: None,
+            palette: Some(palette_bytes),
+        })
     }
 }
