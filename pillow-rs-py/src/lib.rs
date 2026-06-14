@@ -1,7 +1,7 @@
-use pyo3::prelude::*;
-use pyo3::types::PyType;
 use pillow_rs_core::error::PilError;
 use pillow_rs_core::image::Image as RsImage;
+use pyo3::prelude::*;
+use pyo3::types::PyType;
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -20,7 +20,12 @@ impl PyImage {
 
     #[classmethod]
     #[pyo3(signature = (mode, size, color=None))]
-    fn new(_cls: &Bound<'_, PyType>, mode: &str, size: (u32, u32), color: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    fn new(
+        _cls: &Bound<'_, PyType>,
+        mode: &str,
+        size: (u32, u32),
+        color: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
         // Thin binding: extract Python types, delegate logic to core
         let (hex, single, rgb, rgba, la) = if let Some(val) = color {
             (
@@ -30,9 +35,12 @@ impl PyImage {
                 val.extract::<(u8, u8, u8, u8)>().ok(),
                 val.extract::<(u8, u8)>().ok(),
             )
-        } else { (None, None, None, None, None) };
-        let c = pillow_rs_core::color::resolve_new_color(mode, hex.as_deref(), single, rgb, rgba, la)
-            .map_err(map_error)?;
+        } else {
+            (None, None, None, None, None)
+        };
+        let c =
+            pillow_rs_core::color::resolve_new_color(mode, hex.as_deref(), single, rgb, rgba, la)
+                .map_err(map_error)?;
         let img = RsImage::new(size.0, size.1, mode, c).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
@@ -53,9 +61,7 @@ impl PyImage {
     }
 
     fn save(&mut self, fp: &str, format: Option<String>) -> PyResult<()> {
-        self.inner
-            .save(fp, format.as_deref())
-            .map_err(map_error)
+        self.inner.save(fp, format.as_deref()).map_err(map_error)
     }
 
     fn resize(&self, size: (u32, u32), resample: Option<String>) -> PyResult<PyImage> {
@@ -119,7 +125,10 @@ impl PyImage {
         let is_abbreviated = box_coords.map_or(false, |b| b.downcast::<PyImage>().is_ok());
         let effective_mask = if is_abbreviated { box_coords } else { mask };
 
-        let src_image = im.downcast::<PyImage>().ok().map(|p| p.borrow().inner.clone());
+        let src_image = im
+            .downcast::<PyImage>()
+            .ok()
+            .map(|p| p.borrow().inner.clone());
         let src_rgb = im.extract::<(u8, u8, u8)>().ok();
         let src_rgba = im.extract::<(u8, u8, u8, u8)>().ok();
         let src_int = im.extract::<u8>().ok();
@@ -132,13 +141,18 @@ impl PyImage {
         } else if let Some(v) = src_int {
             PasteSource::Color((v, v, v, 255))
         } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err("im must be Image or color"));
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "im must be Image or color",
+            ));
         };
 
-        let parsed_box = if is_abbreviated { None } else {
+        let parsed_box = if is_abbreviated {
+            None
+        } else {
             box_coords.and_then(|b| {
-                b.extract::<(i32,i32,i32,i32)>().ok()
-                    .or_else(|| b.extract::<(i32,i32)>().ok().map(|(x, y)| (x, y, x, y)))
+                b.extract::<(i32, i32, i32, i32)>()
+                    .ok()
+                    .or_else(|| b.extract::<(i32, i32)>().ok().map(|(x, y)| (x, y, x, y)))
             })
         };
 
@@ -146,7 +160,9 @@ impl PyImage {
             .and_then(|m| m.downcast::<PyImage>().ok())
             .map(|p| p.borrow().inner.clone());
 
-        self.inner.paste(source, parsed_box, parsed_mask.as_ref()).map_err(map_error)
+        self.inner
+            .paste(source, parsed_box, parsed_mask.as_ref())
+            .map_err(map_error)
     }
 
     fn split(&self) -> PyResult<Vec<PyImage>> {
@@ -158,14 +174,17 @@ impl PyImage {
     }
 
     fn filter(&self, filter_type: &str) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .filter(filter_type)
-            .map_err(map_error)?;
+        let rs = self.inner.filter(filter_type).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn kernel_filter(&self, kernel: Vec<f32>, scale: f32, offset: i32, size: u32) -> PyResult<PyImage> {
+    fn kernel_filter(
+        &self,
+        kernel: Vec<f32>,
+        scale: f32,
+        offset: i32,
+        size: u32,
+    ) -> PyResult<PyImage> {
         let rs = self
             .inner
             .kernel_filter(&kernel, scale, offset, size)
@@ -184,11 +203,10 @@ impl PyImage {
     }
 
     fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
-        let filter = resample.as_deref()
+        let filter = resample
+            .as_deref()
             .and_then(|s| pillow_rs_core::ops::resize::parse_resample(Some(s)).ok());
-        self.inner
-            .thumbnail(size, filter)
-            .map_err(map_error)
+        self.inner.thumbnail(size, filter).map_err(map_error)
     }
 
     fn quantize(&self, colors: Option<u32>, dither: Option<bool>) -> PyResult<PyImage> {
@@ -256,46 +274,67 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn unsharp_mask(&self, radius: Option<f64>, percent: Option<i32>, threshold: Option<u8>) -> PyResult<PyImage> {
+    fn unsharp_mask(
+        &self,
+        radius: Option<f64>,
+        percent: Option<i32>,
+        threshold: Option<u8>,
+    ) -> PyResult<PyImage> {
         let rs = self
             .inner
-            .unsharp_mask(radius.unwrap_or(2.0) as f32, percent.unwrap_or(150), threshold.unwrap_or(3))
+            .unsharp_mask(
+                radius.unwrap_or(2.0) as f32,
+                percent.unwrap_or(150),
+                threshold.unwrap_or(3),
+            )
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn max_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self.inner.max_filter(size.unwrap_or(3))
+        let rs = self
+            .inner
+            .max_filter(size.unwrap_or(3))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn min_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self.inner.min_filter(size.unwrap_or(3))
+        let rs = self
+            .inner
+            .min_filter(size.unwrap_or(3))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn median_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self.inner.median_filter(size.unwrap_or(3))
+        let rs = self
+            .inner
+            .median_filter(size.unwrap_or(3))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn box_blur(&self, radius: Option<f64>) -> PyResult<PyImage> {
-        let rs = self.inner.box_blur(radius.unwrap_or(2.0) as f32)
+        let rs = self
+            .inner
+            .box_blur(radius.unwrap_or(2.0) as f32)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn mode_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self.inner.mode_filter(size.unwrap_or(3))
+        let rs = self
+            .inner
+            .mode_filter(size.unwrap_or(3))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn rank_filter(&self, size: Option<u32>, rank: Option<u32>) -> PyResult<PyImage> {
-        let rs = self.inner.rank_filter(size.unwrap_or(3), rank.unwrap_or(0))
+        let rs = self
+            .inner
+            .rank_filter(size.unwrap_or(3), rank.unwrap_or(0))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -320,12 +359,15 @@ impl PyImage {
 
     fn alpha_composite(&mut self, im: &Bound<'_, PyImage>) -> PyResult<()> {
         let source = im.borrow().inner.clone();
-        self.inner.alpha_composite(&source, (0, 0), (0, 0))
+        self.inner
+            .alpha_composite(&source, (0, 0), (0, 0))
             .map_err(map_error)
     }
 
     fn getcolors(&mut self, maxcolors: Option<u32>) -> PyResult<Option<Vec<(u32, Vec<u8>)>>> {
-        self.inner.getcolors(maxcolors.unwrap_or(256)).map_err(map_error)
+        self.inner
+            .getcolors(maxcolors.unwrap_or(256))
+            .map_err(map_error)
     }
 
     fn getdata(&mut self, band: Option<i32>) -> PyResult<Vec<u8>> {
@@ -349,33 +391,56 @@ impl PyImage {
     }
 
     fn point(&self, lut: Vec<u8>) -> PyResult<PyImage> {
-        pillow_rs_core::ops::module_fns::eval(&self.inner, &lut).map(|i| PyImage { inner: i }).map_err(map_error)
+        pillow_rs_core::ops::module_fns::eval(&self.inner, &lut)
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
     }
 
     fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
-        pillow_rs_core::ops::module_fns::effect_spread(&self.inner, distance).map(|i| PyImage { inner: i }).map_err(map_error)
+        pillow_rs_core::ops::module_fns::effect_spread(&self.inner, distance)
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (size, method, data=None, resample=0, fill=1, fillcolor=None))]
-    fn transform(&self, size: (u32, u32), method: &str, data: Option<Vec<f64>>,
-                 resample: Option<i32>, fill: Option<i32>, fillcolor: Option<&Bound<'_, PyAny>>) -> PyResult<PyImage> {
+    fn transform(
+        &self,
+        size: (u32, u32),
+        method: &str,
+        data: Option<Vec<f64>>,
+        resample: Option<i32>,
+        fill: Option<i32>,
+        fillcolor: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyImage> {
         let _ = (resample, fill);
         let fill = if let Some(fc) = fillcolor {
-            if let Ok((r, g, b)) = fc.extract::<(u8, u8, u8)>() { (r, g, b, 255) }
-            else if let Ok((r, g, b, a)) = fc.extract::<(u8, u8, u8, u8)>() { (r, g, b, a) }
-            else if let Ok(i) = fc.extract::<u8>() { (i, i, i, 255) }
-            else { (0, 0, 0, 255) }
-        } else { (0, 0, 0, 255) };
+            if let Ok((r, g, b)) = fc.extract::<(u8, u8, u8)>() {
+                (r, g, b, 255)
+            } else if let Ok((r, g, b, a)) = fc.extract::<(u8, u8, u8, u8)>() {
+                (r, g, b, a)
+            } else if let Ok(i) = fc.extract::<u8>() {
+                (i, i, i, 255)
+            } else {
+                (0, 0, 0, 255)
+            }
+        } else {
+            (0, 0, 0, 255)
+        };
 
         match method {
             "AFFINE" => {
-                let matrix = data.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("AFFINE requires data"))?;
-                self.inner.transform_affine(size, &matrix, fill)
-                    .map(|i| PyImage { inner: i }).map_err(map_error)
+                let matrix = data.ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err("AFFINE requires data")
+                })?;
+                self.inner
+                    .transform_affine(size, &matrix, fill)
+                    .map(|i| PyImage { inner: i })
+                    .map_err(map_error)
             }
-            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(
-                format!("Transform method '{}' not yet implemented", method)
-            ))
+            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
+                "Transform method '{}' not yet implemented",
+                method
+            ))),
         }
     }
 
@@ -387,7 +452,10 @@ impl PyImage {
     }
 
     fn remap_palette(&mut self, dest_map: Vec<u8>) -> PyResult<PyImage> {
-        self.inner.remap_palette(&dest_map).map(|i| PyImage { inner: i }).map_err(map_error)
+        self.inner
+            .remap_palette(&dest_map)
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
     }
 
     fn tobitmap(&mut self) -> PyResult<Vec<u8>> {
@@ -430,11 +498,7 @@ impl PyImage {
     }
 
     #[classmethod]
-    fn merge(
-        _cls: &Bound<'_, PyType>,
-        mode: &str,
-        bands: &Bound<'_, PyAny>,
-    ) -> PyResult<PyImage> {
+    fn merge(_cls: &Bound<'_, PyType>, mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
         let mut images = Vec::new();
         for item in bands.iter()? {
             let obj = item?;
@@ -461,33 +525,29 @@ impl PyImage {
 
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| {
-            py.allow_threads(|| inner.enhance_brightness(factor))
-        }).map_err(map_error)?;
+        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_brightness(factor)))
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_contrast(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| {
-            py.allow_threads(|| inner.enhance_contrast(factor))
-        }).map_err(map_error)?;
+        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_contrast(factor)))
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_color(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| {
-            py.allow_threads(|| inner.enhance_color(factor))
-        }).map_err(map_error)?;
+        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_color(factor)))
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     fn enhance_sharpness(&self, factor: f64) -> PyResult<PyImage> {
         let inner = self.inner.clone();
-        let rs = Python::with_gil(|py| {
-            py.allow_threads(|| inner.enhance_sharpness(factor))
-        }).map_err(map_error)?;
+        let rs = Python::with_gil(|py| py.allow_threads(|| inner.enhance_sharpness(factor)))
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -503,7 +563,7 @@ impl PyImage {
                 "LA" => (r, a).to_object(py),
                 "RGB" => (r, g, b).to_object(py),
                 "RGBA" => (r, g, b, a).to_object(py),
-                "P" => r.to_object(py),  // P mode stored as RGB; r is the palette index proxy
+                "P" => r.to_object(py), // P mode stored as RGB; r is the palette index proxy
                 _ => (r, g, b).to_object(py),
             })
         })
@@ -581,10 +641,7 @@ impl PyImage {
         match self.inner.size() {
             Ok((w, h)) => {
                 let mode = self.inner.mode().unwrap_or_else(|_| "?".into());
-                let fmt = self
-                    .inner
-                    .format_name()
-                    .unwrap_or_else(|| "Unknown".into());
+                let fmt = self.inner.format_name().unwrap_or_else(|| "Unknown".into());
                 format!("<Image size={}x{} mode={} format={}>", w, h, mode, fmt)
             }
             Err(_) => "<Image [error loading]>".into(),
@@ -599,9 +656,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
         PilError::ImageError(err) => pyo3::exceptions::PyException::new_err(err.to_string()),
-        PilError::NotImplementedError(msg) => {
-            pyo3::exceptions::PyNotImplementedError::new_err(msg)
-        }
+        PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
         PilError::UnknownFormat(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::Io(err) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
     }
@@ -675,25 +730,25 @@ pub struct PyFont {
 impl PyFont {
     #[staticmethod]
     fn truetype(fp: &str, size: f64) -> PyResult<Self> {
-        let data = std::fs::read(fp)
-            .map_err(|e| pyo3::exceptions::PyOSError::new_err(format!("Cannot read font file: {}", e)))?;
-        let font = pillow_rs_core::font::Font::from_bytes(data, size as f32)
-            .map_err(map_error)?;
+        let data = std::fs::read(fp).map_err(|e| {
+            pyo3::exceptions::PyOSError::new_err(format!("Cannot read font file: {}", e))
+        })?;
+        let font = pillow_rs_core::font::Font::from_bytes(data, size as f32).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
     #[staticmethod]
     fn truetype_from_bytes(data: Vec<u8>, size: f64) -> PyResult<Self> {
-        let font = pillow_rs_core::font::Font::from_bytes(data, size as f32)
-            .map_err(map_error)?;
+        let font = pillow_rs_core::font::Font::from_bytes(data, size as f32).map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
     #[staticmethod]
-    fn load_default() -> PyResult<Self> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "load_default(): use ImageFont.truetype('path.ttf', size) instead"
-        ))
+    #[pyo3(signature = (size=None))]
+    fn load_default(size: Option<f32>) -> PyResult<Self> {
+        let sz = size.unwrap_or(10.0);
+        let font = pillow_rs_core::font::Font::load_default(sz);
+        Ok(PyFont { inner: font })
     }
 
     fn getbbox(&self, text: &str) -> PyResult<(u32, u32)> {
@@ -725,35 +780,89 @@ impl PyDraw {
         Ok(PyDraw { draw })
     }
 
-    fn line(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+    fn line(
+        &mut self,
+        xy: Vec<(i32, i32)>,
+        fill: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
         let color = parse_draw_color(fill)?;
         for i in 0..xy.len() - 1 {
             let (x0, y0) = xy[i];
             let (x1, y1) = xy[i + 1];
-            self.draw.line(x0, y0, x1, y1, color, width.unwrap_or(1))
+            self.draw
+                .line(x0, y0, x1, y1, color, width.unwrap_or(1))
                 .map_err(map_error)?;
         }
         Ok(())
     }
 
-    fn rectangle(&mut self, xy: (i32, i32, i32, i32), fill: Option<&Bound<'_, PyAny>>,
-                 outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
-        self.draw.rectangle(xy.0, xy.1, xy.2, xy.3, fill_color, out_color, width.unwrap_or(1))
+    fn rectangle(
+        &mut self,
+        xy: (i32, i32, i32, i32),
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fill_color = if let Some(_f) = fill {
+            Some(parse_draw_color(fill)?)
+        } else {
+            None
+        };
+        let out_color = if let Some(_o) = outline {
+            Some(parse_draw_color(outline)?)
+        } else {
+            None
+        };
+        self.draw
+            .rectangle(
+                xy.0,
+                xy.1,
+                xy.2,
+                xy.3,
+                fill_color,
+                out_color,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
-    fn ellipse(&mut self, xy: (i32, i32, i32, i32), fill: Option<&Bound<'_, PyAny>>,
-               outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
-        self.draw.ellipse(xy.0, xy.1, xy.2, xy.3, fill_color, out_color, width.unwrap_or(1))
+    fn ellipse(
+        &mut self,
+        xy: (i32, i32, i32, i32),
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fill_color = if let Some(_f) = fill {
+            Some(parse_draw_color(fill)?)
+        } else {
+            None
+        };
+        let out_color = if let Some(_o) = outline {
+            Some(parse_draw_color(outline)?)
+        } else {
+            None
+        };
+        self.draw
+            .ellipse(
+                xy.0,
+                xy.1,
+                xy.2,
+                xy.3,
+                fill_color,
+                out_color,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
-    fn bitmap(&mut self, xy: (f64, f64), bitmap: &Bound<'_, PyImage>,
-              fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn bitmap(
+        &mut self,
+        xy: (f64, f64),
+        bitmap: &Bound<'_, PyImage>,
+        fill: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
         let fill_color = parse_draw_color(fill)?;
         let bmp = bitmap.borrow();
         let bmp_img = bmp.inner.materialize().map_err(map_error)?;
@@ -766,26 +875,36 @@ impl PyDraw {
         for y in 0..max_y {
             for x in 0..max_x {
                 if gray.get_pixel(x, y)[0] != 0 {
-                    self.draw.point(&[(x0 + x as i32, y0 + y as i32)], fill_color).map_err(map_error)?;
+                    self.draw
+                        .point(&[(x0 + x as i32, y0 + y as i32)], fill_color)
+                        .map_err(map_error)?;
                 }
             }
         }
         Ok(())
     }
 
-    fn regular_polygon(&mut self, bounding_circle: &Bound<'_, PyAny>,
-                        n_sides: u32, rotation: Option<f64>,
-                        fill: Option<&Bound<'_, PyAny>>,
-                        outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let (cx, cy, r): (f64, f64, f64) = if let Ok((x, y, r)) = bounding_circle.extract::<(f64, f64, f64)>() {
-            (x, y, r)
-        } else if let Ok(((x, y), r)) = bounding_circle.extract::<((f64, f64), f64)>() {
-            (x, y, r)
-        } else if let Ok((x, y, r)) = bounding_circle.extract::<(i32, i32, i32)>() {
-            (x as f64, y as f64, r as f64)
-        } else {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("bounding_circle must be (x,y,r) or ((x,y),r)"));
-        };
+    fn regular_polygon(
+        &mut self,
+        bounding_circle: &Bound<'_, PyAny>,
+        n_sides: u32,
+        rotation: Option<f64>,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let (cx, cy, r): (f64, f64, f64) =
+            if let Ok((x, y, r)) = bounding_circle.extract::<(f64, f64, f64)>() {
+                (x, y, r)
+            } else if let Ok(((x, y), r)) = bounding_circle.extract::<((f64, f64), f64)>() {
+                (x, y, r)
+            } else if let Ok((x, y, r)) = bounding_circle.extract::<(i32, i32, i32)>() {
+                (x as f64, y as f64, r as f64)
+            } else {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "bounding_circle must be (x,y,r) or ((x,y),r)",
+                ));
+            };
         // Match PIL's _compute_regular_polygon_vertices exactly
         // PIL: start from (radius, 0), rotate by (270 - 0.5*deg_per_side + rotation)
         // PIL uses round(x, 2) for 2-decimal float precision, then C truncates to int
@@ -796,24 +915,57 @@ impl PyDraw {
         let mut pts = Vec::with_capacity(n_sides as usize);
         for i in 0..n_sides {
             let angle_deg = start_angle + deg_per_side * i as f64;
-            let angle_deg = if angle_deg > 360.0 { angle_deg - 360.0 } else { angle_deg };
+            let angle_deg = if angle_deg > 360.0 {
+                angle_deg - 360.0
+            } else {
+                angle_deg
+            };
             // PIL: point[0]*cos(360-deg) - point[1]*sin(360-deg) + centroid
             // with start_point = (r, 0), so simplifies to r*cos(360-angle) + cx
             let theta = (360.0 - angle_deg).to_radians();
-            let x = (r * theta.cos() + cx * 1.0) as i32;
-            let y = (r * theta.sin() + cy * 1.0) as i32;
+            // CRITICAL: match PIL's round(x,2) then truncate to int.
+            // Without round-to-2dp, fp imprecision (e.g. cos(270°)=~-6e-17)
+            // causes truncation to 24 instead of 25 for vertex (25,10).
+            let x_raw = r * theta.cos() + cx;
+            let y_raw = r * theta.sin() + cy;
+            let x = ((x_raw * 100.0).round() / 100.0) as i32;
+            let y = ((y_raw * 100.0).round() / 100.0) as i32;
             pts.push((x, y));
         }
-        let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
-        self.draw.polygon(&pts, fill_color, out_color, width.unwrap_or(1)).map_err(map_error)
+        let fill_color = if let Some(_f) = fill {
+            Some(parse_draw_color(fill)?)
+        } else {
+            None
+        };
+        let out_color = if let Some(_o) = outline {
+            Some(parse_draw_color(outline)?)
+        } else {
+            None
+        };
+        self.draw
+            .polygon(&pts, fill_color, out_color, width.unwrap_or(1))
+            .map_err(map_error)
     }
 
-    fn polygon(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>,
-               outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
-        self.draw.polygon(&xy, fill_color, out_color, width.unwrap_or(1))
+    fn polygon(
+        &mut self,
+        xy: Vec<(i32, i32)>,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fill_color = if let Some(_f) = fill {
+            Some(parse_draw_color(fill)?)
+        } else {
+            None
+        };
+        let out_color = if let Some(_o) = outline {
+            Some(parse_draw_color(outline)?)
+        } else {
+            None
+        };
+        self.draw
+            .polygon(&xy, fill_color, out_color, width.unwrap_or(1))
             .map_err(map_error)
     }
 
@@ -823,78 +975,162 @@ impl PyDraw {
     }
 
     #[pyo3(signature = (xy, start, end, fill=None, width=1))]
-    fn arc(&mut self, xy: (i32, i32, i32, i32), start: f64, end: f64,
-           fill: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
+    fn arc(
+        &mut self,
+        xy: (i32, i32, i32, i32),
+        start: f64,
+        end: f64,
+        fill: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
         let color = parse_draw_color(fill)?;
-        self.draw.arc(xy.0, xy.1, xy.2, xy.3, start, end, color, width.unwrap_or(1))
+        self.draw
+            .arc(
+                xy.0,
+                xy.1,
+                xy.2,
+                xy.3,
+                start,
+                end,
+                color,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
     #[pyo3(signature = (xy, start, end, fill=None, outline=None, width=1))]
-    fn chord(&mut self, xy: (i32, i32, i32, i32), start: f64, end: f64,
-             fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
-        self.draw.chord(xy.0, xy.1, xy.2, xy.3, start, end, fc, oc, width.unwrap_or(1))
+    fn chord(
+        &mut self,
+        xy: (i32, i32, i32, i32),
+        start: f64,
+        end: f64,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        self.draw
+            .chord(
+                xy.0,
+                xy.1,
+                xy.2,
+                xy.3,
+                start,
+                end,
+                fc,
+                oc,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
     #[pyo3(signature = (xy, start, end, fill=None, outline=None, width=1))]
-    fn pieslice(&mut self, xy: (i32, i32, i32, i32), start: f64, end: f64,
-                fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
-        self.draw.pieslice(xy.0, xy.1, xy.2, xy.3, start, end, fc, oc, width.unwrap_or(1))
+    fn pieslice(
+        &mut self,
+        xy: (i32, i32, i32, i32),
+        start: f64,
+        end: f64,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        self.draw
+            .pieslice(
+                xy.0,
+                xy.1,
+                xy.2,
+                xy.3,
+                start,
+                end,
+                fc,
+                oc,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
     #[pyo3(signature = (xy, radius, fill=None, outline=None, width=1))]
-    fn circle(&mut self, xy: (f64, f64), radius: f64,
-              fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
-        self.draw.circle(xy.0 as i32, xy.1 as i32, radius, fc, oc, width.unwrap_or(1))
+    fn circle(
+        &mut self,
+        xy: (f64, f64),
+        radius: f64,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        self.draw
+            .circle(xy.0 as i32, xy.1 as i32, radius, fc, oc, width.unwrap_or(1))
             .map_err(map_error)
     }
 
     #[pyo3(signature = (xy, radius=0.0, fill=None, outline=None, width=1))]
-    fn rounded_rectangle(&mut self, xy: (i32, i32, i32, i32), radius: f64,
-                         fill: Option<&Bound<'_, PyAny>>, outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0,0,0,255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0,0,0,255)));
-        self.draw.rounded_rectangle(xy.0, xy.1, xy.2, xy.3, radius, fc, oc, width.unwrap_or(1))
+    fn rounded_rectangle(
+        &mut self,
+        xy: (i32, i32, i32, i32),
+        radius: f64,
+        fill: Option<&Bound<'_, PyAny>>,
+        outline: Option<&Bound<'_, PyAny>>,
+        width: Option<u32>,
+    ) -> PyResult<()> {
+        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        self.draw
+            .rounded_rectangle(xy.0, xy.1, xy.2, xy.3, radius, fc, oc, width.unwrap_or(1))
             .map_err(map_error)
     }
 
-    fn text(&mut self, xy: (f64, f64), text: String, fill: Option<&Bound<'_, PyAny>>,
-            font: Option<&Bound<'_, PyFont>>) -> PyResult<()> {
+    fn text(
+        &mut self,
+        xy: (f64, f64),
+        text: String,
+        fill: Option<&Bound<'_, PyAny>>,
+        font: Option<&Bound<'_, PyFont>>,
+    ) -> PyResult<()> {
         let color = parse_draw_color(fill)?;
         if let Some(pyfont) = font {
             let borrowed = pyfont.borrow();
-            self.draw.text(xy.0 as i32, xy.1 as i32, &text, &borrowed.inner, color)
+            self.draw
+                .text(xy.0 as i32, xy.1 as i32, &text, &borrowed.inner, color)
                 .map_err(map_error)
         } else {
-            Err(pyo3::exceptions::PyNotImplementedError::new_err("text() requires a font"))
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "text() requires a font",
+            ))
         }
     }
 
-    fn multiline_text(&mut self, xy: (f64, f64), text: &str,
-                      fill: Option<&Bound<'_, PyAny>>,
-                      font: Option<&Bound<'_, PyFont>>,
-                      spacing: Option<i32>) -> PyResult<()> {
+    fn multiline_text(
+        &mut self,
+        xy: (f64, f64),
+        text: &str,
+        fill: Option<&Bound<'_, PyAny>>,
+        font: Option<&Bound<'_, PyFont>>,
+        spacing: Option<i32>,
+    ) -> PyResult<()> {
         let color = parse_draw_color(fill)?;
         let sp = spacing.unwrap_or(4) as f64;
         let mut y = xy.1;
         for line in text.split('\n') {
-            if line.is_empty() { y += sp + 10.0; continue; }
+            if line.is_empty() {
+                y += sp + 10.0;
+                continue;
+            }
             if let Some(ref pyfont) = font {
                 let borrowed = pyfont.borrow();
-                self.draw.text(xy.0 as i32, y as i32, line, &borrowed.inner, color)
+                self.draw
+                    .text(xy.0 as i32, y as i32, line, &borrowed.inner, color)
                     .map_err(map_error)?;
                 let (_, h) = borrowed.getbbox(line)?;
                 y += h as f64 + sp;
             } else {
-                return Err(pyo3::exceptions::PyNotImplementedError::new_err("text() requires a font"));
+                return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                    "text() requires a font",
+                ));
             }
         }
         Ok(())
@@ -903,7 +1139,9 @@ impl PyDraw {
     #[getter]
     fn image(&self) -> PyImage {
         // Return a copy of the current image state
-        PyImage { inner: self.draw_get_image() }
+        PyImage {
+            inner: self.draw_get_image(),
+        }
     }
 }
 
@@ -927,7 +1165,9 @@ fn parse_draw_color(val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)
     } else if let Ok(i) = v.extract::<u8>() {
         Ok((i, i, i, 255))
     } else {
-        Err(pyo3::exceptions::PyTypeError::new_err("Expected color tuple, int, or string"))
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "Expected color tuple, int, or string",
+        ))
     }
 }
 
@@ -939,43 +1179,44 @@ fn ops_autocontrast(image: &Bound<'_, PyImage>, cutoff: Option<f64>) -> PyResult
     let c = cutoff.unwrap_or(0.0);
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::autocontrast(&inner, c))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::equalize(&inner))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::imageops::equalize(&inner)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::invert(&inner))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::imageops::invert(&inner)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_flip(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::flip(&inner))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::imageops::flip(&inner)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn ops_mirror(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::mirror(&inner))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::imageops::mirror(&inner)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -984,7 +1225,8 @@ fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::posterize(&inner, bits))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -994,7 +1236,8 @@ fn ops_solarize(image: &Bound<'_, PyImage>, threshold: Option<u8>) -> PyResult<P
     let t = threshold.unwrap_or(128);
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::solarize(&inner, t))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -1003,52 +1246,104 @@ fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::grayscale(&inner))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_colorize(image: &Bound<'_, PyImage>, black: (u8, u8, u8), white: (u8, u8, u8)) -> PyResult<PyImage> {
+fn ops_colorize(
+    image: &Bound<'_, PyImage>,
+    black: (u8, u8, u8),
+    white: (u8, u8, u8),
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::colorize(&inner, black, white))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_contain(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>) -> PyResult<PyImage> {
+fn ops_contain(
+    image: &Bound<'_, PyImage>,
+    size: (u32, u32),
+    filter: Option<String>,
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::contain(&inner, size.0, size.1, filter.as_deref()))
-    }).map_err(map_error)?;
+        py.allow_threads(|| {
+            pillow_rs_core::ops::imageops::contain(&inner, size.0, size.1, filter.as_deref())
+        })
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_cover(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>) -> PyResult<PyImage> {
+fn ops_cover(
+    image: &Bound<'_, PyImage>,
+    size: (u32, u32),
+    filter: Option<String>,
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::cover(&inner, size.0, size.1, filter.as_deref()))
-    }).map_err(map_error)?;
+        py.allow_threads(|| {
+            pillow_rs_core::ops::imageops::cover(&inner, size.0, size.1, filter.as_deref())
+        })
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_fit(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>, bleed: Option<f64>, centering: Option<(f64, f64)>) -> PyResult<PyImage> {
+fn ops_fit(
+    image: &Bound<'_, PyImage>,
+    size: (u32, u32),
+    filter: Option<String>,
+    bleed: Option<f64>,
+    centering: Option<(f64, f64)>,
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::fit(&inner, size.0, size.1, filter.as_deref(), bleed.unwrap_or(0.0), centering.unwrap_or((0.5, 0.5))))
-    }).map_err(map_error)?;
+        py.allow_threads(|| {
+            pillow_rs_core::ops::imageops::fit(
+                &inner,
+                size.0,
+                size.1,
+                filter.as_deref(),
+                bleed.unwrap_or(0.0),
+                centering.unwrap_or((0.5, 0.5)),
+            )
+        })
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_pad(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>, color: Option<(u8, u8, u8, u8)>, centering: Option<(f64, f64)>) -> PyResult<PyImage> {
+fn ops_pad(
+    image: &Bound<'_, PyImage>,
+    size: (u32, u32),
+    filter: Option<String>,
+    color: Option<(u8, u8, u8, u8)>,
+    centering: Option<(f64, f64)>,
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::pad(&inner, size.0, size.1, filter.as_deref(), color, centering.unwrap_or((0.5, 0.5))))
-    }).map_err(map_error)?;
+        py.allow_threads(|| {
+            pillow_rs_core::ops::imageops::pad(
+                &inner,
+                size.0,
+                size.1,
+                filter.as_deref(),
+                color,
+                centering.unwrap_or((0.5, 0.5)),
+            )
+        })
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -1057,16 +1352,24 @@ fn ops_scale(image: &Bound<'_, PyImage>, factor: f64, filter: Option<String>) ->
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::scale(&inner, factor, filter.as_deref()))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_expand(image: &Bound<'_, PyImage>, border: u32, fill: Option<(u8, u8, u8, u8)>) -> PyResult<PyImage> {
+fn ops_expand(
+    image: &Bound<'_, PyImage>,
+    border: u32,
+    fill: Option<(u8, u8, u8, u8)>,
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::expand(&inner, border, fill.unwrap_or((0, 0, 0, 255))))
-    }).map_err(map_error)?;
+        py.allow_threads(|| {
+            pillow_rs_core::ops::imageops::expand(&inner, border, fill.unwrap_or((0, 0, 0, 255)))
+        })
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -1075,7 +1378,8 @@ fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage>
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::imageops::crop(&inner, border))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -1093,7 +1397,8 @@ fn chops_add(
     let b2 = image2.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::chops::add(&b1, &b2, scale, offset))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -1109,141 +1414,164 @@ fn chops_subtract(
     let b2 = image2.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::chops::subtract(&b1, &b2, scale, offset))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn chops_multiply(
-    image1: &Bound<'_, PyImage>,
-    image2: &Bound<'_, PyImage>,
-) -> PyResult<PyImage> {
+fn chops_multiply(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::chops::multiply(&b1, &b2))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::chops::multiply(&b1, &b2)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn chops_screen(
-    image1: &Bound<'_, PyImage>,
-    image2: &Bound<'_, PyImage>,
-) -> PyResult<PyImage> {
+fn chops_screen(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::chops::screen(&b1, &b2))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::chops::screen(&b1, &b2)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn chops_darker(
-    image1: &Bound<'_, PyImage>,
-    image2: &Bound<'_, PyImage>,
-) -> PyResult<PyImage> {
+fn chops_darker(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::chops::darker(&b1, &b2))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::chops::darker(&b1, &b2)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn chops_lighter(
-    image1: &Bound<'_, PyImage>,
-    image2: &Bound<'_, PyImage>,
-) -> PyResult<PyImage> {
+fn chops_lighter(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
-    let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::chops::lighter(&b1, &b2))
-    }).map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs_core::ops::chops::lighter(&b1, &b2)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn chops_difference(
-    image1: &Bound<'_, PyImage>,
-    image2: &Bound<'_, PyImage>,
-) -> PyResult<PyImage> {
+fn chops_difference(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let b1 = image1.borrow().inner.clone();
     let b2 = image2.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs_core::ops::chops::difference(&b1, &b2))
-    }).map_err(map_error)?;
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn chops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let borrowed = image.borrow();
-    let rs = pillow_rs_core::ops::chops::invert(&borrowed.inner)
-        .map_err(map_error)?;
+    let rs = pillow_rs_core::ops::chops::invert(&borrowed.inner).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
 fn chops_add_modulo(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::add_modulo(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::add_modulo(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
-fn chops_subtract_modulo(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::subtract_modulo(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+fn chops_subtract_modulo(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::subtract_modulo(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
 fn chops_constant(image: &Bound<'_, PyImage>, value: u8) -> PyResult<PyImage> {
     let b = image.borrow();
-    pillow_rs_core::ops::chops::constant(&b.inner, value).map(|i| PyImage { inner: i }).map_err(map_error)
+    pillow_rs_core::ops::chops::constant(&b.inner, value)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
 fn chops_hard_light(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::hard_light(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::hard_light(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
 fn chops_soft_light(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::soft_light(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::soft_light(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
 fn chops_overlay(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::overlay(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::overlay(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
-fn chops_logical_and(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::logical_and(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+fn chops_logical_and(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::logical_and(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
 fn chops_logical_or(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::logical_or(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::logical_or(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
-fn chops_logical_xor(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let b1 = image1.borrow(); let b2 = image2.borrow();
-    pillow_rs_core::ops::chops::logical_xor(&b1.inner, &b2.inner).map(|i| PyImage { inner: i }).map_err(map_error)
+fn chops_logical_xor(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs_core::ops::chops::logical_xor(&b1.inner, &b2.inner)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 #[pyfunction]
 fn chops_offset(image: &Bound<'_, PyImage>, xoffset: i32, yoffset: i32) -> PyResult<PyImage> {
     let b = image.borrow();
-    pillow_rs_core::ops::chops::offset(&b.inner, xoffset, yoffset).map(|i| PyImage { inner: i }).map_err(map_error)
+    pillow_rs_core::ops::chops::offset(&b.inner, xoffset, yoffset)
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
 }
 
 // --- Image module functions ---
@@ -1258,22 +1586,29 @@ fn image_merge(mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
         })?;
         band_images.push(py_img.borrow().inner.clone());
     }
-    let rs = pillow_rs_core::ops::module_fns::merge(mode, &band_images)
-        .map_err(map_error)?;
+    let rs = pillow_rs_core::ops::module_fns::merge(mode, &band_images).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn image_blend(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>, alpha: f64) -> PyResult<PyImage> {
+fn image_blend(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+    alpha: f64,
+) -> PyResult<PyImage> {
     let b1 = image1.borrow();
     let b2 = image2.borrow();
-    let rs = pillow_rs_core::ops::module_fns::blend(&b1.inner, &b2.inner, alpha)
-        .map_err(map_error)?;
+    let rs =
+        pillow_rs_core::ops::module_fns::blend(&b1.inner, &b2.inner, alpha).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn image_composite(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>, mask: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+fn image_composite(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+    mask: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
     let b1 = image1.borrow();
     let b2 = image2.borrow();
     let bm = mask.borrow();
@@ -1302,13 +1637,11 @@ fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
         .map(|(r, g, b, _a)| (r, g, b))
         .map_err(map_error)?;
     let result = pillow_rs_core::color::getcolor(r, g, b, mode).map_err(map_error)?;
-    Python::with_gil(|py| {
-        match mode {
-            "L" | "1" => Ok(result.0.to_object(py)),
-            "LA" => Ok((result.0, result.3).to_object(py)),
-            "RGB" => Ok((result.0, result.1, result.2).to_object(py)),
-            "RGBA" => Ok((result.0, result.1, result.2, result.3).to_object(py)),
-            _ => Ok((result.0, result.1, result.2).to_object(py)),
-        }
+    Python::with_gil(|py| match mode {
+        "L" | "1" => Ok(result.0.to_object(py)),
+        "LA" => Ok((result.0, result.3).to_object(py)),
+        "RGB" => Ok((result.0, result.1, result.2).to_object(py)),
+        "RGBA" => Ok((result.0, result.1, result.2, result.3).to_object(py)),
+        _ => Ok((result.0, result.1, result.2).to_object(py)),
     })
 }

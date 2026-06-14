@@ -9,10 +9,7 @@ use crate::pipeline::PipelineOp;
 
 /// Normalize image contrast. Clips the darkest and lightest `cutoff` percent.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Autocontrast { cutoff },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Autocontrast { cutoff }))
 }
 
 /// Equalize the image histogram.
@@ -39,16 +36,15 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
-        PipelineOp::Posterize { bits: bits.clamp(1, 8) },
+        PipelineOp::Posterize {
+            bits: bits.clamp(1, 8),
+        },
     ))
 }
 
 /// Invert all pixel values above threshold.
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Solarize { threshold },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Solarize { threshold }))
 }
 
 /// Convert to grayscale using PIL-compatible BT.601 formula.
@@ -62,40 +58,24 @@ pub fn colorize(
     black: (u8, u8, u8),
     white: (u8, u8, u8),
 ) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Colorize { black, white },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Colorize { black, white }))
 }
 
 /// Add a border around the image.
-pub fn expand(
-    image: &Image,
-    border: u32,
-    fill: (u8, u8, u8, u8),
-) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Expand { border, fill },
-    ))
+pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Image, PilError> {
+    Ok(Image::push_op(image, PipelineOp::Expand { border, fill }))
 }
 
 /// Resize image to fit within (w, h) while preserving aspect ratio.
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Contain { w, h, filter },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
 /// Resize image to completely cover (w, h), cropping overflow.
 pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Cover { w, h, filter },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
 /// Resize and crop to fit within (w, h) with centering.
@@ -145,16 +125,10 @@ pub fn pad(
 /// Scale image by a factor.
 pub fn scale(image: &Image, factor: f64, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Scale { factor, filter },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
 }
 
 /// Crop border pixels from the image.
 pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::CropBorder { border },
-    ))
+    Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
 }

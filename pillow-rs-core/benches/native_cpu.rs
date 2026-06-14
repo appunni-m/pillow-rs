@@ -80,7 +80,8 @@ fn bench_thumbnail(c: &mut Criterion) {
     let mut img = load_ref_2k();
     c.bench_function("thumbnail_128x128", |b| {
         b.iter(|| {
-            img.thumbnail(black_box((128, 128)), Some("LANCZOS")).unwrap();
+            img.thumbnail(black_box((128, 128)), Some("LANCZOS"))
+                .unwrap();
             black_box(());
         });
     });
@@ -99,7 +100,8 @@ fn bench_tobytes(c: &mut Criterion) {
 fn bench_new_image(c: &mut Criterion) {
     c.bench_function("new_1920x1080_rgb", |b| {
         b.iter(|| {
-            let img = Image::new(black_box(1920), black_box(1080), "RGB", (255, 0, 0, 255)).unwrap();
+            let img =
+                Image::new(black_box(1920), black_box(1080), "RGB", (255, 0, 0, 255)).unwrap();
             black_box(img);
         });
     });
@@ -142,9 +144,7 @@ fn bench_convert_to_l(c: &mut Criterion) {
     let img = load_ref_2k();
     c.bench_function("convert_rgb_to_l", |b| {
         b.iter(|| {
-            let result = img
-                .convert(black_box("L"), None, None, None, None)
-                .unwrap();
+            let result = img.convert(black_box("L"), None, None, None, None).unwrap();
             black_box(result);
         });
     });
@@ -328,8 +328,7 @@ fn bench_chops_subtract(c: &mut Criterion) {
     let img2 = Image::new(2048, 1536, "RGB", (10, 10, 10, 255)).unwrap();
     c.bench_function("chops_subtract", |b| {
         b.iter(|| {
-            let result =
-                chops::subtract(black_box(&img1), black_box(&img2), 1.0, 0.0).unwrap();
+            let result = chops::subtract(black_box(&img1), black_box(&img2), 1.0, 0.0).unwrap();
             black_box(result);
         });
     });
@@ -659,7 +658,12 @@ fn bench_pipeline_20_st(c: &mut Criterion) {
             let r = pillow_rs_core::ops::imageops::mirror(&r).unwrap();
             // 14. paste color
             let mut r2 = r.clone();
-            r2.paste(PasteSource::Color((255, 0, 0, 255)), Some((0, 0, 50, 50)), None).unwrap();
+            r2.paste(
+                PasteSource::Color((255, 0, 0, 255)),
+                Some((0, 0, 50, 50)),
+                None,
+            )
+            .unwrap();
             // 15. quantize
             let r = r2.quantize(256, 0, None, false).unwrap();
             // 16. reduce
@@ -730,73 +734,89 @@ fn bench_coverage_all(c: &mut Criterion) {
     let rgba = load_ref_1k();
 
     // Image methods not yet covered (only methods that actually exist in Rust API)
-    c.bench_function("coverage_image_methods", |b| b.iter(|| {
-        let _ = black_box(img.clone().copy());
-        let _ = black_box(img.clone().getbands().unwrap());
-        let _ = black_box(img.clone().getbbox(true).unwrap());
-        let _ = black_box(img.clone().getchannel(0).unwrap());
-        let _ = black_box(img.clone().getcolors(256).unwrap());
-        let _ = black_box(img.clone().getdata(None).unwrap());
-        let _ = black_box(img.clone().getextrema().unwrap());
-        let _ = black_box(img.clone().getprojection().unwrap());
-        let _ = black_box(img.clone().histogram().unwrap());
-        let _ = black_box(img.clone().load().unwrap());
-        let _ = black_box(img.clone().tell());
-        let _ = black_box(img.clone().effect_spread(3).unwrap());
-        let _ = black_box(img.clone().entropy().unwrap());
-        let _ = black_box(img.clone().remap_palette(&[0u8; 768]).unwrap());
-        let _ = black_box(img.clone().tobitmap().unwrap());
-        let mut c2 = img.clone();
-        let _ = black_box(c2.seek(0).unwrap());
-    }));
+    c.bench_function("coverage_image_methods", |b| {
+        b.iter(|| {
+            let _ = black_box(img.clone().copy());
+            let _ = black_box(img.clone().getbands().unwrap());
+            let _ = black_box(img.clone().getbbox(true).unwrap());
+            let _ = black_box(img.clone().getchannel(0).unwrap());
+            let _ = black_box(img.clone().getcolors(256).unwrap());
+            let _ = black_box(img.clone().getdata(None).unwrap());
+            let _ = black_box(img.clone().getextrema().unwrap());
+            let _ = black_box(img.clone().getprojection().unwrap());
+            let _ = black_box(img.clone().histogram().unwrap());
+            let _ = black_box(img.clone().load().unwrap());
+            let _ = black_box(img.clone().tell());
+            let _ = black_box(img.clone().effect_spread(3).unwrap());
+            let _ = black_box(img.clone().entropy().unwrap());
+            let _ = black_box(img.clone().remap_palette(&[0u8; 768]).unwrap());
+            let _ = black_box(img.clone().tobitmap().unwrap());
+            let mut c2 = img.clone();
+            let _ = black_box(c2.seek(0).unwrap());
+        })
+    });
 
     // ImageChops remaining
-    c.bench_function("coverage_chops", |b| b.iter(|| {
-        let a = &img;
-        let b = &img;
-        let _ = black_box(pillow_rs_core::ops::chops::duplicate(a));
-        let _ = black_box(pillow_rs_core::ops::chops::constant(a, 128).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::offset(a, 10, 10).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::add_modulo(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::subtract_modulo(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::logical_and(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::logical_or(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::logical_xor(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::overlay(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::hard_light(a, b).unwrap());
-        let _ = black_box(pillow_rs_core::ops::chops::soft_light(a, b).unwrap());
-    }));
+    c.bench_function("coverage_chops", |b| {
+        b.iter(|| {
+            let a = &img;
+            let b = &img;
+            let _ = black_box(pillow_rs_core::ops::chops::duplicate(a));
+            let _ = black_box(pillow_rs_core::ops::chops::constant(a, 128).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::offset(a, 10, 10).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::add_modulo(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::subtract_modulo(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::logical_and(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::logical_or(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::logical_xor(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::overlay(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::hard_light(a, b).unwrap());
+            let _ = black_box(pillow_rs_core::ops::chops::soft_light(a, b).unwrap());
+        })
+    });
 
     // ImageOps remaining
-    c.bench_function("coverage_imageops", |b| b.iter(|| {
-        let _ = black_box(pillow_rs_core::ops::imageops::flip(&img).unwrap());
-        let _ = black_box(pillow_rs_core::ops::imageops::mirror(&img).unwrap());
-        let _ = black_box(pillow_rs_core::ops::imageops::posterize(&img, 3).unwrap());
-        let _ = black_box(pillow_rs_core::ops::imageops::solarize(&img, 128).unwrap());
-        let _ = black_box(pillow_rs_core::ops::imageops::grayscale(&img).unwrap());
-        let _ = black_box(pillow_rs_core::ops::imageops::expand(&img, 10, (0, 0, 0, 255)).unwrap());
-    }));
+    c.bench_function("coverage_imageops", |b| {
+        b.iter(|| {
+            let _ = black_box(pillow_rs_core::ops::imageops::flip(&img).unwrap());
+            let _ = black_box(pillow_rs_core::ops::imageops::mirror(&img).unwrap());
+            let _ = black_box(pillow_rs_core::ops::imageops::posterize(&img, 3).unwrap());
+            let _ = black_box(pillow_rs_core::ops::imageops::solarize(&img, 128).unwrap());
+            let _ = black_box(pillow_rs_core::ops::imageops::grayscale(&img).unwrap());
+            let _ =
+                black_box(pillow_rs_core::ops::imageops::expand(&img, 10, (0, 0, 0, 255)).unwrap());
+        })
+    });
 
     // ImageModule remaining
-    c.bench_function("coverage_module_fns", |b| b.iter(|| {
-        let _ = black_box(pillow_rs_core::ops::module_fns::merge("RGB", &[]).unwrap_or_else(|_| img.clone()));
-        let _ = black_box(pillow_rs_core::ops::module_fns::blend(&img, &img, 0.5).unwrap());
-        let _ = black_box(pillow_rs_core::ops::module_fns::composite(&img, &img, &img).unwrap());
-    }));
+    c.bench_function("coverage_module_fns", |b| {
+        b.iter(|| {
+            let _ = black_box(
+                pillow_rs_core::ops::module_fns::merge("RGB", &[]).unwrap_or_else(|_| img.clone()),
+            );
+            let _ = black_box(pillow_rs_core::ops::module_fns::blend(&img, &img, 0.5).unwrap());
+            let _ =
+                black_box(pillow_rs_core::ops::module_fns::composite(&img, &img, &img).unwrap());
+        })
+    });
 
     // ImageDraw placeholder (draw ops are in-place mutating, benchmark operation creation)
-    c.bench_function("coverage_draw", |b| b.iter(|| {
-        let d = pillow_rs_core::Draw::new(img.clone());
-        let _ = black_box(d);
-    }));
+    c.bench_function("coverage_draw", |b| {
+        b.iter(|| {
+            let d = pillow_rs_core::Draw::new(img.clone());
+            let _ = black_box(d);
+        })
+    });
 
     // ImageFilter remaining
-    c.bench_function("coverage_filter_remaining", |b| b.iter(|| {
-        let _ = black_box(img.clone().filter("SMOOTH_MORE").unwrap());
-        let _ = black_box(img.clone().filter("DETAIL").unwrap());
-        let _ = black_box(img.clone().filter("EDGE_ENHANCE_MORE").unwrap());
-        let _ = black_box(img.clone().filter("FIND_EDGES").unwrap());
-    }));
+    c.bench_function("coverage_filter_remaining", |b| {
+        b.iter(|| {
+            let _ = black_box(img.clone().filter("SMOOTH_MORE").unwrap());
+            let _ = black_box(img.clone().filter("DETAIL").unwrap());
+            let _ = black_box(img.clone().filter("EDGE_ENHANCE_MORE").unwrap());
+            let _ = black_box(img.clone().filter("FIND_EDGES").unwrap());
+        })
+    });
 }
 
 criterion_group!(

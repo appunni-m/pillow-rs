@@ -54,7 +54,8 @@ impl Image {
         // pixel values directly and can't be represented as a simple mode convert.
         if let Some(mat) = matrix {
             let img = self.materialize()?;
-            return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result, explicit_mode_for(mode)));
+            return convert_with_matrix(&img, mode, &mat)
+                .map(|result| Image::Loaded(result, explicit_mode_for(mode)));
         }
 
         // Handle conversion from non-standard modes (CMYK, HSV, YCbCr, I, F, P).
@@ -96,7 +97,11 @@ impl Image {
         );
         // Set explicit_mode on the pipeline for non-standard modes
         if let Some(em) = explicit_mode_for(mode) {
-            if let Image::Pipeline { explicit_mode: ref mut em_field, .. } = &mut result {
+            if let Image::Pipeline {
+                explicit_mode: ref mut em_field,
+                ..
+            } = &mut result
+            {
                 *em_field = Some(em.to_string());
             }
         }
@@ -132,8 +137,12 @@ fn convert_with_matrix(
                 })
                 .collect();
             Ok(image::DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w, h, pixels)
-                    .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "matrix conversion failed"))))?,
+                image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
+                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "matrix conversion failed",
+                    )))
+                })?,
             ))
         }
         (12, "RGB") => {
@@ -146,19 +155,27 @@ fn convert_with_matrix(
                     let g = p[1] as f64;
                     let b = p[2] as f64;
                     [
-                        (matrix[0] * r + matrix[1] * g + matrix[2] * b + matrix[3]).clamp(0.0, 255.0) as u8,
-                        (matrix[4] * r + matrix[5] * g + matrix[6] * b + matrix[7]).clamp(0.0, 255.0) as u8,
-                        (matrix[8] * r + matrix[9] * g + matrix[10] * b + matrix[11]).clamp(0.0, 255.0) as u8,
+                        (matrix[0] * r + matrix[1] * g + matrix[2] * b + matrix[3])
+                            .clamp(0.0, 255.0) as u8,
+                        (matrix[4] * r + matrix[5] * g + matrix[6] * b + matrix[7])
+                            .clamp(0.0, 255.0) as u8,
+                        (matrix[8] * r + matrix[9] * g + matrix[10] * b + matrix[11])
+                            .clamp(0.0, 255.0) as u8,
                     ]
                 })
                 .collect();
             Ok(image::DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w, h, pixels)
-                    .ok_or_else(|| PilError::ImageError(image::ImageError::from(std::io::Error::new(std::io::ErrorKind::InvalidData, "matrix conversion failed"))))?,
+                image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
+                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "matrix conversion failed",
+                    )))
+                })?,
             ))
         }
         (n, _) => Err(PilError::ValueError(format!(
-            "Matrix must be 4 or 12 elements, got {}", n
+            "Matrix must be 4 or 12 elements, got {}",
+            n
         ))),
     }
 }

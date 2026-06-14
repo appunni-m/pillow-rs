@@ -457,6 +457,16 @@ class Image:
         return self._rust_image.height
 
     @property
+    def has_transparency_data(self) -> bool:
+        """Whether the image has transparency data."""
+        return False
+
+    @property
+    def palette(self):
+        """Image palette, if any."""
+        return None
+
+    @property
     def mode(self) -> str:
         if self._explicit_mode:
             return self._explicit_mode

@@ -984,7 +984,6 @@ name = "pillow-rs-core"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "color_quant",
  "criterion",
  "csscolorparser",
  "fontdue",

@@ -751,6 +751,7 @@ modules:
       signature: 'quantize(self, colors: int=256, method: int|None=None, kmeans: int=0, palette: Image|None=None, dither:
         Dither=FLOYDSTEINBERG) -> Image'
       supported_modes:
+      - L
       - RGB
       - RGBA
       param_variants:

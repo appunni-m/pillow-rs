@@ -6,9 +6,7 @@ use image::GrayImage;
 
 /// Channel split using pre-allocation pattern.
 fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<Image> {
-    let mut bufs: Vec<Vec<u8>> = (0..channels)
-        .map(|_| vec![0u8; n])
-        .collect();
+    let mut bufs: Vec<Vec<u8>> = (0..channels).map(|_| vec![0u8; n]).collect();
 
     for (i, chunk) in raw.chunks_exact(channels).enumerate() {
         for c in 0..channels {
@@ -16,12 +14,14 @@ fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<
         }
     }
 
-    bufs
-        .into_iter()
+    bufs.into_iter()
         .map(|buf| {
-            Image::Loaded(image::DynamicImage::ImageLuma8(
-                GrayImage::from_raw(w, h, buf).expect("split: buffer size mismatch"),
-            ), None)
+            Image::Loaded(
+                image::DynamicImage::ImageLuma8(
+                    GrayImage::from_raw(w, h, buf).expect("split: buffer size mismatch"),
+                ),
+                None,
+            )
         })
         .collect()
 }
@@ -35,19 +35,14 @@ impl Image {
 
         let bands = match img {
             image::DynamicImage::ImageLuma8(gray) => {
-                vec![Image::Loaded(image::DynamicImage::ImageLuma8(
-                    gray.clone(),
-                ), None)]
+                vec![Image::Loaded(
+                    image::DynamicImage::ImageLuma8(gray.clone()),
+                    None,
+                )]
             }
-            image::DynamicImage::ImageLumaA8(ga) => {
-                split_channels(ga.as_raw(), 2, n, w, h)
-            }
-            image::DynamicImage::ImageRgb8(rgb) => {
-                split_channels(rgb.as_raw(), 3, n, w, h)
-            }
-            image::DynamicImage::ImageRgba8(rgba) => {
-                split_channels(rgba.as_raw(), 4, n, w, h)
-            }
+            image::DynamicImage::ImageLumaA8(ga) => split_channels(ga.as_raw(), 2, n, w, h),
+            image::DynamicImage::ImageRgb8(rgb) => split_channels(rgb.as_raw(), 3, n, w, h),
+            image::DynamicImage::ImageRgba8(rgba) => split_channels(rgba.as_raw(), 4, n, w, h),
             _ => {
                 let rgba = img.to_rgba8();
                 split_channels(rgba.as_raw(), 4, n, w, h)

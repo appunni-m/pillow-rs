@@ -111,28 +111,19 @@ impl Image {
     /// Max filter: each pixel becomes the maximum in its neighborhood.
     pub fn max_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
-        Ok(Image::push_op(
-            self,
-            PipelineOp::MaxFilter { size },
-        ))
+        Ok(Image::push_op(self, PipelineOp::MaxFilter { size }))
     }
 
     /// Min filter: each pixel becomes the minimum in its neighborhood.
     pub fn min_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
-        Ok(Image::push_op(
-            self,
-            PipelineOp::MinFilter { size },
-        ))
+        Ok(Image::push_op(self, PipelineOp::MinFilter { size }))
     }
 
     /// Median filter: each pixel becomes the median in its neighborhood.
     pub fn median_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
-        Ok(Image::push_op(
-            self,
-            PipelineOp::MedianFilter { size },
-        ))
+        Ok(Image::push_op(self, PipelineOp::MedianFilter { size }))
     }
 
     /// Mode filter: each pixel becomes the most common value in its neighborhood.
@@ -219,14 +210,21 @@ impl Image {
                 let g_mode = find_mode_with_threshold(&g_hist);
                 let b_mode = find_mode_with_threshold(&b_hist);
                 let orig = rgb.get_pixel(x as u32, y as u32);
-                out.put_pixel(x as u32, y as u32, image::Rgb([
-                    r_mode.unwrap_or(orig[0]),
-                    g_mode.unwrap_or(orig[1]),
-                    b_mode.unwrap_or(orig[2]),
-                ]));
+                out.put_pixel(
+                    x as u32,
+                    y as u32,
+                    image::Rgb([
+                        r_mode.unwrap_or(orig[0]),
+                        g_mode.unwrap_or(orig[1]),
+                        b_mode.unwrap_or(orig[2]),
+                    ]),
+                );
             }
         }
-        let result = crate::image::preserve_mode(&DynamicImage::ImageRgb8(img.to_rgb8()), DynamicImage::ImageRgb8(out));
+        let result = crate::image::preserve_mode(
+            &DynamicImage::ImageRgb8(img.to_rgb8()),
+            DynamicImage::ImageRgb8(out),
+        );
         Ok(Image::Loaded(result, None))
     }
 

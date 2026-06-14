@@ -39,20 +39,15 @@ impl Image {
                         let (sw, sh) = size;
                         (img.clone(), 0i32, 0i32, sw as i32, sh as i32)
                     }
-                    Some((x1, y1, x2, y2)) => {
-                        (img.clone(), x1, y1, x2 - x1, y2 - y1)
-                    }
+                    Some((x1, y1, x2, y2)) => (img.clone(), x1, y1, x2 - x1, y2 - y1),
                 }
             }
             PasteSource::Color(rgba) => {
                 let (bx, by, bw, bh) = match box_coords {
-                    Some((x1, y1, x2, y2)) if x2 > x1 && y2 > y1 => {
-                        (x1, y1, x2 - x1, y2 - y1)
-                    }
+                    Some((x1, y1, x2, y2)) if x2 > x1 && y2 > y1 => (x1, y1, x2 - x1, y2 - y1),
                     _ => {
                         return Err(PilError::ValueError(
-                            "color paste requires a 4-tuple box to define the region"
-                                .into(),
+                            "color paste requires a 4-tuple box to define the region".into(),
                         ));
                     }
                 };
