@@ -75,10 +75,10 @@ impl Draw {
         let x1 = x1.clamp(0, img_w as i32);
         let y1 = y1.clamp(0, img_h as i32);
 
-        // Fill
+        // Fill (inclusive range, matching PIL)
         if let Some(fc) = fill {
-            for py in y0..y1 {
-                for px in x0..x1 {
+            for py in y0..=y1 {
+                for px in x0..=x1 {
                     if px >= 0 && py >= 0 && (px as u32) < img_w && (py as u32) < img_h {
                         canvas.put_pixel(px as u32, py as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
                     }
@@ -237,9 +237,72 @@ impl Draw {
             }
         }
 
-        // Outline via Midpoint ellipse algorithm
+        // Outline via Bresenham boundary + edge detection (matches PIL's ellipse outline)
         if let Some(oc) = outline {
-            draw_ellipse_outline(&mut canvas, cx as i32, cy as i32, rx as i32, ry as i32, oc, img_w, img_h);
+            // Fill the full ellipse, then extract boundary
+            let mut filled = vec![false; (img_w * img_h) as usize];
+            // Re-use the Bresenham generator loop (same as fill above)
+            let mut qx_o = a;
+            let mut qy_o = b % 2;
+            let mut pr_o = a as i64;
+            let mut py_o = 0i64;
+            let mut finished_o = false;
+            while !finished_o {
+                let y_pos = y0 + ((py_o + b as i64) / 2) as i32;
+                let y_neg = y0 + ((-py_o + b as i64) / 2) as i32;
+                let xb = (pr_o / 2) as i32;
+                if xb > 0 {
+                    let left = (cx_i - xb).max(x0);
+                    let right = (cx_i + xb).min(x1);
+                    for &y_img in &[y_pos, y_neg] {
+                        if y_img >= y0 && y_img <= y1 {
+                            for x in left..=right {
+                                if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
+                                    filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Advance quarter generator
+                loop {
+                    if qx_o < 0 { finished_o = true; break; }
+                    if qx_o == ex && qy_o == ey { finished_o = true; break; }
+                    let mut nx = qx_o;
+                    let mut ny = qy_o + 2;
+                    let mut ndelta = quarter_delta(nx as i64, ny as i64);
+                    if qx_o > 1 {
+                        let d1 = quarter_delta((qx_o - 2) as i64, (qy_o + 2) as i64);
+                        if ndelta > d1 { nx = qx_o - 2; ny = qy_o + 2; ndelta = d1; }
+                        let d2 = quarter_delta((qx_o - 2) as i64, qy_o as i64);
+                        if ndelta > d2 { nx = qx_o - 2; ny = qy_o; }
+                    }
+                    if ny > ey { finished_o = true; break; }
+                    if ny as i64 > py_o {
+                        pr_o = nx as i64;
+                        py_o = ny as i64;
+                        qx_o = nx; qy_o = ny;
+                        break;
+                    }
+                    qx_o = nx; qy_o = ny;
+                }
+            }
+            // Edge detection
+            let iw = img_w as i32;
+            let ih = img_h as i32;
+            for y in 0..ih {
+                for x in 0..iw {
+                    let idx = (y as usize) * (img_w as usize) + (x as usize);
+                    if !filled[idx] { continue; }
+                    let lf = x > 0 && filled[(y as usize) * (img_w as usize) + ((x - 1) as usize)];
+                    let rf = x < iw - 1 && filled[(y as usize) * (img_w as usize) + ((x + 1) as usize)];
+                    let uf = y > 0 && filled[((y - 1) as usize) * (img_w as usize) + (x as usize)];
+                    let df = y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
+                    if !lf || !rf || !uf || !df {
+                        plot(&mut canvas, x, y, oc, img_w, img_h);
+                    }
+                }
+            }
         }
 
         self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
