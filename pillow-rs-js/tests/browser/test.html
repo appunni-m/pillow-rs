@@ -10,7 +10,7 @@
 import init, {
     Image, ImageDraw, ImageChops, ImageOps, ImageFont, ImageStat, ImagePalette,
     merge, blend, composite
-} from '../../pkg/pillow_rs_js.js';
+} from '/pkg/pillow_rs_js.js';
 
 async function main() {
     await init();
@@ -34,14 +34,19 @@ async function main() {
     function makeImage(mode, size, hexBytes) {
         const bytes = hexToBytes(hexBytes);
         const m = mode.toUpperCase();
-        // Try fromBytes directly first
-        try {
-            return Image.fromBytes(m, size[0], size[1], bytes);
-        } catch (_) {
-            // Fallback: create RGB and convert
+        // fromBytes is an INSTANCE method on Image — create temp to call it
+        const temp = new Image('RGB', 1, 1, 0, 0, 0, 255);
+        // I and F modes: pass bytes directly (4 bytes per pixel)
+        if (m === 'I' || m === 'F') {
+            try { return temp.fromBytes(m, size[0], size[1], bytes); }
+            catch (_) { return null; }
         }
+        // Direct fromBytes for supported modes
+        try { return temp.fromBytes(m, size[0], size[1], bytes); }
+        catch (_) { /* fall through */ }
+        // Fallback: use RGB bytes and convert
         try {
-            const rgb = Image.fromBytes('RGB', size[0], size[1], bytes);
+            const rgb = temp.fromBytes('RGB', size[0], size[1], bytes);
             return rgb.convert(m);
         } catch (_) {
             return null;

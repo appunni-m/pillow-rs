@@ -11,14 +11,57 @@
  *           npm install  (from pillow-rs-js/)
  */
 import puppeteer from 'puppeteer';
-import { readFileSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, readdirSync, createReadStream } from 'fs';
+import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
+import http from 'http';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '..', '..', '..', 'tests', 'fixtures');
 const TEST_HTML = join(__dirname, 'test.html');
+const BROWSER_DIR = __dirname;
+const PKG_DIR = join(__dirname, '..', '..', 'pkg');
+
+const MIME = {
+    '.html': 'text/html', '.js': 'application/javascript',
+    '.wasm': 'application/wasm', '.json': 'application/json',
+};
+
+// Simple HTTP server to serve the browser test files
+function startServer() {
+    return new Promise((resolve) => {
+        const server = http.createServer((req, res) => {
+            let filePath;
+            const url = req.url === '/' ? '/test.html' : req.url.split('?')[0];
+            if (url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
+            if (url.startsWith('/pkg/')) {
+                filePath = join(PKG_DIR, url.slice(5));
+            } else {
+                filePath = join(BROWSER_DIR, url);
+            }
+            const ext = extname(filePath);
+            try {
+                const stream = createReadStream(filePath);
+                stream.on('error', () => {
+                    res.writeHead(404);
+                    res.end('Not found');
+                });
+                res.writeHead(200, {
+                    'Content-Type': MIME[ext] || 'application/octet-stream',
+                    'Access-Control-Allow-Origin': '*',
+                });
+                stream.pipe(res);
+            } catch (_) {
+                res.writeHead(404);
+                res.end('Not found');
+            }
+        });
+        server.listen(0, '127.0.0.1', () => {
+            resolve(server);
+        });
+    });
+}
 
 // ── helpers ─────────────────────────────────────────────────────────
 
@@ -61,6 +104,12 @@ function valuesEqual(a, b) {
 // ── main ────────────────────────────────────────────────────────────
 
 async function main() {
+    // Start local HTTP server (file:// can't load ES modules in headless Chrome)
+    const server = await startServer();
+    const port = server.address().port;
+    const BASE_URL = `http://127.0.0.1:${port}`;
+    console.log(`Test server at ${BASE_URL}`);
+
     const browser = await puppeteer.launch({
         headless: 'new',
         args: [
@@ -72,19 +121,24 @@ async function main() {
     });
     const page = await browser.newPage();
 
-    // Collect console messages from the browser for debugging
+    // Collect ALL console messages for debugging
     const browserLogs = [];
     page.on('console', msg => {
-        if (msg.type() === 'error') browserLogs.push(`[browser err] ${msg.text()}`);
+        const text = msg.text();
+        if (text.length > 200) {
+            browserLogs.push(`[browser ${msg.type()}] ${text.slice(0, 200)}...`);
+        } else {
+            browserLogs.push(`[browser ${msg.type()}] ${text}`);
+        }
     });
 
-    // Load test page
-    await page.goto('file://' + TEST_HTML);
+    // Load test page via HTTP
+    await page.goto(BASE_URL + '/test.html', { waitUntil: 'domcontentloaded' });
 
     // Wait for WASM to be ready
     await page.waitForFunction(
         () => window.wasmTest?.ready === true,
-        { timeout: 30000 },
+        { timeout: 60000 },
     );
     console.log('WASM loaded in browser');
 
@@ -255,6 +309,7 @@ async function main() {
 
     // ── summary ─────────────────────────────────────────────────────
     await browser.close();
+    server.close();
 
     console.log(`\n=== WASM Browser Test Results ===`);
     console.log(`  Passed:  ${passed}`);
@@ -263,16 +318,17 @@ async function main() {
     console.log(`  Total:   ${passed + failed + skipped}`);
 
     if (browserLogs.length > 0) {
-        console.log(`\nBrowser errors (${browserLogs.length}):`);
-        for (const log of browserLogs.slice(0, 10)) {
+        console.log(`\nBrowser logs (${browserLogs.length}):`);
+        for (const log of browserLogs.slice(0, 20)) {
             console.log(`  ${log}`);
         }
-        if (browserLogs.length > 10) {
-            console.log(`  ... and ${browserLogs.length - 10} more`);
+        if (browserLogs.length > 20) {
+            console.log(`  ... and ${browserLogs.length - 20} more`);
         }
     }
 
     if (failed > 0) process.exit(1);
+    console.log('\nAll browser tests passed!');
 }
 
 main().catch(e => {
