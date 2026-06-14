@@ -1,4 +1,4 @@
-use image::{ColorType, DynamicImage, RgbImage};
+use image::{ColorType, DynamicImage, GenericImageView, RgbImage};
 
 /// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
 /// R: 0.299, G: 0.587, B: 0.114. PIL truncates (no rounding).
@@ -367,20 +367,12 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 
 /// P (palette) → RGB using the embedded palette data.
 /// P mode is stored as Luma8 (index bytes) with an attached palette.
+/// When no palette is available (frombytes("P", ...)), PIL returns all-black
+/// pixels (0, 0, 0) for every index. Palette lookup will be added later
+/// when quantize stores palette data in Image::Loaded.
 pub fn p_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let gray = img.to_luma8();
-    let (w, h) = gray.dimensions();
-    let gray_data = gray.as_raw();
-
-    // P mode data is grayscale (Luma8) — the pixel values are palette indices.
-    // There's no palette attached to DynamicImage; it was stored separately.
-    // For now, treat P→RGB as direct grayscale mapping (no palette available).
-    let mut out = RgbImage::new(w, h);
-    for (i, op) in out.pixels_mut().enumerate() {
-        let idx = gray_data[i];
-        *op = image::Rgb([idx, idx, idx]);
-    }
-    DynamicImage::ImageRgb8(out)
+    let (w, h) = img.dimensions();
+    DynamicImage::ImageRgb8(image::RgbImage::from_pixel(w, h, image::Rgb([0, 0, 0])))
 }
 
 /// Convert an image from a non-standard PIL mode to a standard one.
