@@ -81,22 +81,24 @@ impl Image {
     /// Apply a named built-in filter. Supports all 10 PIL built-in kernels.
     /// Handles mode conversions for "1", "I", and "F" modes matching PIL behavior.
     pub fn filter(&self, filter_type: &str) -> Result<Image, PilError> {
-        // PIL: for mode "I", convert to "L", apply filter, convert back to "I"
+        // I-mode: push the filter op directly — execute_op handles I-mode dispatch
+        // by operating on int32 pixel values with no [0,255] clipping.
         if self.explicit_mode() == Some("I") {
-            let l_img = self.convert("L", None, None, None, None)?;
-            let filtered = l_img.filter(filter_type)?;
-            return filtered.convert("I", None, None, None, None);
+            return self.filter_push(filter_type);
         }
-        // PIL: for mode "F", convert to "L", apply filter, convert back to "F"
+        // F-mode: convert to L, apply filter, convert back to F
         if self.explicit_mode() == Some("F") {
             let l_img = self.convert("L", None, None, None, None)?;
             let filtered = l_img.filter(filter_type)?;
             return filtered.convert("F", None, None, None, None);
         }
-        // PIL: for mode "1" (binary), filter applies on L, converts back
-        // Mode "1" is stored as Luma8 (0/255), same as PIL after *255 conversion.
-        // The tobytes() method applies the i//255 threshold for bit packing.
-        // No conversion needed here - just apply filter directly on the Luma8 data.
+        // Mode "1" (binary): stored as Luma8 (0/255), filter applies on L data.
+        // No conversion needed.
+        self.filter_push(filter_type)
+    }
+
+    /// Push the appropriate PipelineOp for a built-in filter, without mode conversion.
+    fn filter_push(&self, filter_type: &str) -> Result<Image, PilError> {
         match filter_type {
             "BLUR" => Ok(Image::push_op(
                 self,

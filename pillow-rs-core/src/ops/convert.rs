@@ -65,8 +65,10 @@ impl Image {
         if let Some(src_mode) = self.explicit_mode() {
             let target_is_standard = !is_nonstandard_mode(mode);
             if is_nonstandard_mode(src_mode) && target_is_standard {
+                // Extract palette before materializing (P-mode palette may be on Pipeline)
+                let palette = self.palette();
                 let img = self.materialize()?;
-                let converted = color::convert_from_nonstandard(src_mode, &img)
+                let converted = color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
                     .unwrap_or_else(|| img.to_rgb8().into());
                 // If the target is a standard mode, return the converted image directly.
                 // For mode "L" etc., derive from the RGB result.
@@ -85,8 +87,40 @@ impl Image {
             }
         }
 
-        let mode_enum = parse_mode(mode)?;
         let dither_enum = parse_dither(dither);
+
+        // Special case: converting to P-mode uses PIL's default WEB palette
+        // with Floyd-Steinberg dither, not median cut quantize. We eagerly execute
+        // here so the palette is stored on the result Pipeline, enabling subsequent
+        // convert("RGB") operations to do correct palette lookups.
+        if mode == "P" {
+            use crate::ops::quantize::web_palette_quantize;
+            use std::sync::Arc;
+
+            let img = self.materialize()?;
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let rgb_raw = rgb.into_raw();
+            let dither = !matches!(dither_enum, Some(DitherMethod::None));
+            let (indices, palette_bytes) = web_palette_quantize(&rgb_raw, w, h, dither);
+            let mut out = image::GrayImage::new(w, h);
+            for (i, pixel) in out.pixels_mut().enumerate() {
+                pixel[0] = indices.get(i).copied().unwrap_or(0);
+            }
+            return Ok(Image::Pipeline {
+                source: Arc::new(Image::Loaded(
+                    DynamicImage::ImageLuma8(out),
+                    Some("P".to_string()),
+                )),
+                ops: vec![],
+                format: None,
+                explicit_mode: Some("P".to_string()),
+                backend: None,
+                palette: Some(palette_bytes),
+            });
+        }
+
+        let mode_enum = parse_mode(mode)?;
         let mut result = Image::push_op(
             self,
             PipelineOp::Convert {

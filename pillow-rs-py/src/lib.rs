@@ -672,7 +672,10 @@ fn map_error(e: PilError) -> PyErr {
 fn enable_backend(name: &str) -> PyResult<bool> {
     match pillow_rs_core::compute::Backend::from_str(name) {
         Some(b) => Ok(pillow_rs_core::compute::enable_backend(b)),
-        None => Err(pyo3::exceptions::PyValueError::new_err(format!("unknown backend: {}", name))),
+        None => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown backend: {}",
+            name
+        ))),
     }
 }
 
@@ -681,7 +684,10 @@ fn enable_backend(name: &str) -> PyResult<bool> {
 fn disable_backend(name: &str) -> PyResult<bool> {
     match pillow_rs_core::compute::Backend::from_str(name) {
         Some(b) => Ok(pillow_rs_core::compute::disable_backend(b)),
-        None => Err(pyo3::exceptions::PyValueError::new_err(format!("unknown backend: {}", name))),
+        None => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown backend: {}",
+            name
+        ))),
     }
 }
 
@@ -708,7 +714,10 @@ fn active_backends() -> Vec<String> {
 fn backend_enabled(name: &str) -> PyResult<bool> {
     match pillow_rs_core::compute::Backend::from_str(name) {
         Some(b) => Ok(pillow_rs_core::compute::backend_enabled(b)),
-        None => Err(pyo3::exceptions::PyValueError::new_err(format!("unknown backend: {}", name))),
+        None => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown backend: {}",
+            name
+        ))),
     }
 }
 

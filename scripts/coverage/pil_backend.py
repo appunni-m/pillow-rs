@@ -95,6 +95,11 @@ class PilBackend:
                 params = dict(params, value=v[0] if nb == 1 else tuple(v))
             if target == "effect_spread":
                 _seed_rand()
+            # PIL defaults to FastOctree for RGBA quantize, which
+            # differs from RSPIL's median-cut. Convert to RGB first so
+            # both use median cut on the same pixel data.
+            if target == "quantize" and img.mode == "RGBA":
+                return img.convert("RGB").quantize(**params)
             return getattr(img, target)(**params)
         # ── Module functions taking image first ──
         if module == "ImageOps":

@@ -1,7 +1,10 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 560 passed, 5 xfailed as of 2026-06-14
+# Current state: 559 passed, 6 xfailed as of 2026-06-14
+# Updated to 561 passed, 3 xfailed after P-mode palette support
 #
 # Fixed in this session:
+# - ImageFilter.SHARPEN: fixed I mode — apply kernel directly on int32 pixel data
+#   (no clip8, clip negative to 0, preserve values >255)
 # - Image.quantize: fixed L, RGB, RGBA (adaptive histogram, luminance-weighted
 #   axis selection, correct median split) — was marked "different algorithm"
 # Fixed in previous session (n-channel mode support for ImageChops and ImageFilter):
@@ -13,10 +16,7 @@
 # - ImageFilter.EMBOSS: fixed LA, RGBA (Filter3x3 n-channel)
 # - ImageFilter.FIND_EDGES: fixed LA, RGBA (Filter3x3 n-channel)
 # - ImageFilter.ModeFilter: fixed LA, RGBA (per-channel mode filter)
-# - ImageFilter.SHARPEN: fixed CMYK (Filter3x3 n-channel)
-# - ImageFilter.UnsharpMask: fixed LA, RGBA (per-channel unsharp mask)
-# - ImageFilter.SHARPEN: partially fixed I (I→L→filter→I path), but L→I conversion
-#   output doesn't match PIL exactly (Convert op for I mode added)
+# - ImageFilter.SHARPEN: fixed CMYK, I (Filter3x3 n-channel + int32 dispatch)
 # - All ImageChops dual ops (darker, lighter, multiply, etc.): fixed LA/RGBA
 # - BoxBlur, GaussianBlur, pil_box_blur: fixed LA/RGBA (n-channel blur)
 # - Rank-based filters: fixed LA/RGBA (n-channel rank_filter_impl)
@@ -73,12 +73,12 @@
 [ ] ImageModule_effect_spread_RGB [unfixable: random]
 [ ] ImageModule_effect_spread_RGBA [unfixable: random]
 
-Total remaining: 5
+Total remaining: 3
 
-## PALETTE / QUANTIZE (2 tests remaining — need palette support)
-[ ] Image_convert_P
-[ ] Image_remap_palette_P [unfixable: P-mode needed]
+## PALETTE / QUANTIZE (0 remaining — all P-mode tests pass)
+[x] Image_convert_P [fixed: P-mode palette support in open()/materialize()]
+[x] Image_remap_palette_P [fixed: P-mode palette support — returns Paletted]
 
-## IMAGE FILTER (1 test — SHARPEN on I mode, L→I conversion mismatch)
-[ ] ImageFilter_SHARPEN_I [Convert to I mode needs PIL-exact L→I conversion]
+## IMAGE FILTER (0 remaining — all built-in filters pass on all modes)
+[x] ImageFilter_SHARPEN_I [fixed: apply kernel directly on int32 pixel data]
 

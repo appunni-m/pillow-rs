@@ -367,24 +367,51 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 
 /// P (palette) → RGB using the embedded palette data.
 /// P mode is stored as Luma8 (index bytes) with an attached palette.
-/// When no palette is available (frombytes("P", ...)), PIL returns all-black
-/// pixels (0, 0, 0) for every index. Palette lookup will be added later
-/// when quantize stores palette data in Image::Loaded.
-pub fn p_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let (w, h) = img.dimensions();
-    DynamicImage::ImageRgb8(image::RgbImage::from_pixel(w, h, image::Rgb([0, 0, 0])))
+/// When no palette is provided, PIL's default grayscale ramp is used:
+/// each index i maps to RGB(i, i, i).
+/// When a palette is provided (768 bytes: 256 × R,G,B triples), the actual
+/// palette colors are looked up.
+pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
+    let luma = img.to_luma8();
+    let (w, h) = luma.dimensions();
+    let mut out = image::RgbImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
+        let idx = ip[0] as usize;
+        if let Some(pal) = palette {
+            if idx * 3 + 2 < pal.len() {
+                op[0] = pal[idx * 3];
+                op[1] = pal[idx * 3 + 1];
+                op[2] = pal[idx * 3 + 2];
+            } else {
+                op[0] = 0;
+                op[1] = 0;
+                op[2] = 0;
+            }
+        } else {
+            // PIL default palette: grayscale ramp
+            op[0] = ip[0];
+            op[1] = ip[0];
+            op[2] = ip[0];
+        }
+    }
+    DynamicImage::ImageRgb8(out)
 }
 
 /// Convert an image from a non-standard PIL mode to a standard one.
+/// `palette` provides the optional palette data for P-mode conversion.
 /// Returns None if the source mode is already standard.
-pub fn convert_from_nonstandard(src_mode: &str, img: &DynamicImage) -> Option<DynamicImage> {
+pub fn convert_from_nonstandard(
+    src_mode: &str,
+    img: &DynamicImage,
+    palette: Option<&[u8]>,
+) -> Option<DynamicImage> {
     match src_mode {
         "CMYK" => Some(cmyk_to_rgb(img)),
         "HSV" => Some(hsv_to_rgb(img)),
         "YCbCr" => Some(ycbcr_to_rgb(img)),
         "I" => Some(i_to_rgb(img)),
         "F" => Some(f_to_rgb(img)),
-        "P" => Some(p_to_rgb(img)),
+        "P" => Some(p_to_rgb(img, palette)),
         _ => None,
     }
 }

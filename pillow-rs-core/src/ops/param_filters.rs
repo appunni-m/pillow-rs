@@ -52,11 +52,24 @@ impl Image {
         ))
     }
 
+    /// PIL-compatible clip8: clamp to [0, 255].
+    /// Matches PIL's clip8(): `return ss <= 0.0 ? 0 : ss >= 255.0 ? 255 : (UINT8)ss`
+    fn pil_clip8(v: i32) -> u8 {
+        if v >= 255 {
+            255
+        } else if v <= 0 {
+            0
+        } else {
+            v as u8
+        }
+    }
+
     /// Unsharp mask: sharpen by subtracting a blurred version.
     /// `radius` controls blur amount, `percent` controls strength (150 = 150%),
     /// `threshold` is minimum difference to apply.
     /// Uses PIL-style GaussianBlur for the blurred version.
     /// Handles any number of channels (L=1, LA=2, RGB=3, RGBA=4).
+    /// Uses PIL's exact integer arithmetic: `clip8(original + diff * percent / 100)`.
     pub fn unsharp_mask(
         &self,
         radius: f32,
@@ -70,7 +83,6 @@ impl Image {
 
         let (w, h) = (img.width(), img.height());
         let channels = img.color().channel_count() as usize;
-        let amount = percent as f64 / 100.0;
 
         let raw = img.as_bytes();
         let blur_raw = blurred.as_bytes();
@@ -83,12 +95,12 @@ impl Image {
                     let p = raw[base + c] as i32;
                     let b = blur_raw[base + c] as i32;
                     let diff = p - b;
-                    let val = if diff.unsigned_abs() > threshold as u32 {
-                        (p as f64 + diff as f64 * amount).clamp(0.0, 255.0) as u8
+                    // PIL uses integer arithmetic: diff * percent / 100 (truncating)
+                    out[base + c] = if diff.unsigned_abs() > threshold as u32 {
+                        Self::pil_clip8(p + diff * percent / 100)
                     } else {
                         p as u8
                     };
-                    out[base + c] = val;
                 }
             }
         }

@@ -128,7 +128,6 @@ modules:
       supported_modes:
       - 1
       - CMYK
-      - F
       - HSV
       - I
       - L

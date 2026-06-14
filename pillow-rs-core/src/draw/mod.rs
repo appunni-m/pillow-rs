@@ -2,7 +2,7 @@
 //! Implements line, rectangle, ellipse, polygon, point, text.
 //! Uses Bresenham-style algorithms for pixel-perfect rendering.
 
-use image::{DynamicImage, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -456,10 +456,33 @@ impl Draw {
                                 DynamicImage::ImageLumaA8(ga)
                             }
                             "P" => {
-                                // Approximate: RGBA→grayscale as palette index.
-                                // Without the palette we cannot recover exact indices,
-                                // but PIL's default palette is grayscale, and the
-                                // test fixture fill=200 maps to value ~200.
+                                // Map RGBA pixels back to palette indices using the
+                                // original palette if available, else fall back to grayscale.
+                                if let Some(pal) = self.image.palette() {
+                                    let (w, h) = img_loaded.dimensions();
+                                    let rgba = img_loaded.to_rgba8();
+                                    let mut indices = image::GrayImage::new(w, h);
+                                    for (op, rp) in indices.pixels_mut().zip(rgba.pixels()) {
+                                        let idx = pal
+                                            .chunks_exact(3)
+                                            .position(|p| {
+                                                p[0] == rp[0] && p[1] == rp[1] && p[2] == rp[2]
+                                            })
+                                            .unwrap_or(0)
+                                            .min(255)
+                                            as u8;
+                                        op[0] = idx;
+                                    }
+                                    let palette = self
+                                        .image
+                                        .palette()
+                                        .unwrap_or_else(crate::image::default_palette);
+                                    return Image::Paletted(crate::image::PalettedData {
+                                        indices,
+                                        palette,
+                                    });
+                                }
+                                // Fallback: grayscale approximation
                                 DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded))
                             }
                             "CMYK" => {

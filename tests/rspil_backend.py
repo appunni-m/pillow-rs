@@ -65,10 +65,14 @@ class RspilBackend:
         if bytes_data and mode in self._FROMBYTES_MODES:
             return Image.frombytes(mode, size, bytes_data)
         if bytes_data:
-            img = Image.frombytes("RGB", size, bytes_data)
             try:
-                return img.convert(mode)
+                img = Image.frombytes("RGB", size, bytes_data)
+                try:
+                    return img.convert(mode)
+                except Exception:
+                    return None
             except Exception:
+                # bytes_data doesn't match RGB format; use reference from config
                 return None
         return Image.new(mode, size)
 

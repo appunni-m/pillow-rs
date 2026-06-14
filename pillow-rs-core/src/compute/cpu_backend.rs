@@ -24,10 +24,11 @@ impl ComputeBackend for CpuBackend {
         ops: &[PipelineOp],
         img: &DynamicImage,
         explicit_mode: Option<&str>,
+        palette: Option<&[u8]>,
     ) -> Result<DynamicImage, PilError> {
         let mut img = img.clone();
         for op in ops {
-            img = execute_op(&img, op, explicit_mode)?;
+            img = execute_op(&img, op, explicit_mode, palette)?;
         }
         Ok(img)
     }

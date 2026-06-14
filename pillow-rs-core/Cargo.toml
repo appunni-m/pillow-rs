@@ -10,6 +10,7 @@ name = "pillow_rs_core"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp"] }
+png = "0.18"
 thiserror = "1"
 csscolorparser = "0.8"
 fontdue = "0.9"

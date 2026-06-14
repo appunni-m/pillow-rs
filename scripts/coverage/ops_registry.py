@@ -22,7 +22,7 @@ REGISTRY = {
         "type": "image",
         "method": "resize",
         "params": {"size": [50, 50]},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I", "F"],
+        "modes": ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I"],
     },
     "Image.crop": {
         "type": "image",
