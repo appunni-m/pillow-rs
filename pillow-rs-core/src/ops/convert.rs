@@ -33,6 +33,7 @@ fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
     match s {
         Some("NONE") | Some("none") => Some(DitherMethod::None),
         Some("FLOYDSTEINBERG") | Some("floydsteinberg") => Some(DitherMethod::FloydSteinberg),
+        None => Some(DitherMethod::FloydSteinberg), // PIL default: FloydSteinberg dither
         _ => None,
     }
 }
