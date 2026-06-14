@@ -1244,7 +1244,8 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
             ColorMode::Mode1 => {
-                let gray = crate::color::pil_grayscale_truncate(img);
+                // PIL uses the SAME rounded-L conversion for convert("1") as for convert("L")
+                let gray = crate::color::pil_grayscale(img);
                 let (w, h) = gray.dimensions();
                 let mut out = image::GrayImage::new(w, h);
                 match dither {
