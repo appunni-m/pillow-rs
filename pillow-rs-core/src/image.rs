@@ -1392,6 +1392,49 @@ fn resize_f(
     Ok(DynamicImage::ImageRgba8(out))
 }
 
+/// Deterministic PRNG matching glibc's `rand()` TYPE_3 algorithm.
+/// Used by effect_spread to produce output matching PIL's C rand().
+struct GlibcRand {
+    state: [i32; 31],
+    fptr: usize,
+    rptr: usize,
+}
+
+impl GlibcRand {
+    /// Create a new PRNG seeded with `seed` (equivalent to srand(seed)).
+    fn new(seed: u32) -> Self {
+        const DEG: usize = 31;
+        const SEP: usize = 3;
+        let mut state = [0i32; DEG];
+        state[0] = (seed & 0xffffffff) as i32;
+        for k in 1..DEG {
+            // state[k] = (16807 * state[k-1]) % 2147483647
+            state[k] = ((16807i64 * state[k - 1] as i64) % 2147483647) as i32;
+        }
+        let mut rng = GlibcRand {
+            state,
+            fptr: SEP,
+            rptr: 0,
+        };
+        // Warm up: 10 * DEG cycles
+        for _ in 0..10 * DEG {
+            rng.rand();
+        }
+        rng
+    }
+
+    /// Return the next pseudo-random integer in [0, 2^31), matching C rand().
+    fn rand(&mut self) -> i32 {
+        const DEG: usize = 31;
+        let val = self.state[self.fptr].wrapping_add(self.state[self.rptr]);
+        self.state[self.fptr] = val;
+        let result = (val >> 1) & 0x7fffffff;
+        self.fptr = (self.fptr + 1) % DEG;
+        self.rptr = (self.rptr + 1) % DEG;
+        result
+    }
+}
+
 /// Execute a single PipelineOp against a DynamicImage.
 /// Each op borrows the input, allocates and returns the output.
 /// `explicit_mode` carries the PIL mode override (e.g. "F", "P") that the
@@ -2577,48 +2620,30 @@ pub fn execute_op(
             let input_pixels = pixels;
             let mut out_pixels = input_pixels.clone();
 
-            // PIL uses C rand() WITHOUT calling srand(). We seed srand(42)
-            // deterministically to produce the same sequence for every call,
-            // matching the seeded PIL output used in fixture generation.
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                extern "C" {
-                    fn rand() -> i32;
-                    fn srand(seed: u32);
-                }
-                unsafe {
-                    srand(42);
-                }
-                for y in 0..h {
-                    for x in 0..w {
-                        let src_idx = (y * w + x) as usize;
-                        let src_base = src_idx * stride;
-                        unsafe {
-                            let xx = x + (rand() % d) - half_d;
-                            let yy = y + (rand() % d) - half_d;
-                            if xx >= 0 && xx < w && yy >= 0 && yy < h {
-                                let dst_idx = (yy * w + xx) as usize;
-                                let dst_base = dst_idx * stride;
-                                // Read from INPUT (never modified), write to OUTPUT
-                                for c in 0..stride {
-                                    out_pixels[dst_base + c] = input_pixels[src_base + c];
-                                    out_pixels[src_base + c] = input_pixels[dst_base + c];
-                                }
-                            } else {
-                                // Copy pixel as-is
-                                for c in 0..stride {
-                                    out_pixels[src_base + c] = input_pixels[src_base + c];
-                                }
-                            }
+            // Pure-Rust deterministic PRNG matching glibc's rand() TYPE_3
+            // algorithm with seed=42, so output matches PIL's effect_spread.
+            let mut prng = GlibcRand::new(42);
+            for y in 0..h {
+                for x in 0..w {
+                    let src_idx = (y * w + x) as usize;
+                    let src_base = src_idx * stride;
+                    let xx = x + (prng.rand() % d) - half_d;
+                    let yy = y + (prng.rand() % d) - half_d;
+                    if xx >= 0 && xx < w && yy >= 0 && yy < h {
+                        let dst_idx = (yy * w + xx) as usize;
+                        let dst_base = dst_idx * stride;
+                        // Read from INPUT (never modified), write to OUTPUT
+                        for c in 0..stride {
+                            out_pixels[dst_base + c] = input_pixels[src_base + c];
+                            out_pixels[src_base + c] = input_pixels[dst_base + c];
+                        }
+                    } else {
+                        // Copy pixel as-is
+                        for c in 0..stride {
+                            out_pixels[src_base + c] = input_pixels[src_base + c];
                         }
                     }
                 }
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                // WASM fallback: simple copy
-                out_pixels.copy_from_slice(&input_pixels);
-                let _ = (d, half_d);
             }
             // Reconstruct DynamicImage from the output pixel data
             let result = match stride {

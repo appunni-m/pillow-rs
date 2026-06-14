@@ -375,6 +375,43 @@ impl Draw {
         Ok(())
     }
 
+    /// Draw a 1-bit bitmap image at position (x, y) with fill color.
+    pub fn bitmap(
+        &mut self,
+        x: i32,
+        y: i32,
+        bitmap: &Image,
+        fill: Option<(u8, u8, u8, u8)>,
+    ) -> Result<(), PilError> {
+        let color = fill.unwrap_or((255, 255, 255, 255));
+        let bmp_data = bitmap.getdata(None)?;
+        let (bmp_w, bmp_h) = bitmap.size()?;
+
+        let img = self.image.materialize()?;
+        let (img_w, img_h) = (img.width(), img.height());
+        let mut canvas = img.to_rgba8();
+
+        for py in 0..bmp_h {
+            for px in 0..bmp_w {
+                let idx = (py * bmp_w + px) as usize;
+                if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                    let dx = x + px as i32;
+                    let dy = y + py as i32;
+                    if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                        canvas.put_pixel(
+                            dx as u32,
+                            dy as u32,
+                            image::Rgba([color.0, color.1, color.2, color.3]),
+                        );
+                    }
+                }
+            }
+        }
+
+        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        Ok(())
+    }
+
     /// Return a clone of the current image state, converted back to original mode.
     pub fn image_clone(&self) -> Image {
         let img = self.image.clone();
