@@ -22,6 +22,6 @@
   },
   "expected": {
     "result_type": "value",
-    "value": "<capsule object \"Pillow Imaging\" at 0x7b7b99863120>"
+    "value": "<capsule object \"Pillow Imaging\" at 0x74baf0072460>"
   }
 }

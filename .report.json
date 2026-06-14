@@ -1,0 +1,1 @@
+{"created": 1781419741.7064633, "duration": 0.11455988883972168, "exitcode": 4, "root": "/", "environment": {}, "summary": {"total": 0, "collected": 0}, "collectors": [{"nodeid": "", "outcome": "passed", "result": [{"nodeid": "home/appunni/work/pil-wasm/tests/test_fixture_parity.py", "type": "Module"}]}], "tests": []}

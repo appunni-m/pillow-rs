@@ -7,6 +7,23 @@ from pillow_rs import Image as PyImage
 ROOT = Path(__file__).parent.parent.parent
 WASM_PKG = ROOT / "pillow-rs-js" / "pkg"
 COVERAGE = ROOT / "docs" / "COVERAGE_WASM.md"
+LIB_RS = ROOT / "pillow-rs-js" / "src" / "lib.rs"
+
+# Count actual WASM exports dynamically
+def count_wasm_exports():
+    """Count #[wasm_bindgen] annotated items in lib.rs."""
+    import subprocess
+    # Count lines with wasm_bindgen macro annotations (struct, impl, fn, getter, setter)
+    result = subprocess.run(
+        ["grep", "-cE", r'#\[wasm_bindgen', str(LIB_RS)],
+        capture_output=True, text=True)
+    if result.returncode == 0:
+        return int(result.stdout.strip())
+    return 0
+
+WASM_EXPORT_COUNT = count_wasm_exports()
+
+print(f"WASM exports detected: {WASM_EXPORT_COUNT}")
 
 print("Building WASM...")
 subprocess.run(["wasm-pack", "build", "--target", "nodejs", "--dev"],
@@ -210,10 +227,8 @@ md = f"""# pillow-rs WASM Coverage Report
 
 | Metric | Count |
 |--------|-------|
-| **WASM exports** | 135 |
-| **Python PIL parity tests** | 202/202 ✅ |
-| **Python trust** | 135/135 (100%) |
-| **WASM operations tested** | {total} |
+| **WASM exports** | {WASM_EXPORT_COUNT} |
+| **Cross-validated operations** | {total} |
 | **WASM matches Python** | {passed} |
 | **Mismatches** | {failed} |
 | **Skipped** | {skipped} |
@@ -239,7 +254,7 @@ for name, status, detail in results:
 md += f"""
 ## Browser vs Server
 
-All 135 WASM exports work identically in browser and Node.js:
+All {WASM_EXPORT_COUNT} WASM exports use the same pillow-rs-core Rust code:
 - **Browser**: wasm-pack --target web → ES module with fetch()
 - **Server (Node.js)**: wasm-pack --target nodejs → CommonJS require()
 - **Same core**: both call identical pillow-rs-core Rust code
@@ -252,6 +267,5 @@ COVERAGE.parent.mkdir(exist_ok=True)
 COVERAGE.write_text(md)
 print(f"\nGenerated {COVERAGE}")
 print(f"  WASM vs Python: {passed}/{total} ({pct}%)")
-print(f"  Python: 202/202 PIL parity | 135/135 TRUSTED")
-print(f"  WASM: 135 exports | Browser + Server compatible\n")
+print(f"  WASM: {WASM_EXPORT_COUNT} exports | Browser + Server compatible\n")
 sys.exit(0 if failed==0 else 1)

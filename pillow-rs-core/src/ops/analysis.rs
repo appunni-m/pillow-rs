@@ -98,19 +98,43 @@ impl Image {
     /// Returns 256 values per band, concatenated.
     pub fn histogram(&self) -> Result<Vec<u32>, PilError> {
         let img = self.materialize()?;
-        let rgba = img.to_rgba8();
-
         let n_bands = match img.color() {
             image::ColorType::L8 | image::ColorType::L16 => 1,
             image::ColorType::La8 | image::ColorType::La16 => 2,
             image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
             _ => 4,
         };
-
         let mut hist = vec![0u32; 256 * n_bands];
-        for px in rgba.pixels() {
-            for b in 0..n_bands {
-                hist[b * 256 + px[b] as usize] += 1;
+        // Use mode-aware pixel reading to avoid to_rgba8() remapping channels
+        match img.color() {
+            image::ColorType::La8 | image::ColorType::La16 => {
+                let la = img.to_luma_alpha8();
+                for px in la.pixels() {
+                    hist[px[0] as usize] += 1;
+                    hist[256 + px[1] as usize] += 1;
+                }
+            }
+            image::ColorType::L8 | image::ColorType::L16 => {
+                let luma = img.to_luma8();
+                for px in luma.pixels() {
+                    hist[px[0] as usize] += 1;
+                }
+            }
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 => {
+                let rgb = img.to_rgb8();
+                for px in rgb.pixels() {
+                    hist[px[0] as usize] += 1;
+                    hist[256 + px[1] as usize] += 1;
+                    hist[512 + px[2] as usize] += 1;
+                }
+            }
+            _ => {
+                let rgba = img.to_rgba8();
+                for px in rgba.pixels() {
+                    for b in 0..n_bands {
+                        hist[b * 256 + px[b] as usize] += 1;
+                    }
+                }
             }
         }
         Ok(hist)

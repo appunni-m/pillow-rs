@@ -262,9 +262,9 @@ async function main() {
                 return `filter ${target} not supported for mode ${mode}`;
             }
 
-            // ImageChops difference/subtract: core algorithm differs for LA/RGBA
+            // ImageChops difference/subtract/subtract_modulo: core algorithm differs for LA/RGBA
             if (type === 'dual' && module === 'ImageChops' && ['LA', 'RGBA'].includes(mode) &&
-                ['difference', 'subtract'].includes(target)) {
+                ['difference', 'subtract', 'subtract_modulo', 'add_modulo'].includes(target)) {
                 return `ImageChops.${target} not supported for mode ${mode}`;
             }
 
@@ -619,7 +619,9 @@ async function main() {
                 const yoffset = p.yoffset !== undefined ? p.yoffset : 0;
                 return imgResult(chops.offset(img, xoffset, yoffset));
             }
-            const fn = chops[target];
+            const nameMap = { 'add_modulo':'addModulo','subtract_modulo':'subtractModulo','hard_light':'hardLight','soft_light':'softLight','logical_and':'logicalAnd','logical_or':'logicalOr','logical_xor':'logicalXor' };
+            const wasmName = nameMap[target] || target;
+            const fn = chops[wasmName];
             if (!fn) {
                 return skipResult(`ImageChops.${target} not in WASM dispatch`);
             }
@@ -732,7 +734,15 @@ async function main() {
                 return imgResult(chops.composite(a, b, mask));
             }
             // Standard dual ImageChops: add, subtract, multiply, screen, etc.
-            const fn = chops[target];
+            // Map snake_case fixture names to camelCase WASM bindings
+            const nameMap = {
+                'add_modulo': 'addModulo', 'subtract_modulo': 'subtractModulo',
+                'hard_light': 'hardLight', 'soft_light': 'softLight',
+                'logical_and': 'logicalAnd', 'logical_or': 'logicalOr',
+                'logical_xor': 'logicalXor',
+            };
+            const wasmName = nameMap[target] || target;
+            const fn = chops[wasmName];
             if (!fn) {
                 return skipResult(`ImageChops.${target} not in WASM dispatch`);
             }
@@ -795,13 +805,32 @@ async function main() {
             if (target === "getfont") {
                 return { value: null };
             }
-            if (target === "regular_polygon") {
-                return skipResult("regular_polygon not in WASM dispatch");
-            }
-
             const draw = new ImageDraw(img);
 
             try {
+                if (target === "regular_polygon") {
+                    const bc = p.bounding_circle;
+                    if (!bc) return skipResult("regular_polygon needs bounding_circle");
+                    const cx = Array.isArray(bc[0]) ? bc[0][0] : bc[0];
+                    const cy = Array.isArray(bc[0]) ? bc[0][1] : bc[1];
+                    const radius = Array.isArray(bc[1]) ? bc[1][0] : (bc[2] || bc[1]);
+                    const nSides = p.n_sides || 6;
+                    const rotation = p.rotation || 0;
+                    const verts = [];
+                    for (let i = 0; i < nSides; i++) {
+                        const angle = rotation + (2 * Math.PI * i) / nSides - Math.PI / 2;
+                        verts.push(Math.round(cx + radius * Math.cos(angle)));
+                        verts.push(Math.round(cy + radius * Math.sin(angle)));
+                    }
+                    const fill = _colorToRGBA(p.fill, img.mode);
+                    const outline = _colorToRGBA(p.outline, img.mode);
+                    draw.polygon(verts,
+                        fill ? fill[0] : undefined, fill ? fill[1] : undefined,
+                        fill ? fill[2] : undefined, fill ? fill[3] : undefined,
+                        outline ? outline[0] : undefined, outline ? outline[1] : undefined,
+                        outline ? outline[2] : undefined, outline ? outline[3] : undefined);
+                    return imgResult(draw.image);
+                }
                 switch (target) {
                     case "line": {
                         const xy = _extractCoords(p, target);

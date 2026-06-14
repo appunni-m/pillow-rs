@@ -8,7 +8,10 @@ class Draw:
 
     def __init__(self, image: Image, mode: str | None = None):
         self._orig_mode = image.mode
-        self._draw = RustDraw(image._rust_image)
+        # Pass explicit mode to Rust so it knows the true PIL mode
+        # (e.g. "P" stored as Luma8, "CMYK" stored as Rgba8)
+        rust_mode = image._explicit_mode
+        self._draw = RustDraw(image._rust_image, rust_mode)
         self._image = image
         self._font = None  # current font for text
 

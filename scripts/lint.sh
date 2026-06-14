@@ -26,8 +26,8 @@ echo "=== wasm build ==="
 wasm-pack build --target web --dev 2>&1 | tail -2
 
 echo ""
-echo "=== wasm api coverage ==="
-grep -c "pub fn\|js_name" pillow-rs-js/src/lib.rs | tail -1 || echo "?"
+echo "=== wasm export count ==="
+grep -c '#\[wasm_bindgen' pillow-rs-js/src/lib.rs 2>/dev/null || echo "?"
 
 echo ""
-echo "Lint complete. Python: 202 tests | WASM: check pkg/ output"
+echo "Lint complete."

@@ -10,6 +10,18 @@ use crate::pipeline::PipelineOp;
 /// PIL ModeFilter helper: find most common value in histogram.
 /// Returns None if max count ≤ 2 (caller should preserve original pixel).
 fn find_mode_with_threshold(hist: &[u32; 256]) -> Option<u8> {
+    let (_mode, max_count) = find_mode_with_count(hist);
+    if max_count > 2 {
+        Some(_mode)
+    } else {
+        None
+    }
+}
+
+/// Find the mode (most common value) and its count from a histogram.
+/// Uses PIL's strict `>` tie-breaking (lower value wins on tie).
+/// Starts with pixel 0 as initial mode, scans 1..255.
+fn find_mode_with_count(hist: &[u32; 256]) -> (u8, u32) {
     let mut mode = 0u8;
     let mut max_count = hist[0];
     for v in 1..256 {
@@ -18,11 +30,7 @@ fn find_mode_with_threshold(hist: &[u32; 256]) -> Option<u8> {
             mode = v as u8;
         }
     }
-    if max_count > 2 {
-        Some(mode)
-    } else {
-        None
-    }
+    (mode, max_count)
 }
 
 impl Image {
@@ -48,6 +56,7 @@ impl Image {
     /// `radius` controls blur amount, `percent` controls strength (150 = 150%),
     /// `threshold` is minimum difference to apply.
     /// Uses PIL-style GaussianBlur for the blurred version.
+    /// Handles any number of channels (L=1, LA=2, RGB=3, RGBA=4).
     pub fn unsharp_mask(
         &self,
         radius: f32,
@@ -60,52 +69,32 @@ impl Image {
         let blurred = blurred.materialize()?;
 
         let (w, h) = (img.width(), img.height());
+        let channels = img.color().channel_count() as usize;
         let amount = percent as f64 / 100.0;
 
-        // For L mode, process grayscale directly to avoid RGB conversion issues
-        if img.color().channel_count() == 1 {
-            let gray = img.to_luma8();
-            let blur_gray = blurred.to_luma8();
-            let mut out = image::GrayImage::new(w, h);
-            for y in 0..h {
-                for x in 0..w {
-                    let p = gray.get_pixel(x, y)[0] as i32;
-                    let b = blur_gray.get_pixel(x, y)[0] as i32;
+        let raw = img.as_bytes();
+        let blur_raw = blurred.as_bytes();
+        let mut out = vec![0u8; (w * h) as usize * channels];
+
+        for y in 0..h {
+            for x in 0..w {
+                let base = (y * w + x) as usize * channels;
+                for c in 0..channels {
+                    let p = raw[base + c] as i32;
+                    let b = blur_raw[base + c] as i32;
                     let diff = p - b;
                     let val = if diff.unsigned_abs() > threshold as u32 {
                         (p as f64 + diff as f64 * amount).clamp(0.0, 255.0) as u8
                     } else {
                         p as u8
                     };
-                    out.put_pixel(x, y, image::Luma([val]));
+                    out[base + c] = val;
                 }
-            }
-            return Ok(Image::Loaded(DynamicImage::ImageLuma8(out), None));
-        }
-
-        // RGB mode: process per-channel
-        let rgb = img.to_rgb8();
-        let blur_rgb = blurred.to_rgb8();
-        let mut out = image::RgbImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
-                let p = rgb.get_pixel(x, y);
-                let b = blur_rgb.get_pixel(x, y);
-                let mut pix = [0u8; 3];
-                for c in 0..3 {
-                    let diff = p[c] as i32 - b[c] as i32;
-                    if diff.unsigned_abs() > threshold as u32 {
-                        let v = (p[c] as f64 + diff as f64 * amount).clamp(0.0, 255.0);
-                        pix[c] = v as u8;
-                    } else {
-                        pix[c] = p[c];
-                    }
-                }
-                out.put_pixel(x, y, image::Rgb(pix));
             }
         }
 
-        Ok(Image::Loaded(DynamicImage::ImageRgb8(out), None))
+        let result = crate::image::raw_bytes_to_image(w, h, out, channels)?;
+        Ok(Image::Loaded(result, None))
     }
 
     /// Max filter: each pixel becomes the maximum in its neighborhood.
@@ -132,99 +121,49 @@ impl Image {
     ///   - Strict `>` tie-breaking (lower value wins)
     ///   - If max count ≤ 2, original pixel is preserved unchanged
     ///   - Pixels outside image boundary are SKIPPED (not clamped/replicated)
+    ///   - Supports any channel count (1=L, 2=LA, 3=RGB, 4=RGBA)
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
         let img = self.materialize()?;
         let half = (size / 2) as i32;
 
-        let (w, h) = (img.width(), img.height());
-        let w_i32 = w as i32;
-        let h_i32 = h as i32;
+        let (w_u32, h_u32) = (img.width(), img.height());
+        let w = w_u32 as i32;
+        let h = h_u32 as i32;
+        let channels = img.color().channel_count() as usize;
+        let raw = img.as_bytes();
 
-        // For L (single-channel) mode: process grayscale directly
-        if img.color().channel_count() == 1 {
-            let gray = img.to_luma8();
-            let mut out = image::GrayImage::new(w, h);
-            for y in 0..h_i32 {
-                for x in 0..w_i32 {
-                    let mut hist = [0u32; 256];
-                    for dy in -half..=half {
-                        let sy = y + dy;
-                        if sy < 0 || sy >= h_i32 {
-                            continue; // PIL skips out-of-bounds rows
-                        }
-                        for dx in -half..=half {
-                            let sx = x + dx;
-                            if sx < 0 || sx >= w_i32 {
-                                continue; // PIL skips out-of-bounds columns
-                            }
-                            hist[gray.get_pixel(sx as u32, sy as u32)[0] as usize] += 1;
-                        }
-                    }
-                    // PIL: maxpixel=0, maxcount=histogram[0]; scan 1..255
-                    let mut mode = 0u8;
-                    let mut max_count = hist[0];
-                    for v in 1..256 {
-                        if hist[v] > max_count {
-                            max_count = hist[v];
-                            mode = v as u8;
-                        }
-                    }
-                    // PIL: if max count ≤ 2, preserve original pixel
-                    let val = if max_count > 2 {
-                        mode
-                    } else {
-                        gray.get_pixel(x as u32, y as u32)[0]
-                    };
-                    out.put_pixel(x as u32, y as u32, image::Luma([val]));
-                }
-            }
-            return Ok(Image::Loaded(DynamicImage::ImageLuma8(out), None));
-        }
+        let mut out = vec![0u8; (w_u32 * h_u32) as usize * channels];
 
-        // For multi-channel: process per-channel (matching PIL behavior per-band)
-        let rgb = img.to_rgb8();
-        let mut out = image::RgbImage::new(w, h);
-        for y in 0..h_i32 {
-            for x in 0..w_i32 {
-                let mut r_hist = [0u32; 256];
-                let mut g_hist = [0u32; 256];
-                let mut b_hist = [0u32; 256];
+        for y in 0..h {
+            for x in 0..w {
+                // Per-channel histograms
+                let mut hists: Vec<[u32; 256]> = vec![[0u32; 256]; channels];
                 for dy in -half..=half {
                     let sy = y + dy;
-                    if sy < 0 || sy >= h_i32 {
-                        continue;
+                    if sy < 0 || sy >= h {
+                        continue; // PIL skips out-of-bounds rows
                     }
                     for dx in -half..=half {
                         let sx = x + dx;
-                        if sx < 0 || sx >= w_i32 {
-                            continue;
+                        if sx < 0 || sx >= w {
+                            continue; // PIL skips out-of-bounds columns
                         }
-                        let p = rgb.get_pixel(sx as u32, sy as u32);
-                        r_hist[p[0] as usize] += 1;
-                        g_hist[p[1] as usize] += 1;
-                        b_hist[p[2] as usize] += 1;
+                        let base = ((sy * w + sx) as usize) * channels;
+                        for c in 0..channels {
+                            hists[c][raw[base + c] as usize] += 1;
+                        }
                     }
                 }
-                let r_mode = find_mode_with_threshold(&r_hist);
-                let g_mode = find_mode_with_threshold(&g_hist);
-                let b_mode = find_mode_with_threshold(&b_hist);
-                let orig = rgb.get_pixel(x as u32, y as u32);
-                out.put_pixel(
-                    x as u32,
-                    y as u32,
-                    image::Rgb([
-                        r_mode.unwrap_or(orig[0]),
-                        g_mode.unwrap_or(orig[1]),
-                        b_mode.unwrap_or(orig[2]),
-                    ]),
-                );
+                let out_base = ((y * w + x) as usize) * channels;
+                for c in 0..channels {
+                    let orig_val = raw[((y * w + x) as usize) * channels + c];
+                    let (mode, max_count) = find_mode_with_count(&hists[c]);
+                    out[out_base + c] = if max_count > 2 { mode } else { orig_val };
+                }
             }
         }
-        let result = crate::image::preserve_mode(
-            &DynamicImage::ImageRgb8(img.to_rgb8()),
-            DynamicImage::ImageRgb8(out),
-        );
+        let result = crate::image::raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         Ok(Image::Loaded(result, None))
     }
 

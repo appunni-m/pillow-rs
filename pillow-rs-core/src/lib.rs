@@ -3,12 +3,12 @@
 
 pub mod bitmap_font;
 pub mod color;
+pub mod compute;
 pub mod draw;
 pub mod error;
 pub mod font;
 pub mod format;
 pub mod formats;
-pub mod gpu;
 pub mod image;
 pub mod ops;
 pub mod pipeline;

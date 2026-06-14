@@ -79,7 +79,20 @@ const SMOOTH: FilterKernel =
 
 impl Image {
     /// Apply a named built-in filter. Supports all 10 PIL built-in kernels.
+    /// Handles mode conversions for "1", "I", and "F" modes matching PIL behavior.
     pub fn filter(&self, filter_type: &str) -> Result<Image, PilError> {
+        // PIL: for mode "I", convert to "L", apply filter, convert back to "I"
+        if self.explicit_mode() == Some("I") {
+            let l_img = self.convert("L", None, None, None, None)?;
+            let filtered = l_img.filter(filter_type)?;
+            return filtered.convert("I", None, None, None, None);
+        }
+        // PIL: for mode "F", convert to "L", apply filter, convert back to "F"
+        if self.explicit_mode() == Some("F") {
+            let l_img = self.convert("L", None, None, None, None)?;
+            let filtered = l_img.filter(filter_type)?;
+            return filtered.convert("F", None, None, None, None);
+        }
         match filter_type {
             "BLUR" => Ok(Image::push_op(
                 self,
