@@ -1244,8 +1244,9 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
             ColorMode::Mode1 => {
-                // PIL uses the SAME rounded-L conversion for convert("1") as for convert("L")
-                let gray = crate::color::pil_grayscale(img);
+                // PIL uses TRUNCATED grayscale for convert("1") (dither or no dither)
+                // while convert("L") uses ROUNDED grayscale.
+                let gray = crate::color::pil_grayscale_truncate(img);
                 let (w, h) = gray.dimensions();
                 let mut out = image::GrayImage::new(w, h);
                 match dither {
@@ -1256,37 +1257,37 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
                         }
                     }
                     _ => {
-                        // Floyd-Steinberg error diffusion dithering (PIL default)
-                        // Convert to Vec for mutable access
-                        let mut pixels: Vec<u16> = gray.pixels().map(|p| p[0] as u16).collect();
-                        for y in 0..h {
-                            for x in 0..w {
-                                let idx = (y * w + x) as usize;
-                                let old = pixels[idx];
-                                let new = if old >= 128 { 255u16 } else { 0u16 };
-                                pixels[idx] = new;
-                                let err = old as i32 - new as i32;
-                                // Distribute error to neighbors (Floyd-Steinberg weights)
-                                if x + 1 < w {
-                                    let right = pixels[(y * w + x + 1) as usize] as i32 + err * 7 / 16;
-                                    pixels[(y * w + x + 1) as usize] = right.max(0).min(255) as u16;
-                                }
-                                if y + 1 < h {
-                                    if x > 0 {
-                                        let down_left = pixels[((y + 1) * w + x - 1) as usize] as i32 + err * 3 / 16;
-                                        pixels[((y + 1) * w + x - 1) as usize] = down_left.max(0).min(255) as u16;
-                                    }
-                                    let down = pixels[((y + 1) * w + x) as usize] as i32 + err * 5 / 16;
-                                    pixels[((y + 1) * w + x) as usize] = down.max(0).min(255) as u16;
-                                    if x + 1 < w {
-                                        let down_right = pixels[((y + 1) * w + x + 1) as usize] as i32 + err * 1 / 16;
-                                        pixels[((y + 1) * w + x + 1) as usize] = down_right.max(0).min(255) as u16;
-                                    }
-                                }
+                        // PIL-compatible Floyd-Steinberg dither using PIL's scaled-error pattern.
+                        // Single errors array [w+1]; running l0/l1 carry error between rows.
+                        // Truncation-toward-zero division, no intermediate clipping.
+                        let mut errors = vec![0i32; (w + 1) as usize];
+                        let src: Vec<i32> = gray.pixels().map(|p| p[0] as i32).collect();
+                        let mut fs_out = vec![0u8; (w * h) as usize];
+                        let wu = w as usize;
+                        for y in 0..h as usize {
+                            let mut l = 0i32;
+                            let mut l0: i32 = 0;
+                            let mut l1: i32 = 0;
+                            for x in 0..wu {
+                                let idx = y * wu + x;
+                                let acc = l + errors[x + 1];
+                                let v = src[idx] + acc / 16;
+                                let v = v.max(0).min(255);
+                                let new = if v > 128 { 255i32 } else { 0i32 };
+                                fs_out[idx] = new as u8;
+                                l = v - new;
+                                let l2 = l;
+                                let d2 = l + l;
+                                l += d2;
+                                errors[x] = l + l0;
+                                l += d2;
+                                l0 = l + l1;
+                                l1 = l2;
+                                l += d2;
                             }
                         }
-                        for (op, gp) in out.pixels_mut().zip(pixels.iter()) {
-                            op[0] = if *gp >= 128 { 255 } else { 0 };
+                        for (op, &gp) in out.pixels_mut().zip(fs_out.iter()) {
+                            op[0] = gp;
                         }
                     }
                 }
