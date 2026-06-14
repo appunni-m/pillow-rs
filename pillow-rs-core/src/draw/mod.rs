@@ -270,7 +270,7 @@ impl Draw {
             }
         }
 
-        // Simple fill: scanline with even-odd rule
+        // Fill: even-odd rule point-in-polygon test
         if let Some(fc) = fill {
             // Find bounds
             let mut min_x = i32::MAX;
@@ -334,21 +334,116 @@ impl Draw {
     }
 
     /// Draw an arc (partial ellipse outline).
+    /// Uses the same Bresenham quarter-ellipse generator as the ellipse fill,
+    /// then performs edge detection to find boundary pixels and filters by angle.
     pub fn arc(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: (u8, u8, u8, u8), _width: u32) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+
         let cx = (x0 + x1) as f64 / 2.0;
         let cy = (y0 + y1) as f64 / 2.0;
-        let rx = ((x1 - x0) as f64 / 2.0).abs();
-        let ry = ((y1 - y0) as f64 / 2.0).abs();
-        let steps = ((rx + ry) * 2.0) as i32;
-        for i in 0..steps {
-            let angle = start.to_radians() + (end - start).to_radians() * i as f64 / steps as f64;
-            let x = (cx + rx * angle.cos()).round() as i32;
-            let y = (cy + ry * angle.sin()).round() as i32;
-            plot(&mut canvas, x, y, fill, img_w, img_h);
+        let a = x1 - x0;
+        let b = y1 - y0;
+        if a <= 0 || b <= 0 {
+            return Ok(());
         }
+
+        // Normalize angles to 0..360
+        let mut s = start % 360.0;
+        if s < 0.0 { s += 360.0; }
+        let mut e = end % 360.0;
+        if e < 0.0 { e += 360.0; }
+        let angle_in_range = |angle: f64| -> bool {
+            let mut a = angle % 360.0;
+            if a < 0.0 { a += 360.0; }
+            if s <= e { a >= s && a <= e } else { a >= s || a <= e }
+        };
+
+        let cx_i = ((x0 + x1) / 2) as i32;
+        let cy_i = ((y0 + y1) / 2) as i32;
+
+        // Step 1: Compute full ellipse fill using the Bresenham generator
+        let mut filled = vec![false; (img_w * img_h) as usize];
+
+        let mut qx = a;
+        let mut qy = b % 2;
+        let ex = a % 2;
+        let ey = b;
+        let a2 = a as i64 * a as i64;
+        let b2 = b as i64 * b as i64;
+        let a2b2 = a2 * b2;
+        let quarter_delta = |x: i64, y: i64| -> i64 { (a2 * y * y + b2 * x * x - a2b2).abs() };
+
+        let mut pr = a as i64;
+        let mut py = 0i64;
+        let mut finished = false;
+
+        while !finished {
+            let y_pos = y0 + ((py + b as i64) / 2) as i32;
+            let y_neg = y0 + ((-py + b as i64) / 2) as i32;
+
+            let xb = (pr / 2) as i32;
+            if xb > 0 {
+                let left = (cx_i - xb).max(x0);
+                let right = (cx_i + xb).min(x1);
+                for &y_img in &[y_pos, y_neg] {
+                    if y_img >= y0 && y_img <= y1 {
+                        for x in left..=right {
+                            if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
+                                filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Advance quarter generator
+            loop {
+                if qx < 0 { finished = true; break; }
+                if qx == ex && qy == ey { finished = true; break; }
+                let mut nx = qx;
+                let mut ny = qy + 2;
+                let mut ndelta = quarter_delta(nx as i64, ny as i64);
+                if qx > 1 {
+                    let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
+                    if ndelta > d1 { nx = qx - 2; ny = qy + 2; ndelta = d1; }
+                    let d2 = quarter_delta((qx - 2) as i64, qy as i64);
+                    if ndelta > d2 { nx = qx - 2; ny = qy; }
+                }
+                if ny > ey { finished = true; break; }
+                if ny as i64 > py {
+                    pr = nx as i64;
+                    py = ny as i64;
+                    qx = nx; qy = ny;
+                    break;
+                }
+                qx = nx; qy = ny;
+            }
+        }
+
+        // Step 2: Edge detection — boundary pixels have at least one unfilled 4-connected neighbor
+        let iw = img_w as i32;
+        let ih = img_h as i32;
+        for y in 0..ih {
+            for x in 0..iw {
+                let idx = (y as usize) * (img_w as usize) + (x as usize);
+                if !filled[idx] { continue; }
+                // Check 4-connected neighbors
+                let left_filled = x > 0 && filled[(y as usize) * (img_w as usize) + ((x - 1) as usize)];
+                let right_filled = x < iw - 1 && filled[(y as usize) * (img_w as usize) + ((x + 1) as usize)];
+                let up_filled = y > 0 && filled[((y - 1) as usize) * (img_w as usize) + (x as usize)];
+                let down_filled = y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
+                let is_boundary = !left_filled || !right_filled || !up_filled || !down_filled;
+                if is_boundary {
+                    let angle = (y as f64 - cy).atan2(x as f64 - cx).to_degrees();
+                    if angle_in_range(angle) {
+                        canvas.put_pixel(x as u32, y as u32, Rgba([fill.0, fill.1, fill.2, fill.3]));
+                    }
+                }
+            }
+        }
+
         self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
         Ok(())
     }
@@ -364,49 +459,173 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a pieslice.
+    /// Draw a pieslice. Uses the Bresenham ellipse fill with angle clipping.
     pub fn pieslice(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, start: f64, end: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
         let cx = (x0 + x1) as f64 / 2.0;
         let cy = (y0 + y1) as f64 / 2.0;
-        let rx = ((x1 - x0) as f64 / 2.0).abs();
-        let ry = ((y1 - y0) as f64 / 2.0).abs();
 
-        // Fill
+        let a = x1 - x0;
+        let b = y1 - y0;
+        if a <= 0 || b <= 0 {
+            return Ok(());
+        }
+
+        // Normalize angles
+        let mut s = start % 360.0;
+        if s < 0.0 { s += 360.0; }
+        let mut e = end % 360.0;
+        if e < 0.0 { e += 360.0; }
+        let angle_in_range = |angle: f64| -> bool {
+            let mut a = angle % 360.0;
+            if a < 0.0 { a += 360.0; }
+            if s <= e { a >= s && a <= e } else { a >= s || a <= e }
+        };
+
+        let cx_i = ((x0 + x1) / 2) as i32;
+        let cy_i = ((y0 + y1) / 2) as i32;
+
+        // Use the Bresenham quarter generator for the fill, filter by angle
+        let mut qx = a;
+        let mut qy = b % 2;
+        let ex = a % 2;
+        let ey = b;
+        let a2 = a as i64 * a as i64;
+        let b2 = b as i64 * b as i64;
+        let a2b2 = a2 * b2;
+        let quarter_delta = |x: i64, y: i64| -> i64 { (a2 * y * y + b2 * x * x - a2b2).abs() };
+
+        let mut pr = a as i64;
+        let mut py = 0i64;
+        let mut finished = false;
+
         if let Some(fc) = fill {
-            for y in y0..=y1 {
-                for x in x0..=x1 {
-                    if x >= 0 && y >= 0 && (x as u32) < img_w && (y as u32) < img_h {
-                        let dx = (x as f64 - cx) / rx;
-                        let dy = (y as f64 - cy) / ry;
-                        if dx * dx + dy * dy <= 1.0 {
-                            let angle = dy.atan2(dx).to_degrees();
-                            let angle = if angle < 0.0 { angle + 360.0 } else { angle };
-                            if angle >= start && angle <= end {
-                                canvas.put_pixel(x as u32, y as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
+            while !finished {
+                let y_pos = y0 + ((py + b as i64) / 2) as i32;
+                let y_neg = y0 + ((-py + b as i64) / 2) as i32;
+
+                let xb = (pr / 2) as i32;
+                if xb > 0 {
+                    let left = (cx_i - xb).max(x0);
+                    let right = (cx_i + xb).min(x1);
+                    for &y_img in &[y_pos, y_neg] {
+                        if y_img >= y0 && y_img <= y1 {
+                            for x in left..=right {
+                                if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
+                                    // Always include the center pixel (vertex of pie wedge)
+                                    if x == cx_i && y_img == cy_i {
+                                        canvas.put_pixel(x as u32, y_img as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
+                                    } else {
+                                        let angle = (y_img as f64 - cy).atan2(x as f64 - cx).to_degrees();
+                                        if angle_in_range(angle) {
+                                            canvas.put_pixel(x as u32, y_img as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
+
+                // Advance quarter generator
+                loop {
+                    if qx < 0 { finished = true; break; }
+                    if qx == ex && qy == ey { finished = true; break; }
+                    let mut nx = qx;
+                    let mut ny = qy + 2;
+                    let mut ndelta = quarter_delta(nx as i64, ny as i64);
+                    if qx > 1 {
+                        let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
+                        if ndelta > d1 { nx = qx - 2; ny = qy + 2; ndelta = d1; }
+                        let d2 = quarter_delta((qx - 2) as i64, qy as i64);
+                        if ndelta > d2 { nx = qx - 2; ny = qy; }
+                    }
+                    if ny > ey { finished = true; break; }
+                    if ny as i64 > py {
+                        pr = nx as i64;
+                        py = ny as i64;
+                        qx = nx; qy = ny;
+                        break;
+                    }
+                    qx = nx; qy = ny;
+                }
             }
         }
 
-        // Outline
+        // Outline: draw radii + arc edge using Bresenham
         if let Some(oc) = outline {
-            let steps = ((rx + ry) * 2.0) as i32;
-            for i in 0..steps {
-                let angle = start.to_radians() + (end - start).to_radians() * i as f64 / steps as f64;
-                let x = (cx + rx * angle.cos()).round() as i32;
-                let y = (cy + ry * angle.sin()).round() as i32;
-                plot(&mut canvas, x, y, oc, img_w, img_h);
+            // Radius lines from center to arc endpoints
+            for angle_deg in [start, end] {
+                let rad = angle_deg.to_radians();
+                let ax = (cx + (a as f64 / 2.0) * rad.cos()).round() as i32;
+                let ay = (cy + (b as f64 / 2.0) * rad.sin()).round() as i32;
+                bresenham_line(&mut canvas, cx_i, cy_i, ax, ay, oc, img_w, img_h);
             }
-            // Radii lines
-            for a in [start, end] {
-                let ax = (cx + rx * a.to_radians().cos()).round() as i32;
-                let ay = (cy + ry * a.to_radians().sin()).round() as i32;
-                bresenham_line(&mut canvas, cx as i32, cy as i32, ax, ay, oc, img_w, img_h);
+            // Arc edge: use the same Bresenham + edge detection approach as arc()
+            // Re-use the arc filling logic but with outline color and the same angle range
+            // For simplicity, draw a filled ellipse, mask to angle, then edge-detect for outline
+            let mut filled = vec![false; (img_w * img_h) as usize];
+            // Reset quarter generator
+            qx = a; qy = b % 2; pr = a as i64; py = 0i64; finished = false;
+            while !finished {
+                let y_pos = y0 + ((py + b as i64) / 2) as i32;
+                let y_neg = y0 + ((-py + b as i64) / 2) as i32;
+                let xb = (pr / 2) as i32;
+                if xb > 0 {
+                    let left = (cx_i - xb).max(x0);
+                    let right = (cx_i + xb).min(x1);
+                    for &y_img in &[y_pos, y_neg] {
+                        if y_img >= y0 && y_img <= y1 {
+                            for x in left..=right {
+                                if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
+                                    let angle = (y_img as f64 - cy).atan2(x as f64 - cx).to_degrees();
+                                    if angle_in_range(angle) {
+                                        filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                loop {
+                    if qx < 0 { finished = true; break; }
+                    if qx == ex && qy == ey { finished = true; break; }
+                    let mut nx = qx;
+                    let mut ny = qy + 2;
+                    let mut ndelta = quarter_delta(nx as i64, ny as i64);
+                    if qx > 1 {
+                        let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
+                        if ndelta > d1 { nx = qx - 2; ny = qy + 2; ndelta = d1; }
+                        let d2 = quarter_delta((qx - 2) as i64, qy as i64);
+                        if ndelta > d2 { nx = qx - 2; ny = qy; }
+                    }
+                    if ny > ey { finished = true; break; }
+                    if ny as i64 > py {
+                        pr = nx as i64;
+                        py = ny as i64;
+                        qx = nx; qy = ny;
+                        break;
+                    }
+                    qx = nx; qy = ny;
+                }
+            }
+            // Edge detection
+            let iw = img_w as i32;
+            let ih = img_h as i32;
+            for y in 0..ih {
+                for x in 0..iw {
+                    let idx = (y as usize) * (img_w as usize) + (x as usize);
+                    if !filled[idx] { continue; }
+                    let left_f = x > 0 && filled[(y as usize) * (img_w as usize) + ((x - 1) as usize)];
+                    let right_f = x < iw - 1 && filled[(y as usize) * (img_w as usize) + ((x + 1) as usize)];
+                    let up_f = y > 0 && filled[((y - 1) as usize) * (img_w as usize) + (x as usize)];
+                    let down_f = y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
+                    if !left_f || !right_f || !up_f || !down_f {
+                        canvas.put_pixel(x as u32, y as u32, Rgba([oc.0, oc.1, oc.2, oc.3]));
+                    }
+                }
             }
         }
 
@@ -420,10 +639,50 @@ impl Draw {
         self.ellipse(cx - r, cy - r, cx + r, cy + r, fill, outline, 1)
     }
 
-    /// Draw a rounded rectangle.
-    pub fn rounded_rectangle(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, _radius: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
-        // Simplified: regular rectangle (rounded corners not yet implemented)
-        self.rectangle(x0, y0, x1, y1, fill, outline, 1)
+    /// Draw a rounded rectangle. Composes corner pieslices/arcs and rectangles
+    /// matching PIL's Python algorithm in ImageDraw.py.
+    pub fn rounded_rectangle(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, radius: f64, fill: Option<(u8, u8, u8, u8)>, outline: Option<(u8, u8, u8, u8)>, _width: u32) -> Result<(), PilError> {
+        let r = radius.round() as i32;
+        let d = r * 2;
+        if d <= 0 || x1 <= x0 + 1 || y1 <= y0 + 1 {
+            // No corner curve, just draw rectangle
+            return self.rectangle(x0, y0, x1, y1, fill, outline, 1);
+        }
+
+        // Draw filled body first, then outline on top
+        if let Some(fc) = fill {
+            // Corner pieslices
+            self.pieslice(x0, y0, x0 + d, y0 + d, 180.0, 270.0, fill, None, 0)?;  // TL
+            self.pieslice(x1 - d, y0, x1, y0 + d, 270.0, 360.0, fill, None, 0)?;  // TR
+            self.pieslice(x1 - d, y1 - d, x1, y1, 0.0, 90.0, fill, None, 0)?;     // BR
+            self.pieslice(x0, y1 - d, x0 + d, y1, 90.0, 180.0, fill, None, 0)?;   // BL
+            // Center body rectangle
+            self.rectangle(x0 + r, y0, x1 - r, y1, fill, None, 1)?;
+            // Side rectangles (left/right fill between corners)
+            if x1 - r - 1 >= x0 + r + 1 {
+                self.rectangle(x0 + r + 1, y0, x1 - r - 1, y1, fill, None, 1)?;
+            }
+            let rect_left = if x0 + r > x0 { x0 + r } else { x0 + 1 };
+            if rect_left < x1 - r {
+                self.rectangle(x0, y0 + r, rect_left, y1 - r, fill, None, 1)?;
+                self.rectangle(x1 - r, y0 + r, x1, y1 - r, fill, None, 1)?;
+            }
+        }
+
+        if let Some(oc) = outline {
+            // Corner arcs for outline
+            self.arc(x0, y0, x0 + d, y0 + d, 180.0, 270.0, oc, 1)?;
+            self.arc(x1 - d, y0, x1, y0 + d, 270.0, 360.0, oc, 1)?;
+            self.arc(x1 - d, y1 - d, x1, y1, 0.0, 90.0, oc, 1)?;
+            self.arc(x0, y1 - d, x0 + d, y1, 90.0, 180.0, oc, 1)?;
+            // Edge lines for outline
+            self.line(x0 + r, y0, x1 - r, y0, oc, 1)?;  // top
+            self.line(x1, y0 + r, x1, y1 - r, oc, 1)?;  // right
+            self.line(x1 - r, y1, x0 + r, y1, oc, 1)?;  // bottom
+            self.line(x0, y1 - r, x0, y0 + r, oc, 1)?;   // left
+        }
+
+        Ok(())
     }
 
     /// Draw text at position (x, y) using a font.

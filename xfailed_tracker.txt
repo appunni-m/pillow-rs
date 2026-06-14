@@ -26,10 +26,10 @@
 [ ] ImageDraw_text_RGBA
 
 ## IMAGE FILTERS (4 tests)
-[ ] ImageFilter_GaussianBlur_L
-[ ] ImageFilter_GaussianBlur_RGB
-[ ] ImageFilter_UnsharpMask_L
-[ ] ImageFilter_UnsharpMask_RGB
+[x] ImageFilter_GaussianBlur_L
+[x] ImageFilter_GaussianBlur_RGB
+[x] ImageFilter_UnsharpMask_L
+[x] ImageFilter_UnsharpMask_RGB
 
 ## IMAGE MODULE (6 tests)
 [ ] ImageModule_effect_noise_L
@@ -80,4 +80,4 @@
 [ ] Image_resize_RGBA
 [ ] Image_resize_YCbCr
 
-Total remaining: 66
+Total remaining: 63
