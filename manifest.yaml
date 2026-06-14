@@ -425,10 +425,12 @@ modules:
     - name: getbands
       signature: getbands(self) -> tuple[str,...]
       supported_modes:
-      - L
-      - LA
-      - RGB
-      - RGBA
+        - '1'
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -443,10 +445,12 @@ modules:
       signature: 'thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC,
         reducing_gap: float|None=2.0) -> None'
       supported_modes:
-      - L
-      - LA
-      - RGB
-      - RGBA
+        - '1'
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - size:
         - 100
@@ -468,10 +472,12 @@ modules:
     - name: tobytes
       signature: 'tobytes(self, encoder_name: str=''raw'', *args) -> bytes'
       supported_modes:
-      - L
-      - LA
-      - RGB
-      - RGBA
+        - '1'
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       - encoder_name: raw
@@ -487,6 +493,7 @@ modules:
       signature: 'alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source:
         Sequence[int]=(0,0)) -> None'
       supported_modes:
+      - LA
       - RGBA
       param_variants:
       - im: image
@@ -540,11 +547,12 @@ modules:
     - name: getchannel
       signature: 'getchannel(self, channel: int|str) -> Image'
       supported_modes:
-      - LA
-      - RGB
-      - RGBA
-      - CMYK
-      - YCbCr
+        - CMYK
+        - L
+        - LA
+        - RGB
+        - RGBA
+        - YCbCr
       param_variants:
       - channel: R
       - channel: G
@@ -602,12 +610,13 @@ modules:
     - name: getextrema
       signature: getextrema(self) -> tuple[float,float]|tuple[tuple[int,int],...]
       supported_modes:
-      - '1'
-      - L
-      - LA
-      - P
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -643,11 +652,12 @@ modules:
     - name: getprojection
       signature: getprojection(self) -> tuple[list[int],list[int]]
       supported_modes:
-      - '1'
-      - L
-      - P
-      - RGB
-      - RGBA
+        - '1'
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -662,9 +672,12 @@ modules:
       signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
         -> list[int]'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       - mask: image
@@ -715,10 +728,12 @@ modules:
     - name: putalpha
       signature: 'putalpha(self, alpha: Image|int) -> None'
       supported_modes:
-      - L
-      - LA
-      - RGB
-      - RGBA
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - alpha: int
       - alpha: image
@@ -734,9 +749,13 @@ modules:
       signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0,
         offset: float=0.0) -> None'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - data: sequence
       edge_cases: []
@@ -793,9 +812,11 @@ modules:
       signature: 'reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None)
         -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - CMYK
+        - L
+        - LA
+        - RGB
+        - RGBA
       param_variants:
       - factor: 2
       edge_cases: []
@@ -809,9 +830,13 @@ modules:
     - name: seek
       signature: 'seek(self, frame: int) -> None'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - frame: 0
       edge_cases: []
@@ -822,9 +847,13 @@ modules:
     - name: tell
       signature: tell(self) -> int
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -837,12 +866,13 @@ modules:
         data: Sequence|None=None, resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None)
         -> Image'
       supported_modes:
-      - '1'
-      - L
-      - LA
-      - P
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants: []
       edge_cases: []
       status: implemented
@@ -855,9 +885,10 @@ modules:
     - name: verify
       signature: verify(self) -> None
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - L
+        - LA
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -868,9 +899,13 @@ modules:
     - name: effect_spread
       signature: 'effect_spread(self, distance: int) -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - distance: 3
       edge_cases: []
@@ -885,10 +920,12 @@ modules:
       signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
         -> float'
       supported_modes:
-      - '1'
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       - mask: image
@@ -903,9 +940,13 @@ modules:
     - name: draft
       signature: 'draft(self, mode: str|None, size: tuple[int,int]|None) -> tuple[str,tuple[int,int,float,float]]|None'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants: []
       edge_cases: []
       status: implemented
@@ -916,7 +957,8 @@ modules:
       signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None)
         -> Image'
       supported_modes:
-      - P
+        - L
+        - P
       param_variants:
       - dest_map: list
       edge_cases: []
@@ -996,8 +1038,9 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-      - P
-      - L
+        - L
+        - P
+        - RGB
     - name: getxmp
       signature: getxmp(*args, **kwargs)
       status: implemented
@@ -1129,9 +1172,11 @@ modules:
     - name: blend
       signature: 'blend(im1: Image, im2: Image, alpha: float) -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - CMYK
+        - L
+        - LA
+        - RGB
+        - RGBA
       param_variants:
       - alpha: 0.5
       edge_cases: []
@@ -1145,9 +1190,13 @@ modules:
     - name: composite
       signature: 'composite(image1: Image, image2: Image, mask: Image) -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -1161,9 +1210,13 @@ modules:
     - name: eval
       signature: 'eval(image: Image, *args: Callable[[int],float]) -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -1194,9 +1247,13 @@ modules:
       signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray,
         decoder_name: str=''raw'', *args) -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - mode: RGB
         size:
@@ -1213,9 +1270,13 @@ modules:
     - name: effect_noise
       signature: 'effect_noise(size: tuple[int,int], sigma: float) -> Image'
       supported_modes:
-      - L
-      - RGB
-      - RGBA
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - P
+        - RGB
+        - RGBA
       param_variants:
       - size:
         - 100
@@ -1241,8 +1302,7 @@ modules:
       - wasm
       - wasm_gpu
       supported_modes:
-      - L
-      - RGB
+      - LA
       - RGBA
     - name: effect_mandelbrot
       signature: effect_mandelbrot(*args, **kwargs)
@@ -1619,7 +1679,13 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id002
+      supported_modes:
+        - '1'
+        - CMYK
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: CONTOUR
       signature: ImageFilter.CONTOUR
       status: implemented
@@ -1646,7 +1712,12 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id002
+      supported_modes:
+        - '1'
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: EDGE_ENHANCE_MORE
       signature: ImageFilter.EDGE_ENHANCE_MORE
       status: implemented
@@ -1682,7 +1753,16 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id002
+      supported_modes:
+        - '1'
+        - CMYK
+        - HSV
+        - I
+        - L
+        - LA
+        - RGB
+        - RGBA
+        - YCbCr
     - name: SMOOTH
       signature: ImageFilter.SMOOTH
       status: implemented
@@ -1738,7 +1818,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: MaxFilter
       signature: 'ImageFilter.MaxFilter(size: int=3)'
       status: implemented
@@ -1747,7 +1831,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: MinFilter
       signature: 'ImageFilter.MinFilter(size: int=3)'
       status: implemented
@@ -1756,7 +1844,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: MedianFilter
       signature: 'ImageFilter.MedianFilter(size: int=3)'
       status: implemented
@@ -1765,7 +1857,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: ModeFilter
       signature: 'ImageFilter.ModeFilter(size: int=3)'
       status: implemented
@@ -1774,7 +1870,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: RankFilter
       signature: 'ImageFilter.RankFilter(size: int, rank: int)'
       status: implemented
@@ -1783,7 +1883,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: Color3DLUT
       signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3,
         target_mode: str|None=None)'
@@ -2039,7 +2143,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: add_modulo
       signature: 'add_modulo(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2048,7 +2156,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: blend
       signature: 'blend(image1: Image, image2: Image, alpha: float) -> Image'
       status: implemented
@@ -2066,7 +2178,10 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - P
+        - RGB
     - name: constant
       signature: 'constant(image: Image, value: int) -> Image'
       status: implemented
@@ -2075,7 +2190,10 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - P
+        - RGB
     - name: darker
       signature: 'darker(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2084,7 +2202,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: difference
       signature: 'difference(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2093,7 +2215,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: duplicate
       signature: 'duplicate(image: Image) -> Image'
       status: implemented
@@ -2102,7 +2228,10 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - P
+        - RGB
     - name: hard_light
       signature: 'hard_light(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2111,7 +2240,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: invert
       signature: 'invert(image: Image) -> Image'
       status: implemented
@@ -2120,7 +2253,10 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - P
+        - RGB
     - name: lighter
       signature: 'lighter(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2129,7 +2265,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: logical_and
       signature: 'logical_and(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2168,7 +2308,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: offset
       signature: 'offset(image: Image, xoffset: int, yoffset: int|None=None) -> Image'
       status: implemented
@@ -2177,7 +2321,10 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - RGB
+        - RGBA
     - name: overlay
       signature: 'overlay(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2195,7 +2342,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: soft_light
       signature: 'soft_light(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2204,7 +2355,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: subtract
       signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset:
         float=0) -> Image'
@@ -2214,7 +2369,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
     - name: subtract_modulo
       signature: 'subtract_modulo(image1: Image, image2: Image) -> Image'
       status: implemented
@@ -2223,7 +2382,11 @@ modules:
       - gpu
       - wasm
       - wasm_gpu
-      supported_modes: *id001
+      supported_modes:
+        - L
+        - LA
+        - RGB
+        - RGBA
   ImageColor:
     functions:
     - name: getrgb
@@ -2232,7 +2395,8 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-      - RGB
+        - L
+        - RGB
     - name: getcolor
       signature: 'getcolor(color: str, mode: str) -> int|tuple[int,...]'
       status: implemented
@@ -2249,7 +2413,9 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-      - P
+        - L
+        - P
+        - RGB
     - name: getcolor
       signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) ->
         int'
@@ -2257,28 +2423,36 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-      - P
+        - L
+        - P
+        - RGB
     - name: getdata
       signature: getdata(self) -> tuple[str, Sequence[int]|bytes|bytearray]
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-      - P
+        - L
+        - P
+        - RGB
     - name: save
       signature: 'save(self, fp: str|IO[str]) -> None'
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-      - P
+        - L
+        - P
+        - RGB
     - name: tobytes
       signature: tobytes(self) -> bytes
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-      - P
+        - L
+        - P
+        - RGB
   ImageFont:
     functions:
     - name: load
