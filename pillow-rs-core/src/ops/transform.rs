@@ -30,7 +30,7 @@ impl Image {
                 h: dst_h,
                 method: TransformMethod::Affine,
                 data,
-                filter: ResampleFilter::Bilinear,
+                filter: ResampleFilter::Nearest,
                 fill,
             },
         ))

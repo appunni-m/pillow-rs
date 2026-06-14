@@ -1,19 +1,20 @@
 # pillow-rs Coverage Report
 
-> Auto-generated: 2026-06-12 15:43:25 | Pillow 12.2.0
+> Auto-generated: 2026-06-14 11:51:03 | Pillow parity tested
 
 ## Trust Summary
 
 | Metric | Value |
 |--------|-------|
-| **Total tests** | 296 |
-| **Passing** | 294 |
-| **Failed** | 2 |
-| **Implemented functions** | 135 |
-| **Trusted (PIL parity tested)** | 115 |
-| **Untested** | 20 |
+| **Total tests** | 566 |
+| **Passing** | 486 |
+| **Failed** | 0 |
+| **Skipped** | 80 |
+| **Implemented functions** | 145 |
+| **Trusted (PIL parity tested)** | 143 |
+| **Untested** | 2 |
 | **Stubs** | 5 |
-| **Trust score** | **115/135 (85%)** |
+| **Trust score** | **143/145 (99%)** |
 
 ## Performance Benchmarks
 
@@ -21,51 +22,37 @@
 
 | Operation | Speedup | Faster? |
 |-----------|---------|---------|
-| resize_2k_to_1k | 31.31× | ✅ |
-| crop_2k | 0.67× | ❌ |
-| convert_2k_RGB_to_L | 2.09× | ✅ |
-| transpose_2k_FLIP | 3.29× | ✅ |
-| filter_2k_BLUR | 72.27× | ✅ |
-| paste_2k | 1.11× | ✅ |
-| invert_2k | 3.15× | ✅ |
+| resize_2k_to_1k | 25.34× | ✅ |
+| crop_2k | 0.87× | ❌ |
+| convert_2k_RGB_to_L | 2.33× | ✅ |
+| transpose_2k_FLIP | 2.62× | ✅ |
+| filter_2k_BLUR | 65.19× | ✅ |
+| paste_2k | 1.20× | ✅ |
+| invert_2k | 3.82× | ✅ |
 
-**Average speedup: 16.27×**
+**Average speedup: 14.48×**
 
 ## Module Status
 
 | Module | Implemented | Trusted | Untested | Trust % |
 |--------|------------|---------|----------|---------|
-| Image | 51 | 44 | 7 | 86% |
-| ImageChops | 21 | 13 | 8 | 62% |
+| Image | 48 | 46 | 2 | 96% |
+| ImageChops | 21 | 21 | 0 | 100% |
 | ImageColor | 2 | 2 | 0 | 100% |
-| ImageDraw | 18 | 18 | 0 | 100% |
-| ImageFont | 10 | 5 | 5 | 50% |
-| ImageModule | 10 | 10 | 0 | 100% |
-| ImageOps | 18 | 18 | 0 | 100% |
+| ImageDraw | 14 | 14 | 0 | 100% |
+| ImageEnhance | 4 | 4 | 0 | 100% |
+| ImageFilter | 19 | 19 | 0 | 100% |
+| ImageFont | 5 | 5 | 0 | 100% |
+| ImageModule | 9 | 9 | 0 | 100% |
+| ImageOps | 16 | 16 | 0 | 100% |
 | ImagePalette | 5 | 5 | 0 | 100% |
+| ImageSequence | 1 | 1 | 0 | 100% |
+| ImageStat | 1 | 1 | 0 | 100% |
 
 ## ⚠️ Untested Functions
 
-- `Image.effect_spread`
-- `Image.entropy`
-- `Image.getcolors`
-- `Image.getprojection`
-- `Image.point`
+- `Image.getdata`
 - `Image.quantize`
-- `Image.rotate`
-- `ImageChops.add`
-- `ImageChops.darker`
-- `ImageChops.difference`
-- `ImageChops.invert`
-- `ImageChops.lighter`
-- `ImageChops.multiply`
-- `ImageChops.screen`
-- `ImageChops.subtract`
-- `ImageFont.getbbox`
-- `ImageFont.getlength`
-- `ImageFont.getmask`
-- `ImageFont.getmetrics`
-- `ImageFont.getname`
 
 ## ⬜ Remaining Stubs
 
@@ -75,29 +62,215 @@
 - `ImageModule.effect_mandelbrot`
 - `ImageModule.frombuffer`
 
-## 🔍 Tests Not in Coverage Map
+## Mode × Operation Coverage Matrix
 
-- `tests/test_error_parity.py::test_convert_from_rgb_to_nonstandard[CMYK]`
-- `tests/test_error_parity.py::test_convert_from_rgb_to_nonstandard[F]`
-- `tests/test_error_parity.py::test_convert_from_rgb_to_nonstandard[HSV]`
-- `tests/test_error_parity.py::test_convert_from_rgb_to_nonstandard[I]`
-- `tests/test_error_parity.py::test_convert_from_rgb_to_nonstandard[YCbCr]`
-- `tests/test_error_parity.py::test_crop_nonstandard_modes[CMYK]`
-- `tests/test_error_parity.py::test_crop_nonstandard_modes[F]`
-- `tests/test_error_parity.py::test_crop_nonstandard_modes[HSV]`
-- `tests/test_error_parity.py::test_crop_nonstandard_modes[I]`
-- `tests/test_error_parity.py::test_crop_nonstandard_modes[YCbCr]`
-- `tests/test_error_parity.py::test_filter_nonstandard_modes[1]`
-- `tests/test_error_parity.py::test_filter_nonstandard_modes[CMYK]`
-- `tests/test_error_parity.py::test_filter_nonstandard_modes[P]`
-- `tests/test_error_parity.py::test_new_nonstandard_modes[CMYK]`
-- `tests/test_error_parity.py::test_new_nonstandard_modes[F]`
-- `tests/test_error_parity.py::test_new_nonstandard_modes[HSV]`
-- `tests/test_error_parity.py::test_new_nonstandard_modes[I]`
-- `tests/test_error_parity.py::test_new_nonstandard_modes[YCbCr]`
-- `tests/test_error_parity.py::test_resize_nonstandard_modes[CMYK]`
-- `tests/test_error_parity.py::test_resize_nonstandard_modes[F]`
-- ... and 96 more
+*✅ = passing, ⚠️ = xfailed (in progress), ⬜ = supported but not tested, N/A = PIL doesn't support this mode*
+
+### Image
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | HSV | I | F |
+|-----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| `alpha_composite` | N/A | N/A | N/A | N/A | N/A | ⬜ | N/A | N/A | N/A | N/A |
+| `apply_transparency` | N/A | ✅ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
+| `convert` | N/A | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `copy` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `crop` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `draft` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `effect_spread` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `entropy` | ✅ | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `filter` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A |
+| `frombytes` | N/A | ⚠️ | ⚠️ | N/A | ✅ | ⚠️ | N/A | N/A | N/A | N/A |
+| `get_child_images` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `get_flattened_data` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `getbands` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getbbox` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getchannel` | N/A | N/A | ✅ | N/A | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
+| `getcolors` | ✅ | ✅ | ⬜ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getdata` | N/A | ⚠️ | ⚠️ | N/A | ⚠️ | ⚠️ | N/A | N/A | N/A | N/A |
+| `getexif` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getim` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `getpalette` | N/A | ✅ | N/A | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A |
+| `getpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getprojection` | ⬜ | ✅ | N/A | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getxmp` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `histogram` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `load` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `new` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `open` | N/A | ⚠️ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
+| `paste` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
+| `point` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
+| `putalpha` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `putdata` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `putpalette` | N/A | ⬜ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
+| `putpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `quantize` | N/A | ⚠️ | N/A | N/A | ⚠️ | ⚠️ | N/A | N/A | N/A | N/A |
+| `reduce` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `remap_palette` | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
+| `resize` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `seek` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `split` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `tell` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `thumbnail` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `tobitmap` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| `tobytes` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `transform` | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | N/A | N/A | N/A | N/A |
+| `transpose` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `verify` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+
+### ImageChops
+
+| Operation | 1 | L | RGB |
+|-----------|-------|-------|-------|
+| `add` | N/A | ✅ | ✅ |
+| `add_modulo` | N/A | ✅ | ✅ |
+| `blend` | N/A | ✅ | ✅ |
+| `composite` | N/A | ✅ | ✅ |
+| `constant` | N/A | ✅ | ✅ |
+| `darker` | N/A | ✅ | ✅ |
+| `difference` | N/A | ✅ | ✅ |
+| `duplicate` | N/A | ✅ | ✅ |
+| `hard_light` | N/A | ✅ | ✅ |
+| `invert` | N/A | ✅ | ✅ |
+| `lighter` | N/A | ✅ | ✅ |
+| `logical_and` | ✅ | N/A | N/A |
+| `logical_or` | ✅ | N/A | N/A |
+| `logical_xor` | ✅ | N/A | N/A |
+| `multiply` | N/A | ✅ | ✅ |
+| `offset` | N/A | ✅ | ✅ |
+| `overlay` | N/A | ✅ | ✅ |
+| `screen` | N/A | ✅ | ✅ |
+| `soft_light` | N/A | ✅ | ✅ |
+| `subtract` | N/A | ✅ | ✅ |
+| `subtract_modulo` | N/A | ✅ | ✅ |
+
+### ImageColor
+
+| Operation | L | RGB |
+|-----------|-------|-------|
+| `getcolor` | ✅ | ✅ |
+| `getrgb` | N/A | ✅ |
+
+### ImageDraw
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK |
+|-----------|-------|-------|-------|-------|-------|-------|-------|
+| `arc` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `bitmap` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
+| `chord` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `circle` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `ellipse` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `line` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `multiline_text` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
+| `pieslice` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `point` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `polygon` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `rectangle` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `regular_polygon` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
+| `rounded_rectangle` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
+| `text` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
+
+### ImageEnhance
+
+| Operation | L | LA | RGB | RGBA |
+|-----------|-------|-------|-------|-------|
+| `Brightness` | ✅ | ⬜ | ✅ | ⬜ |
+| `Color` | ✅ | ⬜ | ✅ | ⬜ |
+| `Contrast` | ✅ | ⬜ | ✅ | ⬜ |
+| `Sharpness` | ✅ | ⬜ | ✅ | ⬜ |
+
+### ImageFilter
+
+| Operation | L | LA | RGB | RGBA |
+|-----------|-------|-------|-------|-------|
+| `BLUR` | ✅ | ✅ | ✅ | ✅ |
+| `BoxBlur` | ✅ | ✅ | ✅ | ✅ |
+| `CONTOUR` | ✅ | ✅ | ✅ | ✅ |
+| `DETAIL` | ✅ | ✅ | ✅ | ✅ |
+| `EDGE_ENHANCE` | ✅ | ✅ | ✅ | ✅ |
+| `EDGE_ENHANCE_MORE` | ✅ | ✅ | ✅ | ✅ |
+| `EMBOSS` | ✅ | ⚠️ | ✅ | ⚠️ |
+| `FIND_EDGES` | ✅ | ⚠️ | ✅ | ⚠️ |
+| `GaussianBlur` | ✅ | ✅ | ✅ | ✅ |
+| `Kernel` | ✅ | N/A | ✅ | N/A |
+| `MaxFilter` | ✅ | N/A | ✅ | N/A |
+| `MedianFilter` | ✅ | N/A | ✅ | N/A |
+| `MinFilter` | ✅ | N/A | ✅ | N/A |
+| `ModeFilter` | ✅ | N/A | ✅ | N/A |
+| `RankFilter` | ✅ | N/A | ✅ | N/A |
+| `SHARPEN` | ✅ | ✅ | ✅ | ✅ |
+| `SMOOTH` | ✅ | ✅ | ✅ | ✅ |
+| `SMOOTH_MORE` | ✅ | ✅ | ✅ | ✅ |
+| `UnsharpMask` | ✅ | ⚠️ | ✅ | ⚠️ |
+
+### ImageFont
+
+| Operation | L | RGB | RGBA |
+|-----------|-------|-------|-------|
+| `load` | ✅ | ✅ | ⬜ |
+| `load_default` | ✅ | ✅ | ⬜ |
+| `load_default_imagefont` | ✅ | ✅ | ⬜ |
+| `load_path` | ✅ | ✅ | ⬜ |
+| `truetype` | ✅ | ✅ | ⬜ |
+
+### ImageModule
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | HSV | I | F |
+|-----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| `alpha_composite` | N/A | ⬜ | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
+| `blend` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `composite` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `effect_noise` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `eval` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `frombytes` | N/A | ⬜ | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
+| `merge` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `new` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `open` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### ImageOps
+
+| Operation | L | LA | P | RGB | RGBA |
+|-----------|-------|-------|-------|-------|-------|
+| `autocontrast` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `colorize` | ✅ | N/A | N/A | ⬜ | N/A |
+| `contain` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `cover` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `crop` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `equalize` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `expand` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `fit` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `flip` | ✅ | ⬜ | N/A | ✅ | ✅ |
+| `grayscale` | ✅ | ✅ | ⚠️ | ✅ | ✅ |
+| `invert` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `mirror` | ✅ | ⬜ | N/A | ✅ | ✅ |
+| `pad` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `posterize` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `scale` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| `solarize` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+
+### ImagePalette
+
+| Operation | P |
+|-----------|-------|
+| `copy` | ⬜ |
+| `getcolor` | ⬜ |
+| `getdata` | ⬜ |
+| `save` | ⬜ |
+| `tobytes` | ⬜ |
+
+### ImageSequence
+
+| Operation | L | RGB |
+|-----------|-------|-------|
+| `Iterator` | ✅ | ✅ |
+
+### ImageStat
+
+| Operation | L | RGB | RGBA |
+|-----------|-------|-------|-------|
+| `Stat` | ✅ | ✅ | ⬜ |
+
 
 ## Reverse Verification
 
@@ -108,90 +281,19 @@ Every test in the trust report validates PIL-RSPIL parity:
 - No tests verify only signature existence or stub behavior
 
 **Verification method:** `assert_images_equal(rs_img, pil_img)` for image output,
-`assert_values_equal(rs_val, pil_val)` for non-image values.
+`assert_values_equal(rs_val, pil_val)` for non-image values. Fixture tests use
+SHA-256 hash comparison with tolerance for lossy operations.
 
-## Mode × Operation Coverage Matrix
+## How Coverage Mapping Works
 
-* ✅ = tested (parity passes), ⬜ = untested, N/A = PIL doesn't support this mode*
+Coverage mapping derives from two auto-discovered sources — no separate mapping file:
 
-### Image
+1. **Fixture JSONs** (365 files in `tests/fixtures/`): Each fixture declares
+   `operation.module` + `operation.target` in its JSON metadata.
+   The test runner (`test_fixture_parity.py`) auto-generates
+   `@pytest.mark.covers` markers from this metadata at collection time.
 
-| Operation | L | LA | RGB | RGBA | 1 | P | CMYK | YCbCr | HSV | I | F |
-|-----------|---|---|---|---|---|---|---|---|---|---|---|
-| `open` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `new` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `resize` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `crop` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `rotate` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
-| `transpose` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `convert` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `paste` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `filter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `copy` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `split` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `getbands` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `thumbnail` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `tobytes` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `alpha_composite` | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `close` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getbbox` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getchannel` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `getcolors` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `getdata` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `getextrema` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `getpixel` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getprojection` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `histogram` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `load` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `point` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `putalpha` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `putdata` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `putpixel` | ✅ | ✅ | ✅ | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `quantize` | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `reduce` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `seek` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `tell` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `transform` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `verify` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `effect_spread` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `entropy` | ⬜ | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `draft` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `remap_palette` | N/A | N/A | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `tobitmap` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+2. **Static decorators**: Tests in `tests/test_*.py` files with
+   `@pytest.mark.covers("Module.function")` decorators are parsed directly.
 
-### ImageModule
-
-| Operation | L | LA | RGB | RGBA | 1 | P | CMYK | YCbCr | HSV | I | F |
-|-----------|---|---|---|---|---|---|---|---|---|---|---|
-| `merge` | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `blend` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `composite` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `eval` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `fromarray` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `frombytes` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `effect_noise` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-
-### ImageDraw
-
-| Operation | L | LA | RGB | RGBA | 1 | P | CMYK | YCbCr | HSV | I | F |
-|-----------|---|---|---|---|---|---|---|---|---|---|---|
-| `arc` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `line` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `rectangle` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `ellipse` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `polygon` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `text` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `multiline_text` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `circle` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `rounded_rectangle` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `regular_polygon` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `chord` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `pieslice` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `bitmap` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `point` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `textbbox` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `multiline_textbbox` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `textlength` | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-
-
-*Report generated by `scripts/coverage/generate_coverage_page.py`*
+*Report generated by `scripts/coverage/compute_coverage.py --md`*

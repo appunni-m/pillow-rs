@@ -27,3 +27,43 @@ __all__ = [
     "Resampling", "Transpose", "Dither", "Palette",
     "open", "new", "save", "resize", "crop", "rotate", "convert", "merge", "blend", "composite",
 ]
+
+def enable_backend(name):
+    """Activate a compute backend. Returns True if the backend exists.
+
+    Args:
+        name: Backend name - ``"cpu"``, ``"gpu"``
+    """
+    return _core.enable_backend(name)
+
+def disable_backend(name):
+    """Deactivate a compute backend. Returns True if it was active.
+
+    Args:
+        name: Backend name - ``"cpu"``, ``"gpu"``
+    """
+    return _core.disable_backend(name)
+
+def available_backends():
+    """List backends that exist on this machine.
+
+    Returns:
+        List of backend name strings (e.g. ``["gpu", "cpu"]``)
+    """
+    return _core.available_backends()
+
+def active_backends():
+    """List currently active backends in priority order.
+
+    Returns:
+        List of backend name strings (e.g. ``["gpu", "cpu"]``)
+    """
+    return _core.active_backends()
+
+def backend_enabled(name):
+    """Check if a specific backend is active.
+
+    Args:
+        name: Backend name - ``"cpu"``, ``"gpu"``
+    """
+    return _core.backend_enabled(name)

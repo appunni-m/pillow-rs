@@ -56,7 +56,7 @@ class Image:
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
         # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
-        nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "I": "L", "F": "L"}
+        nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "I": "L", "F": "L", "P": "L"}
         rust_mode = nonstandard.get(mode, mode)
         rust_image = RustImage.new(rust_mode, size, color)
         img = cls(rust_image)

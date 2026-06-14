@@ -71,7 +71,7 @@ All work starts from `manifest.yaml`. To add a new function:
 6. Register new module in `pillow-rs-py/python/pillow_rs/__init__.py`
 7. Update `pillow-rs-core/src/ops/mod.rs` if new module added
 8. Write PIL parity tests in `tests/` using `assert_images_equal()` or `assert_values_equal()`
-9. **CRITICAL**: Add test name → manifest function mapping in `scripts/coverage/compute_coverage.py` `func_name_map` dict — otherwise coverage won't increase
+9. **CRITICAL**: Add a JSON fixture in `tests/fixtures/` with `operation.module` + `operation.target`. Coverage mapping is auto-discovered from fixtures and `@pytest.mark.covers` markers — no separate mapping file needed.
 10. Run `python -m pytest tests/ --json-report --json-report-file=/tmp/report.json`
 11. Run `python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json` to verify coverage increased
 

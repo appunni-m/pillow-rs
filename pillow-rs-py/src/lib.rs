@@ -662,6 +662,51 @@ fn map_error(e: PilError) -> PyErr {
     }
 }
 
+/// Activate a compute backend. Returns true if the backend exists on this machine.
+#[pyfunction]
+fn enable_backend(name: &str) -> PyResult<bool> {
+    match pillow_rs_core::compute::Backend::from_str(name) {
+        Some(b) => Ok(pillow_rs_core::compute::enable_backend(b)),
+        None => Err(pyo3::exceptions::PyValueError::new_err(format!("unknown backend: {}", name))),
+    }
+}
+
+/// Deactivate a compute backend. Returns true if it was active.
+#[pyfunction]
+fn disable_backend(name: &str) -> PyResult<bool> {
+    match pillow_rs_core::compute::Backend::from_str(name) {
+        Some(b) => Ok(pillow_rs_core::compute::disable_backend(b)),
+        None => Err(pyo3::exceptions::PyValueError::new_err(format!("unknown backend: {}", name))),
+    }
+}
+
+/// List backends that exist on this machine.
+#[pyfunction]
+fn available_backends() -> Vec<String> {
+    pillow_rs_core::compute::available_backends()
+        .iter()
+        .map(|b| format!("{:?}", b).to_lowercase())
+        .collect()
+}
+
+/// List currently active backends (priority order).
+#[pyfunction]
+fn active_backends() -> Vec<String> {
+    pillow_rs_core::compute::active_backends()
+        .iter()
+        .map(|b| format!("{:?}", b).to_lowercase())
+        .collect()
+}
+
+/// Check if a specific backend is active.
+#[pyfunction]
+fn backend_enabled(name: &str) -> PyResult<bool> {
+    match pillow_rs_core::compute::Backend::from_str(name) {
+        Some(b) => Ok(pillow_rs_core::compute::backend_enabled(b)),
+        None => Err(pyo3::exceptions::PyValueError::new_err(format!("unknown backend: {}", name))),
+    }
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyImage>()?;
@@ -715,6 +760,13 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(image_merge, m)?)?;
     m.add_function(wrap_pyfunction!(image_blend, m)?)?;
     m.add_function(wrap_pyfunction!(image_composite, m)?)?;
+
+    // GPU functions
+    m.add_function(wrap_pyfunction!(enable_backend, m)?)?;
+    m.add_function(wrap_pyfunction!(disable_backend, m)?)?;
+    m.add_function(wrap_pyfunction!(available_backends, m)?)?;
+    m.add_function(wrap_pyfunction!(active_backends, m)?)?;
+    m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
 
     Ok(())
 }
@@ -774,9 +826,10 @@ pub struct PyDraw {
 #[pymethods]
 impl PyDraw {
     #[new]
-    fn new(image: &Bound<'_, PyImage>) -> PyResult<Self> {
+    #[pyo3(signature = (image, mode=None))]
+    fn new(image: &Bound<'_, PyImage>, mode: Option<String>) -> PyResult<Self> {
         let borrowed = image.borrow();
-        let draw = pillow_rs_core::draw::Draw::new(borrowed.inner.clone());
+        let draw = pillow_rs_core::draw::Draw::new(borrowed.inner.clone(), mode);
         Ok(PyDraw { draw })
     }
 

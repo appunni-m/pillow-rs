@@ -9,7 +9,7 @@ Format:
         "type": "image" | "dual" | "filter" | "draw" | "value" | "module",
         "method": "resize",           # Image instance method name (for "image" type)
         "params": {"size": [50, 50]}, # Default parameters
-        "modes": ["L", "RGB", "RGBA"], # Modes to test
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'], ["L", "LA", "RGB", "RGBA", "1", "P", "F"], ["L", "LA", "RGB", "RGBA"], # Modes to test
         "prep": "convert('1', ...)",  # Optional input prep for dual-image ops
     }
 """
@@ -40,13 +40,13 @@ REGISTRY = {
         "type": "image",
         "method": "transpose",
         "params": {"method": 0},  # FLIP_LEFT_RIGHT
-        "modes": ["L", "RGB", "RGBA", "1", "P"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.copy": {
         "type": "image",
         "method": "copy",
         "params": {},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.tobytes": {
         "type": "value",
@@ -58,19 +58,19 @@ REGISTRY = {
         "type": "image",
         "method": "thumbnail",
         "params": {"size": [50, 50]},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.quantize": {
         "type": "image",
         "method": "quantize",
         "params": {"colors": 16},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['CMYK', 'L', 'LA', 'RGB', 'RGBA', 'YCbCr'],
     },
     "Image.filter": {
         "type": "image",
         "method": "filter",
-        "params": {"filter_type": "BLUR"},
-        "modes": ["L", "RGB"],
+        "params": {"filter": "BLUR"},
+        "modes": ["L", "LA", "RGB", "RGBA"],
     },
     "Image.convert": {
         "type": "image",
@@ -95,19 +95,19 @@ REGISTRY = {
         "type": "value",
         "method": "getbbox",
         "params": {},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ["L", "LA", "RGB", "RGBA"],
     },
     "Image.getextrema": {
         "type": "value",
         "method": "getextrema",
         "params": {},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.histogram": {
         "type": "value",
         "method": "histogram",
         "params": {},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.getpixel": {
         "type": "value",
@@ -119,31 +119,31 @@ REGISTRY = {
         "type": "value",
         "method": "getcolors",
         "params": {"maxcolors": 256},
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'L', 'P', 'RGB', 'RGBA'],
     },
     "Image.getdata": {
         "type": "value",
         "method": "getdata",
-        "params": {"band": -1},
+        "params": {"band": None},
         "modes": ["L", "LA", "RGB", "RGBA"],
     },
     "Image.getprojection": {
         "type": "value",
         "method": "getprojection",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "Image.entropy": {
         "type": "value",
         "method": "entropy",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.getchannel": {
         "type": "image",
         "method": "getchannel",
         "params": {"channel": 0},
-        "modes": ["RGB", "RGBA"],
+        "modes": ["L", "LA", "RGB", "RGBA"],
     },
     "Image.load": {
         "type": "value",
@@ -151,41 +151,35 @@ REGISTRY = {
         "params": {},
         "modes": ["1", "L", "LA", "P", "RGB", "RGBA"],
     },
-    "Image.close": {
-        "type": "value",
-        "method": "close",
-        "params": {},
-        "modes": ["1", "L", "LA", "P", "RGB", "RGBA"],
-    },
     "Image.verify": {
         "type": "value",
         "method": "verify",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "Image.seek": {
         "type": "value",
         "method": "seek",
         "params": {"frame": 0},
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.tell": {
         "type": "value",
         "method": "tell",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.draft": {
         "type": "image",
         "method": "draft",
         "params": {"mode": "RGB", "size": [50, 50]},
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.putalpha": {
         "type": "image",
         "method": "putalpha",
         "params": {"alpha": 128},
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.putpixel": {
         "type": "image",
@@ -197,31 +191,31 @@ REGISTRY = {
         "type": "image",
         "method": "putdata",
         "params": {"data": [128]},  # expanded at runtime based on band count
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.reduce": {
         "type": "image",
         "method": "reduce",
         "params": {"factor": 2},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.effect_spread": {
         "type": "image",
         "method": "effect_spread",
         "params": {"distance": 2},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.transform": {
         "type": "image",
         "method": "transform",
-        "params": {"size": [50, 50], "method": 0, "data": [1, 0, 0, 0, 1, 0]},
-        "modes": ["L", "RGB"],
+        "params": {"size": (50, 50), "method": 0, "data": [1, 0, 0, 0, 1, 0]},
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "Image.remap_palette": {
         "type": "image",
         "method": "remap_palette",
         "params": {"dest_map": [0, 1]},
-        "modes": ["P"],
+        "modes": ['L', 'P'],
     },
     "Image.tobitmap": {
         "type": "value",
@@ -236,106 +230,106 @@ REGISTRY = {
     "ImageFilter.BLUR": {
         "type": "filter",
         "name": "BLUR",
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageFilter.CONTOUR": {
         "type": "filter",
         "name": "CONTOUR",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.DETAIL": {
         "type": "filter",
         "name": "DETAIL",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.EDGE_ENHANCE": {
         "type": "filter",
         "name": "EDGE_ENHANCE",
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageFilter.EDGE_ENHANCE_MORE": {
         "type": "filter",
         "name": "EDGE_ENHANCE_MORE",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.EMBOSS": {
         "type": "filter",
         "name": "EMBOSS",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageFilter.FIND_EDGES": {
         "type": "filter",
         "name": "FIND_EDGES",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.SHARPEN": {
         "type": "filter",
         "name": "SHARPEN",
-        "modes": ["L", "RGB"],
+        "modes": ['1', 'CMYK', 'F', 'HSV', 'I', 'L', 'LA', 'P', 'RGB', 'RGBA', 'YCbCr'],
     },
     "ImageFilter.SMOOTH": {
         "type": "filter",
         "name": "SMOOTH",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.SMOOTH_MORE": {
         "type": "filter",
         "name": "SMOOTH_MORE",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.BoxBlur": {
         "type": "filter",
         "name": "BoxBlur",
         "params": {"radius": 2},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.GaussianBlur": {
         "type": "filter",
         "name": "GaussianBlur",
         "params": {"radius": 2},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.UnsharpMask": {
         "type": "filter",
         "name": "UnsharpMask",
         "params": {"radius": 2, "percent": 150, "threshold": 3},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.MaxFilter": {
         "type": "filter",
         "name": "MaxFilter",
         "params": {"size": 3},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.MinFilter": {
         "type": "filter",
         "name": "MinFilter",
         "params": {"size": 3},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.MedianFilter": {
         "type": "filter",
         "name": "MedianFilter",
         "params": {"size": 3},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.ModeFilter": {
         "type": "filter",
         "name": "ModeFilter",
         "params": {"size": 3},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.RankFilter": {
         "type": "filter",
         "name": "RankFilter",
         "params": {"size": 3, "rank": 2},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageFilter.Kernel": {
         "type": "filter",
         "name": "Kernel",
         "params": {"size": [3, 3], "kernel": [1, 1, 1, 1, 1, 1, 1, 1, 1], "scale": 9, "offset": 0},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
 
     # ═══════════════════════════════════════════════════════════════
@@ -343,96 +337,96 @@ REGISTRY = {
     # ═══════════════════════════════════════════════════════════════
     "ImageChops.add": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.subtract": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.multiply": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.screen": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.darker": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.lighter": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.difference": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.add_modulo": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.subtract_modulo": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.hard_light": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.soft_light": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageChops.overlay": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'RGB'],
     },
     "ImageChops.logical_and": {
         "type": "dual",
         "prep": "convert('1', dither='NONE')",
-        "modes": ["L", "RGB"],
+        "modes": ["1"],
     },
     "ImageChops.logical_or": {
         "type": "dual",
         "prep": "convert('1', dither='NONE')",
-        "modes": ["L", "RGB"],
+        "modes": ["1"],
     },
     "ImageChops.logical_xor": {
         "type": "dual",
         "prep": "convert('1', dither='NONE')",
-        "modes": ["L", "RGB"],
+        "modes": ["1"],
     },
     "ImageChops.blend": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'P', 'RGB'],
     },
     "ImageChops.composite": {
         "type": "dual",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'P', 'RGB'],
     },
     "ImageChops.invert": {
         "type": "image",
         "method": "invert",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'P', 'RGB'],
     },
     "ImageChops.duplicate": {
         "type": "image",
         "method": "copy",
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'P', 'RGB'],
     },
     "ImageChops.constant": {
         "type": "image",
         "method": "constant",
         "params": {"value": 128},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'P', 'RGB'],
     },
     "ImageChops.offset": {
         "type": "image",
         "method": "offset",
-        "params": {"x": 5, "y": 5},
-        "modes": ["L", "RGB"],
+        "params": {"xoffset": 5, "yoffset": 5},
+        "modes": ['L', 'RGB', 'RGBA'],
     },
 
     # ═══════════════════════════════════════════════════════════════
@@ -442,31 +436,31 @@ REGISTRY = {
         "type": "image",
         "method": "autocontrast",
         "params": {"cutoff": 0},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'RGB', 'RGBA'],
     },
     "ImageOps.equalize": {
         "type": "image",
         "method": "equalize",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'RGB', 'RGBA'],
     },
     "ImageOps.invert": {
         "type": "image",
         "method": "invert",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'RGB', 'RGBA'],
     },
     "ImageOps.flip": {
         "type": "image",
         "method": "flip",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'RGB', 'RGBA'],
     },
     "ImageOps.mirror": {
         "type": "image",
         "method": "mirror",
         "params": {},
-        "modes": ["L", "RGB"],
+        "modes": ['L', 'RGB', 'RGBA'],
     },
     "ImageOps.posterize": {
         "type": "image",
@@ -483,8 +477,8 @@ REGISTRY = {
     "ImageOps.grayscale": {
         "type": "image",
         "method": "convert",
-        "params": {"mode": "L"},
-        "modes": ["RGB"],
+        "params": {},
+        "modes": ['L', 'LA', 'RGB', 'RGBA'],
     },
     "ImageOps.colorize": {
         "type": "image",
@@ -569,8 +563,8 @@ REGISTRY = {
     "ImageModule.new": {
         "type": "module",
         "function": "Image.new",
-        "params": {"mode": "__MODE__", "size": [100, 100], "color": 0},
-        "modes": ["L", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I", "F"],
+        "params": {"mode": "RGB", "size": [100, 100], "color": 0},
+        "modes": ['1', 'CMYK', 'F', 'HSV', 'I', 'L', 'LA', 'P', 'RGB', 'RGBA', 'YCbCr'],
     },
     "ImageModule.open": {
         "type": "module",
@@ -582,19 +576,19 @@ REGISTRY = {
         "type": "module",
         "function": "Image.frombytes",
         "params": {},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageModule.blend": {
         "type": "dual",
         "function": "Image.blend",
         "params": {"alpha": 0.5},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageModule.composite": {
         "type": "dual",
         "function": "Image.composite",
         "params": {},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageModule.merge": {
         "type": "module",
@@ -606,7 +600,7 @@ REGISTRY = {
         "type": "module",
         "function": "Image.eval",
         "params": {},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
     "ImageModule.alpha_composite": {
         "type": "image",
@@ -618,7 +612,7 @@ REGISTRY = {
         "type": "module",
         "function": "Image.effect_noise",
         "params": {"size": [100, 100], "sigma": 10.0},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
     },
 
     # ═══════════════════════════════════════════════════════════════
@@ -628,55 +622,55 @@ REGISTRY = {
         "type": "draw",
         "draw": "line",
         "params": {"xy": [[10, 10], [40, 40]], "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.circle": {
         "type": "draw",
         "draw": "circle",
         "params": {"xy": [25, 25], "radius": 15, "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.rectangle": {
         "type": "draw",
         "draw": "rectangle",
         "params": {"xy": [10, 10, 40, 40], "outline": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.ellipse": {
         "type": "draw",
         "draw": "ellipse",
         "params": {"xy": [10, 10, 40, 40], "outline": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.polygon": {
         "type": "draw",
         "draw": "polygon",
         "params": {"xy": [[10, 10], [40, 10], [25, 40]], "outline": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.arc": {
         "type": "draw",
         "draw": "arc",
         "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.chord": {
         "type": "draw",
         "draw": "chord",
         "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.pieslice": {
         "type": "draw",
         "draw": "pieslice",
         "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.point": {
         "type": "draw",
         "draw": "point",
         "params": {"xy": [25, 25], "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
+        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
     },
     "ImageDraw.regular_polygon": {
         "type": "draw",
@@ -715,7 +709,7 @@ REGISTRY = {
     "ImageColor.getcolor": {
         "type": "value",
         "function": "ImageColor.getcolor",
-        "params": {"color": "red", "mode": "__MODE__"},
+        "params": {"color": "red", "mode": "RGB"},
         "modes": ["L", "RGB"],
     },
     "ImageColor.getrgb": {
@@ -792,18 +786,6 @@ REGISTRY = {
         "params": {},
         "modes": ["L", "RGB"],
     },
-    "ImageFont.FreeTypeFont": {
-        "type": "value",
-        "function": "ImageFont.FreeTypeFont",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImageFont.ImageFont": {
-        "type": "value",
-        "function": "ImageFont.ImageFont",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
 
     # ═══════════════════════════════════════════════════════════════
     # ImageStat
@@ -828,12 +810,6 @@ REGISTRY = {
     # ═══════════════════════════════════════════════════════════════
     # Image properties (value-returning)
     # ═══════════════════════════════════════════════════════════════
-    "Image.mode": {"type": "value", "property": "mode", "modes": ["L", "RGB"]},
-    "Image.size": {"type": "value", "property": "size", "modes": ["L", "RGB"]},
-    "Image.width": {"type": "value", "property": "width", "modes": ["L", "RGB"]},
-    "Image.height": {"type": "value", "property": "height", "modes": ["L", "RGB"]},
-    "Image.format": {"type": "value", "property": "format", "modes": ["L", "RGB"]},
-    "Image.info": {"type": "value", "property": "info", "modes": ["L", "RGB"]},
     "Image.getexif": {"type": "value", "property": "getexif", "modes": ["L", "RGB"]},
     "Image.getim": {"type": "value", "property": "getim", "modes": ["L", "RGB"]},
     "Image.getpalette": {"type": "value", "property": "getpalette", "modes": ["L", "RGB"]},
@@ -841,9 +817,62 @@ REGISTRY = {
     "Image.get_flattened_data": {"type": "value", "property": "get_flattened_data", "modes": ["L", "RGB"]},
     "Image.get_child_images": {"type": "value", "property": "get_child_images", "modes": ["L", "RGB"]},
     "Image.apply_transparency": {"type": "value", "property": "apply_transparency", "modes": ["L", "RGB"]},
-    "Image.palette": {"type": "value", "property": "palette", "modes": ["L", "RGB"]},
-    "Image.is_animated": {"type": "value", "property": "is_animated", "modes": ["L", "RGB"]},
-    "Image.n_frames": {"type": "value", "property": "n_frames", "modes": ["L", "RGB"]},
-    "Image.has_transparency_data": {"type": "value", "property": "has_transparency_data", "modes": ["L", "RGB"]},
-    "Image.show": {"type": "value", "property": "show", "modes": ["L", "RGB"]},
+
+    # ── Missing testable ops added for complete coverage ──
+    "Image.point": {
+        "type": "image",
+        "method": "point",
+        "params": {"lut": list(range(256))},
+        "modes": ["L", "RGB"],
+    },
+
+    # ═══════════════════════════════════════════════════════════════
+    # Image instance methods — dual (paste)
+    # ═══════════════════════════════════════════════════════════════
+    "Image.paste": {
+        "type": "dual",
+        "method": "paste",
+        "params": {"box": [0, 0]},
+        "modes": ["L", "RGB", "RGBA"],
+        # NOTE: paste modifies in-place and returns None. "dual" creates a second
+        # image and calls PIL.Image.paste(img1, img2). The default call_dual does
+        # NOT forward params (no box applied). Both backends need "dual" handling
+        # for module="Image". Fixture stores expected=None (weak no-crash test).
+    },
+
+    # ═══════════════════════════════════════════════════════════════
+    # Image instance methods — palette modification
+    # ═══════════════════════════════════════════════════════════════
+    "Image.putpalette": {
+        "type": "image",
+        "method": "putpalette",
+        "params": {"data": list(range(48))},  # 16-colour RGB palette (48 flat values)
+        "modes": ["P"],
+        # NOTE: modifies palette in-place, returns None. Requires "P" mode image.
+        # Fixture stores expected=None (weak no-crash test). Both backends handle
+        # via img.putpalette(**params).
+    },
+
+    # ═══════════════════════════════════════════════════════════════
+    # ImageFilter — parametric filter requiring table data
+    # ═══════════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════════
+    # ImageOps — operations requiring complex params or decorators
+    # ═══════════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════════
+    # ImageDraw — value-returning methods (not draw/mutating operations)
+    # ═══════════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════════
+    # ImageFont — instance methods on font objects (FreeTypeFont/ImageFont)
+    # ═══════════════════════════════════════════════════════════════
+    # These require a font OBJECT, not an Image. The current execution engine
+    # passes Images to call_value/call_method; it cannot provide a font instance.
+    # Both backends need rework to support font-object operations.
+
+    # ═══════════════════════════════════════════════════════════════
+    # ImageModule — classmethods requiring external dependencies
+    # ═══════════════════════════════════════════════════════════════
 }

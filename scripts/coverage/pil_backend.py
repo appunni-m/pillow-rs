@@ -56,7 +56,11 @@ def make_image(mode):
 
 
 def _to_rgb_fill(mode, params, keys):
-    """Convert int fill/outline to RGB tuple for color modes."""
+    """Convert int fill/outline to RGB tuple for color modes (PIL API compatible).
+
+    PIL accepts int fills directly for all modes (handled by _getink C code).
+    Only RGB/RGBA modes need conversion because the test uses a visible green.
+    """
     import copy
     p = copy.deepcopy(params)
     for k in keys:
@@ -152,6 +156,12 @@ class PilBackend:
             elif target == "merge":
                 return fn(img1.mode, img1.split() or [img1])
             return fn(img1, img2)
+        # Try instance method on img1 (e.g., paste, alpha_composite)
+        if hasattr(img1, target):
+            box = params.get("box", (0, 0))
+            if isinstance(box, list):
+                box = tuple(box)
+            return getattr(img1, target)(img2, box)
         # Default: ImageChops
         return getattr(PIL.ImageChops, target)(img1, img2)
 
@@ -178,7 +188,7 @@ class PilBackend:
             _seed_rand()
             return PIL.Image.effect_noise(tuple(params["size"]), params["sigma"])
         if target in ("open", "frombytes"):
-            return make_image("RGB")  # placeholder
+            return PIL.Image.frombytes(img.mode, img.size, img.tobytes())
         if target == "eval":
             return PIL.Image.eval(img, lambda x: min(255, x + 10))
         if target == "merge":

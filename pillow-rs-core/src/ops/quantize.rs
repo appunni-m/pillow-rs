@@ -2,7 +2,7 @@
 //!
 //! Implements PIL's median-cut quantization:
 //! 1. Build 3D histogram (RGB, 5-bit precision = 32x32x32 = 32768 buckets)
-//! 2. Create sorted lists of unique colors for each axis
+//! 2. Find leaf boxes (non-empty buckets) to start
 //! 3. Recursively split the largest-volume box at the median pixel count
 //! 4. Compute palette centroids as weighted averages
 //! 5. Map each pixel to nearest palette color
@@ -10,260 +10,34 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-use std::collections::BTreeMap;
 
-// ── Data structures ──
+/// Histogram bucket index for 5-bit channels.
+fn hist_index(r5: u8, g5: u8, b5: u8) -> usize {
+    (r5 as usize) << 10 | (g5 as usize) << 5 | b5 as usize
+}
 
-/// A rectangular volume (box) in RGB space containing a set of colors.
-#[derive(Debug, Clone)]
+/// Number of bins per channel (5-bit)
+const BINS: usize = 32;
+const TOTAL_BINS: usize = BINS * BINS * BINS; // 32768
+
+/// A rectangular volume in 5-bit (32-level) RGB color space.
+#[derive(Debug, Clone, Copy)]
 struct VBox {
-    r_min: u8,
+    r_min: u8, // 0..31
     r_max: u8,
     g_min: u8,
     g_max: u8,
     b_min: u8,
     b_max: u8,
     pixel_count: u32,
+    volume: u32,
 }
 
-// ── Median cut state ──
-
-struct MedianCutState {
-    /// All unique histogram entries: (r, g, b, count)
-    entries: Vec<(u8, u8, u8, u32)>,
-    /// Index entries sorted by each axis: Vec<(value, entry_index)>
-    sorted_r: Vec<(u8, usize)>,
-    sorted_g: Vec<(u8, usize)>,
-    sorted_b: Vec<(u8, usize)>,
-    /// Final boxes after splitting.
-    boxes: Vec<VBox>,
-}
-
-impl MedianCutState {
-    /// Build histogram from raw RGB pixel data.
-    fn from_pixels(pixels: &[u8]) -> Self {
-        let n = pixels.len() / 3;
-        let mut hist: BTreeMap<u32, (u8, u8, u8, u32)> = BTreeMap::new();
-        for i in 0..n {
-            let base = i * 3;
-            let r = pixels[base];
-            let g = pixels[base + 1];
-            let b = pixels[base + 2];
-            let key = ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
-            let e = hist.entry(key).or_insert((r, g, b, 0));
-            e.3 += 1;
-        }
-
-        let n_entries = hist.len();
-        let mut entries = Vec::with_capacity(n_entries);
-        let mut sorted_r = Vec::with_capacity(n_entries);
-        let mut sorted_g = Vec::with_capacity(n_entries);
-        let mut sorted_b = Vec::with_capacity(n_entries);
-
-        let mut r_min = u8::MAX;
-        let mut r_max = u8::MIN;
-        let mut g_min = u8::MAX;
-        let mut g_max = u8::MIN;
-        let mut b_min = u8::MAX;
-        let mut b_max = u8::MIN;
-        let mut total = 0u32;
-
-        for (_key, &(r, g, b, count)) in &hist {
-            let idx = entries.len();
-            entries.push((r, g, b, count));
-            sorted_r.push((r, idx));
-            sorted_g.push((g, idx));
-            sorted_b.push((b, idx));
-            r_min = r_min.min(r);
-            r_max = r_max.max(r);
-            g_min = g_min.min(g);
-            g_max = g_max.max(g);
-            b_min = b_min.min(b);
-            b_max = b_max.max(b);
-            total += count;
-        }
-
-        sorted_r.sort_by_key(|&(v, _)| v);
-        sorted_g.sort_by_key(|&(v, _)| v);
-        sorted_b.sort_by_key(|&(v, _)| v);
-
-        MedianCutState {
-            entries,
-            sorted_r,
-            sorted_g,
-            sorted_b,
-            boxes: vec![VBox {
-                r_min,
-                r_max,
-                g_min,
-                g_max,
-                b_min,
-                b_max,
-                pixel_count: total,
-            }],
-        }
-    }
-
-    /// Perform median cut splitting until we have `n_colors` boxes.
-    fn split(&mut self, n_colors: usize) {
-        let n_colors = n_colors.min(256).max(1);
-
-        while self.boxes.len() < n_colors {
-            let mut li = None;
-            let mut lc = 0u32;
-            for (i, b) in self.boxes.iter().enumerate() {
-                if b.pixel_count > lc {
-                    lc = b.pixel_count;
-                    li = Some(i);
-                }
-            }
-
-            let idx = match li {
-                Some(i) if self.boxes[i].pixel_count > 1 => i,
-                _ => break,
-            };
-
-            let vbox = self.boxes[idx].clone();
-            match self.try_split(&vbox) {
-                Some((left, right)) => {
-                    self.boxes[idx] = left;
-                    self.boxes.push(right);
-                }
-                None => {
-                    // Can't split this box; mark it so we don't try again.
-                    self.boxes[idx].pixel_count = 0;
-                }
-            }
-        }
-
-        self.boxes.retain(|b| b.pixel_count > 0);
-    }
-
-    /// Try to split a box into two at the median along the best axis.
-    fn try_split(&self, vbox: &VBox) -> Option<(VBox, VBox)> {
-        if vbox.pixel_count <= 1 {
-            return None;
-        }
-
-        // Choose best axis: luminance-weighted range (matches PIL).
-        let r_range = vbox.r_max as u32 - vbox.r_min as u32;
-        let g_range = vbox.g_max as u32 - vbox.g_min as u32;
-        let b_range = vbox.b_max as u32 - vbox.b_min as u32;
-        let weighted = [r_range * 77, g_range * 150, b_range * 29];
-        let mut best_axis = 0;
-        let mut best_val = weighted[0];
-        for i in 1..3 {
-            if weighted[i] > best_val {
-                best_val = weighted[i];
-                best_axis = i;
-            }
-        }
-        if best_val == 0 {
-            return None;
-        }
-
-        // Get the sorted indices for the chosen axis.
-        let sorted = match best_axis {
-            0 => &self.sorted_r,
-            1 => &self.sorted_g,
-            2 => &self.sorted_b,
-            _ => unreachable!(),
-        };
-
-        let get_val = |idx: usize| -> u8 {
-            let (r, g, b, _) = self.entries[idx];
-            match best_axis {
-                0 => r,
-                1 => g,
-                2 => b,
-                _ => unreachable!(),
-            }
-        };
-
-        let in_box = |idx: usize| -> bool {
-            let (r, g, b, _) = self.entries[idx];
-            r >= vbox.r_min
-                && r <= vbox.r_max
-                && g >= vbox.g_min
-                && g <= vbox.g_max
-                && b >= vbox.b_min
-                && b <= vbox.b_max
-        };
-
-        // Collect entries in this box, in sorted order along chosen axis.
-        let mut box_entries: Vec<(usize, u32)> = Vec::new();
-        for &(_, idx) in sorted.iter() {
-            if in_box(idx) {
-                box_entries.push((idx, self.entries[idx].3));
-            }
-        }
-
-        if box_entries.len() <= 1 {
-            return None;
-        }
-
-        // Follow PIL's median split approach:
-        // Walk entries until cum*2 > total pixel count, then extend
-        // LEFT to include same-value entries after the median.
-        let mut cum = 0u32;
-        let mut split_at = 0usize;
-
-        for (j, &(_, cnt)) in box_entries.iter().enumerate() {
-            cum += cnt;
-            if cum * 2 > vbox.pixel_count {
-                split_at = j + 1;
-                break;
-            }
-        }
-
-        // Extend LEFT to include same-value entries after median (PIL behavior).
-        if split_at > 0 && split_at < box_entries.len() {
-            let median_val = get_val(box_entries[split_at - 1].0);
-            for k in split_at..box_entries.len() {
-                if get_val(box_entries[k].0) == median_val {
-                    split_at = k + 1;
-                } else {
-                    break;
-                }
-            }
-        }
-
-        // If extension consumed all entries, trim back to keep at least one
-        // entry on each side.
-        if split_at >= box_entries.len() {
-            split_at = box_entries.len() - 1;
-            if split_at == 0 { return None; }
-        }
-
-        if split_at == 0 {
-            let mid = box_entries.len() / 2;
-            if mid == 0 || mid >= box_entries.len() { return None; }
-            split_at = mid;
-        }
-
-        let (left_e, right_e) = box_entries.split_at(split_at);
-        Some((self.build_box(left_e), self.build_box(right_e)))
-    }
-
-    /// Build a VBox from a list of histogram entry indices.
-    fn build_box(&self, entries: &[(usize, u32)]) -> VBox {
-        let mut r_min = u8::MAX;
-        let mut r_max = u8::MIN;
-        let mut g_min = u8::MAX;
-        let mut g_max = u8::MIN;
-        let mut b_min = u8::MAX;
-        let mut b_max = u8::MIN;
-        let mut total = 0u32;
-        for &(idx, count) in entries {
-            let (r, g, b, _) = self.entries[idx];
-            r_min = r_min.min(r);
-            r_max = r_max.max(r);
-            g_min = g_min.min(g);
-            g_max = g_max.max(g);
-            b_min = b_min.min(b);
-            b_max = b_max.max(b);
-            total += count;
-        }
+impl VBox {
+    fn new(r_min: u8, r_max: u8, g_min: u8, g_max: u8, b_min: u8, b_max: u8) -> Self {
+        let volume = (r_max - r_min + 1) as u32
+            * (g_max - g_min + 1) as u32
+            * (b_max - b_min + 1) as u32;
         VBox {
             r_min,
             r_max,
@@ -271,110 +45,17 @@ impl MedianCutState {
             g_max,
             b_min,
             b_max,
-            pixel_count: total,
+            pixel_count: 0,
+            volume,
         }
     }
 
-    /// Compute palette from leaf boxes (weighted average of pixels in each box).
-    fn compute_palette(&self, pixels: &[u8]) -> Vec<[u8; 3]> {
-        let n_boxes = self.boxes.len().min(256);
-        if n_boxes == 0 {
-            return vec![[0u8; 3]; 1];
-        }
-
-        // Annotate each pixel to its containing box.
-        let pixel_boxes = self.annotate_pixels(pixels);
-
-        // Accumulate sums and counts per box.
-        let mut sums = vec![(0u64, 0u64, 0u64); n_boxes];
-        let mut counts = vec![0u64; n_boxes];
-
-        for i in 0..pixels.len() / 3 {
-            let bi = pixel_boxes[i];
-            if bi < n_boxes {
-                let base = i * 3;
-                sums[bi].0 += pixels[base] as u64;
-                sums[bi].1 += pixels[base + 1] as u64;
-                sums[bi].2 += pixels[base + 2] as u64;
-                counts[bi] += 1;
-            }
-        }
-
-        // Compute centroids with rounding (matching PIL's `+ .5` approach).
-        let mut palette = vec![[0u8; 3]; n_boxes];
-        for bi in 0..n_boxes {
-            if counts[bi] > 0 {
-                palette[bi][0] = ((sums[bi].0 as f64 / counts[bi] as f64) + 0.5) as u8;
-                palette[bi][1] = ((sums[bi].1 as f64 / counts[bi] as f64) + 0.5) as u8;
-                palette[bi][2] = ((sums[bi].2 as f64 / counts[bi] as f64) + 0.5) as u8;
-            }
-        }
-
-        palette
-    }
-
-    /// Map each original pixel to its box index by bounds checking.
-    fn annotate_pixels(&self, pixels: &[u8]) -> Vec<usize> {
-        let n = pixels.len() / 3;
-        let mut indices = vec![0usize; n];
-        for i in 0..n {
-            let base = i * 3;
-            let r = pixels[base];
-            let g = pixels[base + 1];
-            let b = pixels[base + 2];
-            for (bi, vbox) in self.boxes.iter().enumerate() {
-                if r >= vbox.r_min
-                    && r <= vbox.r_max
-                    && g >= vbox.g_min
-                    && g <= vbox.g_max
-                    && b >= vbox.b_min
-                    && b <= vbox.b_max
-                {
-                    indices[i] = bi;
-                    break;
-                }
-            }
-        }
-        indices
+    fn vibe(&self) -> u64 {
+        self.volume as u64 * self.pixel_count as u64
     }
 }
 
-/// Map each pixel to its nearest palette color using Euclidean distance in RGB.
-fn map_pixels_to_palette(pixels: &[u8], palette: &[[u8; 3]]) -> Vec<u8> {
-    let n = pixels.len() / 3;
-    let mut indices = Vec::with_capacity(n);
-
-    for i in 0..n {
-        let base = i * 3;
-        let r = pixels[base];
-        let g = pixels[base + 1];
-        let b = pixels[base + 2];
-
-        let mut best_dist = u32::MAX;
-        let mut best_idx = 0u8;
-
-        for (pi, pc) in palette.iter().enumerate() {
-            let dr = r as i32 - pc[0] as i32;
-            let dg = g as i32 - pc[1] as i32;
-            let db = b as i32 - pc[2] as i32;
-            let dist = (dr * dr + dg * dg + db * db) as u32;
-            if dist < best_dist {
-                best_dist = dist;
-                best_idx = pi as u8;
-            }
-        }
-        indices.push(best_idx);
-    }
-
-    indices
-}
-
-// ── Public entry point ──
-
-/// Run median-cut quantization on RGB pixel data.
-/// Returns (palette_indices, palette_colors) where:
-/// - palette_indices: 1 byte per pixel (index into palette)
-/// - palette_colors: Vec of [r,g,b] arrays
+/// Median cut with 5-bit histogram buckets.
 pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<[u8; 3]>) {
     let n = pixels.len() / 3;
     if n == 0 || n_colors < 2 {
@@ -388,18 +69,50 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
 
     let n_colors = n_colors.min(256);
 
-    let mut mc = MedianCutState::from_pixels(pixels);
-    mc.split(n_colors);
+    // Step 1: Build 5-bit histogram
+    let mut hist = [0u32; TOTAL_BINS];
+    for i in 0..n {
+        let base = i * 3;
+        let r5 = pixels[base] >> 3;
+        let g5 = pixels[base + 1] >> 3;
+        let b5 = pixels[base + 2] >> 3;
+        let idx = hist_index(r5, g5, b5);
+        hist[idx] += 1;
+    }
 
-    // Compute palette from the leaf boxes.
-    let palette = mc.compute_palette(pixels);
+    // Step 2: Find initial bounding box
+    let (r_min, r_max, g_min, g_max, b_min, b_max) = match find_initial_bounds(&hist) {
+        Some(bounds) => bounds,
+        None => return (vec![0u8; n], vec![[0u8; 3]; 1]),
+    };
+
+    // Step 3: Create initial box
+    let mut boxes: Vec<VBox> = vec![VBox::new(r_min, r_max, g_min, g_max, b_min, b_max)];
+    let mut total = 0u32;
+    for r5 in r_min..=r_max {
+        for g5 in g_min..=g_max {
+            for b5 in b_min..=b_max {
+                total += hist[hist_index(r5, g5, b5)];
+            }
+        }
+    }
+    boxes[0].pixel_count = total;
+
+    // Recursively split
+    split_boxes(&mut boxes, &hist, n_colors);
+
+    // Step 4: Sort boxes by vibe for stable palette ordering
+    boxes.sort_by(|a, b| b.vibe().cmp(&a.vibe()));
+
+    // Step 5: Compute palette centroids
+    let palette = compute_palette(&boxes, &hist);
     let n_boxes = palette.len();
 
     if n_boxes == 0 {
         return (vec![0u8; n], vec![[0u8; 3]; 1]);
     }
 
-    // Pad palette if we got fewer boxes than requested.
+    // Pad palette
     let mut final_palette = Vec::with_capacity(n_colors);
     for i in 0..n_colors {
         if i < n_boxes {
@@ -409,10 +122,330 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
         }
     }
 
-    // Map each pixel to the nearest palette color.
+    // Step 6: Map pixels to nearest palette color
     let indices = map_pixels_to_palette(pixels, &final_palette);
 
     (indices, final_palette)
+}
+
+/// Find the initial bounding box from non-empty histogram bins.
+fn find_initial_bounds(hist: &[u32; TOTAL_BINS]) -> Option<(u8, u8, u8, u8, u8, u8)> {
+    let mut r_min = 31u8;
+    let mut r_max = 0u8;
+    let mut g_min = 31u8;
+    let mut g_max = 0u8;
+    let mut b_min = 31u8;
+    let mut b_max = 0u8;
+    let mut found = false;
+
+    for r5 in 0..BINS {
+        for g5 in 0..BINS {
+            for b5 in 0..BINS {
+                if hist[hist_index(r5 as u8, g5 as u8, b5 as u8)] > 0 {
+                    found = true;
+                    r_min = r_min.min(r5 as u8);
+                    r_max = r_max.max(r5 as u8);
+                    g_min = g_min.min(g5 as u8);
+                    g_max = g_max.max(g5 as u8);
+                    b_min = b_min.min(b5 as u8);
+                    b_max = b_max.max(b5 as u8);
+                }
+            }
+        }
+    }
+
+    if found {
+        Some((r_min, r_max, g_min, g_max, b_min, b_max))
+    } else {
+        None
+    }
+}
+
+/// Recursively split boxes until we have enough.
+fn split_boxes(boxes: &mut Vec<VBox>, hist: &[u32; TOTAL_BINS], n_colors: usize) {
+    while boxes.len() < n_colors {
+        let mut best_idx = None;
+        let mut best_vibe = 0u64;
+
+        for (i, b) in boxes.iter().enumerate() {
+            if b.pixel_count > 1 && b.volume > 0 {
+                let v = b.vibe();
+                if v > best_vibe {
+                    best_vibe = v;
+                    best_idx = Some(i);
+                }
+            }
+        }
+
+        let idx = match best_idx {
+            Some(i) => i,
+            None => break,
+        };
+
+        let vbox = boxes[idx];
+        match try_split(&vbox, hist) {
+            Some((left, right)) => {
+                boxes[idx] = left;
+                boxes.push(right);
+            }
+            None => {
+                break;
+            }
+        }
+    }
+}
+
+/// Try to split a VBox into two along the best axis.
+fn try_split(vbox: &VBox, hist: &[u32; TOTAL_BINS]) -> Option<(VBox, VBox)> {
+    if vbox.pixel_count <= 1 || vbox.volume <= 1 {
+        return None;
+    }
+
+    // Choose the axis with the largest range
+    let r_range = vbox.r_max - vbox.r_min;
+    let g_range = vbox.g_max - vbox.g_min;
+    let b_range = vbox.b_max - vbox.b_min;
+
+    let best_axis = if r_range >= g_range && r_range >= b_range {
+        0
+    } else if g_range >= r_range && g_range >= b_range {
+        1
+    } else {
+        2
+    };
+
+    // Build a sorted list of (channel_value, pixel_count) for entries in this box
+    let mut axis_entries: Vec<(u8, u32)> = Vec::new();
+    for r5 in vbox.r_min..=vbox.r_max {
+        for g5 in vbox.g_min..=vbox.g_max {
+            for b5 in vbox.b_min..=vbox.b_max {
+                let count = hist[hist_index(r5, g5, b5)];
+                if count > 0 {
+                    let val = match best_axis {
+                        0 => r5,
+                        1 => g5,
+                        2 => b5,
+                        _ => unreachable!(),
+                    };
+                    axis_entries.push((val, count));
+                }
+            }
+        }
+    }
+
+    // Sort by channel value, then deduplicate by merging same values
+    axis_entries.sort_by_key(|&(v, _)| v);
+    let mut deduped: Vec<(u8, u32)> = Vec::new();
+    for &(val, cnt) in &axis_entries {
+        if let Some(last) = deduped.last_mut() {
+            if last.0 == val {
+                last.1 += cnt;
+                continue;
+            }
+        }
+        deduped.push((val, cnt));
+    }
+
+    if deduped.len() <= 1 {
+        return None;
+    }
+
+    // Find median split
+    let mut cum = 0u32;
+    let mut split_idx = 0usize;
+    let midpoint = vbox.pixel_count / 2;
+
+    for (j, &(_, cnt)) in deduped.iter().enumerate() {
+        cum += cnt;
+        if cum > midpoint {
+            split_idx = j;
+            break;
+        }
+    }
+
+    if split_idx >= deduped.len() - 1 {
+        return None;
+    }
+
+    let split_val = deduped[split_idx].0.saturating_add(1);
+
+    // Build left and right boxes
+    let (left, right) = match best_axis {
+        0 => {
+            if split_val <= vbox.r_min || split_val > vbox.r_max {
+                return None;
+            }
+            let mut left = *vbox;
+            left.r_max = split_val - 1;
+            left.volume = (left.r_max - left.r_min + 1) as u32
+                * (left.g_max - left.g_min + 1) as u32
+                * (left.b_max - left.b_min + 1) as u32;
+            let mut right = *vbox;
+            right.r_min = split_val;
+            right.volume = (right.r_max - right.r_min + 1) as u32
+                * (right.g_max - right.g_min + 1) as u32
+                * (right.b_max - right.b_min + 1) as u32;
+            (left, right)
+        }
+        1 => {
+            if split_val <= vbox.g_min || split_val > vbox.g_max {
+                return None;
+            }
+            let mut left = *vbox;
+            left.g_max = split_val - 1;
+            left.volume = (left.r_max - left.r_min + 1) as u32
+                * (left.g_max - left.g_min + 1) as u32
+                * (left.b_max - left.b_min + 1) as u32;
+            let mut right = *vbox;
+            right.g_min = split_val;
+            right.volume = (right.r_max - right.r_min + 1) as u32
+                * (right.g_max - right.g_min + 1) as u32
+                * (right.b_max - right.b_min + 1) as u32;
+            (left, right)
+        }
+        2 => {
+            if split_val <= vbox.b_min || split_val > vbox.b_max {
+                return None;
+            }
+            let mut left = *vbox;
+            left.b_max = split_val - 1;
+            left.volume = (left.r_max - left.r_min + 1) as u32
+                * (left.g_max - left.g_min + 1) as u32
+                * (left.b_max - left.b_min + 1) as u32;
+            let mut right = *vbox;
+            right.b_min = split_val;
+            right.volume = (right.r_max - right.r_min + 1) as u32
+                * (right.g_max - right.g_min + 1) as u32
+                * (right.b_max - right.b_min + 1) as u32;
+            (left, right)
+        }
+        _ => unreachable!(),
+    };
+
+    // Count pixels in each box
+    let mut left_count = 0u32;
+    let mut right_count = 0u32;
+    for r5 in vbox.r_min..=vbox.r_max {
+        for g5 in vbox.g_min..=vbox.g_max {
+            for b5 in vbox.b_min..=vbox.b_max {
+                let count = hist[hist_index(r5, g5, b5)];
+                if count > 0 {
+                    match best_axis {
+                        0 => {
+                            if r5 < split_val {
+                                left_count += count;
+                            } else {
+                                right_count += count;
+                            }
+                        }
+                        1 => {
+                            if g5 < split_val {
+                                left_count += count;
+                            } else {
+                                right_count += count;
+                            }
+                        }
+                        2 => {
+                            if b5 < split_val {
+                                left_count += count;
+                            } else {
+                                right_count += count;
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        }
+    }
+
+    if left_count == 0 || right_count == 0 {
+        return None;
+    }
+
+    let mut left = left;
+    left.pixel_count = left_count;
+    let mut right = right;
+    right.pixel_count = right_count;
+
+    Some((left, right))
+}
+
+/// Compute palette from box centroids using histogram data.
+fn compute_palette(boxes: &[VBox], hist: &[u32; TOTAL_BINS]) -> Vec<[u8; 3]> {
+    let n = boxes.len().min(256);
+    if n == 0 {
+        return vec![[0u8; 3]; 1];
+    }
+
+    let mut palette = Vec::with_capacity(n);
+
+    for vbox in boxes.iter().take(n) {
+        let mut sum_r = 0u64;
+        let mut sum_g = 0u64;
+        let mut sum_b = 0u64;
+        let mut count = 0u64;
+
+        for r5 in vbox.r_min..=vbox.r_max {
+            for g5 in vbox.g_min..=vbox.g_max {
+                for b5 in vbox.b_min..=vbox.b_max {
+                    let hc = hist[hist_index(r5, g5, b5)];
+                    if hc > 0 {
+                        // Use bin center: (bin * 8 + 4) maps 0..31 to 4..252
+                        let r = (r5 as u64) * 8 + 4;
+                        let g = (g5 as u64) * 8 + 4;
+                        let b = (b5 as u64) * 8 + 4;
+                        sum_r += r * hc as u64;
+                        sum_g += g * hc as u64;
+                        sum_b += b * hc as u64;
+                        count += hc as u64;
+                    }
+                }
+            }
+        }
+
+        if count > 0 {
+            palette.push([
+                ((sum_r + count / 2) / count) as u8,
+                ((sum_g + count / 2) / count) as u8,
+                ((sum_b + count / 2) / count) as u8,
+            ]);
+        } else {
+            palette.push([0u8; 3]);
+        }
+    }
+
+    palette
+}
+
+/// Map each pixel to its nearest palette color using Euclidean distance in RGB.
+fn map_pixels_to_palette(pixels: &[u8], palette: &[[u8; 3]]) -> Vec<u8> {
+    let n = pixels.len() / 3;
+    let mut indices = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let base = i * 3;
+        let r = pixels[base] as i32;
+        let g = pixels[base + 1] as i32;
+        let b = pixels[base + 2] as i32;
+
+        let mut best_dist = i32::MAX;
+        let mut best_idx = 0u8;
+
+        for (pi, pc) in palette.iter().enumerate() {
+            let dr = r - pc[0] as i32;
+            let dg = g - pc[1] as i32;
+            let db = b - pc[2] as i32;
+            let dist = dr * dr + dg * dg + db * db;
+            if dist < best_dist {
+                best_dist = dist;
+                best_idx = pi as u8;
+            }
+        }
+        indices.push(best_idx);
+    }
+
+    indices
 }
 
 // ── Image method ──
@@ -428,12 +461,21 @@ impl Image {
         _dither: bool,
     ) -> Result<Image, PilError> {
         let colors = colors.clamp(2, 256);
-        Ok(Image::push_op(
+        let mut result = Image::push_op(
             self,
             PipelineOp::Quantize {
                 colors,
                 dither: _dither,
             },
-        ))
+        );
+        // Set explicit_mode to "P" for quantize output (matches PIL)
+        if let Image::Pipeline {
+            explicit_mode: ref mut em_field,
+            ..
+        } = &mut result
+        {
+            *em_field = Some("P".to_string());
+        }
+        Ok(result)
     }
 }

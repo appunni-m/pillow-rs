@@ -148,6 +148,7 @@ async function main() {
     let passed = 0;
     let failed = 0;
     let skipped = 0;
+    const skipReasons = {};
 
     for (const file of files) {
         const fixture = JSON.parse(readFileSync(join(FIXTURES, file), 'utf8'));
@@ -200,6 +201,8 @@ async function main() {
 
             if (result?.skip) {
                 skipped++;
+                const reason = result.reason || 'unknown';
+                skipReasons[reason] = (skipReasons[reason] || 0) + 1;
                 continue;
             }
 
@@ -316,6 +319,14 @@ async function main() {
     console.log(`  Failed:  ${failed}`);
     console.log(`  Skipped: ${skipped}`);
     console.log(`  Total:   ${passed + failed + skipped}`);
+
+    if (Object.keys(skipReasons).length > 0) {
+        console.log(`\nSkip reasons (${Object.keys(skipReasons).length} unique):`);
+        const sorted = Object.entries(skipReasons).sort((a, b) => b[1] - a[1]);
+        for (const [reason, count] of sorted) {
+            console.log(`  [${count}x] ${reason.slice(0, 200)}`);
+        }
+    }
 
     if (browserLogs.length > 0) {
         console.log(`\nBrowser logs (${browserLogs.length}):`);

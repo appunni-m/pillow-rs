@@ -22,12 +22,36 @@ def _coerce_coords(params, keys):
 
 
 def _to_rgb_fill(mode, params, keys):
-    """Convert int fill to RGB tuple for color modes (matching PIL behavior)."""
+    """Convert int fill to RGBA tuple, matching PIL's per-mode behavior.
+
+    PIL int fill behavior (from _getink / C draw code):
+    - "RGB", "RGBA": int → tuple replicated (handled upstream by (0,255,0) override)
+    - "1": int → threshold at 0 (non-zero → 255, 0 → 0)
+    - "L": int → grayscale value
+    - "LA": int → (int, 0) — value in L channel, alpha = 0
+    - "P": int → palette index (used as grayscale value in default palette)
+    - "CMYK": int → (int, 0, 0, 0) — value in C channel, others = 0
+    """
     import copy
     p = copy.deepcopy(params)
     for k in keys:
-        if k in p and isinstance(p[k], int) and mode in ("RGB", "RGBA"):
-            p[k] = (0, 255, 0)
+        if k in p and isinstance(p[k], int):
+            v = p[k]
+            if mode in ("RGB", "RGBA"):
+                p[k] = (0, 255, 0)  # standard test green
+            elif mode == "1":
+                # non-zero → white (matching PIL's bit packing)
+                p[k] = (255, 255, 255, 255) if v != 0 else (0, 0, 0, 255)
+            elif mode == "LA":
+                # PIL int fill on LA: L=v, A=0
+                p[k] = (v, v, v, 0)
+            elif mode == "P":
+                # Palette index: use as grayscale RGB
+                p[k] = (v, v, v, 255)
+            elif mode == "CMYK":
+                # PIL int fill on CMYK: C=v, M=Y=K=0
+                p[k] = (v, 0, 0, 0)
+            # else: keep as int for other modes (handled by parse_draw_color)
     return p
 
 
@@ -156,6 +180,12 @@ class RspilBackend:
             if target == "merge":
                 bands = img1.split() if img1.split() else [img1]
                 return Image.merge(img1.mode, bands)
+        if module == "Image":
+            # Instance methods: paste, alpha_composite
+            if hasattr(img1, target):
+                box = tuple(params.get("box", (0, 0)))
+                return getattr(img1, target)(img2, box)
+            raise NotImplementedError(f"dual {module}.{target}")
         raise NotImplementedError(f"dual {module}.{target}")
 
     def call_draw(self, img, module, target, params):
