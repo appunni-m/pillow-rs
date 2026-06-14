@@ -2383,17 +2383,53 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
         }
         PipelineOp::EffectNoise { sigma } => {
+            // PIL's ImagingEffectNoise: Box-Muller polar transform (gaussian noise).
+            // Always produces L mode output. Uses libc rand().
             let (w, h) = (img.width(), img.height());
-            let mut rgb = image::RgbImage::new(w, h);
-            for y in 0..h {
-                for x in 0..w {
-                    let nx =
-                        (x as f64 / w as f64).sin() * *sigma * 127.0;
-                    let v = (128.0 + nx).round().clamp(0.0, 255.0) as u8;
-                    rgb.put_pixel(x, y, image::Rgb([v, v, v]));
+            let mut out = image::GrayImage::new(w, h);
+            let mut nextok = false;
+            let mut next_val = 0.0f64;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                extern "C" {
+                    fn rand() -> i32;
+                }
+                for pixel in out.pixels_mut() {
+                    let this_val = if nextok {
+                        nextok = false;
+                        next_val
+                    } else {
+                        let (v1, v2, radius) = loop {
+                            unsafe {
+                                let v1 = rand() as f64 * (2.0 / 2147483647.0) - 1.0;
+                                let v2 = rand() as f64 * (2.0 / 2147483647.0) - 1.0;
+                                let radius = v1 * v1 + v2 * v2;
+                                if radius < 1.0 {
+                                    break (v1, v2, radius);
+                                }
+                                // RAND_MAX = 2147483647 on glibc (the max value of rand())
+                            }
+                        };
+                        let factor = (-2.0 * radius.ln() / radius).sqrt();
+                        // this = factor * v1; next = factor * v2 (cache it)
+                        next_val = factor * v2;
+                        nextok = true;
+                        factor * v1
+                    };
+                    let v = (128.0 + sigma * this_val).round().clamp(0.0, 255.0) as u8;
+                    pixel[0] = v;
                 }
             }
-            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+            #[cfg(target_arch = "wasm32")]
+            {
+                // WASM fallback: pure sin-based noise
+                for (i, pixel) in out.pixels_mut().enumerate() {
+                    let x = (i as u32) % w;
+                    let nx = (x as f64 / w as f64).sin() * *sigma * 127.0;
+                    pixel[0] = (128.0 + nx).round().clamp(0.0, 255.0) as u8;
+                }
+            }
+            Ok(DynamicImage::ImageLuma8(out))
         }
 
         // ── Point operations (lookup table) ──

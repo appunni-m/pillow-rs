@@ -132,45 +132,33 @@ impl Draw {
             return Ok(());
         }
 
+        // Common Bresenham ellipse parameters (used by both fill and outline)
+        let a = x1 - x0;
+        let b = y1 - y0;
+        if a <= 0 || b <= 0 {
+            return Ok(());
+        }
+        let cx_i = ((x0 + x1) / 2) as i32;
+        let cy_i = ((y0 + y1) / 2) as i32;
+
+        // PIL's quarter_init: start at (a, b%2), with ex=a%2, ey=b
+        let ex = a % 2;
+        let ey = b;
+        let a2 = a as i64 * a as i64;
+        let b2 = b as i64 * b as i64;
+        let a2b2 = a2 * b2;
+        let quarter_delta = |x: i64, y: i64| -> i64 {
+            (a2 * y * y + b2 * x * x - a2b2).abs()
+        };
+
         // Fill using PIL's exact Bresenham quarter-ellipse algorithm.
-        // PIL uses a=x1-x0, b=y1-y0 (the FULL bounding box dimensions, not half).
-        // The quarter generator steps by 2 from (a, b%2) toward (a%2, b).
-        // For FILL: width=a+b makes the inner radius go to zero (fill to center).
-        // At each y-level: x_bound = old_pr/2 where old_pr is the PREVIOUS iteration's
-        // outer X-coordinate (quarters, before division by 2).
         if let Some(fc) = fill {
-            let a = x1 - x0; // full width (PIL: x1-x0)
-            let b = y1 - y0; // full height (PIL: y1-y0)
-            if a <= 0 || b <= 0 {
-                return Ok(());
-            }
-            let cx_i = (cx + 0.5) as i32;
-            let cy_i = (cy + 0.5) as i32;
-
-            // PIL's quarter_init: start at (a, b%2), with ex=a%2, ey=b
-            let mut qx = a;
-            let mut qy = b % 2;
-            let ex = a % 2;
-            let ey = b;
-            let a2 = a as i64 * a as i64;
-            let b2 = b as i64 * b as i64;
-            let a2b2 = a2 * b2;
-
-            // Helper: compute quarter delta (error from true ellipse)
-            let quarter_delta = |x: i64, y: i64| -> i64 {
-                (a2 * y * y + b2 * x * x - a2b2).abs()
-            };
-
             // PR = previous right (outer x-bound from previous iteration)
             // PY = previous y (the Y-level from previous iteration)
-            let mut pr = a as i64; // initial outer boundary = a (full width)
-            let mut py = 0i64;    // initial y-level = 0 (center)
-
-            // PIL's ellipse emits 4 segments per Y-level:
-            // (l,y)->(r,y) [bottom-right], (-r,y)->(-l,y) [bottom-left]
-            // (l,-y)->(r,-y) [top-right],  (-r,-y)->(-l,-y) [top-left]
-            // For filled: inner radius=0, leftmost=0 (becomes 2).
-            // We combine segments at each Y-level into a single [cx-xb, cx+xb] fill.
+            let mut pr = a as i64;
+            let mut py = 0i64;
+            let mut qx = a;
+            let mut qy = b % 2;
             let mut finished = false;
             while !finished {
                 // Positive Y: bottom half (center down to y1)
@@ -239,18 +227,16 @@ impl Draw {
 
         // Outline via Bresenham boundary + edge detection (matches PIL's ellipse outline)
         if let Some(oc) = outline {
-            // Fill the full ellipse, then extract boundary
             let mut filled = vec![false; (img_w * img_h) as usize];
-            // Re-use the Bresenham generator loop (same as fill above)
-            let mut qx_o = a;
-            let mut qy_o = b % 2;
-            let mut pr_o = a as i64;
-            let mut py_o = 0i64;
-            let mut finished_o = false;
-            while !finished_o {
-                let y_pos = y0 + ((py_o + b as i64) / 2) as i32;
-                let y_neg = y0 + ((-py_o + b as i64) / 2) as i32;
-                let xb = (pr_o / 2) as i32;
+            let mut qx = a;
+            let mut qy = b % 2;
+            let mut pr = a as i64;
+            let mut py = 0i64;
+            let mut finished = false;
+            while !finished {
+                let y_pos = y0 + ((py + b as i64) / 2) as i32;
+                let y_neg = y0 + ((-py + b as i64) / 2) as i32;
+                let xb = (pr / 2) as i32;
                 if xb > 0 {
                     let left = (cx_i - xb).max(x0);
                     let right = (cx_i + xb).min(x1);
@@ -264,30 +250,24 @@ impl Draw {
                         }
                     }
                 }
-                // Advance quarter generator
                 loop {
-                    if qx_o < 0 { finished_o = true; break; }
-                    if qx_o == ex && qy_o == ey { finished_o = true; break; }
-                    let mut nx = qx_o;
-                    let mut ny = qy_o + 2;
+                    if qx < 0 { finished = true; break; }
+                    if qx == ex && qy == ey { finished = true; break; }
+                    let mut nx = qx;
+                    let mut ny = qy + 2;
                     let mut ndelta = quarter_delta(nx as i64, ny as i64);
-                    if qx_o > 1 {
-                        let d1 = quarter_delta((qx_o - 2) as i64, (qy_o + 2) as i64);
-                        if ndelta > d1 { nx = qx_o - 2; ny = qy_o + 2; ndelta = d1; }
-                        let d2 = quarter_delta((qx_o - 2) as i64, qy_o as i64);
-                        if ndelta > d2 { nx = qx_o - 2; ny = qy_o; }
+                    if qx > 1 {
+                        let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
+                        if ndelta > d1 { nx = qx - 2; ny = qy + 2; ndelta = d1; }
+                        let d2 = quarter_delta((qx - 2) as i64, qy as i64);
+                        if ndelta > d2 { nx = qx - 2; ny = qy; }
                     }
-                    if ny > ey { finished_o = true; break; }
-                    if ny as i64 > py_o {
-                        pr_o = nx as i64;
-                        py_o = ny as i64;
-                        qx_o = nx; qy_o = ny;
-                        break;
-                    }
-                    qx_o = nx; qy_o = ny;
+                    if ny > ey { finished = true; break; }
+                    if ny as i64 > py { pr = nx as i64; py = ny as i64; qx = nx; qy = ny; break; }
+                    qx = nx; qy = ny;
                 }
             }
-            // Edge detection
+            // Edge detection on filled ellipse to extract outline
             let iw = img_w as i32;
             let ih = img_h as i32;
             for y in 0..ih {
