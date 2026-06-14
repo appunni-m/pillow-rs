@@ -38,9 +38,6 @@ impl Image {
 
     /// Reduce image size by an integer factor (box downsampling).
     pub fn reduce(&self, factor: u32) -> Result<Image, PilError> {
-        Ok(Image::push_op(
-            self,
-            PipelineOp::Reduce { factor },
-        ))
+        Ok(Image::push_op(self, PipelineOp::Reduce { factor }))
     }
 }

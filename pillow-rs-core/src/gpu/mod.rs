@@ -115,12 +115,7 @@ impl GpuEngine {
     ///
     /// Dispatches the RESAMPLE_SHADER compute shader.
     /// NEW code path — CPU resize in `src/ops/transform.rs` equivalent is unmodified.
-    pub fn resize(
-        &self,
-        img: &Image,
-        dst_w: u32,
-        dst_h: u32,
-    ) -> Result<Image, PilError> {
+    pub fn resize(&self, img: &Image, dst_w: u32, dst_h: u32) -> Result<Image, PilError> {
         let img_loaded = img.materialize()?;
         let _rgba = img_loaded.to_rgba8();
         let _ = (dst_w, dst_h);
@@ -154,12 +149,7 @@ impl GpuEngine {
     /// Dispatches the BLEND_SHADER compute shader. `op_code` selects the
     /// blend mode (e.g., 0 = normal, 1 = multiply, 2 = screen, etc.).
     /// NEW code path — CPU blend equivalent is unmodified.
-    pub fn blend(
-        &self,
-        img_a: &Image,
-        img_b: &Image,
-        op_code: u32,
-    ) -> Result<Image, PilError> {
+    pub fn blend(&self, img_a: &Image, img_b: &Image, op_code: u32) -> Result<Image, PilError> {
         let img_a_loaded = img_a.materialize()?;
         let img_b_loaded = img_b.materialize()?;
         let _rgba_a = img_a_loaded.to_rgba8();
@@ -193,32 +183,65 @@ mod tests {
     #[test]
     fn test_shaders_are_embedded() {
         assert!(!BLUR_SHADER.is_empty(), "BLUR_SHADER must be non-empty");
-        assert!(!COLOR_OPS_SHADER.is_empty(), "COLOR_OPS_SHADER must be non-empty");
-        assert!(!RESAMPLE_SHADER.is_empty(), "RESAMPLE_SHADER must be non-empty");
+        assert!(
+            !COLOR_OPS_SHADER.is_empty(),
+            "COLOR_OPS_SHADER must be non-empty"
+        );
+        assert!(
+            !RESAMPLE_SHADER.is_empty(),
+            "RESAMPLE_SHADER must be non-empty"
+        );
         assert!(!BLEND_SHADER.is_empty(), "BLEND_SHADER must be non-empty");
-        assert!(!CONVOLVE_SHADER.is_empty(), "CONVOLVE_SHADER must be non-empty");
+        assert!(
+            !CONVOLVE_SHADER.is_empty(),
+            "CONVOLVE_SHADER must be non-empty"
+        );
     }
 
     #[test]
     fn test_blur_shader_has_expected_decorations() {
-        assert!(BLUR_SHADER.contains("@compute"), "blur shader must contain @compute");
-        assert!(BLUR_SHADER.contains("@group(0)"), "blur shader must have bind group");
-        assert!(BLUR_SHADER.contains("storage"), "blur shader must use storage buffers");
+        assert!(
+            BLUR_SHADER.contains("@compute"),
+            "blur shader must contain @compute"
+        );
+        assert!(
+            BLUR_SHADER.contains("@group(0)"),
+            "blur shader must have bind group"
+        );
+        assert!(
+            BLUR_SHADER.contains("storage"),
+            "blur shader must use storage buffers"
+        );
     }
 
     #[test]
     fn test_color_ops_shader_has_all_modes() {
         assert!(COLOR_OPS_SHADER.contains("invert"), "must support invert");
-        assert!(COLOR_OPS_SHADER.contains("solarize"), "must support solarize");
-        assert!(COLOR_OPS_SHADER.contains("posterize"), "must support posterize");
-        assert!(COLOR_OPS_SHADER.contains("grayscale"), "must support grayscale");
+        assert!(
+            COLOR_OPS_SHADER.contains("solarize"),
+            "must support solarize"
+        );
+        assert!(
+            COLOR_OPS_SHADER.contains("posterize"),
+            "must support posterize"
+        );
+        assert!(
+            COLOR_OPS_SHADER.contains("grayscale"),
+            "must support grayscale"
+        );
     }
 
     #[test]
     fn test_convolve_shader_accepts_kernel_uniform() {
-        assert!(CONVOLVE_SHADER.contains("kernel"), "must have kernel uniform");
+        assert!(
+            CONVOLVE_SHADER.contains("kernel"),
+            "must have kernel uniform"
+        );
         assert!(CONVOLVE_SHADER.contains("scale"), "must have scale uniform");
-        assert!(CONVOLVE_SHADER.contains("offset"), "must have offset uniform");
+        assert!(
+            CONVOLVE_SHADER.contains("offset"),
+            "must have offset uniform"
+        );
     }
 
     // ── GpuEngine initialization ──
@@ -364,9 +387,21 @@ mod tests {
             assert_ne!(err_blur, err_invert, "blur and invert errors should differ");
             assert_ne!(err_blur, err_resize, "blur and resize errors should differ");
             // Each should name the operation
-            assert!(err_blur.contains("blur"), "should mention blur: {}", err_blur);
-            assert!(err_invert.contains("invert"), "should mention invert: {}", err_invert);
-            assert!(err_resize.contains("resize"), "should mention resize: {}", err_resize);
+            assert!(
+                err_blur.contains("blur"),
+                "should mention blur: {}",
+                err_blur
+            );
+            assert!(
+                err_invert.contains("invert"),
+                "should mention invert: {}",
+                err_invert
+            );
+            assert!(
+                err_resize.contains("resize"),
+                "should mention resize: {}",
+                err_resize
+            );
         }
     }
 
@@ -540,16 +575,13 @@ mod tests {
 
     #[ignore = "Temporarily disabled until Task 3 re-enables ops"]
     #[test]
-    fn test_cpu_blur_produces_valid_output() {
-    }
+    fn test_cpu_blur_produces_valid_output() {}
 
     #[ignore = "Temporarily disabled until Task 3 re-enables ops"]
     #[test]
-    fn test_cpu_invert_is_roundtrip() {
-    }
+    fn test_cpu_invert_is_roundtrip() {}
 
     #[ignore = "Temporarily disabled until Task 3 re-enables ops"]
     #[test]
-    fn test_cpu_resize_produces_correct_dimensions() {
-    }
+    fn test_cpu_resize_produces_correct_dimensions() {}
 }

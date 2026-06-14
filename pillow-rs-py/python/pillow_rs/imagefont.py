@@ -65,25 +65,13 @@ def load(filename):
 
 
 def load_default(size=None):
-    """Load default font. Tries FreeType first, falls back to ImageFont."""
+    """Load default font. Uses pre-rendered bitmap font matching PIL's default."""
     if size is None:
-        size = 14
-    # Try to load a default TrueType font (matches PIL behavior)
-    import os
-    # Common TrueType font locations
-    font_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-    ]
-    for path in font_paths:
-        if os.path.exists(path):
-            try:
-                return FreeTypeFont(path, size)
-            except Exception:
-                pass
-    return ImageFont()
+        size = 10
+    font = object.__new__(FreeTypeFont)
+    font._rust_font = RustFont.load_default(float(size))
+    font.size = float(size)
+    return font
 
 
 

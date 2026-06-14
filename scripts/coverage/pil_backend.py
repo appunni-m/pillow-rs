@@ -12,10 +12,19 @@ import PIL.ImagePalette
 import PIL.ImageFont
 import PIL.ImageStat
 import PIL.ImageSequence
+import ctypes
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 REF_PATH = ROOT / "tests" / "test_reference.png"
+
+# ── Deterministic C rand() seeding for effect operations ──────────
+_libc = ctypes.CDLL(None)
+
+
+def _seed_rand():
+    """Seed C library rand() so PIL effects produce deterministic output."""
+    _libc.srand(42)
 
 # ── Reference image (cached) ──────────────────────────────────
 
@@ -80,6 +89,8 @@ class PilBackend:
                 nb = len(img.getbands())
                 v = [255] * max(nb, 1)
                 params = dict(params, value=v[0] if nb == 1 else tuple(v))
+            if target == "effect_spread":
+                _seed_rand()
             return getattr(img, target)(**params)
         # ── Module functions taking image first ──
         if module == "ImageOps":
@@ -164,6 +175,7 @@ class PilBackend:
                                  tuple(params.get("size", [100, 100])),
                                  params.get("color", 0))
         if target == "effect_noise":
+            _seed_rand()
             return PIL.Image.effect_noise(tuple(params["size"]), params["sigma"])
         if target in ("open", "frombytes"):
             return make_image("RGB")  # placeholder

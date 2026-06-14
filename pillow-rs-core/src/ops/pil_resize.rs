@@ -12,13 +12,21 @@ use image::DynamicImage;
 
 /// Box / Nearest-neighbor kernel.
 fn kernel_box(x: f64) -> f64 {
-    if x.abs() < 0.5 { 1.0 } else { 0.0 }
+    if x.abs() < 0.5 {
+        1.0
+    } else {
+        0.0
+    }
 }
 
 /// Triangle (bilinear) kernel.
 fn kernel_triangle(x: f64) -> f64 {
     let a = x.abs();
-    if a < 1.0 { 1.0 - a } else { 0.0 }
+    if a < 1.0 {
+        1.0 - a
+    } else {
+        0.0
+    }
 }
 
 /// Catmull-Rom (bicubic) kernel.
@@ -35,8 +43,12 @@ fn kernel_catrom(x: f64) -> f64 {
 
 /// Lanczos kernel with window `a`.
 fn kernel_lanczos(x: f64, a: f64) -> f64 {
-    if x.abs() >= a { return 0.0; }
-    if x.abs() < 1e-10 { return 1.0; }
+    if x.abs() >= a {
+        return 0.0;
+    }
+    if x.abs() < 1e-10 {
+        return 1.0;
+    }
     let pix = std::f64::consts::PI * x;
     let sa = pix.sin() / pix;
     let s = (std::f64::consts::PI * x / a).sin() / (std::f64::consts::PI * x / a);
@@ -46,8 +58,11 @@ fn kernel_lanczos(x: f64, a: f64) -> f64 {
 /// Hamming kernel (approximated as Lanczos-like window).
 /// PIL's Hamming: 0.54 + 0.46 * cos(pi * x) for |x| < 1, else 0.
 fn kernel_hamming(x: f64) -> f64 {
-    if x.abs() >= 1.0 { 0.0 }
-    else { 0.54 + 0.46 * (std::f64::consts::PI * x).cos() }
+    if x.abs() >= 1.0 {
+        0.0
+    } else {
+        0.54 + 0.46 * (std::f64::consts::PI * x).cos()
+    }
 }
 
 // ── Per-channel interpolation ──
@@ -84,17 +99,25 @@ fn get_channels(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
 
 /// Clamp an integer to [0, max].
 fn clamp_idx(v: i64, max: u32) -> u32 {
-    if v < 0 { 0 }
-    else if v as u32 >= max { max - 1 }
-    else { v as u32 }
+    if v < 0 {
+        0
+    } else if v as u32 >= max {
+        max - 1
+    } else {
+        v as u32
+    }
 }
 
 /// Round a float to u8 using PIL's rounding: truncate after adding 0.5.
 fn pil_round(v: f64) -> u8 {
     let v = v + 0.5;
-    if v <= 0.0 { 0 }
-    else if v >= 256.0 { 255 }
-    else { v as u8 }
+    if v <= 0.0 {
+        0
+    } else if v >= 256.0 {
+        255
+    } else {
+        v as u8
+    }
 }
 
 // ── Main interpolation function ──
@@ -127,12 +150,16 @@ fn interpolate(
     for iy in top..=bottom {
         let sy = clamp_idx(iy, sh);
         let wy = kernel((iy as f64 - cy) / sy_scale);
-        if wy.abs() < 1e-15 { continue; }
+        if wy.abs() < 1e-15 {
+            continue;
+        }
         for ix in left..=right {
             let sx = clamp_idx(ix, sw);
             let wx = kernel((ix as f64 - cx) / sx_scale);
             let w = wx * wy;
-            if w.abs() < 1e-15 { continue; }
+            if w.abs() < 1e-15 {
+                continue;
+            }
             let p = get_channels(img, sx, sy);
             acc[0] += w * p[0];
             acc[1] += w * p[1];
@@ -241,11 +268,15 @@ fn build_rgb8(pixels: &[[f64; 4]], w: u32, h: u32) -> image::RgbImage {
     for y in 0..h {
         for x in 0..w {
             let idx = (y * w + x) as usize;
-            out.put_pixel(x, y, image::Rgb([
-                pil_round(pixels[idx][0]),
-                pil_round(pixels[idx][1]),
-                pil_round(pixels[idx][2]),
-            ]));
+            out.put_pixel(
+                x,
+                y,
+                image::Rgb([
+                    pil_round(pixels[idx][0]),
+                    pil_round(pixels[idx][1]),
+                    pil_round(pixels[idx][2]),
+                ]),
+            );
         }
     }
     out
@@ -256,12 +287,16 @@ fn build_rgba8(pixels: &[[f64; 4]], w: u32, h: u32) -> image::RgbaImage {
     for y in 0..h {
         for x in 0..w {
             let idx = (y * w + x) as usize;
-            out.put_pixel(x, y, image::Rgba([
-                pil_round(pixels[idx][0]),
-                pil_round(pixels[idx][1]),
-                pil_round(pixels[idx][2]),
-                pil_round(pixels[idx][3]),
-            ]));
+            out.put_pixel(
+                x,
+                y,
+                image::Rgba([
+                    pil_round(pixels[idx][0]),
+                    pil_round(pixels[idx][1]),
+                    pil_round(pixels[idx][2]),
+                    pil_round(pixels[idx][3]),
+                ]),
+            );
         }
     }
     out
@@ -273,9 +308,7 @@ fn kernel_lanczos3(x: f64) -> f64 {
 }
 
 /// Choose kernel function and support based on filter type.
-fn filter_from_resample(
-    filter: ResampleFilter,
-) -> (fn(f64) -> f64, f64) {
+fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f64) {
     match filter {
         ResampleFilter::Nearest => (kernel_box, 0.5),
         ResampleFilter::Bilinear => (kernel_triangle, 1.0),
@@ -325,10 +358,7 @@ pub fn pil_resize(
     }
 
     // Premultiply alpha for RGBA/LA modes (PIL-compatible)
-    let needs_alpha = matches!(
-        img.color(),
-        image::ColorType::Rgba8 | image::ColorType::La8
-    );
+    let needs_alpha = matches!(img.color(), image::ColorType::Rgba8 | image::ColorType::La8);
     let work = if needs_alpha {
         premultiply_alpha(img)
     } else {

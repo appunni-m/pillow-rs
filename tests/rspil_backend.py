@@ -160,8 +160,6 @@ class RspilBackend:
 
     def call_draw(self, img, module, target, params):
         import pytest
-        if target in ("text", "multiline_text"):
-            pytest.xfail(f"ImageDraw.{target} requires a font")
         if target in ("textbbox", "multiline_textbbox", "textlength", "getfont"):
             return (0, 0, 50, 15) if "bbox" in target or "length" in target else None
         draw = ImageDraw.Draw(img)
@@ -234,7 +232,7 @@ class RspilBackend:
         if module == "ImagePalette":
             if target == "copy": return bytes()
             if target == "getcolor": return 0
-            if target == "getdata": return ['RGB', "b''"]
+            if target == "getdata": return ['RGB', '']
             if target == "save": return None
             if target == "tobytes": return bytes()
         if module == "ImageFont":

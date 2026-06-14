@@ -138,9 +138,19 @@ def test_fixture_parity(fixture_file):
         if op_key in LOSSY_OPERATIONS and "reference_bytes" in expected:
             ref_bytes = bytes.fromhex(expected["reference_bytes"])
             if len(ref_bytes) == len(raw_bytes):
-                # Count pixels where any byte differs by more than the threshold
-                threshold = 2
-                bad_pixels = sum(1 for a, b in zip(raw_bytes, ref_bytes) if abs(a - b) > threshold)
-                if bad_pixels / len(raw_bytes) * 100 < 5.0: return
+                # For F-mode images, compare decoded floats (byte-level comparison
+                # is meaningless for IEEE 754 float bytes)
+                if fixture["input"]["mode"] == "F":
+                    import struct
+                    n_floats = len(raw_bytes) // 4
+                    pil_floats = [struct.unpack('<f', ref_bytes[i*4:(i+1)*4])[0] for i in range(n_floats)]
+                    rs_floats = [struct.unpack('<f', raw_bytes[i*4:(i+1)*4])[0] for i in range(n_floats)]
+                    bad_floats = sum(1 for a, b in zip(pil_floats, rs_floats) if abs(a - b) > 1.0)
+                    if bad_floats / n_floats * 100 < 5.0: return
+                else:
+                    # Count pixels where any byte differs by more than the threshold
+                    threshold = 2
+                    bad_pixels = sum(1 for a, b in zip(raw_bytes, ref_bytes) if abs(a - b) > threshold)
+                    if bad_pixels / len(raw_bytes) * 100 < 5.0: return
 
         pytest.xfail(f"Hash mismatch: expected={expected['value'][:12]} got={actual_hash[:12]}")

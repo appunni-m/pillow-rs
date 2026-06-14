@@ -8,12 +8,7 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 /// Add two images. Result = image1 + image2, scaled and offset.
-pub fn add(
-    image1: &Image,
-    image2: &Image,
-    scale: f64,
-    offset: f64,
-) -> Result<Image, PilError> {
+pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
         PipelineOp::Add {
@@ -194,8 +189,5 @@ pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError
 
 /// Fill with constant value (single-channel fill).
 pub fn constant(image: &Image, value: u8) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Constant { value },
-    ))
+    Ok(Image::push_op(image, PipelineOp::Constant { value }))
 }

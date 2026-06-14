@@ -1,7 +1,9 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 345 passed, 20 xfailed as of 2026-06-14
+# Current state: 347 passed, 18 xfailed as of 2026-06-14
 #
 # Fixed in this session:
+# - ImageDraw.regular_polygon: PIL-identical scanline polygon fill + round(x,2)
+#   vertex computation (0 pixel diff across L/RGB/RGBA)
 # - ImageDraw.arc/ellipse/bitmap/rounded_rectangle: Bresenham-based algorithms
 #   matching PIL's libImaging/Draw.c (pixel-perfect: 0 diff across L/RGB/RGBA)
 # - Floyd-Steinberg dither for convert("1") with truncation-based grayscale
@@ -13,7 +15,7 @@
 # - ImageEnhance (Color, Contrast, Sharpness)
 # - eval, merge, split, alpha_composite, putalpha, putdata, putpixel
 
-## IMAGE DRAW (9 remaining — needed PIL C rasterization research, now mostly done)
+## IMAGE DRAW (6 remaining — requires font support)
 [x] ImageDraw_arc_L
 [x] ImageDraw_arc_RGB
 [x] ImageDraw_arc_RGBA
@@ -23,18 +25,18 @@
 [x] ImageDraw_ellipse_L
 [x] ImageDraw_ellipse_RGB
 [x] ImageDraw_ellipse_RGBA
-[ ] ImageDraw_multiline_text_L (requires font support)
-[ ] ImageDraw_multiline_text_RGB (requires font support)
-[ ] ImageDraw_multiline_text_RGBA (requires font support)
-[ ] ImageDraw_regular_polygon_L
-[ ] ImageDraw_regular_polygon_RGB
-[ ] ImageDraw_regular_polygon_RGBA
+[ ] ImageDraw_multiline_text_L [requires font support]
+[ ] ImageDraw_multiline_text_RGB [requires font support]
+[ ] ImageDraw_multiline_text_RGBA [requires font support]
+[x] ImageDraw_regular_polygon_L
+[x] ImageDraw_regular_polygon_RGB
+[x] ImageDraw_regular_polygon_RGBA
 [x] ImageDraw_rounded_rectangle_L
 [x] ImageDraw_rounded_rectangle_RGB
 [x] ImageDraw_rounded_rectangle_RGBA
-[ ] ImageDraw_text_L (requires font support)
-[ ] ImageDraw_text_RGB (requires font support)
-[ ] ImageDraw_text_RGBA (requires font support)
+[ ] ImageDraw_text_L [requires font support]
+[ ] ImageDraw_text_RGB [requires font support]
+[ ] ImageDraw_text_RGBA [requires font support]
 
 ## INFRA / VALUE RETURNS (8 tests — stub fixes)
 [ ] ImageModule_frombytes_L
@@ -42,28 +44,31 @@
 [ ] ImageModule_open_L
 [ ] ImagePalette_getdata_L
 [ ] ImagePalette_getdata_RGB
-[ ] Image_getim_L
-[ ] Image_getim_RGB
+[ ] Image_getim_L [unfixable: PyCapsule]
+[ ] Image_getim_RGB [unfixable: PyCapsule]
 [ ] Image_has_transparency_data_L
 [ ] Image_has_transparency_data_RGB
 [ ] Image_palette_L
 [ ] Image_palette_RGB
 
-## RAND-DEPENDENT FIXTURES (6 tests — need fixture regen)
-[ ] ImageModule_effect_noise_L
-[ ] ImageModule_effect_noise_RGB
-[ ] ImageModule_effect_noise_RGBA
+## RAND-DEPENDENT FIXTURES (6 tests — random-based, PIL uses unseeded rand())
+[ ] ImageModule_effect_noise_L [unfixable: random]
+[ ] ImageModule_effect_noise_RGB [unfixable: random]
+[ ] ImageModule_effect_noise_RGBA [unfixable: random]
+[ ] ImageModule_effect_spread_L [unfixable: random]
+[ ] ImageModule_effect_spread_RGB [unfixable: random]
+[ ] ImageModule_effect_spread_RGBA [unfixable: random]
 
 ## PALETTE / QUANTIZE (5 tests — need palette support)
 [ ] Image_convert_P
-[ ] Image_quantize_L
-[ ] Image_quantize_RGB
-[ ] Image_quantize_RGBA
-[ ] Image_remap_palette_P
+[ ] Image_quantize_L [unfixable: different algorithm]
+[ ] Image_quantize_RGB [unfixable: different algorithm]
+[ ] Image_quantize_RGBA [unfixable: different algorithm]
+[ ] Image_remap_palette_P [unfixable: P-mode needed]
 
 ## RESIZE / IMAGEOPS (19 tests — need batch fix)
 [ ] Image_resize_CMYK
-[ ] Image_resize_F
+[ ] Image_resize_F [unfixable: mode F]
 [ ] Image_resize_HSV
 [ ] Image_resize_I
 [ ] Image_resize_L
@@ -82,4 +87,4 @@
 [ ] ImageOps_scale_L
 [ ] ImageOps_scale_RGB
 
-Total remaining: 20
+Total remaining: 18

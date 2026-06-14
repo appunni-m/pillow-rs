@@ -73,9 +73,7 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
 pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
-        PipelineOp::Eval {
-            lut: lut.to_vec(),
-        },
+        PipelineOp::Eval { lut: lut.to_vec() },
     ))
 }
 
@@ -83,17 +81,11 @@ pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 /// PIL: `Image.effect_noise(size, sigma)`
 /// Uses the source image only for dimensions.
 pub fn effect_noise(image: &Image, sigma: f64) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::EffectNoise { sigma },
-    ))
+    Ok(Image::push_op(image, PipelineOp::EffectNoise { sigma }))
 }
 
 /// Spread pixels outward (visual effect).
 /// Uses the source image and applies distance-based spread.
 pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
-    Ok(Image::push_op(
-        image,
-        PipelineOp::EffectSpread { distance },
-    ))
+    Ok(Image::push_op(image, PipelineOp::EffectSpread { distance }))
 }
