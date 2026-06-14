@@ -36,6 +36,8 @@ pub enum Image {
         explicit_mode: Option<String>,
         /// Locked backend for this pipeline. None = use global active set.
         backend: Option<crate::compute::Backend>,
+        /// Quantize palette (RGB triples) — populated after Quantize op materializes.
+        palette: Option<Vec<u8>>,
     },
 }
 
@@ -360,6 +362,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                     format: *format,
                     explicit_mode,
                     backend: source.backend(),
+                    palette: None,
                 }
             }
             other => {
@@ -373,6 +376,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                     format: fmt,
                     explicit_mode,
                     backend: other.backend(),
+                    palette: None,
                 }
             }
         }
@@ -555,6 +559,15 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                 explicit_mode: Some(m),
                 ..
             } => Some(m.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Return the palette data (RGB triples) for P-mode quantized images.
+    /// PIL stores the palette as 768 bytes (256 × R,G,B), accessible via getpalette().
+    pub fn palette(&self) -> Option<Vec<u8>> {
+        match self {
+            Image::Pipeline { palette, .. } => palette.clone(),
             _ => None,
         }
     }

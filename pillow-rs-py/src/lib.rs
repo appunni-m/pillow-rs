@@ -202,6 +202,11 @@ impl PyImage {
         self.inner.tobytes().map_err(map_error)
     }
 
+    /// Return palette data (RGB triples) for P-mode quantized images.
+    fn palette(&self) -> Option<Vec<u8>> {
+        self.inner.palette()
+    }
+
     fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
         let filter = resample
             .as_deref()

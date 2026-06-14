@@ -239,8 +239,13 @@ class Image:
 
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
-        """Reduce colors using NeuQuant algorithm."""
-        return Image(self._rust_image.quantize(colors, dither != 0))
+        """Reduce colors using median cut algorithm."""
+        result = Image(self._rust_image.quantize(colors, dither != 0))
+        # PIL: quantize returns a P-mode image with palette attached
+        p = result._rust_image.palette()
+        if p:
+            result._palette = list(p)
+        return result
 
     def getbbox(self, *, alpha_only: bool = True):
         """Bounding box of non-zero regions."""

@@ -1,20 +1,20 @@
 # pillow-rs Coverage Report
 
-> Auto-generated: 2026-06-14 11:51:03 | Pillow parity tested
+> Auto-generated: 2026-06-14 14:56:12 | Pillow parity tested
 
 ## Trust Summary
 
 | Metric | Value |
 |--------|-------|
-| **Total tests** | 566 |
-| **Passing** | 486 |
+| **Total tests** | 565 |
+| **Passing** | 558 |
 | **Failed** | 0 |
-| **Skipped** | 80 |
+| **Skipped** | 7 |
 | **Implemented functions** | 145 |
-| **Trusted (PIL parity tested)** | 143 |
-| **Untested** | 2 |
+| **Trusted (PIL parity tested)** | 144 |
+| **Untested** | 1 |
 | **Stubs** | 5 |
-| **Trust score** | **143/145 (99%)** |
+| **Trust score** | **144/145 (99%)** |
 
 ## Performance Benchmarks
 
@@ -22,21 +22,21 @@
 
 | Operation | Speedup | Faster? |
 |-----------|---------|---------|
-| resize_2k_to_1k | 25.34× | ✅ |
-| crop_2k | 0.87× | ❌ |
-| convert_2k_RGB_to_L | 2.33× | ✅ |
-| transpose_2k_FLIP | 2.62× | ✅ |
-| filter_2k_BLUR | 65.19× | ✅ |
-| paste_2k | 1.20× | ✅ |
-| invert_2k | 3.82× | ✅ |
+| resize_2k_to_1k | 29.66× | ✅ |
+| crop_2k | 0.59× | ❌ |
+| convert_2k_RGB_to_L | 1.91× | ✅ |
+| transpose_2k_FLIP | 3.08× | ✅ |
+| filter_2k_BLUR | 61.39× | ✅ |
+| paste_2k | 1.03× | ✅ |
+| invert_2k | 3.03× | ✅ |
 
-**Average speedup: 14.48×**
+**Average speedup: 14.38×**
 
 ## Module Status
 
 | Module | Implemented | Trusted | Untested | Trust % |
 |--------|------------|---------|----------|---------|
-| Image | 48 | 46 | 2 | 96% |
+| Image | 48 | 47 | 1 | 98% |
 | ImageChops | 21 | 21 | 0 | 100% |
 | ImageColor | 2 | 2 | 0 | 100% |
 | ImageDraw | 14 | 14 | 0 | 100% |
@@ -51,7 +51,6 @@
 
 ## ⚠️ Untested Functions
 
-- `Image.getdata`
 - `Image.quantize`
 
 ## ⬜ Remaining Stubs
@@ -79,14 +78,14 @@
 | `effect_spread` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `entropy` | ✅ | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `filter` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A |
-| `frombytes` | N/A | ⚠️ | ⚠️ | N/A | ✅ | ⚠️ | N/A | N/A | N/A | N/A |
+| `frombytes` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `get_child_images` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `get_flattened_data` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `getbands` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getbbox` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getchannel` | N/A | N/A | ✅ | N/A | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
 | `getcolors` | ✅ | ✅ | ⬜ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getdata` | N/A | ⚠️ | ⚠️ | N/A | ⚠️ | ⚠️ | N/A | N/A | N/A | N/A |
+| `getdata` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getexif` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getim` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
@@ -97,7 +96,7 @@
 | `histogram` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `load` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `new` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `open` | N/A | ⚠️ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
+| `open` | N/A | ✅ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
 | `paste` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
 | `point` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
 | `putalpha` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
@@ -115,7 +114,7 @@
 | `thumbnail` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `tobitmap` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | `tobytes` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `transform` | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | N/A | N/A | N/A | N/A |
+| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `transpose` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `verify` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 
@@ -156,17 +155,17 @@
 
 | Operation | 1 | L | LA | P | RGB | RGBA | CMYK |
 |-----------|-------|-------|-------|-------|-------|-------|-------|
-| `arc` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `arc` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `bitmap` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
-| `chord` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
-| `circle` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
-| `ellipse` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
-| `line` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `chord` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `circle` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `ellipse` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `line` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `multiline_text` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
-| `pieslice` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
-| `point` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
-| `polygon` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
-| `rectangle` | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ⚠️ |
+| `pieslice` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `point` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `polygon` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `rectangle` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `regular_polygon` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
 | `rounded_rectangle` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
 | `text` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
@@ -190,8 +189,8 @@
 | `DETAIL` | ✅ | ✅ | ✅ | ✅ |
 | `EDGE_ENHANCE` | ✅ | ✅ | ✅ | ✅ |
 | `EDGE_ENHANCE_MORE` | ✅ | ✅ | ✅ | ✅ |
-| `EMBOSS` | ✅ | ⚠️ | ✅ | ⚠️ |
-| `FIND_EDGES` | ✅ | ⚠️ | ✅ | ⚠️ |
+| `EMBOSS` | ✅ | ✅ | ✅ | ✅ |
+| `FIND_EDGES` | ✅ | ✅ | ✅ | ✅ |
 | `GaussianBlur` | ✅ | ✅ | ✅ | ✅ |
 | `Kernel` | ✅ | N/A | ✅ | N/A |
 | `MaxFilter` | ✅ | N/A | ✅ | N/A |
@@ -202,7 +201,7 @@
 | `SHARPEN` | ✅ | ✅ | ✅ | ✅ |
 | `SMOOTH` | ✅ | ✅ | ✅ | ✅ |
 | `SMOOTH_MORE` | ✅ | ✅ | ✅ | ✅ |
-| `UnsharpMask` | ✅ | ⚠️ | ✅ | ⚠️ |
+| `UnsharpMask` | ✅ | ✅ | ✅ | ✅ |
 
 ### ImageFont
 
@@ -241,7 +240,7 @@
 | `expand` | ✅ | ⬜ | N/A | ✅ | ⬜ |
 | `fit` | ✅ | ⬜ | N/A | ✅ | ⬜ |
 | `flip` | ✅ | ⬜ | N/A | ✅ | ✅ |
-| `grayscale` | ✅ | ✅ | ⚠️ | ✅ | ✅ |
+| `grayscale` | ✅ | ✅ | ⬜ | ✅ | ✅ |
 | `invert` | ✅ | ⬜ | N/A | ✅ | ⬜ |
 | `mirror` | ✅ | ⬜ | N/A | ✅ | ✅ |
 | `pad` | ✅ | ⬜ | N/A | ✅ | ⬜ |
