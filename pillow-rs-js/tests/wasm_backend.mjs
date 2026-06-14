@@ -891,13 +891,33 @@ export class WasmBackend {
                     );
                     break;
                 }
-                case "text": {
-                    // Text requires a font — not easily available in WASM
-                    throw new Error("not implemented: ImageDraw.text (no default font in WASM)");
+                case "text":
+                case "multiline_text": {
+                    const { ImageFont } = this.wasm;
+                    const xy = p.xy || [0, 0];
+                    const text = p.text || "";
+                    const font = ImageFont.loadDefault();
+                    const rgba = _colorToRGBA(p.fill, img.mode) || [0, 0, 0, 255];
+                    draw.textFill(xy[0], xy[1], text, font,
+                        rgba[0], rgba[1], rgba[2], rgba[3]);
+                    break;
                 }
                 case "bitmap": {
-                    // bitmap draws an image as a bitmap mask — not in WASM bindings
-                    throw new Error("not implemented: ImageDraw.bitmap");
+                    const xy = p.xy || [0, 0];
+                    const rgba = _colorToRGBA(p.fill, img.mode);
+                    // Use NONE dither to match PIL's ImageDraw.bitmap behavior
+                    const bmp = img.convert("1", "NONE");
+                    if (rgba) {
+                        draw.bitmap([xy[0], xy[1]], bmp,
+                            [rgba[0], rgba[1], rgba[2], rgba[3]]);
+                    } else {
+                        draw.bitmap([xy[0], xy[1]], bmp, null);
+                    }
+                    break;
+                }
+                case "shape": {
+                    // shape is not a standard PIL ImageDraw method
+                    throw new Error("not implemented: ImageDraw.shape");
                 }
                 default:
                     throw new Error(`not implemented: ImageDraw.${target}`);
@@ -1017,6 +1037,14 @@ export class WasmBackend {
 
         if (target === "fromarray") {
             throw new Error("not implemented: fromarray requires numpy");
+        }
+
+        if (target === "effect_mandelbrot") {
+            throw new Error("not implemented: effect_mandelbrot in WASM");
+        }
+
+        if (target === "frombuffer") {
+            throw new Error("not implemented: frombuffer in WASM");
         }
 
         throw new Error(`not implemented: classmethod ${module}.${target}`);
@@ -1151,6 +1179,10 @@ export class WasmBackend {
         }
         if (target === "getim") {
             throw new Error("not implemented: getim in WASM");
+        }
+        // toqimage, toqpixmap — Qt-specific, not available in WASM
+        if (target === "toqimage" || target === "toqpixmap") {
+            throw new Error("not implemented: Qt not available in WASM");
         }
         if (target === "get_flattened_data" || target === "getFlattenedData") {
             const data = img.getFlattenedData();

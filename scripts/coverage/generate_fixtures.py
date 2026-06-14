@@ -52,6 +52,9 @@ def generate_fixture(op_name, mode):
     if op_name in ("ImageModule.blend", "ImageModule.composite"):
         img2 = _make_input(mode)
 
+    # Capture input bytes BEFORE executing (draw ops modify img in-place)
+    input_bytes_hex = img.tobytes().hex()
+
     # Execute
     result = execute(_backend, op_def, img, img2)
 
@@ -60,7 +63,7 @@ def generate_fixture(op_name, mode):
     fixture = {
         "format_version": 1,
         "operation": op_def,
-        "input": {"mode": mode, "size": list(img.size), "bytes": img.tobytes().hex()},
+        "input": {"mode": mode, "size": list(img.size), "bytes": input_bytes_hex},
         "config": {"reference_bytes_rgb": ref_bytes, "targets": spec.get("targets", ["cpu"])},
     }
     if img2:
