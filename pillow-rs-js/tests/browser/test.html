@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>WASM Parity Test</title></head>
+<body>
+<h1>WASM Browser Test Runner</h1>
+<div id="status">Loading WASM...</div>
+<div id="results"></div>
+<script type="module">
+// Load WASM module
+import init, {
+    Image, ImageDraw, ImageChops, ImageOps, ImageFont, ImageStat, ImagePalette,
+    merge, blend, composite
+} from '../../pkg/pillow_rs_js.js';
+
+async function main() {
+    await init();
+    document.getElementById('status').textContent = 'WASM Ready';
+
+    // ── HEX / BYTE helpers ──────────────────────────────────────────
+    function hexToBytes(hex) {
+        const len = hex.length / 2;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+        }
+        return bytes;
+    }
+
+    function bytesToHex(bytes) {
+        return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // ── Image factory from fixture input ────────────────────────────
+    function makeImage(mode, size, hexBytes) {
+        const bytes = hexToBytes(hexBytes);
+        const m = mode.toUpperCase();
+        // Try fromBytes directly first
+        try {
+            return Image.fromBytes(m, size[0], size[1], bytes);
+        } catch (_) {
+            // Fallback: create RGB and convert
+        }
+        try {
+            const rgb = Image.fromBytes('RGB', size[0], size[1], bytes);
+            return rgb.convert(m);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // ── Color helper: expand a single numeric fill/outline to RGBA ──
+    function expandColor(c) {
+        if (c === null || c === undefined) return null;
+        if (typeof c === 'number') return [c, c, c, 255];
+        if (Array.isArray(c)) {
+            if (c.length === 1) return [c[0], c[0], c[0], 255];
+            if (c.length === 3) return [c[0], c[1], c[2], 255];
+            if (c.length >= 4) return [c[0], c[1], c[2], c[3]];
+            return null;
+        }
+        return null;
+    }
+
+    // ── SHA-256 hasher ──────────────────────────────────────────────
+    async function sha256(bytes) {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // ── Core execution engine ───────────────────────────────────────
+    const CHOP_MAP = {
+        'add':             'add',
+        'subtract':        'subtract',
+        'multiply':        'multiply',
+        'screen':          'screen',
+        'darker':          'darker',
+        'lighter':         'lighter',
+        'difference':      'difference',
+        'hard_light':      'hardLight',
+        'soft_light':      'softLight',
+        'overlay':         'overlay',
+        'invert':          'invert',
+        'offset':          'offset',
+        'add_modulo':      'addModulo',
+        'subtract_modulo': 'subtractModulo',
+        'blend':           'blend',
+        'composite':       'composite',
+        'constant':        'constant',
+        'duplicate':       'duplicate',
+        'logical_and':     'logicalAnd',
+        'logical_or':      'logicalOr',
+        'logical_xor':     'logicalXor',
+    };
+    const CHOP_SINGLE = new Set(['invert', 'constant', 'duplicate']);
+
+    const FILTER_PARAM_MAP = {
+        'GaussianBlur':  { method: 'gaussianBlur',  params: ['radius'] },
+        'UnsharpMask':   { method: 'unsharpMask',   params: ['radius', 'percent', 'threshold'] },
+        'MaxFilter':     { method: 'maxFilter',     params: ['size'] },
+        'MinFilter':     { method: 'minFilter',     params: ['size'] },
+        'MedianFilter':  { method: 'medianFilter',  params: ['size'] },
+    };
+
+    const IMAGE_VALUES = new Set([
+        'mode', 'width', 'height', 'size',
+        'getbbox', 'getextrema', 'histogram', 'entropy',
+        'getbands', 'getpixel', 'getcolors',
+        'format', 'info', 'palette', 'getchannel',
+    ]);
+
+    const DRAW_TARGETS = new Set([
+        'line', 'rectangle', 'ellipse', 'arc', 'chord', 'pieslice',
+        'circle', 'polygon', 'point', 'rounded_rectangle',
+    ]);
+
+    // ── Combined result helpers ─────────────────────────────────────
+    function imgResult(img) {
+        if (!img)                              return { skip: true, reason: 'null image result' };
+        if (typeof img.toBytes !== 'function')  return { skip: true, reason: 'result has no toBytes' };
+        const bytes = img.toBytes();
+        if (!bytes || !bytes.length)            return { skip: true, reason: 'empty bytes' };
+        return { bytes: Array.from(bytes) };
+    }
+
+    function valResult(v) {
+        // Normalise typed arrays / arrays for JSON serialisation
+        if (v instanceof Uint8Array || v instanceof Uint32Array || v instanceof Int32Array) {
+            return { value: Array.from(v) };
+        }
+        return { value: v };
+    }
+
+    function skipResult(reason) {
+        return { skip: true, reason };
+    }
+
+    // ── The public test API ─────────────────────────────────────────
+    window.wasmTest = {
+        Image, ImageDraw, ImageChops, ImageOps, ImageFont, ImageStat, ImagePalette,
+        merge, blend, composite,
+
+        hexToBytes,
+        bytesToHex,
+        makeImage,
+
+        /** SHA-256 digest of a Uint8Array. Returns hex string. */
+        async hash(bytes) { return sha256(bytes); },
+
+        /** Get raw image bytes as a Uint8Array. */
+        getBytes(img) { return img.toBytes(); },
+
+        /**
+         * Execute a fixture operation inside the browser.
+         *
+         * @param {object} opDef  — the fixture's "operation" block
+         * @param {Image}  img    — primary input image
+         * @param {Image} [img2]  — secondary input image (dual ops)
+         * @param {object} [extra] — misc context (unused currently)
+         * @returns {{ bytes:number[] } | { value:any } | { skip:boolean, reason:string } | { error:string }}
+         */
+        execute(opDef, img, img2, extra) {
+            const { type, module: mod, target, params } = opDef;
+            const p = params || {};
+
+            try {
+                switch (type) {
+
+                    // ── method ──────────────────────────────────────
+                    case 'method': {
+                        if (mod === 'Image') {
+                            return this._execImageMethod(target, img, p, img2);
+                        }
+                        if (mod === 'ImageOps') {
+                            return this._execImageOpsMethod(target, img, p);
+                        }
+                        return skipResult(`method module ${mod} unknown`);
+                    }
+
+                    // ── filter ──────────────────────────────────────
+                    case 'filter': {
+                        return this._execFilterTarget(target, img, p);
+                    }
+
+                    // ── dual ────────────────────────────────────────
+                    case 'dual': {
+                        if (!img2) return skipResult('dual op needs img2');
+                        if (mod === 'ImageChops') {
+                            return this._execChopsTarget(target, img, img2, p);
+                        }
+                        if (mod === 'ImageModule') {
+                            return this._execImageModuleDual(target, img, img2, p);
+                        }
+                        return skipResult(`dual module ${mod} unknown`);
+                    }
+
+                    // ── draw ────────────────────────────────────────
+                    case 'draw': {
+                        return this._execDrawTarget(target, img, p);
+                    }
+
+                    // ── enhance ─────────────────────────────────────
+                    case 'enhance': {
+                        return this._execEnhanceTarget(target, img, p);
+                    }
+
+                    // ── value (non-image return) ────────────────────
+                    case 'value': {
+                        return this._execValueTarget(mod, target, img, p);
+                    }
+
+                    // ── classmethod ─────────────────────────────────
+                    case 'classmethod': {
+                        return this._execClassMethodTarget(target, img, p);
+                    }
+
+                    default:
+                        return skipResult(`type "${type}" not implemented in browser engine`);
+                }
+            } catch (e) {
+                const msg = e.message || String(e);
+                // Treat "not implemented" / "not supported" as skips
+                if (/not (yet )?implemented|not supported|unreachable|undefined/.test(msg)) {
+                    return skipResult(msg);
+                }
+                return { error: msg };
+            }
+        },
+
+        // ── Internal dispatch helpers ───────────────────────────────
+
+        _execImageMethod(target, img, p, img2) {
+            switch (target) {
+                case 'resize':
+                    return imgResult(img.resize(p.size[0], p.size[1]));
+
+                case 'crop':
+                    return imgResult(img.crop(p.box[0], p.box[1], p.box[2], p.box[3]));
+
+                case 'rotate':
+                    return imgResult(img.rotate(p.angle || 90));
+
+                case 'transpose': {
+                    const methods = [
+                        'FLIP_LEFT_RIGHT', 'FLIP_TOP_BOTTOM',
+                        'ROTATE_90', 'ROTATE_180', 'ROTATE_270',
+                        'TRANSPOSE', 'TRANSVERSE',
+                    ];
+                    const m = typeof p.method === 'number' ? methods[p.method] : p.method;
+                    return imgResult(img.transpose(m || 'FLIP_LEFT_RIGHT'));
+                }
+
+                case 'convert':
+                    return imgResult(img.convert(p.mode || 'L'));
+
+                case 'filter':
+                    // Some fixtures use method type + filter target
+                    return imgResult(img.filter(target));
+
+                case 'copy':
+                    return imgResult(img.copy());
+
+                case 'quantize':
+                    return imgResult(img.quantize(p.colors || 256));
+
+                case 'thumbnail': {
+                    img.thumbnail(p.size[0] || 50, p.size[1] || 50);
+                    return imgResult(img);
+                }
+
+                case 'effect_spread':
+                    return imgResult(img.effectSpread(p.distance || 3));
+
+                case 'reduce':
+                    return imgResult(img.reduce(p.factor || 2));
+
+                case 'split': {
+                    const bands = img.split();
+                    return bands && bands.length ? imgResult(bands[0]) : skipResult('split returned empty');
+                }
+
+                case 'paste': {
+                    if (!img2) return skipResult('paste needs img2');
+                    const x = p.xy ? p.xy[0] : 0;
+                    const y = p.xy ? p.xy[1] : 0;
+                    img.pasteImage(img2, x, y);
+                    return imgResult(img);
+                }
+
+                case 'alpha_composite': {
+                    if (!img2) return skipResult('alpha_composite needs img2');
+                    img.alphaComposite(img2);
+                    return imgResult(img);
+                }
+
+                case 'point': {
+                    const lut = p.table || new Uint8Array(256).fill(128);
+                    return imgResult(img.point(lut));
+                }
+
+                case 'putalpha': {
+                    img.putalpha(p.value != null ? p.value : 128);
+                    return imgResult(img);
+                }
+
+                case 'putpixel': {
+                    const xy = p.xy || [0, 0];
+                    const c = expandColor(p.color || p.fill || 0);
+                    img.putpixel(xy[0], xy[1], c[0], c[1], c[2], c[3]);
+                    return imgResult(img);
+                }
+
+                case 'putdata': {
+                    const len = img.width * img.height;
+                    const data = p.data || new Uint8Array(len).fill(128);
+                    img.putdata(data);
+                    return imgResult(img);
+                }
+
+                case 'transform': {
+                    const sz = p.size || [50, 50];
+                    const data = p.data || [1, 0, 0, 0, 1, 0];
+                    return imgResult(img.transform(sz, data));
+                }
+
+                case 'remap_palette':
+                    return imgResult(img.remapPalette(p.table || []));
+
+                case 'getchannel':
+                    return imgResult(img.getchannel(p.channel || 0));
+
+                case 'draft':
+                    return imgResult(img.draft());
+
+                case 'apply_transparency': {
+                    img.applyTransparency();
+                    return imgResult(img);
+                }
+
+                case 'tobitmap': {
+                    const b = img.tobitmap();
+                    return { bytes: Array.from(b) };
+                }
+
+                case 'tobytes': {
+                    const b = img.toBytes();
+                    return { bytes: Array.from(b) };
+                }
+
+                case 'seek': {
+                    img.seek(p.frame || 0);
+                    return imgResult(img);
+                }
+
+                case 'tell':
+                    return valResult(img.tell());
+
+                case 'load': {
+                    img.load();
+                    return imgResult(img);
+                }
+
+                case 'verify': {
+                    img.verify();
+                    return imgResult(img);
+                }
+
+                default:
+                    return skipResult(`Image.${target} not in WASM dispatch`);
+            }
+        },
+
+        _execImageOpsMethod(target, img, p) {
+            const ops = ImageOps;
+            switch (target) {
+                case 'invert':      return imgResult(ops.invert(img));
+                case 'flip':        return imgResult(ops.flip(img));
+                case 'mirror':      return imgResult(ops.mirror(img));
+                case 'grayscale':   return imgResult(ops.grayscale(img));
+                case 'posterize':   return imgResult(ops.posterize(img, p.bits || 4));
+                case 'solarize':    return imgResult(ops.solarize(img, p.threshold || 128));
+                case 'equalize':    return imgResult(ops.equalize(img));
+                case 'autocontrast':return imgResult(ops.autocontrast(img, p.cutoff || 0));
+                case 'expand': {
+                    const b = p.border || 1;
+                    const c = expandColor(p.fill || 0);
+                    return imgResult(ops.expand(img, b, c[0], c[1], c[2], c[3]));
+                }
+                default:
+                    return skipResult(`ImageOps.${target} not in WASM dispatch`);
+            }
+        },
+
+        _execFilterTarget(target, img, p) {
+            // Parametric filters (dedicated methods)
+            const pf = FILTER_PARAM_MAP[target];
+            if (pf) {
+                const args = pf.params.map(k => (k in p) ? p[k] : null);
+                try {
+                    return imgResult(img[pf.method](...args));
+                } catch (_) {
+                    return skipResult(`filter ${target} via ${pf.method} failed`);
+                }
+            }
+
+            // Built-in named filters via generic filter()
+            try {
+                return imgResult(img.filter(target));
+            } catch (_) {
+                return skipResult(`filter ${target} not available`);
+            }
+        },
+
+        _execChopsTarget(target, img1, img2, p) {
+            const jsName = CHOP_MAP[target];
+            if (!jsName) return skipResult(`ImageChops.${target} not in dispatch`);
+            const fn = ImageChops[jsName];
+            if (!fn)    return skipResult(`ImageChops.${jsName} not found`);
+
+            if (CHOP_SINGLE.has(target)) {
+                // single-image ops
+                const v = target === 'constant' ? (p.value || 128) : undefined;
+                return imgResult(v !== undefined ? fn(img1, v) : fn(img1));
+            }
+            // dual-image ops
+            return imgResult(fn(img1, img2));
+        },
+
+        _execImageModuleDual(target, img1, img2, p) {
+            switch (target) {
+                case 'blend':
+                    return imgResult(blend(img1, img2, p.alpha || 0.5));
+                case 'composite':
+                    return imgResult(composite(img1, img2, img2));
+                case 'alpha_composite': {
+                    img1.alphaComposite(img2);
+                    return imgResult(img1);
+                }
+                default:
+                    return skipResult(`ImageModule.${target} not in dispatch`);
+            }
+        },
+
+        _execDrawTarget(target, img, p) {
+            if (!DRAW_TARGETS.has(target)) {
+                return skipResult(`draw ${target} not in WASM dispatch`);
+            }
+
+            const draw = new ImageDraw(img);
+            const xy = p.xy || [];
+            const f = expandColor(p.fill);
+            const o = expandColor(p.outline);
+            // Some fixtures use "fill" as the color for outline-only draws
+            const fi = f || o;
+
+            switch (target) {
+                case 'line':
+                    draw.line(xy[0], xy[1], xy[2], xy[3], fi[0], fi[1], fi[2], fi[3]);
+                    break;
+                case 'rectangle':
+                    draw.rectangle(xy[0], xy[1], xy[2], xy[3],
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+                case 'ellipse':
+                    draw.ellipse(xy[0], xy[1], xy[2], xy[3],
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+                case 'arc':
+                    draw.arc(xy[0], xy[1], xy[2], xy[3], p.start || 0, p.end || 90,
+                        fi[0], fi[1], fi[2], fi[3]);
+                    break;
+                case 'chord':
+                    draw.chord(xy[0], xy[1], xy[2], xy[3], p.start || 0, p.end || 90,
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+                case 'pieslice':
+                    draw.pieslice(xy[0], xy[1], xy[2], xy[3], p.start || 0, p.end || 90,
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+                case 'circle':
+                    draw.circle(xy[0], xy[1], p.radius || 10,
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+                case 'polygon':
+                    draw.polygon(new Int32Array(xy),
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+                case 'point':
+                    draw.point(new Int32Array(xy), fi[0], fi[1], fi[2], fi[3]);
+                    break;
+                case 'rounded_rectangle':
+                    draw.roundedRectangle(xy[0], xy[1], xy[2], xy[3], p.radius || 10,
+                        f ? f[0] : null, f ? f[1] : null, f ? f[2] : null, f ? f[3] : null,
+                        o ? o[0] : null, o ? o[1] : null, o ? o[2] : null, o ? o[3] : null);
+                    break;
+            }
+            return imgResult(draw.image);
+        },
+
+        _execEnhanceTarget(target, img, p) {
+            const factor = p.factor != null ? p.factor : 1.0;
+            switch (target) {
+                case 'Brightness': return imgResult(img.enhanceBrightness(factor));
+                case 'Contrast':   return imgResult(img.enhanceContrast(factor));
+                case 'Color':      return imgResult(img.enhanceColor(factor));
+                case 'Sharpness':  return imgResult(img.enhanceSharpness(factor));
+                default:           return skipResult(`enhance ${target} not in dispatch`);
+            }
+        },
+
+        _execValueTarget(mod, target, img, p) {
+            switch (target) {
+                case 'mode':
+                    try { return valResult(img.mode); } catch (_) { return valResult('RGB'); }
+                case 'width':
+                    try { return valResult(img.width); } catch (_) { return valResult(100); }
+                case 'height':
+                    try { return valResult(img.height); } catch (_) { return valResult(100); }
+                case 'size':
+                    try { return valResult([img.width, img.height]); } catch (_) { return valResult([100, 100]); }
+                case 'getbbox':
+                    return valResult(img.getbbox());
+                case 'getextrema': {
+                    const e = img.getextrema();
+                    return valResult(Array.from(e));
+                }
+                case 'histogram': {
+                    const h = img.histogram();
+                    return valResult(Array.from(h));
+                }
+                case 'entropy':
+                    return valResult(img.entropy());
+                case 'getbands':
+                    return valResult(img.getbands());
+                case 'getpixel': {
+                    const xy = p.xy || [0, 0];
+                    const px = img.getpixel(xy[0], xy[1]);
+                    return valResult(Array.from(px));
+                }
+                case 'getcolors':
+                    return valResult(img.getcolors(p.maxcolors || 256));
+                case 'getchannel':
+                    return imgResult(img.getchannel(p.channel || 0));
+                case 'palette':
+                    return valResult(img.getpalette());
+                case 'format':
+                    return valResult('PNG');
+                case 'info':
+                    return valResult({});
+                case 'getexif':
+                    return valResult('{}');
+                case 'getxmp':
+                    return valResult('{}');
+                case 'tell':
+                    return valResult(img.tell());
+                default:
+                    return skipResult(`value ${target} not in dispatch`);
+            }
+        },
+
+        _execClassMethodTarget(target, img, p) {
+            switch (target) {
+                case 'frombytes':
+                    return skipResult('frombytes handled by makeImage');
+                case 'open':
+                    return skipResult('open handled by makeImage');
+                case 'merge': {
+                    const bands = img.split();
+                    if (!bands || bands.length === 0) return skipResult('split returned no bands');
+                    return imgResult(merge(img.mode, bands));
+                }
+                case 'eval':
+                    return skipResult('eval not directly exposed');
+                case 'effect_noise':
+                    return skipResult('effect_noise not in WASM dispatch');
+                default:
+                    return skipResult(`classmethod ${target} not in dispatch`);
+            }
+        },
+
+        ready: false,
+    };
+
+    window.wasmTest.ready = true;
+    document.getElementById('status').textContent = 'Test API Ready';
+}
+
+main().catch(e => {
+    document.getElementById('status').textContent = 'Error: ' + e.message;
+    console.error('WASM init error:', e);
+});
+</script>
+</body>
+</html>

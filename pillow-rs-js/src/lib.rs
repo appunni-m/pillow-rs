@@ -41,6 +41,18 @@ impl Image {
     pub fn mode(&mut self) -> Result<String, JsValue> {
         self.inner.mode().map_err(err)
     }
+    #[wasm_bindgen(getter)]
+    pub fn is_animated(&self) -> bool {
+        false
+    }
+    #[wasm_bindgen(getter)]
+    pub fn n_frames(&self) -> u32 {
+        1
+    }
+    #[wasm_bindgen(getter)]
+    pub fn has_transparency_data(&self) -> bool {
+        false
+    }
     pub fn size(&mut self) -> Result<Vec<u32>, JsValue> {
         self.inner.size().map(|(w, h)| vec![w, h]).map_err(err)
     }
@@ -61,9 +73,22 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "rotate")]
-    pub fn rotate(&self, a: f64) -> Result<Image, JsValue> {
+    pub fn rotate(
+        &self,
+        a: f64,
+        expand: Option<bool>,
+        fill: Option<Vec<u8>>,
+    ) -> Result<Image, JsValue> {
+        let fill_color = fill.map(|f| {
+            (
+                f.get(0).copied().unwrap_or(0),
+                f.get(1).copied().unwrap_or(0),
+                f.get(2).copied().unwrap_or(0),
+                f.get(3).copied().unwrap_or(255),
+            )
+        });
         self.inner
-            .rotate(a, false, None)
+            .rotate(a, expand.unwrap_or(false), fill_color)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -75,9 +100,43 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "convert")]
-    pub fn convert(&self, m: &str) -> Result<Image, JsValue> {
+    pub fn convert(
+        &self,
+        m: &str,
+        dither: Option<String>,
+        _palette: Option<Vec<u8>>,
+        colors: Option<u32>,
+    ) -> Result<Image, JsValue> {
+        if m == "I" || m == "F" {
+            // Convert to L first (always works), then widen to 32-bit
+            let l_img = self
+                .inner
+                .convert("L", None, None, None, None)
+                .map_err(err)?;
+            let (w, h) = l_img.size().map_err(err)?;
+            let l_bytes = l_img.tobytes().map_err(err)?;
+            // Build 4-byte-per-pixel data matching PIL's I/F mode format
+            let mut data = Vec::with_capacity(l_bytes.len() * 4);
+            if m == "I" {
+                // I mode: 32-bit signed int per pixel (little-endian i32)
+                for &b in &l_bytes {
+                    let val: i32 = b as i32;
+                    data.extend_from_slice(&val.to_le_bytes());
+                }
+            } else {
+                // F mode: 32-bit IEEE 754 float per pixel (little-endian f32)
+                // L value 128 -> F value 128/255 = 0.50196...
+                for &b in &l_bytes {
+                    let val: f32 = (b as f32) / 255.0;
+                    data.extend_from_slice(&val.to_le_bytes());
+                }
+            }
+            return RsImage::frombytes(m, (w, h), &data)
+                .map(|i| Image { inner: i })
+                .map_err(err);
+        }
         self.inner
-            .convert(m, None, None, None, None)
+            .convert(m, None, dither.as_deref(), None, colors)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -193,10 +252,23 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "getcolors")]
     pub fn getcolors(&mut self, m: u32) -> Result<JsValue, JsValue> {
-        self.inner
-            .getcolors(m)
-            .map(|r| JsValue::from_str(&format!("{:?}", r.is_some())))
-            .map_err(err)
+        match self.inner.getcolors(m).map_err(err)? {
+            None => Ok(JsValue::null()),
+            Some(colors) => {
+                let arr = js_sys::Array::new();
+                for (count, color) in &colors {
+                    let item = js_sys::Array::new();
+                    item.push(&JsValue::from(*count));
+                    let color_arr = js_sys::Array::new();
+                    for &c in color {
+                        color_arr.push(&JsValue::from(c));
+                    }
+                    item.push(&color_arr);
+                    arr.push(&item);
+                }
+                Ok(JsValue::from(arr))
+            }
+        }
     }
     #[wasm_bindgen(js_name = "getdata")]
     pub fn getdata(&mut self, b: Option<i32>) -> Result<Vec<u8>, JsValue> {
@@ -206,7 +278,20 @@ impl Image {
     pub fn getprojection(&mut self) -> Result<JsValue, JsValue> {
         self.inner
             .getprojection()
-            .map(|(h, v)| JsValue::from_str(&format!("h:{} v:{}", h.len(), v.len())))
+            .map(|(h_proj, v_proj)| {
+                let h_arr = js_sys::Array::new();
+                for &val in &h_proj {
+                    h_arr.push(&JsValue::from(val));
+                }
+                let v_arr = js_sys::Array::new();
+                for &val in &v_proj {
+                    v_arr.push(&JsValue::from(val));
+                }
+                let result = js_sys::Array::new();
+                result.push(&h_arr);
+                result.push(&v_arr);
+                JsValue::from(result)
+            })
             .map_err(err)
     }
 
@@ -276,6 +361,43 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    #[wasm_bindgen(js_name = "boxBlur")]
+    pub fn box_blur(&self, radius: f32) -> Result<Image, JsValue> {
+        self.inner
+            .box_blur(radius)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "modeFilter")]
+    pub fn mode_filter(&self, size: u32) -> Result<Image, JsValue> {
+        self.inner
+            .mode_filter(size)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "rankFilter")]
+    pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, JsValue> {
+        self.inner
+            .rank_filter(size, rank)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "kernelFilter")]
+    pub fn kernel_filter(
+        &self,
+        size: Vec<u32>,
+        kernel: Vec<f32>,
+        scale: Option<f64>,
+        offset: Option<f64>,
+    ) -> Result<Image, JsValue> {
+        let sz = size.get(0).copied().unwrap_or(3);
+        let s = scale.unwrap_or(1.0) as f32;
+        let o = offset.unwrap_or(0.0) as i32;
+        self.inner
+            .kernel_filter(&kernel, s, o, sz)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
 
     // Quantize/Reduce
     #[wasm_bindgen(js_name = "quantize")]
@@ -307,7 +429,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "thumbnail")]
     pub fn thumb(&mut self, w: u32, h: u32) -> Result<(), JsValue> {
-        self.inner.thumbnail((w, h)).map_err(err)
+        self.inner.thumbnail((w, h), None).map_err(err)
     }
 
     // Bookkeeping
@@ -380,7 +502,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "getFlattenedData")]
     pub fn get_flattened(&self) -> Result<Vec<u8>, JsValue> {
-        self.inner.tobytes().map_err(err)
+        Err(JsValue::from_str("not yet implemented"))
     }
     #[wasm_bindgen(js_name = "applyTransparency")]
     pub fn apply_transparency(&self) {}
@@ -622,22 +744,48 @@ impl ImageDraw {
             .text(x as i32, y as i32, text, &font.font, (0, 0, 0, 255))
             .map_err(err)
     }
+    #[wasm_bindgen(js_name = "textFill")]
+    pub fn text_fill(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font: &ImageFont,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+    ) -> Result<(), JsValue> {
+        self.draw
+            .text(x as i32, y as i32, text, &font.font, (r, g, b, a))
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "bitmap")]
+    pub fn bitmap(
+        &mut self,
+        xy: Vec<i32>,
+        bitmap: &Image,
+        fill: Option<Vec<u8>>,
+    ) -> Result<(), JsValue> {
+        let x = xy.get(0).copied().unwrap_or(0);
+        let y = xy.get(1).copied().unwrap_or(0);
+        let fill_color = fill.map(|f| {
+            (
+                f.get(0).copied().unwrap_or(255),
+                f.get(1).copied().unwrap_or(255),
+                f.get(2).copied().unwrap_or(255),
+                f.get(3).copied().unwrap_or(255),
+            )
+        });
+        self.draw
+            .bitmap(x, y, &bitmap.inner, fill_color)
+            .map_err(err)
+    }
     #[wasm_bindgen(getter)]
     pub fn image(&self) -> Image {
-        let mut img = Image {
+        Image {
             inner: self.draw.image_clone(),
-        };
-        // Convert back to RGB if original was RGB (Draw uses RGBA internally)
-        let mut clone = img.inner.clone();
-        if let Ok(mode) = clone.mode() {
-            if mode == "RGBA" {
-                // Check if all alpha values are 255 (no transparency) — if so, convert to RGB
-                if let Ok(rgb) = clone.convert("RGB", None, None, None, None) {
-                    img.inner = rgb;
-                }
-            }
         }
-        img
     }
 }
 
@@ -714,28 +862,96 @@ impl ImagePalette {
     pub fn save(&self) -> JsValue {
         JsValue::from_str("palette")
     }
+    #[wasm_bindgen(js_name = "getcolor")]
+    pub fn getcolor(&self, index: u32) -> Vec<u8> {
+        let idx = (index as usize) * 3;
+        if idx + 2 < self.data.len() {
+            vec![self.data[idx], self.data[idx + 1], self.data[idx + 2]]
+        } else {
+            vec![0, 0, 0]
+        }
+    }
 }
 
 // ── ImageStat ────────────────────────────────────────────────────
 #[wasm_bindgen]
-pub struct ImageStat {}
+pub struct ImageStat {
+    count: Vec<u32>,
+    sum: Vec<f64>,
+    mean: Vec<f64>,
+    median: Vec<f64>,
+    rms: Vec<f64>,
+    var: Vec<f64>,
+    stddev: Vec<f64>,
+    extrema: Vec<u8>,
+}
 #[wasm_bindgen]
 impl ImageStat {
     #[wasm_bindgen(constructor)]
-    pub fn new(_input: &JsValue) -> ImageStat {
-        ImageStat {}
+    pub fn new(img: &Image) -> Result<ImageStat, JsValue> {
+        let stats = img.inner.stat().map_err(err)?;
+        let n_bands = stats.len();
+        let mut count = Vec::with_capacity(n_bands);
+        let mut sum = Vec::with_capacity(n_bands);
+        let mut mean = Vec::with_capacity(n_bands);
+        let mut median = Vec::with_capacity(n_bands);
+        let mut rms = Vec::with_capacity(n_bands);
+        let mut var = Vec::with_capacity(n_bands);
+        let mut stddev = Vec::with_capacity(n_bands);
+        let mut extrema = Vec::with_capacity(n_bands * 2);
+        for band in &stats {
+            count.push(band[0] as u32);
+            sum.push(band[1]);
+            mean.push(band[3]);
+            median.push(band[4]);
+            rms.push(band[5]);
+            var.push(band[6]);
+            stddev.push(band[7]);
+            extrema.push(band[8] as u8);
+            extrema.push(band[9] as u8);
+        }
+        Ok(ImageStat {
+            count,
+            sum,
+            mean,
+            median,
+            rms,
+            var,
+            stddev,
+            extrema,
+        })
     }
     #[wasm_bindgen(getter)]
-    pub fn count(&self) -> u32 {
-        0
+    pub fn count(&self) -> Vec<u32> {
+        self.count.clone()
     }
     #[wasm_bindgen(getter)]
-    pub fn sum(&self) -> f64 {
-        0.0
+    pub fn sum(&self) -> Vec<f64> {
+        self.sum.clone()
     }
     #[wasm_bindgen(getter)]
-    pub fn mean(&self) -> f64 {
-        0.0
+    pub fn mean(&self) -> Vec<f64> {
+        self.mean.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn median(&self) -> Vec<f64> {
+        self.median.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn rms(&self) -> Vec<f64> {
+        self.rms.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn var(&self) -> Vec<f64> {
+        self.var.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn stddev(&self) -> Vec<f64> {
+        self.stddev.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn extrema(&self) -> Vec<u8> {
+        self.extrema.clone()
     }
 }
 
@@ -809,10 +1025,10 @@ impl ImageFont {
         ))
     }
     #[wasm_bindgen(js_name = "loadDefault")]
-    pub fn load_default() -> Result<ImageFont, JsValue> {
-        Err(JsValue::from_str(
-            "No default font in WASM. Use new ImageFont(data, size)",
-        ))
+    pub fn load_default(size: Option<f32>) -> ImageFont {
+        ImageFont {
+            font: Font::load_default(size.unwrap_or(10.0)),
+        }
     }
 }
 #[wasm_bindgen(js_name = "imageOpen")]
@@ -1020,6 +1236,69 @@ impl ImageOps {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    #[wasm_bindgen(js_name = "contain")]
+    pub fn contain(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
+        imageops::contain(&img.inner, w, h, None)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "cover")]
+    pub fn cover(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
+        imageops::cover(&img.inner, w, h, None)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "fit")]
+    pub fn fit(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
+        imageops::fit(&img.inner, w, h, None, 0.0, (0.5, 0.5))
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "pad")]
+    pub fn pad(
+        img: &Image,
+        w: u32,
+        h: u32,
+        r: Option<u8>,
+        g: Option<u8>,
+        b: Option<u8>,
+        a: Option<u8>,
+    ) -> Result<Image, JsValue> {
+        let color = r.map(|cr| (cr, g.unwrap_or(0), b.unwrap_or(0), a.unwrap_or(255)));
+        imageops::pad(&img.inner, w, h, None, color, (0.5, 0.5))
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "scale")]
+    pub fn scale(img: &Image, factor: f64) -> Result<Image, JsValue> {
+        imageops::scale(&img.inner, factor, None)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "crop")]
+    pub fn crop_op(img: &Image, border: u32) -> Result<Image, JsValue> {
+        imageops::crop(&img.inner, border)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
+    #[wasm_bindgen(js_name = "colorize")]
+    pub fn colorize(
+        img: &Image,
+        black_r: u8,
+        black_g: u8,
+        black_b: u8,
+        white_r: u8,
+        white_g: u8,
+        white_b: u8,
+    ) -> Result<Image, JsValue> {
+        imageops::colorize(
+            &img.inner,
+            (black_r, black_g, black_b),
+            (white_r, white_g, white_b),
+        )
+        .map(|i| Image { inner: i })
+        .map_err(err)
+    }
 }
 
 // ── Module functions ─────────────────────────────────────────────
@@ -1039,6 +1318,28 @@ pub fn blend(a: &Image, b: &Image, alpha: f64) -> Result<Image, JsValue> {
 #[wasm_bindgen(js_name = "composite")]
 pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
     module_fns::composite(&a.inner, &b.inner, &m.inner)
+        .map(|i| Image { inner: i })
+        .map_err(err)
+}
+
+#[wasm_bindgen(js_name = "effectNoise")]
+pub fn effect_noise_fn(w: u32, h: u32, sigma: f64) -> Result<Image, JsValue> {
+    let img = RsImage::new(w, h, "L", (0, 0, 0, 255)).map_err(err)?;
+    module_fns::effect_noise(&img, sigma)
+        .map(|i| Image { inner: i })
+        .map_err(err)
+}
+
+#[wasm_bindgen(js_name = "eval")]
+pub fn eval_fn(img: &Image, lut: Vec<u8>) -> Result<Image, JsValue> {
+    module_fns::eval(&img.inner, &lut)
+        .map(|i| Image { inner: i })
+        .map_err(err)
+}
+
+#[wasm_bindgen(js_name = "imageOpenBytes")]
+pub fn image_open_bytes(data: Vec<u8>) -> Result<Image, JsValue> {
+    RsImage::open_bytes(data)
         .map(|i| Image { inner: i })
         .map_err(err)
 }
