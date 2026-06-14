@@ -14,6 +14,7 @@ pub trait ComputeBackend: Send + Sync {
         ops: &[PipelineOp],
         img: &DynamicImage,
         explicit_mode: Option<&str>,
+        palette: Option<&[u8]>,
     ) -> Result<DynamicImage, PilError>;
     fn priority(&self) -> u8;
 }
@@ -153,10 +154,11 @@ pub fn execute_on(
     ops: &[PipelineOp],
     img: &DynamicImage,
     explicit_mode: Option<&str>,
+    palette: Option<&[u8]>,
 ) -> Result<DynamicImage, PilError> {
     for backend_obj in get_active_objects() {
         if backend_obj.name() == backend {
-            return backend_obj.execute_batch(ops, img, explicit_mode);
+            return backend_obj.execute_batch(ops, img, explicit_mode, palette);
         }
     }
     Err(PilError::ValueError(format!(

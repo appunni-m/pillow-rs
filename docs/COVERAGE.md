@@ -1,20 +1,20 @@
 # pillow-rs Coverage Report
 
-> Auto-generated: 2026-06-14 14:56:12 | Pillow parity tested
+> Auto-generated: 2026-06-14 20:12:16 | Pillow parity tested
 
 ## Trust Summary
 
 | Metric | Value |
 |--------|-------|
-| **Total tests** | 565 |
-| **Passing** | 558 |
+| **Total tests** | 564 |
+| **Passing** | 564 |
 | **Failed** | 0 |
-| **Skipped** | 7 |
+| **Skipped** | 0 |
 | **Implemented functions** | 145 |
-| **Trusted (PIL parity tested)** | 144 |
-| **Untested** | 1 |
+| **Trusted (PIL parity tested)** | 145 |
+| **Untested** | 0 |
 | **Stubs** | 5 |
-| **Trust score** | **144/145 (99%)** |
+| **Trust score** | **145/145 (100%)** |
 
 ## Performance Benchmarks
 
@@ -22,21 +22,21 @@
 
 | Operation | Speedup | Faster? |
 |-----------|---------|---------|
-| resize_2k_to_1k | 29.66× | ✅ |
-| crop_2k | 0.59× | ❌ |
-| convert_2k_RGB_to_L | 1.91× | ✅ |
-| transpose_2k_FLIP | 3.08× | ✅ |
-| filter_2k_BLUR | 61.39× | ✅ |
-| paste_2k | 1.03× | ✅ |
-| invert_2k | 3.03× | ✅ |
+| resize_2k_to_1k | 30.78× | ✅ |
+| crop_2k | 0.47× | ❌ |
+| convert_2k_RGB_to_L | 1.92× | ✅ |
+| transpose_2k_FLIP | 3.12× | ✅ |
+| filter_2k_BLUR | 62.23× | ✅ |
+| paste_2k | 1.12× | ✅ |
+| invert_2k | 2.90× | ✅ |
 
-**Average speedup: 14.38×**
+**Average speedup: 14.65×**
 
 ## Module Status
 
 | Module | Implemented | Trusted | Untested | Trust % |
 |--------|------------|---------|----------|---------|
-| Image | 48 | 47 | 1 | 98% |
+| Image | 48 | 48 | 0 | 100% |
 | ImageChops | 21 | 21 | 0 | 100% |
 | ImageColor | 2 | 2 | 0 | 100% |
 | ImageDraw | 14 | 14 | 0 | 100% |
@@ -48,10 +48,6 @@
 | ImagePalette | 5 | 5 | 0 | 100% |
 | ImageSequence | 1 | 1 | 0 | 100% |
 | ImageStat | 1 | 1 | 0 | 100% |
-
-## ⚠️ Untested Functions
-
-- `Image.quantize`
 
 ## ⬜ Remaining Stubs
 
@@ -71,7 +67,7 @@
 |-----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
 | `alpha_composite` | N/A | N/A | N/A | N/A | N/A | ⬜ | N/A | N/A | N/A | N/A |
 | `apply_transparency` | N/A | ✅ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
-| `convert` | N/A | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `convert` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `copy` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `crop` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `draft` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
@@ -103,10 +99,10 @@
 | `putdata` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `putpalette` | N/A | ⬜ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
 | `putpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `quantize` | N/A | ⚠️ | N/A | N/A | ⚠️ | ⚠️ | N/A | N/A | N/A | N/A |
+| `quantize` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `reduce` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `remap_palette` | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
-| `resize` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `resize` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
 | `seek` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `split` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |

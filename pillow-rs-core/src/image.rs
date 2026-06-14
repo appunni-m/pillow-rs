@@ -1,18 +1,56 @@
 use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat};
+use std::io::{BufReader, Read, Seek};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::color::{color_type_to_mode, pil_grayscale};
 use crate::error::PilError;
 use crate::format::parse_format_str;
+use crate::ops::pil_resize::pil_resize;
 use crate::pipeline::{
     ColorMode, DitherMethod, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
 };
+
+/// Default palette matching PIL's web/browser palette.
+/// Used for P-mode images without an explicit palette.
+/// Matches PIL's `ImagingPaletteNewBrowser`: 6×6×6 color cube entries at indices 10-225,
+/// with indices 0-9 and 226-255 set to zero.
+pub fn default_palette() -> Vec<u8> {
+    let mut pal = vec![0u8; 768]; // 256 * 3 (RGB)
+    let mut i = 10; // PIL reserves indices 0-9
+    let b_step: [u8; 6] = [0, 51, 102, 153, 204, 255];
+    let g_step: [u8; 6] = [0, 51, 102, 153, 204, 255];
+    let r_step: [u8; 6] = [0, 51, 102, 153, 204, 255];
+    for &b in &b_step {
+        for &g in &g_step {
+            for &r in &r_step {
+                let base = i as usize * 3;
+                pal[base] = r;
+                pal[base + 1] = g;
+                pal[base + 2] = b;
+                i += 1;
+            }
+        }
+    }
+    // Entries 0-9 and 226-255 remain zero (matching PIL behavior)
+    pal
+}
+
+/// A decoded P-mode (palette) image.
+/// `indices` holds one byte per pixel (the palette index, 0-255).
+/// `palette` holds 768 bytes: 256 RGB triples mapping each index to a color.
+#[derive(Debug, Clone)]
+pub struct PalettedData {
+    pub indices: image::GrayImage,
+    pub palette: Vec<u8>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Image {
     /// Fully decoded, ready to process or save. Optional explicit PIL mode.
     Loaded(DynamicImage, Option<String>),
+    /// Fully decoded P-mode (palette) image: index bytes + 768-byte palette.
+    Paletted(PalettedData),
     /// Path not yet decoded — lazy.
     Path {
         path: PathBuf,
@@ -141,14 +179,15 @@ impl Image {
                 width,
                 height,
                 // PIL: any non-zero value in mode "1" is white (255)
-image::Luma([if color.0 > 0 { 255 } else { 0 }]),
+                image::Luma([if color.0 > 0 { 255 } else { 0 }]),
             )),
-            // Non-standard modes: stored as closest DynamicImage variant with explicit tag
-            "P" => DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
-                width,
-                height,
-                image::Luma([color.0]),
-            )),
+            // P-mode: stored as Paletted with default grayscale palette
+            "P" => {
+                return Ok(Image::Paletted(PalettedData {
+                    indices: image::GrayImage::from_pixel(width, height, image::Luma([color.0])),
+                    palette: default_palette(),
+                }));
+            }
             "CMYK" => DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
                 width,
                 height,
@@ -168,7 +207,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
             )),
             _ => return Err(PilError::ValueError(format!("Unsupported mode: {}", mode))),
         };
-        let explicit = if matches!(mode, "CMYK" | "YCbCr" | "HSV" | "I" | "F" | "P") {
+        let explicit = if matches!(mode, "CMYK" | "YCbCr" | "HSV" | "I" | "F") {
             Some(mode.to_string())
         } else if mode == "1" {
             Some(mode.to_string())
@@ -222,10 +261,13 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                 image::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "P" => DynamicImage::ImageLuma8(
-                image::GrayImage::from_raw(w, h, data[..expected].to_vec())
-                    .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
-            ),
+            "P" => {
+                return Ok(Image::Paletted(PalettedData {
+                    indices: image::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                        .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+                    palette: default_palette(),
+                }));
+            }
             "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
                 image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
@@ -255,10 +297,20 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                 )
             }
-            _ => DynamicImage::new_rgba8(w, h),
+            _ => {
+                // CMYK, HSV, YCbCr, I, F stored as RGBA bytes
+                let expected = (w * h * 4) as usize;
+                let mut pixels = vec![0u8; expected];
+                let copy_len = data.len().min(expected);
+                pixels[..copy_len].copy_from_slice(&data[..copy_len]);
+                DynamicImage::ImageRgba8(
+                    image::RgbaImage::from_raw(w, h, pixels)
+                        .ok_or_else(|| PilError::ValueError("frombytes: RGBA buffer error".into()))?,
+                )
+            }
         };
         let explicit_mode = match mode {
-            "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
+            "1" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
             _ => None,
         };
         Ok(Image::Loaded(img, explicit_mode))
@@ -268,16 +320,19 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
         let fmt = format
             .and_then(|f| parse_format_str(f).ok())
             .or_else(|| ImageFormat::from_path(PathBuf::from(path)).ok());
-        // Check if PNG file has palette chunk
-        let is_paletted = fmt == Some(ImageFormat::Png) && {
-            std::fs::read(path)
-                .map(|data| has_plte_chunk(&data))
-                .unwrap_or(false)
-        };
+        // If this is a PNG file, check if it uses a palette (Indexed color type)
+        if fmt == Some(ImageFormat::Png) {
+            let file = std::fs::File::open(path).map_err(PilError::Io)?;
+            let mut reader = BufReader::new(file);
+            if let Ok(paletted) = decode_paletted_png_reader(&mut reader) {
+                return Ok(Image::Paletted(paletted));
+            }
+            // Not paletted (or error) — fall through to lazy Path
+        }
         Ok(Image::Path {
             path: PathBuf::from(path),
             format: fmt,
-            is_paletted,
+            is_paletted: false,
         })
     }
 
@@ -290,11 +345,18 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                 .and_then(|r| r.format())
                 .or_else(|| detect_format_from_magic(&data))
         };
-        let is_paletted = format == Some(ImageFormat::Png) && has_plte_chunk(&data);
+        // If this is a PNG file, check if it uses a palette (Indexed color type)
+        if format == Some(ImageFormat::Png) {
+            let mut cursor = std::io::Cursor::new(&data);
+            if let Ok(paletted) = decode_paletted_png_reader(&mut cursor) {
+                return Ok(Image::Paletted(paletted));
+            }
+            // Not paletted — fall through to lazy Bytes
+        }
         Ok(Image::Bytes {
             data: Arc::new(data),
             format,
-            is_paletted,
+            is_paletted: false,
         })
     }
 
@@ -305,6 +367,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         match self {
             Image::Loaded(img, _) => Ok(img.clone()),
+            Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
             Image::Path { path, .. } => {
                 let img = image::open(path).map_err(PilError::ImageError)?;
                 Ok(img)
@@ -321,6 +384,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                 ops,
                 explicit_mode,
                 backend,
+                palette,
                 ..
             } => {
                 let mut img = source.materialize()?;
@@ -334,7 +398,13 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                         "No active backend supports all pipeline operations".into(),
                     )
                 })?;
-                img = crate::compute::execute_on(b, ops, &img, explicit_mode.as_deref())?;
+                img = crate::compute::execute_on(
+                    b,
+                    ops,
+                    &img,
+                    explicit_mode.as_deref(),
+                    palette.as_deref(),
+                )?;
                 Ok(img)
             }
         }
@@ -347,6 +417,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
     /// Otherwise wraps in a new Pipeline.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         let explicit_mode = source.explicit_mode().map(|s| s.to_string());
+        let source_palette = source.extract_palette();
         match source {
             Image::Pipeline {
                 source,
@@ -362,7 +433,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                     format: *format,
                     explicit_mode,
                     backend: source.backend(),
-                    palette: None,
+                    palette: source_palette.or_else(|| source.palette()),
                 }
             }
             other => {
@@ -376,7 +447,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                     format: fmt,
                     explicit_mode,
                     backend: other.backend(),
-                    palette: None,
+                    palette: source_palette,
                 }
             }
         }
@@ -462,6 +533,9 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
     }
 
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
+        if matches!(self, Image::Paletted(_)) {
+            return Ok(vec!["P".to_string()]);
+        }
         // Check explicit mode for non-standard band names
         if let Image::Loaded(_, Some(m)) = self {
             let bands: Vec<String> = match m.as_str() {
@@ -497,7 +571,8 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
     }
 
     pub fn save(&self, path: &str, format: Option<&str>) -> Result<(), PilError> {
-        let img = self.materialize()?;
+        // Paletted images: convert via the palette to RGB for visual correctness
+        let img = self.paletted_to_rgb().unwrap_or(self.materialize()?);
         let save_format = if let Some(fmt) = format {
             parse_format_str(fmt)?
         } else {
@@ -509,6 +584,10 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
     }
 
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
+        // Fast path for Paletted: return raw index bytes
+        if let Image::Paletted(data) = self {
+            return Ok(data.indices.as_raw().to_vec());
+        }
         let img = self.materialize()?;
         // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
         // Only when the materialized image is still grayscale (not after convert etc.)
@@ -521,7 +600,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
                 for y in 0..h as usize {
                     for x in 0..w as usize {
                         let pixel = gray.get_pixel(x as u32, y as u32)[0];
-                        if pixel > 254 {
+                        if pixel != 0 {
                             let byte_idx = y * row_bytes + x / 8;
                             let bit_idx = 7 - (x % 8);
                             packed[byte_idx] |= 1 << bit_idx;
@@ -555,6 +634,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
     pub fn explicit_mode(&self) -> Option<&str> {
         match self {
             Image::Loaded(_, Some(m)) => Some(m.as_str()),
+            Image::Paletted(_) => Some("P"),
             Image::Pipeline {
                 explicit_mode: Some(m),
                 ..
@@ -563,30 +643,73 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
         }
     }
 
-    /// Return the palette data (RGB triples) for P-mode quantized images.
+    /// Return the palette data (RGB triples) for P-mode images.
     /// PIL stores the palette as 768 bytes (256 × R,G,B), accessible via getpalette().
     pub fn palette(&self) -> Option<Vec<u8>> {
         match self {
+            Image::Paletted(data) => Some(data.palette.clone()),
             Image::Pipeline { palette, .. } => palette.clone(),
+            _ => None,
+        }
+    }
+
+    /// Extract palette from Paletted variant (for Pipeline propagation).
+    fn extract_palette(&self) -> Option<Vec<u8>> {
+        match self {
+            Image::Paletted(data) => Some(data.palette.clone()),
             _ => None,
         }
     }
 
     /// Encode image to PNG bytes.
     pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
-        let img = self.materialize()?;
-        let mut buf = std::io::Cursor::new(Vec::new());
-        img.write_to(&mut buf, image::ImageFormat::Png)
-            .map_err(PilError::ImageError)?;
-        Ok(buf.into_inner())
+        match self.paletted_to_rgb() {
+            Some(img) => {
+                let mut buf = std::io::Cursor::new(Vec::new());
+                img.write_to(&mut buf, image::ImageFormat::Png)
+                    .map_err(PilError::ImageError)?;
+                Ok(buf.into_inner())
+            }
+            None => {
+                let img = self.materialize()?;
+                let mut buf = std::io::Cursor::new(Vec::new());
+                img.write_to(&mut buf, image::ImageFormat::Png)
+                    .map_err(PilError::ImageError)?;
+                Ok(buf.into_inner())
+            }
+        }
+    }
+
+    /// Convert Paletted image to RGB for rendering/saving. Returns None for non-Paletted.
+    fn paletted_to_rgb(&self) -> Option<DynamicImage> {
+        if let Image::Paletted(data) = self {
+            let rgb =
+                image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
+                    let idx = data.indices.get_pixel(x, y)[0] as usize;
+                    let p = idx * 3;
+                    let r = data.palette.get(p).copied().unwrap_or(0);
+                    let g = data.palette.get(p + 1).copied().unwrap_or(0);
+                    let b = data.palette.get(p + 2).copied().unwrap_or(0);
+                    image::Rgb([r, g, b])
+                });
+            Some(DynamicImage::ImageRgb8(rgb))
+        } else {
+            None
+        }
     }
 
     pub fn size(&self) -> Result<(u32, u32), PilError> {
+        if let Image::Paletted(data) = self {
+            return Ok(data.indices.dimensions());
+        }
         let img = self.materialize()?;
         Ok((img.width(), img.height()))
     }
 
     pub fn mode(&self) -> Result<String, PilError> {
+        if matches!(self, Image::Paletted(_)) {
+            return Ok("P".to_string());
+        }
         if let Image::Loaded(_, Some(m)) = self {
             return Ok(m.clone());
         }
@@ -624,7 +747,7 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
 
     pub fn format_name(&self) -> Option<String> {
         match self {
-            Image::Loaded(_, _) => None,
+            Image::Loaded(_, _) | Image::Paletted(_) => None,
             Image::Path { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
             Image::Bytes { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
             Image::Pipeline { format, .. } => format.map(|f| format!("{:?}", f).to_uppercase()),
@@ -888,10 +1011,11 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
             for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
                 op[0] = inverse[ip[0] as usize];
             }
-            return Ok(Image::Loaded(
-                DynamicImage::ImageLuma8(out),
-                Some("P".to_string()),
-            ));
+            let palette = self.palette().unwrap_or_else(crate::image::default_palette);
+            return Ok(Image::Paletted(PalettedData {
+                indices: out,
+                palette,
+            }));
         }
 
         // L-mode: operate on each luma value, returning P-mode output
@@ -902,10 +1026,11 @@ image::Luma([if color.0 > 0 { 255 } else { 0 }]),
             for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
                 op[0] = inverse[ip[0] as usize];
             }
-            return Ok(Image::Loaded(
-                DynamicImage::ImageLuma8(out),
-                Some("P".to_string()),
-            ));
+            let palette = self.palette().unwrap_or_else(crate::image::default_palette);
+            return Ok(Image::Paletted(PalettedData {
+                indices: out,
+                palette,
+            }));
         }
 
         // Non-P, non-L: operate on each RGB channel
@@ -933,7 +1058,10 @@ fn channel_op_binary(
     let other_channels = other_img.color().channel_count() as usize;
     let ch = channels.min(other_channels);
 
-    let (w, h) = (img.width().min(other_img.width()), img.height().min(other_img.height()));
+    let (w, h) = (
+        img.width().min(other_img.width()),
+        img.height().min(other_img.height()),
+    );
     let a_bytes = img.as_bytes();
     let b_bytes = other_img.as_bytes();
     let stride_a = img.width() as usize * ch;
@@ -970,9 +1098,12 @@ fn channel_op_binary(
             image::RgbaImage::from_raw(w, h, out)
                 .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))?,
         ),
-        _ => return Err(PilError::ValueError(format!(
-            "channel_op_binary: unsupported channel count {}", ch
-        ))),
+        _ => {
+            return Err(PilError::ValueError(format!(
+                "channel_op_binary: unsupported channel count {}",
+                ch
+            )))
+        }
     };
 
     Ok(preserve_mode(img, result))
@@ -990,7 +1121,10 @@ fn channel_op_binary_lut(
     let other_channels = other_img.color().channel_count() as usize;
     let ch = channels.min(other_channels);
 
-    let (w, h) = (img.width().min(other_img.width()), img.height().min(other_img.height()));
+    let (w, h) = (
+        img.width().min(other_img.width()),
+        img.height().min(other_img.height()),
+    );
     let a_bytes = img.as_bytes();
     let b_bytes = other_img.as_bytes();
     let stride_a = img.width() as usize * ch;
@@ -1010,27 +1144,29 @@ fn channel_op_binary_lut(
         }
     }
 
-    let result = match ch {
-        1 => DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(w, h, out)
-                .ok_or_else(|| PilError::ValueError("channel_op_binary_lut buffer error".into()))?,
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, out)
-                .ok_or_else(|| PilError::ValueError("channel_op_binary_lut buffer error".into()))?,
-        ),
-        3 => DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(w, h, out)
-                .ok_or_else(|| PilError::ValueError("channel_op_binary_lut buffer error".into()))?,
-        ),
-        4 => DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, out)
-                .ok_or_else(|| PilError::ValueError("channel_op_binary_lut buffer error".into()))?,
-        ),
-        _ => return Err(PilError::ValueError(format!(
-            "channel_op_binary_lut: unsupported channel count {}", ch
-        ))),
-    };
+    let result =
+        match ch {
+            1 => DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, out).ok_or_else(
+                || PilError::ValueError("channel_op_binary_lut buffer error".into()),
+            )?),
+            2 => DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(w, h, out).ok_or_else(
+                || PilError::ValueError("channel_op_binary_lut buffer error".into()),
+            )?),
+            3 => {
+                DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, out).ok_or_else(|| {
+                    PilError::ValueError("channel_op_binary_lut buffer error".into())
+                })?)
+            }
+            4 => DynamicImage::ImageRgba8(image::RgbaImage::from_raw(w, h, out).ok_or_else(
+                || PilError::ValueError("channel_op_binary_lut buffer error".into()),
+            )?),
+            _ => {
+                return Err(PilError::ValueError(format!(
+                    "channel_op_binary_lut: unsupported channel count {}",
+                    ch
+                )))
+            }
+        };
 
     Ok(preserve_mode(img, result))
 }
@@ -1069,6 +1205,61 @@ static SOFT_LIGHT_LUT: [u8; 65536] = {
     }
     arr
 };
+
+/// Decode a paletted PNG from a reader, returning the index bytes + palette.
+/// Returns an error if the PNG is not paletted (Indexed color type).
+fn decode_paletted_png_reader<R: Read + Seek>(r: &mut R) -> Result<PalettedData, PilError> {
+    use png::ColorType;
+    let mut reader = BufReader::new(r);
+    let decoder = png::Decoder::new(&mut reader);
+    let mut png_reader = decoder.read_info().map_err(|e| {
+        PilError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            e.to_string(),
+        ))
+    })?;
+
+    // Extract info upfront to release the immutable borrow before next_frame
+    let (w, h, pal) = {
+        let info = png_reader.info();
+        if info.color_type != ColorType::Indexed {
+            return Err(PilError::ValueError("not a paletted PNG".into()));
+        }
+        if info.width == 0 || info.height == 0 {
+            return Err(PilError::ValueError("empty PNG image".into()));
+        }
+        let mut pal = info.palette.clone().unwrap_or_default().to_vec();
+        pal.resize(768, 0u8);
+        (info.width, info.height, pal)
+    };
+
+    let out_size = png_reader
+        .output_buffer_size()
+        .ok_or_else(|| PilError::ValueError("Could not determine output buffer size".into()))?;
+    let mut buf = vec![0u8; out_size];
+    png_reader.next_frame(&mut buf).map_err(|e| {
+        PilError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            e.to_string(),
+        ))
+    })?;
+
+    // For indexed PNGs, output buffer contains palette indices (w*h bytes).
+    let max_size = (w as usize) * (h as usize);
+    let indices = if buf.len() >= max_size {
+        image::GrayImage::from_raw(w, h, buf[..max_size].to_vec())
+            .ok_or_else(|| PilError::ValueError("paletted PNG decode: buffer error".into()))?
+    } else {
+        return Err(PilError::ValueError(
+            "paletted PNG decode: insufficient data".into(),
+        ));
+    };
+
+    Ok(PalettedData {
+        indices,
+        palette: pal,
+    })
+}
 
 /// Check if PNG data contains a PLTE (palette) chunk.
 fn has_plte_chunk(data: &[u8]) -> bool {
@@ -1214,13 +1405,6 @@ fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicI
     Ok(preserve_mode(img, result))
 }
 
-/// Bilinear interpolation helper.
-fn bilerp(v00: u8, v10: u8, v01: u8, v11: u8, fx: f64, fy: f64) -> u8 {
-    let top = v00 as f64 * (1.0 - fx) + v10 as f64 * fx;
-    let bot = v01 as f64 * (1.0 - fx) + v11 as f64 * fx;
-    (top * (1.0 - fy) + bot * fy).round().clamp(0.0, 255.0) as u8
-}
-
 /// PIL's clip8: truncating cast to u8, clamping at 0 and 255.
 /// Matches PIL ImagingFilter's clip8(): `return ss <= 0.0 ? 0 : ss >= 255.0 ? 255 : (UINT8)ss`
 fn clip8_filter(v: f32) -> u8 {
@@ -1233,6 +1417,173 @@ fn clip8_filter(v: f32) -> u8 {
     }
 }
 
+/// Apply a 3×3 kernel filter on I-mode (32-bit signed integer) data.
+/// I-mode pixel values are stored as 4 RGBA bytes (little-endian i32).
+/// PIL applies the full kernel convolution with floating-point arithmetic,
+/// then rounds to the nearest integer — NO clipping to [0,255].
+fn filter_3x3_i32(
+    img: &DynamicImage,
+    kernel: &[f32; 9],
+    scale: f32,
+    offset: i32,
+) -> Result<DynamicImage, PilError> {
+    let rgba = img.to_rgba8();
+    let (w_u32, h_u32) = rgba.dimensions();
+    let (w, h) = (w_u32 as i32, h_u32 as i32);
+    let raw = rgba.into_raw();
+
+    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let k0 = kernel[0] / s;
+    let k1 = kernel[1] / s;
+    let k2 = kernel[2] / s;
+    let k3 = kernel[3] / s;
+    let k4 = kernel[4] / s;
+    let k5 = kernel[5] / s;
+    let k6 = kernel[6] / s;
+    let k7 = kernel[7] / s;
+    let k8 = kernel[8] / s;
+    // PIL rounding: (INT32)(sum / scale + offset + 0.5)
+    let rounding_bias = offset as f32 + 0.5;
+
+    let mut out = raw.clone();
+
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * 4 };
+            let v00 = i32::from_le_bytes([
+                raw[base(-1, -1)],
+                raw[base(-1, -1) + 1],
+                raw[base(-1, -1) + 2],
+                raw[base(-1, -1) + 3],
+            ]);
+            let v10 = i32::from_le_bytes([
+                raw[base(0, -1)],
+                raw[base(0, -1) + 1],
+                raw[base(0, -1) + 2],
+                raw[base(0, -1) + 3],
+            ]);
+            let v20 = i32::from_le_bytes([
+                raw[base(1, -1)],
+                raw[base(1, -1) + 1],
+                raw[base(1, -1) + 2],
+                raw[base(1, -1) + 3],
+            ]);
+            let v01 = i32::from_le_bytes([
+                raw[base(-1, 0)],
+                raw[base(-1, 0) + 1],
+                raw[base(-1, 0) + 2],
+                raw[base(-1, 0) + 3],
+            ]);
+            let v11 = i32::from_le_bytes([
+                raw[base(0, 0)],
+                raw[base(0, 0) + 1],
+                raw[base(0, 0) + 2],
+                raw[base(0, 0) + 3],
+            ]);
+            let v21 = i32::from_le_bytes([
+                raw[base(1, 0)],
+                raw[base(1, 0) + 1],
+                raw[base(1, 0) + 2],
+                raw[base(1, 0) + 3],
+            ]);
+            let v02 = i32::from_le_bytes([
+                raw[base(-1, 1)],
+                raw[base(-1, 1) + 1],
+                raw[base(-1, 1) + 2],
+                raw[base(-1, 1) + 3],
+            ]);
+            let v12 = i32::from_le_bytes([
+                raw[base(0, 1)],
+                raw[base(0, 1) + 1],
+                raw[base(0, 1) + 2],
+                raw[base(0, 1) + 3],
+            ]);
+            let v22 = i32::from_le_bytes([
+                raw[base(1, 1)],
+                raw[base(1, 1) + 1],
+                raw[base(1, 1) + 2],
+                raw[base(1, 1) + 3],
+            ]);
+
+            let ss = rounding_bias
+                + v00 as f32 * k0
+                + v10 as f32 * k1
+                + v20 as f32 * k2
+                + v01 as f32 * k3
+                + v11 as f32 * k4
+                + v21 as f32 * k5
+                + v02 as f32 * k6
+                + v12 as f32 * k7
+                + v22 as f32 * k8;
+
+            // PIL clips I-mode filter results to 0 (no negative values)
+            let result = if ss >= 0.0 { ss as i32 } else { 0 };
+            let out_idx = (y * w + x) as usize * 4;
+            let le = result.to_le_bytes();
+            out[out_idx] = le[0];
+            out[out_idx + 1] = le[1];
+            out[out_idx + 2] = le[2];
+            out[out_idx + 3] = le[3];
+        }
+    }
+
+    Ok(DynamicImage::ImageRgba8(
+        image::RgbaImage::from_raw(w_u32, h_u32, out)
+            .ok_or_else(|| PilError::ValueError("filter_3x3_i32: buffer error".into()))?,
+    ))
+}
+
+/// Apply a 5×5 kernel filter on I-mode (32-bit signed integer) data.
+/// Same approach as filter_3x3_i32 — no clipping to [0,255].
+fn filter_5x5_i32(
+    img: &DynamicImage,
+    kernel: &[f32; 25],
+    scale: f32,
+    offset: i32,
+) -> Result<DynamicImage, PilError> {
+    let rgba = img.to_rgba8();
+    let (w_u32, h_u32) = rgba.dimensions();
+    let (w, h) = (w_u32 as i32, h_u32 as i32);
+    let raw = rgba.into_raw();
+
+    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    // Pre-compute normalized kernel coefficients
+    let kn: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
+
+    let rounding_bias = offset as f32 + 0.5;
+    let mut out = raw.clone();
+
+    for y in 2..h - 2 {
+        for x in 2..w - 2 {
+            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * 4 };
+
+            let mut ss = rounding_bias;
+            for dy in -2..=2 {
+                for dx in -2..=2 {
+                    let bi = base(dx, dy);
+                    let val = i32::from_le_bytes([raw[bi], raw[bi + 1], raw[bi + 2], raw[bi + 3]]);
+                    let ki = ((dy + 2) * 5 + (dx + 2)) as usize;
+                    ss += val as f32 * kn[ki];
+                }
+            }
+
+            // PIL clips I-mode filter results to 0 (no negative values)
+            let result = if ss >= 0.0 { ss as i32 } else { 0 };
+            let out_idx = (y * w + x) as usize * 4;
+            let le = result.to_le_bytes();
+            out[out_idx] = le[0];
+            out[out_idx + 1] = le[1];
+            out[out_idx + 2] = le[2];
+            out[out_idx + 3] = le[3];
+        }
+    }
+
+    Ok(DynamicImage::ImageRgba8(
+        image::RgbaImage::from_raw(w_u32, h_u32, out)
+            .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
+    ))
+}
+
 /// Convert raw flat bytes back to a DynamicImage based on channel count.
 pub fn raw_bytes_to_image(
     w: u32,
@@ -1241,21 +1592,21 @@ pub fn raw_bytes_to_image(
     channels: usize,
 ) -> Result<DynamicImage, PilError> {
     match channels {
-        1 => Ok(DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, data).ok_or_else(
-            || PilError::ValueError("raw_bytes_to_image: buffer error".into()),
-        )?)),
-        2 => Ok(DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, data).ok_or_else(|| {
-                PilError::ValueError("raw_bytes_to_image: buffer error".into())
-            })?,
+        1 => Ok(DynamicImage::ImageLuma8(
+            image::GrayImage::from_raw(w, h, data)
+                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
-        3 => Ok(DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, data).ok_or_else(
-            || PilError::ValueError("raw_bytes_to_image: buffer error".into()),
-        )?)),
+        2 => Ok(DynamicImage::ImageLumaA8(
+            image::GrayAlphaImage::from_raw(w, h, data)
+                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
+        )),
+        3 => Ok(DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(w, h, data)
+                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
+        )),
         4 => Ok(DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, data).ok_or_else(|| {
-                PilError::ValueError("raw_bytes_to_image: buffer error".into())
-            })?,
+            image::RgbaImage::from_raw(w, h, data)
+                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(
             "raw_bytes_to_image: unsupported channel count {}",
@@ -1266,7 +1617,7 @@ pub fn raw_bytes_to_image(
 
 /// PIL-style box blur with fractional radius support.
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
-/// Repeats `passes` times (horizontal + vertical per pass).
+/// Matches PIL order: ALL horizontal passes first, then ALL vertical passes.
 pub fn pil_box_blur(
     img: &DynamicImage,
     radius: f32,
@@ -1285,16 +1636,17 @@ pub fn pil_box_blur(
     let r_int = radius as i32;
     // Number of pixels in the integer window
     let window_pixels = (2 * r_int + 1) as u32;
-    // Fixed-point weight (PIL: ww = (UINT32)((1 << 24) / (floatRadius * 2 + 1)))
-    let ww = ((1u64 << 24) as f64 / (radius as f64 * 2.0 + 1.0)) as u32;
+    // Fixed-point weight: PIL uses f32 precision for ww computation
+    // (UINT32)((1 << 24) / (floatRadius * 2 + 1)) — all in f32
+    let ww = ((1u64 << 24) as f32 / (radius * 2.0 + 1.0)) as u32;
     // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2)
     let fw = ((1u64 << 24) - window_pixels as u64 * ww as u64) as u32 / 2;
     let bias = 1u32 << 23;
 
     let mut work = raw.to_vec();
 
+    // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
     for _pass in 0..passes {
-        // Horizontal blur: process each row
         let mut hpass = vec![0u8; (w * h) as usize * channels];
         for y in 0..h {
             for x in 0..w {
@@ -1315,8 +1667,10 @@ pub fn pil_box_blur(
             }
         }
         work = hpass;
+    }
 
-        // Vertical blur: process each column
+    // PIL does ALL vertical passes after all horizontal passes
+    for _pass in 0..passes {
         let mut vpass = vec![0u8; (w * h) as usize * channels];
         for x in 0..w {
             for y in 0..h {
@@ -1338,6 +1692,7 @@ pub fn pil_box_blur(
         }
         work = vpass;
     }
+
     let result = raw_bytes_to_image(w_u32, h_u32, work, channels)?;
     Ok(preserve_mode(img, result))
 }
@@ -1489,30 +1844,31 @@ fn resize_f(
     } else {
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                // PIL coordinate mapping: center = (output + 0.5) * src_size / dst_size - 0.5
-                let cx = (dx as f64 + 0.5) * sw_f / dw_f - 0.5;
-                let cy = (dy as f64 + 0.5) * sh_f / dh_f - 0.5;
+                // PIL exact: center = (xx + 0.5) * scale [no -0.5]
+                // filterscale = max(1.0, scale)
+                // xmin = (int)(center - support*filterscale + 0.5) [round to nearest]
+                // weight = kernel((sx + 0.5 - center) / filterscale)
+                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
+                let cy = (dy as f64 + 0.5) * sh_f / dh_f;
 
-                // Gather source pixels within kernel support and interpolate
-                let src_support_x = support * sx_scale;
-                let src_support_y = support * sy_scale;
-                let left = (cx - src_support_x + 1e-9).ceil() as i64;
-                let right = (cx + src_support_x - 1e-9).floor() as i64;
-                let top = (cy - src_support_y + 1e-9).ceil() as i64;
-                let bottom = (cy + src_support_y - 1e-9).floor() as i64;
+                let left = (cx - support * sx_scale + 0.5).trunc() as i64;
+                let right = (cx + support * sx_scale + 0.5).trunc() as i64;
+                let top = (cy - support * sy_scale + 0.5).trunc() as i64;
+                let bottom = (cy + support * sy_scale + 0.5).trunc() as i64;
 
                 let mut acc = 0.0f64;
                 let mut wsum = 0.0f64;
 
-                for iy in top..=bottom {
+                for iy in top..bottom {
                     let sy = clamp_idx(iy, sh);
-                    let wy = kernel((iy as f64 - cy) / sy_scale);
+                    // PIL: weight = kernel((sx + 0.5 - center) / filterscale)
+                    let wy = kernel((iy as f64 + 0.5 - cy) / sy_scale);
                     if wy.abs() < 1e-15 {
                         continue;
                     }
-                    for ix in left..=right {
+                    for ix in left..right {
                         let sx = clamp_idx(ix, sw);
-                        let wx = kernel((ix as f64 - cx) / sx_scale);
+                        let wx = kernel((ix as f64 + 0.5 - cx) / sx_scale);
                         let w = wx * wy;
                         if w.abs() < 1e-15 {
                             continue;
@@ -1528,8 +1884,8 @@ fn resize_f(
                     (acc / wsum) as f32
                 } else {
                     // fallback: nearest pixel
-                    let sx = clamp_idx(cx.round() as i64, sw);
-                    let sy = clamp_idx(cy.round() as i64, sh);
+                    let sx = clamp_idx(cx.floor() as i64, sw);
+                    let sy = clamp_idx(cy.floor() as i64, sh);
                     src_floats[(sy * sw + sx) as usize]
                 };
 
@@ -1545,14 +1901,338 @@ fn resize_f(
     Ok(DynamicImage::ImageRgba8(out))
 }
 
+/// Resize an I-mode image (32-bit signed integers stored as RGBA8 bytes LE).
+/// Uses PIL-compatible direct 2D interpolation with f64 precision and i32 rounding.
+fn resize_i(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    filter: &ResampleFilter,
+) -> Result<DynamicImage, PilError> {
+    let rgba = img.to_rgba8();
+    let (sw, sh) = rgba.dimensions();
+
+    if dst_w == 0 || dst_h == 0 || sw == 0 || sh == 0 {
+        return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
+    }
+    if (dst_w, dst_h) == (sw, sh) {
+        return Ok(img.clone());
+    }
+
+    // Reinterpret each 4 RGBA bytes as i32 (little-endian).
+    let src_ints: Vec<i32> = rgba
+        .pixels()
+        .map(|p| i32::from_le_bytes([p[0], p[1], p[2], p[3]]))
+        .collect();
+
+    let (kernel, support) = resample_kernel(filter);
+    let sw_f = sw as f64;
+    let sh_f = sh as f64;
+    let dw_f = dst_w as f64;
+    let dh_f = dst_h as f64;
+
+    // PIL-compatible scale factor for kernel widening during downscaling
+    let sx_scale = (sw_f / dw_f).max(1.0);
+    let sy_scale = (sh_f / dh_f).max(1.0);
+
+    let n = (dst_w * dst_h) as usize;
+    let mut out_ints: Vec<i32> = Vec::with_capacity(n);
+
+    // Handle NEAREST/Box separately: PIL uses floor((dx+0.5)*sw/dw)
+    if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
+        for dy in 0..dst_h {
+            for dx in 0..dst_w {
+                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
+                let cy = (dy as f64 + 0.5) * sh_f / dh_f;
+                let sx = clamp_idx(cx.floor() as i64, sw);
+                let sy = clamp_idx(cy.floor() as i64, sh);
+                let idx = (sy * sw + sx) as usize;
+                out_ints.push(src_ints[idx]);
+            }
+        }
+    } else {
+        for dy in 0..dst_h {
+            for dx in 0..dst_w {
+                // PIL exact: center = (xx + 0.5) * scale [no -0.5]
+                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
+                let cy = (dy as f64 + 0.5) * sh_f / dh_f;
+
+                // PIL: xmin = (int)(center - support*filterscale + 0.5)
+                let left = (cx - support * sx_scale + 0.5).trunc() as i64;
+                let right = (cx + support * sx_scale + 0.5).trunc() as i64;
+                let top = (cy - support * sy_scale + 0.5).trunc() as i64;
+                let bottom = (cy + support * sy_scale + 0.5).trunc() as i64;
+
+                let mut acc = 0.0f64;
+                let mut wsum = 0.0f64;
+
+                for iy in top..bottom {
+                    let sy = clamp_idx(iy, sh);
+                    // PIL: weight = kernel((sx + 0.5 - center) / filterscale)
+                    let wy = kernel((iy as f64 + 0.5 - cy) / sy_scale);
+                    if wy.abs() < 1e-15 { continue; }
+                    for ix in left..right {
+                        let sx = clamp_idx(ix, sw);
+                        let wx = kernel((ix as f64 + 0.5 - cx) / sx_scale);
+                        let w = wx * wy;
+                        if w.abs() < 1e-15 { continue; }
+                        let idx = (sy * sw + sx) as usize;
+                        acc += w * src_ints[idx] as f64;
+                        wsum += w;
+                    }
+                }
+
+                // PIL rounds to nearest int32
+                let out_val = if wsum > 0.0 {
+                    (acc / wsum + 0.5).trunc() as i32
+                } else {
+                    let sx = clamp_idx(cx.floor() as i64, sw);
+                    let sy = clamp_idx(cy.floor() as i64, sh);
+                    src_ints[(sy * sw + sx) as usize]
+                };
+
+                out_ints.push(out_val);
+            }
+        }
+    }
+
+    // Re-pack each i32 as 4 RGBA8 bytes (little-endian).
+    let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
+    let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
+    Ok(DynamicImage::ImageRgba8(out))
+}
+
+// ── Generic rotation & transform helpers (mode-aware) ──
+
+/// Rotate an image by an arbitrary angle, working on the native number of channels.
+/// When `nearest` is true, uses nearest-neighbor sampling (required for P, 1, I, F modes).
+fn rotate_arbitrary_generic(
+    img: &DynamicImage,
+    angle: f64,
+    expand: bool,
+    fill: Option<(u8, u8, u8, u8)>,
+    nearest: bool,
+) -> DynamicImage {
+    let channels = img.color().channel_count() as usize;
+    let (w, h) = img.dimensions();
+    let sw = w as f64;
+    let sh = h as f64;
+    let rad = angle.to_radians();
+    let (cos, sin) = (rad.cos(), rad.sin());
+
+    // Compute bounding box of rotated image
+    let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for &(cx, cy) in &corners {
+        let rx = cx * cos - cy * sin;
+        let ry = cx * sin + cy * cos;
+        min_x = min_x.min(rx);
+        max_x = max_x.max(rx);
+        min_y = min_y.min(ry);
+        max_y = max_y.max(ry);
+    }
+    let (dw, dh) = if expand {
+        ((max_x - min_x).ceil() as u32, (max_y - min_y).ceil() as u32)
+    } else {
+        (w, h)
+    };
+
+    let raw = img.as_bytes();
+    let fill_color = fill.unwrap_or((0, 0, 0, 0));
+
+    let (ox, oy) = if expand { (-min_x, -min_y) } else { (0.0, 0.0) };
+    let cx_src = sw / 2.0;
+    let cy_src = sh / 2.0;
+    let cx_dst = dw as f64 / 2.0;
+    let cy_dst = dh as f64 / 2.0;
+
+    let mut out = vec![0u8; (dw * dh) as usize * channels];
+
+    for dy in 0..dh {
+        for dx in 0..dw {
+            // Map destination pixel to source coordinate (inverse rotation)
+            let sx_rel = (dx as f64 + ox - cx_dst) * cos + (dy as f64 + oy - cy_dst) * sin + cx_src;
+            let sy_rel =
+                -(dx as f64 + ox - cx_dst) * sin + (dy as f64 + oy - cy_dst) * cos + cy_src;
+
+            let out_idx = (dy * dw + dx) as usize * channels;
+
+            if nearest {
+                let ix = (sx_rel + 0.5).floor() as i64;
+                let iy = (sy_rel + 0.5).floor() as i64;
+                if ix >= 0 && ix < w as i64 && iy >= 0 && iy < h as i64 {
+                    let in_idx = (iy as u32 * w + ix as u32) as usize * channels;
+                    out[out_idx..out_idx + channels]
+                        .copy_from_slice(&raw[in_idx..in_idx + channels]);
+                } else {
+                    for c in 0..channels.min(4) {
+                        out[out_idx + c] = match c {
+                            0 => fill_color.0,
+                            1 => fill_color.1,
+                            2 => fill_color.2,
+                            _ => fill_color.3,
+                        };
+                    }
+                }
+            } else if sx_rel >= 0.0 && sx_rel < sw && sy_rel >= 0.0 && sy_rel < sh {
+                let sx = sx_rel.floor() as u32;
+                let sy = sy_rel.floor() as u32;
+                let fx = sx_rel - sx as f64;
+                let fy = sy_rel - sy as f64;
+                let sx1 = (sx + 1).min(w - 1);
+                let sy1 = (sy + 1).min(h - 1);
+                for c in 0..channels {
+                    let p00 = raw[(sy * w + sx) as usize * channels + c] as f64;
+                    let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
+                    let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
+                    let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
+                    let v = (1.0 - fx) * (1.0 - fy) * p00
+                        + fx * (1.0 - fy) * p10
+                        + (1.0 - fx) * fy * p01
+                        + fx * fy * p11;
+                    out[out_idx + c] = v.round() as u8;
+                }
+            } else {
+                for c in 0..channels.min(4) {
+                    out[out_idx + c] = match c {
+                        0 => fill_color.0,
+                        1 => fill_color.1,
+                        2 => fill_color.2,
+                        _ => fill_color.3,
+                    };
+                }
+            }
+        }
+    }
+
+    match channels {
+        1 => DynamicImage::ImageLuma8(
+            image::GrayImage::from_raw(dw, dh, out)
+                .expect("rotate_arbitrary: buffer size mismatch"),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            image::GrayAlphaImage::from_raw(dw, dh, out)
+                .expect("rotate_arbitrary: buffer size mismatch"),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(dw, dh, out).expect("rotate_arbitrary: buffer size mismatch"),
+        ),
+        4 => DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(dw, dh, out)
+                .expect("rotate_arbitrary: buffer size mismatch"),
+        ),
+        _ => unreachable!(),
+    }
+}
+
+/// Apply an affine transform working on the native number of channels.
+/// When `nearest` is true, uses nearest-neighbor sampling.
+fn transform_affine_generic(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    aff_a: f64,
+    aff_b: f64,
+    aff_c: f64,
+    aff_d: f64,
+    aff_e: f64,
+    aff_f: f64,
+    fill: Option<(u8, u8, u8, u8)>,
+    nearest: bool,
+) -> DynamicImage {
+    let channels = img.color().channel_count() as usize;
+    let raw = img.as_bytes();
+    let (sw, sh) = img.dimensions();
+    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+
+    let mut out = vec![0u8; (dst_w * dst_h) as usize * channels];
+
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            let sx = aff_a * dx as f64 + aff_b * dy as f64 + aff_c;
+            let sy = aff_d * dx as f64 + aff_e * dy as f64 + aff_f;
+            let out_idx = (dy * dst_w + dx) as usize * channels;
+
+            if nearest {
+                let ix = (sx + 0.5).floor() as i64;
+                let iy = (sy + 0.5).floor() as i64;
+                if ix >= 0 && ix < sw as i64 && iy >= 0 && iy < sh as i64 {
+                    let in_idx = (iy as u32 * sw + ix as u32) as usize * channels;
+                    out[out_idx..out_idx + channels]
+                        .copy_from_slice(&raw[in_idx..in_idx + channels]);
+                } else {
+                    for ch in 0..channels.min(4) {
+                        out[out_idx + ch] = match ch {
+                            0 => fill_color.0,
+                            1 => fill_color.1,
+                            2 => fill_color.2,
+                            _ => fill_color.3,
+                        };
+                    }
+                }
+            } else if sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64 {
+                let x0 = sx.floor() as u32;
+                let y0 = sy.floor() as u32;
+                let x1 = (x0 + 1).min(sw - 1);
+                let y1 = (y0 + 1).min(sh - 1);
+                let fx = sx - x0 as f64;
+                let fy = sy - y0 as f64;
+                for ch in 0..channels {
+                    let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
+                    let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;
+                    let p01 = raw[(y1 * sw + x0) as usize * channels + ch] as f64;
+                    let p11 = raw[(y1 * sw + x1) as usize * channels + ch] as f64;
+                    let v = (1.0 - fx) * (1.0 - fy) * p00
+                        + fx * (1.0 - fy) * p10
+                        + (1.0 - fx) * fy * p01
+                        + fx * fy * p11;
+                    out[out_idx + ch] = v.round() as u8;
+                }
+            } else {
+                for ch in 0..channels.min(4) {
+                    out[out_idx + ch] = match ch {
+                        0 => fill_color.0,
+                        1 => fill_color.1,
+                        2 => fill_color.2,
+                        _ => fill_color.3,
+                    };
+                }
+            }
+        }
+    }
+
+    match channels {
+        1 => DynamicImage::ImageLuma8(
+            image::GrayImage::from_raw(dst_w, dst_h, out)
+                .expect("transform_affine: buffer size mismatch"),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            image::GrayAlphaImage::from_raw(dst_w, dst_h, out)
+                .expect("transform_affine: buffer size mismatch"),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(dst_w, dst_h, out)
+                .expect("transform_affine: buffer size mismatch"),
+        ),
+        4 => DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(dst_w, dst_h, out)
+                .expect("transform_affine: buffer size mismatch"),
+        ),
+        _ => unreachable!(),
+    }
+}
+
 /// Execute a single PipelineOp against a DynamicImage.
 /// Each op borrows the input, allocates and returns the output.
 /// `explicit_mode` carries the PIL mode override (e.g. "F", "P") that the
 /// underlying DynamicImage cannot express natively.
+/// `palette` carries the palette data for P-mode images (768 bytes of RGB triples).
 pub fn execute_op(
     img: &DynamicImage,
     op: &PipelineOp,
     explicit_mode: Option<&str>,
+    palette: Option<&[u8]>,
 ) -> Result<DynamicImage, PilError> {
     match op {
         // ── Geometry ──
@@ -1562,8 +2242,12 @@ pub fn execute_op(
             if explicit_mode == Some("F") {
                 return resize_f(img, *w, *h, filter);
             }
-            let f = to_image_filter(filter);
-            let result = DynamicImage::from(image::imageops::resize(img, *w, *h, f));
+            // I-mode: int32 bytes, linear kernel on bytes works correctly
+            if explicit_mode == Some("I") {
+                let result = pil_resize(img, *w, *h, *filter, explicit_mode);
+                return Ok(preserve_mode(img, result));
+            }
+            let result = pil_resize(img, *w, *h, *filter, explicit_mode);
             Ok(preserve_mode(img, result))
         }
         PipelineOp::Crop {
@@ -1592,74 +2276,12 @@ pub fn execute_op(
             } else if (deg - 270).abs() < 2 || (deg - 270).abs() >= 358 {
                 img.rotate90() // 90° CW = 270° CCW (PIL)
             } else {
-                // Bilinear interpolation for arbitrary angles
-                let rgba = img.to_rgba8();
-                let (sw, sh) = (rgba.width() as f64, rgba.height() as f64);
-                let rad = angle.to_radians();
-                let (cos, sin) = (rad.cos(), rad.sin());
-                // Compute bounding box of rotated image
-                let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-                let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                    (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-                for &(cx, cy) in &corners {
-                    let rx = cx * cos - cy * sin;
-                    let ry = cx * sin + cy * cos;
-                    min_x = min_x.min(rx);
-                    max_x = max_x.max(rx);
-                    min_y = min_y.min(ry);
-                    max_y = max_y.max(ry);
-                }
-                let (dw, dh) = if *expand {
-                    ((max_x - min_x).ceil() as u32, (max_y - min_y).ceil() as u32)
-                } else {
-                    (rgba.width(), rgba.height())
-                };
-                let fill_color = fill.unwrap_or((0, 0, 0, 0));
-                let mut out = image::RgbaImage::from_pixel(
-                    dw,
-                    dh,
-                    image::Rgba([fill_color.0, fill_color.1, fill_color.2, fill_color.3]),
-                );
-                let (ox, oy) = if *expand {
-                    (-min_x, -min_y)
-                } else {
-                    (0.0, 0.0)
-                };
-                // Center rotation around image center
-                let cx_src = sw / 2.0;
-                let cy_src = sh / 2.0;
-                let cx_dst = dw as f64 / 2.0;
-                let cy_dst = dh as f64 / 2.0;
-                for dy in 0..dh {
-                    for dx in 0..dw {
-                        // Map destination pixel to source coordinate (inverse rotation)
-                        let sx_rel = (dx as f64 + ox - cx_dst) * cos
-                            + (dy as f64 + oy - cy_dst) * sin
-                            + cx_src;
-                        let sy_rel = -(dx as f64 + ox - cx_dst) * sin
-                            + (dy as f64 + oy - cy_dst) * cos
-                            + cy_src;
-                        if sx_rel >= 0.0 && sx_rel < sw - 1.0 && sy_rel >= 0.0 && sy_rel < sh - 1.0
-                        {
-                            let sx = sx_rel.floor() as u32;
-                            let sy = sy_rel.floor() as u32;
-                            let fx = sx_rel - sx as f64;
-                            let fy = sy_rel - sy as f64;
-                            let p00 = rgba.get_pixel(sx, sy);
-                            let p10 = rgba.get_pixel(sx + 1, sy);
-                            let p01 = rgba.get_pixel(sx, sy + 1);
-                            let p11 = rgba.get_pixel(sx + 1, sy + 1);
-                            for c in 0..4 {
-                                let v = (1.0 - fx) * (1.0 - fy) * p00[c] as f64
-                                    + fx * (1.0 - fy) * p10[c] as f64
-                                    + (1.0 - fx) * fy * p01[c] as f64
-                                    + fx * fy * p11[c] as f64;
-                                out.get_pixel_mut(dx, dy)[c] = v.round() as u8;
-                            }
-                        }
-                    }
-                }
-                DynamicImage::ImageRgba8(out)
+                // Multi-channel arbitrary rotation (no RGBA roundtrip)
+                let nearest = explicit_mode == Some("P")
+                    || explicit_mode == Some("1")
+                    || explicit_mode == Some("I")
+                    || explicit_mode == Some("F");
+                rotate_arbitrary_generic(img, *angle, *expand, *fill, nearest)
             };
             Ok(preserve_mode(img, result))
         }
@@ -1673,7 +2295,6 @@ pub fn execute_op(
             TransposeMethod::Transverse => Ok(img.rotate270().fliph()),
         },
         PipelineOp::Thumbnail { w, h, filter } => {
-            let f = to_image_filter(filter);
             let (cur_w, cur_h) = (img.width(), img.height());
             if *w == 0 || *h == 0 {
                 return Err(PilError::ValueError("thumbnail size must be > 0".into()));
@@ -1681,8 +2302,7 @@ pub fn execute_op(
             let scale = (*w as f64 / cur_w as f64).min(*h as f64 / cur_h as f64);
             let new_w = (cur_w as f64 * scale) as u32;
             let new_h = (cur_h as f64 * scale) as u32;
-            let result =
-                DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), f));
+            let result = pil_resize(img, new_w.max(1), new_h.max(1), *filter, explicit_mode);
             Ok(preserve_mode(img, result))
         }
         PipelineOp::Reduce { factor } => {
@@ -1744,7 +2364,25 @@ pub fn execute_op(
                 }
                 Ok(DynamicImage::ImageLumaA8(ga))
             }
-            ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
+            ColorMode::RGB => {
+                // P-mode images store palette indices in Luma8. When converting
+                // to RGB, expand indices through the palette to get actual colors.
+                if explicit_mode == Some("P") {
+                    if let Some(pal) = palette {
+                        let gray = img.to_luma8();
+                        let (w, h) = gray.dimensions();
+                        let mut out = image::RgbImage::new(w, h);
+                        for (opx, ip) in out.pixels_mut().zip(gray.pixels()) {
+                            let idx = ip[0] as usize * 3;
+                            opx[0] = pal.get(idx).copied().unwrap_or(0);
+                            opx[1] = pal.get(idx + 1).copied().unwrap_or(0);
+                            opx[2] = pal.get(idx + 2).copied().unwrap_or(0);
+                        }
+                        return Ok(DynamicImage::ImageRgb8(out));
+                    }
+                }
+                Ok(DynamicImage::ImageRgb8(img.to_rgb8()))
+            }
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
             ColorMode::Mode1 => {
                 // PIL uses TRUNCATED grayscale for convert("1") (dither or no dither)
@@ -1844,9 +2482,21 @@ pub fn execute_op(
                     let g = ip[1] as f64 / 255.0;
                     let b = ip[2] as f64 / 255.0;
                     let k = 1.0 - r.max(g.max(b));
-                    let c = if k < 1.0 { (1.0 - r - k) / (1.0 - k) } else { 0.0 };
-                    let m = if k < 1.0 { (1.0 - g - k) / (1.0 - k) } else { 0.0 };
-                    let y = if k < 1.0 { (1.0 - b - k) / (1.0 - k) } else { 0.0 };
+                    let c = if k < 1.0 {
+                        (1.0 - r - k) / (1.0 - k)
+                    } else {
+                        0.0
+                    };
+                    let m = if k < 1.0 {
+                        (1.0 - g - k) / (1.0 - k)
+                    } else {
+                        0.0
+                    };
+                    let y = if k < 1.0 {
+                        (1.0 - b - k) / (1.0 - k)
+                    } else {
+                        0.0
+                    };
                     *op = image::Rgba([
                         (c * 255.0 + 0.5) as u8,
                         (m * 255.0 + 0.5) as u8,
@@ -1932,6 +2582,10 @@ pub fn execute_op(
             scale,
             offset,
         } => {
+            // I-mode: operate directly on int32 pixel values (no [0,255] clipping)
+            if explicit_mode == Some("I") {
+                return filter_3x3_i32(img, kernel, *scale, *offset);
+            }
             let channels = img.color().channel_count() as usize;
             let raw = img.as_bytes();
             let (w_u32, h_u32) = (img.width(), img.height());
@@ -1978,6 +2632,10 @@ pub fn execute_op(
             scale,
             offset,
         } => {
+            // I-mode: operate directly on int32 pixel values (no [0,255] clipping)
+            if explicit_mode == Some("I") {
+                return filter_5x5_i32(img, kernel, *scale, *offset);
+            }
             let channels = img.color().channel_count() as usize;
             let raw = img.as_bytes();
             let (w_u32, h_u32) = (img.width(), img.height());
@@ -2240,23 +2898,21 @@ pub fn execute_op(
             Ok(DynamicImage::ImageRgb8(out))
         }
         PipelineOp::Contain { w, h, filter } => {
-            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let (iw, ih) = (img.width(), img.height());
             let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            let result = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            let result = pil_resize(img, nw.max(1), nh.max(1), *filter, explicit_mode);
             Ok(preserve_mode(img, result))
         }
         PipelineOp::Cover { w, h, filter } => {
-            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let (iw, ih) = (img.width(), img.height());
             let ratio = (w as f64 / iw as f64).max(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            let resized = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            let resized = pil_resize(img, nw.max(1), nh.max(1), *filter, explicit_mode);
             let x = (nw.saturating_sub(w)) / 2;
             let y = (nh.saturating_sub(h)) / 2;
             Ok(preserve_mode(img, resized.crop_imm(x, y, w, h)))
@@ -2268,7 +2924,6 @@ pub fn execute_op(
             bleed,
             centering,
         } => {
-            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let (iw, ih) = (img.width(), img.height());
             let bleed = *bleed;
@@ -2279,7 +2934,7 @@ pub fn execute_op(
             let ratio = (eff_w / iw as f64).min(eff_h / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            let resized = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            let resized = pil_resize(img, nw.max(1), nh.max(1), *filter, explicit_mode);
             let crop_x = ((nw as f64 - w as f64) * centering.0) as u32;
             let crop_y = ((nh as f64 - h as f64) * centering.1) as u32;
             Ok(preserve_mode(
@@ -2299,7 +2954,6 @@ pub fn execute_op(
             color,
             centering,
         } => {
-            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let fill = color.unwrap_or((0, 0, 0, 255));
             let (iw, ih) = (img.width(), img.height());
@@ -2307,7 +2961,7 @@ pub fn execute_op(
             let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            let resized = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            let resized = pil_resize(img, nw.max(1), nh.max(1), *filter, explicit_mode);
             // Step 2: pad to target size
             let mut padded = DynamicImage::new_rgba8(w, h);
             for py in 0..h {
@@ -2332,11 +2986,9 @@ pub fn execute_op(
             Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
         }
         PipelineOp::Scale { factor, filter } => {
-            let f = to_image_filter(filter);
             let new_w = (img.width() as f64 * factor).round() as u32;
             let new_h = (img.height() as f64 * factor).round() as u32;
-            let result =
-                DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), f));
+            let result = pil_resize(img, new_w.max(1), new_h.max(1), *filter, explicit_mode);
             Ok(preserve_mode(img, result))
         }
         PipelineOp::Expand { border, fill } => {
@@ -3267,58 +3919,26 @@ pub fn execute_op(
                         "Affine transform needs 6 coefficients".into(),
                     ));
                 }
-                let (a, b, c, d, e, f) = (data[0], data[1], data[2], data[3], data[4], data[5]);
-                let fill_color = fill.unwrap_or((0, 0, 0, 255));
-                let src_rgba = img.to_rgba8();
-                let (sw, sh) = src_rgba.dimensions();
-                let mut out = image::RgbaImage::new(*w, *h);
-                let use_nearest = matches!(filter, ResampleFilter::Nearest);
-                for dy in 0..*h {
-                    for dx in 0..*w {
-                        let sx = a * dx as f64 + b * dy as f64 + c;
-                        let sy = d * dx as f64 + e * dy as f64 + f;
-                        if use_nearest {
-                            let ix = (sx + 0.5).floor() as i64;
-                            let iy = (sy + 0.5).floor() as i64;
-                            if ix >= 0 && ix < sw as i64 && iy >= 0 && iy < sh as i64 {
-                                out.put_pixel(dx, dy, *src_rgba.get_pixel(ix as u32, iy as u32));
-                            } else {
-                                out.put_pixel(
-                                    dx, dy,
-                                    image::Rgba([fill_color.0, fill_color.1, fill_color.2, fill_color.3]),
-                                );
-                            }
-                        } else {
-                            if sx >= 0.0 && sx < sw as f64 - 1.0 && sy >= 0.0 && sy < sh as f64 - 1.0 {
-                                let x0 = sx.floor() as u32;
-                                let y0 = sy.floor() as u32;
-                                let x1 = (x0 + 1).min(sw - 1);
-                                let y1 = (y0 + 1).min(sh - 1);
-                                let fx = sx - x0 as f64;
-                                let fy = sy - y0 as f64;
-                                let p00 = src_rgba.get_pixel(x0, y0);
-                                let p10 = src_rgba.get_pixel(x1, y0);
-                                let p01 = src_rgba.get_pixel(x0, y1);
-                                let p11 = src_rgba.get_pixel(x1, y1);
-                                out.put_pixel(
-                                    dx, dy,
-                                    image::Rgba([
-                                        bilerp(p00[0], p10[0], p01[0], p11[0], fx, fy),
-                                        bilerp(p00[1], p10[1], p01[1], p11[1], fx, fy),
-                                        bilerp(p00[2], p10[2], p01[2], p11[2], fx, fy),
-                                        bilerp(p00[3], p10[3], p01[3], p11[3], fx, fy),
-                                    ]),
-                                );
-                            } else {
-                                out.put_pixel(
-                                    dx, dy,
-                                    image::Rgba([fill_color.0, fill_color.1, fill_color.2, fill_color.3]),
-                                );
-                            }
-                        }
-                    }
-                }
-                Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
+                let (aff_a, aff_b, aff_c, aff_d, aff_e, aff_f) =
+                    (data[0], data[1], data[2], data[3], data[4], data[5]);
+                let p_mode = explicit_mode == Some("P") || explicit_mode == Some("1");
+                let i_f_mode = explicit_mode == Some("I") || explicit_mode == Some("F");
+                let use_nearest = matches!(filter, ResampleFilter::Nearest) || p_mode || i_f_mode;
+
+                let result = transform_affine_generic(
+                    img,
+                    *w,
+                    *h,
+                    aff_a,
+                    aff_b,
+                    aff_c,
+                    aff_d,
+                    aff_e,
+                    aff_f,
+                    *fill,
+                    use_nearest,
+                );
+                Ok(preserve_mode(img, result))
             }
             _ => Err(PilError::NotImplementedError(format!(
                 "Transform method {:?} not yet implemented",

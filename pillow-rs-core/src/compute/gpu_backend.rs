@@ -353,6 +353,7 @@ impl ComputeBackend for GpuBackend {
         ops: &[PipelineOp],
         img: &DynamicImage,
         explicit_mode: Option<&str>,
+        _palette: Option<&[u8]>,
     ) -> Result<DynamicImage, PilError> {
         let rgba = img.to_rgba8();
         let (w, h) = rgba.dimensions();

@@ -988,6 +988,7 @@ dependencies = [
  "csscolorparser",
  "fontdue",
  "image",
+ "png",
  "pollster",
  "rayon",
  "thiserror 1.0.69",

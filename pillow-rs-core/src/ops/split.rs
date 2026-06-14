@@ -29,6 +29,10 @@ fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<
 impl Image {
     /// Split the image into individual bands (immediate operation).
     pub fn split(&self) -> Result<Vec<Image>, PilError> {
+        // PIL: P-mode has 1 band → return a copy preserving mode + palette
+        if let Image::Paletted(data) = self {
+            return Ok(vec![Image::Paletted(data.clone())]);
+        }
         let img = self.materialize()?;
         let (w, h) = (img.width(), img.height());
         let n = (w * h) as usize;
