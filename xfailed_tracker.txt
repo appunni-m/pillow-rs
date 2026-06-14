@@ -1,8 +1,15 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 330 passed, 35 xfailed as of 2026-06-14
-# Changes: fixed non-standard mode convert (CMYK/HSV/YCbCr/I/F -> RGB)
-# Changes: fixed effect_spread (L/RGB/RGBA) using libc rand() FFI matching PIL
-# Changes: fixed GaussianBlur/UnsharpMask (from earlier work)
+# Current state: 333 passed, 32 xfailed as of 2026-06-14
+#
+# Fixed in this session:
+# - Non-standard mode convert (CMYK/HSV/YCbCr/I/F -> RGB) with PIL-exact tables
+# - PIL-compatible Image.effect_spread (L/RGB/RGBA) using libc rand() FFI
+# - Box-Muller gaussian noise for Image.effect_noise (fixtures need regen)
+#
+# Previously fixed:
+# - GaussianBlur, UnsharpMask, DETAIL, EMBOSS, Kernel, ModeFilter, SMOOTH_MORE
+# - ImageEnhance (Color, Contrast, Sharpness)
+# - eval, merge, split, alpha_composite, putalpha, putdata, putpixel
 
 ## IMAGE DRAW (21 tests — need PIL C rasterization research)
 [ ] ImageDraw_arc_L
@@ -27,15 +34,41 @@
 [ ] ImageDraw_text_RGB
 [ ] ImageDraw_text_RGBA
 
-## IMAGE MODULE (6 tests)
-[ ] ImageModule_effect_noise_L
-[ ] ImageModule_effect_noise_RGB
-[ ] ImageModule_effect_noise_RGBA
+## INFRA / VALUE RETURNS (8 tests — stub fixes)
 [ ] ImageModule_frombytes_L
 [ ] ImageModule_frombytes_RGBA
 [ ] ImageModule_open_L
+[ ] ImagePalette_getdata_L
+[ ] ImagePalette_getdata_RGB
+[ ] Image_getim_L
+[ ] Image_getim_RGB
+[ ] Image_has_transparency_data_L
+[ ] Image_has_transparency_data_RGB
+[ ] Image_palette_L
+[ ] Image_palette_RGB
 
-## IMAGEOPS (10 tests)
+## RAND-DEPENDENT FIXTURES (6 tests — need fixture regen)
+[ ] ImageModule_effect_noise_L
+[ ] ImageModule_effect_noise_RGB
+[ ] ImageModule_effect_noise_RGBA
+
+## PALETTE / QUANTIZE (5 tests — need palette support)
+[ ] Image_convert_P
+[ ] Image_quantize_L
+[ ] Image_quantize_RGB
+[ ] Image_quantize_RGBA
+[ ] Image_remap_palette_P
+
+## RESIZE / IMAGEOPS (19 tests — need batch fix)
+[ ] Image_resize_CMYK
+[ ] Image_resize_F
+[ ] Image_resize_HSV
+[ ] Image_resize_I
+[ ] Image_resize_L
+[ ] Image_resize_LA
+[ ] Image_resize_RGB
+[ ] Image_resize_RGBA
+[ ] Image_resize_YCbCr
 [ ] ImageOps_contain_L
 [ ] ImageOps_contain_RGB
 [ ] ImageOps_cover_L
@@ -47,19 +80,4 @@
 [ ] ImageOps_scale_L
 [ ] ImageOps_scale_RGB
 
-## INFRA / COLOR SPACE / OTHER (13 tests)
-[ ] ImagePalette_getdata_L
-[ ] ImagePalette_getdata_RGB
-[ ] Image_convert_P
-[ ] Image_getim_L
-[ ] Image_getim_RGB
-[ ] Image_has_transparency_data_L
-[ ] Image_has_transparency_data_RGB
-[ ] Image_palette_L
-[ ] Image_palette_RGB
-[ ] Image_quantize_L
-[ ] Image_quantize_RGB
-[ ] Image_quantize_RGBA
-[ ] Image_remap_palette_P
-
-Total remaining: 35
+Total remaining: 32

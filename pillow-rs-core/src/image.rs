@@ -6,7 +6,7 @@ use crate::color::{color_type_to_mode, pil_grayscale};
 use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::pipeline::{
-    ColorMode, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
+    ColorMode, DitherMethod, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
 };
 
 #[derive(Debug, Clone)]
@@ -1229,7 +1229,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
         }
 
         // ── Color/Convert ──
-        PipelineOp::Convert { mode, matrix: _, dither: _ } => match mode {
+        PipelineOp::Convert { mode, matrix: _, dither } => match mode {
             ColorMode::L => Ok(DynamicImage::ImageLuma8(crate::color::pil_grayscale(img))),
             ColorMode::LA => {
                 let gray = crate::color::pil_grayscale(img);
@@ -1244,12 +1244,50 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
             ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
             ColorMode::Mode1 => {
-                // PIL convert("1", dither=NONE): truncate grayscale, then threshold at 128
                 let gray = crate::color::pil_grayscale_truncate(img);
                 let (w, h) = gray.dimensions();
                 let mut out = image::GrayImage::new(w, h);
-                for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                    op[0] = if gp[0] >= 128 { 255 } else { 0 };
+                match dither {
+                    Some(DitherMethod::None) => {
+                        // Threshold at 128 (no dither)
+                        for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
+                            op[0] = if gp[0] >= 128 { 255 } else { 0 };
+                        }
+                    }
+                    _ => {
+                        // Floyd-Steinberg error diffusion dithering (PIL default)
+                        // Convert to Vec for mutable access
+                        let mut pixels: Vec<u16> = gray.pixels().map(|p| p[0] as u16).collect();
+                        for y in 0..h {
+                            for x in 0..w {
+                                let idx = (y * w + x) as usize;
+                                let old = pixels[idx];
+                                let new = if old >= 128 { 255u16 } else { 0u16 };
+                                pixels[idx] = new;
+                                let err = old as i32 - new as i32;
+                                // Distribute error to neighbors (Floyd-Steinberg weights)
+                                if x + 1 < w {
+                                    let right = pixels[(y * w + x + 1) as usize] as i32 + err * 7 / 16;
+                                    pixels[(y * w + x + 1) as usize] = right.max(0).min(255) as u16;
+                                }
+                                if y + 1 < h {
+                                    if x > 0 {
+                                        let down_left = pixels[((y + 1) * w + x - 1) as usize] as i32 + err * 3 / 16;
+                                        pixels[((y + 1) * w + x - 1) as usize] = down_left.max(0).min(255) as u16;
+                                    }
+                                    let down = pixels[((y + 1) * w + x) as usize] as i32 + err * 5 / 16;
+                                    pixels[((y + 1) * w + x) as usize] = down.max(0).min(255) as u16;
+                                    if x + 1 < w {
+                                        let down_right = pixels[((y + 1) * w + x + 1) as usize] as i32 + err * 1 / 16;
+                                        pixels[((y + 1) * w + x + 1) as usize] = down_right.max(0).min(255) as u16;
+                                    }
+                                }
+                            }
+                        }
+                        for (op, gp) in out.pixels_mut().zip(pixels.iter()) {
+                            op[0] = if *gp >= 128 { 255 } else { 0 };
+                        }
+                    }
                 }
                 Ok(DynamicImage::ImageLuma8(out))
             }
