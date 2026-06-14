@@ -96,4 +96,29 @@ impl Image {
             }
         }
     }
+
+    /// Apply a generic kernel filter (custom convolution).
+    /// `size` is the kernel dimension (3 or 5).
+    /// `kernel` must have `size*size` elements.
+    pub fn kernel_filter(&self, kernel: &[f32], scale: f32, offset: i32, size: u32) -> Result<Image, PilError> {
+        match size {
+            3 => {
+                let mut k = [0.0f32; 9];
+                if kernel.len() < 9 {
+                    return Err(PilError::ValueError("Kernel must have at least 9 elements for 3x3".into()));
+                }
+                k.copy_from_slice(&kernel[..9]);
+                Ok(Image::push_op(self, PipelineOp::Filter3x3 { kernel: k, scale: scale.max(0.0001), offset }))
+            }
+            5 => {
+                let mut k = [0.0f32; 25];
+                if kernel.len() < 25 {
+                    return Err(PilError::ValueError("Kernel must have at least 25 elements for 5x5".into()));
+                }
+                k.copy_from_slice(&kernel[..25]);
+                Ok(Image::push_op(self, PipelineOp::Filter5x5 { kernel: k, scale: scale.max(0.0001), offset }))
+            }
+            _ => Err(PilError::ValueError("Kernel size must be 3 or 5".into())),
+        }
+    }
 }

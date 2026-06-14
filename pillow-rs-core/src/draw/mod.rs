@@ -107,6 +107,8 @@ impl Draw {
     }
 
     /// Draw an ellipse within the bounding box.
+    /// Uses PIL's exact Bresenham quarter-ellipse algorithm with step-2 coordinate system.
+    /// Matches PIL pixel-for-pixel by using the same `a=x1-x0, b=y1-y0` scaling.
     pub fn ellipse(
         &mut self,
         x0: i32,
@@ -130,17 +132,107 @@ impl Draw {
             return Ok(());
         }
 
-        // Scanline fill
+        // Fill using PIL's exact Bresenham quarter-ellipse algorithm.
+        // PIL uses a=x1-x0, b=y1-y0 (the FULL bounding box dimensions, not half).
+        // The quarter generator steps by 2 from (a, b%2) toward (a%2, b).
+        // For FILL: width=a+b makes the inner radius go to zero (fill to center).
+        // At each y-level: x_bound = old_pr/2 where old_pr is the PREVIOUS iteration's
+        // outer X-coordinate (quarters, before division by 2).
         if let Some(fc) = fill {
-            for y in y0..=y1 {
-                for x in x0..=x1 {
-                    if x >= 0 && y >= 0 && (x as u32) < img_w && (y as u32) < img_h {
-                        let dx = (x as f64 - cx) / rx;
-                        let dy = (y as f64 - cy) / ry;
-                        if dx * dx + dy * dy <= 1.0 {
-                            canvas.put_pixel(x as u32, y as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
+            let a = x1 - x0; // full width (PIL: x1-x0)
+            let b = y1 - y0; // full height (PIL: y1-y0)
+            if a <= 0 || b <= 0 {
+                return Ok(());
+            }
+            let cx_i = (cx + 0.5) as i32;
+            let cy_i = (cy + 0.5) as i32;
+
+            // PIL's quarter_init: start at (a, b%2), with ex=a%2, ey=b
+            let mut qx = a;
+            let mut qy = b % 2;
+            let ex = a % 2;
+            let ey = b;
+            let a2 = a as i64 * a as i64;
+            let b2 = b as i64 * b as i64;
+            let a2b2 = a2 * b2;
+
+            // Helper: compute quarter delta (error from true ellipse)
+            let quarter_delta = |x: i64, y: i64| -> i64 {
+                (a2 * y * y + b2 * x * x - a2b2).abs()
+            };
+
+            // PR = previous right (outer x-bound from previous iteration)
+            // PY = previous y (the Y-level from previous iteration)
+            let mut pr = a as i64; // initial outer boundary = a (full width)
+            let mut py = 0i64;    // initial y-level = 0 (center)
+
+            // PIL's ellipse emits 4 segments per Y-level:
+            // (l,y)->(r,y) [bottom-right], (-r,y)->(-l,y) [bottom-left]
+            // (l,-y)->(r,-y) [top-right],  (-r,-y)->(-l,-y) [top-left]
+            // For filled: inner radius=0, leftmost=0 (becomes 2).
+            // We combine segments at each Y-level into a single [cx-xb, cx+xb] fill.
+            let mut finished = false;
+            while !finished {
+                // Positive Y: bottom half (center down to y1)
+                let y_pos = y0 + ((py + b as i64) / 2) as i32;
+                // Negative Y: top half (y0 up to center, reflected)
+                let y_neg = y0 + ((-py + b as i64) / 2) as i32;
+
+                // For filled ellipse: combined segments cover [-pr, pr] at each Y-level
+                // x_bound = pr/2 (since quarter coordinates divide by 2 for image pixels)
+                let xb = (pr / 2) as i32;
+                let left = (cx_i - xb).max(x0);
+                let right = (cx_i + xb).min(x1);
+                for &y_img in &[y_pos, y_neg] {
+                    if y_img >= y0 && y_img <= y1 && xb > 0 {
+                        for x in left..=right {
+                            if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h {
+                                canvas.put_pixel(x as u32, y_img as u32, Rgba([fc.0, fc.1, fc.2, fc.3]));
+                            }
                         }
                     }
+                }
+
+                // Move to next quarter y-level: consume all quarter points with cy <= py
+                loop {
+                    if qx < 0 {
+                        finished = true;
+                        break;
+                    }
+                    if qx == ex && qy == ey {
+                        finished = true;
+                        break;
+                    }
+                    // Try 3 candidates: (qx, qy+2), (qx-2, qy+2), (qx-2, qy)
+                    let mut nx = qx;
+                    let mut ny = qy + 2;
+                    let mut ndelta = quarter_delta(nx as i64, ny as i64);
+                    if qx > 1 {
+                        let d1 = quarter_delta((qx - 2) as i64, (qy + 2) as i64);
+                        if ndelta > d1 {
+                            nx = qx - 2; ny = qy + 2; ndelta = d1;
+                        }
+                        let d2 = quarter_delta((qx - 2) as i64, qy as i64);
+                        if ndelta > d2 {
+                            nx = qx - 2; ny = qy;
+                        }
+                    }
+                    if ny > ey {
+                        finished = true;
+                        break;
+                    }
+                    // If this new point is at a new y-level (beyond current py), update
+                    if ny as i64 > py {
+                        pr = nx as i64;
+                        py = ny as i64;
+                        qx = nx;
+                        qy = ny;
+                        break;
+                    }
+                    // Same y-level: consume and continue (inner loop for filled, this
+                    // updates the inner boundary, which is at leftmost=0)
+                    qx = nx;
+                    qy = ny;
                 }
             }
         }

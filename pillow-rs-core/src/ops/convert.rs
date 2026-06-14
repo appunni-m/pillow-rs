@@ -1,6 +1,8 @@
+use crate::color;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
+use image::DynamicImage;
 
 /// Parse a mode string into ColorMode.
 pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
@@ -18,6 +20,13 @@ pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
         "1" => Ok(ColorMode::Mode1),
         _ => Err(PilError::ValueError(format!("Unknown mode: {}", s))),
     }
+}
+
+/// Modes that require special handling when converting FROM them.
+/// These modes store pixel data in a non-standard interpretation within
+/// standard DynamicImage variants (e.g., CMYK values stored as RGBA).
+fn is_nonstandard_mode(mode: &str) -> bool {
+    matches!(mode, "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P")
 }
 
 fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
@@ -45,6 +54,33 @@ impl Image {
         if let Some(mat) = matrix {
             let img = self.materialize()?;
             return convert_with_matrix(&img, mode, &mat).map(|result| Image::Loaded(result, explicit_mode_for(mode)));
+        }
+
+        // Handle conversion from non-standard modes (CMYK, HSV, YCbCr, I, F, P).
+        // These modes store pixel data in standard DynamicImage containers but with
+        // a different interpretation (e.g., CMYK values stored as RGBA). We must
+        // materialize first and convert using PIL's exact algorithms.
+        if let Some(src_mode) = self.explicit_mode() {
+            let target_is_standard = !is_nonstandard_mode(mode);
+            if is_nonstandard_mode(src_mode) && target_is_standard {
+                let img = self.materialize()?;
+                let converted = color::convert_from_nonstandard(src_mode, &img)
+                    .unwrap_or_else(|| img.to_rgb8().into());
+                // If the target is a standard mode, return the converted image directly.
+                // For mode "L" etc., derive from the RGB result.
+                let result = if mode == "L" || mode == "LA" {
+                    if mode == "L" {
+                        DynamicImage::ImageLuma8(color::pil_grayscale(&converted))
+                    } else {
+                        DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&converted))
+                    }
+                } else if mode == "RGBA" {
+                    DynamicImage::ImageRgba8(converted.to_rgba8())
+                } else {
+                    converted
+                };
+                return Ok(Image::Loaded(result, explicit_mode_for(mode)));
+            }
         }
 
         let mode_enum = parse_mode(mode)?;

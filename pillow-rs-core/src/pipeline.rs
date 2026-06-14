@@ -44,7 +44,7 @@ pub enum PipelineOp {
     Contain { w: u32, h: u32, filter: ResampleFilter },
     Cover { w: u32, h: u32, filter: ResampleFilter },
     Fit { w: u32, h: u32, filter: ResampleFilter, bleed: f64, centering: (f64, f64) },
-    Pad { w: u32, h: u32, color: Option<(u8, u8, u8, u8)>, centering: (f64, f64) },
+    Pad { w: u32, h: u32, filter: ResampleFilter, color: Option<(u8, u8, u8, u8)>, centering: (f64, f64) },
     Scale { factor: f64, filter: ResampleFilter },
     Expand { border: u32, fill: (u8, u8, u8, u8) },
     CropBorder { border: u32 },

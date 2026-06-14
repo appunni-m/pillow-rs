@@ -165,6 +165,14 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn kernel_filter(&self, kernel: Vec<f32>, scale: f32, offset: i32, size: u32) -> PyResult<PyImage> {
+        let rs = self
+            .inner
+            .kernel_filter(&kernel, scale, offset, size)
+            .map_err(map_error)?;
+        Ok(PyImage { inner: rs })
+    }
+
     fn copy(&self) -> PyImage {
         PyImage {
             inner: self.inner.copy(),
@@ -175,9 +183,11 @@ impl PyImage {
         self.inner.tobytes().map_err(map_error)
     }
 
-    fn thumbnail(&mut self, size: (u32, u32), _resample: Option<String>) -> PyResult<()> {
+    fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
+        let filter = resample.as_deref()
+            .and_then(|s| pillow_rs_core::ops::resize::parse_resample(Some(s)).ok());
         self.inner
-            .thumbnail(size)
+            .thumbnail(size, filter)
             .map_err(map_error)
     }
 
@@ -729,7 +739,7 @@ impl PyDraw {
     fn rectangle(&mut self, xy: (i32, i32, i32, i32), fill: Option<&Bound<'_, PyAny>>,
                  outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
         self.draw.rectangle(xy.0, xy.1, xy.2, xy.3, fill_color, out_color, width.unwrap_or(1))
             .map_err(map_error)
     }
@@ -737,7 +747,7 @@ impl PyDraw {
     fn ellipse(&mut self, xy: (i32, i32, i32, i32), fill: Option<&Bound<'_, PyAny>>,
                outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
         self.draw.ellipse(xy.0, xy.1, xy.2, xy.3, fill_color, out_color, width.unwrap_or(1))
             .map_err(map_error)
     }
@@ -755,7 +765,7 @@ impl PyDraw {
         let max_y = bh.min(2048);
         for y in 0..max_y {
             for x in 0..max_x {
-                if gray.get_pixel(x, y)[0] == 0 {
+                if gray.get_pixel(x, y)[0] != 0 {
                     self.draw.point(&[(x0 + x as i32, y0 + y as i32)], fill_color).map_err(map_error)?;
                 }
             }
@@ -767,7 +777,6 @@ impl PyDraw {
                         n_sides: u32, rotation: Option<f64>,
                         fill: Option<&Bound<'_, PyAny>>,
                         outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
-        use std::f64::consts::TAU;
         let (cx, cy, r): (f64, f64, f64) = if let Ok((x, y, r)) = bounding_circle.extract::<(f64, f64, f64)>() {
             (x, y, r)
         } else if let Ok(((x, y), r)) = bounding_circle.extract::<((f64, f64), f64)>() {
@@ -777,21 +786,33 @@ impl PyDraw {
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("bounding_circle must be (x,y,r) or ((x,y),r)"));
         };
-        let rot = rotation.unwrap_or(0.0).to_radians();
+        // Match PIL's _compute_regular_polygon_vertices exactly
+        // PIL: start from (radius, 0), rotate by (270 - 0.5*deg_per_side + rotation)
+        // PIL uses round(x, 2) for 2-decimal float precision, then C truncates to int
+        let rot = rotation.unwrap_or(0.0);
+        let n = n_sides as f64;
+        let deg_per_side = 360.0 / n;
+        let start_angle = 270.0 - 0.5 * deg_per_side + rot;
         let mut pts = Vec::with_capacity(n_sides as usize);
         for i in 0..n_sides {
-            let angle = rot + TAU * i as f64 / n_sides as f64;
-            pts.push(((cx + r * angle.cos()) as i32, (cy + r * angle.sin()) as i32));
+            let angle_deg = start_angle + deg_per_side * i as f64;
+            let angle_deg = if angle_deg > 360.0 { angle_deg - 360.0 } else { angle_deg };
+            // PIL: point[0]*cos(360-deg) - point[1]*sin(360-deg) + centroid
+            // with start_point = (r, 0), so simplifies to r*cos(360-angle) + cx
+            let theta = (360.0 - angle_deg).to_radians();
+            let x = (r * theta.cos() + cx * 1.0) as i32;
+            let y = (r * theta.sin() + cy * 1.0) as i32;
+            pts.push((x, y));
         }
         let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
         self.draw.polygon(&pts, fill_color, out_color, width.unwrap_or(1)).map_err(map_error)
     }
 
     fn polygon(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>,
                outline: Option<&Bound<'_, PyAny>>, width: Option<u32>) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill { Some(parse_draw_color(fill)?) } else { None };
-        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { Some((0, 0, 0, 255)) };
+        let out_color = if let Some(_o) = outline { Some(parse_draw_color(outline)?) } else { None };
         self.draw.polygon(&xy, fill_color, out_color, width.unwrap_or(1))
             .map_err(map_error)
     }
@@ -1023,10 +1044,10 @@ fn ops_fit(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>,
 }
 
 #[pyfunction]
-fn ops_pad(image: &Bound<'_, PyImage>, size: (u32, u32), color: Option<(u8, u8, u8, u8)>, centering: Option<(f64, f64)>) -> PyResult<PyImage> {
+fn ops_pad(image: &Bound<'_, PyImage>, size: (u32, u32), filter: Option<String>, color: Option<(u8, u8, u8, u8)>, centering: Option<(f64, f64)>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::pad(&inner, size.0, size.1, color, centering.unwrap_or((0.5, 0.5))))
+        py.allow_threads(|| pillow_rs_core::ops::imageops::pad(&inner, size.0, size.1, filter.as_deref(), color, centering.unwrap_or((0.5, 0.5))))
     }).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

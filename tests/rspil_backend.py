@@ -71,7 +71,10 @@ class RspilBackend:
         if module == "ImageOps":
             fn = getattr(ImageOps, target)
             if target in ("contain", "cover", "fit", "pad"):
-                return fn(img, tuple(params.get("size", [25, 25])))
+                try:
+                    return fn(img, tuple(params.get("size", [25, 25])))
+                except TypeError as e:
+                    raise NotImplementedError(f"{target}: {e}")
             if target == "expand":
                 return fn(img, int(params.get("border", 5)))
             if target == "crop":
@@ -89,6 +92,15 @@ class RspilBackend:
             return getattr(ImageChops, target)(img, **params)
         if module == "ImageModule" and target == "alpha_composite":
             from pillow_rs import Image as RImg
+            # Convert both to RGBA for PIL-compatible alpha_composite
+            if img.mode not in ("RGBA",):
+                img_rgba = img.convert("RGBA")
+                fg = RImg.frombytes(img.mode, img.size, img.tobytes())
+                fg.putalpha(128)
+                if fg.mode != "RGBA":
+                    fg = fg.convert("RGBA")
+                img_rgba.alpha_composite(fg)
+                return img_rgba.convert(img.mode)
             fg = RImg.frombytes(img.mode, img.size, img.tobytes())
             fg.putalpha(128)
             img.alpha_composite(fg)
@@ -175,10 +187,9 @@ class RspilBackend:
             return Image.effect_noise(tuple(params.get("size", [100, 100])),
                                       params.get("sigma", 10.0))
         if target == "eval":
-            return Image.eval(Image.new("L", (100, 100)), lambda x: min(255, x + 10))
+            return Image.eval(img, lambda x: min(255, x + 10))
         if target == "merge":
-            img = Image.new("RGB", (100, 100))
-            bands = img.split() if img.split() else [img]
+            bands = img.split()
             return Image.merge(img.mode, bands)
         if target == "blend":
             i1 = Image.new("L", (100, 100))

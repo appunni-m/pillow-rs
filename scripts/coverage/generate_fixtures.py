@@ -68,9 +68,17 @@ def generate_fixture(op_name, mode):
 
     # Expected
     if hasattr(result, 'tobytes'):
-        fixture["expected"] = {"result_type": "hash", "value": hashlib.sha256(result.tobytes()).hexdigest()}
+        fixture["expected"] = {
+            "result_type": "hash",
+            "value": hashlib.sha256(result.tobytes()).hexdigest(),
+            "reference_bytes": result.tobytes().hex(),
+        }
     elif isinstance(result, bytes):
-        fixture["expected"] = {"result_type": "hash", "value": hashlib.sha256(result).hexdigest()}
+        fixture["expected"] = {
+            "result_type": "hash",
+            "value": hashlib.sha256(result).hexdigest(),
+            "reference_bytes": result.hex(),
+        }
     elif isinstance(result, (int, float, str, bool, list, tuple, dict, type(None))):
         fixture["expected"] = {"result_type": "value", "value": _serialize(result)}
     else:

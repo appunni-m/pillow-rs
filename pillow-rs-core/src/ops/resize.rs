@@ -3,12 +3,12 @@ use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 
 /// Parse a resample filter string into ResampleFilter.
-/// Defaults to Bilinear matching Pillow's BILINEAR default.
+/// Defaults to Bicubic matching Pillow's BICUBIC default.
 pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
     match s {
-        None | Some("BILINEAR") | Some("bilinear") => Ok(ResampleFilter::Bilinear),
+        None | Some("BICUBIC") | Some("bicubic") => Ok(ResampleFilter::Bicubic),
         Some("NEAREST") | Some("nearest") => Ok(ResampleFilter::Nearest),
-        Some("BICUBIC") | Some("bicubic") => Ok(ResampleFilter::Bicubic),
+        Some("BILINEAR") | Some("bilinear") => Ok(ResampleFilter::Bilinear),
         Some("LANCZOS") | Some("lanczos") => Ok(ResampleFilter::Lanczos),
         Some("BOX") | Some("box") => Ok(ResampleFilter::Box),
         Some("HAMMING") | Some("hamming") => Ok(ResampleFilter::Hamming),
@@ -41,19 +41,24 @@ impl Image {
 
     /// Resize the image to thumbnail size, mutating in place.
     /// Matching Pillow's Image.thumbnail() semantics.
-    pub fn thumbnail(&mut self, size: (u32, u32)) -> Result<(), PilError> {
+    pub fn thumbnail(
+        &mut self,
+        size: (u32, u32),
+        filter: Option<ResampleFilter>,
+    ) -> Result<(), PilError> {
         let (w, h) = size;
         if w == 0 || h == 0 {
             return Err(PilError::ValueError(
                 "thumbnail size must be > 0".into(),
             ));
         }
+        let filter = filter.unwrap_or(ResampleFilter::Bicubic);
         let new_self = Image::push_op(
             self,
             PipelineOp::Thumbnail {
                 w,
                 h,
-                filter: ResampleFilter::Bilinear,
+                filter,
             },
         );
         *self = new_self;

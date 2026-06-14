@@ -54,22 +54,22 @@ def crop(image: Image, border: int = 0) -> Image:
 
 def scale(image: Image, factor: float, resample=None) -> Image:
     """Scale image by factor. Delegates to Rust pipeline."""
-    return Image(_core.ops_scale(image._rust_image, factor, None))
+    return Image(_core.ops_scale(image._rust_image, factor, resample))
 
 
 def contain(image: Image, size, method=None) -> Image:
     """Resize to fit within size. Delegates to Rust pipeline."""
-    return Image(_core.ops_contain(image._rust_image, (size[0], size[1]), None))
+    return Image(_core.ops_contain(image._rust_image, (size[0], size[1]), method))
 
 
 def cover(image: Image, size, method=None) -> Image:
     """Resize to cover size. Delegates to Rust pipeline."""
-    return Image(_core.ops_cover(image._rust_image, (size[0], size[1]), None))
+    return Image(_core.ops_cover(image._rust_image, (size[0], size[1]), method))
 
 
 def fit(image: Image, size, method=None, bleed=0.0, centering=(0.5, 0.5)):
     """Resize and crop to fit exact dimensions. Delegates to Rust pipeline."""
-    return Image(_core.ops_fit(image._rust_image, (size[0], size[1]), None, bleed, centering))
+    return Image(_core.ops_fit(image._rust_image, (size[0], size[1]), method, bleed, centering))
 
 
 def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
@@ -78,7 +78,7 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
         (color, color, color, 255) if isinstance(color, int) else
         (color[0], color[1], color[2], 255) if len(color) == 3 else color
     )
-    return Image(_core.ops_pad(image._rust_image, (size[0], size[1]), c, centering))
+    return Image(_core.ops_pad(image._rust_image, (size[0], size[1]), method, c, centering))
 
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):

@@ -2,7 +2,7 @@ use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::color::color_type_to_mode;
+use crate::color::{color_type_to_mode, pil_grayscale};
 use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::pipeline::{
@@ -962,20 +962,128 @@ fn bilerp(v00: u8, v10: u8, v01: u8, v11: u8, fx: f64, fy: f64) -> u8 {
     (top * (1.0 - fy) + bot * fy).round().clamp(0.0, 255.0) as u8
 }
 
+/// PIL's clip8: truncating cast to u8, clamping at 0 and 255.
+/// Matches PIL ImagingFilter's clip8(): `return ss <= 0.0 ? 0 : ss >= 255.0 ? 255 : (UINT8)ss`
+fn clip8_filter(v: f32) -> u8 {
+    if v <= 0.0 {
+        0
+    } else if v >= 255.0 {
+        255
+    } else {
+        v as u8
+    }
+}
+
+/// PIL-style box blur with fractional radius support.
+/// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
+/// Repeats `passes` times (horizontal + vertical per pass).
+fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicImage, PilError> {
+    if radius <= 0.0 {
+        return Ok(img.clone());
+    }
+    let rgb = img.to_rgb8();
+    let (w_u32, h_u32) = rgb.dimensions();
+    let w = w_u32 as i32;
+    let h = h_u32 as i32;
+
+    // Integer part of radius (PIL: (int)floatRadius)
+    let r_int = radius as i32;
+    // Number of pixels in the integer window
+    let window_pixels = (2 * r_int + 1) as u32;
+    // Fixed-point weight (PIL: ww = (UINT32)((1 << 24) / (floatRadius * 2 + 1)))
+    let ww = ((1u64 << 24) as f32 / (radius * 2.0 + 1.0)) as u32;
+    // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2)
+    let fw = ((1u64 << 24) - window_pixels as u64 * ww as u64) as u32 / 2;
+    let bias = 1u32 << 23;
+
+    let mut work = rgb.clone();
+
+    for _pass in 0..passes {
+        // Horizontal blur: process each row
+        let mut hpass = image::RgbImage::new(w_u32, h_u32);
+        for y in 0..h {
+            for x in 0..w {
+                // Accumulate pixels in the integer window: [x-r_int, x+r_int]
+                let mut acc_r = 0u64;
+                let mut acc_g = 0u64;
+                let mut acc_b = 0u64;
+                for dx in -r_int..=r_int {
+                    let sx = (x + dx).clamp(0, w - 1) as u32;
+                    let p = work.get_pixel(sx, y as u32);
+                    acc_r += p[0] as u64;
+                    acc_g += p[1] as u64;
+                    acc_b += p[2] as u64;
+                }
+                // Fringe pixels for fractional weight
+                let left_x = (x - r_int - 1).clamp(0, w - 1) as u32;
+                let right_x = (x + r_int + 1).clamp(0, w - 1) as u32;
+                let lp = work.get_pixel(left_x, y as u32);
+                let rp = work.get_pixel(right_x, y as u32);
+                // bulk = acc * ww + (left + right) * fw, then round with bias
+                let bulk_r = acc_r * ww as u64 + (lp[0] as u64 + rp[0] as u64) * fw as u64 + bias as u64;
+                let bulk_g = acc_g * ww as u64 + (lp[1] as u64 + rp[1] as u64) * fw as u64 + bias as u64;
+                let bulk_b = acc_b * ww as u64 + (lp[2] as u64 + rp[2] as u64) * fw as u64 + bias as u64;
+                hpass.put_pixel(x as u32, y as u32, image::Rgb([
+                    (bulk_r >> 24) as u8,
+                    (bulk_g >> 24) as u8,
+                    (bulk_b >> 24) as u8,
+                ]));
+            }
+        }
+        work = hpass;
+
+        // Vertical blur: process each column
+        let mut vpass = image::RgbImage::new(w_u32, h_u32);
+        for x in 0..w {
+            for y in 0..h {
+                let mut acc_r = 0u64;
+                let mut acc_g = 0u64;
+                let mut acc_b = 0u64;
+                for dy in -r_int..=r_int {
+                    let sy = (y + dy).clamp(0, h - 1) as u32;
+                    let p = work.get_pixel(x as u32, sy);
+                    acc_r += p[0] as u64;
+                    acc_g += p[1] as u64;
+                    acc_b += p[2] as u64;
+                }
+                let top_y = (y - r_int - 1).clamp(0, h - 1) as u32;
+                let bot_y = (y + r_int + 1).clamp(0, h - 1) as u32;
+                let tp = work.get_pixel(x as u32, top_y);
+                let bp = work.get_pixel(x as u32, bot_y);
+                let bulk_r = acc_r * ww as u64 + (tp[0] as u64 + bp[0] as u64) * fw as u64 + bias as u64;
+                let bulk_g = acc_g * ww as u64 + (tp[1] as u64 + bp[1] as u64) * fw as u64 + bias as u64;
+                let bulk_b = acc_b * ww as u64 + (tp[2] as u64 + bp[2] as u64) * fw as u64 + bias as u64;
+                vpass.put_pixel(x as u32, y as u32, image::Rgb([
+                    (bulk_r >> 24) as u8,
+                    (bulk_g >> 24) as u8,
+                    (bulk_b >> 24) as u8,
+                ]));
+            }
+        }
+        work = vpass;
+    }
+    Ok(preserve_mode(img, DynamicImage::ImageRgb8(work)))
+}
+
+/// Convert ResampleFilter to image crate's FilterType.
+fn to_image_filter(f: &ResampleFilter) -> image::imageops::FilterType {
+    match f {
+        ResampleFilter::Nearest => image::imageops::FilterType::Nearest,
+        ResampleFilter::Bilinear => image::imageops::FilterType::Triangle,
+        ResampleFilter::Bicubic => image::imageops::FilterType::CatmullRom,
+        ResampleFilter::Lanczos => image::imageops::FilterType::Lanczos3,
+        ResampleFilter::Box => image::imageops::FilterType::Gaussian,
+        ResampleFilter::Hamming => image::imageops::FilterType::Lanczos3,
+    }
+}
+
 /// Execute a single PipelineOp against a DynamicImage.
 /// Each op borrows the input, allocates and returns the output.
 pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, PilError> {
     match op {
         // ── Geometry ──
         PipelineOp::Resize { w, h, filter } => {
-            let f = match filter {
-                ResampleFilter::Lanczos => image::imageops::FilterType::Lanczos3,
-                ResampleFilter::Bilinear => image::imageops::FilterType::Triangle,
-                ResampleFilter::Nearest => image::imageops::FilterType::Nearest,
-                ResampleFilter::Bicubic => image::imageops::FilterType::CatmullRom,
-                ResampleFilter::Box => image::imageops::FilterType::Gaussian,
-                ResampleFilter::Hamming => image::imageops::FilterType::Lanczos3,
-            };
+            let f = to_image_filter(filter);
             let result = DynamicImage::from(image::imageops::resize(img, *w, *h, f));
             Ok(preserve_mode(img, result))
         }
@@ -1065,14 +1173,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             }
         },
         PipelineOp::Thumbnail { w, h, filter } => {
-            let f = match filter {
-                ResampleFilter::Lanczos => image::imageops::FilterType::Lanczos3,
-                ResampleFilter::Bilinear => image::imageops::FilterType::Triangle,
-                ResampleFilter::Nearest => image::imageops::FilterType::Nearest,
-                ResampleFilter::Bicubic => image::imageops::FilterType::CatmullRom,
-                ResampleFilter::Box => image::imageops::FilterType::Gaussian,
-                ResampleFilter::Hamming => image::imageops::FilterType::Lanczos3,
-            };
+            let f = to_image_filter(filter);
             let (cur_w, cur_h) = (img.width(), img.height());
             if *w == 0 || *h == 0 {
                 return Err(PilError::ValueError("thumbnail size must be > 0".into()));
@@ -1229,71 +1330,185 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             scale,
             offset,
         } => {
-            // PIL C code: bottom-to-top row order (ky=0→row y+1, ky=2→row y-1)
-            // Uses float accumulation with offset+0.5 for rounding, then clip8 truncation
+            // PIL C binding pre-divides kernel by scale in f32, then passes to
+            // ImagingFilter3x3 which adds offset+0.5 and accumulates with f32.
+            // CRITICAL: PIL's KERNEL1x3 macro groups 3 pixels into one expression,
+            // so each row (bottom→center→top) is computed with fewer intermediate
+            // rounding steps than per-pixel accumulation.
+            // We must match PIL's grouping exactly for bit-exact results.
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let inv_scale = 1.0f32 / scale;
+            // Pre-divide kernel by scale in f32 (matching PIL's _filter binding)
+            let k0 = kernel[0] / scale;
+            let k1 = kernel[1] / scale;
+            let k2 = kernel[2] / scale;
+            let k3 = kernel[3] / scale;
+            let k4 = kernel[4] / scale;
+            let k5 = kernel[5] / scale;
+            let k6 = kernel[6] / scale;
+            let k7 = kernel[7] / scale;
+            let k8 = kernel[8] / scale;
+            let rounding_bias = *offset as f32 + 0.5;
             let mut out = rgb.clone();
-            for y in 1..h-1 {
-                for x in 1..w-1 {
-                    let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
-                    for ky in 0..3i32 {
-                        for kx in 0..3i32 {
-                            // PIL order: ky=0→y+1 (bottom), ky=1→y (middle), ky=2→y-1 (top)
-                            let sy = (y + 1 - ky) as u32;
-                            let sx = (x + kx - 1) as u32;
-                            let px = rgb.get_pixel(sx, sy);
-                            let ki = (ky * 3 + kx) as usize;
-                            r += px[0] as f32 * kernel[ki];
-                            g += px[1] as f32 * kernel[ki];
-                            b += px[2] as f32 * kernel[ki];
-                        }
-                    }
-                    // PIL uses f64/double internally; match precision with f64
-                    let inv_scale = 1.0f64 / *scale as f64;
-                    let off = *offset as f64 + 0.5;
+            for y in 1..h - 1 {
+                for x in 1..w - 1 {
+                    // bottom row (y+1): kernel[0..2]
+                    let bp = rgb.get_pixel((x - 1) as u32, (y + 1) as u32);
+                    let cp = rgb.get_pixel(x as u32, (y + 1) as u32);
+                    let ap = rgb.get_pixel((x + 1) as u32, (y + 1) as u32);
+                    let row_b_r = bp[0] as f32 * k0 + cp[0] as f32 * k1 + ap[0] as f32 * k2;
+                    let row_b_g = bp[1] as f32 * k0 + cp[1] as f32 * k1 + ap[1] as f32 * k2;
+                    let row_b_b = bp[2] as f32 * k0 + cp[2] as f32 * k1 + ap[2] as f32 * k2;
+                    // center row (y): kernel[3..5]
+                    let bp = rgb.get_pixel((x - 1) as u32, y as u32);
+                    let cp = rgb.get_pixel(x as u32, y as u32);
+                    let ap = rgb.get_pixel((x + 1) as u32, y as u32);
+                    let row_c_r = bp[0] as f32 * k3 + cp[0] as f32 * k4 + ap[0] as f32 * k5;
+                    let row_c_g = bp[1] as f32 * k3 + cp[1] as f32 * k4 + ap[1] as f32 * k5;
+                    let row_c_b = bp[2] as f32 * k3 + cp[2] as f32 * k4 + ap[2] as f32 * k5;
+                    // top row (y-1): kernel[6..8]
+                    let bp = rgb.get_pixel((x - 1) as u32, (y - 1) as u32);
+                    let cp = rgb.get_pixel(x as u32, (y - 1) as u32);
+                    let ap = rgb.get_pixel((x + 1) as u32, (y - 1) as u32);
+                    let row_t_r = bp[0] as f32 * k6 + cp[0] as f32 * k7 + ap[0] as f32 * k8;
+                    let row_t_g = bp[1] as f32 * k6 + cp[1] as f32 * k7 + ap[1] as f32 * k8;
+                    let row_t_b = bp[2] as f32 * k6 + cp[2] as f32 * k7 + ap[2] as f32 * k8;
+                    // Accumulate in PIL's exact order: start with offset+0.5, then add
+                    // row bottom → center → top (each as a grouped expression).
+                    // f32 addition is NOT associative, so order matters for bit-exactness.
+                    let mut r = rounding_bias;
+                    let mut g = rounding_bias;
+                    let mut b = rounding_bias;
+                    r = r + row_b_r; g = g + row_b_g; b = b + row_b_b;
+                    r = r + row_c_r; g = g + row_c_g; b = b + row_c_b;
+                    r = r + row_t_r; g = g + row_t_g; b = b + row_t_b;
                     out.put_pixel(x as u32, y as u32, image::Rgb([
-                        ((r as f64 * inv_scale + off) as i32).clamp(0, 255) as u8,
-                        ((g as f64 * inv_scale + off) as i32).clamp(0, 255) as u8,
-                        ((b as f64 * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        clip8_filter(r),
+                        clip8_filter(g),
+                        clip8_filter(b),
                     ]));
                 }
             }
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
-        PipelineOp::Filter5x5 { kernel, scale, offset } => {
-            // PIL C code: bottom-to-top row order, float accumulation
+        PipelineOp::Filter5x5 {
+            kernel,
+            scale,
+            offset,
+        } => {
+            // PIL C binding pre-divides kernel by scale in f32, then passes to
+            // ImagingFilter5x5 which adds offset+0.5 and accumulates with f32.
+            // Use row-grouped expressions matching PIL's KERNEL1x5 macro pattern.
             let rgb = img.to_rgb8();
             let (w, h) = (rgb.width() as i32, rgb.height() as i32);
-            let inv_scale = 1.0f32 / scale;
+            let k00 = kernel[0] / scale;  let k01 = kernel[1] / scale;
+            let k02 = kernel[2] / scale;  let k03 = kernel[3] / scale;
+            let k04 = kernel[4] / scale;
+            let k10 = kernel[5] / scale;  let k11 = kernel[6] / scale;
+            let k12 = kernel[7] / scale;  let k13 = kernel[8] / scale;
+            let k14 = kernel[9] / scale;
+            let k20 = kernel[10] / scale; let k21 = kernel[11] / scale;
+            let k22 = kernel[12] / scale; let k23 = kernel[13] / scale;
+            let k24 = kernel[14] / scale;
+            let k30 = kernel[15] / scale; let k31 = kernel[16] / scale;
+            let k32 = kernel[17] / scale; let k33 = kernel[18] / scale;
+            let k34 = kernel[19] / scale;
+            let k40 = kernel[20] / scale; let k41 = kernel[21] / scale;
+            let k42 = kernel[22] / scale; let k43 = kernel[23] / scale;
+            let k44 = kernel[24] / scale;
+            let rounding_bias = *offset as f32 + 0.5;
             let mut out = rgb.clone();
-            let off = *offset as f32 + 0.5;
-            for y in 2..h-2 {
-                for x in 2..w-2 {
-                    let mut r = 0f32; let mut g = 0f32; let mut b = 0f32;
-                    for ky in 0..5i32 {
-                        for kx in 0..5i32 {
-                            // PIL order: ky=0→y+2 (bottom row), ky=4→y-2 (top row)
-                            let sy = (y + 2 - ky) as u32;
-                            let sx = (x + kx - 2) as u32;
-                            let px = rgb.get_pixel(sx, sy);
-                            let ki = (ky * 5 + kx) as usize;
-                            r += px[0] as f32 * kernel[ki];
-                            g += px[1] as f32 * kernel[ki];
-                            b += px[2] as f32 * kernel[ki];
-                        }
-                    }
+            for y in 2..h - 2 {
+                for x in 2..w - 2 {
+                    let xm2 = (x - 2) as u32;
+                    let xm1 = (x - 1) as u32;
+                    let x0 = x as u32;
+                    let xp1 = (x + 1) as u32;
+                    let xp2 = (x + 2) as u32;
+                    let yp2 = (y + 2) as u32;
+                    let yp1 = (y + 1) as u32;
+                    let y0 = y as u32;
+                    let ym1 = (y - 1) as u32;
+                    let ym2 = (y - 2) as u32;
+                    // Row 0 (bottom-1, y+2): 5 pixels × kernel[0..4]
+                    let p0 = rgb.get_pixel(xm2, yp2);
+                    let p1 = rgb.get_pixel(xm1, yp2);
+                    let p2 = rgb.get_pixel(x0, yp2);
+                    let p3 = rgb.get_pixel(xp1, yp2);
+                    let p4 = rgb.get_pixel(xp2, yp2);
+                    let row0_r = p0[0] as f32 * k00 + p1[0] as f32 * k01 + p2[0] as f32 * k02 + p3[0] as f32 * k03 + p4[0] as f32 * k04;
+                    let row0_g = p0[1] as f32 * k00 + p1[1] as f32 * k01 + p2[1] as f32 * k02 + p3[1] as f32 * k03 + p4[1] as f32 * k04;
+                    let row0_b = p0[2] as f32 * k00 + p1[2] as f32 * k01 + p2[2] as f32 * k02 + p3[2] as f32 * k03 + p4[2] as f32 * k04;
+                    let mut ss_r = rounding_bias;
+                    let mut ss_g = rounding_bias;
+                    let mut ss_b = rounding_bias;
+                    ss_r = ss_r + row0_r; ss_g = ss_g + row0_g; ss_b = ss_b + row0_b;
+                    // Row 1 (bottom, y+1): kernel[5..9]
+                    let p0 = rgb.get_pixel(xm2, yp1);
+                    let p1 = rgb.get_pixel(xm1, yp1);
+                    let p2 = rgb.get_pixel(x0, yp1);
+                    let p3 = rgb.get_pixel(xp1, yp1);
+                    let p4 = rgb.get_pixel(xp2, yp1);
+                    let row1_r = p0[0] as f32 * k10 + p1[0] as f32 * k11 + p2[0] as f32 * k12 + p3[0] as f32 * k13 + p4[0] as f32 * k14;
+                    let row1_g = p0[1] as f32 * k10 + p1[1] as f32 * k11 + p2[1] as f32 * k12 + p3[1] as f32 * k13 + p4[1] as f32 * k14;
+                    let row1_b = p0[2] as f32 * k10 + p1[2] as f32 * k11 + p2[2] as f32 * k12 + p3[2] as f32 * k13 + p4[2] as f32 * k14;
+                    ss_r = ss_r + row1_r; ss_g = ss_g + row1_g; ss_b = ss_b + row1_b;
+                    // Row 2 (center, y): kernel[10..14]
+                    let p0 = rgb.get_pixel(xm2, y0);
+                    let p1 = rgb.get_pixel(xm1, y0);
+                    let p2 = rgb.get_pixel(x0, y0);
+                    let p3 = rgb.get_pixel(xp1, y0);
+                    let p4 = rgb.get_pixel(xp2, y0);
+                    let row2_r = p0[0] as f32 * k20 + p1[0] as f32 * k21 + p2[0] as f32 * k22 + p3[0] as f32 * k23 + p4[0] as f32 * k24;
+                    let row2_g = p0[1] as f32 * k20 + p1[1] as f32 * k21 + p2[1] as f32 * k22 + p3[1] as f32 * k23 + p4[1] as f32 * k24;
+                    let row2_b = p0[2] as f32 * k20 + p1[2] as f32 * k21 + p2[2] as f32 * k22 + p3[2] as f32 * k23 + p4[2] as f32 * k24;
+                    ss_r = ss_r + row2_r; ss_g = ss_g + row2_g; ss_b = ss_b + row2_b;
+                    // Row 3 (top, y-1): kernel[15..19]
+                    let p0 = rgb.get_pixel(xm2, ym1);
+                    let p1 = rgb.get_pixel(xm1, ym1);
+                    let p2 = rgb.get_pixel(x0, ym1);
+                    let p3 = rgb.get_pixel(xp1, ym1);
+                    let p4 = rgb.get_pixel(xp2, ym1);
+                    let row3_r = p0[0] as f32 * k30 + p1[0] as f32 * k31 + p2[0] as f32 * k32 + p3[0] as f32 * k33 + p4[0] as f32 * k34;
+                    let row3_g = p0[1] as f32 * k30 + p1[1] as f32 * k31 + p2[1] as f32 * k32 + p3[1] as f32 * k33 + p4[1] as f32 * k34;
+                    let row3_b = p0[2] as f32 * k30 + p1[2] as f32 * k31 + p2[2] as f32 * k32 + p3[2] as f32 * k33 + p4[2] as f32 * k34;
+                    ss_r = ss_r + row3_r; ss_g = ss_g + row3_g; ss_b = ss_b + row3_b;
+                    // Row 4 (top+1, y-2): kernel[20..24]
+                    let p0 = rgb.get_pixel(xm2, ym2);
+                    let p1 = rgb.get_pixel(xm1, ym2);
+                    let p2 = rgb.get_pixel(x0, ym2);
+                    let p3 = rgb.get_pixel(xp1, ym2);
+                    let p4 = rgb.get_pixel(xp2, ym2);
+                    let row4_r = p0[0] as f32 * k40 + p1[0] as f32 * k41 + p2[0] as f32 * k42 + p3[0] as f32 * k43 + p4[0] as f32 * k44;
+                    let row4_g = p0[1] as f32 * k40 + p1[1] as f32 * k41 + p2[1] as f32 * k42 + p3[1] as f32 * k43 + p4[1] as f32 * k44;
+                    let row4_b = p0[2] as f32 * k40 + p1[2] as f32 * k41 + p2[2] as f32 * k42 + p3[2] as f32 * k43 + p4[2] as f32 * k44;
+                    ss_r = ss_r + row4_r; ss_g = ss_g + row4_g; ss_b = ss_b + row4_b;
                     out.put_pixel(x as u32, y as u32, image::Rgb([
-                        ((r * inv_scale + off) as i32).clamp(0, 255) as u8,
-                        ((g * inv_scale + off) as i32).clamp(0, 255) as u8,
-                        ((b * inv_scale + off) as i32).clamp(0, 255) as u8,
+                        clip8_filter(ss_r),
+                        clip8_filter(ss_g),
+                        clip8_filter(ss_b),
                     ]));
                 }
             }
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
         }
-        PipelineOp::GaussianBlur { sigma } => Ok(img.blur(*sigma)),
+        PipelineOp::GaussianBlur { sigma } => {
+            // PIL GaussianBlur: 3 passes of BoxBlur with computed fractional radius.
+            // Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al. 2011).
+            if *sigma <= 0.0 {
+                return Ok(img.clone());
+            }
+            let passes = 3.0f32; // PIL uses exactly 3 passes
+            let sigma2 = *sigma * *sigma / passes;
+            let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
+            let l = l_val.floor();
+            let a_num = (2.0 * l + 1.0) * (l * (l + 1.0) - 3.0 * sigma2);
+            let a_den = 6.0 * (sigma2 - (l + 1.0) * (l + 1.0));
+            let a = if a_den.abs() > 1e-10 { a_num / a_den } else { 0.0 };
+            let blur_radius = l + a;
+            // Apply 3 passes of PIL-style box blur
+            pil_box_blur(img, blur_radius, 3)
+        }
         PipelineOp::BoxBlur { radius } => {
             // PIL BoxBlur: separable 2-pass with 24-bit fixed-point arithmetic
             // Uses clamping at borders (repeating edge pixels)
@@ -1475,43 +1690,63 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             // Colorize always outputs RGB (PIL behavior)
             Ok(DynamicImage::ImageRgb8(out))
         }
-        PipelineOp::Contain { w, h, .. } => {
+        PipelineOp::Contain { w, h, filter } => {
+            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let (iw, ih) = (img.width(), img.height());
             let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::CatmullRom))
+            let result = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            Ok(preserve_mode(img, result))
         }
-        PipelineOp::Cover { w, h, .. } => {
+        PipelineOp::Cover { w, h, filter } => {
+            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let (iw, ih) = (img.width(), img.height());
             let ratio = (w as f64 / iw as f64).max(h as f64 / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            let resized = img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::CatmullRom);
+            let resized = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
             let x = (nw.saturating_sub(w)) / 2;
             let y = (nh.saturating_sub(h)) / 2;
-            Ok(resized.crop_imm(x, y, w, h))
+            Ok(preserve_mode(img, resized.crop_imm(x, y, w, h)))
         }
-        PipelineOp::Fit { w, h, .. } => {
+        PipelineOp::Fit { w, h, filter, bleed, centering } => {
+            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let (iw, ih) = (img.width(), img.height());
-            let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
+            let bleed = *bleed;
+            let centering = *centering;
+            // PIL's fit algorithm: apply bleed, compute ratio, resize, crop with centering
+            let eff_w = w as f64 / (1.0 + 2.0 * bleed);
+            let eff_h = h as f64 / (1.0 + 2.0 * bleed);
+            let ratio = (eff_w / iw as f64).min(eff_h / ih as f64);
             let nw = (iw as f64 * ratio) as u32;
             let nh = (ih as f64 * ratio) as u32;
-            Ok(img.resize_exact(nw.max(1), nh.max(1), image::imageops::FilterType::CatmullRom))
+            let resized = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            let crop_x = ((nw as f64 - w as f64) * centering.0) as u32;
+            let crop_y = ((nh as f64 - h as f64) * centering.1) as u32;
+            Ok(preserve_mode(img, resized.crop_imm(crop_x.min(nw.saturating_sub(1)), crop_y.min(nh.saturating_sub(1)), w.min(nw), h.min(nh))))
         }
-        PipelineOp::Pad { w, h, color, .. } => {
+        PipelineOp::Pad { w, h, filter, color, centering } => {
+            let f = to_image_filter(filter);
             let (w, h) = (*w, *h);
             let fill = color.unwrap_or((0, 0, 0, 255));
             let (iw, ih) = (img.width(), img.height());
+            // Step 1: contain (resize to fit within target, preserving aspect ratio)
+            let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
+            let nw = (iw as f64 * ratio) as u32;
+            let nh = (ih as f64 * ratio) as u32;
+            let resized = DynamicImage::from(image::imageops::resize(img, nw.max(1), nh.max(1), f));
+            // Step 2: pad to target size
             let mut padded = DynamicImage::new_rgba8(w, h);
             for py in 0..h { for px in 0..w { padded.put_pixel(px, py, image::Rgba([fill.0, fill.1, fill.2, fill.3])); } }
-            let x = (w.saturating_sub(iw)) / 2;
-            let y = (h.saturating_sub(ih)) / 2;
-            image::imageops::overlay(&mut padded, &img.to_rgba8(), x as i64, y as i64);
-            Ok(padded)
+            let centering = *centering;
+            let x = ((w as f64 - nw as f64) * centering.0) as i64;
+            let y = ((h as f64 - nh as f64) * centering.1) as i64;
+            image::imageops::overlay(&mut padded, &resized.to_rgba8(), x, y);
+            Ok(preserve_mode(img, padded))
         }
         PipelineOp::CropBorder { border } => {
             let b = *border;
@@ -1522,14 +1757,7 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
         }
         PipelineOp::Scale { factor, filter } => {
-            let f = match filter {
-                ResampleFilter::Lanczos => image::imageops::FilterType::Lanczos3,
-                ResampleFilter::Bilinear => image::imageops::FilterType::Triangle,
-                ResampleFilter::Nearest => image::imageops::FilterType::Nearest,
-                ResampleFilter::Bicubic => image::imageops::FilterType::CatmullRom,
-                ResampleFilter::Box => image::imageops::FilterType::Gaussian,
-                ResampleFilter::Hamming => image::imageops::FilterType::Lanczos3,
-            };
+            let f = to_image_filter(filter);
             let new_w = (img.width() as f64 * factor).round() as u32;
             let new_h = (img.height() as f64 * factor).round() as u32;
             let result = DynamicImage::from(image::imageops::resize(img, new_w.max(1), new_h.max(1), f));
@@ -1673,23 +1901,36 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Contrast { factor } => {
-            let mut rgba = img.to_rgba8();
-            let contrast = (*factor as f32 - 1.0) + 1.0;
-            let w = (259.0 * (contrast + 255.0)) / (255.0 * (259.0 - contrast));
-            for p in rgba.pixels_mut() {
+            // PIL: convert to L, compute rounded mean, create uniform gray degenerate,
+            // then blend: degenerate * (1-factor) + original * factor
+            let gray = pil_grayscale(img);
+            let pixels: Vec<u8> = gray.pixels().map(|p| p[0]).collect();
+            let n = pixels.len() as u64;
+            let mean = if n > 0 {
+                let sum: u64 = pixels.iter().map(|&p| p as u64).sum();
+                // int(mean + 0.5) matching PIL's ImageStat
+                ((sum as f64 / n as f64) + 0.5) as u8
+            } else {
+                0
+            };
+            let m = mean as f64;
+            let f = *factor;
+            let mut rgb = img.to_rgb8();
+            for p in rgb.pixels_mut() {
                 for c in 0..3 {
-                    let v = w * (p[c] as f32 - 128.0) + 128.0;
-                    p[c] = v.clamp(0.0, 255.0).round() as u8;
+                    p[c] = (m * (1.0 - f) + p[c] as f64 * f).clamp(0.0, 255.0) as u8;
                 }
             }
-            Ok(DynamicImage::ImageRgba8(rgba))
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::ColorSaturation { factor } => {
-            let gray = img.to_luma8();
+            // Use PIL's rounded grayscale conversion (to_luma8 truncates)
+            let gray = pil_grayscale(img);
             let mut rgb = img.to_rgb8();
             let f = *factor;
             for (px, gp) in rgb.pixels_mut().zip(gray.pixels()) {
                 let g = gp[0] as f64;
+                // blend formula: gray * (1-factor) + original * factor
                 px[0] = ((g + f * (px[0] as f64 - g)).clamp(0.0, 255.0)) as u8;
                 px[1] = ((g + f * (px[1] as f64 - g)).clamp(0.0, 255.0)) as u8;
                 px[2] = ((g + f * (px[2] as f64 - g)).clamp(0.0, 255.0)) as u8;
@@ -1697,24 +1938,68 @@ pub fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, P
             Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
         }
         PipelineOp::Sharpness { factor } => {
+            // PIL: apply SMOOTH filter (3x3 kernel [1,1,1; 1,5,1; 1,1,1] / 13, offset 0),
+            // then blend: smoothed * (1-factor) + original * factor
             let f = *factor;
-            if f <= 1.0 {
-                let sigma = ((1.0 - f) * 5.0).max(0.01) as f32;
-                Ok(img.blur(sigma))
-            } else {
-                let sigma = ((f - 1.0) * 0.5).max(0.01) as f32;
-                let blurred = img.blur(sigma);
-                let blur_rgb = blurred.to_rgb8();
-                let mut rgb = img.to_rgb8();
-                let amount = (f - 1.0).min(5.0);
-                for (px, bp) in rgb.pixels_mut().zip(blur_rgb.pixels()) {
-                    for c in 0..3 {
-                        let diff = px[c] as f64 - bp[c] as f64;
-                        px[c] = ((px[c] as f64 + diff * amount).clamp(0.0, 255.0)) as u8;
-                    }
+            let rgb = img.to_rgb8();
+            let (w, h) = (rgb.width() as i32, rgb.height() as i32);
+            // Pre-divided kernel values matching PIL's layout
+            // kernel: [1,1,1, 1,5,1, 1,1,1], scale=13
+            let inv_scale = 1.0f32 / 13.0f32;
+            let k = inv_scale;       // edges = 1/13
+            let kc = 5.0f32 * inv_scale;  // center = 5/13
+            let rounding_bias = 0.5f32;  // offset=0 => 0+0.5
+            let mut blurred = rgb.clone();
+            for y in 1..h - 1 {
+                for x in 1..w - 1 {
+                    // bottom row (y+1): kernel[0..2] = 1,1,1
+                    let bp = rgb.get_pixel((x - 1) as u32, (y + 1) as u32);
+                    let cp = rgb.get_pixel(x as u32, (y + 1) as u32);
+                    let ap = rgb.get_pixel((x + 1) as u32, (y + 1) as u32);
+                    let row_b_r = bp[0] as f32 * k + cp[0] as f32 * k + ap[0] as f32 * k;
+                    let row_b_g = bp[1] as f32 * k + cp[1] as f32 * k + ap[1] as f32 * k;
+                    let row_b_b = bp[2] as f32 * k + cp[2] as f32 * k + ap[2] as f32 * k;
+                    // center row (y): kernel[3..5] = 1,5,1
+                    let bp = rgb.get_pixel((x - 1) as u32, y as u32);
+                    let cp = rgb.get_pixel(x as u32, y as u32);
+                    let ap = rgb.get_pixel((x + 1) as u32, y as u32);
+                    let row_c_r = bp[0] as f32 * k + cp[0] as f32 * kc + ap[0] as f32 * k;
+                    let row_c_g = bp[1] as f32 * k + cp[1] as f32 * kc + ap[1] as f32 * k;
+                    let row_c_b = bp[2] as f32 * k + cp[2] as f32 * kc + ap[2] as f32 * k;
+                    // top row (y-1): kernel[6..8] = 1,1,1
+                    let bp = rgb.get_pixel((x - 1) as u32, (y - 1) as u32);
+                    let cp = rgb.get_pixel(x as u32, (y - 1) as u32);
+                    let ap = rgb.get_pixel((x + 1) as u32, (y - 1) as u32);
+                    let row_t_r = bp[0] as f32 * k + cp[0] as f32 * k + ap[0] as f32 * k;
+                    let row_t_g = bp[1] as f32 * k + cp[1] as f32 * k + ap[1] as f32 * k;
+                    let row_t_b = bp[2] as f32 * k + cp[2] as f32 * k + ap[2] as f32 * k;
+                    // Accumulate: start with rounding_bias, then add each row group
+                    let mut r = rounding_bias;
+                    let mut g = rounding_bias;
+                    let mut b = rounding_bias;
+                    r += row_b_r; g += row_b_g; b += row_b_b;
+                    r += row_c_r; g += row_c_g; b += row_c_b;
+                    r += row_t_r; g += row_t_g; b += row_t_b;
+                    blurred.put_pixel(x as u32, y as u32, image::Rgb([
+                        r.clamp(0.0, 255.0) as u8,
+                        g.clamp(0.0, 255.0) as u8,
+                        b.clamp(0.0, 255.0) as u8,
+                    ]));
                 }
-                Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
             }
+            // blend: blurred * (1-f) + original * f   (matching PIL's Image.blend)
+            for y in 0..h {
+                for x in 0..w {
+                    let op = rgb.get_pixel(x as u32, y as u32);
+                    let bp = blurred.get_pixel(x as u32, y as u32);
+                    blurred.put_pixel(x as u32, y as u32, image::Rgb([
+                        (bp[0] as f64 * (1.0 - f) + op[0] as f64 * f).clamp(0.0, 255.0) as u8,
+                        (bp[1] as f64 * (1.0 - f) + op[1] as f64 * f).clamp(0.0, 255.0) as u8,
+                        (bp[2] as f64 * (1.0 - f) + op[2] as f64 * f).clamp(0.0, 255.0) as u8,
+                    ]));
+                }
+            }
+            Ok(preserve_mode(img, DynamicImage::ImageRgb8(blurred)))
         }
 
         // ── Effects ──

@@ -82,7 +82,14 @@ class Kernel:
         self.scale = scale
         self.offset = offset
     def _apply(self, rust_image):
-        raise NotImplementedError("Kernel")
+        size_x, size_y = self.size
+        if size_x != size_y or size_x not in (3, 5):
+            raise NotImplementedError(f"Kernel size {self.size} not supported, only 3x3 and 5x5")
+        k = [float(v) for v in (self.kernel or [1] * (size_x * size_y))]
+        scale = float(self.scale) if self.scale is not None else sum(k)
+        from .image import Image
+        from ._core import Image as RustImage
+        return Image(rust_image.kernel_filter(k, scale, int(self.offset), size_x))
 
 
 class Color3DLUT:
