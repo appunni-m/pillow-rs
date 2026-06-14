@@ -1,6 +1,6 @@
 # pillow-rs Coverage Report
 
-> Auto-generated: 2026-06-14 20:12:16 | Pillow parity tested
+> Auto-generated: 2026-06-14 21:10:30 | Pillow parity tested
 
 ## Trust Summary
 
@@ -22,15 +22,15 @@
 
 | Operation | Speedup | Faster? |
 |-----------|---------|---------|
-| resize_2k_to_1k | 30.78× | ✅ |
-| crop_2k | 0.47× | ❌ |
-| convert_2k_RGB_to_L | 1.92× | ✅ |
-| transpose_2k_FLIP | 3.12× | ✅ |
-| filter_2k_BLUR | 62.23× | ✅ |
-| paste_2k | 1.12× | ✅ |
-| invert_2k | 2.90× | ✅ |
+| resize_2k_to_1k | 33.07× | ✅ |
+| crop_2k | 0.65× | ❌ |
+| convert_2k_RGB_to_L | 2.00× | ✅ |
+| transpose_2k_FLIP | 3.51× | ✅ |
+| filter_2k_BLUR | 73.62× | ✅ |
+| paste_2k | 1.03× | ✅ |
+| invert_2k | 2.96× | ✅ |
 
-**Average speedup: 14.65×**
+**Average speedup: 16.69×**
 
 ## Module Status
 
@@ -70,82 +70,82 @@
 | `convert` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `copy` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `crop` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `draft` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `effect_spread` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `entropy` | ✅ | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `draft` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `effect_spread` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `entropy` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `filter` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A |
 | `frombytes` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `get_child_images` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `get_flattened_data` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getbands` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getbands` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getbbox` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getchannel` | N/A | N/A | ✅ | N/A | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
+| `getchannel` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
 | `getcolors` | ✅ | ✅ | ⬜ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getdata` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getexif` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
 | `getim` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getpalette` | N/A | ✅ | N/A | ⬜ | N/A | N/A | N/A | N/A | N/A | N/A |
+| `getpalette` | N/A | ✅ | N/A | ⬜ | ✅ | N/A | N/A | N/A | N/A | N/A |
 | `getpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getprojection` | ⬜ | ✅ | N/A | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `getprojection` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `getxmp` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `histogram` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `histogram` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `load` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `new` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `open` | N/A | ✅ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
 | `paste` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
 | `point` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
-| `putalpha` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `putdata` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `putalpha` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `putdata` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
 | `putpalette` | N/A | ⬜ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
 | `putpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `quantize` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `reduce` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `remap_palette` | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
-| `resize` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| `reduce` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `remap_palette` | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
+| `resize` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
 | `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `seek` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `seek` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
 | `split` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `tell` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `thumbnail` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `tell` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `thumbnail` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `tobitmap` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `tobytes` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `tobytes` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
 | `transpose` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `verify` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| `verify` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 
 ### ImageChops
 
-| Operation | 1 | L | RGB |
-|-----------|-------|-------|-------|
-| `add` | N/A | ✅ | ✅ |
-| `add_modulo` | N/A | ✅ | ✅ |
-| `blend` | N/A | ✅ | ✅ |
-| `composite` | N/A | ✅ | ✅ |
-| `constant` | N/A | ✅ | ✅ |
-| `darker` | N/A | ✅ | ✅ |
-| `difference` | N/A | ✅ | ✅ |
-| `duplicate` | N/A | ✅ | ✅ |
-| `hard_light` | N/A | ✅ | ✅ |
-| `invert` | N/A | ✅ | ✅ |
-| `lighter` | N/A | ✅ | ✅ |
-| `logical_and` | ✅ | N/A | N/A |
-| `logical_or` | ✅ | N/A | N/A |
-| `logical_xor` | ✅ | N/A | N/A |
-| `multiply` | N/A | ✅ | ✅ |
-| `offset` | N/A | ✅ | ✅ |
-| `overlay` | N/A | ✅ | ✅ |
-| `screen` | N/A | ✅ | ✅ |
-| `soft_light` | N/A | ✅ | ✅ |
-| `subtract` | N/A | ✅ | ✅ |
-| `subtract_modulo` | N/A | ✅ | ✅ |
+| Operation | 1 | L | LA | P | RGB | RGBA |
+|-----------|-------|-------|-------|-------|-------|-------|
+| `add` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `add_modulo` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `blend` | N/A | ✅ | N/A | N/A | ✅ | N/A |
+| `composite` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
+| `constant` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
+| `darker` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `difference` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `duplicate` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
+| `hard_light` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `invert` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
+| `lighter` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `logical_and` | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `logical_or` | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `logical_xor` | ✅ | N/A | N/A | N/A | N/A | N/A |
+| `multiply` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `offset` | N/A | ✅ | N/A | N/A | ✅ | ✅ |
+| `overlay` | N/A | ✅ | N/A | N/A | ✅ | N/A |
+| `screen` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `soft_light` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `subtract` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| `subtract_modulo` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
 
 ### ImageColor
 
 | Operation | L | RGB |
 |-----------|-------|-------|
 | `getcolor` | ✅ | ✅ |
-| `getrgb` | N/A | ✅ |
+| `getrgb` | ✅ | ✅ |
 
 ### ImageDraw
 
@@ -177,27 +177,27 @@
 
 ### ImageFilter
 
-| Operation | L | LA | RGB | RGBA |
-|-----------|-------|-------|-------|-------|
-| `BLUR` | ✅ | ✅ | ✅ | ✅ |
-| `BoxBlur` | ✅ | ✅ | ✅ | ✅ |
-| `CONTOUR` | ✅ | ✅ | ✅ | ✅ |
-| `DETAIL` | ✅ | ✅ | ✅ | ✅ |
-| `EDGE_ENHANCE` | ✅ | ✅ | ✅ | ✅ |
-| `EDGE_ENHANCE_MORE` | ✅ | ✅ | ✅ | ✅ |
-| `EMBOSS` | ✅ | ✅ | ✅ | ✅ |
-| `FIND_EDGES` | ✅ | ✅ | ✅ | ✅ |
-| `GaussianBlur` | ✅ | ✅ | ✅ | ✅ |
-| `Kernel` | ✅ | N/A | ✅ | N/A |
-| `MaxFilter` | ✅ | N/A | ✅ | N/A |
-| `MedianFilter` | ✅ | N/A | ✅ | N/A |
-| `MinFilter` | ✅ | N/A | ✅ | N/A |
-| `ModeFilter` | ✅ | N/A | ✅ | N/A |
-| `RankFilter` | ✅ | N/A | ✅ | N/A |
-| `SHARPEN` | ✅ | ✅ | ✅ | ✅ |
-| `SMOOTH` | ✅ | ✅ | ✅ | ✅ |
-| `SMOOTH_MORE` | ✅ | ✅ | ✅ | ✅ |
-| `UnsharpMask` | ✅ | ✅ | ✅ | ✅ |
+| Operation | 1 | L | LA | RGB | RGBA | CMYK | HSV | I |
+|-----------|-------|-------|-------|-------|-------|-------|-------|-------|
+| `BLUR` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A |
+| `BoxBlur` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `CONTOUR` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `DETAIL` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `EDGE_ENHANCE` | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `EDGE_ENHANCE_MORE` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `EMBOSS` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `FIND_EDGES` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `GaussianBlur` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `Kernel` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `MaxFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `MedianFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `MinFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `ModeFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `RankFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `SHARPEN` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `SMOOTH` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `SMOOTH_MORE` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `UnsharpMask` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
 
 ### ImageFont
 
@@ -214,11 +214,11 @@
 | Operation | 1 | L | LA | P | RGB | RGBA | CMYK | HSV | I | F |
 |-----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
 | `alpha_composite` | N/A | ⬜ | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
-| `blend` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `composite` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `effect_noise` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `eval` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `frombytes` | N/A | ⬜ | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
+| `blend` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `composite` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `effect_noise` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `eval` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| `frombytes` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A |
 | `merge` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
 | `new` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | `open` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -246,13 +246,13 @@
 
 ### ImagePalette
 
-| Operation | P |
-|-----------|-------|
-| `copy` | ⬜ |
-| `getcolor` | ⬜ |
-| `getdata` | ⬜ |
-| `save` | ⬜ |
-| `tobytes` | ⬜ |
+| Operation | L | P | RGB |
+|-----------|-------|-------|-------|
+| `copy` | ✅ | ⬜ | ✅ |
+| `getcolor` | ✅ | ⬜ | ✅ |
+| `getdata` | ✅ | ⬜ | ✅ |
+| `save` | ✅ | ⬜ | ✅ |
+| `tobytes` | ✅ | ⬜ | ✅ |
 
 ### ImageSequence
 
