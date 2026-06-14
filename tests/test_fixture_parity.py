@@ -96,6 +96,9 @@ def test_fixture_parity(fixture_file):
         # PixelAccess match
         if isinstance(val, str) and val.startswith("<PixelAccess") and hasattr(actual, '__str__') and str(actual).startswith("<PixelAccess"):
             return
+        # Capsule object match (getim returns a capsule with an address that changes each run)
+        if isinstance(val, str) and val.startswith("<capsule object") and isinstance(actual, str) and actual.startswith("<capsule object"):
+            return
         # Float tolerance
         if isinstance(actual, (int, float)) and isinstance(val, (int, float)):
             if abs(actual - val) < 0.01: return
