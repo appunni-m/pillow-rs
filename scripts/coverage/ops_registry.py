@@ -1,878 +1,342 @@
 #!/usr/bin/env python3
-"""Shared operation registry — single source of truth for fixture generation and testing.
+"""Operation registry — single source of truth for fixture generation and testing.
+
+MODE LISTS are read directly from manifest.yaml (the canonical source).
+Only fixture execution metadata (type, params, method overrides) lives here.
 
 Both generate_fixtures.py and test_fixture_parity.py import this module.
-Each entry defines: what to call, with what parameters, and how to prepare inputs.
 
-Format:
+Format (auto-derived from manifest + FIXTURE_META overrides):
     "Module.function": {
-        "type": "image" | "dual" | "filter" | "draw" | "value" | "module",
-        "method": "resize",           # Image instance method name (for "image" type)
+        "type": "image" | "dual" | "filter" | "draw" | "value" | "module" | "enhance",
+        "method": "resize",           # PIL method/function to call
         "params": {"size": [50, 50]}, # Default parameters
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'], ["L", "LA", "RGB", "RGBA", "1", "P", "F"], ["L", "LA", "RGB", "RGBA"], # Modes to test
-        "prep": "convert('1', ...)",  # Optional input prep for dual-image ops
+        "modes": [...],               # From manifest.yaml supported_modes
+        "prep": "...",                # Optional input prep
     }
 """
 
-REGISTRY = {
-    # ═══════════════════════════════════════════════════════════════
-    # Image instance methods — call img.method(**params)
-    # ═══════════════════════════════════════════════════════════════
-    "Image.resize": {
-        "type": "image",
-        "method": "resize",
-        "params": {"size": [50, 50]},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I"],
-    },
-    "Image.crop": {
-        "type": "image",
-        "method": "crop",
-        "params": {"box": [25, 25, 75, 75]},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I", "F"],
-    },
-    "Image.rotate": {
-        "type": "image",
-        "method": "rotate",
-        "params": {"angle": 90},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK"],
-    },
-    "Image.transpose": {
-        "type": "image",
-        "method": "transpose",
-        "params": {"method": 0},  # FLIP_LEFT_RIGHT
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.copy": {
-        "type": "image",
-        "method": "copy",
-        "params": {},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.tobytes": {
-        "type": "value",
-        "method": "tobytes",
-        "params": {},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P"],
-    },
-    "Image.thumbnail": {
-        "type": "image",
-        "method": "thumbnail",
-        "params": {"size": [50, 50]},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.quantize": {
-        "type": "image",
-        "method": "quantize",
-        "params": {"colors": 16},
-        "modes": ['CMYK', 'L', 'LA', 'RGB', 'RGBA', 'YCbCr'],
-    },
-    "Image.filter": {
-        "type": "image",
-        "method": "filter",
-        "params": {"filter": "BLUR"},
-        "modes": ["L", "LA", "RGB", "RGBA"],
-    },
-    "Image.convert": {
-        "type": "image",
-        "method": "convert",
-        # Special: target_mode depends on the current image mode
-        "params": {"mode": "__CONVERT_TO__"},  # filled at runtime
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P", "CMYK", "YCbCr", "HSV", "I", "F"],
-    },
-    "Image.split": {
-        "type": "value",
-        "method": "split",
-        "params": {},
-        "modes": ["L", "LA", "RGB", "RGBA"],
-    },
-    "Image.getbands": {
-        "type": "value",
-        "method": "getbands",
-        "params": {},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P"],
-    },
-    "Image.getbbox": {
-        "type": "value",
-        "method": "getbbox",
-        "params": {},
-        "modes": ["L", "LA", "RGB", "RGBA"],
-    },
-    "Image.getextrema": {
-        "type": "value",
-        "method": "getextrema",
-        "params": {},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.histogram": {
-        "type": "value",
-        "method": "histogram",
-        "params": {},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.getpixel": {
-        "type": "value",
-        "method": "getpixel",
-        "params": {"xy": [50, 50]},
-        "modes": ["L", "LA", "RGB", "RGBA", "1", "P"],
-    },
-    "Image.getcolors": {
-        "type": "value",
-        "method": "getcolors",
-        "params": {"maxcolors": 256},
-        "modes": ['1', 'L', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.getdata": {
-        "type": "value",
-        "method": "getdata",
-        "params": {"band": None},
-        "modes": ["L", "LA", "RGB", "RGBA"],
-    },
-    "Image.getprojection": {
-        "type": "value",
-        "method": "getprojection",
-        "params": {},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "Image.entropy": {
-        "type": "value",
-        "method": "entropy",
-        "params": {},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.getchannel": {
-        "type": "image",
-        "method": "getchannel",
-        "params": {"channel": 0},
-        "modes": ["L", "LA", "RGB", "RGBA"],
-    },
-    "Image.load": {
-        "type": "value",
-        "method": "load",
-        "params": {},
-        "modes": ["1", "L", "LA", "P", "RGB", "RGBA"],
-    },
-    "Image.verify": {
-        "type": "value",
-        "method": "verify",
-        "params": {},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "Image.seek": {
-        "type": "value",
-        "method": "seek",
-        "params": {"frame": 0},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.tell": {
-        "type": "value",
-        "method": "tell",
-        "params": {},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.draft": {
-        "type": "image",
-        "method": "draft",
-        "params": {"mode": "RGB", "size": [50, 50]},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.putalpha": {
-        "type": "image",
-        "method": "putalpha",
-        "params": {"alpha": 128},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.putpixel": {
-        "type": "image",
-        "method": "putpixel",
-        "params": {"xy": [50, 50], "value": [255, 255, 255, 255]},
-        "modes": ["1", "L", "LA", "P", "RGB", "RGBA"],
-    },
-    "Image.putdata": {
-        "type": "image",
-        "method": "putdata",
-        "params": {"data": [128]},  # expanded at runtime based on band count
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.reduce": {
-        "type": "image",
-        "method": "reduce",
-        "params": {"factor": 2},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.effect_spread": {
-        "type": "image",
-        "method": "effect_spread",
-        "params": {"distance": 2},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.transform": {
-        "type": "image",
-        "method": "transform",
-        "params": {"size": (50, 50), "method": 0, "data": [1, 0, 0, 0, 1, 0]},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "Image.remap_palette": {
-        "type": "image",
-        "method": "remap_palette",
-        "params": {"dest_map": [0, 1]},
-        "modes": ['L', 'P'],
-    },
-    "Image.tobitmap": {
-        "type": "value",
-        "method": "tobitmap",
-        "params": {},
-        "modes": ["1"],
-    },
+import sys
+from pathlib import Path
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageFilter — create filter object, then img.filter(obj)
-    # ═══════════════════════════════════════════════════════════════
-    "ImageFilter.BLUR": {
-        "type": "filter",
-        "name": "BLUR",
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.CONTOUR": {
-        "type": "filter",
-        "name": "CONTOUR",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.DETAIL": {
-        "type": "filter",
-        "name": "DETAIL",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.EDGE_ENHANCE": {
-        "type": "filter",
-        "name": "EDGE_ENHANCE",
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.EDGE_ENHANCE_MORE": {
-        "type": "filter",
-        "name": "EDGE_ENHANCE_MORE",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.EMBOSS": {
-        "type": "filter",
-        "name": "EMBOSS",
-        "modes": ['L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.FIND_EDGES": {
-        "type": "filter",
-        "name": "FIND_EDGES",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.SHARPEN": {
-        "type": "filter",
-        "name": "SHARPEN",
-        "modes": ['1', 'CMYK', 'F', 'HSV', 'I', 'L', 'LA', 'P', 'RGB', 'RGBA', 'YCbCr'],
-    },
-    "ImageFilter.SMOOTH": {
-        "type": "filter",
-        "name": "SMOOTH",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.SMOOTH_MORE": {
-        "type": "filter",
-        "name": "SMOOTH_MORE",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.BoxBlur": {
-        "type": "filter",
-        "name": "BoxBlur",
-        "params": {"radius": 2},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.GaussianBlur": {
-        "type": "filter",
-        "name": "GaussianBlur",
-        "params": {"radius": 2},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.UnsharpMask": {
-        "type": "filter",
-        "name": "UnsharpMask",
-        "params": {"radius": 2, "percent": 150, "threshold": 3},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.MaxFilter": {
-        "type": "filter",
-        "name": "MaxFilter",
-        "params": {"size": 3},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.MinFilter": {
-        "type": "filter",
-        "name": "MinFilter",
-        "params": {"size": 3},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.MedianFilter": {
-        "type": "filter",
-        "name": "MedianFilter",
-        "params": {"size": 3},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.ModeFilter": {
-        "type": "filter",
-        "name": "ModeFilter",
-        "params": {"size": 3},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.RankFilter": {
-        "type": "filter",
-        "name": "RankFilter",
-        "params": {"size": 3, "rank": 2},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageFilter.Kernel": {
-        "type": "filter",
-        "name": "Kernel",
-        "params": {"size": [3, 3], "kernel": [1, 1, 1, 1, 1, 1, 1, 1, 1], "scale": 9, "offset": 0},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
+ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT))
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageChops — dual-image operations
-    # ═══════════════════════════════════════════════════════════════
-    "ImageChops.add": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.subtract": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.multiply": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.screen": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.darker": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.lighter": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.difference": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.add_modulo": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.subtract_modulo": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.hard_light": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.soft_light": {
-        "type": "dual",
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageChops.overlay": {
-        "type": "dual",
-        "modes": ['L', 'RGB'],
-    },
-    "ImageChops.logical_and": {
-        "type": "dual",
-        "prep": "convert('1', dither='NONE')",
-        "modes": ["1"],
-    },
-    "ImageChops.logical_or": {
-        "type": "dual",
-        "prep": "convert('1', dither='NONE')",
-        "modes": ["1"],
-    },
-    "ImageChops.logical_xor": {
-        "type": "dual",
-        "prep": "convert('1', dither='NONE')",
-        "modes": ["1"],
-    },
-    "ImageChops.blend": {
-        "type": "dual",
-        "modes": ['L', 'P', 'RGB'],
-    },
-    "ImageChops.composite": {
-        "type": "dual",
-        "modes": ['L', 'P', 'RGB'],
-    },
-    "ImageChops.invert": {
-        "type": "image",
-        "method": "invert",
-        "modes": ['L', 'P', 'RGB'],
-    },
-    "ImageChops.duplicate": {
-        "type": "image",
-        "method": "copy",
-        "modes": ['L', 'P', 'RGB'],
-    },
-    "ImageChops.constant": {
-        "type": "image",
-        "method": "constant",
-        "params": {"value": 128},
-        "modes": ['L', 'P', 'RGB'],
-    },
-    "ImageChops.offset": {
-        "type": "image",
-        "method": "offset",
-        "params": {"xoffset": 5, "yoffset": 5},
-        "modes": ['L', 'RGB', 'RGBA'],
-    },
+import yaml
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageOps — instance methods on the image
-    # ═══════════════════════════════════════════════════════════════
-    "ImageOps.autocontrast": {
-        "type": "image",
-        "method": "autocontrast",
-        "params": {"cutoff": 0},
-        "modes": ['L', 'RGB', 'RGBA'],
-    },
-    "ImageOps.equalize": {
-        "type": "image",
-        "method": "equalize",
-        "params": {},
-        "modes": ['L', 'RGB', 'RGBA'],
-    },
-    "ImageOps.invert": {
-        "type": "image",
-        "method": "invert",
-        "params": {},
-        "modes": ['L', 'RGB', 'RGBA'],
-    },
-    "ImageOps.flip": {
-        "type": "image",
-        "method": "flip",
-        "params": {},
-        "modes": ['L', 'RGB', 'RGBA'],
-    },
-    "ImageOps.mirror": {
-        "type": "image",
-        "method": "mirror",
-        "params": {},
-        "modes": ['L', 'RGB', 'RGBA'],
-    },
-    "ImageOps.posterize": {
-        "type": "image",
-        "method": "posterize",
-        "params": {"bits": 4},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.solarize": {
-        "type": "image",
-        "method": "solarize",
-        "params": {"threshold": 128},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.grayscale": {
-        "type": "image",
-        "method": "convert",
-        "params": {},
-        "modes": ['L', 'LA', 'RGB', 'RGBA'],
-    },
-    "ImageOps.colorize": {
-        "type": "image",
-        "method": "colorize",
-        "params": {"black": "black", "white": "white"},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.expand": {
-        "type": "image",
-        "method": "expand",
-        "params": {"border": 5},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.crop": {
-        "type": "image",
-        "method": "crop",
-        "params": {"border": 5},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.scale": {
-        "type": "image",
-        "method": "scale",
-        "params": {"factor": 0.5},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.contain": {
-        "type": "image",
-        "method": "contain",
-        "params": {"size": [25, 25]},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.cover": {
-        "type": "image",
-        "method": "cover",
-        "params": {"size": [25, 25]},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.fit": {
-        "type": "image",
-        "method": "fit",
-        "params": {"size": [25, 25]},
-        "modes": ["L", "RGB"],
-    },
-    "ImageOps.pad": {
-        "type": "image",
-        "method": "pad",
-        "params": {"size": [25, 25]},
-        "modes": ["L", "RGB"],
-    },
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageEnhance
-    # ═══════════════════════════════════════════════════════════════
-    "ImageEnhance.Brightness": {
-        "type": "enhance",
-        "name": "Brightness",
-        "params": {"factor": 1.5},
-        "modes": ["L", "RGB"],
-    },
-    "ImageEnhance.Color": {
-        "type": "enhance",
-        "name": "Color",
-        "params": {"factor": 1.5},
-        "modes": ["L", "RGB"],
-    },
-    "ImageEnhance.Contrast": {
-        "type": "enhance",
-        "name": "Contrast",
-        "params": {"factor": 1.5},
-        "modes": ["L", "RGB"],
-    },
-    "ImageEnhance.Sharpness": {
-        "type": "enhance",
-        "name": "Sharpness",
-        "params": {"factor": 1.5},
-        "modes": ["L", "RGB"],
-    },
+# ── Load manifest ────────────────────────────────────────────────────────────────
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageModule — class methods on Image
-    # ═══════════════════════════════════════════════════════════════
-    "ImageModule.new": {
-        "type": "module",
-        "function": "Image.new",
-        "params": {"mode": "RGB", "size": [100, 100], "color": 0},
-        "modes": ['1', 'CMYK', 'F', 'HSV', 'I', 'L', 'LA', 'P', 'RGB', 'RGBA', 'YCbCr'],
-    },
-    "ImageModule.open": {
-        "type": "module",
-        "function": "Image.open",
-        "params": {},  # uses input bytes
-        "modes": ["L", "RGB"],
-    },
-    "ImageModule.frombytes": {
-        "type": "module",
-        "function": "Image.frombytes",
-        "params": {},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageModule.blend": {
-        "type": "dual",
-        "function": "Image.blend",
-        "params": {"alpha": 0.5},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageModule.composite": {
-        "type": "dual",
-        "function": "Image.composite",
-        "params": {},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageModule.merge": {
-        "type": "module",
-        "function": "Image.merge",
-        "params": {},
-        "modes": ["L", "LA", "RGB", "RGBA"],
-    },
-    "ImageModule.eval": {
-        "type": "module",
-        "function": "Image.eval",
-        "params": {},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
-    "ImageModule.alpha_composite": {
-        "type": "image",
-        "method": "alpha_composite",
-        "params": {"fg_alpha": 128},
-        "modes": ["L", "RGB"],
-    },
-    "ImageModule.effect_noise": {
-        "type": "module",
-        "function": "Image.effect_noise",
-        "params": {"size": [100, 100], "sigma": 10.0},
-        "modes": ['1', 'CMYK', 'L', 'LA', 'P', 'RGB', 'RGBA'],
-    },
+def _load_manifest():
+    with open(ROOT / "manifest.yaml") as f:
+        return yaml.safe_load(f)
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageDraw — draw on image, return modified image
-    # ═══════════════════════════════════════════════════════════════
-    "ImageDraw.line": {
-        "type": "draw",
-        "draw": "line",
-        "params": {"xy": [[10, 10], [40, 40]], "fill": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.circle": {
-        "type": "draw",
-        "draw": "circle",
-        "params": {"xy": [25, 25], "radius": 15, "fill": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.rectangle": {
-        "type": "draw",
-        "draw": "rectangle",
-        "params": {"xy": [10, 10, 40, 40], "outline": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.ellipse": {
-        "type": "draw",
-        "draw": "ellipse",
-        "params": {"xy": [10, 10, 40, 40], "outline": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.polygon": {
-        "type": "draw",
-        "draw": "polygon",
-        "params": {"xy": [[10, 10], [40, 10], [25, 40]], "outline": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.arc": {
-        "type": "draw",
-        "draw": "arc",
-        "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.chord": {
-        "type": "draw",
-        "draw": "chord",
-        "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.pieslice": {
-        "type": "draw",
-        "draw": "pieslice",
-        "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.point": {
-        "type": "draw",
-        "draw": "point",
-        "params": {"xy": [25, 25], "fill": 200},
-        "modes": ['1', 'L', 'LA', 'P', 'RGB', 'RGBA', 'CMYK'],
-    },
-    "ImageDraw.regular_polygon": {
-        "type": "draw",
-        "draw": "regular_polygon",
-        "params": {"bounding_circle": [25, 25, 15], "n_sides": 5, "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
-    },
-    "ImageDraw.rounded_rectangle": {
-        "type": "draw",
-        "draw": "rounded_rectangle",
-        "params": {"xy": [10, 10, 40, 40], "radius": 5, "outline": 200},
-        "modes": ["L", "RGB", "RGBA"],
-    },
-    "ImageDraw.bitmap": {
-        "type": "draw",
-        "draw": "bitmap",
-        "params": {"xy": [5, 5], "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
-    },
-    "ImageDraw.text": {
-        "type": "draw",
-        "draw": "text",
-        "params": {"xy": [5, 5], "text": "Hello", "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
-    },
-    "ImageDraw.multiline_text": {
-        "type": "draw",
-        "draw": "multiline_text",
-        "params": {"xy": [5, 5], "text": "Hello", "fill": 200},
-        "modes": ["L", "RGB", "RGBA"],
-    },
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageColor — return color values
-    # ═══════════════════════════════════════════════════════════════
-    "ImageColor.getcolor": {
-        "type": "value",
-        "function": "ImageColor.getcolor",
-        "params": {"color": "red", "mode": "RGB"},
-        "modes": ["L", "RGB"],
-    },
-    "ImageColor.getrgb": {
-        "type": "value",
-        "function": "ImageColor.getrgb",
-        "params": {"color": "red"},
-        "modes": ["L", "RGB"],
-    },
+def _find_manifest_modes(manifest, module_name, op_name):
+    """Extract supported_modes from manifest for a given module.op combination."""
+    modules = manifest.get("modules", {})
+    mod = modules.get(module_name, {})
+    if not mod:
+        return []
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImagePalette
-    # ═══════════════════════════════════════════════════════════════
-    "ImagePalette.copy": {
-        "type": "value",
-        "function": "ImagePalette.copy",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImagePalette.getcolor": {
-        "type": "value",
-        "function": "ImagePalette.getcolor",
-        "params": {"color": [255, 0, 0]},
-        "modes": ["L", "RGB"],
-    },
-    "ImagePalette.getdata": {
-        "type": "value",
-        "function": "ImagePalette.getdata",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImagePalette.save": {
-        "type": "value",
-        "function": "ImagePalette.save",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImagePalette.tobytes": {
-        "type": "value",
-        "function": "ImagePalette.tobytes",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
+    # Check class_methods, methods, functions, classes, properties
+    for section in ["class_methods", "methods", "functions"]:
+        for entry in mod.get(section, []):
+            if entry.get("name") == op_name:
+                modes = entry.get("supported_modes", [])
+                return _normalize_modes(modes)
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageFont
-    # ═══════════════════════════════════════════════════════════════
-    "ImageFont.load_default": {
-        "type": "value",
-        "function": "ImageFont.load_default",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImageFont.load_default_imagefont": {
-        "type": "value",
-        "function": "ImageFont.load_default_imagefont",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImageFont.load": {
-        "type": "value",
-        "function": "ImageFont.load",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImageFont.load_path": {
-        "type": "value",
-        "function": "ImageFont.load_path",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
-    "ImageFont.truetype": {
-        "type": "value",
-        "function": "ImageFont.truetype",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
+    # Classes — check class itself and its methods
+    for cls in mod.get("classes", []):
+        if cls.get("name") == op_name:
+            modes = cls.get("supported_modes", [])
+            return _normalize_modes(modes)
+        # Check nested methods
+        for entry in cls.get("methods", []):
+            if entry.get("name") == op_name:
+                modes = entry.get("supported_modes", [])
+                if not modes:
+                    modes = cls.get("supported_modes", [])
+                return _normalize_modes(modes)
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageStat
-    # ═══════════════════════════════════════════════════════════════
-    "ImageStat.Stat": {
-        "type": "value",
-        "function": "ImageStat.Stat",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
+    # Properties
+    for prop in mod.get("properties", []):
+        if prop.get("name") == op_name:
+            modes = prop.get("modes", [])
+            return _normalize_modes(modes)
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageSequence
-    # ═══════════════════════════════════════════════════════════════
-    "ImageSequence.Iterator": {
-        "type": "value",
-        "function": "ImageSequence.Iterator",
-        "params": {},
-        "modes": ["L", "RGB"],
-    },
+    # YAML anchors may resolve as lists directly
+    if isinstance(modes := [], list):
+        return _normalize_modes(modes)
 
-    # ═══════════════════════════════════════════════════════════════
-    # Image properties (value-returning)
-    # ═══════════════════════════════════════════════════════════════
-    "Image.getexif": {"type": "value", "property": "getexif", "modes": ["L", "RGB"]},
-    "Image.getim": {"type": "value", "property": "getim", "modes": ["L", "RGB"]},
-    "Image.getpalette": {"type": "value", "property": "getpalette", "modes": ["L", "RGB"]},
-    "Image.getxmp": {"type": "value", "property": "getxmp", "modes": ["L", "RGB"]},
-    "Image.get_flattened_data": {"type": "value", "property": "get_flattened_data", "modes": ["L", "RGB"]},
-    "Image.get_child_images": {"type": "value", "property": "get_child_images", "modes": ["L", "RGB"]},
-    "Image.apply_transparency": {"type": "value", "property": "apply_transparency", "modes": ["L", "RGB"]},
+    return []
 
-    # ── Missing testable ops added for complete coverage ──
-    "Image.point": {
-        "type": "image",
-        "method": "point",
-        "params": {"lut": list(range(256))},
-        "modes": ["L", "RGB"],
-    },
 
-    # ═══════════════════════════════════════════════════════════════
-    # Image instance methods — dual (paste)
-    # ═══════════════════════════════════════════════════════════════
-    "Image.paste": {
-        "type": "dual",
-        "method": "paste",
-        "params": {"box": [0, 0]},
-        "modes": ["L", "RGB", "RGBA"],
-        # NOTE: paste modifies in-place and returns None. "dual" creates a second
-        # image and calls PIL.Image.paste(img1, img2). The default call_dual does
-        # NOT forward params (no box applied). Both backends need "dual" handling
-        # for module="Image". Fixture stores expected=None (weak no-crash test).
-    },
+def _normalize_modes(modes):
+    """Ensure modes is a flat list of strings."""
+    result = []
+    for m in modes:
+        if isinstance(m, list):
+            result.extend([str(x) for x in m])
+        else:
+            result.append(str(m))
+    return result
 
-    # ═══════════════════════════════════════════════════════════════
-    # Image instance methods — palette modification
-    # ═══════════════════════════════════════════════════════════════
-    "Image.putpalette": {
-        "type": "image",
-        "method": "putpalette",
-        "params": {"data": list(range(48))},  # 16-colour RGB palette (48 flat values)
-        "modes": ["P"],
-        # NOTE: modifies palette in-place, returns None. Requires "P" mode image.
-        # Fixture stores expected=None (weak no-crash test). Both backends handle
-        # via img.putpalette(**params).
-    },
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageFilter — parametric filter requiring table data
-    # ═══════════════════════════════════════════════════════════════
+# ── Fixture execution metadata — only what CANNOT be inferred from conventions ───
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageOps — operations requiring complex params or decorators
-    # ═══════════════════════════════════════════════════════════════
+FIXTURE_META = {
+    # ── Image methods with non-empty params ──
+    "Image.resize":      {"type": "image", "method": "resize",      "params": {"size": [50, 50]}},
+    "Image.crop":         {"type": "image", "method": "crop",         "params": {"box": [25, 25, 75, 75]}},
+    "Image.rotate":       {"type": "image", "method": "rotate",       "params": {"angle": 90}},
+    "Image.transpose":    {"type": "image", "method": "transpose",    "params": {"method": 0}},
+    "Image.thumbnail":    {"type": "image", "method": "thumbnail",    "params": {"size": [50, 50]}},
+    "Image.quantize":     {"type": "image", "method": "quantize",     "params": {"colors": 16}},
+    "Image.filter":       {"type": "image", "method": "filter",       "params": {"filter": "BLUR"}},
+    "Image.convert":      {"type": "image", "method": "convert",      "params": {"mode": "__CONVERT_TO__"}},
+    "Image.getpixel":     {"type": "value", "method": "getpixel",     "params": {"xy": [50, 50]}},
+    "Image.getcolors":    {"type": "value", "method": "getcolors",    "params": {"maxcolors": 256}},
+    "Image.getdata":      {"type": "value", "method": "getdata",      "params": {"band": None}},
+    "Image.getchannel":   {"type": "image", "method": "getchannel",   "params": {"channel": 0}},
+    "Image.seek":         {"type": "value", "method": "seek",         "params": {"frame": 0}},
+    "Image.draft":        {"type": "image", "method": "draft",        "params": {"mode": "RGB", "size": [50, 50]}},
+    "Image.putalpha":     {"type": "image", "method": "putalpha",     "params": {"alpha": 128}},
+    "Image.putpixel":     {"type": "image", "method": "putpixel",     "params": {"xy": [50, 50], "value": [255, 255, 255, 255]}},
+    "Image.putdata":      {"type": "image", "method": "putdata",      "params": {"data": [128]}},
+    "Image.reduce":       {"type": "image", "method": "reduce",       "params": {"factor": 2}},
+    "Image.effect_spread":{"type": "image", "method": "effect_spread","params": {"distance": 2}},
+    "Image.transform":    {"type": "image", "method": "transform",    "params": {"size": (50, 50), "method": 0, "data": [1, 0, 0, 0, 1, 0]}},
+    "Image.remap_palette":{"type": "image", "method": "remap_palette","params": {"dest_map": [0, 1]}},
+    "Image.point":        {"type": "image", "method": "point",        "params": {"lut": list(range(256))}},
+    "Image.paste":        {"type": "dual",  "method": "paste",        "params": {"box": [0, 0]}},
+    "Image.putpalette":   {"type": "image", "method": "putpalette",   "params": {"data": list(range(48))}},
+    "Image.has_transparency_data": {"type": "value", "method": "has_transparency_data", "params": {}},
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageDraw — value-returning methods (not draw/mutating operations)
-    # ═══════════════════════════════════════════════════════════════
+    # ── ImageChops ──
+    "ImageChops.constant": {"type": "image", "method": "constant", "params": {"value": 128}},
+    "ImageChops.offset":   {"type": "image", "method": "offset",   "params": {"xoffset": 5, "yoffset": 5}},
+    "ImageChops.invert":   {"type": "image", "method": "invert",   "params": {}},
+    "ImageChops.duplicate":{"type": "image", "method": "copy",     "params": {}},
+    "ImageChops.logical_and": {"type": "dual", "prep": "convert('1', dither='NONE')"},
+    "ImageChops.logical_or":  {"type": "dual", "prep": "convert('1', dither='NONE')"},
+    "ImageChops.logical_xor": {"type": "dual", "prep": "convert('1', dither='NONE')"},
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageFont — instance methods on font objects (FreeTypeFont/ImageFont)
-    # ═══════════════════════════════════════════════════════════════
-    # These require a font OBJECT, not an Image. The current execution engine
-    # passes Images to call_value/call_method; it cannot provide a font instance.
-    # Both backends need rework to support font-object operations.
+    # ── ImageOps ──
+    "ImageOps.autocontrast": {"type": "image", "method": "autocontrast", "params": {"cutoff": 0}},
+    "ImageOps.posterize":    {"type": "image", "method": "posterize",    "params": {"bits": 4}},
+    "ImageOps.solarize":     {"type": "image", "method": "solarize",     "params": {"threshold": 128}},
+    "ImageOps.grayscale":    {"type": "image", "method": "convert",      "params": {}},
+    "ImageOps.colorize":     {"type": "image", "method": "colorize",     "params": {"black": "black", "white": "white"}},
+    "ImageOps.expand":       {"type": "image", "method": "expand",       "params": {"border": 5}},
+    "ImageOps.crop":         {"type": "image", "method": "crop",         "params": {"border": 5}},
+    "ImageOps.scale":        {"type": "image", "method": "scale",        "params": {"factor": 0.5}},
+    "ImageOps.contain":      {"type": "image", "method": "contain",      "params": {"size": [25, 25]}},
+    "ImageOps.cover":        {"type": "image", "method": "cover",        "params": {"size": [25, 25]}},
+    "ImageOps.fit":          {"type": "image", "method": "fit",          "params": {"size": [25, 25]}},
+    "ImageOps.pad":          {"type": "image", "method": "pad",          "params": {"size": [25, 25]}},
 
-    # ═══════════════════════════════════════════════════════════════
-    # ImageModule — classmethods requiring external dependencies
-    # ═══════════════════════════════════════════════════════════════
+    # ── ImageEnhance ──
+    "ImageEnhance.Brightness": {"type": "enhance", "name": "Brightness", "params": {"factor": 1.5}},
+    "ImageEnhance.Color":      {"type": "enhance", "name": "Color",      "params": {"factor": 1.5}},
+    "ImageEnhance.Contrast":   {"type": "enhance", "name": "Contrast",   "params": {"factor": 1.5}},
+    "ImageEnhance.Sharpness":  {"type": "enhance", "name": "Sharpness",  "params": {"factor": 1.5}},
+
+    # ── ImageFilter with params ──
+    "ImageFilter.BoxBlur":      {"type": "filter", "name": "BoxBlur",      "params": {"radius": 2}},
+    "ImageFilter.GaussianBlur": {"type": "filter", "name": "GaussianBlur", "params": {"radius": 2}},
+    "ImageFilter.UnsharpMask":  {"type": "filter", "name": "UnsharpMask",  "params": {"radius": 2, "percent": 150, "threshold": 3}},
+    "ImageFilter.MaxFilter":    {"type": "filter", "name": "MaxFilter",    "params": {"size": 3}},
+    "ImageFilter.MinFilter":    {"type": "filter", "name": "MinFilter",    "params": {"size": 3}},
+    "ImageFilter.MedianFilter": {"type": "filter", "name": "MedianFilter", "params": {"size": 3}},
+    "ImageFilter.ModeFilter":   {"type": "filter", "name": "ModeFilter",   "params": {"size": 3}},
+    "ImageFilter.RankFilter":   {"type": "filter", "name": "RankFilter",   "params": {"size": 3, "rank": 2}},
+    "ImageFilter.Kernel":       {"type": "filter", "name": "Kernel",       "params": {"size": [3, 3], "kernel": [1,1,1,1,1,1,1,1,1], "scale": 9, "offset": 0}},
+
+    # ── ImageModule ──
+    "ImageModule.new":            {"type": "module", "function": "Image.new",            "params": {"mode": "RGB", "size": [100, 100], "color": 0}},
+    "ImageModule.open":           {"type": "module", "function": "Image.open",           "params": {}},
+    "ImageModule.frombytes":      {"type": "module", "function": "Image.frombytes",      "params": {}},
+    "ImageModule.blend":          {"type": "dual",   "function": "Image.blend",          "params": {"alpha": 0.5}},
+    "ImageModule.composite":      {"type": "dual",   "function": "Image.composite",      "params": {}},
+    "ImageModule.merge":          {"type": "module", "function": "Image.merge",          "params": {}},
+    "ImageModule.eval":           {"type": "module", "function": "Image.eval",           "params": {}},
+    "ImageModule.alpha_composite":{"type": "image",  "method": "alpha_composite",        "params": {"fg_alpha": 128}},
+    "ImageModule.effect_noise":   {"type": "module", "function": "Image.effect_noise",   "params": {"size": [100, 100], "sigma": 10.0}},
+
+    # ── ImageColor ──
+    "ImageColor.getcolor": {"type": "value", "function": "ImageColor.getcolor", "params": {"color": "red", "mode": "RGB"}},
+    "ImageColor.getrgb":   {"type": "value", "function": "ImageColor.getrgb",   "params": {"color": "red"}},
+
+    # ── ImagePalette ──
+    "ImagePalette.getcolor": {"type": "value", "function": "ImagePalette.getcolor", "params": {"color": [255, 0, 0]}},
+
+    # ── ImageStat ──
+    "ImageStat.Stat": {"type": "value", "function": "ImageStat.Stat", "params": {}},
+
+    # ── ImageSequence ──
+    "ImageSequence.Iterator":   {"type": "value", "function": "ImageSequence.Iterator",   "params": {}},
+    "ImageSequence.all_frames": {"type": "value", "function": "ImageSequence.all_frames", "params": {}},
+
+    # ── ImageDraw ──
+    "ImageDraw.line":              {"type": "draw", "draw": "line",              "params": {"xy": [[10, 10], [40, 40]], "fill": 200}},
+    "ImageDraw.circle":            {"type": "draw", "draw": "circle",            "params": {"xy": [25, 25], "radius": 15, "fill": 200}},
+    "ImageDraw.rectangle":         {"type": "draw", "draw": "rectangle",         "params": {"xy": [10, 10, 40, 40], "outline": 200}},
+    "ImageDraw.ellipse":           {"type": "draw", "draw": "ellipse",           "params": {"xy": [10, 10, 40, 40], "outline": 200}},
+    "ImageDraw.polygon":           {"type": "draw", "draw": "polygon",           "params": {"xy": [[10, 10], [40, 10], [25, 40]], "outline": 200}},
+    "ImageDraw.arc":               {"type": "draw", "draw": "arc",               "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200}},
+    "ImageDraw.chord":             {"type": "draw", "draw": "chord",             "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200}},
+    "ImageDraw.pieslice":          {"type": "draw", "draw": "pieslice",          "params": {"xy": [10, 10, 40, 40], "start": 0, "end": 180, "fill": 200}},
+    "ImageDraw.point":             {"type": "draw", "draw": "point",             "params": {"xy": [25, 25], "fill": 200}},
+    "ImageDraw.regular_polygon":   {"type": "draw", "draw": "regular_polygon",   "params": {"bounding_circle": [25, 25, 15], "n_sides": 5, "fill": 200}},
+    "ImageDraw.rounded_rectangle": {"type": "draw", "draw": "rounded_rectangle", "params": {"xy": [10, 10, 40, 40], "radius": 5, "outline": 200}},
+    "ImageDraw.bitmap":            {"type": "draw", "draw": "bitmap",            "params": {"xy": [5, 5], "fill": 200}},
+    "ImageDraw.text":              {"type": "draw", "draw": "text",              "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
+    "ImageDraw.multiline_text":    {"type": "draw", "draw": "multiline_text",    "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
 }
+
+
+# ── Convention-based defaults ────────────────────────────────────────────────────
+
+def _default_meta(module_name, op_name):
+    """Derive fixture metadata from naming conventions when not in FIXTURE_META."""
+    # Image instance methods
+    if module_name == "Image":
+        return {"type": "value" if _is_value_op(op_name) else "image",
+                "method": op_name, "params": {}}
+    # Image properties
+    if module_name == "ImageProperties":
+        return {"type": "value", "property": op_name, "params": {}}
+
+    # ImageFilter built-in constants (no params)
+    if module_name == "ImageFilter":
+        return {"type": "filter", "name": op_name, "params": {}}
+
+    # ImageChops dual-input ops
+    if module_name == "ImageChops":
+        single_image_ops = {"invert", "duplicate", "constant", "offset"}
+        if op_name in single_image_ops:
+            return {"type": "image", "method": op_name, "params": {}}
+        return {"type": "dual", "params": {}}
+
+    # ImageOps instance methods
+    if module_name == "ImageOps":
+        return {"type": "image", "method": op_name, "params": {}}
+
+    # ImageEnhance
+    if module_name == "ImageEnhance":
+        return {"type": "enhance", "name": op_name, "params": {"factor": 1.5}}
+
+    # ImageDraw
+    if module_name == "ImageDraw":
+        return {"type": "draw", "draw": op_name, "params": {}}
+
+    # ImageModule
+    if module_name == "ImageModule":
+        return {"type": "module", "function": f"Image.{op_name}", "params": {}}
+
+    # Value-returning modules
+    for mod_name in ["ImageColor", "ImagePalette", "ImageFont", "ImageStat", "ImageSequence"]:
+        if module_name == mod_name:
+            return {"type": "value", "function": f"{mod_name}.{op_name}", "params": {}}
+
+    return None
+
+
+def _is_value_op(name):
+    """Return True if an Image method returns a non-image value."""
+    return name in {
+        "tobytes", "split", "getbands", "getbbox", "getextrema", "histogram",
+        "getpixel", "getcolors", "getdata", "getprojection", "entropy",
+        "load", "verify", "seek", "tell", "tobitmap", "has_transparency_data",
+        "getexif", "getim", "getpalette", "getxmp", "get_flattened_data",
+        "get_child_images", "apply_transparency",
+    }
+
+
+# ── Build registry ──────────────────────────────────────────────────────────────
+
+def _module_name_for_op(op_full_name):
+    """Map 'ImageOps.invert' → ('ImageOps', 'invert')."""
+    # Handle compound names like 'ImageFilter.BLUR' or 'ImageSequence.Iterator'
+    for prefix in ["ImageFilter", "ImageEnhance", "ImageChops", "ImageOps",
+                   "ImageDraw", "ImageColor", "ImagePalette", "ImageFont",
+                   "ImageStat", "ImageSequence", "ImageModule"]:
+        if op_full_name.startswith(prefix + "."):
+            return prefix, op_full_name[len(prefix) + 1:]
+    # Default: Image.<method> or Image.property
+    if op_full_name.startswith("Image."):
+        return "Image", op_full_name[6:]
+    return "Image", op_full_name
+
+
+def _collect_manifest_ops(manifest):
+    """Walk the manifest and yield (module_name, op_name, modes, status, targets) for every implemented entry."""
+    modules = manifest.get("modules", {})
+    for mod_name, mod_data in modules.items():
+        # Functions / class_methods / methods
+        for section in ["class_methods", "methods", "functions"]:
+            for entry in mod_data.get(section, []):
+                name = entry.get("name")
+                status = entry.get("status", "")
+                modes = entry.get("supported_modes", [])
+                if name and status == "implemented":
+                    yield mod_name, name, _normalize_modes(modes)
+
+        # Classes — the class itself AND its methods
+        for cls in mod_data.get("classes", []):
+            cls_name = cls.get("name")
+            cls_status = cls.get("status", "")
+            cls_modes = cls.get("supported_modes", [])
+            if cls_name and cls_status == "implemented":
+                yield mod_name, cls_name, _normalize_modes(cls_modes)
+            for entry in cls.get("methods", []):
+                name = entry.get("name")
+                status = entry.get("status", "")
+                modes = entry.get("supported_modes", [])
+                if not modes:
+                    modes = cls_modes
+                # Include methods even if ignored (they need registry entries)
+                if name:
+                    yield mod_name, name, _normalize_modes(modes)
+
+
+def build_registry():
+    """Build REGISTRY dict from manifest.yaml + FIXTURE_META overrides.
+
+    1. Start with FIXTURE_META entries (custom params)
+    2. Auto-derive any remaining manifest ops not in FIXTURE_META
+    3. Modes always come from manifest.yaml
+    """
+    manifest = _load_manifest()
+    registry = {}
+
+    # Pass 1: FIXTURE_META entries
+    for op_full_name, meta in FIXTURE_META.items():
+        module_name, op_name = _module_name_for_op(op_full_name)
+        modes = _find_manifest_modes(manifest, module_name, op_name)
+        if not modes:
+            modes = meta.get("modes", ["L", "RGB"])
+        entry = dict(meta)
+        entry["modes"] = modes
+        registry[op_full_name] = entry
+
+    # Pass 2: Auto-derive remaining implemented manifest ops
+    for mod_name, op_name, modes in _collect_manifest_ops(manifest):
+        op_full_name = f"{mod_name}.{op_name}"
+        if op_full_name in registry:
+            continue  # already in FIXTURE_META
+        meta = _default_meta(mod_name, op_name)
+        if meta is None:
+            continue
+        if not modes:
+            modes = ["L", "RGB"]
+        meta["modes"] = modes
+        registry[op_full_name] = meta
+
+    return registry
+
+
+# ── Public API ───────────────────────────────────────────────────────────────────
+
+REGISTRY = build_registry()

@@ -70,13 +70,105 @@ def fromarray(obj, mode=None):
     """Create image from array-like object (list of lists or bytes)."""
     if isinstance(obj, bytes):
         return Image.frombytes(mode or "L", (len(obj), 1), obj)
-    if hasattr(obj, 'shape'):  # numpy array
+    # numpy arrays and similar array interface objects
+    if hasattr(obj, '__array_interface__'):
+        arr = obj.__array_interface__
+        shape = arr["shape"]
+        dtype = arr["typestr"]
+        h, w = shape[0], shape[1] if len(shape) >= 2 else 1
+        if mode is None:
+            if len(shape) == 2:
+                mode = "L"
+            elif shape[2] == 3:
+                mode = "RGB"
+            elif shape[2] == 4:
+                mode = "RGBA"
+            else:
+                mode = "L"
+        data = bytes(arr["data"][0]) if isinstance(arr["data"], tuple) else bytes(obj)
+        return Image.frombytes(mode, (w, h), data)
+    if hasattr(obj, 'shape'):  # numpy array fallback
         if mode is None:
             mode = "L" if len(obj.shape) == 2 else "RGB" if obj.shape[2] == 3 else "RGBA"
         h, w = obj.shape[0], obj.shape[1]
         data = bytes(obj.tobytes() if hasattr(obj, 'tobytes') else obj)
         return Image.frombytes(mode, (w, h), data)
-    raise NotImplementedError("fromarray: unsupported object type")
+    if hasattr(obj, 'tobytes'):
+        return Image.frombytes(mode or "L", (len(obj.tobytes()), 1), obj.tobytes())
+    if isinstance(obj, (list, tuple)):
+        # Attempt to flatten pixel values
+        import itertools
+        flat = list(itertools.chain.from_iterable(obj)) if obj and isinstance(obj[0], (list, tuple)) else list(obj)
+        if all(isinstance(v, int) for v in flat):
+            size = (len(flat), 1) if mode is None else (len(flat) // len(mode), 1)
+            return Image.frombytes(mode or "L", size, bytes(flat))
+    raise NotImplementedError(f"fromarray: unsupported object type ({type(obj).__name__})")
+
+
+def linear_gradient(mode: str) -> Image:
+    """Generate 256x256 linear gradient from black to white, top to bottom."""
+    if mode == "L":
+        data = bytes(i for i in range(256) for _ in range(256))
+    elif mode == "RGB":
+        data = bytes(i for i in range(256) for _ in range(256) for _ in range(3))
+    else:
+        raise ValueError(f"unsupported mode for linear_gradient: {mode!r}")
+    return Image.frombytes(mode, (256, 256), data)
+
+
+def radial_gradient(mode: str) -> Image:
+    """Generate 256x256 radial gradient from black to white, centre to edge."""
+    cx, cy = 128.0, 128.0
+    max_dist = (cx * cx + cy * cy) ** 0.5  # sqrt(128^2 + 128^2)
+    if mode == "L":
+        data = bytes(
+            min(int(((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / max_dist * 255 + 0.5), 255)
+            for y in range(256)
+            for x in range(256)
+        )
+    elif mode == "RGB":
+        data = bytes(
+            min(int(((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / max_dist * 255 + 0.5), 255)
+            for y in range(256)
+            for x in range(256)
+            for _ in range(3)
+        )
+    else:
+        raise ValueError(f"unsupported mode for radial_gradient: {mode!r}")
+    return Image.frombytes(mode, (256, 256), data)
+
+
+def effect_mandelbrot(
+    size: tuple[int, int],
+    extent: tuple[float, float, float, float],
+    quality: int,
+) -> Image:
+    """Generate a Mandelbrot set covering the given extent."""
+    w, h = size
+    x0, y0, x1, y1 = extent
+    data = bytearray(w * h)
+    idx = 0
+    for py in range(h):
+        cy = y0 + (py / h) * (y1 - y0)
+        for px in range(w):
+            cx = x0 + (px / w) * (x1 - x0)
+            zx, zy = 0.0, 0.0
+            for i in range(quality):
+                zx2 = zx * zx - zy * zy + cx
+                zy2 = 2.0 * zx * zy + cy
+                zx, zy = zx2, zy2
+                if zx * zx + zy * zy > 4.0:
+                    break
+            else:
+                i = quality - 1
+            data[idx] = (i * 255) // quality
+            idx += 1
+    return Image.frombytes("L", (w, h), bytes(data))
+
+
+def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw", *args):
+    """Create an image from pixel data in a byte buffer. Delegates to frombytes."""
+    return Image.frombytes(mode, size, data, decoder_name, *args)
 
 
 def eval(image: Image, *args):

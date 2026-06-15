@@ -362,11 +362,31 @@ pub fn op_chops_duplicate(img: &DynamicImage) -> DynamicImage {
 }
 
 pub fn op_chops_invert(img: &DynamicImage) -> DynamicImage {
-    let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] = 255 - p[c];
+    let channels = img.color().channel_count() as usize;
+    let (w, h) = (img.width(), img.height());
+    let raw = img.as_bytes();
+    let mut out = raw.to_vec();
+    let stride = w as usize * channels;
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            for c in 0..channels {
+                let idx = y * stride + x * channels + c;
+                out[idx] = 255 - out[idx];
+            }
         }
     }
-    preserve_mode(img, DynamicImage::ImageRgb8(rgb))
+    match channels {
+        1 => DynamicImage::ImageLuma8(
+            image::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            image::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
+        ),
+        _ => DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
+        ),
+    }
 }

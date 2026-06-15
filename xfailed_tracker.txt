@@ -3,6 +3,11 @@
 # Updated to 561 passed, 3 xfailed after P-mode palette support
 #
 # Fixed in this session:
+# - ImageDraw F/I mode support: All 24 F and I mode vector drawing tests
+#   (arc, chord, circle, ellipse, line, pieslice, point, polygon, rectangle,
+#    regular_polygon, rounded_rectangle, bitmap) now pass. Color values are
+#   converted to float32 (F mode) or int32 (I mode) LE bytes and written
+#   directly without alpha blending, matching PIL's getink() behavior.
 # - ImageFilter.SHARPEN: fixed I mode — apply kernel directly on int32 pixel data
 #   (no clip8, clip negative to 0, preserve values >255)
 # - Image.quantize: fixed L, RGB, RGBA (adaptive histogram, luminance-weighted

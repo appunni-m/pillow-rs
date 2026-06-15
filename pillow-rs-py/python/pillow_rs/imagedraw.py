@@ -120,9 +120,75 @@ class Draw:
         """Return the current font."""
         return self._font
 
+    def multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
+                           direction=None, features=None, language=None, stroke_width=0,
+                           embedded_color=False, *, font_size=None):
+        """Get the bounding box of multiline text."""
+        text = str(text)
+        font = self._get_font(font)
+
+        lines = text.split('\n')
+        if len(lines) == 1:
+            return self.textbbox(xy, text, font=font)
+
+        # Calculate line height (font height + spacing)
+        if font and hasattr(font, 'getbbox'):
+            _, h = font.getbbox('A')
+            line_height = h + spacing
+        else:
+            line_height = 12 + spacing
+
+        # Calculate widths for each line
+        widths = []
+        for line in lines:
+            if font and hasattr(font, 'getbbox'):
+                w, _ = font.getbbox(line)
+                widths.append(w)
+            else:
+                widths.append(len(line) * 8)
+
+        max_width = max(widths) if widths else 0
+        x0, y0 = float(xy[0]), float(xy[1])
+
+        left = float('inf')
+        top = float('inf')
+        right = float('-inf')
+        bottom = float('-inf')
+
+        for i, line in enumerate(lines):
+            line_y = y0 + i * line_height
+
+            if align == 'center':
+                line_x = x0 + (max_width - widths[i]) / 2.0
+            elif align == 'right':
+                line_x = x0 + max_width - widths[i]
+            else:  # left
+                line_x = x0
+
+            if font and hasattr(font, 'getbbox'):
+                w, h = font.getbbox(line)
+                left = min(left, line_x)
+                top = min(top, line_y)
+                right = max(right, line_x + w)
+                bottom = max(bottom, line_y + h)
+            else:
+                left = min(left, line_x)
+                top = min(top, line_y)
+                right = max(right, line_x + widths[i])
+                bottom = max(bottom, line_y + line_height)
+
+        return (left, top, right, bottom)
+
     def shape(self, shape, fill=None, outline=None):
-        """Draw a shape outline."""
-        raise NotImplementedError("ImageDraw.shape")
+        """Draw a shape defined by a sequence of coordinates."""
+        if isinstance(shape, (list, tuple)):
+            # Accept a single polygon-like sequence of (x,y) pairs
+            if all(isinstance(p, (list, tuple)) and len(p) == 2 for p in shape):
+                self.polygon(shape, fill=fill, outline=outline)
+            else:
+                raise TypeError(f"Unsupported shape format")
+        else:
+            raise TypeError(f"unsupported shape type: {type(shape)}")
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""

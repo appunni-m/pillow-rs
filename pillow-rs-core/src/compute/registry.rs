@@ -677,7 +677,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     };
     use crate::compute::pool_cpu::ops::filter::{
         execute_box_blur, execute_filter3x3, execute_filter5x5, execute_gaussian_blur,
-        execute_max_filter, execute_median_filter, execute_min_filter, execute_rank_filter,
+        execute_max_filter, execute_max_filter_with_mode, execute_median_filter,
+        execute_median_filter_with_mode, execute_min_filter, execute_min_filter_with_mode,
+        execute_rank_filter, execute_rank_filter_with_mode,
     };
     use crate::compute::pool_cpu::ops::geometry::{
         execute_crop, execute_reduce, execute_resize, execute_rotate, execute_thumbnail,
@@ -925,10 +927,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::MedianFilter { size } = op {
-                    execute_median_filter(img, *size)
+                    execute_median_filter_with_mode(img, *size, mode)
                 } else {
                     Err(PilError::ValueError("expected MedianFilter op".into()))
                 }
@@ -941,10 +943,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::MaxFilter { size } = op {
-                    execute_max_filter(img, *size)
+                    execute_max_filter_with_mode(img, *size, mode)
                 } else {
                     Err(PilError::ValueError("expected MaxFilter op".into()))
                 }
@@ -957,10 +959,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::MinFilter { size } = op {
-                    execute_min_filter(img, *size)
+                    execute_min_filter_with_mode(img, *size, mode)
                 } else {
                     Err(PilError::ValueError("expected MinFilter op".into()))
                 }
@@ -973,10 +975,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::RankFilter { size, rank } = op {
-                    execute_rank_filter(img, *size, *rank)
+                    execute_rank_filter_with_mode(img, *size, *rank, mode)
                 } else {
                     Err(PilError::ValueError("expected RankFilter op".into()))
                 }
@@ -1542,10 +1544,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Brightness { factor } = op {
-                    op_enhance_brightness(img, *factor)
+                    op_enhance_brightness(img, *factor, mode)
                 } else {
                     Err(PilError::ValueError("expected Brightness op".into()))
                 }
@@ -1558,10 +1560,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Contrast { factor } = op {
-                    op_enhance_contrast(img, *factor)
+                    op_enhance_contrast(img, *factor, mode)
                 } else {
                     Err(PilError::ValueError("expected Contrast op".into()))
                 }
@@ -1574,10 +1576,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::ColorSaturation { factor } = op {
-                    op_enhance_color_saturation(img, *factor)
+                    op_enhance_color_saturation(img, *factor, mode)
                 } else {
                     Err(PilError::ValueError("expected ColorSaturation op".into()))
                 }
@@ -1590,10 +1592,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Sharpness { factor } = op {
-                    op_enhance_sharpness(img, *factor)
+                    op_enhance_sharpness(img, *factor, mode)
                 } else {
                     Err(PilError::ValueError("expected Sharpness op".into()))
                 }

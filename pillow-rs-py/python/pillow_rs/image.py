@@ -201,8 +201,20 @@ class Image:
         return new
 
     def filter(self, filter_type) -> "Image":
+        # PIL only allows ModeFilter on palette images; all others raise ValueError
         if self.mode == "P":
-            raise ValueError("cannot filter palette images")
+            # For built-in string filters, always raise
+            if isinstance(filter_type, str):
+                raise ValueError("cannot filter palette images")
+            # For parametric filter objects, check by name
+            if hasattr(filter_type, 'name'):
+                name = filter_type.name
+            elif hasattr(filter_type, '__class__'):
+                name = type(filter_type).__name__
+            else:
+                name = str(filter_type)
+            if name != "Mode":
+                raise ValueError("cannot filter palette images")
         # Parametric filter objects have _apply(); string names go to Rust
         if hasattr(filter_type, '_apply'):
             return filter_type._apply(self._rust_image)
@@ -400,12 +412,58 @@ class Image:
         pass
 
     def toqimage(self):
-        """Convert to Qt QImage. Not applicable for Rust."""
-        raise NotImplementedError("toqimage: requires Qt")
+        """Convert to Qt QImage. Requires PyQt5, PyQt6, PySide2, or PySide6."""
+        try:
+            from PyQt6.QtGui import QImage
+        except ImportError:
+            try:
+                from PyQt5.QtGui import QImage
+            except ImportError:
+                try:
+                    from PySide6.QtGui import QImage
+                except ImportError:
+                    try:
+                        from PySide2.QtGui import QImage
+                    except ImportError:
+                        raise ImportError("toqimage requires PyQt5, PyQt6, PySide2, or PySide6")
+
+        mode = self.mode
+        w, h = self.size
+        if mode == "1":
+            raw_data = self.tobytes("raw", "1")
+            fmt = QImage.Format_Mono
+        elif mode == "L":
+            raw_data = self.tobytes("raw", "L")
+            fmt = QImage.Format_Grayscale8
+        elif mode == "RGB":
+            raw_data = self.tobytes("raw", "RGB")
+            fmt = QImage.Format_RGB888
+        elif mode == "RGBA":
+            raw_data = self.tobytes("raw", "RGBA")
+            fmt = QImage.Format_RGBA8888
+        else:
+            # Convert unsupported modes to RGBA first
+            return self.convert("RGBA").toqimage()
+
+        qimg = QImage(raw_data, w, h, fmt)
+        return qimg
 
     def toqpixmap(self):
-        """Convert to Qt QPixmap. Not applicable for Rust."""
-        raise NotImplementedError("toqpixmap: requires Qt")
+        """Convert to Qt QPixmap. Requires PyQt5, PyQt6, PySide2, or PySide6."""
+        try:
+            from PyQt6.QtGui import QPixmap
+        except ImportError:
+            try:
+                from PyQt5.QtGui import QPixmap
+            except ImportError:
+                try:
+                    from PySide6.QtGui import QPixmap
+                except ImportError:
+                    try:
+                        from PySide2.QtGui import QPixmap
+                    except ImportError:
+                        raise ImportError("toqpixmap requires PyQt5, PyQt6, PySide2, or PySide6")
+        return QPixmap.fromImage(self.toqimage())
 
     @classmethod
     def frombytes(cls, mode, size, data, decoder_name="raw", *args):
@@ -418,8 +476,38 @@ class Image:
 
     @classmethod
     def fromarray(cls, obj, mode=None):
-        """Create image from numpy array or similar. Not yet implemented."""
-        raise NotImplementedError("Image.fromarray requires numpy")
+        """Create image from array-like object (bytes, numpy array, list, etc.)."""
+        from .operations import fromarray as _fromarray
+        return _fromarray(obj, mode)
+
+    @classmethod
+    def linear_gradient(cls, mode: str) -> "Image":
+        """Generate 256x256 linear gradient from black to white, top to bottom."""
+        from .operations import linear_gradient as _linear_gradient
+        return _linear_gradient(mode)
+
+    @classmethod
+    def radial_gradient(cls, mode: str) -> "Image":
+        """Generate 256x256 radial gradient from black to white, centre to edge."""
+        from .operations import radial_gradient as _radial_gradient
+        return _radial_gradient(mode)
+
+    @classmethod
+    def effect_mandelbrot(
+        cls,
+        size: Tuple[int, int],
+        extent: Tuple[float, float, float, float],
+        quality: int,
+    ) -> "Image":
+        """Generate a Mandelbrot set covering the given extent."""
+        from .operations import effect_mandelbrot as _effect_mandelbrot
+        return _effect_mandelbrot(size, extent, quality)
+
+    @classmethod
+    def frombuffer(cls, mode: str, size: Tuple[int, int], data, decoder_name: str = "raw", *args) -> "Image":
+        """Create an image from pixel data in a byte buffer. Delegates to frombytes."""
+        from .operations import frombuffer as _frombuffer
+        return _frombuffer(mode, size, data, decoder_name, *args)
 
     @staticmethod
     def eval(image, *args):
