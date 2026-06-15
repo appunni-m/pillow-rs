@@ -14,6 +14,9 @@ pub struct Draw {
     image: Image,
     /// Original mode before draw canvas created. Used to convert back on image_clone().
     orig_mode: Option<String>,
+    /// True for F (float32) and I (int32) modes — pixel data is raw 32-bit LE values,
+    /// and drawing must bypass alpha blending and write the raw 4 bytes as-is.
+    raw_mode: bool,
 }
 
 impl Draw {
@@ -27,10 +30,44 @@ impl Draw {
             let clone = image.clone();
             clone.mode().ok()
         });
+        let raw_mode = matches!(mode.as_deref(), Some("F") | Some("I"));
         Draw {
             image,
             orig_mode: mode,
+            raw_mode,
         }
+    }
+
+    /// Return the effective PIL mode for drawing operations.
+    /// Uses the explicit mode if set, otherwise falls back to the image's mode.
+    fn effective_mode(&self) -> String {
+        self.orig_mode
+            .clone()
+            .or_else(|| self.image.mode().ok())
+            .unwrap_or_else(|| "RGBA".to_string())
+    }
+
+    /// Write a pixel to the canvas. For F/I modes (raw_mode=true), writes the 4 bytes
+    /// directly as-is without any alpha blending. For other modes, uses alpha blending.
+    fn put_pixel(
+        &self,
+        canvas: &mut RgbaImage,
+        x: u32,
+        y: u32,
+        color: (u8, u8, u8, u8),
+    ) {
+        canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, color.3]));
+    }
+
+    /// Return the original PIL mode of the drawing target.
+    pub fn mode(&self) -> Option<&str> {
+        self.orig_mode.as_deref()
+    }
+
+    /// Set the output image from a drawn canvas, preserving the original explicit mode.
+    fn set_image(&mut self, canvas: RgbaImage) {
+        let explicit = self.orig_mode.clone();
+        self.image = Image::Loaded(DynamicImage::ImageRgba8(canvas), explicit);
     }
 
     /// Draw a line from (x0,y0) to (x1,y1). Bresenham's algorithm.
@@ -46,19 +83,20 @@ impl Draw {
         let img = self.image.materialize()?;
         let (w, h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let raw = self.raw_mode;
 
         if width <= 1 {
-            bresenham_line(&mut canvas, x0, y0, x1, y1, fill, w, h);
+            bresenham_line(&mut canvas, x0, y0, x1, y1, fill, w, h, raw);
         } else {
             // Thick line: draw multiple offset lines
             let half = (width as i32) / 2;
             for offset in -half..=half {
-                bresenham_line(&mut canvas, x0 + offset, y0, x1 + offset, y1, fill, w, h);
-                bresenham_line(&mut canvas, x0, y0 + offset, x1, y1 + offset, fill, w, h);
+                bresenham_line(&mut canvas, x0 + offset, y0, x1 + offset, y1, fill, w, h, raw);
+                bresenham_line(&mut canvas, x0, y0 + offset, x1, y1 + offset, fill, w, h, raw);
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
@@ -76,6 +114,7 @@ impl Draw {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let raw = self.raw_mode;
 
         let x0 = x0.clamp(0, img_w as i32 - 1);
         let y0 = y0.clamp(0, img_h as i32 - 1);
@@ -98,18 +137,18 @@ impl Draw {
             for w in 0..width as i32 {
                 // Top
                 for px in x0 - w..=x1 + w {
-                    plot(&mut canvas, px, y0 - w, oc, img_w, img_h);
-                    plot(&mut canvas, px, y1 + w, oc, img_w, img_h);
+                    plot(&mut canvas, px, y0 - w, oc, img_w, img_h, raw);
+                    plot(&mut canvas, px, y1 + w, oc, img_w, img_h, raw);
                 }
                 // Sides
                 for py in y0 - w..=y1 + w {
-                    plot(&mut canvas, x0 - w, py, oc, img_w, img_h);
-                    plot(&mut canvas, x1 + w, py, oc, img_w, img_h);
+                    plot(&mut canvas, x0 - w, py, oc, img_w, img_h, raw);
+                    plot(&mut canvas, x1 + w, py, oc, img_w, img_h, raw);
                 }
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
@@ -129,6 +168,7 @@ impl Draw {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let raw = self.raw_mode;
 
         let _cx = (x0 + x1) as f64 / 2.0;
         let _cy = (y0 + y1) as f64 / 2.0;
@@ -324,13 +364,13 @@ impl Draw {
                     let df =
                         y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
                     if !lf || !rf || !uf || !df {
-                        plot(&mut canvas, x, y, oc, img_w, img_h);
+                        plot(&mut canvas, x, y, oc, img_w, img_h, raw);
                     }
                 }
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
@@ -348,22 +388,23 @@ impl Draw {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let raw = self.raw_mode;
 
         // Outline
         if let Some(oc) = outline {
             for i in 0..points.len() {
                 let (x0, y0) = points[i];
                 let (x1, y1) = points[(i + 1) % points.len()];
-                bresenham_line(&mut canvas, x0, y0, x1, y1, oc, img_w, img_h);
+                bresenham_line(&mut canvas, x0, y0, x1, y1, oc, img_w, img_h, raw);
             }
         }
 
         // Fill: PIL-identical scanline algorithm
         if let Some(fc) = fill {
-            scanline_polygon_fill(&mut canvas, points, fc, img_w, img_h);
+            scanline_polygon_fill(&mut canvas, points, fc, img_w, img_h, raw);
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
@@ -372,14 +413,19 @@ impl Draw {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let raw = self.raw_mode;
         for &(x, y) in points {
-            plot(&mut canvas, x, y, fill, img_w, img_h);
+            plot(&mut canvas, x, y, fill, img_w, img_h, raw);
         }
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
     /// Draw a 1-bit bitmap image at position (x, y) with fill color.
+    ///
+    /// For RGB/RGBA modes, uses the RGBA compositing pipeline.
+    /// For other modes, writes fill values directly in the mode's native pixel format,
+    /// matching PIL's `draw_bitmap` behavior.
     pub fn bitmap(
         &mut self,
         x: i32,
@@ -391,29 +437,225 @@ impl Draw {
         let bmp_data = bitmap.getdata(None)?;
         let (bmp_w, bmp_h) = bitmap.size()?;
 
-        let img = self.image.materialize()?;
-        let (img_w, img_h) = (img.width(), img.height());
-        let mut canvas = img.to_rgba8();
+        let mode = self.effective_mode();
 
-        for py in 0..bmp_h {
-            for px in 0..bmp_w {
-                let idx = (py * bmp_w + px) as usize;
-                if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                    let dx = x + px as i32;
-                    let dy = y + py as i32;
-                    if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                        canvas.put_pixel(
-                            dx as u32,
-                            dy as u32,
-                            image::Rgba([color.0, color.1, color.2, color.3]),
-                        );
+        match mode.as_str() {
+            "RGB" | "RGBA" => {
+                // Use RGBA compositing pipeline
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut canvas = img.to_rgba8();
+
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                canvas.put_pixel(
+                                    dx as u32,
+                                    dy as u32,
+                                    image::Rgba([color.0, color.1, color.2, color.3]),
+                                );
+                            }
+                        }
                     }
                 }
+
+                self.set_image(canvas);
+                Ok(())
+            }
+            "1" => {
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut luma = img.to_luma8();
+                let ink = color.0;
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                luma.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
+                            }
+                        }
+                    }
+                }
+                self.image =
+                    Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("1".to_string()));
+                Ok(())
+            }
+            "L" => {
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut luma = img.to_luma8();
+                let ink = color.0;
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                luma.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
+                            }
+                        }
+                    }
+                }
+                self.image = Image::Loaded(image::DynamicImage::ImageLuma8(luma), None);
+                Ok(())
+            }
+            "LA" => {
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut la = img.to_luma_alpha8();
+                let ink_l = color.0;
+                let ink_a = 0u8;
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                la.put_pixel(dx as u32, dy as u32, image::LumaA([ink_l, ink_a]));
+                            }
+                        }
+                    }
+                }
+                self.image =
+                    Image::Loaded(image::DynamicImage::ImageLumaA8(la), Some("LA".to_string()));
+                Ok(())
+            }
+            "CMYK" => {
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut rgba = img.to_rgba8();
+                let ink = [color.0, 0u8, 0u8, 0u8];
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                rgba.put_pixel(dx as u32, dy as u32, image::Rgba(ink));
+                            }
+                        }
+                    }
+                }
+                self.image = Image::Loaded(
+                    image::DynamicImage::ImageRgba8(rgba),
+                    Some("CMYK".to_string()),
+                );
+                Ok(())
+            }
+            "P" => {
+                if let Some(palette) = self.image.palette() {
+                    let img = self.image.materialize()?;
+                    let luma = img.to_luma8();
+                    let (img_w, img_h) = luma.dimensions();
+                    let mut indices = image::GrayImage::new(img_w, img_h);
+                    for (op, ip) in indices.pixels_mut().zip(luma.pixels()) {
+                        op[0] = ip[0];
+                    }
+                    let ink = color.0;
+                    for py in 0..bmp_h {
+                        for px in 0..bmp_w {
+                            let idx = (py * bmp_w + px) as usize;
+                            if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                                let dx = x + px as i32;
+                                let dy = y + py as i32;
+                                if dx >= 0 && dy >= 0
+                                    && (dx as u32) < img_w
+                                    && (dy as u32) < img_h
+                                {
+                                    indices.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
+                                }
+                            }
+                        }
+                    }
+                    self.image = Image::Paletted(crate::image::PalettedData {
+                        indices,
+                        palette,
+                    });
+                } else {
+                    let img = self.image.materialize()?;
+                    let (img_w, img_h) = (img.width(), img.height());
+                    let mut luma = img.to_luma8();
+                    let ink = color.0;
+                    for py in 0..bmp_h {
+                        for px in 0..bmp_w {
+                            let idx = (py * bmp_w + px) as usize;
+                            if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                                let dx = x + px as i32;
+                                let dy = y + py as i32;
+                                if dx >= 0 && dy >= 0
+                                    && (dx as u32) < img_w
+                                    && (dy as u32) < img_h
+                                {
+                                    luma.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
+                                }
+                            }
+                        }
+                    }
+                    self.image = Image::Loaded(
+                        image::DynamicImage::ImageLuma8(luma),
+                        Some("P".to_string()),
+                    );
+                }
+                Ok(())
+            }
+            "I" | "F" => {
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut rgba = img.to_rgba8();
+                let ink = [color.0, 0u8, 0u8, 0u8];
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                rgba.put_pixel(dx as u32, dy as u32, image::Rgba(ink));
+                            }
+                        }
+                    }
+                }
+                self.image = Image::Loaded(
+                    image::DynamicImage::ImageRgba8(rgba),
+                    Some(mode.to_string()),
+                );
+                Ok(())
+            }
+            _ => {
+                // Fallback: RGBA pipeline
+                let img = self.image.materialize()?;
+                let (img_w, img_h) = (img.width(), img.height());
+                let mut canvas = img.to_rgba8();
+                for py in 0..bmp_h {
+                    for px in 0..bmp_w {
+                        let idx = (py * bmp_w + px) as usize;
+                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                                canvas.put_pixel(
+                                    dx as u32,
+                                    dy as u32,
+                                    image::Rgba([color.0, color.1, color.2, color.3]),
+                                );
+                            }
+                        }
+                    }
+                }
+                self.set_image(canvas);
+                Ok(())
             }
         }
-
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
-        Ok(())
     }
 
     /// Return a clone of the current image state, converted back to original mode.
@@ -530,6 +772,7 @@ impl Draw {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let _raw = self.raw_mode;
 
         let cx = (x0 + x1) as f64 / 2.0;
         let cy = (y0 + y1) as f64 / 2.0;
@@ -673,7 +916,7 @@ impl Draw {
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
@@ -724,6 +967,7 @@ impl Draw {
         let img = self.image.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
+        let raw = self.raw_mode;
         let cx = (x0 + x1) as f64 / 2.0;
         let cy = (y0 + y1) as f64 / 2.0;
 
@@ -862,7 +1106,7 @@ impl Draw {
                 let rad = angle_deg.to_radians();
                 let ax = (cx + (a as f64 / 2.0) * rad.cos()).round() as i32;
                 let ay = (cy + (b as f64 / 2.0) * rad.sin()).round() as i32;
-                bresenham_line(&mut canvas, cx_i, cy_i, ax, ay, oc, img_w, img_h);
+                bresenham_line(&mut canvas, cx_i, cy_i, ax, ay, oc, img_w, img_h, raw);
             }
             // Arc edge: use the same Bresenham + edge detection approach as arc()
             // Re-use the arc filling logic but with outline color and the same angle range
@@ -965,7 +1209,7 @@ impl Draw {
             }
         }
 
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
     }
 
@@ -1040,6 +1284,13 @@ impl Draw {
     }
 
     /// Draw text at position (x, y) using a font.
+    ///
+    /// For RGB and RGBA modes, uses the standard RGBA compositing pipeline.
+    /// For other modes (1, L, LA, CMYK, P, I, F), renders directly in the
+    /// mode's native pixel format, matching PIL's `draw_bitmap` behavior:
+    /// - Integer fill values go to the first channel only; other channels get 0.
+    /// - Binary modes (1, P, I, F) use coverage > 0 threshold.
+    /// - Anti-aliased modes (L, LA, CMYK) use PIL's BLEND (truncation) per channel.
     pub fn text(
         &mut self,
         x: i32,
@@ -1052,6 +1303,24 @@ impl Draw {
         if w == 0 || h == 0 {
             return Ok(());
         }
+
+        let mode = self.effective_mode();
+
+        match mode.as_str() {
+            "RGB" | "RGBA" => self.text_compose_rgba(x, y, w, h, &pixels),
+            _ => self.text_compose_direct(x, y, w, h, &pixels, &mode, fill),
+        }
+    }
+
+    /// RGBA compositing for text (existing pipeline, used for RGB/RGBA modes).
+    fn text_compose_rgba(
+        &mut self,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        pixels: &[u8],
+    ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
         let (img_w, img_h) = (canvas.width(), canvas.height());
@@ -1089,8 +1358,240 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::Loaded(image::DynamicImage::ImageRgba8(canvas), None);
+        self.set_image(canvas);
         Ok(())
+    }
+
+    /// Direct per-pixel text compositing for non-standard modes.
+    ///
+    /// Matches PIL's `fill_mask_1` (binary) and `fill_mask_L` (anti-aliased)
+    /// behavior from Paste.c. Integer fill values go to the first channel;
+    /// other channels are zeroed.
+    fn text_compose_direct(
+        &mut self,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        pixels: &[u8],
+        mode: &str,
+        fill: (u8, u8, u8, u8),
+    ) -> Result<(), PilError> {
+        let img = self.image.materialize()?;
+        let (img_w, img_h) = (img.width(), img.height());
+
+        // For integer fills (all channels equal and alpha=255), treat as
+        // single-channel: fill.0 goes to first channel, others get 0.
+        // For tuple fills, use channel values directly.
+        let is_int_fill = fill.0 == fill.1 && fill.0 == fill.2 && fill.3 == 255;
+
+        match mode {
+            "1" => {
+                // Binary: write fill value where coverage > 0. fontmode="1".
+                let mut luma = img.to_luma8();
+                let ink = fill.0; // The raw integer value
+                for py in 0..h {
+                    for px in 0..w {
+                        let off = ((py * w + px) * 4) as usize;
+                        if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                            let dx = (x as u32 + px).min(img_w - 1);
+                            let dy = (y as u32 + py).min(img_h - 1);
+                            luma.put_pixel(dx, dy, image::Luma([ink]));
+                        }
+                    }
+                }
+                self.image =
+                    Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("1".to_string()));
+                Ok(())
+            }
+            "L" => {
+                // Anti-aliased: blend fill.0 with background using coverage.
+                let mut luma = img.to_luma8();
+                let ink = fill.0;
+                for py in 0..h {
+                    for px in 0..w {
+                        let off = ((py * w + px) * 4) as usize;
+                        if off + 3 >= pixels.len() {
+                            continue;
+                        }
+                        let cov = pixels[off + 3];
+                        if cov == 0 {
+                            continue;
+                        }
+                        let dx = (x as u32 + px).min(img_w - 1);
+                        let dy = (y as u32 + py).min(img_h - 1);
+                        let bg = luma.get_pixel(dx, dy)[0];
+                        // PIL BLEND: (ink * cov + bg * (255 - cov)) / 255 (truncation)
+                        let result = ((ink as u32 * cov as u32
+                            + bg as u32 * (255 - cov) as u32)
+                            / 255) as u8;
+                        luma.put_pixel(dx, dy, image::Luma([result]));
+                    }
+                }
+                self.image = Image::Loaded(image::DynamicImage::ImageLuma8(luma), None);
+                Ok(())
+            }
+            "LA" => {
+                // Anti-aliased per channel: L channel gets fill.0, A channel gets 0
+                // (for integer fill) or the tuple's alpha.
+                let mut la = img.to_luma_alpha8();
+                let ink_l = fill.0;
+                let ink_a = if is_int_fill { 0u8 } else { fill.3 };
+                for py in 0..h {
+                    for px in 0..w {
+                        let off = ((py * w + px) * 4) as usize;
+                        if off + 3 >= pixels.len() {
+                            continue;
+                        }
+                        let cov = pixels[off + 3];
+                        if cov == 0 {
+                            continue;
+                        }
+                        let dx = (x as u32 + px).min(img_w - 1);
+                        let dy = (y as u32 + py).min(img_h - 1);
+                        let bg = la.get_pixel(dx, dy);
+                        let new_l = if cov == 255 {
+                            ink_l
+                        } else {
+                            ((ink_l as u32 * cov as u32 + bg[0] as u32 * (255 - cov) as u32)
+                                / 255) as u8
+                        };
+                        let new_a = if cov == 255 {
+                            ink_a
+                        } else {
+                            ((ink_a as u32 * cov as u32 + bg[1] as u32 * (255 - cov) as u32)
+                                / 255) as u8
+                        };
+                        la.put_pixel(dx, dy, image::LumaA([new_l, new_a]));
+                    }
+                }
+                self.image =
+                    Image::Loaded(image::DynamicImage::ImageLumaA8(la), Some("LA".to_string()));
+                Ok(())
+            }
+            "CMYK" => {
+                // Anti-aliased per channel:
+                //   C channel = fill.0 or tuple C, M=tuple M, Y=tuple Y, K=tuple K.
+                //   For integer fill: C=fill.0, M=Y=K=0.
+                let mut rgba = img.to_rgba8(); // CMYK stored as Rgba8 internally
+                let ink = if is_int_fill {
+                    [fill.0, 0u8, 0u8, 0u8]
+                } else {
+                    [fill.0, fill.1, fill.2, fill.3]
+                };
+                for py in 0..h {
+                    for px in 0..w {
+                        let off = ((py * w + px) * 4) as usize;
+                        if off + 3 >= pixels.len() {
+                            continue;
+                        }
+                        let cov = pixels[off + 3];
+                        if cov == 0 {
+                            continue;
+                        }
+                        let dx = (x as u32 + px).min(img_w - 1);
+                        let dy = (y as u32 + py).min(img_h - 1);
+                        let bg = rgba.get_pixel(dx, dy);
+                        let new_pix = if cov == 255 {
+                            Rgba(ink)
+                        } else {
+                            Rgba([
+                                ((ink[0] as u32 * cov as u32
+                                    + bg[0] as u32 * (255 - cov) as u32)
+                                    / 255) as u8,
+                                ((ink[1] as u32 * cov as u32
+                                    + bg[1] as u32 * (255 - cov) as u32)
+                                    / 255) as u8,
+                                ((ink[2] as u32 * cov as u32
+                                    + bg[2] as u32 * (255 - cov) as u32)
+                                    / 255) as u8,
+                                ((ink[3] as u32 * cov as u32
+                                    + bg[3] as u32 * (255 - cov) as u32)
+                                    / 255) as u8,
+                            ])
+                        };
+                        rgba.put_pixel(dx, dy, new_pix);
+                    }
+                }
+                self.image = Image::Loaded(
+                    image::DynamicImage::ImageRgba8(rgba),
+                    Some("CMYK".to_string()),
+                );
+                Ok(())
+            }
+            "P" => {
+                // Binary: write palette index where coverage > 0. fontmode="1".
+                if let Some(palette) = self.image.palette() {
+                    let img_loaded = img.to_luma8();
+                    let (w_i, h_i) = img_loaded.dimensions();
+                    let mut indices = image::GrayImage::new(w_i, h_i);
+                    for (op, ip) in indices.pixels_mut().zip(img_loaded.pixels()) {
+                        op[0] = ip[0];
+                    }
+                    let ink = fill.0; // palette index
+                    for py in 0..h.min(h_i) {
+                        for px in 0..w.min(w_i) {
+                            let off = ((py * w + px) * 4) as usize;
+                            if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                                let dx = (x as u32 + px).min(img_w - 1);
+                                let dy = (y as u32 + py).min(img_h - 1);
+                                indices.put_pixel(dx, dy, image::Luma([ink]));
+                            }
+                        }
+                    }
+                    self.image = Image::Paletted(crate::image::PalettedData {
+                        indices,
+                        palette,
+                    });
+                } else {
+                    // Fallback: just modify luma8
+                    let mut luma = img.to_luma8();
+                    let ink = fill.0;
+                    for py in 0..h {
+                        for px in 0..w {
+                            let off = ((py * w + px) * 4) as usize;
+                            if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                                let dx = (x as u32 + px).min(img_w - 1);
+                                let dy = (y as u32 + py).min(img_h - 1);
+                                luma.put_pixel(dx, dy, image::Luma([ink]));
+                            }
+                        }
+                    }
+                    self.image =
+                        Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("P".to_string()));
+                }
+                Ok(())
+            }
+            "I" | "F" => {
+                // Binary: write fill.0 as the integer value. fontmode="1".
+                // Stored internally as Rgba8 with explicit mode.
+                let mut rgba = img.to_rgba8();
+                let ink = fill.0; // For I/F, the raw value
+                for py in 0..h {
+                    for px in 0..w {
+                        let off = ((py * w + px) * 4) as usize;
+                        if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                            let dx = (x as u32 + px).min(img_w - 1);
+                            let dy = (y as u32 + py).min(img_h - 1);
+                            rgba.put_pixel(
+                                dx,
+                                dy,
+                                Rgba([ink, 0, 0, 0]), // Value in first channel, others zero
+                            );
+                        }
+                    }
+                }
+                self.image = Image::Loaded(
+                    image::DynamicImage::ImageRgba8(rgba),
+                    Some(mode.to_string()),
+                );
+                Ok(())
+            }
+            _ => {
+                // Fallback: RGBA pipeline
+                self.text_compose_rgba(x, y, w, h, pixels)
+            }
+        }
     }
 
     /// Consume the drawing context and return the modified image.
@@ -1111,6 +1612,7 @@ fn bresenham_line(
     color: (u8, u8, u8, u8),
     w: u32,
     h: u32,
+    raw: bool,
 ) {
     let mut x = x0;
     let mut y = y0;
@@ -1121,7 +1623,7 @@ fn bresenham_line(
     let mut err = dx + dy;
 
     loop {
-        plot(canvas, x, y, color, w, h);
+        plot(canvas, x, y, color, w, h, raw);
         if x == x1 && y == y1 {
             break;
         }
@@ -1137,18 +1639,33 @@ fn bresenham_line(
     }
 }
 
-/// Plot a single pixel with bounds checking and alpha blending.
+/// Plot a single pixel with bounds checking.
 ///
-/// Special case `alpha == 0`: write the RGB channels directly with A=0.
-/// This matches PIL's behavior for int fill on LA mode (the int goes to
-/// the first channel, other channels are zeroed).
+/// When `raw` is true (F/I mode), writes the 4 bytes directly as-is without any
+/// alpha blending — the 4-byte chunk represents a raw float32 or int32 LE value.
+///
+/// When `raw` is false, applies the standard alpha blending:
+/// - `alpha == 255`: write RGB directly with A=255
+/// - `alpha == 0`: write RGB directly with A=0 (PIL int fill behavior)
+/// - otherwise: blend with existing pixel
 #[inline]
-fn plot(canvas: &mut RgbaImage, x: i32, y: i32, color: (u8, u8, u8, u8), w: u32, h: u32) {
+fn plot(
+    canvas: &mut RgbaImage,
+    x: i32,
+    y: i32,
+    color: (u8, u8, u8, u8),
+    w: u32,
+    h: u32,
+    raw: bool,
+) {
     if x < 0 || y < 0 || x as u32 >= w || y as u32 >= h {
         return;
     }
     let (x, y) = (x as u32, y as u32);
-    if color.3 == 255 {
+    if raw {
+        // F/I mode: write the 4-byte value as-is (float32 or int32 LE)
+        canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, color.3]));
+    } else if color.3 == 255 {
         canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, 255]));
     } else if color.3 == 0 {
         // PIL int fill: value goes to first channel, other channels = 0.
@@ -1209,6 +1726,7 @@ fn scanline_polygon_fill(
     color: (u8, u8, u8, u8),
     img_w: u32,
     img_h: u32,
+    _raw: bool,
 ) {
     let n = points.len();
     if n < 3 {

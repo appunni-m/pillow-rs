@@ -1236,7 +1236,7 @@ modules:
       param_variants:
       - obj: numpy
       edge_cases: []
-      status: ignored
+      status: implemented
       pillow_since: '1.0'
       supported_targets:
       - cpu
@@ -1306,7 +1306,7 @@ modules:
       - RGBA
     - name: effect_mandelbrot
       signature: effect_mandelbrot(*args, **kwargs)
-      status: stub
+      status: implemented
       param_variants:
       - {}
       edge_cases: []
@@ -1314,12 +1314,34 @@ modules:
       - cpu
     - name: frombuffer
       signature: frombuffer(*args, **kwargs)
-      status: stub
+      status: implemented
       param_variants:
       - {}
       edge_cases: []
       supported_targets:
       - cpu
+    - name: linear_gradient
+      signature: 'linear_gradient(mode: str) -> Image'
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+      supported_targets:
+      - cpu
+      supported_modes:
+      - L
+      - RGB
+    - name: radial_gradient
+      signature: 'radial_gradient(mode: str) -> Image'
+      status: implemented
+      param_variants:
+      - {}
+      edge_cases: []
+      supported_targets:
+      - cpu
+      supported_modes:
+      - L
+      - RGB
     - name: new
       signature: new(*args, **kwargs)
       status: implemented
@@ -1608,7 +1630,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: ignored
+      status: implemented
       pillow_since: '8.0'
       supported_targets:
       - cpu
@@ -1626,7 +1648,7 @@ modules:
       param_variants:
       - {}
       edge_cases: []
-      status: ignored
+      status: implemented
       pillow_since: '8.0'
       supported_targets:
       - cpu
@@ -1663,7 +1685,7 @@ modules:
       - wasm_gpu
     - name: shape
       signature: shape(*args, **kwargs)
-      status: stub
+      status: implemented
       param_variants:
       - {}
       edge_cases: []
@@ -2511,23 +2533,47 @@ modules:
     - name: FreeTypeFont
       methods:
       - name: getbbox
-        status: ignored
+        status: implemented
         supported_targets:
         - cpu
       - name: getlength
-        status: ignored
+        status: implemented
         supported_targets:
         - cpu
       - name: getmask
-        status: ignored
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: getmask2
+        status: implemented
         supported_targets:
         - cpu
       - name: getmetrics
-        status: ignored
+        status: implemented
         supported_targets:
         - cpu
       - name: getname
-        status: ignored
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: font_variant
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: get_variation_names
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: set_variation_by_name
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: get_variation_axes
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: set_variation_by_axes
+        status: implemented
         supported_targets:
         - cpu
       status: implemented
@@ -2536,15 +2582,32 @@ modules:
     - name: ImageFont
       methods:
       - name: getbbox
-        status: ignored
+        status: implemented
         supported_targets:
         - cpu
       - name: getlength
-        status: ignored
+        status: implemented
         supported_targets:
         - cpu
       - name: getmask
-        status: ignored
+        status: implemented
+        supported_targets:
+        - cpu
+      status: implemented
+      supported_targets:
+      - cpu
+    - name: TransposedFont
+      methods:
+      - name: getmask
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: getbbox
+        status: implemented
+        supported_targets:
+        - cpu
+      - name: getlength
+        status: implemented
         supported_targets:
         - cpu
       status: implemented

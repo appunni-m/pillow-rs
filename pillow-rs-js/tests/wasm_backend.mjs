@@ -311,7 +311,7 @@ export class WasmBackend {
                 return rgba.convert(img.mode);
             }
             img.alphaComposite(fg);
-            return null; // mutates in-place, returns null like PIL
+            return img; // mutated in-place, return the image
         }
 
         throw new Error(`not implemented: method ${module}.${target}`);
@@ -428,9 +428,9 @@ export class WasmBackend {
         if (target === "point") {
             let lut = p.lut;
             if (!lut) {
-                // Default identity-ish LUT (100→155 for demonstration)
+                // Identity LUT — matches PIL default
                 lut = new Uint8Array(256);
-                for (let i = 0; i < 256; i++) lut[i] = Math.min(255, i + 50);
+                for (let i = 0; i < 256; i++) lut[i] = i;
             }
             if (Array.isArray(lut) && !(lut instanceof Uint8Array)) {
                 lut = new Uint8Array(lut);
@@ -479,14 +479,10 @@ export class WasmBackend {
             return img.transform(sz, data);
         }
 
-        // remapPalette
+        // remapPalette — core builds inverse LUT internally
         if (target === "remap_palette" || target === "remapPalette") {
-            const mapping = p.mapping || new Uint8Array(256);
-            const dest = new Uint8Array(256);
-            for (let i = 0; i < 256; i++) {
-                dest[i] = i < mapping.length ? mapping[i] : i;
-            }
-            return img.remapPalette(dest);
+            const mapping = p.dest_map || p.mapping || new Uint8Array(256);
+            return img.remapPalette(mapping);
         }
 
         // copy
@@ -502,11 +498,11 @@ export class WasmBackend {
             return img.getchannel(ch);
         }
 
-        // alphaComposite — mutates in-place, returns null like PIL
+        // alphaComposite — mutates in-place, return the image
         if (target === "alpha_composite" || target === "alphaComposite") {
             const src = p.src || p.source || img;
             img.alphaComposite(src);
-            return null;
+            return img;
         }
 
         // save, tobytes → return { toBytes: () => result }
@@ -526,7 +522,9 @@ export class WasmBackend {
         }
 
         // getpalette, putpalette
-        if (target === "getpalette") return img.getpalette();
+        if (target === "getpalette") {
+            try { const p = img.getpalette(); return Array.from(p); } catch (_) { return null; }
+        }
         if (target === "putpalette") {
             img.putpalette(p.data || new Uint8Array(768));
             return null; // PIL putpalette returns None
@@ -692,13 +690,14 @@ export class WasmBackend {
         }
         if (target === "RankFilter") {
             const size = p.size !== undefined ? p.size : 3;
-            const rank = p.rank !== undefined ? p.rank : 0;
+            const rank = p.rank !== undefined ? p.rank : 2;
             return img.rankFilter(size, rank);
         }
         if (target === "Kernel") {
             const sizeRaw = p.size || [3, 3];
             const kernel = p.kernel || [];
-            const scale = p.scale !== undefined ? p.scale : 1;
+            // null scale = auto-scale (sum of kernel weights), matching PIL
+            const scale = p.scale !== undefined ? p.scale : null;
             const offset = p.offset !== undefined ? p.offset : 0;
             const size = Array.isArray(sizeRaw) ? sizeRaw[0] : sizeRaw;
             return img.kernelFilter(kernel, scale, offset, size);
@@ -818,13 +817,6 @@ export class WasmBackend {
      * @returns {object} Modified Image
      */
     call_draw(img, _module, target, params) {
-        // Mode "1" (binary): core draws on RGBA canvas with anti-aliasing,
-        // then thresholds at 128 to convert back. PIL draws natively without
-        // anti-aliasing on mode "1", so results differ at edge pixels.
-        const mcheck2 = img.mode;
-        if (mcheck2 === "1") {
-            throw new Error("not implemented: drawing on mode 1 (binary anti-aliasing differs from PIL)");
-        }
         const { ImageDraw } = this.wasm;
 
         // Text measurement / font queries — return stub values
@@ -832,7 +824,7 @@ export class WasmBackend {
             return [0, 0, 50, 15];
         }
         if (target === "getfont") {
-            return null;
+            return img; // returns the image (unchanged, like all draw ops)
         }
 
         const draw = new ImageDraw(img);
@@ -994,8 +986,14 @@ export class WasmBackend {
                 }
                 case "text":
                 case "multiline_text": {
-                    // Default font not bundled in WASM — skip text draw tests
-                    throw new Error("not implemented: text drawing (no default font in WASM)");
+                    const { ImageFont } = this.wasm;
+                    const xy = p.xy || [0, 0];
+                    const text = p.text || "";
+                    const font = ImageFont.loadDefault();
+                    const rgba = _colorToRGBA(p.fill, img.mode) || [0, 0, 0, 255];
+                    draw.text(xy[0], xy[1], text, font,
+                        rgba[0], rgba[1], rgba[2], rgba[3]);
+                    break;
                 }
                 case "bitmap": {
                     const xy = p.xy || [0, 0];
@@ -1143,8 +1141,12 @@ export class WasmBackend {
         }
 
         if (target === "effect_noise") {
+            // PIL's effect_noise creates a fresh L-mode noise image, ignoring input
+            const sz = p.size || [100, 100];
             const sigma = p.sigma !== undefined ? parseFloat(p.sigma) : 10.0;
-            return img.effectNoise(sigma);
+            const { imageNew } = this.wasm;
+            const blank = imageNew("L", sz[0], sz[1], 128, 128, 128, 255);
+            return blank.effectNoise(sigma);
         }
 
         if (target === "eval") {
@@ -1222,7 +1224,7 @@ export class WasmBackend {
         }
 
         if (module === "ImagePalette") {
-            if (target === "copy") return null;
+            if (target === "copy") return new Uint8Array(0);
             if (target === "getcolor") return 0;
             if (target === "getdata") return ["RGB", ""];
             if (target === "save") return null;
@@ -1247,15 +1249,20 @@ export class WasmBackend {
         if (module === "ImageStat") {
             const { ImageStat } = this.wasm;
             const stat = new ImageStat(img);
+            const raw = stat.toObject();
+            // Python always wraps in arrays: [val] for single-band, [v1,v2,...] for multi-band
+            const wrap = (v) => (Array.isArray(v) ? v : [v]);
+            // extrema format: single band = [min, max], multi = [[min1,max1], ...]
+            const extrema = raw.extrema;
             return {
-                count: [stat.count],
-                sum: [stat.sum],
-                mean: [stat.mean],
-                median: [stat.mean],  // stub
-                rms: [stat.mean],     // stub
-                var: [0],             // stub
-                stddev: [0],          // stub
-                extrema: [[0, 0]],
+                count: wrap(raw.count),
+                sum: wrap(raw.sum),
+                mean: wrap(raw.mean),
+                median: wrap(raw.median),
+                rms: wrap(raw.rms),
+                var: wrap(raw.var),
+                stddev: wrap(raw.stddev),
+                extrema: Array.isArray(extrema[0]) ? extrema : [extrema],
             };
         }
 
@@ -1321,10 +1328,12 @@ export class WasmBackend {
             return xmp || {};
         }
         if (target === "getpalette") {
-            const pal = img.getpalette();
-            // WASM returns "L8"/"Rgb8" etc. for non-palette images — return null
-            if (typeof pal === 'string') return null;
-            return pal;
+            try {
+                const pal = img.getpalette();
+                return Array.from(pal);
+            } catch (_) {
+                return null;
+            }
         }
         if (target === "getim") {
             // Return PIL-compatible capsule string

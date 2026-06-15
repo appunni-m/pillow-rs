@@ -75,9 +75,9 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "convert")]
-    pub fn convert(&self, m: &str) -> Result<Image, JsValue> {
+    pub fn convert(&self, m: &str, dither: Option<String>) -> Result<Image, JsValue> {
         self.inner
-            .convert(m, None, None, None, None)
+            .convert(m, None, dither.as_deref(), None, None)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -427,12 +427,13 @@ impl Image {
     }
     // More methods
     #[wasm_bindgen(js_name = "getpalette")]
-    pub fn getpalette(&self) -> Result<JsValue, JsValue> {
-        let img = self.inner.materialize().map_err(err)?;
-        Ok(JsValue::from_str(&format!("{:?}", img.color())))
+    pub fn getpalette(&self) -> Result<Vec<u8>, JsValue> {
+        self.inner.palette().ok_or_else(|| JsValue::from_str("no palette"))
     }
     #[wasm_bindgen(js_name = "putpalette")]
-    pub fn putpalette(&mut self, _data: Vec<u8>) {}
+    pub fn putpalette(&mut self, _data: Vec<u8>) {
+        // Core doesn't expose putpalette — no-op
+    }
     #[wasm_bindgen(js_name = "getexif")]
     pub fn getexif(&self) -> JsValue {
         JsValue::from_str("{}")
@@ -684,9 +685,9 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "text")]
-    pub fn text(&mut self, x: f64, y: f64, text: &str, font: &ImageFont) -> Result<(), JsValue> {
+    pub fn text(&mut self, x: f64, y: f64, text: &str, font: &ImageFont, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
         self.draw
-            .text(x as i32, y as i32, text, &font.font, (0, 0, 0, 255))
+            .text(x as i32, y as i32, text, &font.font, (r, g, b, a))
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "bitmap")]
@@ -790,24 +791,60 @@ impl ImagePalette {
 
 // ── ImageStat ────────────────────────────────────────────────────
 #[wasm_bindgen]
-pub struct ImageStat {}
+pub struct ImageStat {
+    inner: pillow_rs_core::image::StatResult,
+}
 #[wasm_bindgen]
 impl ImageStat {
     #[wasm_bindgen(constructor)]
-    pub fn new(_input: &JsValue) -> ImageStat {
-        ImageStat {}
+    pub fn new(img: &Image) -> Result<ImageStat, JsValue> {
+        let s = img.inner.stat_formatted().map_err(err)?;
+        Ok(ImageStat { inner: s })
     }
-    #[wasm_bindgen(getter)]
-    pub fn count(&self) -> u32 {
-        0
+    fn val_to_js(&self, v: &pillow_rs_core::image::StatValue) -> JsValue {
+        use pillow_rs_core::image::StatValue;
+        match v {
+            StatValue::Int(i) => JsValue::from_f64(*i as f64),
+            StatValue::Float(f) => JsValue::from_f64(*f),
+            StatValue::IntList(l) => {
+                let arr = js_sys::Array::new();
+                for &x in l { arr.push(&JsValue::from_f64(x as f64)); }
+                arr.into()
+            }
+            StatValue::FloatList(l) => {
+                let arr = js_sys::Array::new();
+                for &x in l { arr.push(&JsValue::from_f64(x)); }
+                arr.into()
+            }
+            StatValue::ExtremaSingle((min, max)) => {
+                let arr = js_sys::Array::new();
+                arr.push(&JsValue::from_f64(*min as f64));
+                arr.push(&JsValue::from_f64(*max as f64));
+                arr.into()
+            }
+            StatValue::ExtremaList(l) => {
+                let arr = js_sys::Array::new();
+                for &(min, max) in l {
+                    let pair = js_sys::Array::new();
+                    pair.push(&JsValue::from_f64(min as f64));
+                    pair.push(&JsValue::from_f64(max as f64));
+                    arr.push(&pair);
+                }
+                arr.into()
+            }
+        }
     }
-    #[wasm_bindgen(getter)]
-    pub fn sum(&self) -> f64 {
-        0.0
-    }
-    #[wasm_bindgen(getter)]
-    pub fn mean(&self) -> f64 {
-        0.0
+    pub fn toObject(&self) -> js_sys::Object {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"count".into(), &self.val_to_js(&self.inner.count)).ok();
+        js_sys::Reflect::set(&obj, &"sum".into(), &self.val_to_js(&self.inner.sum)).ok();
+        js_sys::Reflect::set(&obj, &"mean".into(), &self.val_to_js(&self.inner.mean)).ok();
+        js_sys::Reflect::set(&obj, &"median".into(), &self.val_to_js(&self.inner.median)).ok();
+        js_sys::Reflect::set(&obj, &"rms".into(), &self.val_to_js(&self.inner.rms)).ok();
+        js_sys::Reflect::set(&obj, &"var".into(), &self.val_to_js(&self.inner.var)).ok();
+        js_sys::Reflect::set(&obj, &"stddev".into(), &self.val_to_js(&self.inner.stddev)).ok();
+        js_sys::Reflect::set(&obj, &"extrema".into(), &self.val_to_js(&self.inner.extrema)).ok();
+        obj
     }
 }
 
@@ -882,9 +919,9 @@ impl ImageFont {
     }
     #[wasm_bindgen(js_name = "loadDefault")]
     pub fn load_default() -> Result<ImageFont, JsValue> {
-        Err(JsValue::from_str(
-            "No default font in WASM. Use new ImageFont(data, size)",
-        ))
+        Ok(ImageFont {
+            font: Font::load_default(10.0),
+        })
     }
 }
 #[wasm_bindgen(js_name = "imageOpen")]

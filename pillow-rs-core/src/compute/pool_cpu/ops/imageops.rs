@@ -77,15 +77,36 @@ pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
-/// Invert: subtract each pixel value from 255 (RGB only).
+/// Invert: subtract each pixel value from 255 (all channels, matching PIL's point()).
 pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] = 255 - p[c];
+    let channels = img.color().channel_count() as usize;
+    let (w, h) = (img.width(), img.height());
+    let raw = img.as_bytes();
+    let mut out = raw.to_vec();
+    let stride = w as usize * channels;
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            for c in 0..channels {
+                let idx = y * stride + x * channels + c;
+                out[idx] = 255 - out[idx];
+            }
         }
     }
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+    let result = match channels {
+        1 => DynamicImage::ImageLuma8(
+            image::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            image::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
+        ),
+        _ => DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
+        ),
+    };
+    Ok(result)
 }
 
 /// Flip vertically.
@@ -277,6 +298,8 @@ pub fn op_scale(
 }
 
 /// Expand: add a border of `border` pixels with `fill` color around the image.
+/// The fill is a 4-tuple (r,g,b,a). Mode-appropriate fill resolution is done
+/// in the Python binding layer to match PIL's Image.new behavior.
 pub fn op_expand(
     img: &DynamicImage,
     border: u32,

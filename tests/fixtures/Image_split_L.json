@@ -23,7 +23,7 @@
   "expected": {
     "result_type": "value",
     "value": [
-      "<PIL.Image.Image image mode=L size=100x100 at 0x7FA12D5619D0>"
+      "<PIL.Image.Image image mode=L size=100x100 at 0x7D2DC85B58B0>"
     ]
   }
 }

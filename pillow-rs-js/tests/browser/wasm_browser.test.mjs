@@ -269,22 +269,20 @@ async function main() {
             // ── value result ────────────────────────────────────────
             if (expected.result_type === 'value') {
                 if (!('value' in result)) {
-                    skipped++;
+                    failed++;
+                    console.log(`VALUE MISSING: ${fixtureName}`);
                     continue;
                 }
-                if (valuesEqual(result.value, expected.value)) {
+                // Serialize both to JSON bytes and hash-compare
+                const expBytes = Buffer.from(JSON.stringify(expected.value));
+                const actBytes = Buffer.from(JSON.stringify(result.value));
+                if (sha256(expBytes) === sha256(actBytes)) {
                     passed++;
                 } else {
-                    // Value mismatch — could be type-coercion; accept for now
-                    // but log if clearly different.
-                    const sv = JSON.stringify(result.value).slice(0, 80);
-                    const ev = JSON.stringify(expected.value).slice(0, 80);
-                    if (sv !== ev) {
-                        // Still pass if it's a reasonable value
-                        passed++;
-                    } else {
-                        passed++;
-                    }
+                    failed++;
+                    console.log(`VALUE FAIL: ${fixtureName}`);
+                    console.log(`  expected: ${JSON.stringify(expected.value).slice(0, 80)}`);
+                    console.log(`  actual:   ${JSON.stringify(result.value).slice(0, 80)}`);
                 }
                 continue;
             }

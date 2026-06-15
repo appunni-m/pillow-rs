@@ -208,6 +208,22 @@ function compareValue(actual, expected) {
         return { pass: true };
     }
 
+    // Object/dict comparison — serialize to JSON bytes, then hash-compare
+    if (typeof expVal === 'object' && expVal !== null && !Array.isArray(expVal)) {
+        const expBytes = new TextEncoder().encode(JSON.stringify(expVal));
+        let actBytes;
+        if (actual instanceof Uint8Array) {
+            actBytes = actual;
+        } else if (typeof actual === 'object' && actual !== null) {
+            actBytes = new TextEncoder().encode(JSON.stringify(actual));
+        } else {
+            return { pass: false, reason: `expected object, got ${typeof actual}` };
+        }
+        return sha256(expBytes) === sha256(actBytes)
+            ? { pass: true }
+            : { pass: false, reason: `object hash mismatch` };
+    }
+
     // Fallback: string comparison
     const expStr = String(expVal);
     const actStr = String(actual);
@@ -263,11 +279,7 @@ for (const file of files.sort()) {
         continue;
     }
 
-    // Skip GPU-only tests
-    if (fixtureName.includes('_wasm_gpu')) {
-        skipped++;
-        continue;
-    }
+    // GPU fixtures run on CPU too — same operations, just mode-tagged
 
     console.log(`  ${fixtureName}...`);
 
@@ -321,9 +333,10 @@ for (const file of files.sort()) {
             throw e; // re-throw to outer catch
         }
 
-        // Skip if result is null/undefined and expected is not value-type
+        // Null/undefined result when hash/image was expected — this is a failure
         if ((result === null || result === undefined) && expected.result_type !== 'value') {
-            skipped++;
+            failed++;
+            failures.push(`${fixtureName}: got null/undefined result, expected ${expected.result_type}`);
             continue;
         }
 

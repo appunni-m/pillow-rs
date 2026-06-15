@@ -4,6 +4,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
+use image::DynamicImage;
 
 /// Find the mode (most common value) and its count from a histogram.
 /// Uses PIL's strict `>` tie-breaking (lower value wins on tie).
@@ -121,8 +122,14 @@ impl Image {
     ///   - If max count ≤ 2, original pixel is preserved unchanged
     ///   - Pixels outside image boundary are SKIPPED (not clamped/replicated)
     ///   - Supports any channel count (1=L, 2=LA, 3=RGB, 4=RGBA)
+    ///   - For P-mode (palette): operates on palette indices, preserves palette
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
+
+        // For palette images: extract palette before materialize
+        let palette = self.palette();
+        let explicit = self.explicit_mode().map(|s| s.to_string());
+
         let img = self.materialize()?;
         let half = (size / 2) as i32;
 
@@ -163,6 +170,25 @@ impl Image {
             }
         }
         let result = crate::image::raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        // Preserve palette for P-mode images
+        if let Some(pal) = palette {
+            let indices = match &result {
+                DynamicImage::ImageLuma8(gray) => gray.clone(),
+                _ => {
+                    return Err(PilError::ValueError(
+                        "mode_filter: unexpected output for palette image".into(),
+                    ));
+                }
+            };
+            return Ok(Image::Paletted(crate::image::PalettedData {
+                indices,
+                palette: pal,
+            }));
+        }
+        // Preserve explicit mode (e.g. "1", "P" via explicit_mode)
+        if explicit.is_some() {
+            return Ok(Image::Loaded(result, explicit));
+        }
         Ok(Image::Loaded(result, None))
     }
 

@@ -853,7 +853,7 @@ impl PyDraw {
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let color = parse_draw_color(fill)?;
+        let color = self.color(fill)?;
         for i in 0..xy.len() - 1 {
             let (x0, y0) = xy[i];
             let (x1, y1) = xy[i + 1];
@@ -872,12 +872,12 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill {
-            Some(parse_draw_color(fill)?)
+            Some(self.color(fill)?)
         } else {
             None
         };
         let out_color = if let Some(_o) = outline {
-            Some(parse_draw_color(outline)?)
+            Some(self.color(outline)?)
         } else {
             None
         };
@@ -902,12 +902,12 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill {
-            Some(parse_draw_color(fill)?)
+            Some(self.color(fill)?)
         } else {
             None
         };
         let out_color = if let Some(_o) = outline {
-            Some(parse_draw_color(outline)?)
+            Some(self.color(outline)?)
         } else {
             None
         };
@@ -930,24 +930,11 @@ impl PyDraw {
         bitmap: &Bound<'_, PyImage>,
         fill: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let fill_color = parse_draw_color(fill)?;
+        let fill_color = self.color(fill)?;
         let bmp = bitmap.borrow();
-        let bmp_img = bmp.inner.materialize().map_err(map_error)?;
-        let gray = bmp_img.to_luma8();
-        let (bw, bh) = gray.dimensions();
-        let (x0, y0) = (xy.0 as i32, xy.1 as i32);
-        // Get image dimensions from draw context
-        let max_x = bw.min(2048); // safe upper bound — draw clips internally
-        let max_y = bh.min(2048);
-        for y in 0..max_y {
-            for x in 0..max_x {
-                if gray.get_pixel(x, y)[0] != 0 {
-                    self.draw
-                        .point(&[(x0 + x as i32, y0 + y as i32)], fill_color)
-                        .map_err(map_error)?;
-                }
-            }
-        }
+        self.draw
+            .bitmap(xy.0 as i32, xy.1 as i32, &bmp.inner, Some(fill_color))
+            .map_err(map_error)?;
         Ok(())
     }
 
@@ -1000,12 +987,12 @@ impl PyDraw {
             pts.push((x, y));
         }
         let fill_color = if let Some(_f) = fill {
-            Some(parse_draw_color(fill)?)
+            Some(self.color(fill)?)
         } else {
             None
         };
         let out_color = if let Some(_o) = outline {
-            Some(parse_draw_color(outline)?)
+            Some(self.color(outline)?)
         } else {
             None
         };
@@ -1022,12 +1009,12 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill {
-            Some(parse_draw_color(fill)?)
+            Some(self.color(fill)?)
         } else {
             None
         };
         let out_color = if let Some(_o) = outline {
-            Some(parse_draw_color(outline)?)
+            Some(self.color(outline)?)
         } else {
             None
         };
@@ -1037,7 +1024,7 @@ impl PyDraw {
     }
 
     fn point(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let color = parse_draw_color(fill)?;
+        let color = self.color(fill)?;
         self.draw.point(&xy, color).map_err(map_error)
     }
 
@@ -1050,7 +1037,7 @@ impl PyDraw {
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let color = parse_draw_color(fill)?;
+        let color = self.color(fill)?;
         self.draw
             .arc(
                 xy.0,
@@ -1075,8 +1062,8 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
         self.draw
             .chord(
                 xy.0,
@@ -1102,8 +1089,8 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
         self.draw
             .pieslice(
                 xy.0,
@@ -1128,8 +1115,8 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
         self.draw
             .circle(xy.0 as i32, xy.1 as i32, radius, fc, oc, width.unwrap_or(1))
             .map_err(map_error)
@@ -1144,8 +1131,8 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| parse_draw_color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| parse_draw_color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
+        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
         self.draw
             .rounded_rectangle(xy.0, xy.1, xy.2, xy.3, radius, fc, oc, width.unwrap_or(1))
             .map_err(map_error)
@@ -1158,7 +1145,7 @@ impl PyDraw {
         fill: Option<&Bound<'_, PyAny>>,
         font: Option<&Bound<'_, PyFont>>,
     ) -> PyResult<()> {
-        let color = parse_draw_color(fill)?;
+        let color = self.color(fill)?;
         if let Some(pyfont) = font {
             let borrowed = pyfont.borrow();
             self.draw
@@ -1179,7 +1166,7 @@ impl PyDraw {
         font: Option<&Bound<'_, PyFont>>,
         spacing: Option<i32>,
     ) -> PyResult<()> {
-        let color = parse_draw_color(fill)?;
+        let color = self.color(fill)?;
         let sp = spacing.unwrap_or(4) as f64;
         let mut y = xy.1;
         for line in text.split('\n') {
@@ -1216,13 +1203,34 @@ impl PyDraw {
     fn draw_get_image(&self) -> pillow_rs_core::image::Image {
         self.draw.image_clone()
     }
+
+    /// Parse a draw color, using the image mode to determine byte representation.
+    fn color(&self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
+        parse_draw_color(val, self.draw.mode())
+    }
 }
 
-fn parse_draw_color(val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
+fn parse_draw_color(val: Option<&Bound<'_, PyAny>>, mode: Option<&str>) -> PyResult<(u8, u8, u8, u8)> {
     let v = match val {
         Some(v) => v,
         None => return Ok((0, 0, 0, 255)), // default black
     };
+    // F mode (float32): convert color to f32 LE bytes
+    if mode == Some("F") {
+        if let Ok(f) = v.extract::<f64>() {
+            let raw = f as f32;
+            let bytes = raw.to_le_bytes();
+            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+        }
+    }
+    // I mode (int32): convert color to i32 LE bytes
+    if mode == Some("I") {
+        if let Ok(i) = v.extract::<i32>() {
+            let bytes = i.to_le_bytes();
+            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+        }
+    }
+    // Standard modes: extract as u8
     if let Ok(s) = v.extract::<String>() {
         pillow_rs_core::color::parse_color_str(&s).map_err(map_error)
     } else if let Ok((r, g, b)) = v.extract::<(u8, u8, u8)>() {

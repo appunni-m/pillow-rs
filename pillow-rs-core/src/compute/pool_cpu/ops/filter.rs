@@ -63,6 +63,7 @@ pub fn raw_bytes_to_image(
 /// I-mode pixel values are stored as 4 RGBA bytes (little-endian i32).
 /// PIL applies the full kernel convolution with floating-point arithmetic,
 /// then rounds to the nearest integer — NO clipping to [0,255].
+/// PIL pre-divides kernel by scale at filter construction time.
 fn filter_3x3_i32(
     img: &DynamicImage,
     kernel: &[f32; 9],
@@ -317,15 +318,53 @@ pub fn pil_box_blur(
 /// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
 /// PIL uses clamping for border pixels.
 /// Generalized to handle any number of channels (1-4).
-fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32) -> Result<DynamicImage, PilError> {
-    let channels = img.color().channel_count() as usize;
-    let raw = img.as_bytes();
+/// For F-mode ("F"): treats 4 RGBA bytes as a single f32 value, sorts floats.
+fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32, mode: Option<&str>) -> Result<DynamicImage, PilError> {
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let half = (size / 2) as i32;
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
 
+    // For F-mode: operate on f32 values stored as 4 RGBA bytes
+    if mode == Some("F") {
+        let rgba = img.to_rgba8();
+        let raw = rgba.into_raw();
+        let mut out = vec![0u8; (w * h) as usize * 4];
+
+        for y in 0..h {
+            for x in 0..w {
+                let mut vals: Vec<f32> = Vec::with_capacity(area);
+                for dy in -half..=half {
+                    for dx in -half..=half {
+                        let sx = (x + dx).clamp(0, w - 1);
+                        let sy = (y + dy).clamp(0, h - 1);
+                        let base = (sy * w + sx) as usize * 4;
+                        let val = f32::from_le_bytes([
+                            raw[base], raw[base + 1], raw[base + 2], raw[base + 3],
+                        ]);
+                        vals.push(val);
+                    }
+                }
+                vals.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let result = vals[rank];
+                let out_base = (y * w + x) as usize * 4;
+                let le = result.to_le_bytes();
+                out[out_base] = le[0];
+                out[out_base + 1] = le[1];
+                out[out_base + 2] = le[2];
+                out[out_base + 3] = le[3];
+            }
+        }
+        let result = DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(w_u32, h_u32, out)
+                .ok_or_else(|| PilError::ValueError("rank_filter_impl(F): buffer error".into()))?,
+        );
+        return Ok(preserve_mode(img, result));
+    }
+
+    let channels = img.color().channel_count() as usize;
+    let raw = img.as_bytes();
     let mut out = vec![0u8; (w * h) as usize * channels];
 
     for y in 0..h {
@@ -369,15 +408,16 @@ pub fn execute_filter3x3(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    let k0 = kernel[0] / scale;
-    let k1 = kernel[1] / scale;
-    let k2 = kernel[2] / scale;
-    let k3 = kernel[3] / scale;
-    let k4 = kernel[4] / scale;
-    let k5 = kernel[5] / scale;
-    let k6 = kernel[6] / scale;
-    let k7 = kernel[7] / scale;
-    let k8 = kernel[8] / scale;
+    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let k0 = kernel[0] / s;
+    let k1 = kernel[1] / s;
+    let k2 = kernel[2] / s;
+    let k3 = kernel[3] / s;
+    let k4 = kernel[4] / s;
+    let k5 = kernel[5] / s;
+    let k6 = kernel[6] / s;
+    let k7 = kernel[7] / s;
+    let k8 = kernel[8] / s;
     let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.to_vec();
     for y in 1..h - 1 {
@@ -422,31 +462,32 @@ pub fn execute_filter5x5(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    let k00 = kernel[0] / scale;
-    let k01 = kernel[1] / scale;
-    let k02 = kernel[2] / scale;
-    let k03 = kernel[3] / scale;
-    let k04 = kernel[4] / scale;
-    let k10 = kernel[5] / scale;
-    let k11 = kernel[6] / scale;
-    let k12 = kernel[7] / scale;
-    let k13 = kernel[8] / scale;
-    let k14 = kernel[9] / scale;
-    let k20 = kernel[10] / scale;
-    let k21 = kernel[11] / scale;
-    let k22 = kernel[12] / scale;
-    let k23 = kernel[13] / scale;
-    let k24 = kernel[14] / scale;
-    let k30 = kernel[15] / scale;
-    let k31 = kernel[16] / scale;
-    let k32 = kernel[17] / scale;
-    let k33 = kernel[18] / scale;
-    let k34 = kernel[19] / scale;
-    let k40 = kernel[20] / scale;
-    let k41 = kernel[21] / scale;
-    let k42 = kernel[22] / scale;
-    let k43 = kernel[23] / scale;
-    let k44 = kernel[24] / scale;
+    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let k00 = kernel[0] / s;
+    let k01 = kernel[1] / s;
+    let k02 = kernel[2] / s;
+    let k03 = kernel[3] / s;
+    let k04 = kernel[4] / s;
+    let k10 = kernel[5] / s;
+    let k11 = kernel[6] / s;
+    let k12 = kernel[7] / s;
+    let k13 = kernel[8] / s;
+    let k14 = kernel[9] / s;
+    let k20 = kernel[10] / s;
+    let k21 = kernel[11] / s;
+    let k22 = kernel[12] / s;
+    let k23 = kernel[13] / s;
+    let k24 = kernel[14] / s;
+    let k30 = kernel[15] / s;
+    let k31 = kernel[16] / s;
+    let k32 = kernel[17] / s;
+    let k33 = kernel[18] / s;
+    let k34 = kernel[19] / s;
+    let k40 = kernel[20] / s;
+    let k41 = kernel[21] / s;
+    let k42 = kernel[22] / s;
+    let k43 = kernel[23] / s;
+    let k44 = kernel[24] / s;
     let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.to_vec();
     for y in 2..h - 2 {
@@ -567,17 +608,17 @@ pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage,
 
 /// Execute a median filter (rank = size*size/2).
 pub fn execute_median_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, size * size / 2)
+    rank_filter_impl(img, size, size * size / 2, None)
 }
 
 /// Execute a max filter (rank = size*size - 1).
 pub fn execute_max_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, size * size - 1)
+    rank_filter_impl(img, size, size * size - 1, None)
 }
 
 /// Execute a min filter (rank = 0).
 pub fn execute_min_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, 0)
+    rank_filter_impl(img, size, 0, None)
 }
 
 /// Execute a rank filter (rank = given rank).
@@ -586,5 +627,42 @@ pub fn execute_rank_filter(
     size: u32,
     rank: u32,
 ) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, rank)
+    rank_filter_impl(img, size, rank, None)
+}
+
+/// Execute a median filter with explicit mode.
+pub fn execute_median_filter_with_mode(
+    img: &DynamicImage,
+    size: u32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    rank_filter_impl(img, size, size * size / 2, mode)
+}
+
+/// Execute a max filter with explicit mode.
+pub fn execute_max_filter_with_mode(
+    img: &DynamicImage,
+    size: u32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    rank_filter_impl(img, size, size * size - 1, mode)
+}
+
+/// Execute a min filter with explicit mode.
+pub fn execute_min_filter_with_mode(
+    img: &DynamicImage,
+    size: u32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    rank_filter_impl(img, size, 0, mode)
+}
+
+/// Execute a rank filter with explicit mode.
+pub fn execute_rank_filter_with_mode(
+    img: &DynamicImage,
+    size: u32,
+    rank: u32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    rank_filter_impl(img, size, rank, mode)
 }

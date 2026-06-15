@@ -1,15 +1,26 @@
 //! GPU worker pool — implements BackendImpl for GPU compute backend.
 //!
-//! Uses wgpu for compute shader dispatch with packed u32 RGBA buffers
-//! (R|G<<8|B<<16|A<<24) and 16x16 workgroups.
-//!
-//! GPU initialization is lazy — happens on first `execute_batch` call.
-//! If wgpu cannot initialize, `execute_batch` returns an error.
-//!
-//! ## Supported shader binding patterns
-//! - 2-bindings: input (storage read), output (storage read_write) — no params
-//! - 3-bindings: input, output, params (uniform) — standard single-input ops
-//! - 4-bindings: input_a, input_b, output, params — dual-input ops with second image
+//! Debug logging: set RSPIL_GPU_DEBUG=1 to write per-op logs to /tmp/gpu_debug.log
+
+macro_rules! gpu_log {
+    ($($arg:tt)*) => {{
+        let msg = format!($($arg)*);
+        eprintln!("{}", msg);
+        if std::env::var("RSPIL_GPU_DEBUG").is_ok() {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true).append(true).open("/tmp/gpu_debug.log")
+            {
+                let _ = writeln!(f, "{}", msg);
+                let _ = f.flush();
+            }
+        }
+    }};
+}
+
+// Uses wgpu for compute shader dispatch with packed u32 RGBA buffers
+// (R|G<<8|B<<16|A<<24) and 16x16 workgroups.
+// GPU init is lazy — happens on first `execute_batch` call.
 
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
@@ -26,7 +37,7 @@ struct BufferPool {
     buf_img2: wgpu::Buffer, // Second image for dual-input ops
     buf_img3: wgpu::Buffer, // Third image for 3-input ops (Composite/Paste mask)
     params: wgpu::Buffer,
-    lut_buf: wgpu::Buffer, // LUT storage buffer for Eval/PointOp (1024 bytes)
+    lut_buf: wgpu::Buffer,  // LUT storage buffer for Eval/PointOp (1024 bytes)
     capacity: u32,
 }
 
@@ -210,6 +221,38 @@ struct GpuInner {
     queue: wgpu::Queue,
     buffers: BufferPool,
     pipelines: HashMap<String, CachedPipeline>,
+    /// Volta-style staging buffer pool: recycles MAP_READ buffers keyed by exact byte size.
+    /// Avoids wgpu internal destruction queue exhaustion from repeated create_buffer/drop cycles.
+    staging_pool: std::sync::Mutex<std::collections::HashMap<u64, Vec<wgpu::Buffer>>>,
+    staging_count: std::sync::Mutex<usize>,
+}
+
+impl GpuInner {
+    /// Acquire a staging buffer of exactly `size_bytes` from the pool, or None if pool is empty.
+    fn acquire_staging(&self, size_bytes: u64) -> Option<wgpu::Buffer> {
+        let mut pool = self.staging_pool.lock().unwrap();
+        if let Some(buffers) = pool.get_mut(&size_bytes) {
+            if let Some(buf) = buffers.pop() {
+                let mut count = self.staging_count.lock().unwrap();
+                *count = (*count).saturating_sub(1);
+                return Some(buf);
+            }
+        }
+        None
+    }
+
+    /// Return a staging buffer to the pool for reuse. If pool is full (64 limit), drops it.
+    fn release_staging(&self, buffer: wgpu::Buffer, size_bytes: u64) {
+        let count = self.staging_count.lock().unwrap();
+        if *count >= 64 {
+            return; // Pool full, drop the buffer
+        }
+        drop(count);
+        let mut pool = self.staging_pool.lock().unwrap();
+        pool.entry(size_bytes).or_default().push(buffer);
+        let mut count = self.staging_count.lock().unwrap();
+        *count += 1;
+    }
 }
 
 impl GpuInner {
@@ -236,22 +279,24 @@ impl GpuInner {
         let mut pipelines = HashMap::new();
         for (&key, entry) in registry::registry().iter() {
             if let Some(source) = entry.gpu_source {
-                eprintln!("[GPU] compiling shader: {}", key);
+                gpu_log!("[GPU] compiling shader: {}", key);
                 if let Some(pipeline) = Self::build_pipeline(&device, key, source) {
-                    eprintln!("[GPU]   -> OK ({} bindings)", pipeline.num_bindings);
+                    gpu_log!("[GPU]   -> OK ({} bindings)", pipeline.num_bindings);
                     pipelines.insert(key.to_string(), pipeline);
                 } else {
-                    eprintln!("[GPU]   -> SKIPPED (validation failed)");
+                    gpu_log!("[GPU]   -> SKIPPED (validation failed)");
                 }
             }
         }
-        eprintln!("[GPU] total compiled: {} pipelines", pipelines.len());
+        gpu_log!("[GPU] total compiled: {} pipelines", pipelines.len());
 
         Some(GpuInner {
             device,
             queue,
             buffers,
             pipelines,
+            staging_pool: std::sync::Mutex::new(std::collections::HashMap::new()),
+            staging_count: std::sync::Mutex::new(0),
         })
     }
 
@@ -619,31 +664,58 @@ impl GpuInner {
         };
         let size = (w * h * 4) as u64;
 
-        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
+        // Volta-style staging buffer pool: acquire a recycled buffer or create one.
+        // Buffers are never dropped — returned to the pool for reuse via release_staging().
+        // This avoids wgpu internal destruction queue exhaustion from repeated
+        // create_buffer/drop cycles across hundreds of sequential GPU operations.
+        let staging = self
+            .acquire_staging(size)
+            .unwrap_or_else(|| {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size,
+                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                })
+            });
+        gpu_log!("[GPU] readback: copy_buffer_to_buffer start");
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.copy_buffer_to_buffer(src, 0, &staging, 0, size);
         self.queue.submit(Some(encoder.finish()));
+        gpu_log!("[GPU] readback: copy submitted, map_async start");
 
         let slice = staging.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |r| {
             let _ = tx.send(r);
         });
+        gpu_log!("[GPU] readback: map_async called, poll start");
         self.device.poll(wgpu::Maintain::Wait);
+        // Double-poll: single Wait may not drain all pending GPU work when
+        // the queue has 300+ accumulated operations. Second poll ensures
+        // the staging buffer is fully released before returning to pool.
+        self.device.poll(wgpu::Maintain::Wait);
+        gpu_log!("[GPU] readback: poll done, recv start");
         rx.recv()
             .map_err(|_| PilError::ValueError("readback channel closed".into()))?
             .map_err(|e| PilError::ValueError(format!("map_async failed: {:?}", e)))?;
+        gpu_log!("[GPU] readback: recv done, get_mapped_range start");
 
         let data = slice.get_mapped_range().to_vec();
+        gpu_log!("[GPU] readback: got {} bytes, unmap start", data.len());
+        drop(slice);
         staging.unmap();
+        gpu_log!("[GPU] readback: unmap done, final poll start");
+        self.device.poll(wgpu::Maintain::Wait);
+        // Double-poll: single Wait may not drain all pending GPU work when
+        // the queue has 300+ accumulated operations. Second poll ensures
+        // the staging buffer is fully released before returning to pool.
+        self.device.poll(wgpu::Maintain::Wait);
+        gpu_log!("[GPU] readback: final poll done");
+        // Volta-style: return buffer to pool for reuse, never drop.
+        self.release_staging(staging, size);
 
         let n = (w * h) as usize;
         let mut rgba_bytes = Vec::with_capacity(n * 4);
@@ -679,8 +751,10 @@ impl GpuInner {
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
+        gpu_log!("[GPU] batch_impl: {} ops, start dims {}x{}", ops.len(), cur_w, cur_h);
         for (i, op) in ops.iter().enumerate() {
             let base_key = registry::variant_key(op);
+            gpu_log!("[GPU] batch_impl: op[{}/{}]={}", i + 1, ops.len(), base_key);
 
             let cached = self.pipelines.get(base_key).ok_or_else(|| {
                 PilError::ValueError(format!("GpuPool: no compiled pipeline for '{}'", base_key))
@@ -902,11 +976,18 @@ impl BackendImpl for GpuPool {
             mcode,
             op_keys
         );
+        gpu_log!("[GPU] step=upload_rgba start");
         gpu.buffers.upload_rgba(&gpu.queue, &rgba)?;
+        gpu_log!("[GPU] step=upload_rgba done");
+        gpu_log!("[GPU] step=execute_batch_impl start");
         let (final_is_a, final_w, final_h) = gpu.execute_batch_impl(ops, w, h, mcode)?;
+        gpu_log!("[GPU] step=execute_batch_impl done final=({},{}) is_a={}", final_w, final_h, final_is_a);
         // Ensure GPU is done before readback
+        gpu_log!("[GPU] step=poll before readback");
         gpu.device.poll(wgpu::Maintain::Wait);
+        gpu_log!("[GPU] step=poll done, readback start");
         let result = gpu.readback_to_image(final_w, final_h, final_is_a)?;
+        gpu_log!("[GPU] step=readback done");
         // Detect mode-changing ops that need output mode override.
         // Grayscale: always outputs L, regardless of input mode.
         // Convert: output matches target mode (handled by CPU fallback for now).
