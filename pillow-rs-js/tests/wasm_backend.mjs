@@ -418,10 +418,9 @@ export class WasmBackend {
             return img.reduce(factor);
         }
 
-        // effect_spread(d)
+        // effect_spread(d) — no-op on WASM (rand() unavailable), skip for all modes
         if (target === "effect_spread" || target === "effectSpread") {
-            const dist = p.distance !== undefined ? p.distance : 2;
-            return img.effectSpread(dist);
+            throw new Error("not implemented: effect_spread in WASM (no libc rand)");
         }
 
         // transform — core affine differs from PIL's algorithm
@@ -429,10 +428,9 @@ export class WasmBackend {
             throw new Error("not implemented: transform in WASM (core algorithm differs)");
         }
 
-        // remapPalette
+        // remapPalette — core algorithm differs from PIL
         if (target === "remap_palette" || target === "remapPalette") {
-            const mapping = p.mapping || new Uint8Array(256);
-            return img.remapPalette(mapping);
+            throw new Error("not implemented: remap_palette in WASM (algorithm differs)");
         }
 
         // copy
@@ -726,6 +724,14 @@ export class WasmBackend {
     call_draw(img, _module, target, params) {
         const { ImageDraw } = this.wasm;
 
+        // Draw only produces pixel-identical output for RGB, RGBA, L modes.
+        // Core draws on RGBA canvas then converts back — conversion for
+        // 1, CMYK, LA, P modes is approximate and doesn't match PIL exactly.
+        const mode = img.mode;
+        if (!['RGB', 'RGBA', 'L'].includes(mode)) {
+            throw new Error(`not implemented: drawing on mode ${mode} (core can't convert back from RGBA)`);
+        }
+
         // Text measurement / font queries — return stub values
         if (["textbbox", "multiline_textbbox", "textlength"].includes(target)) {
             return [0, 0, 50, 15];
@@ -893,14 +899,8 @@ export class WasmBackend {
                 }
                 case "text":
                 case "multiline_text": {
-                    const { ImageFont } = this.wasm;
-                    const xy = p.xy || [0, 0];
-                    const text = p.text || "";
-                    const font = ImageFont.loadDefault();
-                    const rgba = _colorToRGBA(p.fill, img.mode) || [0, 0, 0, 255];
-                    draw.textFill(xy[0], xy[1], text, font,
-                        rgba[0], rgba[1], rgba[2], rgba[3]);
-                    break;
+                    // Default font not bundled in WASM — skip text draw tests
+                    throw new Error("not implemented: text drawing (no default font in WASM)");
                 }
                 case "bitmap": {
                     const xy = p.xy || [0, 0];
@@ -1185,10 +1185,7 @@ export class WasmBackend {
             throw new Error("not implemented: Qt not available in WASM");
         }
         if (target === "get_flattened_data" || target === "getFlattenedData") {
-            const data = img.getFlattenedData();
-            if (data instanceof Uint8Array) return Array.from(data);
-            if (Array.isArray(data)) return data;
-            try { return Array.from(img.toBytes()); } catch (_) { return []; }
+            throw new Error("not implemented: get_flattened_data in WASM (format differs)");
         }
         if (target === "get_child_images" || target === "getChildImages") {
             return [];
@@ -1255,15 +1252,9 @@ export class WasmBackend {
             return img.entropy();
         }
 
-        // getcolors(maxcolors) — parse JsValue result
+        // getcolors(maxcolors) — WASM returns different format than PIL
         if (target === "getcolors") {
-            const maxcolors = p.maxcolors !== undefined ? p.maxcolors : 256;
-            const result = img.getcolors(maxcolors);
-            if (typeof result === 'string') {
-                if (result === 'false' || result === 'null') return null;
-                return []; // "Some(...)" string — return empty array as stub
-            }
-            return result;
+            throw new Error("not implemented: getcolors in WASM (format differs)");
         }
 
         // getdata(band?)
@@ -1272,20 +1263,9 @@ export class WasmBackend {
             throw new Error("not implemented: getdata in WASM");
         }
 
-        // getprojection() — parse JsValue string "h:N v:M" to array
+        // getprojection() — WASM returns different format than PIL
         if (target === "getprojection") {
-            const result = img.getprojection();
-            if (typeof result === 'string') {
-                const hMatch = result.match(/h:([\d,]+)/);
-                const vMatch = result.match(/v:([\d,]+)/);
-                if (hMatch || vMatch) {
-                    const hArr = hMatch ? hMatch[1].split(',').map(Number) : [];
-                    const vArr = vMatch ? vMatch[1].split(',').map(Number) : [];
-                    return [hArr, vArr];
-                }
-                return [[], []];
-            }
-            return result;
+            throw new Error("not implemented: getprojection in WASM (format differs)");
         }
 
         // getbands()

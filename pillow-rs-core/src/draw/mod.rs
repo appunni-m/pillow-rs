@@ -421,7 +421,7 @@ impl Draw {
         let img = self.image.clone();
         if let Some(ref orig) = self.orig_mode {
             if let Ok(current) = img.mode() {
-                if current != *orig && *orig != "RGBA" {
+                if current != *orig || matches!(orig.as_str(), "RGBA" | "CMYK") {
                     // Convert RGBA back to original mode
                     if let Ok(img_loaded) = img.materialize() {
                         let converted = match orig.as_str() {
@@ -489,6 +489,14 @@ impl Draw {
                                 // Identity: RGBA pixel values ARE CMYK pixel values
                                 // (C→R, M→G, Y→B, K→A). Just tag the buffer as CMYK.
                                 return Image::Loaded(img_loaded, Some("CMYK".to_string()));
+                            }
+                            "RGBA" => {
+                                // Identity: RGBA pixel values stay RGBA.
+                                // Tag with explicit mode so mode() always reports "RGBA".
+                                return Image::Loaded(
+                                    DynamicImage::ImageRgba8(img_loaded.to_rgba8()),
+                                    Some("RGBA".to_string()),
+                                );
                             }
                             _ => img_loaded,
                         };

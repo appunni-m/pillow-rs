@@ -8,7 +8,7 @@
 //! No allocations on the hot path.
 
 use crate::error::PilError;
-use crate::pipeline::{PipelineOp, ResampleFilter, TransposeMethod};
+use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
 use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -137,6 +137,19 @@ pub enum OpId {
     Sharpen,
     InvertChops,
     Scale,
+    Convert,
+    Quantize,
+    EffectNoise,
+    PutAlpha,
+    PutPixel,
+    Crop,
+    Reduce,
+    Thumbnail,
+    Contain,
+    Cover,
+    Fit,
+    Transform,
+    PutData,
 }
 
 /// GPU operation definition — holds compiled shader metadata.
@@ -357,6 +370,19 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::CompositeModule { .. } => Some(OpId::CompositeModule),
         PipelineOp::Eval { .. } => Some(OpId::Eval),
         PipelineOp::PointOp { .. } => Some(OpId::PointOp),
+        PipelineOp::Convert { .. } => Some(OpId::Convert),
+        PipelineOp::Quantize { .. } => Some(OpId::Quantize),
+        PipelineOp::Crop { .. } => Some(OpId::Crop),
+        PipelineOp::Reduce { .. } => Some(OpId::Reduce),
+        PipelineOp::Thumbnail { .. } => Some(OpId::Thumbnail),
+        PipelineOp::Contain { .. } => Some(OpId::Contain),
+        PipelineOp::Cover { .. } => Some(OpId::Cover),
+        PipelineOp::Fit { .. } => Some(OpId::Fit),
+        PipelineOp::EffectNoise { .. } => Some(OpId::EffectNoise),
+        PipelineOp::Transform { .. } => Some(OpId::Transform),
+        PipelineOp::PutPixel { .. } => Some(OpId::PutPixel),
+        PipelineOp::PutData { .. } => Some(OpId::PutData),
+        PipelineOp::PutAlpha { .. } => Some(OpId::PutAlpha),
         _ => None,
     }
 }
@@ -458,11 +484,6 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── RankFilter: size, rank ──
         PipelineOp::RankFilter { size, rank } => vec![*size, *rank],
 
-        // ── Paste: x, y (as u32, clamped non-negative) ──
-        PipelineOp::Paste { x, y, .. } => {
-            vec![(*x).max(0) as u32, (*y).max(0) as u32]
-        }
-
         // ── EffectSpread: distance ──
         PipelineOp::EffectSpread { distance } => vec![*distance],
 
@@ -515,6 +536,119 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── Scale: factor as fixed-point (factor * 65536) ──
         PipelineOp::Scale { factor, .. } => vec![(factor * 65536.0) as u32],
+
+        // ── Convert: encode ColorMode as u32 code ──
+        PipelineOp::Convert { mode, .. } => {
+            let code: u32 = match mode {
+                ColorMode::L => 0,
+                ColorMode::LA => 1,
+                ColorMode::RGB => 2,
+                ColorMode::RGBA => 3,
+                ColorMode::CMYK => 4,
+                ColorMode::YCbCr => 5,
+                ColorMode::HSV => 6,
+                ColorMode::I => 7,
+                ColorMode::F => 8,
+                ColorMode::P => 9,
+                ColorMode::Mode1 => 10,
+            };
+            vec![code]
+        }
+
+        // ── Quantize: colors, levels, step ──
+        PipelineOp::Quantize { colors, .. } => {
+            let c = *colors;
+            let levels = 256 / c.max(1);
+            vec![c, levels, 256]
+        }
+
+        // ── EffectNoise: sigma bits, seed ──
+        PipelineOp::EffectNoise { sigma } => {
+            vec![(*sigma as f32).to_bits(), 0]
+        }
+
+        // ── PutAlpha: alpha as u32 ──
+        PipelineOp::PutAlpha { alpha } => vec![*alpha as u32],
+
+        // ── PutPixel: x, y, color packed as RGBA u32 ──
+        PipelineOp::PutPixel { x, y, color } => {
+            let (r, g, b, a) = *color;
+            let packed = (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24);
+            vec![*x, *y, packed]
+        }
+
+        // ── Crop: left, top, width, height ──
+        PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } => {
+            vec![*left, *top, *right - *left, *bottom - *top]
+        }
+
+        // ── Reduce: factor ──
+        PipelineOp::Reduce { factor } => vec![*factor],
+
+        // ── Thumbnail: dst_w, dst_h ──
+        PipelineOp::Thumbnail { w, h, .. } => vec![*w, *h],
+
+        // ── Contain: dst_w, dst_h ──
+        PipelineOp::Contain { w, h, .. } => vec![*w, *h],
+
+        // ── Cover: new_w, new_h, crop_x, crop_y ──
+        PipelineOp::Cover { w, h, .. } => vec![*w, *h, 0, 0],
+
+        // ── Fit: new_w, new_h, crop_x, crop_y ──
+        PipelineOp::Fit { w, h, .. } => vec![*w, *h, 0, 0],
+
+        // ── Paste: src_w, src_h, paste_x, paste_y, has_mask ──
+        PipelineOp::Paste {
+            w, h, x, y, mask, ..
+        } => {
+            vec![
+                (*w).max(0) as u32,
+                (*h).max(0) as u32,
+                (*x).max(0) as u32,
+                (*y).max(0) as u32,
+                mask.is_some() as u32,
+            ]
+        }
+
+        // ── Transform: dst_w, dst_h, a..f bits, fill_color, filter_code ──
+        PipelineOp::Transform {
+            w,
+            h,
+            data,
+            filter,
+            fill,
+            ..
+        } => {
+            let a = (data.first().copied().unwrap_or(0.0) as f32).to_bits();
+            let b = (data.get(1).copied().unwrap_or(0.0) as f32).to_bits();
+            let c = (data.get(2).copied().unwrap_or(0.0) as f32).to_bits();
+            let d = (data.get(3).copied().unwrap_or(0.0) as f32).to_bits();
+            let e = (data.get(4).copied().unwrap_or(0.0) as f32).to_bits();
+            let f = (data.get(5).copied().unwrap_or(0.0) as f32).to_bits();
+            let fill_color = match fill {
+                Some((r, g, b, a)) => {
+                    (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24)
+                }
+                None => 0,
+            };
+            let filter_code = match filter {
+                ResampleFilter::Nearest => 0u32,
+                ResampleFilter::Bilinear => 1,
+                ResampleFilter::Bicubic => 2,
+                ResampleFilter::Lanczos => 3,
+                ResampleFilter::Box => 4,
+                ResampleFilter::Hamming => 5,
+            };
+            vec![*w, *h, a, b, c, d, e, f, fill_color, filter_code]
+        }
+
+        // ── PutData: data length ──
+        PipelineOp::PutData { data } => vec![data.len() as u32],
 
         // ── Everything else (no GPU support / no params) ──
         _ => vec![],
@@ -574,19 +708,25 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Crop",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Crop {
-                left,
-                top,
-                right,
-                bottom,
-            } = op
-            {
-                execute_crop(img, *left, *top, *right, *bottom)
-            } else {
-                Err(PilError::ValueError("expected Crop op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Crop {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                } = op
+                {
+                    execute_crop(img, *left, *top, *right, *bottom)
+                } else {
+                    Err(PilError::ValueError("expected Crop op".into()))
+                }
+            },
+            "crop.wgsl"
+        ),
     );
     m.insert(
         "Rotate",
@@ -621,51 +761,75 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Thumbnail",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Thumbnail { w, h, filter } = op {
-                execute_thumbnail(img, *w, *h, filter, mode)
-            } else {
-                Err(PilError::ValueError("expected Thumbnail op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Thumbnail { w, h, filter } = op {
+                    execute_thumbnail(img, *w, *h, filter, mode)
+                } else {
+                    Err(PilError::ValueError("expected Thumbnail op".into()))
+                }
+            },
+            "thumbnail.wgsl"
+        ),
     );
     m.insert(
         "Reduce",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Reduce { factor } = op {
-                execute_reduce(img, *factor)
-            } else {
-                Err(PilError::ValueError("expected Reduce op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Reduce { factor } = op {
+                    execute_reduce(img, *factor)
+                } else {
+                    Err(PilError::ValueError("expected Reduce op".into()))
+                }
+            },
+            "reduce.wgsl"
+        ),
     );
 
     // ── Color ──
     m.insert(
         "Convert",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Convert {
-                mode: cm,
-                matrix: _,
-                dither,
-            } = op
-            {
-                op_convert(img, cm, dither.as_ref(), mode, None)
-            } else {
-                Err(PilError::ValueError("expected Convert op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Convert {
+                    mode: cm,
+                    matrix: _,
+                    dither,
+                } = op
+                {
+                    op_convert(img, cm, dither.as_ref(), mode, None)
+                } else {
+                    Err(PilError::ValueError("expected Convert op".into()))
+                }
+            },
+            "convert.wgsl"
+        ),
     );
     m.insert(
         "Quantize",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Quantize { colors, dither } = op {
-                let _ = dither;
-                op_quantize(img, *colors as usize, None)
-            } else {
-                Err(PilError::ValueError("expected Quantize op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Quantize { colors, dither } = op {
+                    let _ = dither;
+                    op_quantize(img, *colors as usize, None)
+                } else {
+                    Err(PilError::ValueError("expected Quantize op".into()))
+                }
+            },
+            "quantize.wgsl"
+        ),
     );
     m.insert(
         "RemapPalette",
@@ -968,40 +1132,58 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Contain",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Contain { w, h, filter } = op {
-                op_contain(img, *w, *h, *filter, mode)
-            } else {
-                Err(PilError::ValueError("expected Contain op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Contain { w, h, filter } = op {
+                    op_contain(img, *w, *h, *filter, mode)
+                } else {
+                    Err(PilError::ValueError("expected Contain op".into()))
+                }
+            },
+            "contain.wgsl"
+        ),
     );
     m.insert(
         "Cover",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Cover { w, h, filter } = op {
-                op_cover(img, *w, *h, *filter, mode)
-            } else {
-                Err(PilError::ValueError("expected Cover op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Cover { w, h, filter } = op {
+                    op_cover(img, *w, *h, *filter, mode)
+                } else {
+                    Err(PilError::ValueError("expected Cover op".into()))
+                }
+            },
+            "cover.wgsl"
+        ),
     );
     m.insert(
         "Fit",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Fit {
-                w,
-                h,
-                filter,
-                bleed,
-                centering,
-            } = op
-            {
-                op_fit(img, *w, *h, *filter, *bleed, *centering, mode)
-            } else {
-                Err(PilError::ValueError("expected Fit op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Fit {
+                    w,
+                    h,
+                    filter,
+                    bleed,
+                    centering,
+                } = op
+                {
+                    op_fit(img, *w, *h, *filter, *bleed, *centering, mode)
+                } else {
+                    Err(PilError::ValueError("expected Fit op".into()))
+                }
+            },
+            "fit.wgsl"
+        ),
     );
     m.insert(
         "Pad",
@@ -1310,13 +1492,16 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Composite",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Composite { other, mask } = op {
-                op_chops_composite(img, other, mask)
-            } else {
-                Err(PilError::ValueError("expected Composite op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img, op, _mode| {
+                if let PipelineOp::Composite { other, mask } = op {
+                    op_chops_composite(img, other, mask)
+                } else {
+                    Err(PilError::ValueError("expected Composite op".into()))
+                }
+            },
+            "composite.wgsl"
+        ),
     );
     m.insert(
         "Duplicate",
@@ -1413,7 +1598,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     Err(PilError::ValueError("expected Sharpness op".into()))
                 }
             },
-            "sharpen.wgsl"
+            "sharpness.wgsl"
         ),
     );
 
@@ -1436,31 +1621,37 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Paste",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Paste {
-                source,
-                x,
-                y,
-                w: _,
-                h: _,
-                mask,
-            } = op
-            {
-                op_paste(img, source, *x as i64, *y as i64, mask)
-            } else {
-                Err(PilError::ValueError("expected Paste op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img, op, _mode| {
+                if let PipelineOp::Paste {
+                    source,
+                    x,
+                    y,
+                    w: _,
+                    h: _,
+                    mask,
+                } = op
+                {
+                    op_paste(img, source, *x as i64, *y as i64, mask)
+                } else {
+                    Err(PilError::ValueError("expected Paste op".into()))
+                }
+            },
+            "paste.wgsl"
+        ),
     );
     m.insert(
         "AlphaComposite",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::AlphaComposite { source, .. } = op {
-                op_alpha_composite(img, source)
-            } else {
-                Err(PilError::ValueError("expected AlphaComposite op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img, op, _mode| {
+                if let PipelineOp::AlphaComposite { source, .. } = op {
+                    op_alpha_composite(img, source)
+                } else {
+                    Err(PilError::ValueError("expected AlphaComposite op".into()))
+                }
+            },
+            "alpha_composite.wgsl"
+        ),
     );
 
     // ── Module fns ──
@@ -1493,96 +1684,139 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "CompositeModule",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::CompositeModule { other, mask } = op {
-                op_composite_module(img, other, mask, mode)
-            } else {
-                Err(PilError::ValueError("expected CompositeModule op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img, op, mode| {
+                if let PipelineOp::CompositeModule { other, mask } = op {
+                    op_composite_module(img, other, mask, mode)
+                } else {
+                    Err(PilError::ValueError("expected CompositeModule op".into()))
+                }
+            },
+            "composite_module.wgsl"
+        ),
     );
-    // Eval: CPU-only — LUT is 1024 bytes, doesn't fit in uniform buffer with WGSL alignment.
     m.insert(
         "Eval",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Eval { lut } = op {
-                op_eval(img, lut)
-            } else {
-                Err(PilError::ValueError("expected Eval op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Eval { lut } = op {
+                    op_eval(img, lut)
+                } else {
+                    Err(PilError::ValueError("expected Eval op".into()))
+                }
+            },
+            "eval.wgsl"
+        ),
     );
     m.insert(
         "EffectNoise",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::EffectNoise { sigma } = op {
-                op_effect_noise(img, *sigma)
-            } else {
-                Err(PilError::ValueError("expected EffectNoise op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::EffectNoise { sigma } = op {
+                    op_effect_noise(img, *sigma)
+                } else {
+                    Err(PilError::ValueError("expected EffectNoise op".into()))
+                }
+            },
+            "effect_noise.wgsl"
+        ),
     );
 
     // ── Point + Transform ──
-    // PointOp: CPU-only — LUT is 1024 bytes, doesn't fit in uniform buffer with WGSL alignment.
     m.insert(
         "PointOp",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::PointOp { lut } = op {
-                op_point(img, lut)
-            } else {
-                Err(PilError::ValueError("expected PointOp op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::PointOp { lut } = op {
+                    op_point(img, lut)
+                } else {
+                    Err(PilError::ValueError("expected PointOp op".into()))
+                }
+            },
+            "point_op.wgsl"
+        ),
     );
     m.insert(
         "Transform",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Transform {
-                w,
-                h,
-                method,
-                data,
-                filter,
-                fill,
-            } = op
-            {
-                op_transform(img, *w, *h, method, data, filter, *fill, mode)
-            } else {
-                Err(PilError::ValueError("expected Transform op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Transform {
+                    w,
+                    h,
+                    method,
+                    data,
+                    filter,
+                    fill,
+                } = op
+                {
+                    op_transform(img, *w, *h, method, data, filter, *fill, mode)
+                } else {
+                    Err(PilError::ValueError("expected Transform op".into()))
+                }
+            },
+            "transform.wgsl"
+        ),
     );
 
     // ── Mutating ──
     m.insert(
         "PutPixel",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::PutPixel { x, y, color } = op {
-                op_put_pixel(img, *x, *y, *color)
-            } else {
-                Err(PilError::ValueError("expected PutPixel op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::PutPixel { x, y, color } = op {
+                    op_put_pixel(img, *x, *y, *color)
+                } else {
+                    Err(PilError::ValueError("expected PutPixel op".into()))
+                }
+            },
+            "put_pixel.wgsl"
+        ),
     );
     m.insert(
         "PutData",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::PutData { data } = op {
-                op_put_data(img, data)
-            } else {
-                Err(PilError::ValueError("expected PutData op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::PutData { data } = op {
+                    op_put_data(img, data)
+                } else {
+                    Err(PilError::ValueError("expected PutData op".into()))
+                }
+            },
+            "put_data.wgsl"
+        ),
     );
     m.insert(
         "PutAlpha",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::PutAlpha { alpha } = op {
-                Ok(op_put_alpha(img, *alpha))
-            } else {
-                Err(PilError::ValueError("expected PutAlpha op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::PutAlpha { alpha } = op {
+                    Ok(op_put_alpha(img, *alpha))
+                } else {
+                    Err(PilError::ValueError("expected PutAlpha op".into()))
+                }
+            },
+            "put_alpha.wgsl"
+        ),
     );
 }

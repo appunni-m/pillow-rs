@@ -24,7 +24,9 @@ struct BufferPool {
     buf_a: wgpu::Buffer,
     buf_b: wgpu::Buffer,
     buf_img2: wgpu::Buffer, // Second image for dual-input ops
+    buf_img3: wgpu::Buffer, // Third image for 3-input ops (Composite/Paste mask)
     params: wgpu::Buffer,
+    lut_buf: wgpu::Buffer, // LUT storage buffer for Eval/PointOp (1024 bytes)
     capacity: u32,
 }
 
@@ -53,6 +55,18 @@ impl BufferPool {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let buf_img3 = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu_buf_img3"),
+            size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let lut_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("gpu_lut"),
+            size: 1024, // 256 entries * 4 bytes each
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         let params = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("gpu_params"),
             size: 256 * 16,
@@ -63,7 +77,9 @@ impl BufferPool {
             buf_a,
             buf_b,
             buf_img2,
+            buf_img3,
             params,
+            lut_buf,
             capacity,
         }
     }
@@ -107,6 +123,27 @@ impl BufferPool {
         queue.write_buffer(&self.buf_img2, 0, bytemuck::cast_slice(&packed));
     }
 
+    /// Upload a third image to buf_img3 for 3-input shader ops (Composite mask).
+    fn upload_third(&self, queue: &wgpu::Queue, rgba: &RgbaImage) {
+        let (w, h) = rgba.dimensions();
+        let n = (w * h) as usize;
+        let mut packed: Vec<u32> = Vec::with_capacity(n);
+        for px in rgba.pixels() {
+            packed.push(
+                (px[0] as u32)
+                    | ((px[1] as u32) << 8)
+                    | ((px[2] as u32) << 16)
+                    | ((px[3] as u32) << 24),
+            );
+        }
+        queue.write_buffer(&self.buf_img3, 0, bytemuck::cast_slice(&packed));
+    }
+
+    /// Upload LUT data to the storage buffer for Eval/PointOp shaders.
+    fn upload_lut(&self, queue: &wgpu::Queue, lut: &[u32; 256]) {
+        queue.write_buffer(&self.lut_buf, 0, bytemuck::cast_slice(&lut[..]));
+    }
+
     fn upload_params(&self, queue: &wgpu::Queue, params: &[u32], w: u32, h: u32, mode: u32) {
         // Uniform buffer layout: [w, h, mode, pad0] + params (tightly packed u32s)
         // mode: 0=L, 1=LA, 2=RGB, 3=RGBA
@@ -141,14 +178,28 @@ fn count_shader_bindings(source: &str) -> u32 {
     }
 }
 
+/// Detect if a 4-binding shader uses the LUT layout (Eval/PointOp).
+/// In LUT layout, `@binding(1)` is `storage read_write` (output).
+/// In dual-input layout, `@binding(1)` is `storage read` (input_b).
+fn is_lut_shader(source: &str) -> bool {
+    for line in source.lines() {
+        if line.contains("@binding(1)") {
+            return line.contains("read_write");
+        }
+    }
+    false
+}
+
 // ─── CachedPipeline ────────────────────────────────────────────────────────
 
 struct CachedPipeline {
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     variant_name: &'static str,
-    /// Number of bindings in this shader (2 or 3 for supported shaders).
+    /// Number of bindings in this shader (2-5).
     num_bindings: u32,
+    /// True if this is a 4-binding LUT shader (Eval/PointOp).
+    is_lut: bool,
 }
 
 // ─── GpuInner (lazy-initialized GPU engine) ────────────────────────────────
@@ -211,42 +262,39 @@ impl GpuInner {
 
         let num_bindings = count_shader_bindings(shader_source);
 
-        // Supported: 2, 3, or 4 binding shaders. 0/1/more are invalid.
-        if num_bindings < 2 || num_bindings > 4 {
+        // Supported: 2-5 binding shaders. 0/1/>5 are invalid.
+        if num_bindings < 2 || num_bindings > 5 {
             return None;
         }
 
+        // Detect if this is a LUT shader (Eval/PointOp) with 4 bindings.
+        let is_lut = num_bindings == 4 && is_lut_shader(shader_source);
+
         // Build bind group layout matching shader declarations.
-        // Layout depends on binding count:
+        // Layout depends on binding count and LUT variant:
         //   2: [input(read), output(read_write)]
         //   3: [input(read), output(read_write), params(uniform)]
-        //   4: [input_a(read), input_b(read), output(read_write), params(uniform)]
+        //   4 (dual-input): [input_a(read), input_b(read), output(read_write), params(uniform)]
+        //   4 (LUT):        [input(read), output(read_write), params(uniform), lut(read)]
+        //   5: [input_a(read), input_b(read), input_c(read), output(read_write), params(uniform)]
         let mut bindings = Vec::with_capacity(num_bindings as usize);
 
-        if num_bindings == 4 {
-            // Dual-input layout
+        if num_bindings == 5 {
+            // 5-binding: 3 inputs + output + params (Composite/CompositeModule/Paste)
+            for i in 0..3 {
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: i,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+            }
             bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 2,
+                binding: 3,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -256,7 +304,7 @@ impl GpuInner {
                 count: None,
             });
             bindings.push(wgpu::BindGroupLayoutEntry {
-                binding: 3,
+                binding: 4,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
@@ -265,6 +313,92 @@ impl GpuInner {
                 },
                 count: None,
             });
+        } else if num_bindings == 4 {
+            if is_lut {
+                // LUT layout: [input(read), output(rw), params(uniform), lut(read)]
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+            } else {
+                // Dual-input layout
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+                bindings.push(wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                });
+            }
         } else {
             // 2 or 3 binding (single-input) layout
             bindings.push(wgpu::BindGroupLayoutEntry {
@@ -334,6 +468,7 @@ impl GpuInner {
             bind_group_layout,
             variant_name,
             num_bindings,
+            is_lut,
         })
     }
 
@@ -343,19 +478,64 @@ impl GpuInner {
         input_buf: &wgpu::Buffer,
         output_buf: &wgpu::Buffer,
         img2_buf: Option<&wgpu::Buffer>,
+        img3_buf: Option<&wgpu::Buffer>,
     ) -> wgpu::BindGroup {
         let mut entries = Vec::with_capacity(cached.num_bindings as usize);
-        match cached.num_bindings {
-            4 => {
+        match (cached.num_bindings, cached.is_lut) {
+            (5, _) => {
+                // 5-binding: [in_a(read), in_b(read), in_c(read), out(rw), params(uniform)]
                 entries.push(wgpu::BindGroupEntry {
                     binding: 0,
                     resource: input_buf.as_entire_binding(),
                 });
-                // For dual-input ops, binding 1 is the second image (read-only)
-                let buf_b = img2_buf.unwrap_or(output_buf);
+                let second = img2_buf.unwrap_or(output_buf);
                 entries.push(wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: buf_b.as_entire_binding(),
+                    resource: second.as_entire_binding(),
+                });
+                let third = img3_buf.unwrap_or(output_buf);
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: third.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: output_buf.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.buffers.params.as_entire_binding(),
+                });
+            }
+            (4, true) => {
+                // LUT layout: [input(read), output(rw), params(uniform), lut(read)]
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buf.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output_buf.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.buffers.params.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.buffers.lut_buf.as_entire_binding(),
+                });
+            }
+            (4, false) => {
+                // Dual-input layout: [input_a(read), input_b(read), output(rw), params(uniform)]
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buf.as_entire_binding(),
+                });
+                let second = img2_buf.unwrap_or(output_buf);
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: second.as_entire_binding(),
                 });
                 entries.push(wgpu::BindGroupEntry {
                     binding: 2,
@@ -367,6 +547,7 @@ impl GpuInner {
                 });
             }
             _ => {
+                // 2 or 3 binding: [input(read), output(rw), ...params(uniform)]
                 entries.push(wgpu::BindGroupEntry {
                     binding: 0,
                     resource: input_buf.as_entire_binding(),
@@ -398,8 +579,9 @@ impl GpuInner {
         input_buf: &wgpu::Buffer,
         output_buf: &wgpu::Buffer,
         img2_buf: Option<&wgpu::Buffer>,
+        img3_buf: Option<&wgpu::Buffer>,
     ) {
-        let bind_group = self.make_bind_group(cached, input_buf, output_buf, img2_buf);
+        let bind_group = self.make_bind_group(cached, input_buf, output_buf, img2_buf, img3_buf);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -478,14 +660,20 @@ impl GpuInner {
         w: u32,
         h: u32,
         mode: u32,
-    ) -> Result<bool, PilError> {
+    ) -> Result<(bool, u32, u32), PilError> {
         // Pre-materialize second images to avoid interleaved CPU decode during GPU dispatch.
         // Each dual-input op gets its second image materialized upfront; upload to buf_img2
         // happens right before dispatch (CPU→GPU, not a round trip).
         let second_images: Vec<Option<DynamicImage>> =
             ops.iter().map(|op| extract_second_image(op)).collect();
 
+        // Pre-materialize third images for 3-input ops (Composite/Paste mask).
+        let third_images: Vec<Option<DynamicImage>> =
+            ops.iter().map(|op| extract_third_image(op)).collect();
+
         let mut current_is_a = true;
+        let mut cur_w = w;
+        let mut cur_h = h;
         for (i, op) in ops.iter().enumerate() {
             let base_key = registry::variant_key(op);
 
@@ -494,7 +682,8 @@ impl GpuInner {
             })?;
 
             let params = registry::extract_params(op);
-            self.buffers.upload_params(&self.queue, &params, w, h, mode);
+            self.buffers
+                .upload_params(&self.queue, &params, cur_w, cur_h, mode);
 
             let (input_buf, output_buf) = if current_is_a {
                 (&self.buffers.buf_a, &self.buffers.buf_b)
@@ -511,12 +700,36 @@ impl GpuInner {
                 None
             };
 
-            self.dispatch_pass(cached, w, h, input_buf, output_buf, img2_buf);
+            // Upload pre-materialized third image to buf_img3 for 3-input ops.
+            let img3_buf: Option<&wgpu::Buffer> = if let Some(ref third) = third_images[i] {
+                let third_rgba = third.to_rgba8();
+                self.buffers.upload_third(&self.queue, &third_rgba);
+                Some(&self.buffers.buf_img3)
+            } else {
+                None
+            };
+
+            // Upload LUT data for Eval/PointOp shaders before dispatch.
+            if cached.is_lut {
+                if let Some(lut_data) = extract_lut(op) {
+                    self.buffers.upload_lut(&self.queue, &lut_data);
+                }
+            }
+
+            self.dispatch_pass(
+                cached, cur_w, cur_h, input_buf, output_buf, img2_buf, img3_buf,
+            );
             current_is_a = !current_is_a;
+
+            // Update dimensions after size-changing ops.
+            if let Some((new_w, new_h)) = op_output_dims(op, cur_w, cur_h) {
+                cur_w = new_w;
+                cur_h = new_h;
+            }
         }
         // After N ops, current_is_a tracks where the latest result lives:
         //   true → buf_a has the final result, false → buf_b
-        Ok(current_is_a)
+        Ok((current_is_a, cur_w, cur_h))
     }
 }
 
@@ -565,6 +778,71 @@ fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
         _ => None,
     };
     arc_img.and_then(|img| img.materialize().ok())
+}
+
+/// Extract the third image (mask) from a 3-input PipelineOp, if present.
+/// Returns the materialized DynamicImage ready for GPU upload.
+fn extract_third_image(op: &PipelineOp) -> Option<DynamicImage> {
+    let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
+        PipelineOp::Composite { mask, .. } | PipelineOp::CompositeModule { mask, .. } => Some(mask),
+        PipelineOp::Paste { mask, .. } => mask.as_ref(),
+        _ => None,
+    };
+    arc_img.and_then(|img| img.materialize().ok())
+}
+
+/// Extract and pack LUT data from a PipelineOp into [u32; 256] for GPU upload.
+/// Each u32 packs RGBA channels for one LUT entry (R in byte 0, G byte 1, B byte 2, A byte 3).
+fn extract_lut(op: &PipelineOp) -> Option<[u32; 256]> {
+    let lut_bytes: &[u8] = match op {
+        PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => lut.as_slice(),
+        _ => return None,
+    };
+    let mut packed = [0u32; 256];
+    if lut_bytes.len() == 256 {
+        // Single-channel LUT: replicate value across all four bytes.
+        for i in 0..256 {
+            let v = lut_bytes[i] as u32;
+            packed[i] = v | (v << 8) | (v << 16) | (v << 24);
+        }
+    } else if lut_bytes.len() >= 1024 {
+        // Packed RGBA LUT (256 entries * 4 bytes each).
+        for i in 0..256 {
+            let base = i * 4;
+            packed[i] = (lut_bytes[base] as u32)
+                | ((lut_bytes[base + 1] as u32) << 8)
+                | ((lut_bytes[base + 2] as u32) << 16)
+                | ((lut_bytes[base + 3] as u32) << 24);
+        }
+    }
+    Some(packed)
+}
+
+/// Compute output dimensions for a size-changing op given current input dimensions.
+/// Returns `None` if the op does not change the image dimensions.
+fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)> {
+    match op {
+        PipelineOp::Resize { w, h, .. } => Some((*w.max(&1), *h.max(&1))),
+        PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } => {
+            let new_w = right.saturating_sub(*left).max(1);
+            let new_h = bottom.saturating_sub(*top).max(1);
+            Some((new_w, new_h))
+        }
+        PipelineOp::Reduce { factor } if *factor > 0 => {
+            Some(((cur_w / factor).max(1), (cur_h / factor).max(1)))
+        }
+        PipelineOp::Scale { factor, .. } => {
+            let new_w = (cur_w as f64 * factor).round().max(1.0) as u32;
+            let new_h = (cur_h as f64 * factor).round().max(1.0) as u32;
+            Some((new_w, new_h))
+        }
+        _ => None,
+    }
 }
 
 // ─── GpuPool ───────────────────────────────────────────────────────────────
@@ -620,10 +898,10 @@ impl BackendImpl for GpuPool {
             op_keys
         );
         gpu.buffers.upload_rgba(&gpu.queue, &rgba)?;
-        let final_is_a = gpu.execute_batch_impl(ops, w, h, mcode)?;
+        let (final_is_a, final_w, final_h) = gpu.execute_batch_impl(ops, w, h, mcode)?;
         // Ensure GPU is done before readback
         gpu.device.poll(wgpu::Maintain::Wait);
-        let result = gpu.readback_to_image(w, h, final_is_a)?;
+        let result = gpu.readback_to_image(final_w, final_h, final_is_a)?;
         Ok(crate::image::preserve_mode(img, result))
     }
 }

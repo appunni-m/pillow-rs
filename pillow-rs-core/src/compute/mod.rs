@@ -63,11 +63,13 @@ pub trait BackendImpl: Send + Sync {
 // ── Modules ────────────────────────────────────────────────────────────────
 
 mod pool_cpu;
+#[cfg(not(target_arch = "wasm32"))]
 mod pool_gpu;
 mod pool_simd;
 pub mod registry;
 
 pub use pool_cpu::CpuPool;
+#[cfg(not(target_arch = "wasm32"))]
 pub use pool_gpu::GpuPool;
 pub use pool_simd::SimdPool;
 
@@ -107,8 +109,12 @@ use std::sync::OnceLock;
 fn pools() -> &'static [Box<dyn BackendImpl>] {
     static POOLS: OnceLock<Vec<Box<dyn BackendImpl>>> = OnceLock::new();
     POOLS.get_or_init(|| {
-        let mut v: Vec<Box<dyn BackendImpl>> =
-            vec![Box::new(CpuPool), Box::new(GpuPool), Box::new(SimdPool)];
+        let mut v: Vec<Box<dyn BackendImpl>> = vec![
+            Box::new(CpuPool),
+            #[cfg(not(target_arch = "wasm32"))]
+            Box::new(GpuPool),
+            Box::new(SimdPool),
+        ];
         v.sort_by_key(|b| std::cmp::Reverse(b.priority()));
         v
     })

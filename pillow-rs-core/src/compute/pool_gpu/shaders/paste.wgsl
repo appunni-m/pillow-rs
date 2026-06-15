@@ -2,19 +2,17 @@
 // with optional mask blending.
 // Per-pixel dispatch (16x16 workgroups) over the destination image.
 //
-// CPU reference (image.rs:2775): Paste source image into destination at (x,y)
+// CPU reference: paste source image into destination at (x,y)
 // with optional mask. For each destination pixel in paste rect:
 //   if mask provided: out = (src * mask + dst * (255-mask)) / 255
-//   else: out = src (opaque) if source has alpha, or opaque over dst
+//   else: direct copy of src over dst (same as mask=255)
 //
-// 3 input buffers: input_dst, input_src, input_mask (all-255 if no mask).
-//   input_mask is indexed by src coordinates (reads low byte as blend factor).
+// 5-binding layout (buf_img3): input_dst, input_src, input_mask, output, params.
+//   input_dst, input_src, input_mask are storage read.
+//   output is storage read_write.
 //
-// Mode-aware: only paste active channels. L/LA: paste R only; RGB: paste R,G,B;
-// RGBA: paste R,G,B,A.
-//
-// Params: width=dst_w, height=dst_h, mode, _pad, src_w, src_h,
-//         paste_x (i32), paste_y (i32), has_mask
+// Mode-aware: only paste active channels.
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 
 struct Params {
     width: u32,
@@ -33,10 +31,10 @@ fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 @group(0) @binding(0) var<storage, read> input_dst: array<u32>;
-@group(0) @binding(1) var<storage, read_write> output: array<u32>;
-@group(0) @binding(2) var<uniform> params: Params;
-@group(0) @binding(3) var<storage, read> input_src: array<u32>;
-@group(0) @binding(4) var<storage, read> input_mask: array<u32>;
+@group(0) @binding(1) var<storage, read> input_src: array<u32>;
+@group(0) @binding(2) var<storage, read> input_mask: array<u32>;
+@group(0) @binding(3) var<storage, read_write> output: array<u32>;
+@group(0) @binding(4) var<uniform> params: Params;
 
 fn blend_pixel(src: u32, dst: u32, mask: u32, mode: u32) -> u32 {
     let sr = src & 0xffu;
@@ -78,12 +76,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         var mask_val: u32 = 255u;
         if params.has_mask == 1u {
             let mask_pixel = input_mask[src_idx];
-            mask_val = mask_pixel & 0xffu; // mask is in low byte
+            mask_val = mask_pixel & 0xffu;  // mask in low byte
         }
 
         output[dst_idx] = blend_pixel(src_pixel, dst_pixel, mask_val, params.mode);
     } else {
-        // Outside the paste region: pass destination through unchanged
+        // Outside paste region: pass destination through unchanged
         output[dst_idx] = dst_pixel;
     }
 }
