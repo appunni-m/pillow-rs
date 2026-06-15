@@ -24,20 +24,6 @@ def _hash(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def _json_deep_list(obj):
-    """Recursively convert tuples to lists for JSON fixture comparison.
-
-    JSON has no tuple type, so fixture values parsed from JSON use lists
-    everywhere. PIL returns tuples. This helper normalizes our output so
-    it can be compared against the JSON-derived expected value.
-    """
-    if isinstance(obj, tuple):
-        return [_json_deep_list(x) for x in obj]
-    if isinstance(obj, list):
-        return [_json_deep_list(x) for x in obj]
-    return obj
-
-
 def _make_input(fixture):
     """Create RSPIL image from fixture input block."""
     inp = fixture["input"]
@@ -146,7 +132,7 @@ def test_fixture_parity(fixture_file):
                     try: band.tobytes()
                     except: pytest.xfail(f"split: band {i} has no tobytes")
                 return  # Split result is valid (same band count, images have bytes)
-            act = _json_deep_list(actual)
+            act = [list(x) if isinstance(x, (list, tuple)) else x for x in actual]
             if act == val: return
         if actual == val: return
         pytest.xfail("value mismatch")
