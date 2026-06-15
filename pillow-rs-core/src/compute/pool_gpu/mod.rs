@@ -902,6 +902,27 @@ impl BackendImpl for GpuPool {
         // Ensure GPU is done before readback
         gpu.device.poll(wgpu::Maintain::Wait);
         let result = gpu.readback_to_image(final_w, final_h, final_is_a)?;
-        Ok(crate::image::preserve_mode(img, result))
+        // Detect mode-changing ops that need output mode override.
+        // Grayscale: always outputs L, regardless of input mode.
+        // Convert: output matches target mode (handled by CPU fallback for now).
+        let out_mode: Option<image::ColorType> = if ops.iter().any(|op| {
+            matches!(op, PipelineOp::Grayscale)
+        }) {
+            Some(image::ColorType::L8)
+        } else {
+            None
+        };
+        if let Some(ct) = out_mode {
+            // Bypass preserve_mode — use the override color type directly
+            match ct {
+                image::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
+                image::ColorType::La8 => Ok(DynamicImage::ImageLumaA8(result.to_luma_alpha8())),
+                image::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
+                image::ColorType::Rgba8 => Ok(DynamicImage::ImageRgba8(result.to_rgba8())),
+                _ => Ok(crate::image::preserve_mode(img, result)),
+            }
+        } else {
+            Ok(crate::image::preserve_mode(img, result))
+        }
     }
 }
