@@ -1231,39 +1231,36 @@ pub fn filter_5x5(
     }
 }
 
-/// Sharpen filter on packed u32 RGBA pixels.
+/// PIL ImageEnhance.Sharpness on packed u32 RGBA pixels.
 ///
-/// Fixed 3x3 sharpen kernel (PIL ImageFilter.SHARPEN):
-///   [-2, -2, -2,
-///    -2, 32, -2,
-///    -2, -2, -2]
-///   scale=16, offset=0
+/// PIL algorithm:
+/// 1. Apply SMOOTH kernel [1,1,1, 1,5,1, 1,1,1] / 13 (NOT a sharpen kernel!)
+/// 2. Blend: out = blurred * (1.0 - factor) + original * factor
 ///
-/// `factor_fp` is a fixed-point factor (factor * 1000) that interpolates
-/// between the original image and the sharpened result:
-///   result = lerp(original, sharpened, factor_fp / 1000.0)
-/// - factor_fp = 0     -> original image (no sharpen)
-/// - factor_fp = 1000  -> full sharpen effect
-/// - factor_fp = 2000  -> double sharpness (extrapolation)
+/// `factor_fp` is a fixed-point factor (factor * 1000) where:
+/// - factor_fp = 1000 (1.0) -> output = original (identity)
+/// - factor_fp < 1000 (<1.0) -> output is MORE blurred (anti-sharpen)
+/// - factor_fp > 1000 (>1.0) -> output = original + (original - blurred) * (factor-1) (unsharp mask)
+///
+/// CPU reference: pool_cpu/ops/enhance.rs op_enhance_sharpness
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn sharpen(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) {
+pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
     let src = pixels.to_vec();
     let w_i = w as i32;
     let h_i = h as i32;
     let half = 1i32;
-    // Fixed sharpen kernel (PIL ImageFilter.SHARPEN)
-    let kernel: [f32; 9] = [
-        -2.0, -2.0, -2.0, //
-        -2.0, 32.0, -2.0, //
-        -2.0, -2.0, -2.0,
-    ];
-    let scale = 16.0;
-    // Interpolation weight: factor_fp / 1000
+    // SMOOTH kernel pre-divided: [1,1,1, 1,5,1, 1,1,1] / 13
+    let inv_scale = 1.0f32 / 13.0f32;
+    let k_edges = inv_scale; // edges = 1/13
+    let k_center = 5.0f32 * inv_scale; // center = 5/13
+    let rounding_bias = 0.5f32; // offset=0 => 0.0 + 0.5
+                                // Blend weight: factor_fp / 1000
     let t = factor_fp as f32 / 1000.0;
+    let one_minus_t = 1.0 - t;
 
     for y in 0..h_i {
         for x in 0..w_i {
@@ -1274,6 +1271,7 @@ pub fn sharpen(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) {
             let orig_b = (orig >> 16) & 0xFF;
             let orig_a = orig & 0xFF00_0000;
 
+            // Convolve with SMOOTH kernel
             let mut sum_r: f32 = 0.0;
             let mut sum_g: f32 = 0.0;
             let mut sum_b: f32 = 0.0;
@@ -1283,30 +1281,35 @@ pub fn sharpen(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) {
                     let sx = (x + kx).clamp(0, w_i - 1);
                     let sy = (y + ky).clamp(0, h_i - 1);
                     let sp = src[(sy * w_i + sx) as usize];
-                    let ki = ((ky + half) * 3 + (kx + half)) as usize;
-                    let k = kernel[ki];
+                    // Kernel position: center (1,1) gets 5/13, edges get 1/13
+                    let k = if ky == 0 && kx == 0 {
+                        k_center
+                    } else {
+                        k_edges
+                    };
                     sum_r += (sp & 0xFF) as f32 * k;
                     sum_g += ((sp >> 8) & 0xFF) as f32 * k;
                     sum_b += ((sp >> 16) & 0xFF) as f32 * k;
                 }
             }
 
-            let sharp_r = ((sum_r / scale + 0.5) as i32).clamp(0, 255) as u32;
-            let sharp_g_raw = ((sum_g / scale + 0.5) as i32).clamp(0, 255) as u32;
-            let sharp_b_raw = ((sum_b / scale + 0.5) as i32).clamp(0, 255) as u32;
+            // Apply rounding bias and clamp to [0, 255]
+            let blur_r = ((sum_r + rounding_bias) as i32).clamp(0, 255) as u32;
+            let blur_g_raw = ((sum_g + rounding_bias) as i32).clamp(0, 255) as u32;
+            let blur_b_raw = ((sum_b + rounding_bias) as i32).clamp(0, 255) as u32;
 
-            let sharp_g = if has_gb { sharp_g_raw } else { sharp_r };
-            let sharp_b = if has_gb { sharp_b_raw } else { sharp_r };
+            let blur_g = if has_gb { blur_g_raw } else { blur_r };
+            let blur_b = if has_gb { blur_b_raw } else { blur_r };
 
-            // Lerp: original * (1 - t) + sharpened * t
-            let out_r = ((orig_r as f32 * (1.0 - t) + sharp_r as f32 * t) + 0.5) as u32;
+            // Blend: out = blurred * (1.0 - t) + original * t
+            let out_r = ((blur_r as f32 * one_minus_t + orig_r as f32 * t) + 0.5) as u32;
             let out_g = if has_gb {
-                ((orig_g as f32 * (1.0 - t) + sharp_g as f32 * t) + 0.5) as u32
+                ((blur_g as f32 * one_minus_t + orig_g as f32 * t) + 0.5) as u32
             } else {
                 out_r
             };
             let out_b = if has_gb {
-                ((orig_b as f32 * (1.0 - t) + sharp_b as f32 * t) + 0.5) as u32
+                ((blur_b as f32 * one_minus_t + orig_b as f32 * t) + 0.5) as u32
             } else {
                 out_r
             };

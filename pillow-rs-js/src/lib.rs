@@ -248,6 +248,13 @@ impl Image {
             .map(|i| Image { inner: i })
             .map_err(err)
     }
+    #[wasm_bindgen(js_name = "boxBlur")]
+    pub fn boxb(&self, r: f32) -> Result<Image, JsValue> {
+        self.inner
+            .box_blur(r)
+            .map(|i| Image { inner: i })
+            .map_err(err)
+    }
     #[wasm_bindgen(js_name = "unsharpMask")]
     pub fn unsharp(&self, r: f32, p: i32, t: u8) -> Result<Image, JsValue> {
         self.inner
@@ -307,7 +314,7 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "thumbnail")]
     pub fn thumb(&mut self, w: u32, h: u32) -> Result<(), JsValue> {
-        self.inner.thumbnail((w, h)).map_err(err)
+        self.inner.thumbnail((w, h), None).map_err(err)
     }
 
     // Bookkeeping
@@ -423,7 +430,7 @@ impl ImageDraw {
     #[wasm_bindgen(constructor)]
     pub fn new(img: &Image) -> ImageDraw {
         ImageDraw {
-            draw: Draw::new(img.inner.clone()),
+            draw: Draw::new(img.inner.clone(), None),
         }
     }
 
