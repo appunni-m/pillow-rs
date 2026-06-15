@@ -612,7 +612,9 @@ impl Draw {
                 let img = self.image.materialize()?;
                 let (img_w, img_h) = (img.width(), img.height());
                 let mut rgba = img.to_rgba8();
-                let ink = [color.0, 0u8, 0u8, 0u8];
+                // Write all 4 bytes of the LE representation (parse_draw_color
+                // already packed I as i32→LE bytes, F as f32→LE bytes)
+                let ink = [color.0, color.1, color.2, color.3];
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
                         let idx = (py * bmp_w + px) as usize;
@@ -1563,10 +1565,10 @@ impl Draw {
                 Ok(())
             }
             "I" | "F" => {
-                // Binary: write fill.0 as the integer value. fontmode="1".
+                // Binary: write full 4-byte LE representation. fontmode="1".
                 // Stored internally as Rgba8 with explicit mode.
                 let mut rgba = img.to_rgba8();
-                let ink = fill.0; // For I/F, the raw value
+                let ink = [fill.0, fill.1, fill.2, fill.3];
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
@@ -1576,7 +1578,7 @@ impl Draw {
                             rgba.put_pixel(
                                 dx,
                                 dy,
-                                Rgba([ink, 0, 0, 0]), // Value in first channel, others zero
+                                Rgba(ink),
                             );
                         }
                     }

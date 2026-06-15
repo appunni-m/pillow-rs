@@ -225,6 +225,9 @@ struct GpuInner {
     /// Avoids wgpu internal destruction queue exhaustion from repeated create_buffer/drop cycles.
     staging_pool: std::sync::Mutex<std::collections::HashMap<u64, Vec<wgpu::Buffer>>>,
     staging_count: std::sync::Mutex<usize>,
+    /// Submission back-pressure: after N queue submits, force a poll(Wait) to drain
+    /// wgpu's internal ActiveSubmission queue. Prevents fence exhaustion (wgpu#5969).
+    submission_count: std::sync::Mutex<usize>,
 }
 
 impl GpuInner {
@@ -297,6 +300,7 @@ impl GpuInner {
             pipelines,
             staging_pool: std::sync::Mutex::new(std::collections::HashMap::new()),
             staging_count: std::sync::Mutex::new(0),
+            submission_count: std::sync::Mutex::new(0),
         })
     }
 
@@ -649,6 +653,10 @@ impl GpuInner {
             cpass.dispatch_workgroups(wgs_x, wgs_y, 1);
         }
         self.queue.submit(Some(encoder.finish()));
+        // Drain immediately: prevents ActiveSubmission queue accumulation across
+        // hundreds of sequential tests. Without this, wgpu's internal submission
+        // tracking overflows and poll(Wait) deadlocks.
+        self.device.poll(wgpu::Maintain::Wait);
     }
 
     fn readback_to_image(
@@ -678,10 +686,11 @@ impl GpuInner {
                     mapped_at_creation: false,
                 })
             });
-        gpu_log!("[GPU] readback: copy_buffer_to_buffer start");
+        gpu_log!("[GPU] readback: create_encoder start");
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        gpu_log!("[GPU] readback: encoder created, copy_buffer_to_buffer start");
         encoder.copy_buffer_to_buffer(src, 0, &staging, 0, size);
         self.queue.submit(Some(encoder.finish()));
         gpu_log!("[GPU] readback: copy submitted, map_async start");
@@ -716,6 +725,10 @@ impl GpuInner {
         gpu_log!("[GPU] readback: final poll done");
         // Volta-style: return buffer to pool for reuse, never drop.
         self.release_staging(staging, size);
+        // wgpu#5173: empty submit flushes pending writes before the next map_async.
+        // Without this, re-mapped staging buffer content may be stale.
+        self.queue.submit([]);
+        self.device.poll(wgpu::Maintain::Wait);
 
         let n = (w * h) as usize;
         let mut rgba_bytes = Vec::with_capacity(n * 4);

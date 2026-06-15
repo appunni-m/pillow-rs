@@ -32,6 +32,11 @@ class Image:
         # Inherit explicit mode from Rust pipeline (e.g. "1", "P", "CMYK")
         self._explicit_mode = getattr(rust_image, 'explicit_mode', lambda: None)()
 
+    def _ensure_materialized(self):
+        """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
+        if hasattr(self._rust_image, 'materialize'):
+            self._rust_image = self._rust_image.materialize()
+
     @classmethod
     def open(
         cls,

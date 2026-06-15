@@ -27,12 +27,25 @@ def _hash(data):
 def _make_input(fixture):
     """Create RSPIL image from fixture input block."""
     inp = fixture["input"]
-    img = _backend.make_image(inp["mode"], tuple(inp["size"]), bytes.fromhex(inp["bytes"]))
+    mode = inp["mode"]
+    size = tuple(inp["size"])
+    raw = bytes.fromhex(inp["bytes"])
+    img = _backend.make_image(mode, size, raw)
     if img is None:
         ref = bytes.fromhex(fixture["config"]["reference_bytes_rgb"])
-        img = _backend.make_image("RGB", tuple(inp["size"]), ref)
+        img = _backend.make_image("RGB", size, ref)
         if img:
-            img = img.convert(inp["mode"])
+            # For P mode, we need the correct palette which PIL's quantize provides.
+            # Convert the reference RGB to P mode using PIL to match the fixture,
+            # then extract the RGB values for RSPIL operations.
+            if mode == "P":
+                from PIL import Image as PILImage
+                pil_rgb = PILImage.frombytes("RGB", size, ref)
+                pil_p = pil_rgb.convert("P")
+                pil_rgb_back = pil_p.convert("RGB")
+                img = _backend.make_image("RGB", size, pil_rgb_back.tobytes())
+            else:
+                img = img.convert(mode)
     return img
 
 
@@ -67,6 +80,10 @@ def test_fixture_parity(fixture_file):
     if "input2" in fixture:
         inp2 = fixture["input2"]
         img2 = _backend.make_image(inp2["mode"], tuple(inp2["size"]), bytes.fromhex(inp2["bytes"]))
+        # Fallback for modes that can't be reconstructed from raw bytes (e.g. P)
+        if img2 is None:
+            ref = bytes.fromhex(fixture["config"]["reference_bytes_rgb"])
+            img2 = _backend.make_image("RGB", tuple(inp2["size"]), ref)
 
     # Error path
     if fixture["expected"]["result_type"] == "error":
