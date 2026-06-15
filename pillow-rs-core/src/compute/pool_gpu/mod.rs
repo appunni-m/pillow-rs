@@ -236,11 +236,16 @@ impl GpuInner {
         let mut pipelines = HashMap::new();
         for (&key, entry) in registry::registry().iter() {
             if let Some(source) = entry.gpu_source {
+                eprintln!("[GPU] compiling shader: {}", key);
                 if let Some(pipeline) = Self::build_pipeline(&device, key, source) {
+                    eprintln!("[GPU]   -> OK ({} bindings)", pipeline.num_bindings);
                     pipelines.insert(key.to_string(), pipeline);
+                } else {
+                    eprintln!("[GPU]   -> SKIPPED (validation failed)");
                 }
             }
         }
+        eprintln!("[GPU] total compiled: {} pipelines", pipelines.len());
 
         Some(GpuInner {
             device,
