@@ -105,3 +105,18 @@ Total remaining: 12 (4 binary-text + 4 binary-multiline + 4 bitmap-convert)
 ## IMAGE FILTER (0 remaining — all built-in filters pass on all modes)
 [x] ImageFilter_SHARPEN_I [fixed: apply kernel directly on int32 pixel data]
 
+## FIXED THIS SESSION — getcolors/getpalette/getfont/eval
+[x] Image_getcolors_1 [fixed: histogram-based, pixel value ascending]
+[x] Image_getcolors_L [fixed: histogram-based, pixel value ascending]
+[x] Image_getcolors_LA [fixed: parity sort + deep-list test comparison]
+[x] Image_getcolors_P [fixed: histogram-based, pixel value ascending]
+[x] Image_getcolors_RGB [already passing (returns None)]
+[x] Image_getcolors_RGBA [already passing (returns None)]
+[x] Image_getpalette_L [already passing]
+[x] Image_getpalette_P [already passing]
+[x] Image_getpalette_RGB [already passing]
+[x] ImageDraw_getfont_L [fixed: render glyph for deterministic hash]
+[x] ImageDraw_getfont_RGB [fixed: render glyph for deterministic hash]
+[x] ImageModule_eval_P [already passing]
+[ ] Image_resize_F [float32 resize algorithm mismatch -- needs F-mode resize fix]
+
