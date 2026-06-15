@@ -40,8 +40,8 @@ def _to_rgb_fill(mode, params, keys):
             if mode in ("RGB", "RGBA"):
                 p[k] = (0, 255, 0)  # standard test green
             elif mode == "1":
-                # non-zero → white (matching PIL's bit packing)
-                p[k] = (255, 255, 255, 255) if v != 0 else (0, 0, 0, 255)
+                # PIL stores raw byte value directly (no threshold)
+                p[k] = (v, v, v, 255)
             elif mode == "LA":
                 # PIL int fill on LA: L=v, A=0
                 p[k] = (v, v, v, 0)
@@ -72,7 +72,6 @@ class RspilBackend:
                 except Exception:
                     return None
             except Exception:
-                # bytes_data doesn't match RGB format; use reference from config
                 return None
         return Image.new(mode, size)
 

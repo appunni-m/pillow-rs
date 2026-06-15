@@ -61,9 +61,13 @@ pub fn raw_bytes_to_image(
 
 /// Apply a 3x3 kernel filter on I-mode (32-bit signed integer) data.
 /// I-mode pixel values are stored as 4 RGBA bytes (little-endian i32).
-/// PIL applies the full kernel convolution with floating-point arithmetic,
-/// then rounds to the nearest integer — NO clipping to [0,255].
-/// PIL pre-divides kernel by scale at filter construction time.
+/// PIL applies the full kernel convolution with double-precision arithmetic,
+/// then truncates to 32-bit integer — NO clipping to [0,255].
+/// Key PIL I-mode behaviors:
+///   - Reversed Y-axis kernel: k[0] on bottom row, k[8] on top row
+///   - NO +0.5 rounding bias (unlike UINT8 mode)
+///   - f64 precision for accumulation
+///   - Only clips negative results to 0
 fn filter_3x3_i32(
     img: &DynamicImage,
     kernel: &[f32; 9],
@@ -75,89 +79,45 @@ fn filter_3x3_i32(
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let raw = rgba.into_raw();
 
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
-    let k0 = kernel[0] / s;
-    let k1 = kernel[1] / s;
-    let k2 = kernel[2] / s;
-    let k3 = kernel[3] / s;
-    let k4 = kernel[4] / s;
-    let k5 = kernel[5] / s;
-    let k6 = kernel[6] / s;
-    let k7 = kernel[7] / s;
-    let k8 = kernel[8] / s;
-    // PIL rounding: (INT32)(sum / scale + offset + 0.5)
-    let rounding_bias = offset as f32 + 0.5;
+    // Use f64 for accumulation to match PIL's I-mode code path
+    let s = if (scale as f64).abs() < 1e-10 { 1.0 } else { scale as f64 };
+    let kd = [
+        kernel[0] as f64 / s,
+        kernel[1] as f64 / s,
+        kernel[2] as f64 / s,
+        kernel[3] as f64 / s,
+        kernel[4] as f64 / s,
+        kernel[5] as f64 / s,
+        kernel[6] as f64 / s,
+        kernel[7] as f64 / s,
+        kernel[8] as f64 / s,
+    ];
 
     let mut out = raw.clone();
 
     for y in 1..h - 1 {
         for x in 1..w - 1 {
             let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * 4 };
-            let v00 = i32::from_le_bytes([
-                raw[base(-1, -1)],
-                raw[base(-1, -1) + 1],
-                raw[base(-1, -1) + 2],
-                raw[base(-1, -1) + 3],
-            ]);
-            let v10 = i32::from_le_bytes([
-                raw[base(0, -1)],
-                raw[base(0, -1) + 1],
-                raw[base(0, -1) + 2],
-                raw[base(0, -1) + 3],
-            ]);
-            let v20 = i32::from_le_bytes([
-                raw[base(1, -1)],
-                raw[base(1, -1) + 1],
-                raw[base(1, -1) + 2],
-                raw[base(1, -1) + 3],
-            ]);
-            let v01 = i32::from_le_bytes([
-                raw[base(-1, 0)],
-                raw[base(-1, 0) + 1],
-                raw[base(-1, 0) + 2],
-                raw[base(-1, 0) + 3],
-            ]);
-            let v11 = i32::from_le_bytes([
-                raw[base(0, 0)],
-                raw[base(0, 0) + 1],
-                raw[base(0, 0) + 2],
-                raw[base(0, 0) + 3],
-            ]);
-            let v21 = i32::from_le_bytes([
-                raw[base(1, 0)],
-                raw[base(1, 0) + 1],
-                raw[base(1, 0) + 2],
-                raw[base(1, 0) + 3],
-            ]);
-            let v02 = i32::from_le_bytes([
-                raw[base(-1, 1)],
-                raw[base(-1, 1) + 1],
-                raw[base(-1, 1) + 2],
-                raw[base(-1, 1) + 3],
-            ]);
-            let v12 = i32::from_le_bytes([
-                raw[base(0, 1)],
-                raw[base(0, 1) + 1],
-                raw[base(0, 1) + 2],
-                raw[base(0, 1) + 3],
-            ]);
-            let v22 = i32::from_le_bytes([
-                raw[base(1, 1)],
-                raw[base(1, 1) + 1],
-                raw[base(1, 1) + 2],
-                raw[base(1, 1) + 3],
-            ]);
+            let read_pixel = |dx: i32, dy: i32| -> i64 {
+                let bi = base(dx, dy);
+                i32::from_le_bytes([raw[bi], raw[bi + 1], raw[bi + 2], raw[bi + 3]]) as i64
+            };
 
-            let ss = rounding_bias
-                + v00 as f32 * k0
-                + v10 as f32 * k1
-                + v20 as f32 * k2
-                + v01 as f32 * k3
-                + v11 as f32 * k4
-                + v21 as f32 * k5
-                + v02 as f32 * k6
-                + v12 as f32 * k7
-                + v22 as f32 * k8;
+            // PIL I-mode: reversed Y-axis (k[0] on bottom row, k[8] on top row)
+            // This matches the UINT8 filter's row_b / row_c / row_t layout.
+            // WITH +0.5 rounding bias (same as UINT8 mode).
+            let bot_row = read_pixel(-1, 1) as f64 * kd[0]
+                + read_pixel(0, 1) as f64 * kd[1]
+                + read_pixel(1, 1) as f64 * kd[2];
+            let mid_row = read_pixel(-1, 0) as f64 * kd[3]
+                + read_pixel(0, 0) as f64 * kd[4]
+                + read_pixel(1, 0) as f64 * kd[5];
+            let top_row = read_pixel(-1, -1) as f64 * kd[6]
+                + read_pixel(0, -1) as f64 * kd[7]
+                + read_pixel(1, -1) as f64 * kd[8];
+
+            // PIL I-mode: WITH +0.5 rounding bias
+            let ss = offset as f64 + 0.5 + bot_row + mid_row + top_row;
 
             // PIL clips I-mode filter results to 0 (no negative values)
             let result = if ss >= 0.0 { ss as i32 } else { 0 };
@@ -179,7 +139,7 @@ fn filter_3x3_i32(
 // ── 5x5 filter (I-mode) ──
 
 /// Apply a 5x5 kernel filter on I-mode (32-bit signed integer) data.
-/// Same approach as filter_3x3_i32 — no clipping to [0,255].
+/// Same approach as filter_3x3_i32 — f64, reversed Y-axis, NO +0.5 rounding.
 fn filter_5x5_i32(
     img: &DynamicImage,
     kernel: &[f32; 25],
@@ -191,26 +151,50 @@ fn filter_5x5_i32(
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let raw = rgba.into_raw();
 
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
-    // Pre-compute normalized kernel coefficients
-    let kn: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
+    let s = if (scale as f64).abs() < 1e-10 { 1.0 } else { scale as f64 };
+    // Pre-compute normalized kernel coefficients using f64
+    let kd: [f64; 25] = std::array::from_fn(|i| kernel[i] as f64 / s);
 
-    let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.clone();
 
     for y in 2..h - 2 {
         for x in 2..w - 2 {
             let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * 4 };
+            let read_pixel = |dx: i32, dy: i32| -> i64 {
+                let bi = base(dx, dy);
+                i32::from_le_bytes([raw[bi], raw[bi + 1], raw[bi + 2], raw[bi + 3]]) as i64
+            };
 
-            let mut ss = rounding_bias;
-            for dy in -2..=2 {
-                for dx in -2..=2 {
-                    let bi = base(dx, dy);
-                    let val = i32::from_le_bytes([raw[bi], raw[bi + 1], raw[bi + 2], raw[bi + 3]]);
-                    let ki = ((dy + 2) * 5 + (dx + 2)) as usize;
-                    ss += val as f32 * kn[ki];
-                }
-            }
+            // Reversed Y-axis: k[0..4] on bottom row (y+2), k[20..24] on top row (y-2)
+            // WITH +0.5 rounding bias
+            let bot_row0 = read_pixel(-2, 2) as f64 * kd[0]
+                + read_pixel(-1, 2) as f64 * kd[1]
+                + read_pixel(0, 2) as f64 * kd[2]
+                + read_pixel(1, 2) as f64 * kd[3]
+                + read_pixel(2, 2) as f64 * kd[4];
+            let bot_row1 = read_pixel(-2, 1) as f64 * kd[5]
+                + read_pixel(-1, 1) as f64 * kd[6]
+                + read_pixel(0, 1) as f64 * kd[7]
+                + read_pixel(1, 1) as f64 * kd[8]
+                + read_pixel(2, 1) as f64 * kd[9];
+            let mid_row = read_pixel(-2, 0) as f64 * kd[10]
+                + read_pixel(-1, 0) as f64 * kd[11]
+                + read_pixel(0, 0) as f64 * kd[12]
+                + read_pixel(1, 0) as f64 * kd[13]
+                + read_pixel(2, 0) as f64 * kd[14];
+            let top_row1 = read_pixel(-2, -1) as f64 * kd[15]
+                + read_pixel(-1, -1) as f64 * kd[16]
+                + read_pixel(0, -1) as f64 * kd[17]
+                + read_pixel(1, -1) as f64 * kd[18]
+                + read_pixel(2, -1) as f64 * kd[19];
+            let top_row0 = read_pixel(-2, -2) as f64 * kd[20]
+                + read_pixel(-1, -2) as f64 * kd[21]
+                + read_pixel(0, -2) as f64 * kd[22]
+                + read_pixel(1, -2) as f64 * kd[23]
+                + read_pixel(2, -2) as f64 * kd[24];
+
+            // PIL I-mode: WITH +0.5 rounding bias
+            let ss = offset as f64 + 0.5 + bot_row0 + bot_row1 + mid_row + top_row1 + top_row0;
 
             // PIL clips I-mode filter results to 0 (no negative values)
             let result = if ss >= 0.0 { ss as i32 } else { 0 };

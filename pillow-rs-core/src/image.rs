@@ -363,7 +363,20 @@ impl Image {
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         match self {
             Image::Loaded(img, _) => Ok(img.clone()),
-            Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
+            Image::Paletted(data) => {
+                // Convert palette indices to RGB using the palette.
+                // Ops like resize/filter/paste/composite operate on actual colors, not indices.
+                let rgb =
+                    image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
+                        let idx = data.indices.get_pixel(x, y)[0] as usize;
+                        let p = idx * 3;
+                        let r = data.palette.get(p).copied().unwrap_or(0);
+                        let g = data.palette.get(p + 1).copied().unwrap_or(0);
+                        let b = data.palette.get(p + 2).copied().unwrap_or(0);
+                        image::Rgb([r, g, b])
+                    });
+                Ok(DynamicImage::ImageRgb8(rgb))
+            }
             Image::Path { path, .. } => {
                 let img = image::open(path).map_err(PilError::ImageError)?;
                 Ok(img)
@@ -476,18 +489,122 @@ impl Image {
     /// Returns vectors indexed by band: [band0_stats, band1_stats, ...].
     /// Each band is: [count, sum, sum2, mean, median, rms, var, stddev, min, max]
     pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {
+        let explicit_mode = self.explicit_mode();
+        let is_f = explicit_mode == Some("F");
+        let is_i = explicit_mode == Some("I");
+
+        if is_f || is_i {
+            // F mode: float32, I mode: int32. Both are single-band values
+            // stored as 4 RGBA bytes per pixel. PIL's Stat uses a 256-bin
+            // histogram with linear scaling from [min, max] to [0, 255]:
+            //   bin = (int)((value - min) * 255 / (max - min))
+            // Stats are computed from bin indices, not original values.
+            let img = self.materialize()?;
+            let rgba = img.as_bytes();
+            let n_pixels = rgba.len() / 4;
+            if n_pixels == 0 {
+                return Ok(vec![vec![0.0; 10]]);
+            }
+            let mut values: Vec<f64> = Vec::with_capacity(n_pixels);
+            for i in 0..n_pixels {
+                let base = i * 4;
+                let bytes: [u8; 4] = [rgba[base], rgba[base + 1], rgba[base + 2], rgba[base + 3]];
+                if is_f {
+                    values.push(f32::from_le_bytes(bytes) as f64);
+                } else {
+                    values.push(i32::from_le_bytes(bytes) as f64);
+                }
+            }
+            let mut sorted = values.clone();
+            sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let min_val = sorted[0];
+            let max_val = sorted[sorted.len() - 1];
+            if (max_val - min_val).abs() < f64::EPSILON {
+                return Ok(vec![vec![
+                    n_pixels as f64, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                ]]);
+            }
+            let scale = 255.0 / (max_val - min_val);
+            let mut hist = [0i64; 256];
+            for &v in &values {
+                let bin = ((v - min_val) * scale) as usize;
+                if bin < 256 {
+                    hist[bin] += 1;
+                }
+            }
+            let count = n_pixels as f64;
+            let sum: f64 = hist.iter().enumerate().map(|(i, &c)| i as f64 * c as f64).sum();
+            let sum2: f64 = hist.iter().enumerate().map(|(i, &c)| (i as f64) * (i as f64) * c as f64).sum();
+            let mean = sum / count;
+            let rms = (sum2 / count).sqrt();
+            let var = (sum2 - sum * sum / count) / count;
+            let var = if var < 0.0 { 0.0 } else { var };
+            let stddev = var.sqrt();
+            let mut cum = 0i64;
+            let half = (count / 2.0) as i64;
+            let mut median = 0.0;
+            for (i, &c) in hist.iter().enumerate() {
+                cum += c;
+                if cum > half {
+                    median = i as f64;
+                    break;
+                }
+            }
+            let mut min_bin = 255usize;
+            let mut max_bin = 0usize;
+            for (i, &c) in hist.iter().enumerate() {
+                if c > 0 {
+                    min_bin = min_bin.min(i);
+                    max_bin = max_bin.max(i);
+                }
+            }
+            return Ok(vec![vec![
+                count, sum, sum2, mean, median, rms, var, stddev,
+                min_bin as f64, max_bin as f64,
+            ]]);
+        }
+
         let img = self.materialize()?;
-        let rgba = img.to_rgba8();
-        let (w, h) = (rgba.width() as usize, rgba.height() as usize);
-        let n_pixels = w * h;
         let n_bands = img.color().channel_count() as usize;
+        let (w, h) = (img.width() as usize, img.height() as usize);
+        let n_pixels = w * h;
+
+        // Extract bands correctly for each image type
         let mut bands: Vec<Vec<u8>> = vec![Vec::with_capacity(n_pixels); n_bands];
 
-        for px in rgba.pixels() {
-            for b in 0..n_bands {
-                bands[b].push(px[b]);
+        match n_bands {
+            1 => {
+                let gray = img.to_luma8();
+                for px in gray.pixels() {
+                    bands[0].push(px[0]);
+                }
+            }
+            2 => {
+                // LA mode: channel 0 = L (from R), channel 1 = A (from A)
+                let rgba = img.to_rgba8();
+                for px in rgba.pixels() {
+                    bands[0].push(px[0]); // L = R
+                    bands[1].push(px[3]); // A = A
+                }
+            }
+            3 => {
+                let rgb = img.to_rgb8();
+                for px in rgb.pixels() {
+                    bands[0].push(px[0]);
+                    bands[1].push(px[1]);
+                    bands[2].push(px[2]);
+                }
+            }
+            _ => {
+                let rgba = img.to_rgba8();
+                for px in rgba.pixels() {
+                    for b in 0..4 {
+                        bands[b].push(px[b]);
+                    }
+                }
             }
         }
+
         for b in bands.iter_mut() {
             b.sort_unstable();
         }
@@ -515,6 +632,26 @@ impl Image {
             ]);
         }
         Ok(results)
+    }
+
+    fn compute_stat_values(values: &[f64], _n_bands: usize) -> Vec<Vec<f64>> {
+        let mut sorted = values.to_vec();
+        sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let count = sorted.len() as f64;
+        if count == 0.0 {
+            return vec![vec![0.0; 10]; _n_bands];
+        }
+        let sum: f64 = sorted.iter().sum();
+        let sum2: f64 = sorted.iter().map(|&x| x * x).sum();
+        let mean = sum / count;
+        let rms = (sum2 / count).sqrt();
+        let var = (sum2 - sum * sum / count) / count;
+        let var = if var < 0.0 { 0.0 } else { var };
+        let stddev = var.sqrt();
+        let min = sorted[0];
+        let max = sorted[sorted.len() - 1];
+        let median = sorted[sorted.len() / 2];
+        vec![vec![count, sum, sum2, mean, median, rms, var, stddev, min, max]]
     }
 
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
@@ -839,18 +976,30 @@ impl Image {
             image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
             _ => 4,
         };
-        let rgba = img.to_rgba8();
         let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
-        for p in rgba.pixels() {
-            let key: Vec<u8> = p.0[..n_bands].to_vec();
-            *counts.entry(key).or_insert(0) += 1;
+        match n_bands {
+            2 => {
+                // LA mode: use L from R, A from A (not first 2 bytes which are L,L)
+                let la = img.to_luma_alpha8();
+                for p in la.pixels() {
+                    let key = vec![p[0], p[1]];
+                    *counts.entry(key).or_insert(0) += 1;
+                }
+            }
+            _ => {
+                let rgba = img.to_rgba8();
+                for p in rgba.pixels() {
+                    let key: Vec<u8> = p.0[..n_bands].to_vec();
+                    *counts.entry(key).or_insert(0) += 1;
+                }
+            }
         }
         if counts.len() > maxcolors as usize {
             return Ok(None);
         }
         let mut result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
-        // PIL sorts by color value ascending
-        result.sort_by(|a, b| a.1.cmp(&b.1));
+        // PIL sorts by color value descending
+        result.sort_by(|a, b| b.1.cmp(&a.1));
         Ok(Some(result))
     }
 
