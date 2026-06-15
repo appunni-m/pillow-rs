@@ -42,15 +42,11 @@ def _to_rgb_fill(mode, params, keys):
             elif mode == "1":
                 # PIL stores raw byte value directly (no threshold)
                 p[k] = (v, v, v, 255)
-            elif mode == "LA":
-                # PIL int fill on LA: L=v, A=0
-                p[k] = (v, v, v, 0)
-            elif mode == "P":
-                # Palette index: use as grayscale RGB
+            elif mode in ("1", "P", "LA", "CMYK"):
+                # Alpha=255 so render_text produces visible glyphs.
+                # Rust text_compose_direct handles per-channel zeroing
+                # via the is_int_fill heuristic (all channels equal + a=255).
                 p[k] = (v, v, v, 255)
-            elif mode == "CMYK":
-                # PIL int fill on CMYK: C=v, M=Y=K=0
-                p[k] = (v, 0, 0, 0)
             # else: keep as int for other modes (handled by parse_draw_color)
     return p
 
