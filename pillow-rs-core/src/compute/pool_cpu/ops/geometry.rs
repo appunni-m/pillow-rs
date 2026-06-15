@@ -324,12 +324,16 @@ fn resize_i(
                     let sy = clamp_idx(iy, sh);
                     // PIL: weight = kernel((sx + 0.5 - center) / filterscale)
                     let wy = kernel((iy as f64 + 0.5 - cy) / sy_scale);
-                    if wy.abs() < 1e-15 { continue; }
+                    if wy.abs() < 1e-15 {
+                        continue;
+                    }
                     for ix in left..right {
                         let sx = clamp_idx(ix, sw);
                         let wx = kernel((ix as f64 + 0.5 - cx) / sx_scale);
                         let w = wx * wy;
-                        if w.abs() < 1e-15 { continue; }
+                        if w.abs() < 1e-15 {
+                            continue;
+                        }
                         let idx = (sy * sw + sx) as usize;
                         acc += w * src_ints[idx] as f64;
                         wsum += w;
@@ -682,10 +686,7 @@ pub fn execute_thumbnail(
 
 /// Execute a Reduce operation.
 /// Averages each factor×factor block per-channel, preserving mode.
-pub fn execute_reduce(
-    img: &DynamicImage,
-    factor: u32,
-) -> Result<DynamicImage, PilError> {
+pub fn execute_reduce(img: &DynamicImage, factor: u32) -> Result<DynamicImage, PilError> {
     if factor < 2 {
         return Ok(img.clone());
     }

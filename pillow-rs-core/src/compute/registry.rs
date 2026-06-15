@@ -1,7 +1,8 @@
 //! Unified operation registry — maps every PipelineOp to its per-backend implementation.
 //!
-//! CPU ops live in `pool_cpu/ops/`, GPU shaders in `gpu_shaders/`.
-//! Both backends query this single registry for `supports()` and `execute()`.
+//! CPU ops live in `pool_cpu/ops/`, GPU shaders in `pool_gpu/shaders/`,
+//! WebGPU shaders in `pool_webgpu/shaders/`, SIMD ops in `pool_simd/ops/`.
+//! All backends query this single registry for `supports()` and `execute()`.
 //!
 //! Performance: `variant_key()` returns a `&'static str` for O(1) HashMap lookup.
 //! No allocations on the hot path.
@@ -12,18 +13,22 @@ use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-// ── CPU op types ──────────────────────────────────────────────────────────────
+// ── Op function types ────────────────────────────────────────────────────────────
 
-pub type CpuOpFn = fn(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError>;
+pub type CpuOpFn =
+    fn(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> Result<DynamicImage, PilError>;
+
+/// SIMD operation function — same signature as CPU but vectorized internally.
+pub type SimdOpFn =
+    fn(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> Result<DynamicImage, PilError>;
+
+// ── OpEntry — one entry per operation, all backends ──────────────────────────────
 
 pub struct OpEntry {
     pub cpu_fn: Option<CpuOpFn>,
     pub gpu_shader: Option<&'static str>,
     pub gpu_source: Option<&'static str>,
+    pub simd_fn: Option<SimdOpFn>,
 }
 
 impl OpEntry {
@@ -32,21 +37,39 @@ impl OpEntry {
             cpu_fn: Some(f),
             gpu_shader: None,
             gpu_source: None,
+            simd_fn: None,
         }
     }
 }
 
-/// Create an OpEntry with CPU function and a GPU shader (WGSL source embedded at compile time).
+// ── Registration macros — one per backend ────────────────────────────────────────
+
+/// Create an OpEntry with CPU function + GPU shader (wgpu — native + WASM WebGPU).
 macro_rules! gpu_entry {
     ($f:expr, $shader:literal) => {
         $crate::compute::registry::OpEntry {
             cpu_fn: Some($f as $crate::compute::registry::CpuOpFn),
             gpu_shader: Some($shader),
-            gpu_source: Some(include_str!(concat!("gpu_shaders/", $shader))),
+            gpu_source: Some(include_str!(concat!("pool_gpu/shaders/", $shader))),
+            simd_fn: None,
         }
     };
 }
+
+/// Create an OpEntry with CPU function + SIMD accelerated function.
+macro_rules! simd_entry {
+    ($cpu:expr, $simd:expr) => {
+        $crate::compute::registry::OpEntry {
+            cpu_fn: Some($cpu as $crate::compute::registry::CpuOpFn),
+            gpu_shader: None,
+            gpu_source: None,
+            simd_fn: Some($simd as $crate::compute::registry::SimdOpFn),
+        }
+    };
+}
+
 pub(crate) use gpu_entry;
+pub(crate) use simd_entry;
 
 static REGISTRY: OnceLock<HashMap<&'static str, OpEntry>> = OnceLock::new();
 
@@ -244,6 +267,12 @@ pub fn gpu_supports(op: &PipelineOp) -> bool {
         .is_some_and(|e| e.gpu_shader.is_some())
 }
 
+pub fn simd_supports(op: &PipelineOp) -> bool {
+    registry()
+        .get(variant_key(op))
+        .is_some_and(|e| e.simd_fn.is_some())
+}
+
 pub fn execute_cpu(
     op: &PipelineOp,
     img: &DynamicImage,
@@ -260,9 +289,7 @@ pub fn execute_cpu(
 }
 
 pub fn gpu_shader_name(op: &PipelineOp) -> Option<&'static str> {
-    registry()
-        .get(variant_key(op))
-        .and_then(|e| e.gpu_shader)
+    registry().get(variant_key(op)).and_then(|e| e.gpu_shader)
 }
 
 /// Get the embedded WGSL source for a GPU shader by variant key.
@@ -411,14 +438,12 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         }
 
         // ── Add / Subtract: scale (f32 bits as u32), offset (f32 bits as u32) ──
-        PipelineOp::Add { scale, offset, .. }
-        | PipelineOp::Subtract { scale, offset, .. } => {
+        PipelineOp::Add { scale, offset, .. } | PipelineOp::Subtract { scale, offset, .. } => {
             vec![(*scale as f32).to_bits(), (*offset as f32).to_bits()]
         }
 
         // ── Blend / BlendModule: alpha * 255 as u32 ──
-        PipelineOp::Blend { alpha, .. }
-        | PipelineOp::BlendModule { alpha, .. } => {
+        PipelineOp::Blend { alpha, .. } | PipelineOp::BlendModule { alpha, .. } => {
             vec![(alpha.clamp(0.0, 1.0) * 255.0) as u32]
         }
 
@@ -500,12 +525,11 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
 fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     use crate::compute::pool_cpu::ops::chops::{
-        op_chops_add, op_chops_add_modulo, op_chops_blend, op_chops_composite,
-        op_chops_constant, op_chops_darker, op_chops_difference, op_chops_duplicate,
-        op_chops_hard_light, op_chops_invert, op_chops_lighter, op_chops_logical_and,
-        op_chops_logical_or, op_chops_logical_xor, op_chops_multiply, op_chops_offset,
-        op_chops_overlay, op_chops_screen, op_chops_soft_light, op_chops_subtract,
-        op_chops_subtract_modulo,
+        op_chops_add, op_chops_add_modulo, op_chops_blend, op_chops_composite, op_chops_constant,
+        op_chops_darker, op_chops_difference, op_chops_duplicate, op_chops_hard_light,
+        op_chops_invert, op_chops_lighter, op_chops_logical_and, op_chops_logical_or,
+        op_chops_logical_xor, op_chops_multiply, op_chops_offset, op_chops_overlay,
+        op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
     };
     use crate::compute::pool_cpu::ops::color::{op_convert, op_quantize, op_remap_palette};
     use crate::compute::pool_cpu::ops::effects::{
@@ -526,9 +550,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         execute_transpose,
     };
     use crate::compute::pool_cpu::ops::imageops::{
-        op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize,
-        op_expand, op_fit, op_flip, op_grayscale, op_invert, op_mirror, op_pad, op_posterize,
-        op_scale, op_solarize,
+        op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize, op_expand,
+        op_fit, op_flip, op_grayscale, op_invert, op_mirror, op_pad, op_posterize, op_scale,
+        op_solarize,
     };
 
     // ── Geometry ──
@@ -1038,7 +1062,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         "Add",
         gpu_entry!(
             |img, op, _mode| {
-                if let PipelineOp::Add { other, scale, offset } = op {
+                if let PipelineOp::Add {
+                    other,
+                    scale,
+                    offset,
+                } = op
+                {
                     op_chops_add(img, other, *scale, *offset)
                 } else {
                     Err(PilError::ValueError("expected Add op".into()))
@@ -1051,7 +1080,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         "Subtract",
         gpu_entry!(
             |img, op, _mode| {
-                if let PipelineOp::Subtract { other, scale, offset } = op {
+                if let PipelineOp::Subtract {
+                    other,
+                    scale,
+                    offset,
+                } = op
+                {
                     op_chops_subtract(img, other, *scale, *offset)
                 } else {
                     Err(PilError::ValueError("expected Subtract op".into()))
@@ -1434,8 +1468,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         "Merge",
         OpEntry::cpu_only(|img, op, _mode| {
             if let PipelineOp::Merge { mode, bands } = op {
-                let arc_bands: Vec<std::sync::Arc<crate::image::Image>> =
-                    bands.iter().map(|im| std::sync::Arc::new(im.clone())).collect();
+                let arc_bands: Vec<std::sync::Arc<crate::image::Image>> = bands
+                    .iter()
+                    .map(|im| std::sync::Arc::new(im.clone()))
+                    .collect();
                 op_merge(img, mode, &arc_bands)
             } else {
                 Err(PilError::ValueError("expected Merge op".into()))

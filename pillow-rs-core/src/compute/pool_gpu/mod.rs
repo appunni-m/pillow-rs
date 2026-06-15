@@ -23,7 +23,7 @@ use std::collections::HashMap;
 struct BufferPool {
     buf_a: wgpu::Buffer,
     buf_b: wgpu::Buffer,
-    buf_img2: wgpu::Buffer,     // Second image for dual-input ops
+    buf_img2: wgpu::Buffer, // Second image for dual-input ops
     params: wgpu::Buffer,
     capacity: u32,
 }
@@ -50,8 +50,7 @@ impl BufferPool {
         let buf_img2 = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("gpu_buf_img2"),
             size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let params = device.create_buffer(&wgpu::BufferDescriptor {
@@ -60,7 +59,13 @@ impl BufferPool {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        BufferPool { buf_a, buf_b, buf_img2, params, capacity }
+        BufferPool {
+            buf_a,
+            buf_b,
+            buf_img2,
+            params,
+            capacity,
+        }
     }
 
     fn upload_rgba(&self, queue: &wgpu::Queue, rgba: &RgbaImage) -> Result<(), PilError> {
@@ -129,7 +134,11 @@ fn count_shader_bindings(source: &str) -> u32 {
             }
         }
     }
-    if max_binding >= 0 { max_binding as u32 + 1 } else { 0 }
+    if max_binding >= 0 {
+        max_binding as u32 + 1
+    } else {
+        0
+    }
 }
 
 // ─── CachedPipeline ────────────────────────────────────────────────────────
@@ -155,9 +164,8 @@ struct GpuInner {
 impl GpuInner {
     fn new() -> Option<Self> {
         let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(
-            instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
-        )?;
+        let adapter =
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("pillow-rs-gpu"),
@@ -183,7 +191,12 @@ impl GpuInner {
             }
         }
 
-        Some(GpuInner { device, queue, buffers, pipelines })
+        Some(GpuInner {
+            device,
+            queue,
+            buffers,
+            pipelines,
+        })
     }
 
     fn build_pipeline(
@@ -289,18 +302,16 @@ impl GpuInner {
             }
         }
 
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some(variant_name),
-                entries: &bindings,
-            });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(variant_name),
+            entries: &bindings,
+        });
 
-        let pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some(variant_name),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some(variant_name),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
         // Use error scope to catch shader validation errors without panicking.
         device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -318,7 +329,12 @@ impl GpuInner {
             return None;
         }
 
-        Some(CachedPipeline { pipeline, bind_group_layout, variant_name, num_bindings })
+        Some(CachedPipeline {
+            pipeline,
+            bind_group_layout,
+            variant_name,
+            num_bindings,
+        })
     }
 
     fn make_bind_group(
@@ -331,18 +347,39 @@ impl GpuInner {
         let mut entries = Vec::with_capacity(cached.num_bindings as usize);
         match cached.num_bindings {
             4 => {
-                entries.push(wgpu::BindGroupEntry { binding: 0, resource: input_buf.as_entire_binding() });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buf.as_entire_binding(),
+                });
                 // For dual-input ops, binding 1 is the second image (read-only)
                 let buf_b = img2_buf.unwrap_or(output_buf);
-                entries.push(wgpu::BindGroupEntry { binding: 1, resource: buf_b.as_entire_binding() });
-                entries.push(wgpu::BindGroupEntry { binding: 2, resource: output_buf.as_entire_binding() });
-                entries.push(wgpu::BindGroupEntry { binding: 3, resource: self.buffers.params.as_entire_binding() });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buf_b.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: output_buf.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.buffers.params.as_entire_binding(),
+                });
             }
             _ => {
-                entries.push(wgpu::BindGroupEntry { binding: 0, resource: input_buf.as_entire_binding() });
-                entries.push(wgpu::BindGroupEntry { binding: 1, resource: output_buf.as_entire_binding() });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buf.as_entire_binding(),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output_buf.as_entire_binding(),
+                });
                 if cached.num_bindings > 2 {
-                    entries.push(wgpu::BindGroupEntry { binding: 2, resource: self.buffers.params.as_entire_binding() });
+                    entries.push(wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.buffers.params.as_entire_binding(),
+                    });
                 }
             }
         }
@@ -388,7 +425,11 @@ impl GpuInner {
         h: u32,
         final_is_a: bool,
     ) -> Result<DynamicImage, PilError> {
-        let src = if final_is_a { &self.buffers.buf_a } else { &self.buffers.buf_b };
+        let src = if final_is_a {
+            &self.buffers.buf_a
+        } else {
+            &self.buffers.buf_b
+        };
         let size = (w * h * 4) as u64;
 
         let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -406,7 +447,9 @@ impl GpuInner {
 
         let slice = staging.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |r| { let _ = tx.send(r); });
+        slice.map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
         self.device.poll(wgpu::Maintain::Wait);
         rx.recv()
             .map_err(|_| PilError::ValueError("readback channel closed".into()))?
@@ -439,24 +482,16 @@ impl GpuInner {
         // Pre-materialize second images to avoid interleaved CPU decode during GPU dispatch.
         // Each dual-input op gets its second image materialized upfront; upload to buf_img2
         // happens right before dispatch (CPU→GPU, not a round trip).
-        let second_images: Vec<Option<DynamicImage>> = ops
-            .iter()
-            .map(|op| extract_second_image(op))
-            .collect();
+        let second_images: Vec<Option<DynamicImage>> =
+            ops.iter().map(|op| extract_second_image(op)).collect();
 
         let mut current_is_a = true;
         for (i, op) in ops.iter().enumerate() {
             let base_key = registry::variant_key(op);
 
-            let cached = self
-                .pipelines
-                .get(base_key)
-                .ok_or_else(|| {
-                    PilError::ValueError(format!(
-                        "GpuPool: no compiled pipeline for '{}'",
-                        base_key
-                    ))
-                })?;
+            let cached = self.pipelines.get(base_key).ok_or_else(|| {
+                PilError::ValueError(format!("GpuPool: no compiled pipeline for '{}'", base_key))
+            })?;
 
             let params = registry::extract_params(op);
             self.buffers.upload_params(&self.queue, &params, w, h, mode);
@@ -468,14 +503,13 @@ impl GpuInner {
             };
 
             // Upload pre-materialized second image to buf_img2 if this is a dual-input op.
-            let img2_buf: Option<&wgpu::Buffer> =
-                if let Some(ref second) = second_images[i] {
-                    let second_rgba = second.to_rgba8();
-                    self.buffers.upload_second(&self.queue, &second_rgba);
-                    Some(&self.buffers.buf_img2)
-                } else {
-                    None
-                };
+            let img2_buf: Option<&wgpu::Buffer> = if let Some(ref second) = second_images[i] {
+                let second_rgba = second.to_rgba8();
+                self.buffers.upload_second(&self.queue, &second_rgba);
+                Some(&self.buffers.buf_img2)
+            } else {
+                None
+            };
 
             self.dispatch_pass(cached, w, h, input_buf, output_buf, img2_buf);
             current_is_a = !current_is_a;
@@ -525,8 +559,9 @@ fn extract_second_image(op: &PipelineOp) -> Option<DynamicImage> {
         | PipelineOp::Composite { other, .. }
         | PipelineOp::BlendModule { other, .. }
         | PipelineOp::CompositeModule { other, .. } => Some(other),
-        PipelineOp::Paste { source, .. }
-        | PipelineOp::AlphaComposite { source, .. } => Some(source),
+        PipelineOp::Paste { source, .. } | PipelineOp::AlphaComposite { source, .. } => {
+            Some(source)
+        }
         _ => None,
     };
     arc_img.and_then(|img| img.materialize().ok())
@@ -545,7 +580,8 @@ impl GpuPool {
         GPU.get_or_init(|| {
             GpuInner::new().expect("Failed to initialize GPU: wgpu adapter or device unavailable")
         });
-        GPU.get().ok_or_else(|| PilError::ValueError("GPU not available".into()))
+        GPU.get()
+            .ok_or_else(|| PilError::ValueError("GPU not available".into()))
     }
 }
 
@@ -577,7 +613,11 @@ impl BackendImpl for GpuPool {
         let op_keys: Vec<&str> = ops.iter().map(|op| registry::variant_key(op)).collect();
         eprintln!(
             "[GPU] {} op(s) {}x{} mode={}: {:?}",
-            ops.len(), w, h, mcode, op_keys
+            ops.len(),
+            w,
+            h,
+            mcode,
+            op_keys
         );
         gpu.buffers.upload_rgba(&gpu.queue, &rgba)?;
         let final_is_a = gpu.execute_batch_impl(ops, w, h, mcode)?;

@@ -1,9 +1,9 @@
 // ── ImageChops operations extracted from image.rs execute_op() ──
 
-use std::sync::Arc;
-use image::{DynamicImage, GenericImage, GrayImage, GrayAlphaImage, RgbImage, RgbaImage};
 use crate::error::PilError;
 use crate::image::{preserve_mode, Image};
+use image::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use std::sync::Arc;
 
 // ── Blend mode lookup tables (generated from PIL C implementation) ──
 
@@ -139,20 +139,20 @@ fn channel_op_binary_lut(
 
     let result =
         match ch {
-            1 => DynamicImage::ImageLuma8(GrayImage::from_raw(w, h, out).ok_or_else(
-                || PilError::ValueError("channel_op_binary_lut buffer error".into()),
-            )?),
-            2 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(w, h, out).ok_or_else(
-                || PilError::ValueError("channel_op_binary_lut buffer error".into()),
-            )?),
-            3 => {
-                DynamicImage::ImageRgb8(RgbImage::from_raw(w, h, out).ok_or_else(|| {
+            1 => DynamicImage::ImageLuma8(GrayImage::from_raw(w, h, out).ok_or_else(|| {
+                PilError::ValueError("channel_op_binary_lut buffer error".into())
+            })?),
+            2 => {
+                DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(w, h, out).ok_or_else(|| {
                     PilError::ValueError("channel_op_binary_lut buffer error".into())
                 })?)
             }
-            4 => DynamicImage::ImageRgba8(RgbaImage::from_raw(w, h, out).ok_or_else(
-                || PilError::ValueError("channel_op_binary_lut buffer error".into()),
-            )?),
+            3 => DynamicImage::ImageRgb8(RgbImage::from_raw(w, h, out).ok_or_else(|| {
+                PilError::ValueError("channel_op_binary_lut buffer error".into())
+            })?),
+            4 => DynamicImage::ImageRgba8(RgbaImage::from_raw(w, h, out).ok_or_else(|| {
+                PilError::ValueError("channel_op_binary_lut buffer error".into())
+            })?),
             _ => {
                 return Err(PilError::ValueError(format!(
                     "channel_op_binary_lut: unsupported channel count {}",
@@ -166,22 +166,30 @@ fn channel_op_binary_lut(
 
 // ── Individual operation functions ──
 
-pub fn op_chops_add(img: &DynamicImage, other: &Arc<Image>, scale: f64, offset: f64) -> Result<DynamicImage, PilError> {
+pub fn op_chops_add(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    scale: f64,
+    offset: f64,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| {
         ((a as f64 + b as f64) * scale + offset).clamp(0.0, 255.0) as u8
     })
 }
 
-pub fn op_chops_subtract(img: &DynamicImage, other: &Arc<Image>, scale: f64, offset: f64) -> Result<DynamicImage, PilError> {
+pub fn op_chops_subtract(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    scale: f64,
+    offset: f64,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| {
         ((a as f64 - b as f64) * scale + offset).clamp(0.0, 255.0) as u8
     })
 }
 
 pub fn op_chops_multiply(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
-    channel_op_binary(img, other, |a, b| {
-        ((a as u32 * b as u32) / 255) as u8
-    })
+    channel_op_binary(img, other, |a, b| ((a as u32 * b as u32) / 255) as u8)
 }
 
 pub fn op_chops_screen(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
@@ -198,7 +206,10 @@ pub fn op_chops_lighter(img: &DynamicImage, other: &Arc<Image>) -> Result<Dynami
     channel_op_binary(img, other, |a, b| a.max(b))
 }
 
-pub fn op_chops_difference(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_difference(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| {
         (a as i16 - b as i16).unsigned_abs() as u8
     })
@@ -208,31 +219,52 @@ pub fn op_chops_overlay(img: &DynamicImage, other: &Arc<Image>) -> Result<Dynami
     channel_op_binary_lut(img, other, &OVERLAY_LUT)
 }
 
-pub fn op_chops_hard_light(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_hard_light(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary_lut(img, other, &HARD_LIGHT_LUT)
 }
 
-pub fn op_chops_soft_light(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_soft_light(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary_lut(img, other, &SOFT_LIGHT_LUT)
 }
 
-pub fn op_chops_add_modulo(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_add_modulo(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| a.wrapping_add(b))
 }
 
-pub fn op_chops_subtract_modulo(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_subtract_modulo(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| a.wrapping_sub(b))
 }
 
-pub fn op_chops_logical_and(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_logical_and(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| a & b)
 }
 
-pub fn op_chops_logical_or(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_logical_or(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| a | b)
 }
 
-pub fn op_chops_logical_xor(img: &DynamicImage, other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_logical_xor(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| a ^ b)
 }
 
@@ -259,7 +291,11 @@ pub fn op_chops_offset(img: &DynamicImage, x: i32, y: i32) -> DynamicImage {
     preserve_mode(img, result)
 }
 
-pub fn op_chops_blend(img: &DynamicImage, other: &Arc<Image>, alpha: f64) -> Result<DynamicImage, PilError> {
+pub fn op_chops_blend(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    alpha: f64,
+) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize()?;
     let a = alpha.clamp(0.0, 1.0);
     let rgb1 = img.to_rgb8();
@@ -287,7 +323,11 @@ pub fn op_chops_blend(img: &DynamicImage, other: &Arc<Image>, alpha: f64) -> Res
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
-pub fn op_chops_composite(img: &DynamicImage, other: &Arc<Image>, mask: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_chops_composite(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    mask: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize()?;
     let mask_img = mask.materialize()?;
     let rgb1 = img.to_rgb8();

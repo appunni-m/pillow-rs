@@ -385,7 +385,9 @@ pub fn pil_resize(
     // PIL does NOT premultiply alpha for these modes.
     let is_cmyk = explicit_mode == Some("CMYK");
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
-    let needs_alpha = !is_cmyk && !is_fi && matches!(img.color(), image::ColorType::Rgba8 | image::ColorType::La8);
+    let needs_alpha = !is_cmyk
+        && !is_fi
+        && matches!(img.color(), image::ColorType::Rgba8 | image::ColorType::La8);
     let work = if needs_alpha {
         premultiply_alpha(img)
     } else {

@@ -50,7 +50,6 @@ impl VBox {
             volume,
         }
     }
-
 }
 
 // ── PIL's PIXEL_HASH ──
@@ -377,7 +376,6 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
     (indices, final_palette)
 }
 
-
 // ── Helper: check if HistEntry falls inside VBox ──
 
 #[inline]
@@ -556,34 +554,34 @@ fn try_split(vbox: &VBox, entries: &[HistEntry]) -> Option<(VBox, VBox)> {
     // Count pixels and recompute actual bounds from entries (PIL computes
     // bounds from pixel data, not from split values — this avoids looser
     // explicit bounds that would affect axis-weight calculation).
-    let left_bounds = entries
-        .iter()
-        .filter(|e| vbox_contains(e, &left))
-        .fold(
-            None::<(u8, u8, u8, u8, u8, u8)>,
-            |acc, e| match acc {
-                None => Some((e.r, e.r, e.g, e.g, e.b, e.b)),
-                Some((rmin, rmax, gmin, gmax, bmin, bmax)) => Some((
-                    rmin.min(e.r), rmax.max(e.r),
-                    gmin.min(e.g), gmax.max(e.g),
-                    bmin.min(e.b), bmax.max(e.b),
-                )),
-            },
-        );
-    let right_bounds = entries
-        .iter()
-        .filter(|e| vbox_contains(e, &right))
-        .fold(
-            None::<(u8, u8, u8, u8, u8, u8)>,
-            |acc, e| match acc {
-                None => Some((e.r, e.r, e.g, e.g, e.b, e.b)),
-                Some((rmin, rmax, gmin, gmax, bmin, bmax)) => Some((
-                    rmin.min(e.r), rmax.max(e.r),
-                    gmin.min(e.g), gmax.max(e.g),
-                    bmin.min(e.b), bmax.max(e.b),
-                )),
-            },
-        );
+    let left_bounds = entries.iter().filter(|e| vbox_contains(e, &left)).fold(
+        None::<(u8, u8, u8, u8, u8, u8)>,
+        |acc, e| match acc {
+            None => Some((e.r, e.r, e.g, e.g, e.b, e.b)),
+            Some((rmin, rmax, gmin, gmax, bmin, bmax)) => Some((
+                rmin.min(e.r),
+                rmax.max(e.r),
+                gmin.min(e.g),
+                gmax.max(e.g),
+                bmin.min(e.b),
+                bmax.max(e.b),
+            )),
+        },
+    );
+    let right_bounds = entries.iter().filter(|e| vbox_contains(e, &right)).fold(
+        None::<(u8, u8, u8, u8, u8, u8)>,
+        |acc, e| match acc {
+            None => Some((e.r, e.r, e.g, e.g, e.b, e.b)),
+            Some((rmin, rmax, gmin, gmax, bmin, bmax)) => Some((
+                rmin.min(e.r),
+                rmax.max(e.r),
+                gmin.min(e.g),
+                gmax.max(e.g),
+                bmin.min(e.b),
+                bmax.max(e.b),
+            )),
+        },
+    );
 
     let (left_bounds, left_count) = match left_bounds {
         Some((rmin, rmax, gmin, gmax, bmin, bmax)) => {

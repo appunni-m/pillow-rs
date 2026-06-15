@@ -14,10 +14,7 @@ use crate::pipeline::ResampleFilter;
 /// Autocontrast: stretch image contrast based on histogram cutoff.
 /// PIL: compute histogram, sort pixel values, find lo/hi at cutoff percentiles,
 /// then linearly map [lo, hi] to [0, 255].
-pub fn op_autocontrast(
-    img: &DynamicImage,
-    cutoff: f64,
-) -> Result<DynamicImage, PilError> {
+pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, PilError> {
     let gray = img.to_luma8();
     let total = gray.len() as f64;
     let low_thresh = (total * cutoff / 100.0) as usize;
@@ -44,9 +41,7 @@ pub fn op_autocontrast(
 
 /// Equalize: histogram equalization matching PIL's algorithm.
 /// Build LUT from non-zero histogram bins, using PIL's step formula.
-pub fn op_equalize(
-    img: &DynamicImage,
-) -> Result<DynamicImage, PilError> {
+pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     // PIL 12 equalize: build LUT from non-zero histogram bins
     // step = (sum(non_zero_bins) - last_bin_count) / 255
     // lut[i] = floor(accumulator / step) where accumulator tracks step/2 + cumulative hist
@@ -83,9 +78,7 @@ pub fn op_equalize(
 }
 
 /// Invert: subtract each pixel value from 255 (RGB only).
-pub fn op_invert(
-    img: &DynamicImage,
-) -> Result<DynamicImage, PilError> {
+pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     let mut rgb = img.to_rgb8();
     for p in rgb.pixels_mut() {
         for c in 0..3 {
@@ -96,24 +89,17 @@ pub fn op_invert(
 }
 
 /// Flip vertically.
-pub fn op_flip(
-    img: &DynamicImage,
-) -> Result<DynamicImage, PilError> {
+pub fn op_flip(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     Ok(img.flipv())
 }
 
 /// Mirror horizontally.
-pub fn op_mirror(
-    img: &DynamicImage,
-) -> Result<DynamicImage, PilError> {
+pub fn op_mirror(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     Ok(img.fliph())
 }
 
 /// Posterize: reduce the number of bits per channel.
-pub fn op_posterize(
-    img: &DynamicImage,
-    bits: u8,
-) -> Result<DynamicImage, PilError> {
+pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilError> {
     let mask = !((1u8 << (8 - bits)) - 1);
     let mut rgb = img.to_rgb8();
     for p in rgb.pixels_mut() {
@@ -126,10 +112,7 @@ pub fn op_posterize(
 
 /// Solarize: invert pixels where value >= threshold.
 /// PIL uses >=, not >.
-pub fn op_solarize(
-    img: &DynamicImage,
-    threshold: u8,
-) -> Result<DynamicImage, PilError> {
+pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, PilError> {
     let t = threshold;
     let mut rgb = img.to_rgb8();
     for p in rgb.pixels_mut() {
@@ -144,9 +127,7 @@ pub fn op_solarize(
 }
 
 /// Grayscale: convert to L-mode using PIL's BT.601 formula.
-pub fn op_grayscale(
-    img: &DynamicImage,
-) -> Result<DynamicImage, PilError> {
+pub fn op_grayscale(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageLuma8(pil_grayscale(img)))
 }
 
@@ -271,10 +252,7 @@ pub fn op_pad(
 }
 
 /// CropBorder: remove `border` pixels from all four sides.
-pub fn op_crop_border(
-    img: &DynamicImage,
-    border: u32,
-) -> Result<DynamicImage, PilError> {
+pub fn op_crop_border(img: &DynamicImage, border: u32) -> Result<DynamicImage, PilError> {
     let b = border;
     let (w, h) = (img.width(), img.height());
     if 2 * b >= w || 2 * b >= h {
@@ -313,11 +291,6 @@ pub fn op_expand(
             expanded.put_pixel(px, py, image::Rgba([fill.0, fill.1, fill.2, fill.3]));
         }
     }
-    image::imageops::overlay(
-        &mut expanded,
-        &img.to_rgba8(),
-        border as i64,
-        border as i64,
-    );
+    image::imageops::overlay(&mut expanded, &img.to_rgba8(), border as i64, border as i64);
     Ok(preserve_mode(img, expanded))
 }

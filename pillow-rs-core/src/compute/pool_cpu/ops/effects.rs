@@ -1,10 +1,10 @@
 // ── Effects + Module fns + Point + Mutating operations extracted from image.rs execute_op() ──
 
-use std::sync::Arc;
-use image::{DynamicImage, GenericImageView, GrayImage, GrayAlphaImage, RgbImage, RgbaImage};
 use crate::error::PilError;
 use crate::image::{preserve_mode, Image};
 use crate::pipeline::{ColorMode, ResampleFilter, TransformMethod};
+use image::{DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use std::sync::Arc;
 
 // ── EffectSpread ──
 
@@ -77,17 +77,14 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
                         let dst_idx = (yy * w + xx) as usize;
                         let dst_base = dst_idx * stride;
                         // Read from INPUT (never modified), write to OUTPUT
-                        out_pixels[dst_base..dst_base + stride].copy_from_slice(
-                            &input_pixels[src_base..src_base + stride],
-                        );
-                        out_pixels[src_base..src_base + stride].copy_from_slice(
-                            &input_pixels[dst_base..dst_base + stride],
-                        );
+                        out_pixels[dst_base..dst_base + stride]
+                            .copy_from_slice(&input_pixels[src_base..src_base + stride]);
+                        out_pixels[src_base..src_base + stride]
+                            .copy_from_slice(&input_pixels[dst_base..dst_base + stride]);
                     } else {
                         // Copy pixel as-is
-                        out_pixels[src_base..src_base + stride].copy_from_slice(
-                            &input_pixels[src_base..src_base + stride],
-                        );
+                        out_pixels[src_base..src_base + stride]
+                            .copy_from_slice(&input_pixels[src_base..src_base + stride]);
                     }
                 }
             }
@@ -102,24 +99,20 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     // Reconstruct DynamicImage from the output pixel data
     let result = match stride {
         1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(
-                || {
-                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "effect_spread buffer error",
-                    )))
-                },
-            )?,
+            GrayImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
+                PilError::ImageError(image::ImageError::from(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "effect_spread buffer error",
+                )))
+            })?,
         ),
         2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(
-                || {
-                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "effect_spread buffer error",
-                    )))
-                },
-            )?,
+            GrayAlphaImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
+                PilError::ImageError(image::ImageError::from(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "effect_spread buffer error",
+                )))
+            })?,
         ),
         3 => DynamicImage::ImageRgb8(
             RgbImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
@@ -130,14 +123,12 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
             })?,
         ),
         _ => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(
-                || {
-                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "effect_spread buffer error",
-                    )))
-                },
-            )?,
+            RgbaImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
+                PilError::ImageError(image::ImageError::from(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "effect_spread buffer error",
+                )))
+            })?,
         ),
     };
     Ok(result)
@@ -145,7 +136,13 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
 
 // ── Paste ──
 
-pub fn op_paste(img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &Option<Arc<Image>>) -> Result<DynamicImage, PilError> {
+pub fn op_paste(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+    x: i64,
+    y: i64,
+    mask: &Option<Arc<Image>>,
+) -> Result<DynamicImage, PilError> {
     let src_img = source.materialize()?;
     let (src_w, src_h) = (src_img.width(), src_img.height());
     let paste_x = x;
@@ -180,12 +177,12 @@ pub fn op_paste(img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &
                     let a = sp.0.get(3).copied().unwrap_or(255) as u16;
                     let da = dp.0.get(3).copied().unwrap_or(255) as u16;
                     let blended = image::Rgba([
-                        ((sp[0] as u16 * mask_val as u16 + dp[0] as u16 * inv_alpha + 127)
-                            / 255) as u8,
-                        ((sp[1] as u16 * mask_val as u16 + dp[1] as u16 * inv_alpha + 127)
-                            / 255) as u8,
-                        ((sp[2] as u16 * mask_val as u16 + dp[2] as u16 * inv_alpha + 127)
-                            / 255) as u8,
+                        ((sp[0] as u16 * mask_val as u16 + dp[0] as u16 * inv_alpha + 127) / 255)
+                            as u8,
+                        ((sp[1] as u16 * mask_val as u16 + dp[1] as u16 * inv_alpha + 127) / 255)
+                            as u8,
+                        ((sp[2] as u16 * mask_val as u16 + dp[2] as u16 * inv_alpha + 127) / 255)
+                            as u8,
                         ((a * mask_val as u16 + da * inv_alpha + 127) / 255) as u8,
                     ]);
                     dest_clone.put_pixel(dx, dy, blended);
@@ -202,7 +199,10 @@ pub fn op_paste(img: &DynamicImage, source: &Arc<Image>, x: i64, y: i64, mask: &
 
 // ── AlphaComposite ──
 
-pub fn op_alpha_composite(img: &DynamicImage, source: &Arc<Image>) -> Result<DynamicImage, PilError> {
+pub fn op_alpha_composite(
+    img: &DynamicImage,
+    source: &Arc<Image>,
+) -> Result<DynamicImage, PilError> {
     let src_img = source.materialize()?;
     let mut dest_rgba = img.to_rgba8();
     let src_rgba = src_img.to_rgba8();
@@ -235,7 +235,11 @@ pub fn op_alpha_composite(img: &DynamicImage, source: &Arc<Image>) -> Result<Dyn
 
 // ── Merge ──
 
-pub fn op_merge(img: &DynamicImage, mode: &ColorMode, bands: &[Arc<Image>]) -> Result<DynamicImage, PilError> {
+pub fn op_merge(
+    img: &DynamicImage,
+    mode: &ColorMode,
+    bands: &[Arc<Image>],
+) -> Result<DynamicImage, PilError> {
     let _n_expected = match mode {
         ColorMode::RGB => 3,
         ColorMode::RGBA => 4,
@@ -305,7 +309,12 @@ pub fn op_merge(img: &DynamicImage, mode: &ColorMode, bands: &[Arc<Image>]) -> R
 
 // ── BlendModule ──
 
-pub fn op_blend_module(img: &DynamicImage, other: &Arc<Image>, alpha: f64, explicit_mode: Option<&str>) -> Result<DynamicImage, PilError> {
+pub fn op_blend_module(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    alpha: f64,
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize()?;
     let a = alpha.clamp(0.0, 1.0);
     // CMYK mode: blend all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
@@ -362,7 +371,12 @@ pub fn op_blend_module(img: &DynamicImage, other: &Arc<Image>, alpha: f64, expli
 
 // ── CompositeModule ──
 
-pub fn op_composite_module(img: &DynamicImage, other: &Arc<Image>, mask: &Arc<Image>, explicit_mode: Option<&str>) -> Result<DynamicImage, PilError> {
+pub fn op_composite_module(
+    img: &DynamicImage,
+    other: &Arc<Image>,
+    mask: &Arc<Image>,
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize()?;
     let mask_img = mask.materialize()?;
     // CMYK mode: composite all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
@@ -648,20 +662,17 @@ fn transform_affine_generic(
 
     match channels {
         1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
+            GrayImage::from_raw(dst_w, dst_h, out).expect("transform_affine: buffer size mismatch"),
         ),
         2 => DynamicImage::ImageLumaA8(
             GrayAlphaImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
+            RgbImage::from_raw(dst_w, dst_h, out).expect("transform_affine: buffer size mismatch"),
         ),
         4 => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(dst_w, dst_h, out)
-                .expect("transform_affine: buffer size mismatch"),
+            RgbaImage::from_raw(dst_w, dst_h, out).expect("transform_affine: buffer size mismatch"),
         ),
         _ => unreachable!(),
     }
@@ -705,17 +716,20 @@ pub fn op_transform(
             );
             Ok(preserve_mode(img, result))
         }
-        &TransformMethod::Perspective
-        | &TransformMethod::Quad
-        | &TransformMethod::Mesh => Err(PilError::NotImplementedError(
-            format!("Transform {:?} not yet implemented", method),
-        )),
+        &TransformMethod::Perspective | &TransformMethod::Quad | &TransformMethod::Mesh => Err(
+            PilError::NotImplementedError(format!("Transform {:?} not yet implemented", method)),
+        ),
     }
 }
 
 // ── PutPixel ──
 
-pub fn op_put_pixel(img: &DynamicImage, x: u32, y: u32, color: (u8, u8, u8, u8)) -> Result<DynamicImage, PilError> {
+pub fn op_put_pixel(
+    img: &DynamicImage,
+    x: u32,
+    y: u32,
+    color: (u8, u8, u8, u8),
+) -> Result<DynamicImage, PilError> {
     let mut rgba = img.to_rgba8();
     let (w, h) = (rgba.width(), rgba.height());
     if x >= w || y >= h {
@@ -747,21 +761,18 @@ pub fn op_put_data(img: &DynamicImage, data: &[u8]) -> Result<DynamicImage, PilE
     }
     match img.color() {
         image::ColorType::Rgb8 => {
-            let rgb =
-                RgbImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
-                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+            let rgb = RgbImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+                .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageRgb8(rgb))
         }
         image::ColorType::L8 => {
-            let gray =
-                GrayImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
-                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+            let gray = GrayImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+                .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageLuma8(gray))
         }
         _ => {
-            let rgba =
-                RgbaImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
-                    .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+            let rgba = RgbaImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+                .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageRgba8(rgba))
         }
     }
