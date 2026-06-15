@@ -1,37 +1,24 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 857 passed, 23 xfailed as of 2026-06-15
-# Updated after P-mode + CMYK enhance fix: 16 tests fixed
+# Current state: 870 passed, 12 xfailed as of 2026-06-15
+# Updated after PIL-blend formula fix: 9 text tests fixed
 #
-# Fixed in this session (P-mode operations):
-# - All 11 P-mode image operation tests now pass. Root cause: Paletted images
-#   were converted to RGB before operations, losing P-mode. Fix: Added
-#   is_palette_safe_op() to detect ops that work on indices, and materialize()
-#   routes them to operate on palette index data directly (matching PIL).
-#   Composite/Blend on P-mode also fixed to composite on indices.
-# - Image_getpalette_P: Fixed Rust palette extraction in Python bindings and
-#   trailing-zero trimming to match PIL's getpalette().
-# - All 4 CMYK ImageEnhance tests now pass. Root cause: enhance operations
-#   used to_rgb8() which loses CMYK K channel. Fix: Added CMYK-specific paths
-#   operating on all 4 channels (C=R, M=G, Y=B, K=A in RGBA8), matching PIL's
-#   degenerate computation (C=0,M=0,Y=0,K=255-gray for Color/Contrast on CMYK).
+# Fixed in this session (PIL-blend formula + rspil_backend alpha fix):
+# - Text rendering for L, LA, CMYK modes now passes. Root cause: RSPIL's blend
+#   formula used unsigned truncation ((fg*cov + bg*(255-cov))/255) while PIL uses
+#   signed rounding (DIV255: (x+127)/255). Fix: Added pil_blend() using PIL's
+#   exact BLEND macro: DIV255(dst*(255-mask) + src*mask). This fixed ALL
+#   anti-aliased text rendering (L, LA, CMYK) and multiline_text for those modes.
+# - rspil_backend._to_rgb_fill() was setting alpha=0 for LA and CMYK mode int
+#   fills, which caused render_text() to produce all-zero alpha glyphs and make
+#   text invisible. Fix: alpha=255 always; Rust's text_compose_direct handles
+#   per-channel zeroing via the is_int_fill heuristic.
+# - Multiline_text now passes for L, LA, CMYK, RGB, RGBA (delegates to text).
 #
-# Fixed in this session:
-# - ImageDraw_bitmap_1: now passes. Mode-specific fill handling in Rust
-#   Draw::bitmap() writes raw byte values for mode "1" (was thresholding to 255).
-# - ImageDraw mode-specific text/bitmap: All text() and bitmap() methods now
-#   dispatch to mode-specific rendering for modes 1, L, LA, CMYK, P, I, F.
-#   Integer fills go to the first channel with others zeroed, matching PIL.
-#   Binary modes (1, P, I, F) use coverage > 0 threshold.
-#   Anti-aliased modes (L, LA, CMYK) use PIL's BLEND truncation per channel.
-# - ImageDraw multiline_text: Now delegates to mode-specific text rendering.
-# - Bitmap binding: Changed from per-pixel point() loop to direct bitmap()
-#   call, enabling mode-specific handling in the Rust core.
-#
-# Remaining text/multiline_text failures (ALL blocked by font rendering):
-#   PIL's default FreeType font produces slightly different coverage values
-#   than fontdue (off by ~4 counts), causing off-by-one blending errors.
-#   text_RGBA passes because both PIL and RSPIL use fill=(0,255,0) green,
-#   and differences happen to not affect the hash with that input.
+# Remaining text/multiline_text failures (blocked by binary fontmode):
+#   PIL uses fontmode="1" for modes "1", "P", "I", "F" — this changes the glyph
+#   bitmap to binary (0 or 255) via FreeType's FT_LOAD_TARGET_MONO, producing
+#   different glyph shapes than anti-aliased rendering. RSPIL's BitmapFont only
+#   stores anti-aliased glyph data. Fix requires separate binary glyph data.
 #
 # Remaining bitmap failures (CMYK, P, F, I — blocked by convert()):
 #   RSPIL's Image.convert("1") doesn't threshold properly for these modes,
@@ -39,11 +26,14 @@
 #   is created by convert("1"), so incorrect masks cause incorrect output.
 #   Fix: Image.convert("1") must threshold at 0 (non-zero → 255) for all modes.
 #
-# Fixed in previous session:
+# Previously fixed:
+# - PIL-blend formula: Changed from unsigned truncation to PIL's BLEND/DIV255
+# - rspil_backend._to_rgb_fill: Fixed alpha=0 bug for LA/CMYK int fills
+# - ImageDraw_bitmap_1: Mode-specific raw byte write (was thresholding to 255)
 # - ImageDraw F/I mode support: All 24 F and I mode vector drawing tests
 # - ImageFilter.SHARPEN: fixed I mode
+# - P-mode palette support in open()/materialize()
 # - Image.quantize: fixed L, RGB, RGBA
-# - Numerous n-channel mode support fixes
 
 ## IMAGE DRAW (text/bitmap mode-specific fill support)
 [x] ImageDraw_arc_L
@@ -60,30 +50,30 @@
 [x] ImageDraw_ellipse_L
 [x] ImageDraw_ellipse_RGB
 [x] ImageDraw_ellipse_RGBA
-[ ] ImageDraw_multiline_text_1 [requires font parity]
-[ ] ImageDraw_multiline_text_CMYK [requires font parity]
-[ ] ImageDraw_multiline_text_F [requires font parity]
-[ ] ImageDraw_multiline_text_I [requires font parity]
-[ ] ImageDraw_multiline_text_L [requires font parity]
-[ ] ImageDraw_multiline_text_LA [requires font parity]
-[ ] ImageDraw_multiline_text_P [requires font parity]
-[ ] ImageDraw_multiline_text_RGB [requires font parity]
-[ ] ImageDraw_multiline_text_RGBA [requires font parity]
+[ ] ImageDraw_multiline_text_1 [requires binary fontmode data]
+[x] ImageDraw_multiline_text_CMYK [fixed: PIL-blend formula + alpha fill]
+[ ] ImageDraw_multiline_text_F [requires binary fontmode data]
+[ ] ImageDraw_multiline_text_I [requires binary fontmode data]
+[x] ImageDraw_multiline_text_L [fixed: PIL-blend formula]
+[x] ImageDraw_multiline_text_LA [fixed: PIL-blend formula + alpha fill]
+[ ] ImageDraw_multiline_text_P [requires binary fontmode data]
+[x] ImageDraw_multiline_text_RGB [fixed: PIL-blend formula]
+[x] ImageDraw_multiline_text_RGBA [fixed: PIL-blend formula]
 [x] ImageDraw_regular_polygon_L
 [x] ImageDraw_regular_polygon_RGB
 [x] ImageDraw_regular_polygon_RGBA
 [x] ImageDraw_rounded_rectangle_L
 [x] ImageDraw_rounded_rectangle_RGB
 [x] ImageDraw_rounded_rectangle_RGBA
-[ ] ImageDraw_text_1 [requires font parity]
-[ ] ImageDraw_text_CMYK [requires font parity]
-[ ] ImageDraw_text_F [requires font parity]
-[ ] ImageDraw_text_I [requires font parity]
-[ ] ImageDraw_text_L [requires font parity]
-[ ] ImageDraw_text_LA [requires font parity]
-[ ] ImageDraw_text_P [requires font parity]
-[ ] ImageDraw_text_RGB [requires font parity]
-[x] ImageDraw_text_RGBA [passes — font happens to match for (0,255,0) fill]
+[ ] ImageDraw_text_1 [requires binary fontmode data]
+[x] ImageDraw_text_CMYK [fixed: PIL-blend formula + alpha fill]
+[ ] ImageDraw_text_F [requires binary fontmode data]
+[ ] ImageDraw_text_I [requires binary fontmode data]
+[x] ImageDraw_text_L [fixed: PIL-blend formula]
+[x] ImageDraw_text_LA [fixed: PIL-blend formula + alpha fill]
+[ ] ImageDraw_text_P [requires binary fontmode data]
+[x] ImageDraw_text_RGB [fixed: PIL-blend formula]
+[x] ImageDraw_text_RGBA [passes — PIL-blend formula matches]
 
 ## INFRA / VALUE RETURNS (8 tests — stub fixes)
 [ ] ImageModule_frombytes_L
@@ -106,7 +96,7 @@
 [ ] ImageModule_effect_spread_RGB [unfixable: random]
 [ ] ImageModule_effect_spread_RGBA [unfixable: random]
 
-Total remaining: 23 (text/bitmap mode-specific tests blocked by font/convert)
+Total remaining: 12 (4 binary-text + 4 binary-multiline + 4 bitmap-convert)
 
 ## PALETTE / QUANTIZE (0 remaining — all P-mode tests pass)
 [x] Image_convert_P [fixed: P-mode palette support in open()/materialize()]
