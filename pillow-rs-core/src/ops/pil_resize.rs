@@ -275,7 +275,7 @@ fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
 /// from one row of the source image.
 fn horizontal_pass_row(
     src_row: &[u8],
-    src_w: u32,
+    _src_w: u32,
     channels: usize,
     coeffs: &FilterCoeffs,
     out_w: u32,
@@ -308,7 +308,7 @@ fn horizontal_pass_row(
 /// Returns a single value per channel for this (x, y) position.
 fn vertical_pass_col(
     intermediate: &[u8],
-    src_rows: u32,
+    _src_rows: u32,
     out_x: u32,
     out_w: u32,
     channels: usize,
@@ -420,8 +420,8 @@ pub fn pil_resize(
                 let sx = sx.min(sw - 1);
                 let sy = sy.min(sh - 1);
                 let p = pixel_at(&work, sx, sy);
-                for c in 0..channels {
-                    out_bytes.push(pil_round(p[c]));
+                for &v in p[..channels].iter() {
+                    out_bytes.push(pil_round(v));
                 }
             }
         }
@@ -463,9 +463,7 @@ pub fn pil_resize(
             let vert_result =
                 vertical_pass_col(&intermediate, sh, dx, dw, channels, &v_coeffs, dy as usize);
             let dest = &mut out_row[dx as usize * channels..(dx as usize + 1) * channels];
-            for c in 0..channels {
-                dest[c] = vert_result[c];
-            }
+            dest[..channels].copy_from_slice(&vert_result[..channels]);
         }
     }
 

@@ -3,7 +3,7 @@
 //! Implements PIL's exact median-cut quantization:
 //! 1. Build adaptive 3D color histogram using PIL's PIXEL_HASH table
 //!    (adaptive precision — starts at 8-bit, increases scale when
-//!     unique entries exceed 65536, merging duplicate scaled bins)
+//!    unique entries exceed 65536, merging duplicate scaled bins)
 //! 2. Find leaf boxes (non-empty histogram bins) to start
 //! 3. Recursively split the largest-volume box at the median pixel count
 //! 4. Compute palette centroids from ORIGINAL pixel value averages
@@ -865,20 +865,20 @@ pub fn web_palette_quantize(pixels: &[u8], w: u32, h: u32, dither: bool) -> (Vec
                     err_g[next_row + x] += eg * 5 / 16;
                     err_b[next_row + x] += eb * 5 / 16;
                     if x + 1 < wu {
-                        err_r[next_row + x + 1] += er * 1 / 16;
-                        err_g[next_row + x + 1] += eg * 1 / 16;
-                        err_b[next_row + x + 1] += eb * 1 / 16;
+                        err_r[next_row + x + 1] += er / 16;
+                        err_g[next_row + x + 1] += eg / 16;
+                        err_b[next_row + x + 1] += eb / 16;
                     }
                 }
             }
         }
     } else {
         // No dither: nearest-neighbor mapping
-        for pi in 0..n_pixels {
+        for (pi, out_pixel) in out.iter_mut().enumerate() {
             let src_i = pi * 3;
             let (best_idx, _, _, _) =
                 find_nearest_web(pixels[src_i], pixels[src_i + 1], pixels[src_i + 2]);
-            out[pi] = best_idx;
+            *out_pixel = best_idx;
         }
     }
 

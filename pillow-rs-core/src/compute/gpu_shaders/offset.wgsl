@@ -1,14 +1,22 @@
 // Offset: output[y][x] = input[clamp(y-dy,0,H-1)][clamp(x-dx,0,W-1)]
-// Param[0] = dx, Param[1] = dy
+// Mode-aware: preserves alpha correctly per image mode.
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
     width: u32,
     height: u32,
-    _pad0: u32,
-    _pad1: u32,
+    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
+    _pad: u32,
     dx: u32,
     dy: u32,
 }
+
+// ── Mode helpers ──
+
+fn mode_has_g(m: u32) -> bool { return m >= 2u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -29,5 +37,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let src_idx = sy * w + sx;
     let dst_idx = gid.y * w + gid.x;
 
-    output[dst_idx] = input[src_idx];
+    let pixel = input[src_idx];
+    let r = pixel & 0xffu;
+    let g = (pixel >> 8u) & 0xffu;
+    let b = (pixel >> 16u) & 0xffu;
+    let a = (pixel >> 24u) & 0xffu;
+
+    let out_a = select(255u, a, mode_has_a(params.mode));
+    output[dst_idx] = r | (g << 8u) | (b << 16u) | (out_a << 24u);
 }

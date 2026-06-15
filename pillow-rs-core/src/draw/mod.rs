@@ -130,8 +130,8 @@ impl Draw {
         let (img_w, img_h) = (img.width(), img.height());
         let mut canvas = img.to_rgba8();
 
-        let cx = (x0 + x1) as f64 / 2.0;
-        let cy = (y0 + y1) as f64 / 2.0;
+        let _cx = (x0 + x1) as f64 / 2.0;
+        let _cy = (y0 + y1) as f64 / 2.0;
         let rx = ((x1 - x0) as f64 / 2.0).abs();
         let ry = ((y1 - y0) as f64 / 2.0).abs();
 
@@ -145,8 +145,8 @@ impl Draw {
         if a <= 0 || b <= 0 {
             return Ok(());
         }
-        let cx_i = ((x0 + x1) / 2) as i32;
-        let cy_i = ((y0 + y1) / 2) as i32;
+        let cx_i = (x0 + x1) / 2;
+        let _cy_i = (y0 + y1) / 2;
 
         // PIL's quarter_init: start at (a, b%2), with ex=a%2, ey=b
         let ex = a % 2;
@@ -552,8 +552,8 @@ impl Draw {
             }
         };
 
-        let cx_i = ((x0 + x1) / 2) as i32;
-        let cy_i = ((y0 + y1) / 2) as i32;
+        let cx_i = (x0 + x1) / 2;
+        let _cy_i = (y0 + y1) / 2;
 
         // Step 1: Compute full ellipse fill using the Bresenham generator
         let mut filled = vec![false; (img_w * img_h) as usize];
@@ -746,8 +746,8 @@ impl Draw {
             }
         };
 
-        let cx_i = ((x0 + x1) / 2) as i32;
-        let cy_i = ((y0 + y1) / 2) as i32;
+        let cx_i = (x0 + x1) / 2;
+        let cy_i = (y0 + y1) / 2;
 
         // Use the Bresenham quarter generator for the fill, filter by angle
         let mut qx = a;
@@ -996,7 +996,7 @@ impl Draw {
         }
 
         // Draw filled body first, then outline on top
-        if let Some(fc) = fill {
+        if let Some(_fc) = fill {
             // Corner pieslices
             self.pieslice(x0, y0, x0 + d, y0 + d, 180.0, 270.0, fill, None, 0)?; // TL
             self.pieslice(x1 - d, y0, x1, y0 + d, 270.0, 360.0, fill, None, 0)?; // TR
@@ -1005,7 +1005,7 @@ impl Draw {
                                                                                 // Center body rectangle
             self.rectangle(x0 + r, y0, x1 - r, y1, fill, None, 1)?;
             // Side rectangles (left/right fill between corners)
-            if x1 - r - 1 >= x0 + r + 1 {
+            if x1 - r > x0 + r + 1 {
                 self.rectangle(x0 + r + 1, y0, x1 - r - 1, y1, fill, None, 1)?;
             }
             let rect_left = if x0 + r > x0 { x0 + r } else { x0 + 1 };
@@ -1161,35 +1161,6 @@ fn plot(canvas: &mut RgbaImage, x: i32, y: i32, color: (u8, u8, u8, u8), w: u32,
                 color.3.max(existing[3]),
             ]),
         );
-    }
-}
-
-/// Midpoint ellipse outline algorithm.
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn draw_ellipse_outline(
-    canvas: &mut RgbaImage,
-    cx: i32,
-    cy: i32,
-    rx: i32,
-    ry: i32,
-    color: (u8, u8, u8, u8),
-    w: u32,
-    h: u32,
-) {
-    if rx <= 0 || ry <= 0 {
-        return;
-    }
-    let rx = rx as f64;
-    let ry = ry as f64;
-
-    // Simple approach: draw at angle increments
-    // Use adaptive step based on radius
-    let steps = ((rx + ry) * 1.5) as i32;
-    for i in 0..steps {
-        let angle = 2.0 * std::f64::consts::PI * i as f64 / steps as f64;
-        let x = (cx as f64 + rx * angle.cos()).round() as i32;
-        let y = (cy as f64 + ry * angle.sin()).round() as i32;
-        plot(canvas, x, y, color, w, h);
     }
 }
 

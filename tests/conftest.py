@@ -13,6 +13,23 @@ def pytest_addoption(parser):
                      help="Path to manifest.yaml")
     parser.addoption("--strict-covers", action="store_true", default=False,
                      help="Fail collection on missing or invalid @pytest.mark.covers")
+    parser.addoption("--backend", action="store", default="cpu",
+                     help="Compute backend: cpu, gpu")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def backend(request):
+    """Set compute backend for the test session."""
+    backend_name = request.config.getoption("--backend", default="cpu")
+    if backend_name != "cpu":
+        from pillow_rs import enable_backend, available_backends
+        if backend_name not in available_backends():
+            pytest.skip(f"Backend '{backend_name}' not available")
+        enable_backend(backend_name)
+    yield
+    if backend_name != "cpu":
+        from pillow_rs import disable_backend
+        disable_backend(backend_name)
 
 
 @pytest.fixture(scope="session")
