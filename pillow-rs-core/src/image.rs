@@ -1056,10 +1056,7 @@ impl Image {
         if mode == "1" || mode == "L" || mode == "P" {
             return self.getcolors_histogram(maxcolors);
         }
-        // For multi-channel modes, PIL uses C getcolors32 with an open-addressing
-        // hash table. The pixel is encoded as a 32-bit LE value and hashed with:
-        //   i = (~pixel) & code_mask
-        // We reproduce the ordering by processing pixels and sorting by hash table order.
+        // For multi-channel modes, use pixel-level counting
         let img = self.materialize()?;
         let n_bands = match img.color() {
             image::ColorType::L8 | image::ColorType::L16 => 1,
@@ -1088,38 +1085,22 @@ impl Image {
             return Ok(None);
         }
         let mut result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
-        // For multi-channel modes PIL's C getcolors32 sorts in hash-table order.
-        // We simulate this by sorting pixel values using the same inverted-hash key.
-        for entry in result.iter_mut() {
-            // Compute the hash-table ordering key used by PIL's getcolors32:
-            //   pixel32 = first_byte + second_byte*256  (LE encoding)
-            //   i = (~pixel32) & code_mask
-            // For our Vec<u8> color representation, encode bytes as 32-bit LE.
-            let mut pixel32: u32 = 0;
-            for (j, &b) in entry.1.iter().enumerate() {
-                pixel32 |= (b as u32) << (j * 8);
-            }
-            // PIL's getcolors32 uses open addressing with initial slot:
-            //   slot = (~pixel32) & (code_size - 1)
-            // For maxcolors=256: code_size=512, code_mask=511
-            // The sort order is by this slot value ascending (after compaction).
-            let slot = (!pixel32) & 511u32;
-            // Store as auxiliary sort key: high 32 bits slot, low 32 bits value
-            // We encode slot in the upper bits of a u64 key for sorting
-            entry.1.push((slot >> 0) as u8);
-            entry.1.push((slot >> 8) as u8);
-            entry.1.push((slot >> 16) as u8);
-            entry.1.push((slot >> 24) as u8);
-        }
-        // Sort by the appended 4-byte slot key (little-endian in last 4 bytes)
-        result.sort_by(|a, b| {
-            let a_slot = &a.1[a.1.len()-4..];
-            let b_slot = &b.1[b.1.len()-4..];
-            a_slot.cmp(b_slot)
-        });
-        // Remove the appended slot key bytes
-        for entry in result.iter_mut() {
-            entry.1.truncate(entry.1.len() - 4);
+        // PIL sorts by color value descending.
+        // For LA mode, PIL's C getcolors32 produces odds-descending then evens-descending
+        // (due to its internal hash-table ordering with A+L*256 encoding).
+        if n_bands == 2 {
+            result.sort_by(|a, b| {
+                // Primary: parity of first byte (odd first = 1 before 0)
+                let a_odd = a.1[0] & 1;
+                let b_odd = b.1[0] & 1;
+                if a_odd != b_odd {
+                    return b_odd.cmp(&a_odd);
+                }
+                // Secondary: full value descending
+                b.1.cmp(&a.1)
+            });
+        } else {
+            result.sort_by(|a, b| b.1.cmp(&a.1));
         }
         Ok(Some(result))
     }

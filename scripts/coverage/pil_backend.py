@@ -173,6 +173,13 @@ class PilBackend:
     def call_draw(self, img, module, target, params):
         draw = PIL.ImageDraw.Draw(img)
         p = _to_rgb_fill(img.mode, params, ("fill", "outline"))
+        if target == "getfont":
+            from PIL import ImageFont, Image, ImageDraw as PILImageDraw
+            font = ImageFont.load_default()
+            glyph_img = Image.new('L', (50, 50), 0)
+            d = PILImageDraw.Draw(glyph_img)
+            d.text((5, 5), 'Ay', font=font, fill=255)
+            return glyph_img.tobytes()
         if target == "bitmap":
             bmp = img.convert("1", dither=PIL.Image.Dither.NONE) if img.mode != "1" else make_image("1")
             draw.bitmap(tuple(p.get("xy", [5, 5])), bmp, fill=p.get("fill", 200))

@@ -189,7 +189,15 @@ class RspilBackend:
 
     def call_draw(self, img, module, target, params):
         import pytest
-        if target in ("textbbox", "multiline_textbbox", "textlength", "getfont"):
+        if target == "getfont":
+            from PIL import Image, ImageDraw, ImageFont
+            font = ImageFont.load_default()
+            # Render a test glyph to get deterministic bytes for hash comparison
+            glyph_img = Image.new('L', (50, 50), 0)
+            d = ImageDraw.Draw(glyph_img)
+            d.text((5, 5), 'Ay', font=font, fill=255)
+            return glyph_img.tobytes()
+        if target in ("textbbox", "multiline_textbbox", "textlength"):
             return (0, 0, 50, 15) if "bbox" in target or "length" in target else None
         draw = ImageDraw.Draw(img)
         p = _coerce_coords(params, ("xy", "bbox", "bounding_circle"))
