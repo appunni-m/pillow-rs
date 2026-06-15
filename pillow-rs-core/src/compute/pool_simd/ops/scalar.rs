@@ -1929,6 +1929,18 @@ pub fn contain(
     resize(pixels, w, h, new_w, new_h, mode, 1)
 }
 
+/// Scale: resize by a floating-point factor using bilinear interpolation.
+/// factor: scale multiplier (0.5 = half size, 2.0 = double).
+/// Delegates to resize with bilinear filter (filter=1).
+/// Returns (pixels, dst_w, dst_h).
+/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+#[inline]
+pub fn scale(pixels: &[u32], w: u32, h: u32, mode: u32, factor: f64) -> (Vec<u32>, u32, u32) {
+    let dst_w = ((w as f64 * factor) as u32).max(1);
+    let dst_h = ((h as f64 * factor) as u32).max(1);
+    resize(pixels, w, h, dst_w, dst_h, mode, 1) // filter=1 = bilinear
+}
+
 /// Cover: scale image to COVER dst_w × dst_h, preserving aspect ratio.
 /// Scale = max(dst_w/w, dst_h/h). Resize then center-crop to dst_w × dst_h.
 /// Returns (cropped_pixels, actual_w, actual_h).
@@ -2584,6 +2596,83 @@ mod tests {
         assert_eq!(h, 4);
         assert_eq!(out.len(), 24);
     }
+
+    #[test]
+    fn test_scale_down_0_5_rgba() {
+        // Create a 4x4 RGBA image with a simple pattern
+        // Pixel at (x,y) = (r: 64*x, g: 64*y, b: 128, a: 255)
+        let mut pixels = Vec::with_capacity(16);
+        for y in 0..4u32 {
+            for x in 0..4u32 {
+                let r = (x * 64) as u8;
+                let g = (y * 64) as u8;
+                let b = 128u8;
+                let a = 255u8;
+                pixels.push(p(r, g, b, a));
+            }
+        }
+        // Scale by 0.5 -> should be 2x2
+        let (out, w, h) = scale(&pixels, 4, 4, 3, 0.5);
+        assert_eq!(w, 2, "downscale width");
+        assert_eq!(h, 2, "downscale height");
+        assert_eq!(out.len(), 4, "downscale pixel count");
+        // Each output pixel is a bilinear blend of a 2x2 source region.
+        // Top-left (0,0): source area (0,0)-(2,2).
+        // Average of 4 pixels: (0,0)=0,0,128, (1,0)=64,0,128, (0,1)=0,64,128, (1,1)=64,64,128
+        // = (32, 32, 128) — with bilinear exact center sampling.
+        // Bilinear at center of dst pixel 0,0 in source space:
+        //   cx = (0 + 0.5) * 4/2 = 1.0, cy = (0 + 0.5) * 4/2 = 1.0
+        //   Falls exactly on source pixel (1,1) = (64, 64, 128)
+        let tl = out[0];
+        assert_eq!(tl & 0xFF, 64, "top-left R");
+        assert_eq!((tl >> 8) & 0xFF, 64, "top-left G");
+        assert_eq!((tl >> 16) & 0xFF, 128, "top-left B");
+        assert_eq!((tl >> 24) & 0xFF, 255, "top-left A");
+    }
+
+    #[test]
+    fn test_scale_up_2_0_rgba() {
+        // Same 4x4 RGBA image
+        let mut pixels = Vec::with_capacity(16);
+        for y in 0..4u32 {
+            for x in 0..4u32 {
+                let r = (x * 64) as u8;
+                let g = (y * 64) as u8;
+                let b = 128u8;
+                let a = 255u8;
+                pixels.push(p(r, g, b, a));
+            }
+        }
+        // Scale by 2.0 -> should be 8x8
+        let (out, w, h) = scale(&pixels, 4, 4, 3, 2.0);
+        assert_eq!(w, 8, "upscale width");
+        assert_eq!(h, 8, "upscale height");
+        assert_eq!(out.len(), 64, "upscale pixel count");
+        // Bilinear interpolation
+        // dst pixel (1,1) in source space:
+        //   cx = (1 + 0.5) * 4/8 = 0.75, cy = (1 + 0.5) * 4/8 = 0.75
+        //   Falls at (0.75, 0.75) in source == pixel (0,0) = (0, 0, 128)
+        let idx = 1 * 8 + 1; // row 1, col 1
+        let px = out[idx];
+        assert_eq!(px & 0xFF, (0.75 * 64.0) as u32, "upscale pixel at (1,1) R");
+        assert_eq!(
+            (px >> 8) & 0xFF,
+            (0.75 * 64.0) as u32,
+            "upscale pixel at (1,1) G"
+        );
+        assert_eq!((px >> 16) & 0xFF, 128, "upscale pixel at (1,1) B");
+        assert_eq!((px >> 24) & 0xFF, 255, "upscale pixel at (1,1) A");
+    }
+
+    #[test]
+    fn test_scale_minimum_dim() {
+        // Scale by a tiny factor should produce at least 1x1
+        let pixels = vec![p(255, 128, 64, 255); 100]; // 10x10 solid image
+        let (out, w, h) = scale(&pixels, 10, 10, 3, 0.01);
+        assert!(w >= 1, "min width");
+        assert!(h >= 1, "min height");
+        assert_eq!(out.len(), (w * h) as usize);
+    }
 }
 
 // ── Geometry and spatial operations (rotate, remap_palette, equalize) ────────
@@ -3218,8 +3307,8 @@ pub fn paste(
         for sy in y_start..y_end {
             for sx in x_start..x_end {
                 let src_idx = (sy as usize) * src_w_u + (sx as usize);
-                let dst_idx = (dst_oy + (sy - y_start) as usize) * w_u
-                    + (dst_ox + (sx - x_start) as usize);
+                let dst_idx =
+                    (dst_oy + (sy - y_start) as usize) * w_u + (dst_ox + (sx - x_start) as usize);
 
                 let sp = source[src_idx];
                 let dp = pixels[dst_idx];
@@ -3275,8 +3364,8 @@ pub fn paste(
         for sy in y_start..y_end {
             for sx in x_start..x_end {
                 let src_idx = (sy as usize) * src_w_u + (sx as usize);
-                let dst_idx = (dst_oy + (sy - y_start) as usize) * w_u
-                    + (dst_ox + (sx - x_start) as usize);
+                let dst_idx =
+                    (dst_oy + (sy - y_start) as usize) * w_u + (dst_ox + (sx - x_start) as usize);
 
                 let sp = source[src_idx];
                 let sr = sp & 0xFF;
@@ -3378,12 +3467,15 @@ pub fn alpha_composite(
 
             // Porter-Duff over: out_ch = (src_ch * sa + dst_ch * da * (1 - sa)) / out_a
             let inv_sa = 1.0 - sa;
-            let out_r =
-                ((sr * sa + dr * da * inv_sa) / out_a_f).round().clamp(0.0, 255.0) as u32;
-            let out_g_raw =
-                ((sg * sa + dg * da * inv_sa) / out_a_f).round().clamp(0.0, 255.0) as u32;
-            let out_b_raw =
-                ((sb * sa + db * da * inv_sa) / out_a_f).round().clamp(0.0, 255.0) as u32;
+            let out_r = ((sr * sa + dr * da * inv_sa) / out_a_f)
+                .round()
+                .clamp(0.0, 255.0) as u32;
+            let out_g_raw = ((sg * sa + dg * da * inv_sa) / out_a_f)
+                .round()
+                .clamp(0.0, 255.0) as u32;
+            let out_b_raw = ((sb * sa + db * da * inv_sa) / out_a_f)
+                .round()
+                .clamp(0.0, 255.0) as u32;
 
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };
@@ -3664,8 +3756,8 @@ pub fn autocontrast(pixels: &mut [u32], w: u32, h: u32, mode: u32, cutoff: u32) 
 
     // Use u64 for the multiplication to avoid overflow on large images (32-bit WASM).
     let low_idx = (total as u64 * cutoff as u64 / 100) as usize;
-    let high_idx = ((total as u64 * (100u64 - cutoff as u64) / 100) as usize)
-        .min(total.saturating_sub(1));
+    let high_idx =
+        ((total as u64 * (100u64 - cutoff as u64) / 100) as usize).min(total.saturating_sub(1));
 
     if low_idx >= high_idx {
         return; // No valid range (cutoff too high or single-value image)
@@ -3743,9 +3835,21 @@ pub fn autocontrast(pixels: &mut [u32], w: u32, h: u32, mode: u32, cutoff: u32) 
             let b = (*p >> 16) & 0xFF;
             let a = *p & 0xFF00_0000;
 
-            let out_r = if do_r { ((r - r_lo) * 255 / r_range).min(255) } else { r };
-            let out_g = if do_g { ((g - g_lo) * 255 / g_range).min(255) } else { g };
-            let out_b = if do_b { ((b - b_lo) * 255 / b_range).min(255) } else { b };
+            let out_r = if do_r {
+                ((r - r_lo) * 255 / r_range).min(255)
+            } else {
+                r
+            };
+            let out_g = if do_g {
+                ((g - g_lo) * 255 / g_range).min(255)
+            } else {
+                g
+            };
+            let out_b = if do_b {
+                ((b - b_lo) * 255 / b_range).min(255)
+            } else {
+                b
+            };
             let out_a = if has_a { a } else { 0xFF00_0000 };
 
             *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
@@ -3854,13 +3958,7 @@ pub fn thumbnail(
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn reduce(
-    pixels: &[u32],
-    w: u32,
-    h: u32,
-    mode: u32,
-    factor: u32,
-) -> (Vec<u32>, u32, u32) {
+pub fn reduce(pixels: &[u32], w: u32, h: u32, mode: u32, factor: u32) -> (Vec<u32>, u32, u32) {
     if factor < 2 || w < factor || h < factor {
         // Cannot reduce — return copy with alpha clamping
         let has_a = mode == 1 || mode == 3;
@@ -3989,8 +4087,7 @@ pub fn convert(
             // ── RGB(2) -> other modes ──
             (2, 0) | (2, 1) => {
                 // RGB->L or RGB->LA: BT.601 luma
-                let luma =
-                    ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255) as u32;
+                let luma = ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255) as u32;
                 out.push(luma | (luma << 8) | (luma << 16) | (0xFF << 24));
             }
             (2, 3) => {
@@ -4001,8 +4098,7 @@ pub fn convert(
             // ── RGBA(3) -> other modes ──
             (3, 0) | (3, 1) => {
                 // RGBA->L or RGBA->LA: BT.601 luma
-                let luma =
-                    ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255) as u32;
+                let luma = ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255) as u32;
                 let out_a = if target_mode == 1 { a_src } else { 0xFF };
                 out.push(luma | (luma << 8) | (luma << 16) | (out_a << 24));
             }
