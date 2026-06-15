@@ -6,6 +6,51 @@ use crate::pipeline::{ColorMode, ResampleFilter, TransformMethod};
 use image::{DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use std::sync::Arc;
 
+// ── glibc-compatible PRNG ────────────────────────────────────────────────
+//
+// Implements glibc's `srand()`/`rand()` (TYPE_3 algorithm) so PIL's
+// deterministic seeded output is reproducible on WASM where libc is absent.
+// Verified: with seed 42 it produces the exact same sequence as glibc.
+
+struct GlibcRand {
+    state: [i32; 31],
+    fptr: usize,
+    rptr: usize,
+}
+
+impl GlibcRand {
+    fn new(seed: u32) -> Self {
+        let mut state = [0i32; 31];
+        state[0] = (seed & 0x7fffffff) as i32;
+        for i in 1..31 {
+            state[i] = ((state[i - 1] as i64).wrapping_mul(16807) % 2147483647) as i32;
+        }
+        let mut rng = GlibcRand {
+            state,
+            fptr: 3,
+            rptr: 0,
+        };
+        // Warm-up: 310 iterations with pointer advancement (matching glibc)
+        for _ in 0..310 {
+            rng.advance();
+        }
+        rng
+    }
+
+    /// Core step: state[fptr] += state[rptr], return (val >> 1) & 0x7fffffff
+    fn advance(&mut self) -> i32 {
+        let val = self.state[self.fptr].wrapping_add(self.state[self.rptr]);
+        self.state[self.fptr] = val;
+        self.fptr = (self.fptr + 1) % 31;
+        self.rptr = (self.rptr + 1) % 31;
+        (val >> 1) & 0x7fffffff
+    }
+
+    fn next(&mut self) -> i32 {
+        self.advance()
+    }
+}
+
 // ── EffectSpread ──
 
 pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImage, PilError> {
@@ -54,47 +99,28 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     let input_pixels = pixels;
     let mut out_pixels = input_pixels.clone();
 
-    // PIL uses C rand() WITHOUT calling srand(). We seed srand(42)
-    // deterministically to produce the same sequence for every call,
-    // matching the seeded PIL output used in fixture generation.
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        extern "C" {
-            fn rand() -> i32;
-            fn srand(seed: u32);
-        }
-        unsafe {
-            srand(42);
-        }
-        for y in 0..h {
-            for x in 0..w {
-                let src_idx = (y * w + x) as usize;
-                let src_base = src_idx * stride;
-                unsafe {
-                    let xx = x + (rand() % d) - half_d;
-                    let yy = y + (rand() % d) - half_d;
-                    if xx >= 0 && xx < w && yy >= 0 && yy < h {
-                        let dst_idx = (yy * w + xx) as usize;
-                        let dst_base = dst_idx * stride;
-                        // Read from INPUT (never modified), write to OUTPUT
-                        out_pixels[dst_base..dst_base + stride]
-                            .copy_from_slice(&input_pixels[src_base..src_base + stride]);
-                        out_pixels[src_base..src_base + stride]
-                            .copy_from_slice(&input_pixels[dst_base..dst_base + stride]);
-                    } else {
-                        // Copy pixel as-is
-                        out_pixels[src_base..src_base + stride]
-                            .copy_from_slice(&input_pixels[src_base..src_base + stride]);
-                    }
-                }
+    // Use glibc-compatible PRNG (works on ALL platforms including WASM)
+    let mut rng = GlibcRand::new(42);
+    for y in 0..h {
+        for x in 0..w {
+            let src_idx = (y * w + x) as usize;
+            let src_base = src_idx * stride;
+            let xx = x + (rng.next() % d) - half_d;
+            let yy = y + (rng.next() % d) - half_d;
+            if xx >= 0 && xx < w && yy >= 0 && yy < h {
+                let dst_idx = (yy * w + xx) as usize;
+                let dst_base = dst_idx * stride;
+                // Read from INPUT (never modified), write to OUTPUT
+                out_pixels[dst_base..dst_base + stride]
+                    .copy_from_slice(&input_pixels[src_base..src_base + stride]);
+                out_pixels[src_base..src_base + stride]
+                    .copy_from_slice(&input_pixels[dst_base..dst_base + stride]);
+            } else {
+                // Copy pixel as-is
+                out_pixels[src_base..src_base + stride]
+                    .copy_from_slice(&input_pixels[src_base..src_base + stride]);
             }
         }
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        // WASM fallback: simple copy
-        out_pixels.copy_from_slice(&input_pixels);
-        let _ = (d, half_d);
     }
     // Reconstruct DynamicImage from the output pixel data
     let result = match stride {
@@ -488,55 +514,36 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
     // the second value from the pair).
     let (w, h) = (img.width(), img.height());
     let mut out = GrayImage::new(w, h);
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        extern "C" {
-            fn rand() -> i32;
-            fn srand(seed: u32);
-        }
-        unsafe {
-            srand(42);
-        }
-        // RAND_MAX on glibc
-        const RAND_MAX_F64: f64 = 2147483647.0;
-        for pixel in out.pixels_mut() {
-            let (v1, radius) = loop {
-                unsafe {
-                    // Exact match to PIL:
-                    //   v1 = rand() * (2.0 / RAND_MAX) - 1.0;
-                    //   v2 = rand() * (2.0 / RAND_MAX) - 1.0;
-                    let v1 = rand() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
-                    let v2 = rand() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
-                    let radius = v1 * v1 + v2 * v2;
-                    if radius < 1.0 {
-                        break (v1, radius);
-                    }
-                }
-            };
-            // factor = sqrt(-2.0 * log(radius) / radius)
-            let factor = (-2.0 * radius.ln() / radius).sqrt();
-            let this = factor * v1;
-            // PIL: CLIP8(128 + sigma * this)
-            // CLIP8: (v) <= 0 ? 0 : (v) >= 255.0 ? 255 : (UINT8)(v)
-            // Cast truncates toward zero (no rounding).
-            let v = 128.0 + sigma * this;
-            pixel[0] = if v <= 0.0 {
-                0
-            } else if v >= 255.0 {
-                255
-            } else {
-                v as u8
-            };
-        }
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        // WASM fallback: pure sin-based noise
-        for (i, pixel) in out.pixels_mut().enumerate() {
-            let x = (i as u32) % w;
-            let nx = (x as f64 / w as f64).sin() * sigma * 127.0;
-            pixel[0] = (128.0 + nx).round().clamp(0.0, 255.0) as u8;
-        }
+    // Use glibc-compatible PRNG on ALL platforms
+    let mut rng = GlibcRand::new(42);
+    // RAND_MAX on glibc
+    const RAND_MAX_F64: f64 = 2147483647.0;
+    for pixel in out.pixels_mut() {
+        let (v1, radius) = loop {
+            // Exact match to PIL:
+            //   v1 = rand() * (2.0 / RAND_MAX) - 1.0;
+            //   v2 = rand() * (2.0 / RAND_MAX) - 1.0;
+            let v1 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
+            let v2 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
+            let radius = v1 * v1 + v2 * v2;
+            if radius < 1.0 {
+                break (v1, radius);
+            }
+        };
+        // factor = sqrt(-2.0 * log(radius) / radius)
+        let factor = (-2.0 * radius.ln() / radius).sqrt();
+        let this = factor * v1;
+        // PIL: CLIP8(128 + sigma * this)
+        // CLIP8: (v) <= 0 ? 0 : (v) >= 255.0 ? 255 : (UINT8)(v)
+        // Cast truncates toward zero (no rounding).
+        let v = 128.0 + sigma * this;
+        pixel[0] = if v <= 0.0 {
+            0
+        } else if v >= 255.0 {
+            255
+        } else {
+            v as u8
+        };
     }
     Ok(DynamicImage::ImageLuma8(out))
 }

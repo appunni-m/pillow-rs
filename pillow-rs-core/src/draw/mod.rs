@@ -500,10 +500,10 @@ impl Draw {
                             }
                             _ => img_loaded,
                         };
-                        let explicit = if *orig == "P" {
-                            Some("P".to_string())
-                        } else {
-                            None
+                        let explicit = match orig.as_str() {
+                            "P" => Some("P".to_string()),
+                            "1" => Some("1".to_string()),
+                            _ => None,
                         };
                         return Image::Loaded(converted, explicit);
                     }
