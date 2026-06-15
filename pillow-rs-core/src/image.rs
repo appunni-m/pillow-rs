@@ -299,8 +299,9 @@ impl Image {
                 let copy_len = data.len().min(expected);
                 pixels[..copy_len].copy_from_slice(&data[..copy_len]);
                 DynamicImage::ImageRgba8(
-                    image::RgbaImage::from_raw(w, h, pixels)
-                        .ok_or_else(|| PilError::ValueError("frombytes: RGBA buffer error".into()))?,
+                    image::RgbaImage::from_raw(w, h, pixels).ok_or_else(|| {
+                        PilError::ValueError("frombytes: RGBA buffer error".into())
+                    })?,
                 )
             }
         };
@@ -388,12 +389,7 @@ impl Image {
                 // Explicit override OR auto-select: first active backend that supports ALL ops.
                 let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
 
-                img = crate::compute::execute_batch(
-                    b,
-                    ops,
-                    &img,
-                    explicit_mode.as_deref(),
-                )?;
+                img = crate::compute::execute_batch(b, ops, &img, explicit_mode.as_deref())?;
                 Ok(img)
             }
         }
@@ -1177,8 +1173,7 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
             let (w, h) = rgba.dimensions();
             let luma: Vec<u8> = rgba.pixels().map(|px| px[0]).collect();
             DynamicImage::ImageLuma8(
-                image::GrayImage::from_raw(w, h, luma)
-                    .unwrap_or_else(|| result.to_luma8()),
+                image::GrayImage::from_raw(w, h, luma).unwrap_or_else(|| result.to_luma8()),
             )
         }
         image::ColorType::La8 => {

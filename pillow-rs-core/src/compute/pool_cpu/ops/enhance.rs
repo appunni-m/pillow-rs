@@ -1,9 +1,9 @@
 // ── Enhance operations extracted from image.rs execute_op() ──
 
-use image::DynamicImage;
 use crate::color::pil_grayscale;
 use crate::error::PilError;
 use crate::image::preserve_mode;
+use image::DynamicImage;
 
 pub fn op_enhance_brightness(img: &DynamicImage, factor: f64) -> Result<DynamicImage, PilError> {
     let mut rgb = img.to_rgb8();
@@ -40,7 +40,10 @@ pub fn op_enhance_contrast(img: &DynamicImage, factor: f64) -> Result<DynamicIma
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
-pub fn op_enhance_color_saturation(img: &DynamicImage, factor: f64) -> Result<DynamicImage, PilError> {
+pub fn op_enhance_color_saturation(
+    img: &DynamicImage,
+    factor: f64,
+) -> Result<DynamicImage, PilError> {
     // Use PIL's rounded grayscale conversion (to_luma8 truncates)
     let gray = pil_grayscale(img);
     let mut rgb = img.to_rgb8();

@@ -382,9 +382,8 @@ pub fn execute_filter3x3(
     let mut out = raw.to_vec();
     for y in 1..h - 1 {
         for x in 1..w - 1 {
-            let base = |dx: i32, dy: i32| -> usize {
-                ((y + dy) * w + (x + dx)) as usize * channels
-            };
+            let base =
+                |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * channels };
             for c in 0..channels {
                 let row_b = raw[base(-1, 1) + c] as f32 * k0
                     + raw[base(0, 1) + c] as f32 * k1
@@ -452,9 +451,8 @@ pub fn execute_filter5x5(
     let mut out = raw.to_vec();
     for y in 2..h - 2 {
         for x in 2..w - 2 {
-            let base = |dx: i32, dy: i32| -> usize {
-                ((y + dy) * w + (x + dx)) as usize * channels
-            };
+            let base =
+                |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * channels };
             for c in 0..channels {
                 let row0 = raw[base(-2, 2) + c] as f32 * k00
                     + raw[base(-1, 2) + c] as f32 * k01
@@ -496,10 +494,7 @@ pub fn execute_filter5x5(
 }
 
 /// Execute a Gaussian blur via 3 passes of PIL-style box blur.
-pub fn execute_gaussian_blur(
-    img: &DynamicImage,
-    sigma: f32,
-) -> Result<DynamicImage, PilError> {
+pub fn execute_gaussian_blur(img: &DynamicImage, sigma: f32) -> Result<DynamicImage, PilError> {
     // PIL GaussianBlur: 3 passes of BoxBlur with computed fractional radius.
     // Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al. 2011).
     // PIL's ImagingGaussianBlur uses f32 parameters but f64 in sqrt/promotion.
@@ -524,10 +519,7 @@ pub fn execute_gaussian_blur(
 }
 
 /// Execute a box blur with integer radius.
-pub fn execute_box_blur(
-    img: &DynamicImage,
-    radius: u32,
-) -> Result<DynamicImage, PilError> {
+pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage, PilError> {
     let r = radius as i32;
     if r <= 0 {
         return Ok(img.clone());
@@ -574,26 +566,17 @@ pub fn execute_box_blur(
 }
 
 /// Execute a median filter (rank = size*size/2).
-pub fn execute_median_filter(
-    img: &DynamicImage,
-    size: u32,
-) -> Result<DynamicImage, PilError> {
+pub fn execute_median_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
     rank_filter_impl(img, size, size * size / 2)
 }
 
 /// Execute a max filter (rank = size*size - 1).
-pub fn execute_max_filter(
-    img: &DynamicImage,
-    size: u32,
-) -> Result<DynamicImage, PilError> {
+pub fn execute_max_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
     rank_filter_impl(img, size, size * size - 1)
 }
 
 /// Execute a min filter (rank = 0).
-pub fn execute_min_filter(
-    img: &DynamicImage,
-    size: u32,
-) -> Result<DynamicImage, PilError> {
+pub fn execute_min_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
     rank_filter_impl(img, size, 0)
 }
 

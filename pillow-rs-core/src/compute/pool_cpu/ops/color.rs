@@ -108,8 +108,7 @@ pub fn op_convert(
             let (w, h) = rgb.dimensions();
             let n = (w * h) as usize;
             let rgb_raw = rgb.into_raw();
-            let (indices, _palette) =
-                median_cut_quantize_rgb(&rgb_raw, 256);
+            let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, 256);
             let mut out = image::GrayImage::new(w, h);
             for (i, pixel) in out.pixels_mut().enumerate().take(n) {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);
@@ -202,8 +201,7 @@ pub fn op_quantize(
         ));
     }
     // Use median-cut quantization instead of NeuQuant.
-    let (indices, _palette) =
-        median_cut_quantize_rgb(&rgb_raw, colors);
+    let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, colors);
     let mut out = image::GrayImage::new(w, h);
     for (i, pixel) in out.pixels_mut().enumerate().take(n) {
         pixel[0] = indices.get(i).copied().unwrap_or(0);

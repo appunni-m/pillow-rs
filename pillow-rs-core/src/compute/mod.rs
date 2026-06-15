@@ -9,7 +9,7 @@
 //! ## Adding a new PipelineOp
 //! 1. Add variant to `PipelineOp` enum
 //! 2. Add CPU impl in `pool_cpu/ops/<category>.rs`
-//! 3. Add GPU shader in `gpu_shaders/<name>.wgsl` (optional)
+//! 3. Add GPU shader in `pool_gpu/shaders/<name>.wgsl` (optional)
 //! 4. Register in `registry.rs` — one line
 //!    Done. No other files touched.
 //!
@@ -28,12 +28,19 @@ use std::sync::Mutex;
 // ── Backend ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Backend { Cpu = 0, Gpu = 1, Simd = 2 }
+pub enum Backend {
+    Cpu = 0,
+    Gpu = 1,
+    Simd = 2,
+}
 
 impl Backend {
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
-            "cpu" => Some(Self::Cpu), "gpu" => Some(Self::Gpu), "simd" => Some(Self::Simd), _ => None
+            "cpu" => Some(Self::Cpu),
+            "gpu" => Some(Self::Gpu),
+            "simd" => Some(Self::Simd),
+            _ => None,
         }
     }
 }
@@ -43,31 +50,48 @@ impl Backend {
 /// Every backend implements this trait. CPU is the universal fallback.
 pub trait BackendImpl: Send + Sync {
     fn name(&self) -> Backend;
-    fn priority(&self) -> u8;  // higher = preferred
+    fn priority(&self) -> u8; // higher = preferred
     fn supports(&self, op: &PipelineOp) -> bool;
-    fn execute_batch(&self, ops: &[PipelineOp], img: &DynamicImage, mode: Option<&str>) -> Result<DynamicImage, PilError>;
+    fn execute_batch(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+    ) -> Result<DynamicImage, PilError>;
 }
 
 // ── Modules ────────────────────────────────────────────────────────────────
 
 mod pool_cpu;
 mod pool_gpu;
+mod pool_simd;
 pub mod registry;
 
 pub use pool_cpu::CpuPool;
 pub use pool_gpu::GpuPool;
+pub use pool_simd::SimdPool;
 
 // ── Backend activation ─────────────────────────────────────────────────────
 
 static ACTIVE: std::sync::OnceLock<Mutex<HashSet<Backend>>> = std::sync::OnceLock::new();
 
 fn active() -> &'static Mutex<HashSet<Backend>> {
-    ACTIVE.get_or_init(|| { let mut s = HashSet::new(); s.insert(Backend::Cpu); Mutex::new(s) })
+    ACTIVE.get_or_init(|| {
+        let mut s = HashSet::new();
+        s.insert(Backend::Cpu);
+        Mutex::new(s)
+    })
 }
 
-pub fn enable_backend(b: Backend) -> bool { active().lock().unwrap().insert(b) }
-pub fn disable_backend(b: Backend) -> bool { active().lock().unwrap().remove(&b) }
-pub fn backend_enabled(b: Backend) -> bool { active().lock().unwrap().contains(&b) }
+pub fn enable_backend(b: Backend) -> bool {
+    active().lock().unwrap().insert(b)
+}
+pub fn disable_backend(b: Backend) -> bool {
+    active().lock().unwrap().remove(&b)
+}
+pub fn backend_enabled(b: Backend) -> bool {
+    active().lock().unwrap().contains(&b)
+}
 
 pub fn active_backends() -> Vec<Backend> {
     let a = active().lock().unwrap();
@@ -83,7 +107,8 @@ use std::sync::OnceLock;
 fn pools() -> &'static [Box<dyn BackendImpl>] {
     static POOLS: OnceLock<Vec<Box<dyn BackendImpl>>> = OnceLock::new();
     POOLS.get_or_init(|| {
-        let mut v: Vec<Box<dyn BackendImpl>> = vec![Box::new(CpuPool), Box::new(GpuPool)];
+        let mut v: Vec<Box<dyn BackendImpl>> =
+            vec![Box::new(CpuPool), Box::new(GpuPool), Box::new(SimdPool)];
         v.sort_by_key(|b| std::cmp::Reverse(b.priority()));
         v
     })
@@ -97,7 +122,9 @@ pub fn available_backends() -> Vec<Backend> {
 
 /// Pick best active backend that supports ALL ops. Falls back to CPU.
 pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Backend {
-    if let Some(b) = explicit { return b; }
+    if let Some(b) = explicit {
+        return b;
+    }
     let active_set = active().lock().unwrap();
     for pool in pools() {
         if active_set.contains(&pool.name()) && ops.iter().all(|op| pool.supports(op)) {
@@ -119,5 +146,8 @@ pub fn execute_batch(
             return pool.execute_batch(ops, img, mode);
         }
     }
-    Err(PilError::ValueError(format!("Backend {:?} not available", backend)))
+    Err(PilError::ValueError(format!(
+        "Backend {:?} not available",
+        backend
+    )))
 }
