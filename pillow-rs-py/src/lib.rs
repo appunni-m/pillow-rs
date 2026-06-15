@@ -670,7 +670,7 @@ fn map_error(e: PilError) -> PyErr {
 /// Activate a compute backend. Returns true if the backend exists on this machine.
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
-    match pillow_rs_core::compute::Backend::from_str(name) {
+    match pillow_rs_core::compute::Backend::parse(name) {
         Some(b) => Ok(pillow_rs_core::compute::enable_backend(b)),
         None => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown backend: {}",
@@ -682,7 +682,7 @@ fn enable_backend(name: &str) -> PyResult<bool> {
 /// Deactivate a compute backend. Returns true if it was active.
 #[pyfunction]
 fn disable_backend(name: &str) -> PyResult<bool> {
-    match pillow_rs_core::compute::Backend::from_str(name) {
+    match pillow_rs_core::compute::Backend::parse(name) {
         Some(b) => Ok(pillow_rs_core::compute::disable_backend(b)),
         None => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown backend: {}",
@@ -712,7 +712,7 @@ fn active_backends() -> Vec<String> {
 /// Check if a specific backend is active.
 #[pyfunction]
 fn backend_enabled(name: &str) -> PyResult<bool> {
-    match pillow_rs_core::compute::Backend::from_str(name) {
+    match pillow_rs_core::compute::Backend::parse(name) {
         Some(b) => Ok(pillow_rs_core::compute::backend_enabled(b)),
         None => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown backend: {}",

@@ -1,24 +1,34 @@
 // Colorize: lerp(black_color, white_color, luma/255)
 // Param[0] = black_color packed as 0x00BBGGRR
 // Param[1] = white_color packed as 0x00BBGGRR
+// Mode-aware: for L/LA (only R carries luma), only process R;
+// for RGB/RGBA, process all RGB channels.
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
     width: u32,
     height: u32,
-    _pad0: u32,
-    _pad1: u32,
+    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
+    _pad: u32,
     black_color: u32,
     white_color: u32,
 }
 
-@group(0) @binding(0) var<storage, read> input: array<u32>;
-@group(0) @binding(1) var<storage, read_write> output: array<u32>;
-@group(0) @binding(2) var<uniform> params: Params;
+// ── Mode helpers ──
+
+fn mode_has_g(m: u32) -> bool { return m >= 2u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 fn colorize_lerp(black: u32, white: u32, luma: u32) -> u32 {
     let val = black * 255u + (white - black) * luma;
     return min((val + 127u) / 255u, 255u);
 }
+
+@group(0) @binding(0) var<storage, read> input: array<u32>;
+@group(0) @binding(1) var<storage, read_write> output: array<u32>;
+@group(0) @binding(2) var<uniform> params: Params;
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -29,9 +39,11 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let r = pixel & 0xffu;
     let g = (pixel >> 8u) & 0xffu;
     let b = (pixel >> 16u) & 0xffu;
+    let a = (pixel >> 24u) & 0xffu;
 
-    // BT.601 luma
-    let luma = (299u * r + 587u * g + 114u * b) / 1000u;
+    // For L/LA: luma = r (single channel, only R carries luma)
+    // For RGB/RGBA: luma = BT.601
+    let luma = select(r, (299u * r + 587u * g + 114u * b) / 1000u, mode_has_g(params.mode));
 
     // Extract black/white colors
     let bc = params.black_color;
@@ -44,9 +56,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let wb = (wc >> 16u) & 0xffu;
 
     // lerp: black + (white - black) * luma / 255
-    let out_r = colorize_lerp(br, wr, luma);
-    let out_g = colorize_lerp(bg, wg, luma);
-    let out_b = colorize_lerp(bb, wb, luma);
+    let val_r = colorize_lerp(br, wr, luma);
+    let val_g = colorize_lerp(bg, wg, luma);
+    let val_b = colorize_lerp(bb, wb, luma);
 
-    output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (255u << 24u);
+    // For L/LA: only process R (luma); G and B pass through unchanged
+    let out_r = val_r;
+    let out_g = select(g, val_g, mode_has_g(params.mode));
+    let out_b = select(b, val_b, mode_has_b(params.mode));
+    let out_a = select(255u, a, mode_has_a(params.mode));
+
+    output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

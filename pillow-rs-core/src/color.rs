@@ -1,4 +1,4 @@
-use image::{ColorType, DynamicImage, GenericImageView, RgbImage};
+use image::{ColorType, DynamicImage, RgbImage};
 
 /// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
 /// R: 0.299, G: 0.587, B: 0.114. PIL truncates (no rounding).

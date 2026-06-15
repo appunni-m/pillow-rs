@@ -1,22 +1,9 @@
 //! Parameterized image filters — GaussianBlur, BoxBlur, UnsharpMask,
 //! MaxFilter, MinFilter, MedianFilter, ModeFilter, RankFilter.
 
-use image::DynamicImage;
-
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-
-/// PIL ModeFilter helper: find most common value in histogram.
-/// Returns None if max count ≤ 2 (caller should preserve original pixel).
-fn find_mode_with_threshold(hist: &[u32; 256]) -> Option<u8> {
-    let (_mode, max_count) = find_mode_with_count(hist);
-    if max_count > 2 {
-        Some(_mode)
-    } else {
-        None
-    }
-}
 
 /// Find the mode (most common value) and its count from a histogram.
 /// Uses PIL's strict `>` tie-breaking (lower value wins on tie).
@@ -24,9 +11,9 @@ fn find_mode_with_threshold(hist: &[u32; 256]) -> Option<u8> {
 fn find_mode_with_count(hist: &[u32; 256]) -> (u8, u32) {
     let mut mode = 0u8;
     let mut max_count = hist[0];
-    for v in 1..256 {
-        if hist[v] > max_count {
-            max_count = hist[v];
+    for (v, &count) in hist.iter().enumerate().skip(1) {
+        if count > max_count {
+            max_count = count;
             mode = v as u8;
         }
     }

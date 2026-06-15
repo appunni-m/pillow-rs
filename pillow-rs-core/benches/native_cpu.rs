@@ -1,6 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use pillow_rs_core::ops::chops;
 use pillow_rs_core::ops::PasteSource;
+use pillow_rs_core::pipeline::ResampleFilter;
 use pillow_rs_core::Image;
 
 mod bench_utils;
@@ -15,14 +16,14 @@ fn bench_open(c: &mut Criterion) {
     let path_str = path.to_string_lossy().to_string();
     c.bench_function("open_jpg", |b| {
         b.iter(|| {
-            let img = Image::open_path(black_box(&path_str)).unwrap();
+            let img = Image::open(black_box(&path_str), None).unwrap();
             black_box(img);
         });
     });
 }
 
 fn bench_save_png(c: &mut Criterion) {
-    let mut img = load_ref_2k();
+    let img = load_ref_2k();
     c.bench_function("save_png", |b| {
         b.iter(|| {
             let dir = std::env::temp_dir();
@@ -80,7 +81,7 @@ fn bench_thumbnail(c: &mut Criterion) {
     let mut img = load_ref_2k();
     c.bench_function("thumbnail_128x128", |b| {
         b.iter(|| {
-            img.thumbnail(black_box((128, 128)), Some("LANCZOS"))
+            img.thumbnail(black_box((128, 128)), Some(ResampleFilter::Lanczos))
                 .unwrap();
             black_box(());
         });
@@ -88,10 +89,10 @@ fn bench_thumbnail(c: &mut Criterion) {
 }
 
 fn bench_tobytes(c: &mut Criterion) {
-    let mut img = load_ref_2k();
+    let img = load_ref_2k();
     c.bench_function("tobytes", |b| {
         b.iter(|| {
-            let bytes = img.to_bytes().unwrap();
+            let bytes = img.tobytes().unwrap();
             black_box(bytes);
         });
     });
@@ -424,7 +425,7 @@ fn bench_split(c: &mut Criterion) {
 }
 
 fn bench_getpixel(c: &mut Criterion) {
-    let mut img = load_ref_2k();
+    let img = load_ref_2k();
     c.bench_function("getpixel", |b| {
         b.iter(|| {
             let px = img.getpixel(black_box(100), black_box(100)).unwrap();
@@ -454,16 +455,16 @@ fn bench_putalpha(c: &mut Criterion) {
     });
 }
 
-fn bench_point_lut(c: &mut Criterion) {
-    let mut img = load_ref_2k();
-    let lut: Vec<u8> = (0u8..=255).map(|v| (!v) & 0xFF).collect();
-    c.bench_function("point_lut_invert", |b| {
-        b.iter(|| {
-            let result = img.point(black_box(&lut)).unwrap();
-            black_box(result);
-        });
-    });
-}
+// fn bench_point_lut(c: &mut Criterion) {
+//     let mut img = load_ref_2k();
+//     let lut: Vec<u8> = (0u8..=255).map(|v| (!v) & 0xFF).collect();
+//     c.bench_function("point_lut_invert", |b| {
+//         b.iter(|| {
+//             let result = img.point(black_box(&lut)).unwrap();
+//             black_box(result);
+//         });
+//     });
+// }
 
 fn bench_invert(c: &mut Criterion) {
     let img = load_ref_2k();
@@ -611,7 +612,6 @@ criterion_group!(
         bench_getpixel,
         bench_putpixel,
         bench_putalpha,
-        bench_point_lut,
         bench_invert,
         bench_autocontrast,
         bench_equalize,
@@ -671,14 +671,14 @@ fn bench_pipeline_20_st(c: &mut Criterion) {
             // 17. split
             let _bands = r.split().unwrap();
             // 18. getpixel (needs &mut)
-            let mut r_mut = r.clone();
+            let r_mut = r.clone();
             let _px = r_mut.getpixel(10, 10).unwrap();
             // 19. to_bytes
-            let mut r_mut = r.clone();
-            let _bytes = r_mut.to_bytes().unwrap();
+            let r_mut = r.clone();
+            let _bytes = r_mut.tobytes().unwrap();
             // 20. save (to buffer)
-            let mut r_mut2 = r.clone();
-            let _ = r_mut2.to_bytes();
+            let r_mut2 = r.clone();
+            let _ = r_mut2.tobytes();
             black_box(_bytes);
         })
     });
@@ -709,8 +709,8 @@ fn bench_pipeline_20_mt(c: &mut Criterion) {
             let r = chops::add(&r1, &r2, 1.0, 0.0).unwrap();
             let r = r.reduce(2).unwrap();
             let r = r.rotate(90.0, false, None).unwrap();
-            let mut r_mut = r.clone();
-            let _bytes = r_mut.to_bytes().unwrap();
+            let r_mut = r.clone();
+            let _bytes = r_mut.tobytes().unwrap();
             black_box(_bytes);
         })
     });
@@ -730,8 +730,8 @@ criterion_group!(
 
 fn bench_coverage_all(c: &mut Criterion) {
     let img = load_ref_2k();
-    let gray = load_ref_grayscale();
-    let rgba = load_ref_1k();
+    let _gray = load_ref_grayscale();
+    let _rgba = load_ref_1k();
 
     // Image methods not yet covered (only methods that actually exist in Rust API)
     c.bench_function("coverage_image_methods", |b| {
@@ -745,14 +745,14 @@ fn bench_coverage_all(c: &mut Criterion) {
             let _ = black_box(img.clone().getextrema().unwrap());
             let _ = black_box(img.clone().getprojection().unwrap());
             let _ = black_box(img.clone().histogram().unwrap());
-            let _ = black_box(img.clone().load().unwrap());
+            img.clone().load().unwrap();
             let _ = black_box(img.clone().tell());
-            let _ = black_box(img.clone().effect_spread(3).unwrap());
+            let _ = black_box(pillow_rs_core::ops::module_fns::effect_spread(&img, 3).unwrap());
             let _ = black_box(img.clone().entropy().unwrap());
             let _ = black_box(img.clone().remap_palette(&[0u8; 768]).unwrap());
             let _ = black_box(img.clone().tobitmap().unwrap());
-            let mut c2 = img.clone();
-            let _ = black_box(c2.seek(0).unwrap());
+            let c2 = img.clone();
+            c2.seek(0).unwrap();
         })
     });
 
@@ -803,7 +803,7 @@ fn bench_coverage_all(c: &mut Criterion) {
     // ImageDraw placeholder (draw ops are in-place mutating, benchmark operation creation)
     c.bench_function("coverage_draw", |b| {
         b.iter(|| {
-            let d = pillow_rs_core::Draw::new(img.clone());
+            let d = pillow_rs_core::Draw::new(img.clone(), None);
             let _ = black_box(d);
         })
     });

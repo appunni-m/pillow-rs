@@ -1046,7 +1046,7 @@ pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
 /// Activate a compute backend. Returns true if the backend exists.
 #[wasm_bindgen]
 pub fn enable_backend(name: &str) -> bool {
-    pillow_rs_core::compute::Backend::from_str(name)
+    pillow_rs_core::compute::Backend::parse(name)
         .map(|b| pillow_rs_core::compute::enable_backend(b))
         .unwrap_or(false)
 }
@@ -1054,7 +1054,7 @@ pub fn enable_backend(name: &str) -> bool {
 /// Deactivate a compute backend. Returns true if it was active.
 #[wasm_bindgen]
 pub fn disable_backend(name: &str) -> bool {
-    pillow_rs_core::compute::Backend::from_str(name)
+    pillow_rs_core::compute::Backend::parse(name)
         .map(|b| pillow_rs_core::compute::disable_backend(b))
         .unwrap_or(false)
 }
@@ -1080,7 +1080,7 @@ pub fn active_backends() -> Vec<String> {
 /// Check if a specific backend is active.
 #[wasm_bindgen]
 pub fn backend_enabled(name: &str) -> bool {
-    pillow_rs_core::compute::Backend::from_str(name)
+    pillow_rs_core::compute::Backend::parse(name)
         .map(|b| pillow_rs_core::compute::backend_enabled(b))
         .unwrap_or(false)
 }

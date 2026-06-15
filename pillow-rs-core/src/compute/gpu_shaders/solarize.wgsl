@@ -1,13 +1,21 @@
-// Solarize: if ch > threshold, ch = 255 - ch
-// Param[0] = threshold
+// Solarize: if ch >= threshold, ch = 255 - ch
+// Mode-aware: only processes channels present in the image mode.
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
+// Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
 
 struct Params {
     width: u32,
     height: u32,
-    _pad0: u32,
-    _pad1: u32,
+    mode: u32,    // 0=L, 1=LA, 2=RGB, 3=RGBA
+    _pad: u32,
     threshold: u32,
 }
+
+// ── Mode helpers ──
+
+fn mode_has_g(m: u32) -> bool { return m >= 2u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
@@ -25,9 +33,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let a = (pixel >> 24u) & 0xffu;
 
     let thresh = params.threshold;
-    let out_r = select(r, 255u - r, r > thresh);
-    let out_g = select(g, 255u - g, g > thresh);
-    let out_b = select(b, 255u - b, b > thresh);
+    let val_r = select(r, 255u - r, r >= thresh);
+    let val_g = select(g, 255u - g, g >= thresh);
+    let val_b = select(b, 255u - b, b >= thresh);
 
-    output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (a << 24u);
+    let out_r = val_r;
+    let out_g = select(g, val_g, mode_has_g(params.mode));
+    let out_b = select(b, val_b, mode_has_b(params.mode));
+    let out_a = select(255u, a, mode_has_a(params.mode));
+
+    output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

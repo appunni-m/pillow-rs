@@ -852,6 +852,7 @@ pub static BITMAP_GLYPH_DATA: [(u32, u32, i32, &[u8]); 95] = [
 
 /// Advance widths (in pixels) for each glyph.
 /// Index by character code - 32.
+#[allow(dead_code)]
 pub static BITMAP_ADVANCE_WIDTHS: [u32; 95] = [
     2,  // 32 ' '
     3,  // 33 '!'
