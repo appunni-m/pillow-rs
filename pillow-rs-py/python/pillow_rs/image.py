@@ -31,6 +31,14 @@ class Image:
         self._rust_image = rust_image
         # Inherit explicit mode from Rust pipeline (e.g. "1", "P", "CMYK")
         self._explicit_mode = getattr(rust_image, 'explicit_mode', lambda: None)()
+        # Extract palette for Paletted images (P-mode)
+        if self._explicit_mode == "P":
+            try:
+                p = self._rust_image.palette()
+                if p:
+                    self._palette = list(p)
+            except Exception:
+                pass
 
     def _ensure_materialized(self):
         """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
@@ -399,9 +407,32 @@ class Image:
         return f'<capsule object "Pillow Imaging" at 0x{id(self):x}>'
 
     def getpalette(self, rawmode="RGB"):
-        """Return palette data."""
+        """Return palette data.
+
+        PIL behavior: returns the palette as a flat list of RGB values,
+        trimmed to the last non-zero triple. WEB palette has 226 colors
+        (678 bytes). Full custom palette has 256 colors (768 bytes).
+        """
         if hasattr(self, '_palette'):
-            return list(self._palette)
+            pal = list(self._palette)
+            # Trim trailing zero triples to match PIL
+            last = len(pal)
+            while last >= 3 and pal[last-3] == 0 and pal[last-2] == 0 and pal[last-1] == 0:
+                last -= 3
+            return pal[:last]
+        # Try to get palette from Rust image (Paletted variant or Pipeline with palette)
+        try:
+            p = self._rust_image.palette()
+            if p:
+                self._palette = list(p)
+                pal = list(self._palette)
+                # Trim trailing zero triples
+                last = len(pal)
+                while last >= 3 and pal[last-3] == 0 and pal[last-2] == 0 and pal[last-1] == 0:
+                    last -= 3
+                return pal[:last]
+        except Exception:
+            pass
         return None
 
     def getxmp(self):
@@ -477,6 +508,14 @@ class Image:
         img = cls(RustImage.frombytes(mode, size, bytes(data)))
         if mode in ("1", "P", "CMYK", "HSV", "YCbCr", "I", "F"):
             img._explicit_mode = mode
+        # Extract palette for P-mode images so getpalette() works
+        if mode == "P":
+            try:
+                p = img._rust_image.palette()
+                if p:
+                    img._palette = list(p)
+            except Exception:
+                pass
         return img
 
     @classmethod

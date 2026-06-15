@@ -64,9 +64,14 @@ impl Draw {
         self.orig_mode.as_deref()
     }
 
-    /// Set the output image from a drawn canvas, preserving the original explicit mode.
+    /// Set the output image from a drawn RGBA canvas.
+    /// image_clone() handles RGBA→native mode conversion for standard modes.
+    /// Only F/I/CMYK need explicit_mode tagging (their RGBA data IS the final format).
     fn set_image(&mut self, canvas: RgbaImage) {
-        let explicit = self.orig_mode.clone();
+        let explicit = match self.orig_mode.as_deref() {
+            Some("F") | Some("I") | Some("CMYK") => self.orig_mode.clone(),
+            _ => None,
+        };
         self.image = Image::Loaded(DynamicImage::ImageRgba8(canvas), explicit);
     }
 
@@ -1408,6 +1413,7 @@ impl Draw {
             }
             "L" => {
                 // Anti-aliased: blend fill.0 with background using coverage.
+                // Uses PIL's signed truncation: bg + (fg - bg) * cov / 255
                 let mut luma = img.to_luma8();
                 let ink = fill.0;
                 for py in 0..h {
@@ -1423,10 +1429,7 @@ impl Draw {
                         let dx = (x as u32 + px).min(img_w - 1);
                         let dy = (y as u32 + py).min(img_h - 1);
                         let bg = luma.get_pixel(dx, dy)[0];
-                        // PIL BLEND: (ink * cov + bg * (255 - cov)) / 255 (truncation)
-                        let result = ((ink as u32 * cov as u32
-                            + bg as u32 * (255 - cov) as u32)
-                            / 255) as u8;
+                        let result = pil_blend(ink, bg, cov);
                         luma.put_pixel(dx, dy, image::Luma([result]));
                     }
                 }
@@ -1436,6 +1439,7 @@ impl Draw {
             "LA" => {
                 // Anti-aliased per channel: L channel gets fill.0, A channel gets 0
                 // (for integer fill) or the tuple's alpha.
+                // Uses PIL's signed truncation: bg + (fg - bg) * cov / 255
                 let mut la = img.to_luma_alpha8();
                 let ink_l = fill.0;
                 let ink_a = if is_int_fill { 0u8 } else { fill.3 };
@@ -1452,18 +1456,8 @@ impl Draw {
                         let dx = (x as u32 + px).min(img_w - 1);
                         let dy = (y as u32 + py).min(img_h - 1);
                         let bg = la.get_pixel(dx, dy);
-                        let new_l = if cov == 255 {
-                            ink_l
-                        } else {
-                            ((ink_l as u32 * cov as u32 + bg[0] as u32 * (255 - cov) as u32)
-                                / 255) as u8
-                        };
-                        let new_a = if cov == 255 {
-                            ink_a
-                        } else {
-                            ((ink_a as u32 * cov as u32 + bg[1] as u32 * (255 - cov) as u32)
-                                / 255) as u8
-                        };
+                        let new_l = pil_blend(ink_l, bg[0], cov);
+                        let new_a = pil_blend(ink_a, bg[1], cov);
                         la.put_pixel(dx, dy, image::LumaA([new_l, new_a]));
                     }
                 }
@@ -1475,6 +1469,7 @@ impl Draw {
                 // Anti-aliased per channel:
                 //   C channel = fill.0 or tuple C, M=tuple M, Y=tuple Y, K=tuple K.
                 //   For integer fill: C=fill.0, M=Y=K=0.
+                // Uses PIL's signed truncation: bg + (fg - bg) * cov / 255
                 let mut rgba = img.to_rgba8(); // CMYK stored as Rgba8 internally
                 let ink = if is_int_fill {
                     [fill.0, 0u8, 0u8, 0u8]
@@ -1498,18 +1493,10 @@ impl Draw {
                             Rgba(ink)
                         } else {
                             Rgba([
-                                ((ink[0] as u32 * cov as u32
-                                    + bg[0] as u32 * (255 - cov) as u32)
-                                    / 255) as u8,
-                                ((ink[1] as u32 * cov as u32
-                                    + bg[1] as u32 * (255 - cov) as u32)
-                                    / 255) as u8,
-                                ((ink[2] as u32 * cov as u32
-                                    + bg[2] as u32 * (255 - cov) as u32)
-                                    / 255) as u8,
-                                ((ink[3] as u32 * cov as u32
-                                    + bg[3] as u32 * (255 - cov) as u32)
-                                    / 255) as u8,
+                                pil_blend(ink[0], bg[0], cov),
+                                pil_blend(ink[1], bg[1], cov),
+                                pil_blend(ink[2], bg[2], cov),
+                                pil_blend(ink[3], bg[3], cov),
                             ])
                         };
                         rgba.put_pixel(dx, dy, new_pix);
@@ -1695,6 +1682,22 @@ fn plot(
 fn blend_u8(src: u8, dst: u8, alpha: u8, inv_alpha: u16) -> u8 {
     let a = alpha as u16;
     (((src as u16 * a) + (dst as u16 * inv_alpha) + 127) / 255) as u8
+}
+
+/// PIL-style single-channel blend:
+///   BLEND(mask, dst, src) = DIV255(dst * (255 - mask) + src * mask)
+/// where DIV255(x) = (x + 127) / 255  (round-to-nearest via +127 before /255 truncation)
+///
+/// This exactly matches PIL's ImagingFill2 → fill_mask_L C implementation.
+/// Using the simpler unsigned formula (fg*cov + bg*(255-cov))/255 truncates,
+/// which differs by 1 from PIL's rounded result for some cov values.
+#[inline]
+fn pil_blend(fg: u8, bg: u8, cov: u8) -> u8 {
+    let x = (bg as u32) * (255u32 - cov as u32) + (fg as u32) * (cov as u32);
+    // DIV255 with rounding: (x + 127) / 255
+    // Note: `(x + 127 + (x >> 8)) >> 8` is NOT used — it is an approximation
+    // that differs from the exact /255 for some inputs (e.g., x=37104 gives 145 vs 146).
+    ((x + 127) / 255) as u8
 }
 
 /// PIL-style ROUND_UP: away-from-zero rounding at 0.5.

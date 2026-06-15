@@ -169,13 +169,13 @@ pub fn op_paste(
     y: i64,
     mask: &Option<Arc<Image>>,
 ) -> Result<DynamicImage, PilError> {
-    let src_img = source.materialize()?;
+    let src_img = source.materialize_for_ops()?;
     let (src_w, src_h) = (src_img.width(), src_img.height());
     let paste_x = x;
     let paste_y = y;
 
     if let Some(mask_img_ref) = mask {
-        let mask_img = mask_img_ref.materialize()?;
+        let mask_img = mask_img_ref.materialize_for_ops()?;
         let mask_gray = mask_img.to_luma8();
         let mut dest_clone = img.to_rgba8();
 
@@ -229,7 +229,7 @@ pub fn op_alpha_composite(
     img: &DynamicImage,
     source: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    let src_img = source.materialize()?;
+    let src_img = source.materialize_for_ops()?;
     let mut dest_rgba = img.to_rgba8();
     let src_rgba = src_img.to_rgba8();
     let (sw, sh) = src_rgba.dimensions();
@@ -285,7 +285,7 @@ pub fn op_merge(
     let (w, h) = first_gray.dimensions();
     band_pixels.push(first_gray.into_raw());
     for band in bands.iter().skip(1) {
-        let b_img = band.materialize()?;
+        let b_img = band.materialize_for_ops()?;
         let b_gray = b_img.to_luma8();
         band_pixels.push(b_gray.into_raw());
     }
@@ -341,7 +341,7 @@ pub fn op_blend_module(
     alpha: f64,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize()?;
+    let other_img = other.materialize_for_ops()?;
     let a = alpha.clamp(0.0, 1.0);
     // CMYK mode: blend all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
     if explicit_mode == Some("CMYK") {
@@ -403,8 +403,32 @@ pub fn op_composite_module(
     mask: &Arc<Image>,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize()?;
-    let mask_img = mask.materialize()?;
+    // P-mode: composite on palette indices (PIL operates on indices, not colors)
+    if explicit_mode == Some("P") {
+        let gray1 = img.to_luma8();
+        let other_indices = other.materialize_indices()?;
+        let gray2 = other_indices.to_luma8();
+        let mask_img = mask.materialize_for_ops()?;
+        let mask_gray = mask_img.to_luma8();
+        let (w, h) = (
+            gray1.width().min(gray2.width()).min(mask_gray.width()),
+            gray1.height().min(gray2.height()).min(mask_gray.height()),
+        );
+        let mut out = GrayImage::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                let i1 = gray1.get_pixel(x, y)[0] as u16;
+                let i2 = gray2.get_pixel(x, y)[0] as u16;
+                let m = mask_gray.get_pixel(x, y)[0] as u16;
+                // PIL: (i1 * m + i2 * (255 - m) + 127) / 255
+                let val = (i1 * m + i2 * (255 - m) + 127) / 255;
+                out.put_pixel(x, y, image::Luma([val as u8]));
+            }
+        }
+        return Ok(DynamicImage::ImageLuma8(out));
+    }
+    let other_img = other.materialize_for_ops()?;
+    let mask_img = mask.materialize_for_ops()?;
     // CMYK mode: composite all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
     if explicit_mode == Some("CMYK") {
         let rgba1 = img.to_rgba8();

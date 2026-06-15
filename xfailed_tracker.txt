@@ -1,6 +1,19 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
-# Current state: 764 passed, 116 xfailed as of 2026-06-15
-# Updated after ImageDraw mode-specific text/bitmap fix
+# Current state: 857 passed, 23 xfailed as of 2026-06-15
+# Updated after P-mode + CMYK enhance fix: 16 tests fixed
+#
+# Fixed in this session (P-mode operations):
+# - All 11 P-mode image operation tests now pass. Root cause: Paletted images
+#   were converted to RGB before operations, losing P-mode. Fix: Added
+#   is_palette_safe_op() to detect ops that work on indices, and materialize()
+#   routes them to operate on palette index data directly (matching PIL).
+#   Composite/Blend on P-mode also fixed to composite on indices.
+# - Image_getpalette_P: Fixed Rust palette extraction in Python bindings and
+#   trailing-zero trimming to match PIL's getpalette().
+# - All 4 CMYK ImageEnhance tests now pass. Root cause: enhance operations
+#   used to_rgb8() which loses CMYK K channel. Fix: Added CMYK-specific paths
+#   operating on all 4 channels (C=R, M=G, Y=B, K=A in RGBA8), matching PIL's
+#   degenerate computation (C=0,M=0,Y=0,K=255-gray for Color/Contrast on CMYK).
 #
 # Fixed in this session:
 # - ImageDraw_bitmap_1: now passes. Mode-specific fill handling in Rust
