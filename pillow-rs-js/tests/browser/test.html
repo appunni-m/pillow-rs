@@ -273,9 +273,9 @@ async function main() {
                 return `ImageModule.${target} not supported for mode ${mode}`;
             }
 
-            // Image.effect_spread for LA
-            if (type === 'method' && module === 'Image' && target === 'effect_spread' && mode === 'LA') {
-                return `Image.effect_spread not supported for mode ${mode}`;
+            // Image.effect_spread — WASM fallback is no-op (rand() unavailable)
+            if (type === 'method' && module === 'Image' && target === 'effect_spread') {
+                return `Image.effect_spread not supported in WASM (no libc rand)`;
             }
 
             // Image.reduce for CMYK

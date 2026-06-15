@@ -631,20 +631,11 @@ impl ImageDraw {
     }
     #[wasm_bindgen(getter)]
     pub fn image(&self) -> Image {
-        let mut img = Image {
+        // Core image_clone() already handles mode preservation
+        // (RGB→RGB, RGBA→RGBA, L→L, etc.)
+        Image {
             inner: self.draw.image_clone(),
-        };
-        // Convert back to RGB if original was RGB (Draw uses RGBA internally)
-        let mut clone = img.inner.clone();
-        if let Ok(mode) = clone.mode() {
-            if mode == "RGBA" {
-                // Check if all alpha values are 255 (no transparency) — if so, convert to RGB
-                if let Ok(rgb) = clone.convert("RGB", None, None, None, None) {
-                    img.inner = rgb;
-                }
-            }
         }
-        img
     }
 }
 
