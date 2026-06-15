@@ -18,7 +18,10 @@ class Draw:
     def _sync(self):
         """Sync drawing output back to the Python Image, preserving original mode."""
         drawn = Image(self._draw.image)
-        if drawn.mode != self._orig_mode:
+        # F/I modes store raw 32-bit LE values in the RGBA canvas — no conversion.
+        # Standard modes: the RGBA canvas must be converted back to native format.
+        _RAW_MODES = {"F", "I"}
+        if self._orig_mode not in _RAW_MODES and drawn.mode != self._orig_mode:
             drawn = drawn.convert(self._orig_mode)
         self._image._rust_image = drawn._rust_image
 

@@ -672,20 +672,13 @@ impl GpuInner {
         };
         let size = (w * h * 4) as u64;
 
-        // Volta-style staging buffer pool: acquire a recycled buffer or create one.
-        // Buffers are never dropped — returned to the pool for reuse via release_staging().
-        // This avoids wgpu internal destruction queue exhaustion from repeated
-        // create_buffer/drop cycles across hundreds of sequential GPU operations.
-        let staging = self
-            .acquire_staging(size)
-            .unwrap_or_else(|| {
-                self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: None,
-                    size,
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                })
-            });
+        // TEST: skip pool, create fresh staging buffer each time
+        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         gpu_log!("[GPU] readback: create_encoder start");
         let mut encoder = self
             .device
@@ -723,10 +716,7 @@ impl GpuInner {
         // the staging buffer is fully released before returning to pool.
         self.device.poll(wgpu::Maintain::Wait);
         gpu_log!("[GPU] readback: final poll done");
-        // Volta-style: return buffer to pool for reuse, never drop.
-        self.release_staging(staging, size);
-        // wgpu#5173: empty submit flushes pending writes before the next map_async.
-        // Without this, re-mapped staging buffer content may be stale.
+        // wgpu#5173: empty submit flushes pending writes.
         self.queue.submit([]);
         self.device.poll(wgpu::Maintain::Wait);
 

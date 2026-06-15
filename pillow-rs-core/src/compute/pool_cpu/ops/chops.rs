@@ -46,7 +46,7 @@ fn channel_op_binary(
     other: &Arc<Image>,
     op: impl Fn(u8, u8) -> u8,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize()?;
+    let other_img = other.materialize_for_ops()?;
     let channels = img.color().channel_count() as usize;
     let other_channels = other_img.color().channel_count() as usize;
     let ch = channels.min(other_channels);
@@ -109,7 +109,7 @@ fn channel_op_binary_lut(
     other: &Arc<Image>,
     lut: &[u8; 65536],
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize()?;
+    let other_img = other.materialize_for_ops()?;
     let channels = img.color().channel_count() as usize;
     let other_channels = other_img.color().channel_count() as usize;
     let ch = channels.min(other_channels);
@@ -296,7 +296,7 @@ pub fn op_chops_blend(
     other: &Arc<Image>,
     alpha: f64,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize()?;
+    let other_img = other.materialize_for_ops()?;
     let a = alpha.clamp(0.0, 1.0);
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
@@ -328,8 +328,8 @@ pub fn op_chops_composite(
     other: &Arc<Image>,
     mask: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize()?;
-    let mask_img = mask.materialize()?;
+    let other_img = other.materialize_for_ops()?;
+    let mask_img = mask.materialize_for_ops()?;
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
     let mask_gray = mask_img.to_luma8();

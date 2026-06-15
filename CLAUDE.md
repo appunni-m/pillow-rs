@@ -53,12 +53,80 @@ Binding files in `pillow-rs-py/python/pillow_rs/` MUST be thin wrappers:
 - WASM: `wasm-pack build --target web` (from `pillow-rs-js/`)
 - Core tests: `cargo test --manifest-path pillow-rs-core/Cargo.toml`
 
-## Key Patterns from Puhu (adopt these)
+## Drawing Architecture — Per-Mode Native Pixel Paths
 
-1. **LazyImage enum** — `Loaded(DynamicImage) | Path(PathBuf) | Bytes(Vec<u8>)`. Defers decode until first operation. Critical for WASM.
-2. **Operation immutability** — operations return new `Image` instances; `paste` mutates in-place (matching Pillow semantics).
-3. **Parallel chunk processing** — use `par_chunks()` for pixel-level operations on native targets.
-4. **Mode-aware fast paths** — check for `Rgb8`, `Rgba8`, `Luma8` before falling back to generic `DynamicImage` methods.
+**Iron rule: The draw module MUST NOT convert images to RGBA for drawing. Each mode draws directly in its native pixel format. Zero lossy conversions.**
+
+### Architecture
+
+```
+ImageDraw.line() on L  → draw on Luma8 canvas (1 byte/pixel)  → return Luma8
+ImageDraw.line() on RGB → draw on Rgb8 canvas  (3 bytes/pixel) → return Rgb8
+ImageDraw.line() on F   → write f32 LE bytes   (4 bytes/pixel) → return Rgba8 with explicit_mode="F"
+ImageDraw.line() on I   → write i32 LE bytes   (4 bytes/pixel) → return Rgba8 with explicit_mode="I"
+```
+
+### Conversion Hotspots That Must Be Removed
+
+| File | Location | Anti-pattern | Fix |
+|------|----------|-------------|-----|
+| `draw/mod.rs` | Every draw fn starts with `img.to_rgba8()` | Forces RGBA canvas | Draw on native-format canvas instead |
+| `draw/mod.rs` | `image_clone()` lines 671-741 | Big mode→conversion match table | Remove entirely — output already in correct format |
+| `imagedraw.py` | `_sync()` line 26 | `drawn.convert(self._orig_mode)` | Remove — canvas already in correct mode |
+| `effects.rs` | `op_paste` lines 180,218,220 | `to_rgba8()` on dest | Work on native format |
+| `image.rs` | `getpixel`/`putpixel` lines 572-955 | Mode-specific to_rgba8 then convert back | Read/write native pixels directly |
+
+### Drawing Functions That Need Per-Mode Paths
+
+Every draw function (`line`, `rectangle`, `ellipse`, `polygon`, `arc`, `point`, `bitmap`, `text`) must dispatch on canvas type:
+
+```
+match canvas {
+    Luma8(_)  → draw with 1-byte pixel writes
+    LumaA8(_) → draw with 2-byte pixel writes  
+    Rgb8(_)   → draw with 3-byte pixel writes
+    Rgba8(_)  → draw with 4-byte pixel writes + alpha
+}
+```
+
+### Mode-Specific Color Semantics
+
+| Mode | Bytes/px | Color format | fill=200 means |
+|------|----------|-------------|----------------|
+| `1`  | 1 (packed) | 0 or 255 | 255 (non-zero→white) |
+| `L`  | 1 | u8 luminance | pixel value 200 |
+| `LA` | 2 | u8 lum + u8 alpha | (200, 255) |
+| `RGB` | 3 | u8 red, green, blue | (200, 200, 200) |
+| `RGBA` | 4 | u8 r,g,b + alpha | (200, 200, 200, 255) |
+| `CMYK` | 4 | u8 c,m,y,k | (200, 0, 0, 0) — C channel only |
+| `P`  | 1 | palette index | index 200 (or closest) |
+| `I`  | 4 | i32 LE bytes | [200,0,0,0] LE |
+| `F`  | 4 | f32 LE bytes | 200.0f32 LE |
+
+### Canvas Initialization
+
+```rust
+// Instead of:
+let mut canvas = img.to_rgba8();
+
+// Dispatch on image color type:
+let mut canvas = match img {
+    DynamicImage::ImageLuma8(l)  => l.clone(),
+    DynamicImage::ImageLumaA8(l) => l.clone(),
+    DynamicImage::ImageRgb8(r)   => r.clone(),
+    DynamicImage::ImageRgba8(r)  => r.clone(),
+    _ => img.to_rgba8(), // fallback for unusual types
+};
+```
+
+### What Gets Deleted
+
+After this refactor, the following code becomes dead and should be removed:
+1. `draw/mod.rs`: `image_clone()` method entirely
+2. `draw/mod.rs`: All `to_rgba8()` calls at the start of draw functions
+3. `imagedraw.py`: `_sync()` mode conversion logic
+4. `imagedraw.py`: `_orig_mode` tracking
+
 
 ## Manifest-Driven Development
 
@@ -153,3 +221,5 @@ always set timeout for tests (3min)
 
 Strictly
 use internet to research exact algo
+
+If needed wrote separate code for each mode

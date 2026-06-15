@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{PipelineOp, ResampleFilter};
 
 /// Default palette matching PIL's web/browser palette.
 /// Used for P-mode images without an explicit palette.
@@ -360,23 +360,50 @@ impl Image {
 
     /// Execute the pipeline chain and return a decoded DynamicImage.
     /// This is where all the lazy work gets done.
+    /// Check whether an op can be applied directly to palette indices (P-mode),
+    /// versus needing actual RGB color values. Ops that operate on single-channel
+    /// pixel values (indices) are safe. Color-dependent ops (filters, enhance,
+    /// convert) need RGB.
+    fn is_palette_safe_op(op: &PipelineOp) -> bool {
+        match op {
+            // Geometry ops — operate on pixels regardless of meaning
+            PipelineOp::Crop { .. } => true,
+            PipelineOp::Resize { filter, .. } => matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box),
+            PipelineOp::Rotate { .. } => true, // Always uses nearest for P-mode
+            PipelineOp::Transpose { .. } => true,
+            PipelineOp::Transform { .. } => true, // Always uses nearest for P-mode
+            PipelineOp::EffectSpread { .. } => true,
+            PipelineOp::Reduce { .. } => true,
+            PipelineOp::Thumbnail { filter, .. } => matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box),
+
+            // Value ops — apply function/LUT to each pixel value (index)
+            PipelineOp::PointOp { .. } => true,
+            PipelineOp::Invert => true,
+            PipelineOp::InvertChops => true,
+            PipelineOp::Eval { .. } => true,
+
+            // Duplicate / Constant / Offset — value-safe
+            PipelineOp::Duplicate => true,
+            PipelineOp::Constant { .. } => true,
+            PipelineOp::Offset { .. } => true,
+
+            // Blend / Composite — blend index values
+            PipelineOp::Blend { .. } => true,
+            PipelineOp::BlendModule { .. } => true,
+            PipelineOp::Composite { .. } => true,
+            PipelineOp::CompositeModule { .. } => true,
+
+            // Enhance ops — NOT safe for P-mode (need color)
+            // Filter ops — NOT safe (need color)
+            // Convert / Quantize — NOT safe (change mode)
+            _ => false,
+        }
+    }
+
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         match self {
             Image::Loaded(img, _) => Ok(img.clone()),
-            Image::Paletted(data) => {
-                // Convert palette indices to RGB using the palette.
-                // Ops like resize/filter/paste/composite operate on actual colors, not indices.
-                let rgb =
-                    image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
-                        let idx = data.indices.get_pixel(x, y)[0] as usize;
-                        let p = idx * 3;
-                        let r = data.palette.get(p).copied().unwrap_or(0);
-                        let g = data.palette.get(p + 1).copied().unwrap_or(0);
-                        let b = data.palette.get(p + 2).copied().unwrap_or(0);
-                        image::Rgb([r, g, b])
-                    });
-                Ok(DynamicImage::ImageRgb8(rgb))
-            }
+            Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
             Image::Path { path, .. } => {
                 let img = image::open(path).map_err(PilError::ImageError)?;
                 Ok(img)
@@ -397,6 +424,23 @@ impl Image {
                 ..
             } => {
                 let mut img = source.materialize()?;
+                // At execution time: if source was Paletted, the materialized Luma8
+                // holds palette indices. For palette-safe ops, operate on indices
+                // directly (preserving P-mode). For other ops, convert to RGB so
+                // filters, enhance, etc. work on actual colors.
+                if matches!(**source, Image::Paletted(_)) {
+                    let all_safe = ops.iter().all(Self::is_palette_safe_op);
+                    if all_safe {
+                        // Operate directly on palette indices (Luma8 = index bytes)
+                        let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+                        img = crate::compute::execute_batch(b, ops, &img, Some("P"))?;
+                        return Ok(img);
+                    }
+                    // Non-safe ops: convert to RGB
+                    if let Some(rgb) = source.paletted_to_rgb() {
+                        img = rgb;
+                    }
+                }
 
                 // Determine the backend for this pipeline.
                 // Explicit override OR auto-select: first active backend that supports ALL ops.
@@ -405,6 +449,35 @@ impl Image {
                 img = crate::compute::execute_batch(b, ops, &img, explicit_mode.as_deref())?;
                 Ok(img)
             }
+        }
+    }
+
+    /// Materialize a Paletted image to its palette indices (Luma8).
+    /// For non-Paletted images, falls through to normal materialize.
+    pub fn materialize_indices(&self) -> Result<DynamicImage, PilError> {
+        match self {
+            Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode,
+                backend,
+                ..
+            } if matches!(**source, Image::Paletted(_))
+                || explicit_mode.as_deref() == Some("P") =>
+            {
+                let mut img = source.materialize()?; // Paletted → Luma8 (indices)
+                // Check if all ops are palette-safe
+                if ops.iter().all(Self::is_palette_safe_op) {
+                    let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
+                    img = crate::compute::execute_batch(b, ops, &img, Some("P"))?;
+                    Ok(img)
+                } else {
+                    // Fall back to normal materialize (converts to RGB)
+                    self.materialize()
+                }
+            }
+            _ => self.materialize(),
         }
     }
 
@@ -801,8 +874,17 @@ impl Image {
         }
     }
 
+    /// Materialize for operations: converts Paletted to RGB so ops work on actual
+    /// pixel colors. Non-Paletted images are materialized normally.
+    /// This is for ops (paste, composite, filter, etc.) — NOT for save/tobytes.
+    pub fn materialize_for_ops(&self) -> Result<DynamicImage, PilError> {
+        self.paletted_to_rgb()
+            .map(Ok)
+            .unwrap_or_else(|| self.materialize())
+    }
+
     /// Convert Paletted image to RGB for rendering/saving. Returns None for non-Paletted.
-    fn paletted_to_rgb(&self) -> Option<DynamicImage> {
+    pub(crate) fn paletted_to_rgb(&self) -> Option<DynamicImage> {
         if let Image::Paletted(data) = self {
             let rgb =
                 image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
@@ -969,6 +1051,12 @@ impl Image {
     /// Returns (count, color) pairs. Color is Vec<u8> matching the image mode.
     #[allow(clippy::type_complexity)]
     pub fn getcolors(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
+        let mode = self.mode()?;
+        // For 1, L, P modes, PIL uses histogram (pixel value ascending)
+        if mode == "1" || mode == "L" || mode == "P" {
+            return self.getcolors_histogram(maxcolors);
+        }
+        // For multi-channel modes, use pixel-level counting
         let img = self.materialize()?;
         let n_bands = match img.color() {
             image::ColorType::L8 | image::ColorType::L16 => 1,
@@ -979,7 +1067,7 @@ impl Image {
         let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
         match n_bands {
             2 => {
-                // LA mode: use L from R, A from A (not first 2 bytes which are L,L)
+                // LA mode
                 let la = img.to_luma_alpha8();
                 for p in la.pixels() {
                     let key = vec![p[0], p[1]];
@@ -1000,6 +1088,41 @@ impl Image {
         let mut result: Vec<_> = counts.into_iter().map(|(k, v)| (v, k)).collect();
         // PIL sorts by color value descending
         result.sort_by(|a, b| b.1.cmp(&a.1));
+        Ok(Some(result))
+    }
+
+    /// Histogram-based getcolors for 1, L, P modes.
+    /// Matches PIL's Python-level implementation:
+    ///   h = self.im.histogram()
+    ///   out = [(h[i], i) for i in range(256) if h[i]]
+    fn getcolors_histogram(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
+        let img = self.materialize()?;
+        // Compute 256-bin histogram
+        let mut hist = [0u32; 256];
+        match img.color() {
+            image::ColorType::L8 | image::ColorType::L16 => {
+                let luma = img.to_luma8();
+                for p in luma.pixels() {
+                    hist[p[0] as usize] += 1;
+                }
+            }
+            _ => {
+                // For P mode and mode 1, image crate may store differently,
+                // convert to luma for indexing
+                let luma = img.to_luma8();
+                for p in luma.pixels() {
+                    hist[p[0] as usize] += 1;
+                }
+            }
+        }
+        // Build result: [(count, pixel_value)] in pixel value ascending order
+        let result: Vec<(u32, Vec<u8>)> = (0..=255u8)
+            .filter(|&i| hist[i as usize] > 0)
+            .map(|i| (hist[i as usize], vec![i]))
+            .collect();
+        if result.len() > maxcolors as usize {
+            return Ok(None);
+        }
         Ok(Some(result))
     }
 
