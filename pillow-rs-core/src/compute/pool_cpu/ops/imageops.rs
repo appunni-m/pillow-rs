@@ -317,3 +317,71 @@ pub fn op_expand(
     image::imageops::overlay(&mut expanded, &img.to_rgba8(), border as i64, border as i64);
     Ok(preserve_mode(img, expanded))
 }
+
+/// Generate a 256x256 linear gradient (top-to-bottom, black-to-white).
+pub fn op_linear_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicImage, PilError> {
+    use crate::pipeline::ColorMode;
+    let w = 256u32;
+    let h = 256u32;
+    match mode {
+        ColorMode::L => {
+            let mut gray = image::GrayImage::new(w, h);
+            for y in 0..h {
+                let val = y as u8;
+                for x in 0..w {
+                    gray.put_pixel(x, y, image::Luma([val]));
+                }
+            }
+            Ok(DynamicImage::ImageLuma8(gray))
+        }
+        _ => {
+            // Default to RGB
+            let mut rgb = image::RgbImage::new(w, h);
+            for y in 0..h {
+                let val = y as u8;
+                for x in 0..w {
+                    rgb.put_pixel(x, y, image::Rgb([val, val, val]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(rgb))
+        }
+    }
+}
+
+/// Generate a 256x256 radial gradient (center-out, black-to-white).
+pub fn op_radial_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicImage, PilError> {
+    use crate::pipeline::ColorMode;
+    let w = 256u32;
+    let h = 256u32;
+    let cx = 128.0f64;
+    let cy = 128.0f64;
+    let max_dist = (cx * cx + cy * cy).sqrt();
+    match mode {
+        ColorMode::L => {
+            let mut gray = image::GrayImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let dx = x as f64 - cx;
+                    let dy = y as f64 - cy;
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    let val = ((dist / max_dist * 255.0 + 0.5).min(255.0)) as u8;
+                    gray.put_pixel(x, y, image::Luma([val]));
+                }
+            }
+            Ok(DynamicImage::ImageLuma8(gray))
+        }
+        _ => {
+            let mut rgb = image::RgbImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let dx = x as f64 - cx;
+                    let dy = y as f64 - cy;
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    let val = ((dist / max_dist * 255.0 + 0.5).min(255.0)) as u8;
+                    rgb.put_pixel(x, y, image::Rgb([val, val, val]));
+                }
+            }
+            Ok(DynamicImage::ImageRgb8(rgb))
+        }
+    }
+}

@@ -1052,3 +1052,37 @@ pub fn transform_mesh(
         RgbaImage::from_raw(dst_w, dst_h, out).expect("transform_mesh: buffer size mismatch"),
     ))
 }
+
+/// Generate a Mandelbrot set fractal image.
+/// For each pixel (px, py) in w×h, maps to complex plane via extent [x0,y0]→[x1,y1],
+/// iterates z = z² + c up to `quality` times, outputs iteration count as grayscale.
+pub fn op_effect_mandelbrot(
+    w: u32, h: u32,
+    x0: f64, y0: f64, x1: f64, y1: f64,
+    quality: u32,
+) -> Result<DynamicImage, PilError> {
+    let mut gray = image::GrayImage::new(w, h);
+    let dx = (x1 - x0) / w as f64;
+    let dy = (y1 - y0) / h as f64;
+    for py in 0..h {
+        let cy = y0 + py as f64 * dy;
+        for px in 0..w {
+            let cx = x0 + px as f64 * dx;
+            let (mut zx, mut zy) = (0.0f64, 0.0f64);
+            let mut iter: u32 = 0;
+            while iter < quality {
+                let zx2 = zx * zx - zy * zy + cx;
+                let zy2 = 2.0 * zx * zy + cy;
+                zx = zx2;
+                zy = zy2;
+                if zx * zx + zy * zy > 4.0 {
+                    break;
+                }
+                iter += 1;
+            }
+            let val = (iter * 255 / quality.max(1)) as u8;
+            gray.put_pixel(px, py, image::Luma([val]));
+        }
+    }
+    Ok(DynamicImage::ImageLuma8(gray))
+}

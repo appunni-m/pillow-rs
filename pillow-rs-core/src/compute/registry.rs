@@ -278,6 +278,10 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::PutPixel { .. } => "PutPixel",
         PipelineOp::PutData { .. } => "PutData",
         PipelineOp::PutAlpha { .. } => "PutAlpha",
+        PipelineOp::ExtractBand { .. } => "ExtractBand",
+        PipelineOp::LinearGradient { .. } => "LinearGradient",
+        PipelineOp::RadialGradient { .. } => "RadialGradient",
+        PipelineOp::EffectMandelbrot { .. } => "EffectMandelbrot",
     }
 }
 
@@ -743,11 +747,11 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         op_chops_logical_xor, op_chops_multiply, op_chops_offset, op_chops_overlay,
         op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
     };
-    use crate::compute::pool_cpu::ops::color::{op_convert, op_quantize, op_remap_palette};
+    use crate::compute::pool_cpu::ops::color::{op_convert, op_extract_band, op_quantize, op_remap_palette};
     use crate::compute::pool_cpu::ops::effects::{
-        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_noise,
-        op_effect_spread, op_eval, op_merge, op_paste, op_point, op_put_alpha, op_put_data,
-        op_put_pixel, op_transform,
+        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_mandelbrot,
+        op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste, op_point, op_put_alpha,
+        op_put_data, op_put_pixel, op_transform,
     };
     use crate::compute::pool_cpu::ops::enhance::{
         op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast,
@@ -765,8 +769,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     };
     use crate::compute::pool_cpu::ops::imageops::{
         op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize, op_expand,
-        op_fit, op_flip, op_grayscale, op_invert, op_mirror, op_pad, op_posterize, op_scale,
-        op_solarize,
+        op_fit, op_flip, op_grayscale, op_invert, op_linear_gradient, op_mirror, op_pad,
+        op_posterize, op_radial_gradient, op_scale, op_solarize,
     };
 
     // ── Geometry ──
@@ -1955,5 +1959,62 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             },
             "put_alpha.wgsl"
         ),
+    );
+
+    // ── ExtractBand (CPU-only for now, GPU/SIMD later) ──
+    m.insert(
+        "ExtractBand",
+        OpEntry::cpu_only(|img, op, _mode| {
+            if let PipelineOp::ExtractBand { index } = op {
+                op_extract_band(img, *index)
+            } else {
+                Err(PilError::ValueError("expected ExtractBand op".into()))
+            }
+        }),
+    );
+
+    // ── LinearGradient (CPU-only for now) ──
+    m.insert(
+        "LinearGradient",
+        OpEntry::cpu_only(|_img, op, _mode| {
+            if let PipelineOp::LinearGradient { mode } = op {
+                op_linear_gradient(mode)
+            } else {
+                Err(PilError::ValueError("expected LinearGradient op".into()))
+            }
+        }),
+    );
+
+    // ── RadialGradient (CPU-only for now) ──
+    m.insert(
+        "RadialGradient",
+        OpEntry::cpu_only(|_img, op, _mode| {
+            if let PipelineOp::RadialGradient { mode } = op {
+                op_radial_gradient(mode)
+            } else {
+                Err(PilError::ValueError("expected RadialGradient op".into()))
+            }
+        }),
+    );
+
+    // ── EffectMandelbrot (CPU-only for now) ──
+    m.insert(
+        "EffectMandelbrot",
+        OpEntry::cpu_only(|_img, op, _mode| {
+            if let PipelineOp::EffectMandelbrot {
+                w,
+                h,
+                x0,
+                y0,
+                x1,
+                y1,
+                quality,
+            } = op
+            {
+                op_effect_mandelbrot(*w, *h, *x0, *y0, *x1, *y1, *quality)
+            } else {
+                Err(PilError::ValueError("expected EffectMandelbrot op".into()))
+            }
+        }),
     );
 }
