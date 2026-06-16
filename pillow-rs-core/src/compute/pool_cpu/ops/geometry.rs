@@ -9,7 +9,7 @@ use std::f64;
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::pil_resize::pil_resize;
+use crate::ops::pil_resize::{pil_resize, precompute_coeffs_float, FilterCoeffs};
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 // ── Resample filter conversion ──
@@ -182,12 +182,12 @@ fn resize_f(
     let n = (dst_w * dst_h) as usize;
     let mut out_floats: Vec<f32> = Vec::with_capacity(n);
 
-    // Handle NEAREST/Box separately: PIL uses (int)(dx * sw/dw + 0.5) = truncate after +0.5
+    // PIL AFFINE transform: sx = (int)((dx + 1) * sw/dw - 0.5)
     if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let sx = ((dx as f64) * sw_f / dw_f + 0.5) as i64;
-                let sy = ((dy as f64) * sh_f / dh_f + 0.5) as i64;
+                let sx = ((dx as f64 + 1.0) * sw_f / dw_f - 0.5) as i64;
+                let sy = ((dy as f64 + 1.0) * sh_f / dh_f - 0.5) as i64;
                 let sx = clamp_idx(sx, sw);
                 let sy = clamp_idx(sy, sh);
                 let idx = (sy * sw + sx) as usize;
@@ -254,9 +254,8 @@ fn resize_f(
     Ok(DynamicImage::ImageRgba8(out))
 }
 
-#[allow(dead_code)]
 /// Resize an I-mode image (32-bit signed integers stored as RGBA8 bytes LE).
-/// Uses PIL-compatible direct 2D interpolation with f64 precision and i32 rounding.
+/// Uses PIL's two-pass separable approach matching ImagingResample.
 fn resize_i(
     img: &DynamicImage,
     dst_w: u32,
@@ -290,67 +289,80 @@ fn resize_i(
     let sy_scale = (sh_f / dh_f).max(1.0);
 
     let n = (dst_w * dst_h) as usize;
-    let mut out_ints: Vec<i32> = Vec::with_capacity(n);
 
-    // Handle NEAREST/Box separately: PIL uses (int)(dx * sw/dw + 0.5)
-    if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
+    // NEAREST: PIL uses ImagingTransform (AFFINE, single-pixel sampling)
+    if matches!(filter, ResampleFilter::Nearest) {
+        let mut out_ints: Vec<i32> = Vec::with_capacity(n);
+        let eps: f64 = -1e-14;
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let sx = ((dx as f64) * sw_f / dw_f + 0.5) as i64;
-                let sy = ((dy as f64) * sh_f / dh_f + 0.5) as i64;
+                let sx = ((dx as f64 + 0.5) * sw_f / dw_f + eps) as i64;
+                let sy = ((dy as f64 + 0.5) * sh_f / dh_f + eps) as i64;
                 let sx = clamp_idx(sx, sw);
                 let sy = clamp_idx(sy, sh);
                 let idx = (sy * sw + sx) as usize;
                 out_ints.push(src_ints[idx]);
             }
         }
-    } else {
-        for dy in 0..dst_h {
-            for dx in 0..dst_w {
-                // PIL exact: center = (xx + 0.5) * scale [no -0.5]
-                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
-                let cy = (dy as f64 + 0.5) * sh_f / dh_f;
+        let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+            .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
+        return Ok(DynamicImage::ImageRgba8(out));
+    }
 
-                // PIL: xmin = (int)(center - support*filterscale + 0.5)
-                let left = (cx - support * sx_scale + 0.5).trunc() as i64;
-                let right = (cx + support * sx_scale + 0.5).trunc() as i64;
-                let top = (cy - support * sy_scale + 0.5).trunc() as i64;
-                let bottom = (cy + support * sy_scale + 0.5).trunc() as i64;
+    // Two-pass separable approach for non-NEAREST filters (matching PIL's ImagingResample)
+    // Use PIL's standard double-precision precomputation for exact weight matching.
+    let h_coeffs = precompute_coeffs_float(dst_w, sw, kernel, support);
+    let v_coeffs = precompute_coeffs_float(dst_h, sh, kernel, support);
 
-                let mut acc = 0.0f64;
-                let mut wsum = 0.0f64;
+    const PRECISION_BITS: i64 = 22;
+    const HALF_PRECISION: i64 = 1 << (PRECISION_BITS - 1);
 
-                for iy in top..bottom {
-                    let sy = clamp_idx(iy, sh);
-                    // PIL: weight = kernel((sx + 0.5 - center) / filterscale)
-                    let wy = kernel((iy as f64 + 0.5 - cy) / sy_scale);
-                    if wy.abs() < 1e-15 {
-                        continue;
-                    }
-                    for ix in left..right {
-                        let sx = clamp_idx(ix, sw);
-                        let wx = kernel((ix as f64 + 0.5 - cx) / sx_scale);
-                        let w = wx * wy;
-                        if w.abs() < 1e-15 {
-                            continue;
-                        }
-                        let idx = (sy * sw + sx) as usize;
-                        acc += w * src_ints[idx] as f64;
-                        wsum += w;
-                    }
-                }
+    // Allocate intermediate buffer (sh rows x dw cols) as i32, matching PIL's
+    // ImagingResample behavior (horizontal pass rounds to output type).
+    let mut intermediate: Vec<i32> = vec![0i32; (sh * dst_w) as usize];
 
-                // PIL rounds to nearest int32
-                let out_val = if wsum > 0.0 {
-                    (acc / wsum + 0.5).trunc() as i32
-                } else {
-                    let sx = clamp_idx(cx.floor() as i64, sw);
-                    let sy = clamp_idx(cy.floor() as i64, sh);
-                    src_ints[(sy * sw + sx) as usize]
-                };
-
-                out_ints.push(out_val);
+    // Horizontal pass: for each source row, compute each output column's weighted sum,
+    // round to i32 (matching PIL's intermediate quantization with fixed-point weights).
+    for sy in 0..sh {
+        let src_row_base = (sy * sw) as usize;
+        for dx in 0..dst_w {
+            let x0 = h_coeffs.xmin[dx as usize];
+            let cnt = h_coeffs.count[dx as usize];
+            if cnt == 0 {
+                continue;
             }
+            let mut acc: i64 = 0;
+            for (cix, &w) in h_coeffs.weights[dx as usize].iter().enumerate() {
+                let sx = (x0 + cix as i64) as usize;
+                acc += w * src_ints[src_row_base + sx] as i64;
+            }
+            // Round fixed-point sum to i32
+            let val = ((acc + HALF_PRECISION) >> PRECISION_BITS) as i32;
+            intermediate[(sy * dst_w + dx) as usize] = val;
+        }
+    }
+
+    // Vertical pass: for each output column, compute each output row's weighted sum,
+    // round to i32 (final output).
+    let mut out_ints: Vec<i32> = Vec::with_capacity(n);
+    for dy in 0..dst_h {
+        let y0 = v_coeffs.xmin[dy as usize];
+        let cnt = v_coeffs.count[dy as usize];
+        if cnt == 0 {
+            for _ in 0..dst_w {
+                out_ints.push(0i32);
+            }
+            continue;
+        }
+        for dx in 0..dst_w {
+            let mut acc: i64 = 0;
+            for (cix, &w) in v_coeffs.weights[dy as usize].iter().enumerate() {
+                let sy = (y0 + cix as i64) as usize;
+                acc += w * intermediate[(sy * dst_w as usize) + dx as usize] as i64;
+            }
+            let out_val = ((acc + HALF_PRECISION) >> PRECISION_BITS) as i32;
+            out_ints.push(out_val);
         }
     }
 
@@ -672,11 +684,20 @@ pub fn execute_transpose(
     match method {
         TransposeMethod::FlipLeftRight => Ok(img.fliph()),
         TransposeMethod::FlipTopBottom => Ok(img.flipv()),
-        TransposeMethod::Rotate90 => Ok(img.rotate90()),
+        // PIL rotates counter-clockwise; image crate rotates clockwise.
+        // PIL ROTATE_90 (CCW) = image crate rotate270 (CW)
+        // PIL ROTATE_270 (CCW) = image crate rotate90 (CW)
+        TransposeMethod::Rotate90 => Ok(img.rotate270()),
         TransposeMethod::Rotate180 => Ok(img.rotate180()),
-        TransposeMethod::Rotate270 => Ok(img.rotate270()),
-        TransposeMethod::Transpose => Ok(img.rotate90().fliph()),
-        TransposeMethod::Transverse => Ok(img.rotate270().fliph()),
+        TransposeMethod::Rotate270 => Ok(img.rotate90()),
+        // PIL TRANSPOSE = ROTATE_90 (CCW) then FLIP_LEFT_RIGHT
+        // With corrected ROTATE_90 = rotate270:
+        //   TRANSPOSE = rotate270().fliph()
+        // PIL TRANSVERSE = ROTATE_270 (CCW) then FLIP_LEFT_RIGHT
+        // With corrected ROTATE_270 = rotate90:
+        //   TRANSVERSE = rotate90().fliph()
+        TransposeMethod::Transpose => Ok(img.rotate270().fliph()),
+        TransposeMethod::Transverse => Ok(img.rotate90().fliph()),
     }
 }
 

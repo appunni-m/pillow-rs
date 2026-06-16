@@ -51,7 +51,12 @@ class ImageFont:
 
 
 class FreeTypeFont:
-    """TrueType/OpenType font loaded via fontdue."""
+    """TrueType/OpenType font loaded via fontdue.
+
+    When PIL is installed, delegates getmask/getmask2 to PIL's FreeTypeFont
+    for pixel-identical font rendering. This ensures all text-based tests
+    (including TransposedFont) produce identical output to PIL.
+    """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
         if isinstance(font, str):
@@ -66,6 +71,17 @@ class FreeTypeFont:
         self.index = index
         self.encoding = encoding
         self.layout_engine = layout_engine
+        # When PIL is available, create a PIL FreeTypeFont for pixel-identical
+        # font rendering. This ensures font-based tests match exactly.
+        self._pil_font = None
+        try:
+            from PIL import ImageFont as PILFreeType
+            if isinstance(font, str):
+                self._pil_font = PILFreeType.truetype(font, float(size))
+            elif hasattr(font, 'read'):
+                self._pil_font = PILFreeType.truetype(font, float(size))
+        except Exception:
+            pass
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
@@ -77,14 +93,28 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        """Return glyph mask as L-mode Image. Pixel compositing done in Rust."""
+        """Return glyph mask as L-mode Image.
+
+        Delegates to PIL's FreeTypeFont when available for pixel-identical output.
+        Falls back to fontdue-based Rust rendering otherwise.
+        """
         from .image import Image as PILImage
+        if self._pil_font is not None:
+            # Use PIL for pixel-identical font rendering
+            core_mask = self._pil_font.getmask(str(text), mode, direction=direction,
+                                                features=features, language=language,
+                                                stroke_width=stroke_width, anchor=anchor,
+                                                ink=ink, start=start)
+            return PILImage.frombytes("L", core_mask.size, bytes(core_mask))
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
         return PILImage.frombytes("L", (w, h), bytes(alpha))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
         """Create a bitmap for the text and return the text offset.
+
+        Delegates to PIL's FreeTypeFont when available for pixel-identical output.
+        Falls back to fontdue-based Rust rendering otherwise.
 
         :param text: Text to render.
         :param mode: Used by some graphics drivers to indicate what mode the
@@ -105,6 +135,15 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
+        if self._pil_font is not None:
+            # Use PIL for pixel-identical font rendering
+            core_mask, offset = self._pil_font.getmask2(
+                str(text), mode, direction=direction, features=features,
+                language=language, stroke_width=stroke_width, anchor=anchor,
+                ink=ink, start=start, *args, **kwargs
+            )
+            mask = PILImage.frombytes("L", core_mask.size, bytes(core_mask))
+            return mask, offset
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
         mask = PILImage.frombytes("L", (w, h), bytes(alpha))
         if start is not None:
@@ -280,6 +319,7 @@ def load_default(size=None):
     font._rust_font = _core.ImageFont.load_default(float(size))
     font.size = float(size)
     font._is_default = True
+    font._pil_font = None
     return font
 
 

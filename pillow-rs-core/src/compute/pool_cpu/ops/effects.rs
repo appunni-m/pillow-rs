@@ -230,6 +230,32 @@ pub fn op_alpha_composite(
     source: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
     let src_img = source.materialize_for_ops()?;
+
+    // LA mode: composite on native LA canvas, return LA (PIL behavior)
+    if matches!(img.color(), image::ColorType::La8) {
+        let mut dest_la = img.to_luma_alpha8();
+        let src_la = src_img.to_luma_alpha8();
+        let (sw, sh) = src_la.dimensions();
+        for py in 0..sh.min(dest_la.height()) {
+            for px in 0..sw.min(dest_la.width()) {
+                let sp = src_la.get_pixel(px, py);
+                let dp = dest_la.get_pixel(px, py);
+                let sa = sp[1] as f64 / 255.0;
+                let da = dp[1] as f64 / 255.0;
+                let out_a = sa + da * (1.0 - sa);
+                if out_a <= 0.0 {
+                    continue;
+                }
+                let l = ((sp[0] as f64 * sa + dp[0] as f64 * da * (1.0 - sa)) / out_a)
+                    .round()
+                    .clamp(0.0, 255.0) as u8;
+                let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
+                dest_la.put_pixel(px, py, image::LumaA([l, a]));
+            }
+        }
+        return Ok(DynamicImage::ImageLumaA8(dest_la));
+    }
+
     let mut dest_rgba = img.to_rgba8();
     let src_rgba = src_img.to_rgba8();
     let (sw, sh) = src_rgba.dimensions();
@@ -457,6 +483,33 @@ pub fn op_composite_module(
             }
         }
         return Ok(DynamicImage::ImageRgba8(out));
+    }
+    // LA mode: composite both L and A channels natively
+    if matches!(img.color(), image::ColorType::La8) {
+        let la1 = img.to_luma_alpha8();
+        let la2 = other_img.to_luma_alpha8();
+        let mask_gray = mask_img.to_luma8();
+        let (w, h) = (
+            la1.width().min(la2.width()).min(mask_gray.width()),
+            la1.height().min(la2.height()).min(mask_gray.height()),
+        );
+        let mut out = GrayAlphaImage::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                let p1 = la1.get_pixel(x, y);
+                let p2 = la2.get_pixel(x, y);
+                let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
+                out.put_pixel(
+                    x,
+                    y,
+                    image::LumaA([
+                        ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
+                        ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
+                    ]),
+                );
+            }
+        }
+        return Ok(DynamicImage::ImageLumaA8(out));
     }
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();

@@ -114,11 +114,16 @@ fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
     }
 }
 
-/// Round a float to u8: truncate after adding 0.5, clipped to [0, 255].
-/// Uses a tiny epsilon to compensate for floating-point accumulation differences
-/// from PIL's fixed-point (PRECISION_BITS=22) arithmetic.
+/// PIL uses 22-bit fixed-point arithmetic (PRECISION_BITS=22) for weights
+/// and intermediate accumulation. We match this exactly.
+const PRECISION_BITS: u32 = 22;
+const PRECISION: i64 = 1i64 << PRECISION_BITS; // 2^22
+const HALF_PRECISION: i64 = 1i64 << (PRECISION_BITS - 1); // 2^21
+
+/// Round a float to u8, matching PIL's fixed-point rounding:
+///   `(int)(v + 0.5)` clamped to [0, 255]
 fn pil_round(v: f64) -> u8 {
-    let v = v + 0.5 + 1e-10;
+    let v = v + 0.5;
     if v <= 0.0 {
         0
     } else if v >= 256.0 {
@@ -128,33 +133,76 @@ fn pil_round(v: f64) -> u8 {
     }
 }
 
+/// Convert a fixed-point sum to u8, matching PIL's:
+///   `(UINT8)((sum + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS)`
+fn fixed_point_to_u8(sum: i64) -> u8 {
+    let v = (sum + HALF_PRECISION) >> PRECISION_BITS;
+    if v <= 0 {
+        0
+    } else if v >= 255 {
+        255
+    } else {
+        v as u8
+    }
+}
+
 // ── PIL-compatible pixel range and weight computation ──
 
-/// Precompute filter coefficients for one dimension.
+/// Precompute filter coefficients for one dimension, using PIL's exact
+/// fixed-point arithmetic (PRECISION_BITS=22).
 ///
 /// For each output pixel, computes:
 /// - xmin: first contributing source pixel index
 /// - count: number of contributing source pixels
-/// - weights: normalized filter weights for each source pixel
+/// - weights: normalized filter weights in 22-bit fixed-point
 ///
 /// This matches PIL's `precompute_coeffs`:
 ///   center = (xx + 0.5) * scale
 ///   xmin = (int)(center - support + 0.5)
 ///   xmax = (int)(center + support + 0.5)
 ///   weight = kernel((sx + 0.5 - center) * ss)  where ss = 1.0 / filterscale
-struct FilterCoeffs {
-    xmin: Vec<i64>,
-    count: Vec<usize>,
-    weights: Vec<Vec<f64>>,
+pub(crate) struct FilterCoeffs {
+    pub(crate) xmin: Vec<i64>,
+    pub(crate) count: Vec<usize>,
+    pub(crate) weights: Vec<Vec<i64>>, // 22-bit fixed-point weights
 }
 
-fn precompute_coeffs(
+pub(crate) fn precompute_coeffs(
     out_size: u32,
     in_size: u32,
     kernel: fn(f64) -> f64,
     support: f64,
 ) -> FilterCoeffs {
     let scale = in_size as f64 / out_size as f64;
+    _precompute_coeffs_impl(out_size, in_size, scale, kernel, support)
+}
+
+/// Precompute coefficients using a float-promoted scale, matching PIL's
+/// _resize C code where the scale factor is computed with float (32-bit)
+/// arithmetic and then converted to double (64-bit).
+pub(crate) fn precompute_coeffs_float(
+    out_size: u32,
+    in_size: u32,
+    kernel: fn(f64) -> f64,
+    support: f64,
+) -> FilterCoeffs {
+    // PIL computes: scale = (float)(box[2] - box[0]) / outSize
+    // The (float) cast and float division gives a slightly different result
+    // than double arithmetic, especially at exact integer boundaries.
+    let scale = (in_size as f32 / out_size as f32) as f64;
+    _precompute_coeffs_impl(out_size, in_size, scale, kernel, support)
+}
+
+/// Internal implementation with explicit scale, called by pil_resize (double scale)
+/// and resize_i (float-promoted scale).
+fn _precompute_coeffs_impl(
+    out_size: u32,
+    in_size: u32,
+    scale: f64,
+    kernel: fn(f64) -> f64,
+    support: f64,
+) -> FilterCoeffs {
+
     let filterscale = scale.max(1.0);
     let ss = 1.0 / filterscale;
     let src_support = support * filterscale;
@@ -162,7 +210,7 @@ fn precompute_coeffs(
     let n = out_size as usize;
     let mut xmin = Vec::with_capacity(n);
     let mut count = Vec::with_capacity(n);
-    let mut weights: Vec<Vec<f64>> = Vec::with_capacity(n);
+    let mut weights: Vec<Vec<i64>> = Vec::with_capacity(n);
 
     for ox in 0..n {
         // PIL center = (ox + 0.5) * scale
@@ -189,24 +237,48 @@ fn precompute_coeffs(
             continue;
         }
 
-        let mut w = Vec::with_capacity(cnt);
+        // Compute f64 weights, then convert to fixed-point
+        let mut w_f64 = Vec::with_capacity(cnt);
         let mut wsum = 0.0;
         for ix in 0..cnt {
             let sx = x0 + ix as i64;
             // PIL: kernel((sx + 0.5 - center) * ss)
             let val = kernel((sx as f64 + 0.5 - center) * ss);
-            w.push(val);
+            w_f64.push(val);
             wsum += val;
         }
 
-        // Normalize weights (PIL normalizes by the sum)
+        // Normalize weights. PIL's C code divides each weight by the sum
+        // in-place on the double buffer: kk[offset + i] /= wsum.
+        // This is subtly different from multiplication by 1/wsum due to
+        // floating-point rounding (one ULP difference).
         if wsum > 0.0 {
-            let inv = 1.0 / wsum;
-            for wi in w.iter_mut() {
-                *wi *= inv;
+            for wi in w_f64.iter_mut() {
+                *wi /= wsum;
             }
         }
-        weights.push(w);
+
+        // Convert to fixed-point: (int)(weight * (1 << PRECISION_BITS) + (weight >= 0 ? 0.5 : -0.5))
+        // PIL uses different rounding for positive and negative weights.
+        let mut w_fixed: Vec<i64> = w_f64
+            .iter()
+            .map(|&w| {
+                let scaled = w * PRECISION as f64;
+                let rounded = if w >= 0.0 {
+                    scaled + 0.5
+                } else {
+                    scaled - 0.5
+                };
+                rounded as i64
+            })
+            .collect();
+
+        // NOTE: PIL does NOT adjust the fixed-point weights to sum exactly to
+        // PRECISION. The normalizes weights are converted to fixed-point with
+        // rounding (+0.5 for positive, -0.5 for negative) and used as-is.
+        // Any small discrepancy from the ideal sum is absorbed by the
+        // HALF_PRECISION bias added during accumulation.
+        weights.push(w_fixed);
     }
 
     FilterCoeffs {
@@ -274,7 +346,8 @@ fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
 /// Resample one row of pixels into the output columns.
 ///
 /// This is the horizontal pass: it computes one row of the intermediate image
-/// from one row of the source image.
+/// from one row of the source image. Uses PIL's fixed-point arithmetic:
+///   `result = (sum + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS`
 fn horizontal_pass_row(
     src_row: &[u8],
     _src_w: u32,
@@ -289,16 +362,14 @@ fn horizontal_pass_row(
         if cnt == 0 {
             continue;
         }
-        let mut acc = vec![0.0f64; channels];
-        for (cix, &w) in coeffs.weights[ox].iter().enumerate() {
-            let sx = (x0 + cix as i64) as usize;
-            for c in 0..channels {
-                acc[c] += src_row[sx * channels + c] as f64 * w;
-            }
-        }
-        let dest = &mut intermediate_row[ox * channels..(ox + 1) * channels];
+        let weights = &coeffs.weights[ox];
         for c in 0..channels {
-            dest[c] = pil_round(acc[c]);
+            let mut acc: i64 = 0;
+            for (cix, &w) in weights.iter().enumerate() {
+                let sx = (x0 + cix as i64) as usize;
+                acc += src_row[sx * channels + c] as i64 * w;
+            }
+            intermediate_row[ox * channels + c] = fixed_point_to_u8(acc);
         }
     }
 }
@@ -306,7 +377,7 @@ fn horizontal_pass_row(
 /// Resample one column into the output rows.
 ///
 /// This is the vertical pass: it computes one column of the final image
-/// from one column of the intermediate image.
+/// from one column of the intermediate image. Uses PIL's fixed-point arithmetic.
 /// Returns a single value per channel for this (x, y) position.
 fn vertical_pass_col(
     intermediate: &[u8],
@@ -322,17 +393,16 @@ fn vertical_pass_col(
     if cnt == 0 {
         return vec![0u8; channels];
     }
-    let mut acc = vec![0.0f64; channels];
-    for (cix, &w) in coeffs.weights[out_y].iter().enumerate() {
-        let sy = (y0 + cix as i64) as usize;
-        let src_idx = (sy * out_w as usize + out_x as usize) * channels;
-        for c in 0..channels {
-            acc[c] += intermediate[src_idx + c] as f64 * w;
-        }
-    }
+    let weights = &coeffs.weights[out_y];
     let mut result = vec![0u8; channels];
     for c in 0..channels {
-        result[c] = pil_round(acc[c]);
+        let mut acc: i64 = 0;
+        for (cix, &w) in weights.iter().enumerate() {
+            let sy = (y0 + cix as i64) as usize;
+            let src_idx = (sy * out_w as usize + out_x as usize) * channels;
+            acc += intermediate[src_idx + c] as i64 * w;
+        }
+        result[c] = fixed_point_to_u8(acc);
     }
     result
 }
@@ -408,25 +478,34 @@ pub fn pil_resize(
         _ => 4usize,
     };
 
-    // NEAREST/Box: PIL uses ImagingTransform with AFFINE, not ImagingResample.
-    // The AFFINE transform maps: sx = (int)((dx + 0.5) * sw/dw - 0.5)
-    // This is SINGLE-pixel mapping (no averaging), even during downscaling.
-    // We special-case this to match PIL's exact NEAREST behavior.
-    if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
+    // PIL's _resize C code uses ImagingTransform with AFFINE for NEAREST filter
+    // (single-pixel sampling), NOT the two-pass pipeline. Box and all other filters
+    // go through ImagingResample (two-pass convolution).
+    // The AFFINE formula is:
+    //   xin = a[0] * (x + 0.5) + a[2]   (a[2] = box[0] = 0)
+    //   ix = (int)floor(xin)
+    // A tiny epsilon is subtracted because the C code computes the scale factor
+    // using float then double promotion, causing exact-integer boundaries to
+    // nudge down by ~1e-15.
+    if matches!(filter, ResampleFilter::Nearest) {
         let sw_f = sw as f64;
         let sh_f = sh as f64;
         let dw_f = dw as f64;
         let dh_f = dh as f64;
+        // PIL uses float for box values then promotes to double, causing
+        // exact-integer boundaries to round slightly below the integer.
+        // Subtract a tiny epsilon to match this behavior.
+        let eps: f64 = -1e-14;
         let n = (dw * dh) as usize;
         let mut out_bytes: Vec<u8> = Vec::with_capacity(n * channels);
         for dy in 0..dh {
             for dx in 0..dw {
-                // PIL AFFINE transform: ximg = a0*dx + a2, a2 = 0.5*a0 - 0.5
-                // Simplifies to: sx = (int)((dx + 0.5) * sw/dw - 0.5)
-                let sx = ((dx as f64 + 0.5) * sw_f / dw_f - 0.5) as i64;
-                let sy = ((dy as f64 + 0.5) * sh_f / dh_f - 0.5) as i64;
-                let sx = sx.max(0).min(sw as i64 - 1) as u32;
-                let sy = sy.max(0).min(sh as i64 - 1) as u32;
+                let center_x = (dx as f64 + 0.5) * sw_f / dw_f;
+                let center_y = (dy as f64 + 0.5) * sh_f / dh_f;
+                let sx = (center_x + eps) as u32;
+                let sy = (center_y + eps) as u32;
+                let sx = sx.min(sw - 1);
+                let sy = sy.min(sh - 1);
                 let p = pixel_at(&work, sx, sy);
                 for c in 0..channels {
                     out_bytes.push(pil_round(p[c]));
@@ -442,7 +521,7 @@ pub fn pil_resize(
         return pil_preserve_mode(orig_img, result);
     }
 
-    // Precompute horizontal and vertical coefficients
+    // Precompute horizontal and vertical coefficients for two-pass pipeline
     let h_coeffs = precompute_coeffs(dw, sw, kernel_fn, support);
     let v_coeffs = precompute_coeffs(dh, sh, kernel_fn, support);
 

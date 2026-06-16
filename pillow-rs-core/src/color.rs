@@ -130,6 +130,13 @@ pub fn resolve_new_color(
         return Ok((l, l, l, a));
     }
     if let Some((r, g, b)) = rgb {
+        // PIL rejects color tuples for single-channel modes (L, 1, P)
+        // The Python Image.new wrapper uses this path for P-mode by converting
+        // "P" to "L" internally. Match PIL's P-mode behavior: index 0 with
+        // the color stored in the palette (palette managed on Python side).
+        if mode == "L" || mode == "1" || mode == "P" {
+            return Ok((0, 0, 0, 0));
+        }
         return Ok((r, g, b, 255));
     }
     if let Some(rgba) = rgba {
