@@ -5,6 +5,12 @@ pub enum PilError {
     #[error("{0}")]
     IOError(String),
 
+    #[error("{0}")]
+    OsError(String),
+
+    #[error("{0}")]
+    AssertionError(String),
+
     #[error("cannot identify image file '{0}'")]
     UnidentifiedImageError(String),
 
