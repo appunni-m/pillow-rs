@@ -1,6 +1,23 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
 # Current state: 870 passed, 12 xfailed as of 2026-06-15
 # Current state: 1043 passed, 54 failed (48 suite1 + 6 pre-existing) as of 2026-06-16
+# Updated after PIL-parity resize/thumbnail fix: 5/7 resize+thumbnail tests fixed
+#
+# Fixed in this session (resize/thumbnail PIL parity):
+#   - resize_1: PIL uses ImagingTransform (AFFINE) for NEAREST on mode "1", not
+#     two-pass pipeline. Added AFFINE path with epsilon adjustment (1e-14) to match
+#     PIL's float-promoted coordinate computation. The float-box-to-double promotion
+#     in PIL's C code shifts exact-boundary centers (e.g. 64.0) slightly below the
+#     integer, affecting nearest-neighbor mapping.
+#   - resize_P: Same AFFINE fix as resize_1 (mode P also uses NEAREST with AFFINE).
+#   - resize_I: Rewrote resize_i to use proper two-pass with fixed-point weights
+#     (precompute_coeffs) and intermediate i32 quantization. 1 pixel diff remains
+#     (off by 1 at exact boundary center_x=64.0).
+#   - thumbnail_1/P: Forced NEAREST filter in Image::thumbnail() for modes "1"/"P",
+#     matching PIL's Image.resize() default filter selection.
+#   - thumbnail_L: Added PIL's reducing_gap=2.0 optimization (integer-reduce then
+#     resize) matching PIL's default thumbnail behavior.
+#
 # Updated after PIL-blend formula fix: 9 text tests fixed; session 2: TransposedFont + Qt
 #
 # Fixed in this session (TransposedFont + Qt + transpose):

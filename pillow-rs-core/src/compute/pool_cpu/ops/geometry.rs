@@ -9,7 +9,7 @@ use std::f64;
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::pil_resize::{pil_resize, precompute_coeffs_float, FilterCoeffs};
+use crate::ops::pil_resize::{pil_resize, precompute_coeffs, precompute_coeffs_float, FilterCoeffs};
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 // ── Resample filter conversion ──
@@ -312,8 +312,8 @@ fn resize_i(
 
     // Two-pass separable approach for non-NEAREST filters (matching PIL's ImagingResample)
     // Use PIL's standard double-precision precomputation for exact weight matching.
-    let h_coeffs = precompute_coeffs_float(dst_w, sw, kernel, support);
-    let v_coeffs = precompute_coeffs_float(dst_h, sh, kernel, support);
+    let h_coeffs = precompute_coeffs(dst_w, sw, kernel, support);
+    let v_coeffs = precompute_coeffs(dst_h, sh, kernel, support);
 
     const PRECISION_BITS: i64 = 22;
     const HALF_PRECISION: i64 = 1 << (PRECISION_BITS - 1);
@@ -703,6 +703,8 @@ pub fn execute_transpose(
 
 /// Execute a Thumbnail operation.
 /// Computes the scale factor to fit within the given box, preserving aspect ratio.
+/// Matches PIL's thumbnail behavior including the reducing_gap optimization
+/// (default reducing_gap=2.0) for non-NEAREST filters.
 pub fn execute_thumbnail(
     img: &DynamicImage,
     w: u32,
@@ -724,12 +726,73 @@ pub fn execute_thumbnail(
         Some("1") | Some("P") => ResampleFilter::Nearest,
         _ => *filter,
     };
+    // PIL's thumbnail uses reducing_gap=2.0 by default: first integer-reduce
+    // by up to scale/reducing_gap, then resize the rest.
+    // This matches PIL's ImagingReduce then ImagingResample two-step.
+    // Skip reducing_gap for modes with alpha (LA, RGBA) to avoid premultiply issues.
+    let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest)
+        && !matches!(img.color(), image::ColorType::La8 | image::ColorType::Rgba8);
+    let mut work_img = img.clone();
+    if needs_reduce {
+        let scale_x = cur_w as f64 / new_w as f64;
+        let scale_y = cur_h as f64 / new_h as f64;
+        let factor = ((scale_x.max(scale_y)) / 2.0) as u32;
+        let factor = factor.max(1);
+        if factor > 1 {
+            let (rw, rh) = (cur_w / factor, cur_h / factor);
+            // Average each factor×factor block per-channel (matching PIL's ImagingReduce)
+            let channels = work_img.color().channel_count() as usize;
+            let raw = work_img.as_bytes();
+            let mut out = vec![0u8; (rw * rh * channels as u32) as usize];
+            for y in 0..rh {
+                for x in 0..rw {
+                    for c in 0..channels {
+                        let mut sum = 0u64;
+                        for dy in 0..factor {
+                            let sy = (y * factor + dy).min(cur_h - 1);
+                            for dx in 0..factor {
+                                let sx = (x * factor + dx).min(cur_w - 1);
+                                let idx = (sy * cur_w + sx) as usize * channels + c;
+                                sum += raw[idx] as u64;
+                            }
+                        }
+                        let block_pixels = (factor.min(cur_h - y * factor) * factor.min(cur_w - x * factor)) as u64;
+                        let val = ((sum + block_pixels / 2) / block_pixels) as u8;
+                        out[(y * rw + x) as usize * channels + c] = val;
+                    }
+                }
+            }
+            work_img = raw_to_dynimage(&out, rw, rh, channels);
+        }
+    }
     let result = match explicit_mode {
-        Some("F") => resize_f(img, new_w, new_h, &effective_filter)?,
-        Some("I") => resize_i(img, new_w, new_h, &effective_filter)?,
-        _ => pil_resize(img, new_w, new_h, effective_filter, explicit_mode),
+        Some("F") => resize_f(&work_img, new_w, new_h, &effective_filter)?,
+        Some("I") => resize_i(&work_img, new_w, new_h, &effective_filter)?,
+        _ => pil_resize(&work_img, new_w, new_h, effective_filter, explicit_mode),
     };
     Ok(preserve_mode(img, result))
+}
+
+/// Helper: convert raw bytes + dimensions to DynamicImage.
+fn raw_to_dynimage(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
+    match channels {
+        1 => DynamicImage::ImageLuma8(
+            image::GrayImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image::GrayImage::new(w, h)),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            image::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image::GrayAlphaImage::new(w, h)),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image::RgbImage::new(w, h)),
+        ),
+        _ => DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| image::RgbaImage::new(w, h)),
+        ),
+    }
 }
 
 /// Execute a Reduce operation.
