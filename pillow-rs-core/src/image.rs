@@ -978,8 +978,9 @@ impl Image {
     /// PIL: Returns Image.Exif object or the raw EXIF bytes from the image file.
     /// We return minimal empty EXIF header bytes matching PIL's empty EXIF format.
     pub fn getexif(&self) -> Vec<u8> {
-        // Minimal EXIF header: TIFF with 0 IFD entries
-        b"Exif\x00\x00MM\x00*\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00".to_vec()
+        // Return empty vec — no EXIF data extracted. PIL returns empty Exif dict {}.
+        // Full EXIF extraction would need TIFF/EXIF parsing from JPEG/HEIF headers.
+        Vec::new()
     }
 
     /// Return XMP metadata. PIL parses XMP XML from image headers.

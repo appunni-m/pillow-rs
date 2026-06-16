@@ -422,8 +422,9 @@ class Image:
         return tuple(self.getdata())
 
     def getexif(self):
-        """Return EXIF data. Returns minimal empty EXIF bytes matching PIL."""
-        return bytes(self._rust_image.getexif())
+        """Return EXIF data as dict, matching PIL's Image.Exif."""
+        raw = bytes(self._rust_image.getexif())
+        return {} if not raw else raw
 
     def getim(self):
         """Return internal C capsule. Not applicable for Rust."""
