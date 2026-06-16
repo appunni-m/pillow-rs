@@ -747,7 +747,16 @@ pub fn op_transform(
             );
             Ok(preserve_mode(img, result))
         }
-        &TransformMethod::Perspective | &TransformMethod::Quad | &TransformMethod::Mesh => Err(
+        &TransformMethod::Mesh => {
+            if data.len() < 12 {
+                return Err(PilError::ValueError(
+                    "Mesh transform needs at least 12 values per element".into(),
+                ));
+            }
+            let result = transform_mesh(img, w, h, data, fill);
+            Ok(preserve_mode(img, result?))
+        }
+        &TransformMethod::Perspective | &TransformMethod::Quad => Err(
             PilError::NotImplementedError(format!("Transform {:?} not yet implemented", method)),
         ),
     }
@@ -851,4 +860,195 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8) -> DynamicImage {
         }
     };
     out
+}
+
+// ── Color3DLUT — trilinear interpolation (matching PIL's _imaging C code) ──
+
+const SCALE_BITS: u32 = 18;
+const SHIFT_BITS: u32 = 15;
+const PRECISION_BITS: u32 = 6;
+/// PIL's _prepare_lut_table converts [0,1] float table values to INT16
+/// by multiplying with `255 << PRECISION_BITS` = 255 * 64 = 16320.
+/// See: `_prepare_lut_table` in PIL's _imaging.c
+const TABLE_SCALE: f64 = (255 << 6) as f64; // 16320.0
+const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
+
+fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize {
+    x + y * sx + z * sxy
+}
+
+pub fn op_color3dlut(
+    img: &DynamicImage,
+    size: (u32, u32, u32),
+    table: &[f64],
+    channels: u32,
+) -> Result<DynamicImage, PilError> {
+    let (sx, sy, sz) = (size.0 as usize, size.1 as usize, size.2 as usize);
+    let ch = channels as usize;
+    let sxy = sx * sy;
+
+    let (w, h) = img.dimensions();
+    let src_channels = img.color().channel_count() as usize;
+
+    // Precompute grid mapping: pixel value → fractional grid coordinate
+    let scale_x = (sx - 1) as f64 / 255.0;
+    let scale_y = (sy - 1) as f64 / 255.0;
+    let scale_z = (sz - 1) as f64 / 255.0;
+
+    let mut out = vec![0u8; (w * h) as usize * 4];
+
+    for y in 0..h {
+        for x in 0..w {
+            let out_idx = ((y * w + x) as usize) * 4;
+            let px = img.get_pixel(x, y).0;
+
+            let fx = px[0] as f64 * scale_x;
+            let fy = px[1] as f64 * scale_y;
+            let fz = px[2] as f64 * scale_z;
+
+            let x0 = (fx.floor() as usize).min(sx - 1);
+            let y0 = (fy.floor() as usize).min(sy - 1);
+            let z0 = (fz.floor() as usize).min(sz - 1);
+            let x1 = (x0 + 1).min(sx - 1);
+            let y1 = (y0 + 1).min(sy - 1);
+            let z1 = (z0 + 1).min(sz - 1);
+
+            let dx = fx - x0 as f64;
+            let dy = fy - y0 as f64;
+            let dz = fz - z0 as f64;
+
+            let w000 = (1.0 - dx) * (1.0 - dy) * (1.0 - dz);
+            let w100 = dx * (1.0 - dy) * (1.0 - dz);
+            let w010 = (1.0 - dx) * dy * (1.0 - dz);
+            let w110 = dx * dy * (1.0 - dz);
+            let w001 = (1.0 - dx) * (1.0 - dy) * dz;
+            let w101 = dx * (1.0 - dy) * dz;
+            let w011 = (1.0 - dx) * dy * dz;
+            let w111 = dx * dy * dz;
+
+            let base000 = table_index_3d(x0, y0, z0, sx, sxy) * ch;
+            let base100 = table_index_3d(x1, y0, z0, sx, sxy) * ch;
+            let base010 = table_index_3d(x0, y1, z0, sx, sxy) * ch;
+            let base110 = table_index_3d(x1, y1, z0, sx, sxy) * ch;
+            let base001 = table_index_3d(x0, y0, z1, sx, sxy) * ch;
+            let base101 = table_index_3d(x1, y0, z1, sx, sxy) * ch;
+            let base011 = table_index_3d(x0, y1, z1, sx, sxy) * ch;
+            let base111 = table_index_3d(x1, y1, z1, sx, sxy) * ch;
+
+            for c in 0..ch {
+                let v = w000 * table[base000 + c]
+                    + w100 * table[base100 + c]
+                    + w010 * table[base010 + c]
+                    + w110 * table[base110 + c]
+                    + w001 * table[base001 + c]
+                    + w101 * table[base101 + c]
+                    + w011 * table[base011 + c]
+                    + w111 * table[base111 + c];
+                // PIL uses _prepare_lut_table which does item * 16320 + 0.5 (round to INT16),
+                // then clip8 does (result + 32) >> 6 = (result / 64) truncated with rounding.
+                // Equivalent to: round(v * 255.0) clamped to [0, 255]
+                let clipped = (v * 255.0 + 0.5).floor().max(0.0).min(255.0) as u8;
+                out[out_idx + c] = clipped;
+            }
+            if ch == 3 {
+                out[out_idx + 3] = if src_channels >= 4 { px[3] } else { 255 };
+            }
+        }
+    }
+
+    // Preserve input color type (RGB input → RGB output, RGBA → RGBA)
+    let result = DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(w, h, out).expect("color3dlut: buffer size mismatch"),
+    );
+    Ok(preserve_mode(img, result))
+}
+
+// ── MESH transform — piecewise bilinear quad mapping ──
+
+pub fn transform_mesh(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    mesh_data: &[f64],
+    fill: Option<(u8, u8, u8, u8)>,
+) -> Result<DynamicImage, PilError> {
+    let channels = img.color().channel_count() as usize;
+    let raw = img.as_bytes();
+    let (sw, sh) = img.dimensions();
+    let sw_f = sw as f64;
+    let sh_f = sh as f64;
+    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+
+    let mut out = vec![0u8; (dst_w * dst_h) as usize * 4];
+    // Initialize output with fill color
+    for y in 0..dst_h as usize {
+        for x in 0..dst_w as usize {
+            let idx = (y * dst_w as usize + x) * 4;
+            out[idx] = fill_color.0;
+            out[idx + 1] = fill_color.1;
+            out[idx + 2] = fill_color.2;
+            out[idx + 3] = fill_color.3;
+        }
+    }
+
+    // Process each mesh element
+    let num_elements = mesh_data.len() / 12;
+    for elem in 0..num_elements {
+        let base = elem * 12;
+        let x0_d = mesh_data[base] as i32;
+        let y0_d = mesh_data[base + 1] as i32;
+        let x1_d = mesh_data[base + 2] as i32;
+        let y1_d = mesh_data[base + 3] as i32;
+        let x0_s = mesh_data[base + 4];
+        let y0_s = mesh_data[base + 5];
+        let x1_s = mesh_data[base + 6];
+        let y1_s = mesh_data[base + 7];
+        let x2_s = mesh_data[base + 8];
+        let y2_s = mesh_data[base + 9];
+        let x3_s = mesh_data[base + 10];
+        let y3_s = mesh_data[base + 11];
+
+        let bw = (x1_d - x0_d) as f64;
+        let bh = (y1_d - y0_d) as f64;
+        if bw <= 0.0 || bh <= 0.0 {
+            continue;
+        }
+
+        let bx0 = x0_d.max(0);
+        let by0 = y0_d.max(0);
+        let bx1 = x1_d.min(dst_w as i32);
+        let by1 = y1_d.min(dst_h as i32);
+
+        for dy in by0..by1 {
+            let v = (dy - y0_d) as f64 / bh;
+            for dx in bx0..bx1 {
+                let u = (dx - x0_d) as f64 / bw;
+
+                // PIL bilinear mapping: quad[0]=top-left, quad[1]=bottom-left,
+                // quad[2]=bottom-right, quad[3]=top-right (counter-clockwise)
+                let sx = (1.0 - u) * (1.0 - v) * x0_s + u * (1.0 - v) * x3_s
+                    + u * v * x2_s + (1.0 - u) * v * x1_s;
+                let sy = (1.0 - u) * (1.0 - v) * y0_s + u * (1.0 - v) * y3_s
+                    + u * v * y2_s + (1.0 - u) * v * y1_s;
+
+                if sx >= 0.0 && sx < sw_f && sy >= 0.0 && sy < sh_f {
+                    // NEAREST sampling for identity mesh parity
+                    let ix = (sx + 0.5).floor() as u32;
+                    let iy = (sy + 0.5).floor() as u32;
+                    let src_idx = ((iy * sw + ix) as usize) * channels;
+                    let out_idx = ((dy as u32 * dst_w + dx as u32) as usize) * 4;
+                    for c in 0..channels {
+                        out[out_idx + c] = raw[src_idx + c];
+                    }
+                    if channels < 4 {
+                        out[out_idx + 3] = 255;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(dst_w, dst_h, out).expect("transform_mesh: buffer size mismatch"),
+    ))
 }

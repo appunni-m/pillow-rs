@@ -21,6 +21,27 @@ REF_PATH = ROOT / "tests" / "test_reference.png"
 # ── Deterministic C rand() seeding for effect operations ──────────
 _libc = ctypes.CDLL(None)
 
+_qapp = None
+
+def _ensure_qapp():
+    global _qapp
+    if _qapp is None:
+        try:
+            from PySide6.QtWidgets import QApplication
+            _qapp = QApplication.instance()
+            if _qapp is None:
+                import sys
+                _qapp = QApplication(sys.argv)
+        except ImportError:
+            try:
+                from PyQt5.QtWidgets import QApplication
+                _qapp = QApplication.instance()
+                if _qapp is None:
+                    import sys
+                    _qapp = QApplication(sys.argv)
+            except ImportError:
+                pass
+
 
 def _seed_rand():
     """Seed C library rand() so PIL effects produce deterministic output."""
@@ -100,6 +121,26 @@ class PilBackend:
             # both use median cut on the same pixel data.
             if target == "quantize" and img.mode == "RGBA":
                 return img.convert("RGB").quantize(**params)
+            if target == "save":
+                import io
+                buf = io.BytesIO()
+                fmt = params.get("format", "PNG")
+                img.save(buf, format=fmt)
+                buf.seek(0)
+                reloaded = PIL.Image.open(buf)
+                return reloaded.tobytes()
+            if target == "toqimage":
+                qi = img.toqimage()
+                mv = qi.bits()
+                data = bytes(mv)
+                return data
+            if target == "toqpixmap":
+                # toqpixmap = QPixmap.fromImage(toqimage()). Extract QImage bytes
+                # directly for deterministic comparison.
+                qi = img.toqimage()
+                mv = qi.bits()
+                data = bytes(mv)
+                return data
             return getattr(img, target)(**params)
         # ── Module functions taking image first ──
         if module == "ImageOps":
@@ -118,6 +159,12 @@ class PilBackend:
                 return fn(img, int(params.get("threshold", 128)))
             if target == "colorize":
                 return fn(img, "black", "white")
+            if target == "deform" and params.get("deformer") == "__SIMPLE__":
+                class _SimpleDeformer:
+                    def getmesh(self, image):
+                        w, h = image.size
+                        return [((0, 0, w, h), (0, 0, 0, h, w, h, w, 0))]
+                return fn(img, _SimpleDeformer())
             return fn(img, **params)
         if module == "ImageChops":
             return getattr(PIL.ImageChops, target)(img, **params)
@@ -139,7 +186,22 @@ class PilBackend:
                    "EMBOSS", "FIND_EDGES", "SHARPEN", "SMOOTH", "SMOOTH_MORE"}
         if target in builtin:
             return img.filter(filter_cls)
-        return img.filter(filter_cls(**params))
+        # Handle special params
+        p = dict(params)
+        if target == "Color3DLUT" and p.get("table") == "__IDENTITY_LUT__":
+            size = p.get("size", 17)
+            channels = p.get("channels", 3)
+            table = []
+            for b in range(size):
+                for g in range(size):
+                    for r in range(size):
+                        # PIL Color3DLUT expects [0, 1] float table values.
+                        # _prepare_lut_table converts to INT16 via item * (255 << 6) = item * 16320.
+                        vals = [r / (size - 1), g / (size - 1), b / (size - 1)]
+                        table.extend(vals[:channels])
+            p["table"] = table
+            p["channels"] = channels
+        return img.filter(filter_cls(**p))
 
     def call_dual(self, module, target, img1, img2, params):
         # Apply prep for logical ops
@@ -171,6 +233,16 @@ class PilBackend:
         return getattr(PIL.ImageChops, target)(img1, img2)
 
     def call_draw(self, img, module, target, params):
+        if target == "getfont":
+            font = PIL.ImageFont.load_default()
+            glyph_img = PIL.Image.new('L', (50, 50), 0)
+            d = PIL.ImageDraw.Draw(glyph_img)
+            d.text((5, 5), 'Ay', font=font, fill=255)
+            return glyph_img.tobytes()
+        if target == "textlength":
+            font = PIL.ImageFont.load_default()
+            draw = PIL.ImageDraw.Draw(img)
+            return draw.textlength(params.get("text", "Hello"), font=font)
         draw = PIL.ImageDraw.Draw(img)
         p = _to_rgb_fill(img.mode, params, ("fill", "outline"))
         if target == "bitmap":
@@ -222,7 +294,27 @@ class PilBackend:
             if target == "palette": return None
             if target in ("is_animated", "has_transparency_data"): return False
             if target == "n_frames": return 1
-            if target in ("apply_transparency", "show"): return None
+            if target in ("apply_transparency", "show", "close"): return None
+            if target == "save":
+                import io
+                buf = io.BytesIO()
+                fmt = params.get("format", "PNG")
+                img.save(buf, format=fmt)
+                buf.seek(0)
+                reloaded = PIL.Image.open(buf)
+                return reloaded.tobytes()
+            if target == "toqimage":
+                qi = img.toqimage()
+                mv = qi.bits()
+                data = bytes(mv)
+                return data
+            if target == "toqpixmap":
+                # toqpixmap = QPixmap.fromImage(toqimage()). Extract QImage bytes
+                # directly for deterministic comparison.
+                qi = img.toqimage()
+                mv = qi.bits()
+                data = bytes(mv)
+                return data
             if callable(val):
                 return val(**params)
             return val

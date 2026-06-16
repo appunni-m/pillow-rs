@@ -1296,7 +1296,7 @@ impl Draw {
     /// For other modes (1, L, LA, CMYK, P, I, F), renders directly in the
     /// mode's native pixel format, matching PIL's `draw_bitmap` behavior:
     /// - Integer fill values go to the first channel only; other channels get 0.
-    /// - Binary modes (1, P, I, F) use coverage > 0 threshold.
+    /// - Binary modes (1, P, I, F) use PIL's fontmode="1": binary glyphs (coverage >= 128 → 255).
     /// - Anti-aliased modes (L, LA, CMYK) use PIL's BLEND (truncation) per channel.
     pub fn text(
         &mut self,
@@ -1306,12 +1306,17 @@ impl Draw {
         font: &crate::font::Font,
         fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
-        let (w, h, pixels) = font.render_text(text, fill, 0.0);
+        let mode = self.effective_mode();
+        let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
+
+        let (w, h, pixels) = if binary {
+            font.render_text_binary(text, fill, 0.0)
+        } else {
+            font.render_text(text, fill, 0.0)
+        };
         if w == 0 || h == 0 {
             return Ok(());
         }
-
-        let mode = self.effective_mode();
 
         match mode.as_str() {
             "RGB" | "RGBA" => self.text_compose_rgba(x, y, w, h, &pixels),
@@ -1394,9 +1399,9 @@ impl Draw {
 
         match mode {
             "1" => {
-                // Binary: write fill value where coverage > 0. fontmode="1".
+                // Binary: write 255 where coverage > 0. PIL thresholds non-zero to 255.
                 let mut luma = img.to_luma8();
-                let ink = fill.0; // The raw integer value
+                let ink = if fill.0 > 0 { 255u8 } else { 0u8 };
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;

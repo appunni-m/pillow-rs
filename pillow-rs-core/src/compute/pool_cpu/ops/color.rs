@@ -55,7 +55,12 @@ pub fn op_convert(
         ColorMode::Mode1 => {
             // PIL uses TRUNCATED grayscale for convert("1") (dither or no dither)
             // while convert("L") uses ROUNDED grayscale.
-            let gray = pil_grayscale_truncate(img);
+            // CMYK mode: proper CMYK→RGB→L conversion before thresholding.
+            let gray = if explicit_mode == Some("CMYK") {
+                crate::color::cmyk_to_grayscale(img)
+            } else {
+                pil_grayscale_truncate(img)
+            };
             let (w, h) = gray.dimensions();
             let mut out = image::GrayImage::new(w, h);
             match dither {

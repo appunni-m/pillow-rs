@@ -40,4 +40,24 @@ impl Image {
     pub fn reduce(&self, factor: u32) -> Result<Image, PilError> {
         Ok(Image::push_op(self, PipelineOp::Reduce { factor }))
     }
+
+    /// Apply a MESH transform — piecewise bilinear quad mapping.
+    pub fn transform_mesh(
+        &self,
+        size: (u32, u32),
+        data: Vec<f64>,
+        fillcolor: (u8, u8, u8, u8),
+    ) -> Result<Image, PilError> {
+        Ok(Image::push_op(
+            self,
+            PipelineOp::Transform {
+                w: size.0,
+                h: size.1,
+                method: TransformMethod::Mesh,
+                data,
+                filter: ResampleFilter::Nearest,
+                fill: Some(fillcolor),
+            },
+        ))
+    }
 }

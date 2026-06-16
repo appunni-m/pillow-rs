@@ -7,6 +7,7 @@
 
 mod data;
 use data::BITMAP_GLYPH_DATA;
+use data::BITMAP_GLYPH_DATA_BINARY;
 
 /// A bitmap font using pre-rendered glyphs matching PIL's default font exactly.
 #[derive(Debug, Clone)]
@@ -129,11 +130,35 @@ impl BitmapFont {
         fill: (u8, u8, u8, u8),
         _spacing: f32,
     ) -> (u32, u32, Vec<u8>) {
+        self.render_text_impl(text, fill, false)
+    }
+
+    /// Render text in binary mode (fontmode="1").
+    /// Coverage values are thresholded at 128: >= 128 → 255, < 128 → 0.
+    pub fn render_text_binary(
+        &self,
+        text: &str,
+        fill: (u8, u8, u8, u8),
+        _spacing: f32,
+    ) -> (u32, u32, Vec<u8>) {
+        self.render_text_impl(text, fill, true)
+    }
+
+    fn render_text_impl(
+        &self,
+        text: &str,
+        fill: (u8, u8, u8, u8),
+        binary: bool,
+    ) -> (u32, u32, Vec<u8>) {
         if text.is_empty() {
             return (0, 0, vec![]);
         }
 
-        let (w, h, mask) = self.getmask(text);
+        let (w, h, mask) = if binary {
+            self.getmask_binary(text)
+        } else {
+            self.getmask(text)
+        };
         if w == 0 || h == 0 {
             return (w, h, vec![]);
         }
@@ -157,5 +182,64 @@ impl BitmapFont {
         }
 
         (w, h, pixels)
+    }
+
+    /// Render text mask in binary mode using PIL's exact monochrome glyph data.
+    /// Returns (width, height, mask_data) with values 0 or 255.
+    fn getmask_binary(&self, text: &str) -> (u32, u32, Vec<u8>) {
+        if text.is_empty() {
+            return (0, 0, vec![]);
+        }
+
+        // Compute layout using binary glyph metrics
+        let mut glyphs: Vec<(u32, u32, i32, &[u8])> = Vec::new();
+        let mut total_w = 0u32;
+        let mut max_ymax = 0i32;
+
+        for ch in text.chars() {
+            let idx = (ch as u8).wrapping_sub(32) as usize;
+            if idx < 95 {
+                let (gw, gh, ymin, data) = BITMAP_GLYPH_DATA_BINARY[idx];
+                total_w += gw;
+                let ymax = ymin + gh as i32;
+                if ymax > max_ymax {
+                    max_ymax = ymax;
+                }
+                glyphs.push((gw, gh, ymin, data));
+            } else {
+                total_w += 2;
+            }
+        }
+
+        if total_w == 0 || max_ymax <= 0 {
+            return (total_w, 0, vec![]);
+        }
+
+        let line_h = max_ymax as u32;
+        let mut canvas = vec![0u8; (total_w * line_h) as usize];
+        let mut cx = 0u32;
+
+        for &(gw, gh, ymin, data) in &glyphs {
+            let gy_offset = ymin as u32;
+            for dy in 0..gh {
+                for dx in 0..gw {
+                    let src_idx = (dy * gw + dx) as usize;
+                    if src_idx < data.len() {
+                        let alpha = data[src_idx];
+                        if alpha > 0 {
+                            let canvas_x = cx + dx;
+                            let canvas_y = gy_offset + dy;
+                            if canvas_x < total_w && canvas_y < line_h {
+                                let dst_idx = (canvas_y * total_w + canvas_x) as usize;
+                                canvas[dst_idx] = canvas[dst_idx].max(alpha);
+                            }
+                        }
+                    }
+                }
+            }
+            cx += gw;
+        }
+
+        (total_w, line_h, canvas)
     }
 }

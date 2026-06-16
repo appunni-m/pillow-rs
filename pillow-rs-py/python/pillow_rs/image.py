@@ -56,7 +56,7 @@ class Image:
         if isinstance(fp, Path):
             fp = str(fp)
         if isinstance(fp, bytes):
-            rust_image = RustImage.open_bytes(fp)
+            rust_image = RustImage.open(fp)
         else:
             rust_image = RustImage.open(fp)
         return cls(rust_image)
@@ -245,7 +245,15 @@ class Image:
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        return self._rust_image.tobytes()
+        data = self._rust_image.tobytes()
+        # Handle raw encoder formats: "BGRA" swaps B and R channels
+        if encoder_name == "raw" and args and args[0] in ("BGRA", "BGR"):
+            fmt = args[0]
+            nchan = 4 if fmt == "BGRA" else 3
+            ba = bytearray(data)
+            ba[0::nchan], ba[2::nchan] = ba[2::nchan], ba[0::nchan]
+            return bytes(ba)
+        return data
 
     def getpixel(self, xy: Tuple[int, int]):
         """Get pixel value at (x, y). Mode dispatch done in Rust."""
@@ -378,14 +386,11 @@ class Image:
 
     def apply_transparency(self):
         """Apply transparency mask to image."""
-        if self.mode == "RGBA":
-            pass  # Already has alpha
-        elif self.mode == "P" and self.palette:
-            pass  # Palette transparency
+        return self._rust_image.apply_transparency()
 
     def get_child_images(self):
         """Return list of child images (multi-frame)."""
-        return []
+        return [Image(img) for img in self._rust_image.get_child_images()]
 
     def get_flattened_data(self, band=None):
         """Return flattened pixel data matching PIL format."""
@@ -395,16 +400,11 @@ class Image:
 
     def getexif(self):
         """Return EXIF data. Returns minimal empty EXIF bytes matching PIL."""
-        # Minimal EXIF header (TIFF with 0 IFD entries) — matches PIL empty EXIF
-        return b'Exif\x00\x00MM\x00*\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00'
+        return bytes(self._rust_image.getexif())
 
     def getim(self):
         """Return internal C capsule. Not applicable for Rust."""
-
-        # Return a capsule-like string matching PIL's format for test parity
-        # PIL returns a CPython PyCapsule wrapping a C pointer,
-        # but Rust has no C pointer to wrap. Return a compatible string.
-        return f'<capsule object "Pillow Imaging" at 0x{id(self):x}>'
+        return self._rust_image.getim()
 
     def getpalette(self, rawmode="RGB"):
         """Return palette data.
@@ -437,7 +437,7 @@ class Image:
 
     def getxmp(self):
         """Return XMP metadata. Returns empty dict."""
-        return {}
+        return dict(self._rust_image.getxmp())
 
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
@@ -448,40 +448,53 @@ class Image:
         pass
 
     def toqimage(self):
-        """Convert to Qt QImage. Requires PyQt5, PyQt6, PySide2, or PySide6."""
+        """Convert to Qt QImage. Matches PIL's ImageQt._toqclass_helper format mapping."""
         try:
-            from PyQt6.QtGui import QImage
+            from PyQt6.QtGui import QImage, qRgb
         except ImportError:
             try:
-                from PyQt5.QtGui import QImage
+                from PyQt5.QtGui import QImage, qRgb
             except ImportError:
                 try:
-                    from PySide6.QtGui import QImage
+                    from PySide6.QtGui import QImage, qRgb
                 except ImportError:
                     try:
-                        from PySide2.QtGui import QImage
+                        from PySide2.QtGui import QImage, qRgb
                     except ImportError:
                         raise ImportError("toqimage requires PyQt5, PyQt6, PySide2, or PySide6")
 
         mode = self.mode
         w, h = self.size
+        colortable = None
+
         if mode == "1":
             raw_data = self.tobytes("raw", "1")
             fmt = QImage.Format_Mono
         elif mode == "L":
             raw_data = self.tobytes("raw", "L")
-            fmt = QImage.Format_Grayscale8
+            fmt = QImage.Format_Indexed8
+            colortable = [qRgb(i, i, i) for i in range(256)]
+        elif mode == "P":
+            raw_data = self.tobytes("raw", "P")
+            fmt = QImage.Format_Indexed8
+            palette = self.getpalette()
+            if palette:
+                colortable = [qRgb(*palette[i:i+3]) for i in range(0, len(palette), 3)]
         elif mode == "RGB":
-            raw_data = self.tobytes("raw", "RGB")
-            fmt = QImage.Format_RGB888
+            # Match PIL: convert to RGBA, use BGRA byte order, Format_RGB32
+            rgba = self.convert("RGBA")
+            raw_data = rgba.tobytes("raw", "BGRA")
+            fmt = QImage.Format_RGB32
         elif mode == "RGBA":
-            raw_data = self.tobytes("raw", "RGBA")
-            fmt = QImage.Format_RGBA8888
+            raw_data = self.tobytes("raw", "BGRA")
+            fmt = QImage.Format_ARGB32
         else:
             # Convert unsupported modes to RGBA first
             return self.convert("RGBA").toqimage()
 
         qimg = QImage(raw_data, w, h, fmt)
+        if colortable:
+            qimg.setColorTable(colortable)
         return qimg
 
     def toqpixmap(self):
@@ -576,9 +589,27 @@ class Image:
         return None
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
-        """General affine/perspective transform."""
-        if method == 0 or method == "AFFINE" or (isinstance(data, list) and len(data) == 6):
+        """General affine/perspective/mesh transform."""
+        if method == 0 or method == "AFFINE" or (isinstance(data, list) and len(data) == 6 and not isinstance(data[0], (list, tuple))):
             return Image(self._rust_image.transform(size, "AFFINE", data, resample, fill, fillcolor))
+        if method == "MESH" or (isinstance(data, (list, tuple)) and len(data) > 0 and isinstance(data[0], (list, tuple))):
+            # PIL's MESH data is list of (bbox, quad) tuples, or a single (bbox, quad) tuple
+            mesh_items = data if isinstance(data, list) else [data]
+            # Check if it's a single mesh element (bbox, quad) tuple
+            if len(mesh_items) == 2 and all(isinstance(x, (int, float)) for x in mesh_items[:4]):
+                # Single mesh element tuple
+                mesh_flat = []
+                mesh_flat.extend([float(mesh_items[0][0]), float(mesh_items[0][1]),
+                                  float(mesh_items[0][2]), float(mesh_items[0][3])])
+                mesh_flat.extend([float(v) for v in mesh_items[1]])
+                return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
+            # List of mesh elements
+            mesh_flat = []
+            for item in mesh_items:
+                bbox, quad = item
+                mesh_flat.extend([float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])])
+                mesh_flat.extend([float(v) for v in quad])
+            return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
         raise NotImplementedError(f"transform method '{method}' not yet implemented")
 
     def verify(self):

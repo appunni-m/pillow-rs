@@ -197,4 +197,21 @@ impl Image {
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::RankFilter { size, rank }))
     }
+
+    /// 3D Color Lookup Table with trilinear interpolation.
+    pub fn color3dlut(
+        &self,
+        size: (u32, u32, u32),
+        table: Vec<f64>,
+        channels: u32,
+    ) -> Result<Image, PilError> {
+        Ok(Image::push_op(
+            self,
+            PipelineOp::Color3DLut {
+                size,
+                table,
+                channels,
+            },
+        ))
+    }
 }

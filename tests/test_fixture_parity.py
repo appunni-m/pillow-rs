@@ -132,8 +132,12 @@ def test_fixture_parity(fixture_file):
                     try: band.tobytes()
                     except: pytest.xfail(f"split: band {i} has no tobytes")
                 return  # Split result is valid (same band count, images have bytes)
-            act = [list(x) if isinstance(x, (list, tuple)) else x for x in actual]
-            if act == val: return
+            # JSON has no tuple type — recursively normalize tuples to lists
+            def _normalize(v):
+                if isinstance(v, (list, tuple)):
+                    return [_normalize(x) for x in v]
+                return v
+            if _normalize(actual) == val: return
         if actual == val: return
         pytest.xfail("value mismatch")
 

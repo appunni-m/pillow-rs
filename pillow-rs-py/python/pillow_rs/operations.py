@@ -107,35 +107,14 @@ def fromarray(obj, mode=None):
 
 def linear_gradient(mode: str) -> Image:
     """Generate 256x256 linear gradient from black to white, top to bottom."""
-    if mode == "L":
-        data = bytes(i for i in range(256) for _ in range(256))
-    elif mode == "RGB":
-        data = bytes(i for i in range(256) for _ in range(256) for _ in range(3))
-    else:
-        raise ValueError(f"unsupported mode for linear_gradient: {mode!r}")
-    return Image.frombytes(mode, (256, 256), data)
+    from . import _core
+    return Image(_core.image_linear_gradient(mode))
 
 
 def radial_gradient(mode: str) -> Image:
-    """Generate 256x256 radial gradient from black to white, centre to edge."""
-    cx, cy = 128.0, 128.0
-    max_dist = (cx * cx + cy * cy) ** 0.5  # sqrt(128^2 + 128^2)
-    if mode == "L":
-        data = bytes(
-            min(int(((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / max_dist * 255 + 0.5), 255)
-            for y in range(256)
-            for x in range(256)
-        )
-    elif mode == "RGB":
-        data = bytes(
-            min(int(((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / max_dist * 255 + 0.5), 255)
-            for y in range(256)
-            for x in range(256)
-            for _ in range(3)
-        )
-    else:
-        raise ValueError(f"unsupported mode for radial_gradient: {mode!r}")
-    return Image.frombytes(mode, (256, 256), data)
+    """Generate 256x256 radial gradient from white (center) to black (edges)."""
+    from . import _core
+    return Image(_core.image_radial_gradient(mode))
 
 
 def effect_mandelbrot(
@@ -144,26 +123,8 @@ def effect_mandelbrot(
     quality: int,
 ) -> Image:
     """Generate a Mandelbrot set covering the given extent."""
-    w, h = size
-    x0, y0, x1, y1 = extent
-    data = bytearray(w * h)
-    idx = 0
-    for py in range(h):
-        cy = y0 + (py / h) * (y1 - y0)
-        for px in range(w):
-            cx = x0 + (px / w) * (x1 - x0)
-            zx, zy = 0.0, 0.0
-            for i in range(quality):
-                zx2 = zx * zx - zy * zy + cx
-                zy2 = 2.0 * zx * zy + cy
-                zx, zy = zx2, zy2
-                if zx * zx + zy * zy > 4.0:
-                    break
-            else:
-                i = quality - 1
-            data[idx] = (i * 255) // quality
-            idx += 1
-    return Image.frombytes("L", (w, h), bytes(data))
+    from . import _core
+    return Image(_core.image_effect_mandelbrot(size, extent, quality))
 
 
 def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw", *args):

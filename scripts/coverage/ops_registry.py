@@ -112,6 +112,10 @@ FIXTURE_META = {
     "Image.paste":        {"type": "dual",  "method": "paste",        "params": {"box": [0, 0]}},
     "Image.putpalette":   {"type": "image", "method": "putpalette",   "params": {"data": list(range(48))}},
     "Image.has_transparency_data": {"type": "value", "method": "has_transparency_data", "params": {}},
+    "Image.save":             {"type": "value", "method": "save",             "params": {"format": "PNG"}},
+    "Image.close":            {"type": "value", "method": "close",            "params": {}},
+    "Image.toqimage":         {"type": "value", "method": "toqimage",         "params": {}},
+    "Image.toqpixmap":        {"type": "value", "method": "toqpixmap",        "params": {}},
 
     # ── ImageChops ──
     "ImageChops.constant": {"type": "image", "method": "constant", "params": {"value": 128}},
@@ -135,6 +139,8 @@ FIXTURE_META = {
     "ImageOps.cover":        {"type": "image", "method": "cover",        "params": {"size": [25, 25]}},
     "ImageOps.fit":          {"type": "image", "method": "fit",          "params": {"size": [25, 25]}},
     "ImageOps.pad":          {"type": "image", "method": "pad",          "params": {"size": [25, 25]}},
+    "ImageOps.exif_transpose": {"type": "image", "method": "exif_transpose", "params": {}},
+    "ImageOps.deform":         {"type": "image", "method": "deform",         "params": {"deformer": "__SIMPLE__"}},
 
     # ── ImageEnhance ──
     "ImageEnhance.Brightness": {"type": "enhance", "name": "Brightness", "params": {"factor": 1.5}},
@@ -152,6 +158,7 @@ FIXTURE_META = {
     "ImageFilter.ModeFilter":   {"type": "filter", "name": "ModeFilter",   "params": {"size": 3}},
     "ImageFilter.RankFilter":   {"type": "filter", "name": "RankFilter",   "params": {"size": 3, "rank": 2}},
     "ImageFilter.Kernel":       {"type": "filter", "name": "Kernel",       "params": {"size": [3, 3], "kernel": [1,1,1,1,1,1,1,1,1], "scale": 9, "offset": 0}},
+    "ImageFilter.Color3DLUT":   {"type": "filter", "name": "Color3DLUT",   "params": {"size": 17, "table": "__IDENTITY_LUT__", "channels": 3}},
 
     # ── ImageModule ──
     "ImageModule.new":            {"type": "module", "function": "Image.new",            "params": {"mode": "RGB", "size": [100, 100], "color": 0}},
@@ -193,6 +200,8 @@ FIXTURE_META = {
     "ImageDraw.bitmap":            {"type": "draw", "draw": "bitmap",            "params": {"xy": [5, 5], "fill": 200}},
     "ImageDraw.text":              {"type": "draw", "draw": "text",              "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
     "ImageDraw.multiline_text":    {"type": "draw", "draw": "multiline_text",    "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
+    "ImageDraw.textlength":        {"type": "draw", "draw": "textlength",        "params": {"text": "Hello"}},
+    "ImageDraw.getfont":           {"type": "draw", "draw": "getfont",           "params": {}},
 }
 
 
@@ -251,6 +260,7 @@ def _is_value_op(name):
         "load", "verify", "seek", "tell", "tobitmap", "has_transparency_data",
         "getexif", "getim", "getpalette", "getxmp", "get_flattened_data",
         "get_child_images", "apply_transparency",
+        "close", "save",
     }
 
 

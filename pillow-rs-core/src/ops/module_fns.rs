@@ -89,3 +89,198 @@ pub fn effect_noise(image: &Image, sigma: f64) -> Result<Image, PilError> {
 pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::EffectSpread { distance }))
 }
+
+/// Generate a 256×256 linear gradient from black (top) to white (bottom).
+/// PIL: `Image.linear_gradient(mode)` — only single-channel modes like "L".
+/// Matches PIL's ImagingFillLinearGradient in src/libImaging/Fill.c exactly.
+pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
+    if mode.len() != 1 {
+        return Err(PilError::ValueError(format!(
+            "linear_gradient: unsupported mode '{}', only single-channel modes supported",
+            mode
+        )));
+    }
+    let bytes_per_pixel = match mode {
+        "L" | "P" => 1,
+        "1" => 1,
+        "I" => 4,
+        "F" => 4,
+        _ => {
+            return Err(PilError::ValueError(format!(
+                "linear_gradient: unsupported mode '{}'",
+                mode
+            )));
+        }
+    };
+    let size: usize = 256 * 256 * bytes_per_pixel;
+    let mut data = vec![0u8; size];
+
+    for y in 0..256usize {
+        let row_start = y * 256 * bytes_per_pixel;
+        match mode {
+            "L" | "P" | "1" => {
+                let val = y as u8;
+                data[row_start..row_start + 256].fill(val);
+            }
+            "I" => {
+                // 4-byte i32 LE per pixel
+                let val = y as i32;
+                let bytes = val.to_le_bytes();
+                for x in 0..256 {
+                    let off = row_start + x * 4;
+                    data[off..off + 4].copy_from_slice(&bytes);
+                }
+            }
+            "F" => {
+                // 4-byte f32 LE per pixel
+                let val = y as f32;
+                let bytes = val.to_le_bytes();
+                for x in 0..256 {
+                    let off = row_start + x * 4;
+                    data[off..off + 4].copy_from_slice(&bytes);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    Image::frombytes(mode, (256, 256), &data)
+}
+
+/// Generate a 256×256 radial gradient from white (center) to black (edges).
+/// PIL: `Image.radial_gradient(mode)` — only single-channel modes like "L".
+/// Matches PIL's ImagingFillRadialGradient in src/libImaging/Fill.c exactly.
+pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
+    if mode.len() != 1 {
+        return Err(PilError::ValueError(format!(
+            "radial_gradient: unsupported mode '{}', only single-channel modes supported",
+            mode
+        )));
+    }
+    let bytes_per_pixel = match mode {
+        "L" | "P" => 1,
+        "1" => 1,
+        "I" => 4,
+        "F" => 4,
+        _ => {
+            return Err(PilError::ValueError(format!(
+                "radial_gradient: unsupported mode '{}'",
+                mode
+            )));
+        }
+    };
+    let size: usize = 256 * 256 * bytes_per_pixel;
+    let mut data = vec![0u8; size];
+
+    for y in 0..256 {
+        for x in 0..256 {
+            let dx = x as f64 - 128.0;
+            let dy = y as f64 - 128.0;
+            // PIL exact formula: d = (int) sqrt((dx*dx + dy*dy) * 2.0)
+            let d = ((dx * dx + dy * dy) * 2.0).sqrt() as i32;
+            let val = if d >= 255 { 255u8 } else { d as u8 };
+
+            match mode {
+                "L" | "P" | "1" => {
+                    data[y * 256 + x] = val;
+                }
+                "I" => {
+                    let bytes = (val as i32).to_le_bytes();
+                    let off = (y * 256 + x) * 4;
+                    data[off..off + 4].copy_from_slice(&bytes);
+                }
+                "F" => {
+                    let bytes = (val as f32).to_le_bytes();
+                    let off = (y * 256 + x) * 4;
+                    data[off..off + 4].copy_from_slice(&bytes);
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+    Image::frombytes(mode, (256, 256), &data)
+}
+
+/// Generate a Mandelbrot set image.
+/// PIL: `Image.effect_mandelbrot(size, extent, quality)`.
+/// Matches PIL's ImagingEffectMandelbrot in src/libImaging/Effects.c exactly,
+/// including the UINT8 overflow behavior when k > quality and pixel escapes.
+pub fn effect_mandelbrot(
+    size: (u32, u32),
+    extent: (f64, f64, f64, f64),
+    quality: i32,
+) -> Result<Image, PilError> {
+    let (w, h) = size;
+    if w == 0 || h == 0 {
+        return Err(PilError::ValueError(
+            "effect_mandelbrot: size must be > 0".into(),
+        ));
+    }
+
+    let (x0, y0, x1, y1) = extent;
+    let width = x1 - x0;
+    let height = y1 - y0;
+
+    if width < 0.0 || height < 0.0 || quality < 2 {
+        return Err(PilError::ValueError(
+            "effect_mandelbrot: invalid extent or quality".into(),
+        ));
+    }
+
+    // PIL's exact stride computation
+    let dr = if w > 1 {
+        width / (w - 1) as f64
+    } else {
+        0.0
+    };
+    let di = if h > 1 {
+        height / (h - 1) as f64
+    } else {
+        0.0
+    };
+
+    // PIL uses escape radius 100.0 (NOT the common 4.0)
+    let radius = 100.0f64;
+    let mut data = vec![0u8; (w * h) as usize];
+
+    for y in 0..h {
+        let row_start = (y * w) as usize;
+        for x in 0..w {
+            let cr = x as f64 * dr + x0;
+            let ci = y as f64 * di + y0;
+
+            // PIL's exact loop: for (k = 1;; k++) with check order:
+            //   1. compute Mandelbrot iteration
+            //   2. check escape → pixel = k*255/quality (as u8, may overflow)
+            //   3. check k > quality → pixel = 0 (never escaped)
+            let mut zx = 0.0f64;
+            let mut zy = 0.0f64;
+            let mut zx2 = 0.0f64;
+            let mut zy2 = 0.0f64;
+
+            let mut k: i32 = 1;
+            loop {
+                // y1 = 2 * x1 * y1 + ci
+                zy = 2.0 * zx * zy + ci;
+                // x1 = xi2 - yi2 + cr  (using OLD xi2/yi2)
+                zx = zx2 - zy2 + cr;
+                zx2 = zx * zx;
+                zy2 = zy * zy;
+
+                if zx2 + zy2 > radius {
+                    // PIL: buf[x] = k * 255 / quality (stored as UINT8)
+                    // In C: int val = k * 255 / quality; buf[x] = (UINT8)val;
+                    let val = (k * 255 / quality) as u8;
+                    data[row_start + x as usize] = val;
+                    break;
+                }
+                if k > quality {
+                    data[row_start + x as usize] = 0;
+                    break;
+                }
+                k += 1;
+            }
+        }
+    }
+
+    Image::frombytes("L", (w, h), &data)
+}

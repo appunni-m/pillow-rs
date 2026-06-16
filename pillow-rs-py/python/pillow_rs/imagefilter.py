@@ -260,13 +260,13 @@ class Color3DLUT:
         )
 
     def _apply(self, rust_image):
-        """Apply 3D LUT to image using trilinear interpolation."""
+        """Apply 3D LUT to image using Rust trilinear interpolation."""
         from .image import Image
 
         img = Image(rust_image)
         src_mode = img.mode
 
-        # Convert to RGB for processing if the mode is not RGB/RGBA
+        # Convert to RGB for processing if needed
         if src_mode not in ("RGB", "RGBA"):
             rgb_img = img.convert("RGB")
             has_alpha = False
@@ -274,114 +274,22 @@ class Color3DLUT:
             rgb_img = img
             has_alpha = src_mode == "RGBA"
 
-        pixels = rgb_img.getdata()  # list of (R,G,B) or (R,G,B,A) tuples
-
-        sx, sy, sz = self.size
-        channels = self.channels
-        table = self.table
-
-        # Pre-compute scale factors
-        sx_m1 = sx - 1
-        sy_m1 = sy - 1
-        sz_m1 = sz - 1
-        scale_x = sx_m1 / 255.0
-        scale_y = sy_m1 / 255.0
-        scale_z = sz_m1 / 255.0
-
-        new_pixels = []
-
-        for pixel in pixels:
-            r, g, b = pixel[0], pixel[1], pixel[2]
-
-            # Map 0-255 to [0, size-1]
-            x = r * scale_x
-            y = g * scale_y
-            z = b * scale_z
-
-            # Find surrounding grid points
-            x0 = int(x)
-            y0 = int(y)
-            z0 = int(z)
-            x1 = x0 + 1 if x0 < sx_m1 else x0
-            y1 = y0 + 1 if y0 < sy_m1 else y0
-            z1 = z0 + 1 if z0 < sz_m1 else z0
-            dx = x - x0
-            dy = y - y0
-            dz = z - z0
-
-            # Interpolation weights (pre-computed)
-            w000 = (1 - dx) * (1 - dy) * (1 - dz)
-            w100 = dx * (1 - dy) * (1 - dz)
-            w010 = (1 - dx) * dy * (1 - dz)
-            w110 = dx * dy * (1 - dz)
-            w001 = (1 - dx) * (1 - dy) * dz
-            w101 = dx * (1 - dy) * dz
-            w011 = (1 - dx) * dy * dz
-            w111 = dx * dy * dz
-
-            # Indices into table for the 8 corners of the 3D cube
-            stride_y = sx
-            stride_z = sx * sy
-
-            base000 = (x0 + y0 * stride_y + z0 * stride_z) * channels
-            base100 = (x1 + y0 * stride_y + z0 * stride_z) * channels
-            base010 = (x0 + y1 * stride_y + z0 * stride_z) * channels
-            base110 = (x1 + y1 * stride_y + z0 * stride_z) * channels
-            base001 = (x0 + y0 * stride_y + z1 * stride_z) * channels
-            base101 = (x1 + y0 * stride_y + z1 * stride_z) * channels
-            base011 = (x0 + y1 * stride_y + z1 * stride_z) * channels
-            base111 = (x1 + y1 * stride_y + z1 * stride_z) * channels
-
-            result = []
-
-            # Process each output channel with trilinear interpolation
-            for c in range(channels):
-                v000 = table[base000 + c]
-                v100 = table[base100 + c]
-                v010 = table[base010 + c]
-                v110 = table[base110 + c]
-                v001 = table[base001 + c]
-                v101 = table[base101 + c]
-                v011 = table[base011 + c]
-                v111 = table[base111 + c]
-
-                # Convert float [0,1] values to 0-255 scale
-                if isinstance(v000, float):
-                    v000 *= 255.0
-                    v100 *= 255.0
-                    v010 *= 255.0
-                    v110 *= 255.0
-                    v001 *= 255.0
-                    v101 *= 255.0
-                    v011 *= 255.0
-                    v111 *= 255.0
-
-                # Trilinear interpolation
-                val = (v000 * w000 + v100 * w100 + v010 * w010 + v110 * w110 +
-                       v001 * w001 + v101 * w101 + v011 * w011 + v111 * w111)
-
-                result.append(max(0, min(255, int(round(val)))))
-
-            # Preserve original alpha when LUT has fewer than 4 channels
-            # but the source image has alpha
-            if has_alpha and channels < 4:
-                result.append(pixel[3])
-
-            new_pixels.append(tuple(result))
+        # Use Rust implementation for trilinear interpolation
+        result = rgb_img._rust_image.color3dlut(
+            self.size, list(map(float, self.table)), self.channels
+        )
 
         # Determine output mode
         if self.mode:
             out_mode = self.mode
-        elif channels == 4:
+        elif self.channels == 4:
             out_mode = "RGBA"
         elif has_alpha:
             out_mode = "RGBA"
         else:
             out_mode = "RGB"
 
-        result_img = Image.new(out_mode, rgb_img.size)
-        result_img.putdata(new_pixels)
-        return result_img
+        return Image(result)
 
     def __repr__(self):
         r = [

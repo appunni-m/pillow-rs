@@ -114,9 +114,11 @@ class Draw:
         return (xy[0], xy[1], xy[0] + 80, xy[1] + 12)
 
     def textlength(self, text, font=None, **kwargs):
+        if font and hasattr(font, 'getlength'):
+            return font.getlength(str(text))
         if font and hasattr(font, 'getbbox'):
-            w, _ = font.getbbox(str(text))
-            return w
+            bbox = font.getbbox(str(text))
+            return bbox[2] - bbox[0]
         return len(str(text)) * 8
 
     def getfont(self):
