@@ -386,6 +386,9 @@ impl Image {
             PipelineOp::Invert => true,
             PipelineOp::InvertChops => true,
             PipelineOp::Eval { .. } => true,
+            PipelineOp::PutPixel { .. } => true,
+            PipelineOp::PutData { .. } => true,
+            PipelineOp::PutAlpha { .. } => true,
 
             // Duplicate / Constant / Offset — value-safe
             PipelineOp::Duplicate => true,
@@ -599,17 +602,24 @@ impl Image {
 
     /// Set a single pixel. Mutates self in-place.
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), PilError> {
-        // Defer via pipeline — consistent with all other ops
         let new_self = Image::push_op(
             self,
-            PipelineOp::PutPixel {
-                x,
-                y,
-                color: (r, g, b, a),
-            },
+            PipelineOp::PutPixel { x, y, color: (r, g, b, a) },
         );
         *self = new_self;
         Ok(())
+    }
+
+    /// Mode-aware putpixel for single-int values. Expands int to RGBA per PIL mode rules.
+    pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
+        let (r, g, b, a) = match mode {
+            "L" | "1" | "P" => (v, v, v, 255),
+            "LA" => (v, 0, 0, 0),
+            "RGB" => (v, 0, 0, 255),
+            "RGBA" | "CMYK" => (v, 0, 0, 0),
+            _ => (v, v, v, 255),
+        };
+        self.putpixel(x, y, r, g, b, a)
     }
 
     /// PIL-compatible statistics result. Single-band: scalars. Multi-band: vectors.

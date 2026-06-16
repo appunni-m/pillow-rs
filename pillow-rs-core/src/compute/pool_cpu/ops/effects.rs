@@ -770,16 +770,34 @@ pub fn op_put_pixel(
     y: u32,
     color: (u8, u8, u8, u8),
 ) -> Result<DynamicImage, PilError> {
-    let mut rgba = img.to_rgba8();
-    let (w, h) = (rgba.width(), rgba.height());
+    let (w, h) = (img.width(), img.height());
     if x >= w || y >= h {
         return Err(PilError::ValueError(format!(
             "pixel ({},{}) out of bounds ({}x{})",
             x, y, w, h
         )));
     }
-    rgba.put_pixel(x, y, image::Rgba([color.0, color.1, color.2, color.3]));
-    Ok(preserve_mode(img, DynamicImage::ImageRgba8(rgba)))
+    match img.clone() {
+        DynamicImage::ImageLuma8(mut l) => {
+            l.put_pixel(x, y, image::Luma([color.0]));
+            Ok(DynamicImage::ImageLuma8(l))
+        }
+        DynamicImage::ImageLumaA8(mut la) => {
+            la.put_pixel(x, y, image::LumaA([color.0, color.3]));
+            Ok(DynamicImage::ImageLumaA8(la))
+        }
+        DynamicImage::ImageRgb8(mut rgb) => {
+            rgb.put_pixel(x, y, image::Rgb([color.0, color.1, color.2]));
+            Ok(DynamicImage::ImageRgb8(rgb))
+        }
+        DynamicImage::ImageRgba8(mut rgba) => {
+            rgba.put_pixel(x, y, image::Rgba([color.0, color.1, color.2, color.3]));
+            Ok(DynamicImage::ImageRgba8(rgba))
+        }
+        _ => Err(PilError::NotImplementedError(
+            "putpixel not supported for this image type".into()
+        )),
+    }
 }
 
 // ── PutData ──

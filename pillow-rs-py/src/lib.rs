@@ -779,27 +779,16 @@ impl PyImage {
         let mut flat: Vec<u8> = Vec::new();
         for item in data.iter()? {
             let obj = item?;
-            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
-            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1, t.2]);
-            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
-                flat.extend_from_slice(&[t.0, t.1]);
-            } else if let Ok(v) = obj.extract::<u8>() {
-                if n_bands > 1 {
-                    flat.push(v);
-                    flat.resize(flat.len() + n_bands - 1, 0);
-                } else {
-                    flat.push(v);
-                }
-            } else if let Ok(v) = obj.extract::<i64>() {
-                let v = v.clamp(0, 255) as u8;
-                if n_bands > 1 {
-                    flat.push(v);
-                    flat.resize(flat.len() + n_bands - 1, 0);
-                } else {
-                    flat.push(v);
-                }
+            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() { flat.extend_from_slice(&[t.0, t.1, t.2, t.3]); }
+            else if let Ok(t) = obj.extract::<(u8, u8, u8)>() { flat.extend_from_slice(&[t.0, t.1, t.2]); }
+            else if let Ok(t) = obj.extract::<(u8, u8)>() { flat.extend_from_slice(&[t.0, t.1]); }
+            else if let Ok(v) = obj.extract::<u8>() {
+                flat.push(v);
+                for _ in 1..n_bands { flat.push(0); }
+            }
+            else if let Ok(v) = obj.extract::<i64>() {
+                flat.push(v.clamp(0, 255) as u8);
+                for _ in 1..n_bands { flat.push(0); }
             }
         }
         self.inner.putdata(&flat).map_err(map_error)
@@ -824,6 +813,9 @@ impl PyImage {
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
     fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
         let mode = self.inner.mode().map_err(map_error)?;
+        if let Ok(v) = value.extract::<u8>() {
+            return self.inner.putpixel_mode(xy.0, xy.1, v, &mode).map_err(map_error);
+        }
         if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
             return self.inner.putpixel(xy.0, xy.1, r, g, b, 255).map_err(map_error);
         }
@@ -831,24 +823,15 @@ impl PyImage {
             return self.inner.putpixel(xy.0, xy.1, r, g, b, a).map_err(map_error);
         }
         if let Ok(list) = value.extract::<Vec<u8>>() {
-            match list.len() {
-                2 => return self.inner.putpixel(xy.0, xy.1, list[0], 0, 0, list[1]).map_err(map_error),
-                3 => return self.inner.putpixel(xy.0, xy.1, list[0], list[1], list[2], 255).map_err(map_error),
-                4 => return self.inner.putpixel(xy.0, xy.1, list[0], list[1], list[2], list[3]).map_err(map_error),
-                _ => {}
-            }
-        }
-        if let Ok(v) = value.extract::<u8>() {
-            let (r, g, b, a) = match mode.as_str() {
-                "L" | "1" | "P" => (v, v, v, 255),
-                "LA" => (v, 0, 0, 0),
-                _ => (v, 0, 0, 0),
+            let (r, g, b, a) = match list.len() {
+                2 => (list[0], 0, 0, list[1]),
+                3 => (list[0], list[1], list[2], 255),
+                4 => (list[0], list[1], list[2], list[3]),
+                _ => return Err(pyo3::exceptions::PyValueError::new_err("invalid color length")),
             };
             return self.inner.putpixel(xy.0, xy.1, r, g, b, a).map_err(map_error);
         }
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            "value must be int, tuple, or list",
-        ))
+        Err(pyo3::exceptions::PyTypeError::new_err("value must be int, tuple, or list"))
     }
 
     #[getter]

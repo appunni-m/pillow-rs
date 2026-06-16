@@ -4,8 +4,14 @@
 Reads each input JSON from tests/fixtures/input/jsons/, executes the operation
 via PIL, and writes the expected results to tests/fixtures/outputs/jsons/.
 Reference images are saved as PNGs in tests/fixtures/outputs/images/.
+
+Usage:
+    python scripts/generate_fixtures.py                          # process all suites
+    python scripts/generate_fixtures.py --suite 1                # process suite 1 only
+    python scripts/generate_fixtures.py --fixtures-dir tests/fixtures_2 --suite 1
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -36,11 +42,13 @@ except ImportError:
 
 from engine import CALL_STYLE, get_call_style, create_input
 
+# These are set in main() after parsing CLI args
 FIXTURES_DIR = ROOT / "tests" / "fixtures"
 INPUT_DIR = FIXTURES_DIR / "input" / "jsons"
 OUTPUT_JSONS_DIR = FIXTURES_DIR / "outputs" / "jsons"
 OUTPUT_IMAGES_DIR = FIXTURES_DIR / "outputs" / "images"
 OUTPUT_RAWS_DIR = FIXTURES_DIR / "outputs" / "raws"
+TARGET_SUITE = None  # None = all suites, 0-9 = specific suite
 
 
 class PilBackend:
@@ -76,7 +84,12 @@ def generate_one(input_path):
     op = inp["operation"]
     call_style = get_call_style(op["module"], op["target"])
 
-    out = {"format_version": 2, "operation": op, "cases": []}
+    out = {
+        "format_version": 2,
+        "suite": inp.get("suite", 0),
+        "operation": op,
+        "cases": [],
+    }
     stem = input_path.stem
 
     for case in inp["cases"]:
@@ -204,7 +217,32 @@ def generate_one(input_path):
 
 
 def main():
-    """Generate output fixtures for all input fixtures."""
+    """Generate output fixtures for all input fixtures (filtered by --suite)."""
+    global FIXTURES_DIR, INPUT_DIR, OUTPUT_JSONS_DIR, OUTPUT_IMAGES_DIR, OUTPUT_RAWS_DIR, TARGET_SUITE
+
+    parser = argparse.ArgumentParser(
+        description="Generate expected output fixtures by running PIL against input specs"
+    )
+    parser.add_argument(
+        "--fixtures-dir",
+        default="tests/fixtures",
+        help="Fixtures directory relative to repo root (default: tests/fixtures)",
+    )
+    parser.add_argument(
+        "--suite",
+        type=int,
+        default=None,
+        help="Suite number 0-9 to generate (default: all suites). 0 = main fixtures.",
+    )
+    args = parser.parse_args()
+
+    FIXTURES_DIR = ROOT / args.fixtures_dir
+    TARGET_SUITE = args.suite
+    INPUT_DIR = FIXTURES_DIR / "input" / "jsons"
+    OUTPUT_JSONS_DIR = FIXTURES_DIR / "outputs" / "jsons"
+    OUTPUT_IMAGES_DIR = FIXTURES_DIR / "outputs" / "images"
+    OUTPUT_RAWS_DIR = FIXTURES_DIR / "outputs" / "raws"
+
     OUTPUT_JSONS_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_RAWS_DIR.mkdir(parents=True, exist_ok=True)
@@ -214,16 +252,34 @@ def main():
         print("No input fixtures found in", INPUT_DIR)
         return
 
+    generated = 0
+    skipped = 0
     for input_path in input_files:
+        # Filter by suite if --suite specified
+        if TARGET_SUITE is not None:
+            try:
+                inp_preview = json.loads(input_path.read_text())
+                file_suite = inp_preview.get("suite", 0)
+                if file_suite != TARGET_SUITE:
+                    skipped += 1
+                    continue
+            except json.JSONDecodeError:
+                print(f"  SKIP {input_path.stem}: invalid JSON", file=sys.stderr)
+                continue
+
         try:
             out = generate_one(input_path)
             output_path = OUTPUT_JSONS_DIR / input_path.name
             output_path.write_text(json.dumps(out, indent=2))
             print(f"  OK  {input_path.stem} ({len(out['cases'])} cases)")
+            generated += 1
         except Exception as e:
             print(f"  FAIL {input_path.stem}: {e}", file=sys.stderr)
 
-    print(f"\nGenerated {len(input_files)} output fixtures")
+    suite_msg = f" (suite {TARGET_SUITE})" if TARGET_SUITE is not None else " (all suites)"
+    print(f"\nGenerated {generated} output fixtures{suite_msg}")
+    if skipped > 0:
+        print(f"Skipped {skipped} fixtures from other suites")
 
 
 if __name__ == "__main__":
