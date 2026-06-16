@@ -1,4 +1,5 @@
 """ImageStat — statistical analysis of images. Pillow-compatible module."""
+from . import _core
 from .image import Image
 
 
@@ -18,10 +19,8 @@ class Stat:
             self.stddev = result['stddev']
             self.extrema = result['extrema']
         else:
-            # List-based stat (fallback)
-            data = list(image_or_list)
-            self.count = len(data)
-            self.sum = sum(data) if data else 0
-            n = self.count or 1
-            self.mean = self.sum / n
-            self.extrema = (min(data), max(data)) if data else (0, 0)
+            result = _core.stat_from_list(list(image_or_list))
+            self.count = result['count']
+            self.sum = result['sum']
+            self.mean = result['mean']
+            self.extrema = (result['min'], result['max'])

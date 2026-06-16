@@ -1,5 +1,5 @@
 """ImageFont — font loading and text rendering via fontdue (pure Rust FreeType equivalent)."""
-from ._core import ImageFont as RustFont
+from . import _core
 from .image import Image
 
 
@@ -14,12 +14,7 @@ class ImageFont:
         """
         if isinstance(text, bytes):
             text = text.decode("utf-8", errors="replace")
-        lines = text.split("\n") if isinstance(text, str) else [str(text)]
-        char_width = 6
-        char_height = 11
-        max_width = max(len(line) for line in lines) * char_width
-        total_height = len(lines) * char_height
-        return (0, 0, max_width, total_height)
+        return _core.font_default_bbox(text)
 
     def getlength(self, text, *args, **kwargs):
         """Get text length in pixels using default bitmap font.
@@ -29,8 +24,7 @@ class ImageFont:
         if isinstance(text, bytes):
             text = text.decode("utf-8", errors="replace")
         if isinstance(text, str):
-            lines = text.split("\n")
-            return max(len(line) for line in lines) * 6
+            return _core.font_default_length(text)
         return len(str(text)) * 6
 
     def getmask(self, text, mode="", *args, **kwargs):
@@ -52,12 +46,8 @@ class ImageFont:
         except Exception:
             pass
         # Fallback: return a blank L mask sized for the text
-        w = int(self.getlength(text))
-        if isinstance(text, str):
-            h = 11 * (text.count("\n") + 1)
-        else:
-            h = 11
-        return Image.new("L", (max(w, 1), max(h, 1)), 0)
+        w, h = _core.font_default_mask_size(text)
+        return Image.new("L", (w, h), 0)
 
 
 class FreeTypeFont:
@@ -66,10 +56,10 @@ class FreeTypeFont:
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
         if isinstance(font, str):
             self._font_path = font
-            self._rust_font = RustFont.truetype(font, float(size))
+            self._rust_font = _core.ImageFont.truetype(font, float(size))
         elif hasattr(font, 'read'):
             self._font_data = font.read()
-            self._rust_font = RustFont.truetype_from_bytes(self._font_data, float(size))
+            self._rust_font = _core.ImageFont.truetype_from_bytes(self._font_data, float(size))
         else:
             raise TypeError("font must be a file path or file-like object")
         self.size = float(size)
@@ -287,7 +277,7 @@ def load_default(size=None):
     if size is None:
         size = 10
     font = object.__new__(FreeTypeFont)
-    font._rust_font = RustFont.load_default(float(size))
+    font._rust_font = _core.ImageFont.load_default(float(size))
     font.size = float(size)
     font._is_default = True
     return font

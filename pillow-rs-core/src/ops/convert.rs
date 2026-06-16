@@ -50,6 +50,11 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
+        // PIL: converting to the same mode is a no-op (returns a copy).
+        if mode == self.mode()? {
+            return Ok(self.copy());
+        }
+
         // Matrix-based conversion must be executed immediately since it modifies
         // pixel values directly and can't be represented as a simple mode convert.
         if let Some(mat) = matrix {

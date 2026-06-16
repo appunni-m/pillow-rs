@@ -1,5 +1,6 @@
 """ImageFilter — convolution kernels and filter classes. Pillow-compatible module."""
 from ._core import Image as RustImage
+from . import _core
 from .image import Image
 
 
@@ -84,14 +85,10 @@ class Kernel:
         self.scale = scale
         self.offset = offset
     def _apply(self, rust_image):
-        size_x, size_y = self.size
-        if size_x != size_y or size_x not in (3, 5):
-            raise NotImplementedError(f"Kernel size {self.size} not supported, only 3x3 and 5x5")
-        k = [float(v) for v in (self.kernel or [1] * (size_x * size_y))]
-        scale = float(self.scale) if self.scale is not None else sum(k)
-        from .image import Image
-        from ._core import Image as RustImage
-        return Image(rust_image.kernel_filter(k, scale, int(self.offset), size_x))
+        k, scale, offset, size_x = _core.kernel_prepare(
+            self.kernel, self.scale, self.offset, self.size
+        )
+        return Image(rust_image.kernel_filter(k, scale, offset, size_x))
 
 
 class Color3DLUT:
@@ -121,55 +118,13 @@ class Color3DLUT:
 
     name = "Color 3D LUT"
 
-    def __init__(self, size, table=None, channels=3, target_mode=None, **kwargs):
+    def __init__(self, size, table=None, channels=3, target_mode=None, **_kwargs):
         if channels not in (3, 4):
             raise ValueError("Only 3 or 4 output channels are supported")
-        self.size = size = self._check_size(size)
+        self.size = _core.color3dlut_check_size(size)
         self.channels = channels
         self.mode = target_mode
-
-        # Hidden flag ``_copy_table=False`` could be used to avoid extra copying
-        # of the table if the table is specially made for the constructor.
-        copy_table = kwargs.get("_copy_table", True)
-        items = size[0] * size[1] * size[2]
-        wrong_size = False
-
-        if copy_table:
-            table = list(table)
-
-        # Convert a list of tuples into a flat list
-        if table and isinstance(table[0], (list, tuple)):
-            flat_table = []
-            for pixel in table:
-                if len(pixel) != channels:
-                    raise ValueError(
-                        "The elements of the table should "
-                        "have a length of %d." % channels
-                    )
-                flat_table.extend(pixel)
-            table = flat_table
-
-        if wrong_size or len(table) != items * channels:
-            raise ValueError(
-                "The table should have either channels * size**3 float items "
-                "or size**3 items of channels-sized tuples with floats. "
-                "Table should be: %dx%dx%dx%d. "
-                "Actual length: %d" % (channels, size[0], size[1], size[2], len(table))
-            )
-        self.table = table
-
-    @staticmethod
-    def _check_size(size):
-        """Validate and normalize LUT size. Converts int to 3-tuple."""
-        try:
-            _, _, _ = size
-        except (TypeError, ValueError):
-            size = (size, size, size)
-        size = tuple(int(x) for x in size)
-        for size_1d in size:
-            if not 2 <= size_1d <= 65:
-                raise ValueError("Size should be in [2, 65] range.")
-        return size
+        self.table = _core.color3dlut_new(table, self.size, channels)
 
     @classmethod
     def generate(cls, size, callback, channels=3, target_mode=None):
@@ -184,26 +139,15 @@ class Color3DLUT:
         :param target_mode: Passed to the constructor of the resulting
                             lookup table.
         """
-        size_1d, size_2d, size_3d = cls._check_size(size)
+        validated_size = _core.color3dlut_check_size(size)
         if channels not in (3, 4):
             raise ValueError("Only 3 or 4 output channels are supported")
-
-        table = [0.0] * (size_1d * size_2d * size_3d * channels)
-        idx_out = 0
-        for b in range(size_3d):
-            for g in range(size_2d):
-                for r in range(size_1d):
-                    table[idx_out:idx_out + channels] = callback(
-                        r / (size_1d - 1), g / (size_2d - 1), b / (size_3d - 1)
-                    )
-                    idx_out += channels
-
+        table = _core.color3dlut_generate(validated_size, channels, callback)
         return cls(
-            (size_1d, size_2d, size_3d),
+            validated_size,
             table,
             channels=channels,
             target_mode=target_mode,
-            _copy_table=False,
         )
 
     def transform(self, callback, with_normals=False, channels=None, target_mode=None):
@@ -227,42 +171,19 @@ class Color3DLUT:
         """
         if channels not in (None, 3, 4):
             raise ValueError("Only 3 or 4 output channels are supported")
-        ch_in = self.channels
-        ch_out = channels or ch_in
-        size_1d, size_2d, size_3d = self.size
-
-        table = [0.0] * (size_1d * size_2d * size_3d * ch_out)
-        idx_in = 0
-        idx_out = 0
-        for b in range(size_3d):
-            for g in range(size_2d):
-                for r in range(size_1d):
-                    values = self.table[idx_in:idx_in + ch_in]
-                    if with_normals:
-                        values = callback(
-                            r / (size_1d - 1),
-                            g / (size_2d - 1),
-                            b / (size_3d - 1),
-                            *values,
-                        )
-                    else:
-                        values = callback(*values)
-                    table[idx_out:idx_out + ch_out] = values
-                    idx_out += ch_out
-                    idx_in += ch_in
-
+        ch_out = channels or self.channels
+        table = _core.color3dlut_transform(
+            self.table, self.size, self.channels, ch_out, with_normals, callback
+        )
         return type(self)(
             self.size,
             table,
             channels=ch_out,
             target_mode=target_mode or self.mode,
-            _copy_table=False,
         )
 
     def _apply(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
-        from .image import Image
-
         img = Image(rust_image)
         src_mode = img.mode
 

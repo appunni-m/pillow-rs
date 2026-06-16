@@ -28,7 +28,9 @@ where
     if is_p_mode {
         // Convert back to Luma8 by extracting R channel (R=G=B for P-mode indices)
         let (w, h) = canvas.dimensions();
-        DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| image::Luma([canvas.get_pixel(x, y)[0]])))
+        DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
+            image::Luma([canvas.get_pixel(x, y)[0]])
+        }))
     } else {
         DynamicImage::ImageRgba8(canvas)
     }
@@ -802,21 +804,95 @@ pub fn op_draw_rounded_rect(
         result = op_draw_rectangle(&result, x0 + r, y0, x1 - r, y1, Some(fc), None, 1, _mode)?;
         // Side rectangles
         if x1 - r > x0 + r + 1 {
-            result = op_draw_rectangle(&result, x0 + r + 1, y0, x1 - r - 1, y1, Some(fc), None, 1, _mode)?;
+            result = op_draw_rectangle(
+                &result,
+                x0 + r + 1,
+                y0,
+                x1 - r - 1,
+                y1,
+                Some(fc),
+                None,
+                1,
+                _mode,
+            )?;
         }
         let rect_left = if x0 + r > x0 { x0 + r } else { x0 + 1 };
         if rect_left < x1 - r {
-            result = op_draw_rectangle(&result, x0, y0 + r, rect_left, y1 - r, Some(fc), None, 1, _mode)?;
-            result = op_draw_rectangle(&result, x1 - r, y0 + r, x1, y1 - r, Some(fc), None, 1, _mode)?;
+            result = op_draw_rectangle(
+                &result,
+                x0,
+                y0 + r,
+                rect_left,
+                y1 - r,
+                Some(fc),
+                None,
+                1,
+                _mode,
+            )?;
+            result = op_draw_rectangle(
+                &result,
+                x1 - r,
+                y0 + r,
+                x1,
+                y1 - r,
+                Some(fc),
+                None,
+                1,
+                _mode,
+            )?;
         }
     }
 
     if let Some(oc) = outline {
         // Corner arcs
-        result = op_draw_arc(&result, x0, y0, x0 + d, y0 + d, 180.0, 270.0, Some(oc), 1, _mode)?;
-        result = op_draw_arc(&result, x1 - d, y0, x1, y0 + d, 270.0, 360.0, Some(oc), 1, _mode)?;
-        result = op_draw_arc(&result, x1 - d, y1 - d, x1, y1, 0.0, 90.0, Some(oc), 1, _mode)?;
-        result = op_draw_arc(&result, x0, y1 - d, x0 + d, y1, 90.0, 180.0, Some(oc), 1, _mode)?;
+        result = op_draw_arc(
+            &result,
+            x0,
+            y0,
+            x0 + d,
+            y0 + d,
+            180.0,
+            270.0,
+            Some(oc),
+            1,
+            _mode,
+        )?;
+        result = op_draw_arc(
+            &result,
+            x1 - d,
+            y0,
+            x1,
+            y0 + d,
+            270.0,
+            360.0,
+            Some(oc),
+            1,
+            _mode,
+        )?;
+        result = op_draw_arc(
+            &result,
+            x1 - d,
+            y1 - d,
+            x1,
+            y1,
+            0.0,
+            90.0,
+            Some(oc),
+            1,
+            _mode,
+        )?;
+        result = op_draw_arc(
+            &result,
+            x0,
+            y1 - d,
+            x0 + d,
+            y1,
+            90.0,
+            180.0,
+            Some(oc),
+            1,
+            _mode,
+        )?;
         // Edge lines
         result = op_draw_line(&result, x0 + r, y0, x1 - r, y0, oc, 1, _mode)?;
         result = op_draw_line(&result, x1, y0 + r, x1, y1 - r, oc, 1, _mode)?;
@@ -912,7 +988,19 @@ pub fn op_draw_chord(
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if let Some(fc) = fill {
-        op_draw_pieslice(img, x0, y0, x1, y1, start, end, Some(fc), outline, width, _mode)
+        op_draw_pieslice(
+            img,
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            Some(fc),
+            outline,
+            width,
+            _mode,
+        )
     } else {
         op_draw_arc(
             img,

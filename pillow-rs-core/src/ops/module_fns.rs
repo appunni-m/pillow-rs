@@ -88,9 +88,12 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
         return eval(image, lut);
     }
     if lut.len() != 256 {
-        return Err(PilError::ValueError(
-            format!("wrong number of lut entries: expected {} or {} got {}", 256, expected, lut.len())
-        ));
+        return Err(PilError::ValueError(format!(
+            "wrong number of lut entries: expected {} or {} got {}",
+            256,
+            expected,
+            lut.len()
+        )));
     }
     let mut replicated = Vec::with_capacity(expected);
     for _ in 0..n_bands {

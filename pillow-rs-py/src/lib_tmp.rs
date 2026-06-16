@@ -2,7 +2,7 @@ use pillow_rs_core::error::PilError;
 use pillow_rs_core::image::Image as RsImage;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyType, PyTuple};
+use pyo3::types::PyType;
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -85,12 +85,6 @@ impl PyImage {
 
     fn crop(&self, box_coords: (u32, u32, u32, u32)) -> PyResult<PyImage> {
         let rs = self.inner.crop(box_coords).map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-    /// Crop using PIL box format (left, top, right, bottom).
-    /// Computes width and height internally.
-    fn crop_box(&self, left: u32, top: u32, right: u32, bottom: u32) -> PyResult<PyImage> {
-        let rs = self.inner.crop_box(left, top, right, bottom).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -222,32 +216,10 @@ impl PyImage {
     fn tobytes_formatted(&self, mode: &str) -> PyResult<Vec<u8>> {
         self.inner.tobytes_formatted(mode).map_err(map_error)
     }
-    /// Like tobytes_formatted but with optional channel swap (BGRA/BGR).
-    fn tobytes_formatted_swap(&self, mode: &str, fmt: &str) -> PyResult<Vec<u8>> {
-        let mut data = self.inner.tobytes_formatted(mode).map_err(map_error)?;
-        match fmt {
-            "BGRA" => {
-                for chunk in data.chunks_exact_mut(4) {
-                    chunk.swap(0, 2);
-                }
-            }
-            "BGR" => {
-                for chunk in data.chunks_exact_mut(3) {
-                    chunk.swap(0, 2);
-                }
-            }
-            _ => {}
-        }
-        Ok(data)
-    }
 
     /// Return palette data (RGB triples) for P-mode quantized images.
     fn palette(&self) -> Option<Vec<u8>> {
         self.inner.palette()
-    }
-    /// Return palette trimmed of trailing zero triples, matching PIL's getpalette().
-    fn getpalette_trimmed(&self) -> Option<Vec<u8>> {
-        self.inner.getpalette_trimmed()
     }
 
     fn apply_transparency(&mut self) -> PyResult<()> {
@@ -303,18 +275,6 @@ impl PyImage {
 
     fn getextrema(&self) -> PyResult<Vec<(u8, u8)>> {
         self.inner.getextrema().map_err(map_error)
-    }
-    /// Return extrema formatted as PIL expects.
-    fn getextrema_formatted(&self) -> PyResult<PyObject> {
-        let raw = self.inner.getextrema().map_err(map_error)?;
-        Python::with_gil(|py| {
-            if raw.len() == 1 {
-                Ok((raw[0].0, raw[0].1).to_object(py))
-            } else {
-                let tuples: Vec<(u8, u8)> = raw.iter().map(|&(a, b)| (a, b)).collect();
-                Ok(tuples.to_object(py))
-            }
-        })
     }
 
     fn stat(&self) -> PyResult<Vec<Vec<f64>>> {
@@ -472,62 +432,9 @@ impl PyImage {
             .getcolors(maxcolors.unwrap_or(256))
             .map_err(map_error)
     }
-    /// Return getcolors formatted as PIL expects.
-    fn getcolors_formatted(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
-        let raw = self.inner.getcolors(maxcolors.unwrap_or(256)).map_err(map_error)?;
-        let mode = self.inner.mode().map_err(map_error)?;
-        Python::with_gil(|py| {
-            match raw {
-                None => Ok(None),
-                Some(results) => {
-                    let n_bands = match mode.as_str() {
-                        "L" | "1" | "P" | "I" | "F" => 1,
-                        "LA" => 2,
-                        "RGB" | "YCbCr" | "HSV" => 3,
-                        _ => 4,
-                    };
-                    let out = pyo3::types::PyList::empty(py);
-                    for (count, color) in results {
-                        let entry_list = [count.to_object(py)];
-                        let entry = pyo3::types::PyList::new(py, &entry_list)?;
-                        if n_bands == 1 {
-                            entry.append(color[0].to_object(py))?;
-                        } else {
-                            let clist: Vec<u8> = color.iter().take(n_bands).copied().collect();
-                            entry.append(clist.to_object(py))?;
-                        }
-                        out.append(entry)?;
-                    }
-                    Ok(Some(out.to_object(py)))
-                }
-            }
-        })
-    }
 
     fn getdata(&mut self, band: Option<i32>) -> PyResult<Vec<u8>> {
         self.inner.getdata(band).map_err(map_error)
-    }
-    /// Return getdata formatted as PIL expects.
-    fn getdata_formatted(&mut self, band: Option<i32>) -> PyResult<PyObject> {
-        let raw = self.inner.getdata(band).map_err(map_error)?;
-        let mode = self.inner.mode().map_err(map_error)?;
-        Python::with_gil(|py| {
-            let n_bands = match mode.as_str() {
-                "L" | "1" | "P" | "I" | "F" => 1,
-                "LA" => 2,
-                "RGB" | "YCbCr" | "HSV" => 3,
-                _ => 4,
-            };
-            if n_bands == 1 {
-                Ok(raw.to_object(py))
-            } else {
-                let out = pyo3::types::PyList::empty(py);
-                for chunk in raw.chunks_exact(n_bands) {
-                    out.append(chunk.to_object(py))?;
-                }
-                Ok(out.to_object(py))
-            }
-        })
     }
 
     fn getprojection(&mut self) -> PyResult<(Vec<u32>, Vec<u32>)> {
@@ -546,7 +453,6 @@ impl PyImage {
         self.inner.tell()
     }
 
-    /// Pre-built LUT: must have exactly 256 * n_bands entries (PIL requirement).
     fn point(&self, lut: Vec<u8>) -> PyResult<PyImage> {
         pillow_rs_core::ops::module_fns::eval(&self.inner, &lut)
             .map(|i| PyImage { inner: i })
@@ -558,19 +464,6 @@ impl PyImage {
         pillow_rs_core::ops::module_fns::eval_replicated(&self.inner, &lut, n_bands)
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
-    }
-
-    /// Validate pre-built LUT length before calling point.
-    /// PIL: LUT must have exactly 256 * n_bands entries.
-    fn point_validated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
-        let n_bands = self.inner.getbands().map_err(map_error)?.len();
-        let expected = 256 * n_bands;
-        if lut.len() != expected {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                format!("wrong number of lut entries: expected {} got {}", expected, lut.len())
-            ));
-        }
-        self.point(lut)
     }
 
     fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
@@ -821,35 +714,6 @@ impl PyImage {
             .putpixel(xy.0, xy.1, r, g, b, a)
             .map_err(map_error)
     }
-    /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
-    fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let mode = self.inner.mode().map_err(map_error)?;
-        if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
-            return self.inner.putpixel(xy.0, xy.1, r, g, b, 255).map_err(map_error);
-        }
-        if let Ok((r, g, b, a)) = value.extract::<(u8, u8, u8, u8)>() {
-            return self.inner.putpixel(xy.0, xy.1, r, g, b, a).map_err(map_error);
-        }
-        if let Ok(list) = value.extract::<Vec<u8>>() {
-            match list.len() {
-                2 => return self.inner.putpixel(xy.0, xy.1, list[0], 0, 0, list[1]).map_err(map_error),
-                3 => return self.inner.putpixel(xy.0, xy.1, list[0], list[1], list[2], 255).map_err(map_error),
-                4 => return self.inner.putpixel(xy.0, xy.1, list[0], list[1], list[2], list[3]).map_err(map_error),
-                _ => {}
-            }
-        }
-        if let Ok(v) = value.extract::<u8>() {
-            let (r, g, b, a) = match mode.as_str() {
-                "L" | "1" | "P" => (v, v, v, 255),
-                "LA" => (v, 0, 0, 0),
-                _ => (v, 0, 0, 0),
-            };
-            return self.inner.putpixel(xy.0, xy.1, r, g, b, a).map_err(map_error);
-        }
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            "value must be int, tuple, or list",
-        ))
-    }
 
     #[getter]
     fn size(&mut self) -> PyResult<(u32, u32)> {
@@ -986,8 +850,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_scale, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand, m)?)?;
     m.add_function(wrap_pyfunction!(ops_crop_border, m)?)?;
-    m.add_function(wrap_pyfunction!(exif_get_orientation, m)?)?;
-    m.add_function(wrap_pyfunction!(exif_remove_orientation, m)?)?;
 
     // ImageChops functions
     m.add_function(wrap_pyfunction!(chops_add, m)?)?;
@@ -1016,20 +878,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getcolor, m)?)?;
     m.add_function(wrap_pyfunction!(palette_search, m)?)?;
     m.add_function(wrap_pyfunction!(palette_getcolor_append, m)?)?;
-    m.add_function(wrap_pyfunction!(palette_getcolor_validate, m)?)?;
-    m.add_function(wrap_pyfunction!(palette_save_to_file, m)?)?;
     m.add_function(wrap_pyfunction!(palette_to_text, m)?)?;
-
-    // ImageFont module helpers
-    m.add_function(wrap_pyfunction!(font_default_bbox, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_length, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
-
-    // ImageDraw helpers
-    m.add_function(wrap_pyfunction!(outline_curve, m)?)?;
-
-    // ImageStat module helpers
-    m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
 
     // Image module functions
     m.add_function(wrap_pyfunction!(image_merge, m)?)?;
@@ -1045,17 +894,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(available_backends, m)?)?;
     m.add_function(wrap_pyfunction!(active_backends, m)?)?;
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
-
-    // ImageFilter helper functions
-    m.add_function(wrap_pyfunction!(color3dlut_check_size, m)?)?;
-    m.add_function(wrap_pyfunction!(color3dlut_new, m)?)?;
-    m.add_function(wrap_pyfunction!(color3dlut_generate, m)?)?;
-    m.add_function(wrap_pyfunction!(color3dlut_transform, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_bbox, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_length, m)?)?;
-    m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
-    m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
-    m.add_function(wrap_pyfunction!(kernel_prepare, m)?)?;
 
     Ok(())
 }
@@ -1124,19 +962,16 @@ impl PyDraw {
 
     fn line(
         &mut self,
-        xy: Vec<Vec<i32>>,
+        xy: Vec<(i32, i32)>,
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| if v.len() >= 2 { (v[0], v[1]) } else { (v[0], v[0]) })
-            .collect();
-        let w = width.map(|w| if w > 0 { w } else { 1 }).unwrap_or(1);
-        for i in 0..pts.len() - 1 {
+        for i in 0..xy.len() - 1 {
+            let (x0, y0) = xy[i];
+            let (x1, y1) = xy[i + 1];
             self.draw
-                .line(pts[i].0, pts[i].1, pts[i + 1].0, pts[i + 1].1, color, w)
+                .line(x0, y0, x1, y1, color, width.unwrap_or(1))
                 .map_err(map_error)?;
         }
         Ok(())
@@ -1281,7 +1116,7 @@ impl PyDraw {
 
     fn polygon(
         &mut self,
-        xy: Vec<Vec<i32>>,
+        xy: Vec<(i32, i32)>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
@@ -1296,22 +1131,14 @@ impl PyDraw {
         } else {
             None
         };
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| if v.len() >= 2 { (v[0], v[1]) } else { (v[0], v[0]) })
-            .collect();
         self.draw
-            .polygon(&pts, fill_color, out_color, width.unwrap_or(1))
+            .polygon(&xy, fill_color, out_color, width.unwrap_or(1))
             .map_err(map_error)
     }
 
-    fn point(&mut self, xy: Vec<Vec<i32>>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn point(&mut self, xy: Vec<(i32, i32)>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| if v.len() >= 2 { (v[0], v[1]) } else { (v[0], v[0]) })
-            .collect();
-        self.draw.point(&pts, color).map_err(map_error)
+        self.draw.point(&xy, color).map_err(map_error)
     }
 
     #[pyo3(signature = (xy, start, end, fill=None, width=1))]
@@ -1474,87 +1301,6 @@ impl PyDraw {
             }
         }
         Ok(())
-    }
-
-    /// Compute text bounding box. Loads default FreeType font if font is None.
-    /// Returns (left, top, right, bottom).
-    #[pyo3(signature = (xy, text, font=None))]
-    fn textbbox(
-        &mut self,
-        xy: (i32, i32),
-        text: &str,
-        font: Option<&Bound<'_, PyFont>>,
-    ) -> PyResult<(i32, i32, i32, i32)> {
-        let (w, h) = match font {
-            Some(f) => f.borrow().inner.text_bbox(text),
-            None => pillow_rs_core::font::Font::load_default(10.0).text_bbox(text),
-        };
-        Ok((xy.0, xy.1, xy.0 + w as i32, xy.1 + h as i32))
-    }
-
-    /// Compute text length in pixels. Loads default FreeType font if font is None.
-    #[pyo3(signature = (text, font=None))]
-    fn textlength(
-        &mut self,
-        text: &str,
-        font: Option<&Bound<'_, PyFont>>,
-    ) -> PyResult<f64> {
-        let w = match font {
-            Some(f) => f.borrow().inner.text_bbox(text).0,
-            None => pillow_rs_core::font::Font::load_default(10.0).text_bbox(text).0,
-        };
-        Ok(w as f64)
-    }
-
-    /// Compute bounding box for multiline text. Matches PIL's exact algorithm.
-    #[pyo3(signature = (xy, text, font=None, spacing=4, align="left"))]
-    fn multiline_textbbox(
-        &mut self,
-        xy: (i32, i32),
-        text: &str,
-        font: Option<&Bound<'_, PyFont>>,
-        spacing: i32,
-        align: &str,
-    ) -> PyResult<(i32, i32, i32, i32)> {
-        let default_font;
-        let f: &pillow_rs_core::font::Font = if let Some(f) = font {
-            &f.borrow().inner
-        } else {
-            default_font = pillow_rs_core::font::Font::load_default(10.0);
-            &default_font
-        };
-        let lines: Vec<&str> = text.split('\n').collect();
-        if lines.is_empty() {
-            return Ok((xy.0, xy.1, xy.0, xy.1));
-        }
-        if lines.len() == 1 {
-            let (w, h) = f.text_bbox(text);
-            return Ok((xy.0, xy.1, xy.0 + w as i32, xy.1 + h as i32));
-        }
-        let (_, lh) = f.text_bbox("A");
-        let line_height = spacing as u32 + lh;
-        let widths: Vec<u32> = lines.iter().map(|l| f.text_bbox(l).0).collect();
-        let max_width = *widths.iter().max().unwrap_or(&0);
-        let x0 = xy.0 as f64;
-        let y0 = xy.1 as f64;
-        let mut left = f64::MAX;
-        let mut top = f64::MAX;
-        let mut right = f64::MIN;
-        let mut bottom = f64::MIN;
-        for (i, line) in lines.iter().enumerate() {
-            let line_y = y0 + i as f64 * line_height as f64;
-            let line_x = match align {
-                "center" => x0 + (max_width as f64 - widths[i] as f64) / 2.0,
-                "right" => x0 + max_width as f64 - widths[i] as f64,
-                _ => x0,
-            };
-            let (w, h) = f.text_bbox(line);
-            left = left.min(line_x);
-            top = top.min(line_y);
-            right = right.max(line_x + w as f64);
-            bottom = bottom.max(line_y + h as f64);
-        }
-        Ok((left as i32, top as i32, right as i32, bottom as i32))
     }
 
     #[getter]
@@ -1785,27 +1531,9 @@ fn ops_pad(
     image: &Bound<'_, PyImage>,
     size: (u32, u32),
     filter: Option<String>,
-    color: Option<&Bound<'_, PyAny>>,
+    color: Option<(u8, u8, u8, u8)>,
     centering: Option<(f64, f64)>,
 ) -> PyResult<PyImage> {
-    // Resolve color: None -> (0,0,0,255), int -> (v,v,v,255),
-    // 3-tuple -> (v0,v1,v2,255), 4-tuple as-is
-    let resolved_color: Option<(u8, u8, u8, u8)> = match color {
-        None => None,
-        Some(c) => {
-            let result = if let Ok(i) = c.extract::<u8>() {
-                Some((i, i, i, 255))
-            } else if let Ok((r, g, b)) = c.extract::<(u8, u8, u8)>() {
-                Some((r, g, b, 255))
-            } else if let Ok((r, g, b, a)) = c.extract::<(u8, u8, u8, u8)>() {
-                Some((r, g, b, a))
-            } else {
-                None
-            };
-            result
-        }
-    };
-
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
@@ -1814,7 +1542,7 @@ fn ops_pad(
                 size.0,
                 size.1,
                 filter.as_deref(),
-                resolved_color,
+                color,
                 centering.unwrap_or((0.5, 0.5)),
             )
         })
@@ -1836,34 +1564,14 @@ fn ops_scale(image: &Bound<'_, PyImage>, factor: f64, filter: Option<String>) ->
 #[pyfunction]
 fn ops_expand(
     image: &Bound<'_, PyImage>,
-    border: &Bound<'_, PyAny>,
-    fill: &Bound<'_, PyAny>,
+    border: u32,
+    fill: Option<(u8, u8, u8, u8)>,
 ) -> PyResult<PyImage> {
-    // Resolve border: int -> use as u32, 4-tuple -> max
-    let border_val: u32 = if let Ok(i) = border.extract::<u32>() {
-        i
-    } else if let Ok((t, r, b, l)) = border.extract::<(u32, u32, u32, u32)>() {
-        t.max(r).max(b).max(l)
-    } else {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "border must be int or 4-tuple",
-        ));
-    };
-
-    // Resolve fill: int -> (v, 0, 0, 0), 3-tuple -> (v0, v1, v2, 0), 4-tuple as-is
-    let fill_val: (u8, u8, u8, u8) = if let Ok(i) = fill.extract::<u8>() {
-        (i, 0, 0, 0)
-    } else if let Ok((r, g, b)) = fill.extract::<(u8, u8, u8)>() {
-        (r, g, b, 0)
-    } else if let Ok((r, g, b, a)) = fill.extract::<(u8, u8, u8, u8)>() {
-        (r, g, b, a)
-    } else {
-        (0, 0, 0, 0)
-    };
-
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs_core::ops::imageops::expand(&inner, border_val, fill_val))
+        py.allow_threads(|| {
+            pillow_rs_core::ops::imageops::expand(&inner, border, fill.unwrap_or((0, 0, 0, 255)))
+        })
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -1877,18 +1585,6 @@ fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage>
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
-}
-
-/// Extract Orientation tag (0x0112) from raw EXIF bytes. Returns None if not found.
-#[pyfunction]
-fn exif_get_orientation(raw: Vec<u8>) -> Option<u32> {
-    pillow_rs_core::ops::imageops::exif_get_orientation(&raw)
-}
-
-/// Remove Orientation tag from EXIF bytes by zeroing its tag field.
-#[pyfunction]
-fn exif_remove_orientation(raw: Vec<u8>) -> Vec<u8> {
-    pillow_rs_core::ops::imageops::exif_remove_orientation(&raw)
 }
 
 // --- ImageChops module-level functions ---
@@ -2199,307 +1895,4 @@ fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
         "RGBA" => Ok((result.0, result.1, result.2, result.3).to_object(py)),
         _ => Ok((result.0, result.1, result.2).to_object(py)),
     })
-}
-
-/// Validate a color for palette mode, append it, and return the
-/// updated palette and the color index.
-/// Handles mode-specific logic: RGB mode rejects non-opaque RGBA,
-/// RGBA mode auto-fills missing alpha to 255.
-#[pyfunction]
-fn palette_getcolor_validate(palette: Vec<u8>, color: Vec<u8>, mode: &str) -> PyResult<(Vec<u8>, usize)> {
-    let mut pal = palette;
-    let idx = pillow_rs_core::color::palette_getcolor_validate(&mut pal, &color, mode)
-        .map_err(|e| PyValueError::new_err(e))?;
-    Ok((pal, idx))
-}
-
-/// Save palette data to a text file.
-#[pyfunction]
-fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> {
-    pillow_rs_core::color::palette_save_to_file(&palette, mode, fp)
-        .map_err(|e| pyo3::exceptions::PyOSError::new_err(e))
-}
-
-/// Compute default bitmap font bounding box (6x11 px per char).
-#[pyfunction]
-fn font_default_bbox(text: &str) -> (i32, i32, i32, i32) {
-    pillow_rs_core::bitmap_font::font_default_bbox(text)
-}
-
-/// Compute default bitmap font text length (6 px per char).
-#[pyfunction]
-fn font_default_length(text: &str) -> u32 {
-    pillow_rs_core::bitmap_font::font_default_length(text)
-}
-
-/// Compute default bitmap font mask size with min(1) for each dimension.
-#[pyfunction]
-fn font_default_mask_size(text: &str) -> (u32, u32) {
-    pillow_rs_core::bitmap_font::font_default_mask_size(text)
-}
-
-/// Compute cubic Bezier curve subdivision points for Outline.
-/// Accepts flat list of 8 control points [x0,y0,x1,y1,x2,y2,x3,y3] and steps.
-/// Returns flat list of [x,y] int pairs for the curve.
-#[pyfunction]
-fn outline_curve(points: Vec<f64>, steps: u32) -> Vec<Vec<i32>> {
-    let result = pillow_rs_core::draw::outline_curve_points(&points, steps);
-    result.into_iter().map(|(x, y)| vec![x, y]).collect()
-}
-
-/// Compute basic statistics from a list of values (PIL's ImageStat fallback).
-/// Returns a dict with count, sum, mean, min, max.
-#[pyfunction]
-fn stat_from_list(data: Vec<f64>) -> PyObject {
-    let (count, sum, mean, min_val, max_val) = pillow_rs_core::image::stat_from_list(&data);
-    Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new(py);
-        let _ = dict.set_item("count", count as i64);
-        let _ = dict.set_item("sum", sum);
-        let _ = dict.set_item("mean", mean);
-        let _ = dict.set_item("min", min_val);
-        let _ = dict.set_item("max", max_val);
-        dict.to_object(py)
-    })
-}
-
-
-// --- ImageFilter helper functions ---
-
-/// Validate and normalize 3D LUT size. Accepts int (converted to 3-tuple)
-/// or sequence of 3 ints. Each dimension must be in [2, 65].
-#[pyfunction]
-fn color3dlut_check_size(size: &Bound<'_, PyAny>) -> PyResult<(u32, u32, u32)> {
-    // Try as a sequence first
-    if let Ok(len) = size.len() {
-        if len == 3 {
-            let s0: f64 = size.get_item(0)?.extract()?;
-            let s1: f64 = size.get_item(1)?.extract()?;
-            let s2: f64 = size.get_item(2)?.extract()?;
-            let s = [s0 as i32, s1 as i32, s2 as i32];
-            for &si in &s {
-                if si < 2 || si > 65 {
-                    return Err(PyValueError::new_err(
-                        "Size should be in [2, 65] range.",
-                    ));
-                }
-            }
-            return Ok((s[0] as u32, s[1] as u32, s[2] as u32));
-        }
-        return Err(PyValueError::new_err(
-            "Size should be either an integer or a tuple of three integers.",
-        ));
-    }
-
-    // Single value (int or float)
-    let s: f64 = size.extract().map_err(|_| {
-        PyValueError::new_err(
-            "Size should be either an integer or a tuple of three integers.",
-        )
-    })?;
-    let si = s as i32;
-    if si < 2 || si > 65 {
-        return Err(PyValueError::new_err(
-            "Size should be in [2, 65] range.",
-        ));
-    }
-    Ok((si as u32, si as u32, si as u32))
-}
-
-/// Validate and flatten a 3D LUT table from Python object.
-/// Handles flat list of floats and list of tuples.
-/// Always returns a flat Vec<f64> of validated length.
-#[pyfunction]
-#[pyo3(signature = (table_obj, size, channels=3, copy_table=true))]
-fn color3dlut_new(
-    table_obj: &Bound<'_, PyAny>,
-    size: (u32, u32, u32),
-    channels: u32,
-    copy_table: bool,
-) -> PyResult<Vec<f64>> {
-    let _ = copy_table;
-    let items = size.0 as usize * size.1 as usize * size.2 as usize;
-    let expected_len = items * channels as usize;
-
-    // Check if table is empty
-    let table_len = table_obj.len().unwrap_or(0);
-    if table_len == 0 {
-        return Err(PyValueError::new_err(format!(
-            "The table should have either channels * size**3 float items              or size**3 items of channels-sized tuples with floats.              Table should be: {}x{}x{}x{}. Actual length: 0",
-            channels, size.0, size.1, size.2
-        )));
-    }
-
-    // Check if first element is a sequence (tuple/list of values) -> flatten
-    let first_item = table_obj.get_item(0)?;
-    let is_nested = first_item.extract::<Vec<f64>>().is_ok();
-
-    let table: Vec<f64> = if is_nested {
-        let mut flat = Vec::with_capacity(expected_len);
-        for item in table_obj.iter()? {
-            let item = item?;
-            let pixel: Vec<f64> = item.extract().map_err(|_| {
-                PyValueError::new_err(format!(
-                    "The elements of the table should have a length of {}.",
-                    channels
-                ))
-            })?;
-            if pixel.len() != channels as usize {
-                return Err(PyValueError::new_err(format!(
-                    "The elements of the table should have a length of {}.",
-                    channels
-                )));
-            }
-            flat.extend(pixel);
-        }
-        flat
-    } else {
-        // Flat table: extract as Vec<f64>
-        table_obj.extract::<Vec<f64>>().map_err(|_| {
-            PyValueError::new_err(
-                "Table must be a sequence of floats or a sequence of tuples of floats.",
-            )
-        })?
-    };
-
-    if table.len() != expected_len {
-        return Err(PyValueError::new_err(format!(
-            "The table should have either channels * size**3 float items              or size**3 items of channels-sized tuples with floats.              Table should be: {}x{}x{}x{}. Actual length: {}",
-            channels,
-            size.0,
-            size.1,
-            size.2,
-            table.len()
-        )));
-    }
-
-    Ok(table)
-}
-
-/// Generate a 3D LUT table by calling a Python callback for each position.
-/// The callback receives (r, g, b) normalized to [0, 1] and returns a tuple
-/// of `channels` floats.
-#[pyfunction]
-fn color3dlut_generate(
-    size: (u32, u32, u32),
-    channels: u32,
-    callback: PyObject,
-    py: Python,
-) -> PyResult<Vec<f64>> {
-    let (s1, s2, s3) = size;
-    let ch = channels as usize;
-    let total = (s1 as usize) * (s2 as usize) * (s3 as usize) * ch;
-    let mut table = vec![0.0_f64; total];
-    let mut idx = 0;
-    for b in 0..s3 {
-        for g in 0..s2 {
-            for r in 0..s1 {
-                let args = (
-                    r as f64 / (s1 - 1) as f64,
-                    g as f64 / (s2 - 1) as f64,
-                    b as f64 / (s3 - 1) as f64,
-                );
-                let result = callback.call(py, args, None)?;
-                let values: Vec<f64> = result.extract(py)?;
-                for (i, &v) in values.iter().enumerate().take(ch) {
-                    table[idx + i] = v;
-                }
-                idx += ch;
-            }
-        }
-    }
-    Ok(table)
-}
-
-/// Transform a 3D LUT table by calling a Python callback for each entry.
-/// If `with_normals` is true, the callback receives (r_norm, g_norm, b_norm, *values).
-/// Otherwise, receives (*values).
-/// The callback returns a tuple of `channels_out` floats.
-#[pyfunction]
-fn color3dlut_transform(
-    table: Vec<f64>,
-    size: (u32, u32, u32),
-    channels_in: u32,
-    channels_out: u32,
-    with_normals: bool,
-    callback: PyObject,
-    py: Python,
-) -> PyResult<Vec<f64>> {
-    let (s1, s2, s3) = size;
-    let ci = channels_in as usize;
-    let co = channels_out as usize;
-    let total = (s1 as usize) * (s2 as usize) * (s3 as usize) * co;
-    let mut out_table = vec![0.0_f64; total];
-    let mut idx_in = 0;
-    let mut idx_out = 0;
-    for b in 0..s3 {
-        for g in 0..s2 {
-            for r in 0..s1 {
-                let values = &table[idx_in..idx_in + ci];
-                let result = if with_normals {
-                    let mut normals = Vec::with_capacity(3 + ci);
-                    normals.push(r as f64 / (s1 - 1) as f64);
-                    normals.push(g as f64 / (s2 - 1) as f64);
-                    normals.push(b as f64 / (s3 - 1) as f64);
-                    normals.extend_from_slice(values);
-                    let pt = PyTuple::new(py, &normals)?;
-                    callback.call(py, &pt, None)?
-                } else {
-                    let pt = PyTuple::new(py, values)?;
-                    callback.call(py, &pt, None)?
-                };
-                let new_values: Vec<f64> = result.extract(py)?;
-                if new_values.len() != co {
-                    return Err(PyValueError::new_err(format!(
-                        "Callback returned {} values, expected {}",
-                        new_values.len(),
-                        co
-                    )));
-                }
-                for (i, &v) in new_values.iter().enumerate() {
-                    out_table[idx_out + i] = v;
-                }
-                idx_in += ci;
-                idx_out += co;
-            }
-        }
-    }
-    Ok(out_table)
-}
-
-/// Prepare kernel parameters for image convolution.
-/// - If `kernel` is None, creates a default kernel of all 1.0s
-/// - If `scale` is None, computes it as the sum of kernel values
-/// - Converts `offset` to i32
-/// - Validates that size[0] == size[1] and size[0] in {3, 5}
-/// Returns (kernel, scale, offset_i32, size_x).
-#[pyfunction]
-#[pyo3(signature = (kernel, scale=None, offset=0.0, size=(3, 3)))]
-fn kernel_prepare(
-    kernel: Option<Vec<f64>>,
-    scale: Option<f64>,
-    offset: f64,
-    size: (u32, u32),
-) -> PyResult<(Vec<f64>, f64, i32, u32)> {
-    let (size_x, size_y) = size;
-    if size_x != size_y || (size_x != 3 && size_x != 5) {
-        return Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
-            "Kernel size {}x{} not supported, only 3x3 and 5x5",
-            size_x, size_y
-        )));
-    }
-    let numel = (size_x * size_y) as usize;
-    let k: Vec<f64> = match kernel {
-        Some(k) => k,
-        None => vec![1.0_f64; numel],
-    };
-    if k.len() != numel {
-        return Err(PyValueError::new_err(format!(
-            "not enough coefficients in kernel (expected {}, got {})",
-            numel,
-            k.len()
-        )));
-    }
-    let computed_scale = scale.unwrap_or_else(|| k.iter().sum());
-    Ok((k, computed_scale, offset as i32, size_x))
 }

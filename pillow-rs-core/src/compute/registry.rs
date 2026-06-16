@@ -2112,7 +2112,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_rounded_rect(img, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width, mode)
+            op_draw_rounded_rect(
+                img, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width, mode,
+            )
         } else {
             Err(PilError::ValueError("expected DrawRoundedRect".into()))
         }

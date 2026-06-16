@@ -445,8 +445,8 @@ impl Image {
                 // holds palette indices. For palette-safe ops, operate on indices
                 // directly (preserving P-mode). For other ops, convert to RGB so
                 // filters, enhance, etc. work on actual colors.
-                let is_p_mode = matches!(**source, Image::Paletted(_))
-                    || source.explicit_mode() == Some("P");
+                let is_p_mode =
+                    matches!(**source, Image::Paletted(_)) || source.explicit_mode() == Some("P");
                 if is_p_mode {
                     let all_safe = ops.iter().all(Self::is_palette_safe_op);
                     if all_safe {
@@ -463,16 +463,16 @@ impl Image {
                         // palette stored on pipeline. Convert indices to RGB.
                         let palette = _palette.clone().or_else(|| source.palette());
                         if let Some(palette) = palette {
-                        let (w, h) = (img.width(), img.height());
-                        let indices = img.to_luma8();
-                        let rgb = image::RgbImage::from_fn(w, h, |x, y| {
-                            let idx = indices.get_pixel(x, y)[0] as usize;
-                            let p = idx * 3;
-                            let r = palette.get(p).copied().unwrap_or(0);
-                            let g = palette.get(p + 1).copied().unwrap_or(0);
-                            let b = palette.get(p + 2).copied().unwrap_or(0);
-                            image::Rgb([r, g, b])
-                        });
+                            let (w, h) = (img.width(), img.height());
+                            let indices = img.to_luma8();
+                            let rgb = image::RgbImage::from_fn(w, h, |x, y| {
+                                let idx = indices.get_pixel(x, y)[0] as usize;
+                                let p = idx * 3;
+                                let r = palette.get(p).copied().unwrap_or(0);
+                                let g = palette.get(p + 1).copied().unwrap_or(0);
+                                let b = palette.get(p + 2).copied().unwrap_or(0);
+                                image::Rgb([r, g, b])
+                            });
                             img = DynamicImage::ImageRgb8(rgb);
                         }
                     }
@@ -525,7 +525,9 @@ impl Image {
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         // Ops that change the image mode fundamentally should clear explicit_mode
         let explicit_mode = match &op {
-            PipelineOp::Grayscale | PipelineOp::Convert { .. } | PipelineOp::Quantize { .. } => None,
+            PipelineOp::Grayscale | PipelineOp::Convert { .. } | PipelineOp::Quantize { .. } => {
+                None
+            }
             // Draw ops: preserve explicit_mode for P-mode (draw on palette indices),
             // but clear for other modes (draw produces RGBA).
             PipelineOp::DrawLine { .. }
@@ -940,6 +942,19 @@ impl Image {
             Image::Pipeline { palette, .. } => palette.clone(),
             _ => None,
         }
+    }
+
+    /// Return palette trimmed of trailing zero RGB triples, matching PIL's getpalette().
+    /// PIL: returns the palette as a flat list of RGB values, trimmed to the last
+    /// non-zero triple. WEB palette has 226 colors (678 bytes). Full custom palette
+    /// has 256 colors (768 bytes).
+    pub fn getpalette_trimmed(&self) -> Option<Vec<u8>> {
+        let raw = self.palette()?;
+        let mut last = raw.len();
+        while last >= 3 && raw[last - 3] == 0 && raw[last - 2] == 0 && raw[last - 1] == 0 {
+            last = last.saturating_sub(3);
+        }
+        Some(raw[..last].to_vec())
     }
 
     /// Apply transparency mask to image.
@@ -1624,6 +1639,26 @@ pub fn raw_bytes_to_image(
         ))),
     }
 }
+
+/// Compute basic statistics from a list of values (PIL's ImageStat fallback
+/// for non-Image inputs like plain lists). Returns (count, sum, mean, min, max).
+pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
+    let count = data.len() as f64;
+    let sum: f64 = data.iter().sum();
+    let mean = if count > 0.0 { sum / count } else { 0.0 };
+    let min_val = if count > 0.0 {
+        data.iter().cloned().fold(f64::MAX, f64::min)
+    } else {
+        0.0
+    };
+    let max_val = if count > 0.0 {
+        data.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+    } else {
+        0.0
+    };
+    (count, sum, mean, min_val, max_val)
+}
+
 /// Convert ResampleFilter to image crate's FilterType.
 /// Resize an I-mode image (32-bit signed integers stored as RGBA8 bytes LE).
 /// Uses PIL-compatible direct 2D interpolation with f64 precision and i32 rounding.
