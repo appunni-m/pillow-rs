@@ -162,6 +162,63 @@ pub fn palette_getcolor(palette: &[u8], r: u8, g: u8, b: u8) -> Option<usize> {
     None
 }
 
+/// PIL-compatible palette getcolor: search for (r,g,b,a) in palette, append if not found.
+/// Returns the index. Fails if palette already has 256 entries and color is new.
+/// `mode` is "RGB" (3 bytes/entry) or "RGBA" (4 bytes/entry).
+pub fn palette_getcolor_append(
+    palette: &mut Vec<u8>,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+    mode: &str,
+) -> Result<usize, String> {
+    let step = if mode == "RGBA" { 4 } else { 3 };
+
+    // Search for existing color
+    for i in (0..palette.len()).step_by(step) {
+        if palette[i] == r && palette[i + 1] == g && palette[i + 2] == b {
+            if step == 3 || palette[i + 3] == a {
+                return Ok(i / step);
+            }
+        }
+    }
+
+    // Not found — append
+    let idx = palette.len() / step;
+    if idx >= 256 {
+        return Err("cannot allocate more than 256 colors".into());
+    }
+    palette.push(r);
+    palette.push(g);
+    palette.push(b);
+    if step == 4 {
+        palette.push(a);
+    }
+    Ok(idx)
+}
+
+/// Format a palette as PIL-compatible text (header + 256-entry table).
+pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
+    let step = if mode == "RGBA" { 4 } else { 3 };
+    let palette_len = palette.len();
+    let mut out = String::with_capacity(4096);
+    out.push_str("# Palette\n");
+    out.push_str("# Mode: ");
+    out.push_str(mode);
+    out.push('\n');
+    for i in 0..256 {
+        use std::fmt::Write;
+        let _ = write!(out, "{i}");
+        for j in 0..step {
+            let val = palette.get(i * step + j).copied().unwrap_or(0);
+            let _ = write!(out, " {val}");
+        }
+        out.push('\n');
+    }
+    out
+}
+
 /// Convert an RGB image to LA using PIL's BT.601 formula + opaque alpha.
 pub fn pil_grayscale_alpha(img: &DynamicImage) -> image::GrayAlphaImage {
     let gray = pil_grayscale(img);

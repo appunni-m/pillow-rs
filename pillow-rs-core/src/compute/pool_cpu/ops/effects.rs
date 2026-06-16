@@ -538,8 +538,8 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
     // the second value from the pair).
     let (w, h) = (img.width(), img.height());
     let mut out = GrayImage::new(w, h);
-    // Use glibc-compatible PRNG on ALL platforms
-    let mut rng = GlibcRand::new(42);
+    // Use glibc-compatible PRNG with seed 1 (PIL's default rand() seed)
+    let mut rng = GlibcRand::new(1);
     // RAND_MAX on glibc
     const RAND_MAX_F64: f64 = 2147483647.0;
     for pixel in out.pixels_mut() {
@@ -784,7 +784,11 @@ pub fn op_put_pixel(
 
 // ── PutData ──
 
-pub fn op_put_data(img: &DynamicImage, data: &[u8]) -> Result<DynamicImage, PilError> {
+pub fn op_put_data(
+    img: &DynamicImage,
+    data: &[u8],
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width() as usize, img.height() as usize);
     let expected = match img.color() {
         image::ColorType::L8 => w * h,
@@ -792,26 +796,44 @@ pub fn op_put_data(img: &DynamicImage, data: &[u8]) -> Result<DynamicImage, PilE
         image::ColorType::Rgb8 => w * h * 3,
         _ => w * h * 4,
     };
-    if data.len() < expected {
-        return Err(PilError::ValueError(format!(
-            "putdata: expected {} bytes, got {}",
-            expected,
-            data.len()
-        )));
-    }
+    // PIL: putdata accepts data shorter than the image — only the first
+    // data.len() bytes are replaced; remaining pixels stay unchanged.
+    let n_copy = data.len().min(expected);
+    let clip = explicit_mode == Some("1");
     match img.color() {
         image::ColorType::Rgb8 => {
-            let rgb = RgbImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+            let orig = img.to_rgb8();
+            let mut pixels = orig.into_raw();
+            for (i, &v) in data[..n_copy].iter().enumerate() {
+                pixels[i] = if clip && v != 0 { 255 } else { v };
+            }
+            let rgb = RgbImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageRgb8(rgb))
         }
         image::ColorType::L8 => {
-            let gray = GrayImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+            let orig = img.to_luma8();
+            let mut pixels = orig.into_raw();
+            for (i, &v) in data[..n_copy].iter().enumerate() {
+                pixels[i] = if clip && v != 0 { 255 } else { v };
+            }
+            let gray = GrayImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageLuma8(gray))
         }
+        image::ColorType::La8 => {
+            let orig = img.to_luma_alpha8();
+            let mut pixels = orig.into_raw();
+            pixels[..n_copy].copy_from_slice(&data[..n_copy]);
+            let la = GrayAlphaImage::from_raw(w as u32, h as u32, pixels)
+                .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
+            Ok(DynamicImage::ImageLumaA8(la))
+        }
         _ => {
-            let rgba = RgbaImage::from_raw(w as u32, h as u32, data[..expected].to_vec())
+            let orig = img.to_rgba8();
+            let mut pixels = orig.into_raw();
+            pixels[..n_copy].copy_from_slice(&data[..n_copy]);
+            let rgba = RgbaImage::from_raw(w as u32, h as u32, pixels)
                 .ok_or_else(|| PilError::ValueError("putdata: buffer error".into()))?;
             Ok(DynamicImage::ImageRgba8(rgba))
         }

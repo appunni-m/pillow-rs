@@ -691,10 +691,14 @@ impl Draw {
         let mode = self.effective_mode();
         let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
 
+        // Font rendering always uses alpha=255 so glyph coverage is preserved.
+        // Mode-specific alpha handling (e.g., LA alpha=0 for int fills) is done
+        // in text_compose_direct / text_compose_rgba.
+        let render_fill = (fill.0, fill.1, fill.2, 255u8);
         let (w, h, pixels) = if binary {
-            font.render_text_binary(text, fill, 0.0)
+            font.render_text_binary(text, render_fill, 0.0)
         } else {
-            font.render_text(text, fill, 0.0)
+            font.render_text(text, render_fill, 0.0)
         };
         if w == 0 || h == 0 {
             return Ok(());

@@ -115,8 +115,10 @@ fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
 }
 
 /// Round a float to u8: truncate after adding 0.5, clipped to [0, 255].
+/// Uses a tiny epsilon to compensate for floating-point accumulation differences
+/// from PIL's fixed-point (PRECISION_BITS=22) arithmetic.
 fn pil_round(v: f64) -> u8 {
-    let v = v + 0.5;
+    let v = v + 0.5 + 1e-10;
     if v <= 0.0 {
         0
     } else if v >= 256.0 {

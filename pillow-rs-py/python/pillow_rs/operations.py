@@ -66,15 +66,38 @@ def composite(image1: Image, image2: Image, mask: Image) -> Image:
     return Image(_core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image))
 
 
+def alpha_composite(im1: Image, im2: Image) -> Image:
+    """Alpha composite im2 over im1, returning a new image.
+
+    PIL: ``Image.alpha_composite(im1, im2)`` composites im2 over im1
+    and returns a new RGBA image.
+    """
+    result = im1.copy()
+    result.alpha_composite(im2)
+    return result
+
+
 def fromarray(obj, mode=None):
     """Create image from array-like object (list of lists or bytes)."""
     if isinstance(obj, bytes):
         return Image.frombytes(mode or "L", (len(obj), 1), obj)
-    # numpy arrays and similar array interface objects
+    # numpy arrays: use tobytes() for safe memory access
+    if hasattr(obj, 'tobytes'):
+        data = obj.tobytes()
+        shape = obj.shape if hasattr(obj, 'shape') else (len(obj), 1)
+        h, w = shape[0], shape[1] if len(shape) >= 2 else 1
+        if mode is None:
+            if len(shape) == 2:
+                mode = "L"
+            elif len(shape) == 3:
+                mode = {3: "RGB", 4: "RGBA"}.get(shape[2], "L")
+            else:
+                mode = "L"
+        return Image.frombytes(mode, (w, h), data)
+    # array interface (non-numpy array-like objects)
     if hasattr(obj, '__array_interface__'):
         arr = obj.__array_interface__
         shape = arr["shape"]
-        dtype = arr["typestr"]
         h, w = shape[0], shape[1] if len(shape) >= 2 else 1
         if mode is None:
             if len(shape) == 2:
@@ -85,16 +108,12 @@ def fromarray(obj, mode=None):
                 mode = "RGBA"
             else:
                 mode = "L"
-        data = bytes(arr["data"][0]) if isinstance(arr["data"], tuple) else bytes(obj)
+        # Use the underlying object if data is a tuple (pointer, readonly)
+        if isinstance(arr["data"], tuple):
+            data = memoryview(obj).tobytes() if hasattr(obj, '__buffer__') else bytes(obj)
+        else:
+            data = bytes(arr["data"])
         return Image.frombytes(mode, (w, h), data)
-    if hasattr(obj, 'shape'):  # numpy array fallback
-        if mode is None:
-            mode = "L" if len(obj.shape) == 2 else "RGB" if obj.shape[2] == 3 else "RGBA"
-        h, w = obj.shape[0], obj.shape[1]
-        data = bytes(obj.tobytes() if hasattr(obj, 'tobytes') else obj)
-        return Image.frombytes(mode, (w, h), data)
-    if hasattr(obj, 'tobytes'):
-        return Image.frombytes(mode or "L", (len(obj.tobytes()), 1), obj.tobytes())
     if isinstance(obj, (list, tuple)):
         # Attempt to flatten pixel values
         import itertools

@@ -88,23 +88,41 @@ def extract_functions(manifest):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_fixture_map(fixtures_dir=FIXTURES_DIR):
-    """Read fixture JSONs and return {param_id: [func_names]}.
+    """Read consolidated fixture JSONs and return {param_id: [func_names]}.
 
-    Each fixture JSON has: {"operation": {"module": "Image", "target": "resize"}, ...}
-    The parametrize ID (fpath.stem) is e.g. "Image_resize_L".
+    Consolidated format (v2): tests/fixtures/input/jsons/Module.target.json
+    with a "cases" array. Each case produces a parametrize ID like
+    "Image.resize_Image_resize_L" (fixture_stem + "_" + case_id).
     """
     fixture_map = {}
-    for fpath in sorted(fixtures_dir.glob("*.json")):
+    input_jsons = fixtures_dir / "input" / "jsons"
+    # Prefer consolidated v2 format if available
+    search_dir = input_jsons if input_jsons.exists() else fixtures_dir
+    for fpath in sorted(search_dir.glob("*.json")):
         with open(fpath) as f:
             fx = json.load(f)
         op = fx["operation"]
         func_name = f"{op.get('module', '?')}.{op['target']}"
-        param_id = fpath.stem  # e.g., Image_resize_L
-        if param_id in fixture_map:
-            if func_name not in fixture_map[param_id]:
-                fixture_map[param_id].append(func_name)
+        stem = fpath.stem
+        # v2 consolidated: iterate cases
+        cases = fx.get("cases", [])
+        if cases:
+            for case in cases:
+                cid = case.get("id", "")
+                param_id = f"{stem}__{cid}" if cid else stem
+                if param_id in fixture_map:
+                    if func_name not in fixture_map[param_id]:
+                        fixture_map[param_id].append(func_name)
+                else:
+                    fixture_map[param_id] = [func_name]
         else:
-            fixture_map[param_id] = [func_name]
+            # v1 format: single case per file
+            param_id = stem
+            if param_id in fixture_map:
+                if func_name not in fixture_map[param_id]:
+                    fixture_map[param_id].append(func_name)
+            else:
+                fixture_map[param_id] = [func_name]
     return fixture_map
 
 
@@ -358,8 +376,24 @@ ALL_MODES = ["1", "L", "LA", "P", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F
 def build_mode_matrix(fixture_map, report):
     """Build {func_name: {mode: status}} from fixture data and test report.
 
+    Reads mode from fixture JSONs directly (case-level 'mode' field).
     Status is one of: '✅' (passed), '⚠️' (xfailed), '❌' (failed), '' (not tested)
     """
+    # Build param_id → mode lookup from fixture JSONs (using __ separator)
+    param_mode = {}
+    input_jsons = FIXTURES_DIR / "input" / "jsons"
+    search_dir = input_jsons if input_jsons.exists() else FIXTURES_DIR
+    for fpath in sorted(search_dir.glob("*.json")):
+        with open(fpath) as f:
+            fx = json.load(f)
+        stem = fpath.stem
+        for case in fx.get("cases", []):
+            cid = case.get("id", "")
+            mode = case.get("mode", "")
+            param_id = f"{stem}__{cid}" if cid else stem
+            if mode:
+                param_mode[param_id] = mode
+
     # Reverse aliases: fixture name → manifest name
     reverse_aliases = {}
     for manifest_name, fixture_name in MANIFEST_TO_FIXTURE_ALIASES.items():
@@ -377,30 +411,16 @@ def build_mode_matrix(fixture_map, report):
         funcs = fixture_map.get(param_id, [])
         if not funcs:
             continue
-        # Extract mode from param_id
-        for mode in ALL_MODES:
-            if param_id.endswith("_" + mode):
-                for func in funcs:
-                    # Apply reverse alias to get manifest name
-                    manifest_func = reverse_aliases.get(func, func)
-                    key = (manifest_func, mode)
-                    if outcome == "passed":
-                        outcomes[key] = "✅"
-                    elif outcome == "xfailed":
-                        outcomes[key] = "⚠️"
-                    elif outcome == "failed":
-                        outcomes[key] = "❌"
-                break
-        else:
-            for func in funcs:
-                manifest_func = reverse_aliases.get(func, func)
-                key = (manifest_func, "")
-                if outcome == "passed":
-                    outcomes[key] = "✅"
-                elif outcome == "xfailed":
-                    outcomes[key] = "⚠️"
-                elif outcome == "failed":
-                    outcomes[key] = "❌"
+        mode = param_mode.get(param_id, "")
+        for func in funcs:
+            manifest_func = reverse_aliases.get(func, func)
+            key = (manifest_func, mode) if mode else (manifest_func, "")
+            if outcome == "passed":
+                outcomes[key] = "✅"
+            elif outcome == "xfailed":
+                outcomes[key] = "⚠️"
+            elif outcome == "failed":
+                outcomes[key] = "❌"
 
     return outcomes
 

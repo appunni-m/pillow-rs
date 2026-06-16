@@ -961,10 +961,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::RemapPalette { dest_map } = op {
-                    let arr: &[u8; 256] = dest_map.as_slice().try_into().map_err(|_| {
-                        PilError::ValueError("remap_palette: expected 256-byte dest_map".into())
-                    })?;
-                    op_remap_palette(img, arr, mode)
+                    // Pass dest_map as-is (capped at 256 per PIL behavior).
+                    // op_remap_palette handles short dest_maps correctly.
+                    let end = dest_map.len().min(256);
+                    op_remap_palette(img, &dest_map[..end], mode)
                 } else {
                     Err(PilError::ValueError("expected RemapPalette op".into()))
                 }
@@ -1947,10 +1947,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::PutData { data } = op {
-                    op_put_data(img, data)
+                    op_put_data(img, data, mode)
                 } else {
                     Err(PilError::ValueError("expected PutData op".into()))
                 }

@@ -1,5 +1,6 @@
 use pillow_rs_core::error::PilError;
 use pillow_rs_core::image::Image as RsImage;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -820,6 +821,10 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // ImageColor
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
+    m.add_function(wrap_pyfunction!(getcolor, m)?)?;
+    m.add_function(wrap_pyfunction!(palette_search, m)?)?;
+    m.add_function(wrap_pyfunction!(palette_getcolor_append, m)?)?;
+    m.add_function(wrap_pyfunction!(palette_to_text, m)?)?;
 
     // Image module functions
     m.add_function(wrap_pyfunction!(image_merge, m)?)?;
@@ -1296,11 +1301,15 @@ fn parse_draw_color(
         Ok((r, g, b, a))
     } else if let Ok(i) = v.extract::<u8>() {
         // Match PIL's _getink per-mode behavior for int fills:
+        //   RGB: (R=i, G=0, B=0, A=255) — PIL puts int fill in RED only
+        //   RGBA: (R=i, G=0, B=0, A=0) — PIL puts int fill in RED only, A=0
         //   LA: (L=i, A=0) — alpha=0 means "use value directly"
         //   CMYK: (C=i, M=0, Y=0, K=0)
+        //   L/1/P: (i, i, i, 255) — single channel, G/B irrelevant
         //   F/I: already handled above
-        //   all others: RGBA (i, i, i, 255)
         match mode {
+            Some("RGB") => Ok((i, 0, 0, 255)),
+            Some("RGBA") => Ok((i, 0, 0, 0)),
             Some("LA") => Ok((i, i, i, 0)),
             Some("CMYK") => Ok((i, 0, 0, 0)),
             _ => Ok((i, i, i, 255)),
@@ -1796,6 +1805,27 @@ fn getrgb(color: &str) -> PyResult<(u8, u8, u8)> {
 #[pyfunction]
 fn palette_search(palette: Vec<u8>, r: u8, g: u8, b: u8) -> Option<usize> {
     pillow_rs_core::color::palette_getcolor(&palette, r, g, b)
+}
+
+/// PIL-compatible getcolor: search palette for (r,g,b[,a]), append if new. Returns index.
+#[pyfunction]
+fn palette_getcolor_append(
+    palette: Vec<u8>,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+    mode: &str,
+) -> PyResult<usize> {
+    let mut pal = palette;
+    pillow_rs_core::color::palette_getcolor_append(&mut pal, r, g, b, a, mode)
+        .map_err(|e| PyValueError::new_err(e))
+}
+
+/// Format palette as PIL-compatible text (header + 256-entry table).
+#[pyfunction]
+fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
+    pillow_rs_core::color::palette_to_text(&palette, mode)
 }
 
 #[pyfunction]
