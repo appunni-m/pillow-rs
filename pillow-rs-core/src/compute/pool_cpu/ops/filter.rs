@@ -83,9 +83,15 @@ fn filter_3x3_i32(
     // Pre-divide kernel by scale (matching PIL C construction)
     let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
     let kd = [
-        kernel[0] / s, kernel[1] / s, kernel[2] / s,
-        kernel[3] / s, kernel[4] / s, kernel[5] / s,
-        kernel[6] / s, kernel[7] / s, kernel[8] / s,
+        kernel[0] / s,
+        kernel[1] / s,
+        kernel[2] / s,
+        kernel[3] / s,
+        kernel[4] / s,
+        kernel[5] / s,
+        kernel[6] / s,
+        kernel[7] / s,
+        kernel[8] / s,
     ];
 
     let mut out = raw.clone();
@@ -303,7 +309,12 @@ pub fn pil_box_blur(
 /// PIL uses clamping for border pixels.
 /// Generalized to handle any number of channels (1-4).
 /// For F-mode ("F"): treats 4 RGBA bytes as a single f32 value, sorts floats.
-fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32, mode: Option<&str>) -> Result<DynamicImage, PilError> {
+fn rank_filter_impl(
+    img: &DynamicImage,
+    size: u32,
+    rank: u32,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let half = (size / 2) as i32;
@@ -325,7 +336,10 @@ fn rank_filter_impl(img: &DynamicImage, size: u32, rank: u32, mode: Option<&str>
                         let sy = (y + dy).clamp(0, h - 1);
                         let base = (sy * w + sx) as usize * 4;
                         let val = f32::from_le_bytes([
-                            raw[base], raw[base + 1], raw[base + 2], raw[base + 3],
+                            raw[base],
+                            raw[base + 1],
+                            raw[base + 2],
+                            raw[base + 3],
                         ]);
                         vals.push(val);
                     }

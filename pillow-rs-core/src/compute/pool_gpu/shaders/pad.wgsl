@@ -1,16 +1,17 @@
 // Pad: place source image into a larger canvas with centering.
 // If source fits: place at center, fill border with color.
 // If source too large: resize to fit (bilinear), then pad.
-// Output dimensions = dst_w x dst_h (from params)
+// Output dimensions = dst_w x dst_h (from params, also dispatch size)
+// Source dimensions come from the header width/height (= cur_w/cur_h).
 // Mode-aware. Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 
 struct Params {
-    width: u32,    // output width
-    height: u32,   // output height
+    width: u32,    // source width (from header = cur_w)
+    height: u32,   // source height (from header = cur_h)
     mode: u32,     // 0=L, 1=LA, 2=RGB, 3=RGBA
     _pad: u32,
-    src_w: u32,    // source width
-    src_h: u32,    // source height
+    dst_w: u32,    // output width
+    dst_h: u32,    // output height
     fill: u32,     // packed fill color (0xAABBGGRR)
     centering_x: u32,  // fixed-point centering (0.0-1.0) * 65536
     centering_y: u32,  // fixed-point centering (0.0-1.0) * 65536
@@ -62,26 +63,26 @@ fn bilinear_sample(sx: f32, sy: f32, src_w: u32, src_h: u32) -> u32 {
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if gid.x >= params.width || gid.y >= params.height { return; }
+    if gid.x >= params.dst_w || gid.y >= params.dst_h { return; }
 
     let cx = f32(params.centering_x) / 65536.0;
     let cy = f32(params.centering_y) / 65536.0;
 
     // Compute source coordinate for this output pixel
-    let placed_w = f32(params.src_w) * f32(params.scale_x) / 65536.0;
-    let placed_h = f32(params.src_h) * f32(params.scale_y) / 65536.0;
+    let placed_w = f32(params.width) * f32(params.scale_x) / 65536.0;
+    let placed_h = f32(params.height) * f32(params.scale_y) / 65536.0;
 
-    let offset_x = (f32(params.width) - placed_w) * cx;
-    let offset_y = (f32(params.height) - placed_h) * cy;
+    let offset_x = (f32(params.dst_w) - placed_w) * cx;
+    let offset_y = (f32(params.dst_h) - placed_h) * cy;
 
     let sx = (f32(gid.x) - offset_x) * 65536.0 / f32(params.scale_x);
     let sy = (f32(gid.y) - offset_y) * 65536.0 / f32(params.scale_y);
 
-    let idx = gid.y * params.width + gid.x;
+    let idx = gid.y * params.dst_w + gid.x;
 
     // Check if source coordinate is within source bounds
-    if sx >= 0.0 && sx < f32(params.src_w) && sy >= 0.0 && sy < f32(params.src_h) {
-        let pixel = bilinear_sample(sx, sy, params.src_w, params.src_h);
+    if sx >= 0.0 && sx < f32(params.width) && sy >= 0.0 && sy < f32(params.height) {
+        let pixel = bilinear_sample(sx, sy, params.width, params.height);
         let r = pixel & 0xffu;
         let g = (pixel >> 8u) & 0xffu;
         let b2 = (pixel >> 16u) & 0xffu;

@@ -37,7 +37,7 @@ struct BufferPool {
     buf_img2: wgpu::Buffer, // Second image for dual-input ops
     buf_img3: wgpu::Buffer, // Third image for 3-input ops (Composite/Paste mask)
     params: wgpu::Buffer,
-    lut_buf: wgpu::Buffer,  // LUT storage buffer for Eval/PointOp (1024 bytes)
+    lut_buf: wgpu::Buffer, // LUT storage buffer for Eval/PointOp (1024 bytes)
     capacity: u32,
 }
 
@@ -754,7 +754,12 @@ impl GpuInner {
         let mut current_is_a = true;
         let mut cur_w = w;
         let mut cur_h = h;
-        gpu_log!("[GPU] batch_impl: {} ops, start dims {}x{}", ops.len(), cur_w, cur_h);
+        gpu_log!(
+            "[GPU] batch_impl: {} ops, start dims {}x{}",
+            ops.len(),
+            cur_w,
+            cur_h
+        );
         for (i, op) in ops.iter().enumerate() {
             let base_key = registry::variant_key(op);
             gpu_log!("[GPU] batch_impl: op[{}/{}]={}", i + 1, ops.len(), base_key);
@@ -764,8 +769,24 @@ impl GpuInner {
             })?;
 
             let params = registry::extract_params(op);
+
+            // Pre-compute output dimensions BEFORE dispatch so workgroup count
+            // covers the full output image for size-changing ops.
+            let out_w = op_output_dims(op, cur_w, cur_h)
+                .map(|(w, _)| w)
+                .unwrap_or(cur_w);
+            let out_h = op_output_dims(op, cur_w, cur_h)
+                .map(|(_, h)| h)
+                .unwrap_or(cur_h);
+
+            // Append output dimensions as the last params — shaders that declare
+            // dst_w/dst_h at the end of their Params struct can read them.
+            // Existing shaders ignore extra uniform data after their struct.
+            let mut extended = params;
+            extended.push(out_w);
+            extended.push(out_h);
             self.buffers
-                .upload_params(&self.queue, &params, cur_w, cur_h, mode);
+                .upload_params(&self.queue, &extended, cur_w, cur_h, mode);
 
             let (input_buf, output_buf) = if current_is_a {
                 (&self.buffers.buf_a, &self.buffers.buf_b)
@@ -799,15 +820,13 @@ impl GpuInner {
             }
 
             self.dispatch_pass(
-                cached, cur_w, cur_h, input_buf, output_buf, img2_buf, img3_buf,
+                cached, out_w, out_h, input_buf, output_buf, img2_buf, img3_buf,
             );
             current_is_a = !current_is_a;
 
             // Update dimensions after size-changing ops.
-            if let Some((new_w, new_h)) = op_output_dims(op, cur_w, cur_h) {
-                cur_w = new_w;
-                cur_h = new_h;
-            }
+            cur_w = out_w;
+            cur_h = out_h;
         }
         // After N ops, current_is_a tracks where the latest result lives:
         //   true → buf_a has the final result, false → buf_b
@@ -878,6 +897,7 @@ fn extract_third_image(op: &PipelineOp) -> Option<DynamicImage> {
 fn extract_lut(op: &PipelineOp) -> Option<[u32; 256]> {
     let lut_bytes: &[u8] = match op {
         PipelineOp::Eval { lut } | PipelineOp::PointOp { lut } => lut.as_slice(),
+        PipelineOp::RemapPalette { dest_map } => dest_map.as_slice(),
         _ => return None,
     };
     let mut packed = [0u32; 256];
@@ -905,6 +925,7 @@ fn extract_lut(op: &PipelineOp) -> Option<[u32; 256]> {
 fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)> {
     match op {
         PipelineOp::Resize { w, h, .. } => Some((*w.max(&1), *h.max(&1))),
+        PipelineOp::Pad { w, h, .. } => Some((*w.max(&1), *h.max(&1))),
         PipelineOp::Crop {
             left,
             top,
@@ -914,6 +935,39 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
             let new_w = right.saturating_sub(*left).max(1);
             let new_h = bottom.saturating_sub(*top).max(1);
             Some((new_w, new_h))
+        }
+        PipelineOp::Expand { border, .. } => {
+            let new_w = (cur_w + 2 * border).max(1);
+            let new_h = (cur_h + 2 * border).max(1);
+            Some((new_w, new_h))
+        }
+        PipelineOp::CropBorder { border } => {
+            let new_w = cur_w.saturating_sub(2 * border).max(1);
+            let new_h = cur_h.saturating_sub(2 * border).max(1);
+            Some((new_w, new_h))
+        }
+        PipelineOp::Rotate { angle, expand, .. } => {
+            if *expand {
+                let (sw, sh) = (cur_w as f64, cur_h as f64);
+                let rad = angle.to_radians();
+                let (cos_a, sin_a) = (rad.cos(), rad.sin());
+                let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+                let (mut min_x, mut min_y, mut max_x, mut max_y) =
+                    (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+                for &(cx, cy) in &corners {
+                    let rx = cx * cos_a - cy * sin_a;
+                    let ry = cx * sin_a + cy * cos_a;
+                    min_x = min_x.min(rx);
+                    max_x = max_x.max(rx);
+                    min_y = min_y.min(ry);
+                    max_y = max_y.max(ry);
+                }
+                let dw = (max_x - min_x).ceil() as u32;
+                let dh = (max_y - min_y).ceil() as u32;
+                Some((dw.max(1), dh.max(1)))
+            } else {
+                Some((cur_w, cur_h))
+            }
         }
         PipelineOp::Reduce { factor } if *factor > 0 => {
             Some(((cur_w / factor).max(1), (cur_h / factor).max(1)))
@@ -984,7 +1038,12 @@ impl BackendImpl for GpuPool {
         gpu_log!("[GPU] step=upload_rgba done");
         gpu_log!("[GPU] step=execute_batch_impl start");
         let (final_is_a, final_w, final_h) = gpu.execute_batch_impl(ops, w, h, mcode)?;
-        gpu_log!("[GPU] step=execute_batch_impl done final=({},{}) is_a={}", final_w, final_h, final_is_a);
+        gpu_log!(
+            "[GPU] step=execute_batch_impl done final=({},{}) is_a={}",
+            final_w,
+            final_h,
+            final_is_a
+        );
         // Ensure GPU is done before readback
         gpu_log!("[GPU] step=poll before readback");
         gpu.device.poll(wgpu::Maintain::Wait);
@@ -994,13 +1053,12 @@ impl BackendImpl for GpuPool {
         // Detect mode-changing ops that need output mode override.
         // Grayscale: always outputs L, regardless of input mode.
         // Convert: output matches target mode (handled by CPU fallback for now).
-        let out_mode: Option<image::ColorType> = if ops.iter().any(|op| {
-            matches!(op, PipelineOp::Grayscale)
-        }) {
-            Some(image::ColorType::L8)
-        } else {
-            None
-        };
+        let out_mode: Option<image::ColorType> =
+            if ops.iter().any(|op| matches!(op, PipelineOp::Grayscale)) {
+                Some(image::ColorType::L8)
+            } else {
+                None
+            };
         if let Some(ct) = out_mode {
             // Bypass preserve_mode — use the override color type directly
             match ct {

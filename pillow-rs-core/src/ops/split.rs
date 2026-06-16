@@ -24,12 +24,7 @@ impl Image {
 
         // Create N pipeline images, each extracting one band
         let bands: Vec<Image> = (0..n_bands)
-            .map(|i| {
-                Image::push_op(
-                    self,
-                    PipelineOp::ExtractBand { index: i as u8 },
-                )
-            })
+            .map(|i| Image::push_op(self, PipelineOp::ExtractBand { index: i as u8 }))
             .collect();
 
         Ok(bands)

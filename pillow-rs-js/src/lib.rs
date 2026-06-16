@@ -325,7 +325,13 @@ impl Image {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "kernelFilter")]
-    pub fn kernelf(&self, kernel: Vec<f32>, scale: f32, offset: i32, size: u32) -> Result<Image, JsValue> {
+    pub fn kernelf(
+        &self,
+        kernel: Vec<f32>,
+        scale: f32,
+        offset: i32,
+        size: u32,
+    ) -> Result<Image, JsValue> {
         self.inner
             .kernel_filter(&kernel, scale, offset, size)
             .map(|i| Image { inner: i })
@@ -428,7 +434,9 @@ impl Image {
     // More methods
     #[wasm_bindgen(js_name = "getpalette")]
     pub fn getpalette(&self) -> Result<Vec<u8>, JsValue> {
-        self.inner.palette().ok_or_else(|| JsValue::from_str("no palette"))
+        self.inner
+            .palette()
+            .ok_or_else(|| JsValue::from_str("no palette"))
     }
     #[wasm_bindgen(js_name = "putpalette")]
     pub fn putpalette(&mut self, _data: Vec<u8>) {
@@ -685,7 +693,17 @@ impl ImageDraw {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "text")]
-    pub fn text(&mut self, x: f64, y: f64, text: &str, font: &ImageFont, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
+    pub fn text(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font: &ImageFont,
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+    ) -> Result<(), JsValue> {
         self.draw
             .text(x as i32, y as i32, text, &font.font, (r, g, b, a))
             .map_err(err)
@@ -808,12 +826,16 @@ impl ImageStat {
             StatValue::Float(f) => JsValue::from_f64(*f),
             StatValue::IntList(l) => {
                 let arr = js_sys::Array::new();
-                for &x in l { arr.push(&JsValue::from_f64(x as f64)); }
+                for &x in l {
+                    arr.push(&JsValue::from_f64(x as f64));
+                }
                 arr.into()
             }
             StatValue::FloatList(l) => {
                 let arr = js_sys::Array::new();
-                for &x in l { arr.push(&JsValue::from_f64(x)); }
+                for &x in l {
+                    arr.push(&JsValue::from_f64(x));
+                }
                 arr.into()
             }
             StatValue::ExtremaSingle((min, max)) => {
@@ -843,7 +865,12 @@ impl ImageStat {
         js_sys::Reflect::set(&obj, &"rms".into(), &self.val_to_js(&self.inner.rms)).ok();
         js_sys::Reflect::set(&obj, &"var".into(), &self.val_to_js(&self.inner.var)).ok();
         js_sys::Reflect::set(&obj, &"stddev".into(), &self.val_to_js(&self.inner.stddev)).ok();
-        js_sys::Reflect::set(&obj, &"extrema".into(), &self.val_to_js(&self.inner.extrema)).ok();
+        js_sys::Reflect::set(
+            &obj,
+            &"extrema".into(),
+            &self.val_to_js(&self.inner.extrema),
+        )
+        .ok();
         obj
     }
 }
@@ -1148,7 +1175,15 @@ impl ImageOps {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "pad")]
-    pub fn pad(img: &Image, w: u32, h: u32, r: Option<u8>, g: Option<u8>, b: Option<u8>, a: Option<u8>) -> Result<Image, JsValue> {
+    pub fn pad(
+        img: &Image,
+        w: u32,
+        h: u32,
+        r: Option<u8>,
+        g: Option<u8>,
+        b: Option<u8>,
+        a: Option<u8>,
+    ) -> Result<Image, JsValue> {
         let color = r.map(|cr| (cr, g.unwrap_or(0), b.unwrap_or(0), a.unwrap_or(255)));
         imageops::pad(&img.inner, w, h, None, color, (0.5, 0.5))
             .map(|i| Image { inner: i })
@@ -1167,10 +1202,22 @@ impl ImageOps {
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "colorize")]
-    pub fn colorize(img: &Image, black_r: u8, black_g: u8, black_b: u8, white_r: u8, white_g: u8, white_b: u8) -> Result<Image, JsValue> {
-        imageops::colorize(&img.inner, (black_r, black_g, black_b), (white_r, white_g, white_b))
-            .map(|i| Image { inner: i })
-            .map_err(err)
+    pub fn colorize(
+        img: &Image,
+        black_r: u8,
+        black_g: u8,
+        black_b: u8,
+        white_r: u8,
+        white_g: u8,
+        white_b: u8,
+    ) -> Result<Image, JsValue> {
+        imageops::colorize(
+            &img.inner,
+            (black_r, black_g, black_b),
+            (white_r, white_g, white_b),
+        )
+        .map(|i| Image { inner: i })
+        .map_err(err)
     }
 }
 

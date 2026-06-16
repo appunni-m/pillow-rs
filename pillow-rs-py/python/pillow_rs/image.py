@@ -385,8 +385,22 @@ class Image:
         return Image(self._rust_image.effect_spread(distance))
 
     def apply_transparency(self):
-        """Apply transparency mask to image."""
-        return self._rust_image.apply_transparency()
+        """Apply transparency mask to image.
+
+        PIL: For P-mode images with palette transparency, converts the palette
+        from RGB to RGBA format, setting alpha=0 for transparent entries.
+        Our implementation converts P-mode to RGBA, making transparency explicit.
+        """
+        if self._explicit_mode == "P":
+            # P-mode stored as L in Rust (Python-level explicit_mode).
+            # Convert to RGBA to apply transparency.
+            rgb = self._rust_image.convert("RGBA", None, None, None, None)
+            self._rust_image = rgb
+            self._explicit_mode = None
+        else:
+            # Handle Paletted variant at Rust level (loaded P-mode images).
+            # For RGBA/LA/RGB images, this is a no-op.
+            return self._rust_image.apply_transparency()
 
     def get_child_images(self):
         """Return list of child images (multi-frame)."""

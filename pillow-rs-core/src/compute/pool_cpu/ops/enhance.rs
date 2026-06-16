@@ -103,7 +103,10 @@ pub fn op_enhance_color_saturation(
             for x in 0..w {
                 let p = rgba.get_pixel(x, y);
                 // CMYK→RGB: R = (255-C)*(255-K)/255, G = (255-M)*(255-K)/255, B = (255-Y)*(255-K)/255
-                let c = p[0] as u32; let m = p[1] as u32; let y_ = p[2] as u32; let k = p[3] as u32;
+                let c = p[0] as u32;
+                let m = p[1] as u32;
+                let y_ = p[2] as u32;
+                let k = p[3] as u32;
                 let r = (255 - c) * (255 - k) / 255;
                 let g = (255 - m) * (255 - k) / 255;
                 let b = (255 - y_) * (255 - k) / 255;
@@ -112,12 +115,16 @@ pub fn op_enhance_color_saturation(
                 // PIL degenerate for CMYK: C=0, M=0, Y=0, K=255-gray_val
                 // Blend: degenerate * (1-f) + original * f
                 // C = 0 * (1-f) + orig_C * f
-                out.put_pixel(x, y, image::Rgba([
-                    (p[0] as f64 * f).clamp(0.0, 255.0) as u8,
-                    (p[1] as f64 * f).clamp(0.0, 255.0) as u8,
-                    (p[2] as f64 * f).clamp(0.0, 255.0) as u8,
-                    ((255.0 - gray_val) * (1.0 - f) + p[3] as f64 * f).clamp(0.0, 255.0) as u8,
-                ]));
+                out.put_pixel(
+                    x,
+                    y,
+                    image::Rgba([
+                        (p[0] as f64 * f).clamp(0.0, 255.0) as u8,
+                        (p[1] as f64 * f).clamp(0.0, 255.0) as u8,
+                        (p[2] as f64 * f).clamp(0.0, 255.0) as u8,
+                        ((255.0 - gray_val) * (1.0 - f) + p[3] as f64 * f).clamp(0.0, 255.0) as u8,
+                    ]),
+                );
             }
         }
         return Ok(DynamicImage::ImageRgba8(out));

@@ -1026,10 +1026,14 @@ pub fn transform_mesh(
 
                 // PIL bilinear mapping: quad[0]=top-left, quad[1]=bottom-left,
                 // quad[2]=bottom-right, quad[3]=top-right (counter-clockwise)
-                let sx = (1.0 - u) * (1.0 - v) * x0_s + u * (1.0 - v) * x3_s
-                    + u * v * x2_s + (1.0 - u) * v * x1_s;
-                let sy = (1.0 - u) * (1.0 - v) * y0_s + u * (1.0 - v) * y3_s
-                    + u * v * y2_s + (1.0 - u) * v * y1_s;
+                let sx = (1.0 - u) * (1.0 - v) * x0_s
+                    + u * (1.0 - v) * x3_s
+                    + u * v * x2_s
+                    + (1.0 - u) * v * x1_s;
+                let sy = (1.0 - u) * (1.0 - v) * y0_s
+                    + u * (1.0 - v) * y3_s
+                    + u * v * y2_s
+                    + (1.0 - u) * v * y1_s;
 
                 if sx >= 0.0 && sx < sw_f && sy >= 0.0 && sy < sh_f {
                     // NEAREST sampling for identity mesh parity
@@ -1057,8 +1061,12 @@ pub fn transform_mesh(
 /// For each pixel (px, py) in w×h, maps to complex plane via extent [x0,y0]→[x1,y1],
 /// iterates z = z² + c up to `quality` times, outputs iteration count as grayscale.
 pub fn op_effect_mandelbrot(
-    w: u32, h: u32,
-    x0: f64, y0: f64, x1: f64, y1: f64,
+    w: u32,
+    h: u32,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
     quality: u32,
 ) -> Result<DynamicImage, PilError> {
     let mut gray = image::GrayImage::new(w, h);

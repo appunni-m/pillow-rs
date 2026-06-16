@@ -7,6 +7,7 @@
 //! Performance: `variant_key()` returns a `&'static str` for O(1) HashMap lookup.
 //! No allocations on the hot path.
 
+use crate::compute::pool_simd::ops::adapters;
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
 use image::DynamicImage;
@@ -692,26 +693,34 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── CropBorder: border ──
         PipelineOp::CropBorder { border } => vec![*border],
 
-        // ── Expand: border, src_w, src_h, fill_color ──
+        // ── Expand: border, fill_color ──
+        // src_w/src_h come from the header (cur_w/cur_h), not from extract_params.
         PipelineOp::Expand { border, fill } => {
             let (r, g, b, a) = *fill;
-            vec![*border, 0, 0, (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)]
+            vec![
+                *border,
+                (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24),
+            ]
         }
 
         // ── Merge: num_bands ──
         PipelineOp::Merge { bands, .. } => vec![bands.len() as u32],
 
-        // ── RemapPalette: LUT data ──
-        PipelineOp::RemapPalette { dest_map } => {
-            let mut params = dest_map.iter().map(|&v| v as u32).collect::<Vec<u32>>();
-            params.resize(256, 0);
-            params
-        }
+        // ── RemapPalette: LUT uploaded via extract_lut, no params ──
+        PipelineOp::RemapPalette { .. } => vec![],
 
         // ── Pad: src_w, src_h, fill, centering_x, centering_y, scale_x, scale_y ──
-        PipelineOp::Pad { w, h, color, centering, .. } => {
+        PipelineOp::Pad {
+            w,
+            h,
+            color,
+            centering,
+            ..
+        } => {
             let fill = match color {
-                Some((r, g, b, a)) => (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24),
+                Some((r, g, b, a)) => {
+                    (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24)
+                }
                 None => 0xff000000u32,
             };
             let cx = (centering.0.clamp(0.0, 1.0) * 65536.0) as u32;
@@ -719,15 +728,22 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![*w, *h, fill, cx, cy, 65536u32, 65536u32]
         }
 
-        // ── Rotate: cos_theta, sin_theta, fill ──
-        PipelineOp::Rotate { angle, fill, .. } => {
+        // ── Rotate: cos_theta, sin_theta, fill, expand ──
+        PipelineOp::Rotate {
+            angle,
+            fill,
+            expand,
+            ..
+        } => {
             let cos_t = (angle.cos() as f32).to_bits();
             let sin_t = (angle.sin() as f32).to_bits();
             let fill_color = match fill {
-                Some((r, g, b, a)) => (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24),
+                Some((r, g, b, a)) => {
+                    (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24)
+                }
                 None => 0u32,
             };
-            vec![cos_t, sin_t, fill_color]
+            vec![cos_t, sin_t, fill_color, *expand as u32]
         }
 
         // ── GaussianBlur: sigma ──
@@ -757,15 +773,17 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         op_chops_logical_xor, op_chops_multiply, op_chops_offset, op_chops_overlay,
         op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
     };
-    use crate::compute::pool_cpu::ops::color::{op_convert, op_extract_band, op_quantize, op_remap_palette};
+    use crate::compute::pool_cpu::ops::color::{
+        op_convert, op_extract_band, op_quantize, op_remap_palette,
+    };
     use crate::compute::pool_cpu::ops::draw::{
         op_draw_arc, op_draw_chord, op_draw_circle, op_draw_ellipse, op_draw_line,
         op_draw_pieslice, op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
     };
     use crate::compute::pool_cpu::ops::effects::{
-        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_mandelbrot,
-        op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste, op_point, op_put_alpha,
-        op_put_data, op_put_pixel, op_transform,
+        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module,
+        op_effect_mandelbrot, op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste,
+        op_point, op_put_alpha, op_put_data, op_put_pixel, op_transform,
     };
     use crate::compute::pool_cpu::ops::enhance::{
         op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast,
@@ -1783,9 +1801,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
 
     // ── Module fns ──
+    // Merge is CPU-only: GPU requires multi-band data packing that doesn't fit the
+    // current single/dual-image upload infrastructure. The binding layout (4 bindings
+    // with extra_bands as storage read) is incompatible with existing LUT/dual-input
+    // layout detection. A future enhancement can add a custom binding layout for it.
     m.insert(
         "Merge",
-        gpu_entry!(
+        OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
              _mode: Option<&str>|
@@ -1800,7 +1822,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
                     Err(PilError::ValueError("expected Merge op".into()))
                 }
             },
-            "merge.wgsl"
         ),
     );
     m.insert(
@@ -2039,53 +2060,288 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         };
     }
     draw_entry!("DrawLine", |img, op, _mode| {
-        if let PipelineOp::DrawLine { x0, y0, x1, y1, fill, width } = op {
+        if let PipelineOp::DrawLine {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            width,
+        } = op
+        {
             op_draw_line(img, *x0, *y0, *x1, *y1, *fill, *width)
-        } else { Err(PilError::ValueError("expected DrawLine".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawLine".into()))
+        }
     });
     draw_entry!("DrawRectangle", |img, op, _mode| {
-        if let PipelineOp::DrawRectangle { x0, y0, x1, y1, fill, outline, width } = op {
+        if let PipelineOp::DrawRectangle {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+        } = op
+        {
             op_draw_rectangle(img, *x0, *y0, *x1, *y1, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawRectangle".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawRectangle".into()))
+        }
     });
     draw_entry!("DrawRoundedRect", |img, op, _mode| {
-        if let PipelineOp::DrawRoundedRect { x0, y0, x1, y1, radius, fill, outline, width } = op {
+        if let PipelineOp::DrawRoundedRect {
+            x0,
+            y0,
+            x1,
+            y1,
+            radius,
+            fill,
+            outline,
+            width,
+        } = op
+        {
             op_draw_rounded_rect(img, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawRoundedRect".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawRoundedRect".into()))
+        }
     });
     draw_entry!("DrawEllipse", |img, op, _mode| {
-        if let PipelineOp::DrawEllipse { x0, y0, x1, y1, fill, outline, width } = op {
+        if let PipelineOp::DrawEllipse {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+        } = op
+        {
             op_draw_ellipse(img, *x0, *y0, *x1, *y1, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawEllipse".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawEllipse".into()))
+        }
     });
     draw_entry!("DrawCircle", |img, op, _mode| {
-        if let PipelineOp::DrawCircle { cx, cy, radius, fill, outline, width } = op {
+        if let PipelineOp::DrawCircle {
+            cx,
+            cy,
+            radius,
+            fill,
+            outline,
+            width,
+        } = op
+        {
             op_draw_circle(img, *cx, *cy, *radius, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawCircle".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawCircle".into()))
+        }
     });
     draw_entry!("DrawPolygon", |img, op, _mode| {
-        if let PipelineOp::DrawPolygon { points, fill, outline, width } = op {
+        if let PipelineOp::DrawPolygon {
+            points,
+            fill,
+            outline,
+            width,
+        } = op
+        {
             op_draw_polygon(img, points, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawPolygon".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawPolygon".into()))
+        }
     });
     draw_entry!("DrawArc", |img, op, _mode| {
-        if let PipelineOp::DrawArc { x0, y0, x1, y1, start, end, fill, width } = op {
+        if let PipelineOp::DrawArc {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            width,
+        } = op
+        {
             op_draw_arc(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *width)
-        } else { Err(PilError::ValueError("expected DrawArc".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawArc".into()))
+        }
     });
     draw_entry!("DrawChord", |img, op, _mode| {
-        if let PipelineOp::DrawChord { x0, y0, x1, y1, start, end, fill, outline, width } = op {
-            op_draw_chord(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawChord".into())) }
+        if let PipelineOp::DrawChord {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            outline,
+            width,
+        } = op
+        {
+            op_draw_chord(
+                img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width,
+            )
+        } else {
+            Err(PilError::ValueError("expected DrawChord".into()))
+        }
     });
     draw_entry!("DrawPieslice", |img, op, _mode| {
-        if let PipelineOp::DrawPieslice { x0, y0, x1, y1, start, end, fill, outline, width } = op {
-            op_draw_pieslice(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width)
-        } else { Err(PilError::ValueError("expected DrawPieslice".into())) }
+        if let PipelineOp::DrawPieslice {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            outline,
+            width,
+        } = op
+        {
+            op_draw_pieslice(
+                img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width,
+            )
+        } else {
+            Err(PilError::ValueError("expected DrawPieslice".into()))
+        }
     });
     draw_entry!("DrawPoint", |img, op, _mode| {
         if let PipelineOp::DrawPoint { points, fill } = op {
             op_draw_point(img, points, *fill)
-        } else { Err(PilError::ValueError("expected DrawPoint".into())) }
+        } else {
+            Err(PilError::ValueError("expected DrawPoint".into()))
+        }
     });
+
+    // ── SIMD registrations ───────────────────────────────────────────
+    // Register SIMD-accelerated functions for all backed scalar ops.
+    // The simd_fn slot is added alongside existing cpu_fn + gpu_shader.
+
+    fn simd_set(e: &mut OpEntry, f: SimdOpFn) {
+        e.simd_fn = Some(f);
+    }
+
+    // Section A: Simple single-image ops
+    simd_set(m.get_mut("Invert").unwrap(), adapters::simd_invert);
+    simd_set(m.get_mut("Grayscale").unwrap(), adapters::simd_grayscale);
+    simd_set(m.get_mut("Duplicate").unwrap(), adapters::simd_duplicate);
+    simd_set(
+        m.get_mut("InvertChops").unwrap(),
+        adapters::simd_invert_chops,
+    );
+
+    // Section B: Single-image with params
+    simd_set(m.get_mut("Solarize").unwrap(), adapters::simd_solarize);
+    simd_set(m.get_mut("Posterize").unwrap(), adapters::simd_posterize);
+    simd_set(m.get_mut("Brightness").unwrap(), adapters::simd_brightness);
+    simd_set(m.get_mut("Contrast").unwrap(), adapters::simd_contrast);
+    simd_set(
+        m.get_mut("ColorSaturation").unwrap(),
+        adapters::simd_color_saturation,
+    );
+    simd_set(m.get_mut("Sharpness").unwrap(), adapters::simd_sharpness);
+    simd_set(m.get_mut("Colorize").unwrap(), adapters::simd_colorize);
+    simd_set(m.get_mut("Constant").unwrap(), adapters::simd_constant);
+    simd_set(m.get_mut("Offset").unwrap(), adapters::simd_offset);
+
+    // Section C: Spatial single-image
+    simd_set(m.get_mut("Flip").unwrap(), adapters::simd_flip);
+    simd_set(m.get_mut("Mirror").unwrap(), adapters::simd_mirror);
+    simd_set(m.get_mut("Equalize").unwrap(), adapters::simd_equalize);
+    simd_set(
+        m.get_mut("Autocontrast").unwrap(),
+        adapters::simd_autocontrast,
+    );
+    simd_set(
+        m.get_mut("EffectSpread").unwrap(),
+        adapters::simd_effect_spread,
+    );
+
+    // Section D: Filter/window ops
+    simd_set(
+        m.get_mut("MedianFilter").unwrap(),
+        adapters::simd_median_filter,
+    );
+    simd_set(m.get_mut("MaxFilter").unwrap(), adapters::simd_max_filter);
+    simd_set(m.get_mut("MinFilter").unwrap(), adapters::simd_min_filter);
+    simd_set(m.get_mut("RankFilter").unwrap(), adapters::simd_rank_filter);
+    simd_set(m.get_mut("Filter3x3").unwrap(), adapters::simd_filter_3x3);
+    simd_set(m.get_mut("Filter5x5").unwrap(), adapters::simd_filter_5x5);
+    simd_set(m.get_mut("BoxBlur").unwrap(), adapters::simd_box_blur);
+    simd_set(
+        m.get_mut("GaussianBlur").unwrap(),
+        adapters::simd_gaussian_blur,
+    );
+    simd_set(m.get_mut("Quantize").unwrap(), adapters::simd_quantize);
+
+    // Section E: Dual-image per-pixel ops
+    simd_set(m.get_mut("Add").unwrap(), adapters::simd_add);
+    simd_set(m.get_mut("Subtract").unwrap(), adapters::simd_subtract);
+    simd_set(m.get_mut("Multiply").unwrap(), adapters::simd_multiply);
+    simd_set(m.get_mut("Screen").unwrap(), adapters::simd_screen);
+    simd_set(m.get_mut("Darker").unwrap(), adapters::simd_darker);
+    simd_set(m.get_mut("Lighter").unwrap(), adapters::simd_lighter);
+    simd_set(m.get_mut("Difference").unwrap(), adapters::simd_difference);
+    simd_set(m.get_mut("AddModulo").unwrap(), adapters::simd_add_modulo);
+    simd_set(
+        m.get_mut("SubtractModulo").unwrap(),
+        adapters::simd_subtract_modulo,
+    );
+    simd_set(m.get_mut("LogicalAnd").unwrap(), adapters::simd_logical_and);
+    simd_set(m.get_mut("LogicalOr").unwrap(), adapters::simd_logical_or);
+    simd_set(m.get_mut("LogicalXor").unwrap(), adapters::simd_logical_xor);
+    simd_set(m.get_mut("Overlay").unwrap(), adapters::simd_overlay);
+    simd_set(m.get_mut("HardLight").unwrap(), adapters::simd_hard_light);
+    simd_set(m.get_mut("SoftLight").unwrap(), adapters::simd_soft_light);
+    simd_set(m.get_mut("Blend").unwrap(), adapters::simd_blend);
+    simd_set(
+        m.get_mut("BlendModule").unwrap(),
+        adapters::simd_blend_module,
+    );
+    simd_set(m.get_mut("Composite").unwrap(), adapters::simd_composite);
+    simd_set(
+        m.get_mut("CompositeModule").unwrap(),
+        adapters::simd_composite_module,
+    );
+
+    // Section F: Ops that change dimensions
+    simd_set(m.get_mut("Transpose").unwrap(), adapters::simd_transpose);
+    simd_set(m.get_mut("Resize").unwrap(), adapters::simd_resize);
+    simd_set(m.get_mut("Thumbnail").unwrap(), adapters::simd_thumbnail);
+    simd_set(m.get_mut("Contain").unwrap(), adapters::simd_contain);
+    simd_set(m.get_mut("Cover").unwrap(), adapters::simd_cover);
+    simd_set(m.get_mut("Fit").unwrap(), adapters::simd_fit);
+    simd_set(m.get_mut("Scale").unwrap(), adapters::simd_scale);
+    simd_set(m.get_mut("Pad").unwrap(), adapters::simd_pad);
+    simd_set(m.get_mut("Expand").unwrap(), adapters::simd_expand);
+    simd_set(m.get_mut("CropBorder").unwrap(), adapters::simd_crop_border);
+    simd_set(m.get_mut("Crop").unwrap(), adapters::simd_crop);
+    simd_set(m.get_mut("Rotate").unwrap(), adapters::simd_rotate);
+    simd_set(m.get_mut("Reduce").unwrap(), adapters::simd_reduce);
+    simd_set(m.get_mut("Convert").unwrap(), adapters::simd_convert);
+    simd_set(
+        m.get_mut("RemapPalette").unwrap(),
+        adapters::simd_remap_palette,
+    );
+    simd_set(m.get_mut("Transform").unwrap(), adapters::simd_transform);
+
+    // Section G: Special/mutating ops
+    simd_set(m.get_mut("PutPixel").unwrap(), adapters::simd_put_pixel);
+    simd_set(m.get_mut("PutData").unwrap(), adapters::simd_put_data);
+    simd_set(m.get_mut("PutAlpha").unwrap(), adapters::simd_put_alpha);
+    simd_set(m.get_mut("Eval").unwrap(), adapters::simd_eval);
+    simd_set(
+        m.get_mut("EffectNoise").unwrap(),
+        adapters::simd_effect_noise,
+    );
+    simd_set(m.get_mut("PointOp").unwrap(), adapters::simd_point_op);
+    simd_set(m.get_mut("Paste").unwrap(), adapters::simd_paste);
+    simd_set(
+        m.get_mut("AlphaComposite").unwrap(),
+        adapters::simd_alpha_composite,
+    );
+    simd_set(m.get_mut("Merge").unwrap(), adapters::simd_merge);
 }

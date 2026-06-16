@@ -15,7 +15,7 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use image::DynamicImage;
 
-mod ops;
+pub mod ops;
 
 // ─── SimdPool ──────────────────────────────────────────────────────────────
 
