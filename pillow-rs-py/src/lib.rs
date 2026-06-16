@@ -459,6 +459,13 @@ impl PyImage {
             .map_err(map_error)
     }
 
+    /// point() with band replication: takes 256-entry LUT, replicates to n_bands*256
+    fn point_replicated(&self, lut: Vec<u8>, n_bands: usize) -> PyResult<PyImage> {
+        pillow_rs_core::ops::module_fns::eval_replicated(&self.inner, &lut, n_bands)
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
+    }
+
     fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
         pillow_rs_core::ops::module_fns::effect_spread(&self.inner, distance)
             .map(|i| PyImage { inner: i })
@@ -655,6 +662,37 @@ impl PyImage {
                 flat.push(v);
             } else if let Ok(v) = obj.extract::<i64>() {
                 flat.push(v.clamp(0, 255) as u8);
+            }
+        }
+        self.inner.putdata(&flat).map_err(map_error)
+    }
+
+    /// putdata with band-aware int expansion: single ints become (v,0,...,0) for multi-band
+    fn putdata_formatted(&mut self, data: &Bound<'_, PyAny>, n_bands: usize) -> PyResult<()> {
+        let mut flat: Vec<u8> = Vec::new();
+        for item in data.iter()? {
+            let obj = item?;
+            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
+            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1, t.2]);
+            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1]);
+            } else if let Ok(v) = obj.extract::<u8>() {
+                if n_bands > 1 {
+                    flat.push(v);
+                    flat.resize(flat.len() + n_bands - 1, 0);
+                } else {
+                    flat.push(v);
+                }
+            } else if let Ok(v) = obj.extract::<i64>() {
+                let v = v.clamp(0, 255) as u8;
+                if n_bands > 1 {
+                    flat.push(v);
+                    flat.resize(flat.len() + n_bands - 1, 0);
+                } else {
+                    flat.push(v);
+                }
             }
         }
         self.inner.putdata(&flat).map_err(map_error)

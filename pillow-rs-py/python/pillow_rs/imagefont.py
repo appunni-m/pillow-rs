@@ -238,10 +238,15 @@ class TransposedFont:
         """Create a bitmap for the text, optionally transposed."""
         im = self.font.getmask(text, mode, *args, **kwargs)
         if self.orientation is not None:
-            from .image import Image as PILImage
-            if isinstance(im, PILImage):
-                return im.transpose(self.orientation)
+            return im.transpose(self.orientation)
         return im
+
+    def getmask2(self, text, mode="", *args, **kwargs):
+        """Create a mask + offset for the text, optionally transposed."""
+        mask, offset = self.font.getmask2(text, mode, *args, **kwargs)
+        if self.orientation is not None:
+            mask = mask.transpose(self.orientation)
+        return mask, offset
 
     def getbbox(self, text, *args, **kwargs):
         """Get bounding box for text, adjusted for orientation.

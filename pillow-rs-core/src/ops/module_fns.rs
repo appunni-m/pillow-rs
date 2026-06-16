@@ -77,6 +77,28 @@ pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     ))
 }
 
+/// Like eval() but replicates a 256-entry LUT across n_bands channels.
+/// PIL: `self.point(lut)` where lut is a function → 256*bands entries.
+pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Image, PilError> {
+    if n_bands == 0 || n_bands > 4 {
+        return Err(PilError::ValueError("invalid band count".into()));
+    }
+    let expected = 256 * n_bands;
+    if lut.len() == expected {
+        return eval(image, lut);
+    }
+    if lut.len() != 256 {
+        return Err(PilError::ValueError(
+            format!("wrong number of lut entries: expected {} or {} got {}", 256, expected, lut.len())
+        ));
+    }
+    let mut replicated = Vec::with_capacity(expected);
+    for _ in 0..n_bands {
+        replicated.extend_from_slice(lut);
+    }
+    eval(image, &replicated)
+}
+
 /// Generate an image with Gaussian noise.
 /// PIL: `Image.effect_noise(size, sigma)`
 /// Uses the source image only for dimensions.
