@@ -70,6 +70,27 @@ fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> image::GrayImage {
     image::GrayImage::from_raw(w, h, gray).expect("pil_grayscale buffer mismatch")
 }
 
+/// PIL-compatible CMYK→grayscale using MULDIV255 formula.
+/// CMYK stored as RGBA (C→R, M→G, Y→B, K→A).
+pub fn cmyk_to_grayscale(img: &DynamicImage) -> image::GrayImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let n = (w * h) as usize;
+    let mut gray = vec![0u8; n];
+    for (i, p) in rgba.pixels().enumerate() {
+        let c = p[0] as u32;
+        let m = p[1] as u32;
+        let y_ = p[2] as u32;
+        let k = p[3] as u32;
+        let nk = 255u32.saturating_sub(k);
+        let r = (nk as i32 - muldiv255(c, nk) as i32).clamp(0, 255) as u8;
+        let g = (nk as i32 - muldiv255(m, nk) as i32).clamp(0, 255) as u8;
+        let b = (nk as i32 - muldiv255(y_, nk) as i32).clamp(0, 255) as u8;
+        gray[i] = rgb_to_luma_u8(r, g, b);
+    }
+    image::GrayImage::from_raw(w, h, gray).expect("cmyk_to_grayscale buffer mismatch")
+}
+
 /// Resolve a color value for a given image mode. The binding layer extracts
 /// Python types (int/tuple/string) and passes raw values here. Core handles
 /// ALL mode-aware logic: single-int semantics, tuple lengths, defaults.
@@ -158,7 +179,7 @@ pub fn pil_grayscale_alpha(img: &DynamicImage) -> image::GrayAlphaImage {
 /// PIL's MULDIV255 macro: `(a * b + 128) * 257 >> 16`
 /// Equivalent to `(a * b + 128) / 255` with proper rounding.
 #[inline]
-fn muldiv255(a: u32, b: u32) -> u32 {
+pub fn muldiv255(a: u32, b: u32) -> u32 {
     let t = a * b + 128;
     ((t >> 8) + t) >> 8
 }
@@ -184,40 +205,84 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// HSV → RGB using PIL-compatible algorithm (standard hexagonal).
+/// HSV → RGB using PIL's exact integer-domain algorithm from libImaging/Convert.c.
+/// PIL keeps V in 0-255 range (not normalized), computes p/q/t in 0-255 range,
+/// rounds with round(), and clamps with CLIP8.
 /// HSV is stored as RGB (H→R, S→G, V→B).
-/// H: 0-255 maps to 0-360 degrees. S,V: 0-255 maps to 0-1.
+/// H,S,V are all 0-255 byte values.
+/// PIL's formula (from C source):
+///   fs = s / 255.0    (normalized saturation)
+///   h = h * 6.0 / 255.0  (0-6 sector mapping)
+///   j = floor(h); f = h - j
+///   p = v * (1.0 - fs)     ← v is 0-255, so p is 0-255
+///   q = v * (1.0 - fs * f)
+///   t = v * (1.0 - fs * (1.0 - f))
+///   Then round all to nearest integer, CLIP8
 pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     let mut out = RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-        let h = ip[0] as f32 * 360.0 / 255.0; // 0-255 → 0-360
-        let s = ip[1] as f32 / 255.0; // 0-255 → 0-1
-        let v = ip[2] as f32 / 255.0; // 0-255 → 0-1
+        let h_in = ip[0] as f32;
+        let s_in = ip[1] as f32;
+        let v = ip[2] as f32;
 
-        let hi = (h / 60.0).floor() as i32 % 6;
-        let f = h / 60.0 - (h / 60.0).floor();
-        let p = v * (1.0 - s);
-        let q = v * (1.0 - f * s);
-        let t = v * (1.0 - (1.0 - f) * s);
-
-        let (r, g, b) = match hi {
-            0 => (v, t, p),
-            1 => (q, v, p),
-            2 => (p, v, t),
-            3 => (p, q, v),
-            4 => (t, p, v),
-            _ => (v, p, q),
-        };
-
-        *op = image::Rgb([
-            (r * 255.0 + 0.5) as u8,
-            (g * 255.0 + 0.5) as u8,
-            (b * 255.0 + 0.5) as u8,
-        ]);
+        if s_in == 0.0 {
+            let g = v.round().clamp(0.0, 255.0) as u8;
+            *op = image::Rgb([g, g, g]);
+        } else {
+            let fs = s_in / 255.0; // normalized saturation
+            let h = h_in * 6.0 / 255.0; // 0-6 sector mapping
+            let j = h.floor() as i32;
+            let f = h - h.floor();
+            // p, q, t are in 0-255 range (v is 0-255)
+            let p = v * (1.0 - fs);
+            let q = v * (1.0 - fs * f);
+            let t = v * (1.0 - fs * (1.0 - f));
+            // PIL rounds all values, then CLIP8
+            let up = p.round().clamp(0.0, 255.0) as u8;
+            let uq = q.round().clamp(0.0, 255.0) as u8;
+            let ut = t.round().clamp(0.0, 255.0) as u8;
+            let uv = v.round().clamp(0.0, 255.0) as u8;
+            let (r, g, b) = match j % 6 {
+                0 => (uv, ut, up),
+                1 => (uq, uv, up),
+                2 => (up, uv, ut),
+                3 => (up, uq, uv),
+                4 => (ut, up, uv),
+                _ => (uv, up, uq),
+            };
+            *op = image::Rgb([r, g, b]);
+        }
     }
     DynamicImage::ImageRgb8(out)
+}
+
+/// I (int32) → L: scale from I range to 0-255 using PIL's formula.
+/// PIL: L = (I + 32768) / 256
+pub fn i32_to_l(img: &DynamicImage) -> image::GrayImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut gray = image::GrayImage::new(w, h);
+    for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
+        let i = i32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
+        let l = ((i as i64 + 32768) / 256).clamp(0, 255) as u8;
+        gp[0] = l;
+    }
+    gray
+}
+
+/// F (float32) → L: clamp to 0-255 range.
+pub fn f32_to_l(img: &DynamicImage) -> image::GrayImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut gray = image::GrayImage::new(w, h);
+    for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
+        let f = f32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
+        let l = (f.clamp(0.0, 255.0)) as u8;
+        gp[0] = l;
+    }
+    gray
 }
 
 /// YCbCr → RGB using PIL's exact lookup-table-based ITU-R BT.601 conversion.

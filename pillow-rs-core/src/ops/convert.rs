@@ -80,6 +80,15 @@ impl Image {
                     }
                 } else if mode == "RGBA" {
                     DynamicImage::ImageRgba8(converted.to_rgba8())
+                } else if mode == "1" {
+                    // PIL: convert("1") uses truncated grayscale then threshold at 128
+                    let gray = color::pil_grayscale_truncate(&converted);
+                    let (w, h) = gray.dimensions();
+                    let mut out = image::GrayImage::new(w, h);
+                    for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
+                        op[0] = if gp[0] >= 128 { 255 } else { 0 };
+                    }
+                    DynamicImage::ImageLuma8(out)
                 } else {
                     converted
                 };
