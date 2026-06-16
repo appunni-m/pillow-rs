@@ -182,14 +182,14 @@ fn resize_f(
     let n = (dst_w * dst_h) as usize;
     let mut out_floats: Vec<f32> = Vec::with_capacity(n);
 
-    // Handle NEAREST/Box separately: PIL uses floor((dx+0.5)*sw/dw) without -0.5
+    // Handle NEAREST/Box separately: PIL uses (int)(dx * sw/dw + 0.5) = truncate after +0.5
     if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
-                let cy = (dy as f64 + 0.5) * sh_f / dh_f;
-                let sx = clamp_idx(cx.floor() as i64, sw);
-                let sy = clamp_idx(cy.floor() as i64, sh);
+                let sx = ((dx as f64) * sw_f / dw_f + 0.5) as i64;
+                let sy = ((dy as f64) * sh_f / dh_f + 0.5) as i64;
+                let sx = clamp_idx(sx, sw);
+                let sy = clamp_idx(sy, sh);
                 let idx = (sy * sw + sx) as usize;
                 out_floats.push(src_floats[idx]);
             }
@@ -292,14 +292,14 @@ fn resize_i(
     let n = (dst_w * dst_h) as usize;
     let mut out_ints: Vec<i32> = Vec::with_capacity(n);
 
-    // Handle NEAREST/Box separately: PIL uses floor((dx+0.5)*sw/dw)
+    // Handle NEAREST/Box separately: PIL uses (int)(dx * sw/dw + 0.5)
     if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
-                let cy = (dy as f64 + 0.5) * sh_f / dh_f;
-                let sx = clamp_idx(cx.floor() as i64, sw);
-                let sy = clamp_idx(cy.floor() as i64, sh);
+                let sx = ((dx as f64) * sw_f / dw_f + 0.5) as i64;
+                let sy = ((dy as f64) * sh_f / dh_f + 0.5) as i64;
+                let sx = clamp_idx(sx, sw);
+                let sy = clamp_idx(sy, sh);
                 let idx = (sy * sw + sx) as usize;
                 out_ints.push(src_ints[idx]);
             }
@@ -598,8 +598,24 @@ pub fn execute_resize(
         return resize_f(img, w, h, filter);
     }
     if explicit_mode == Some("I") {
+        return resize_i(img, w, h, filter);
+    }
+    // Mode "1": convert to L, resize, then convert back to "1" by thresholding at 128.
+    // PIL's C extension handles mode "1" internally with bit-unpacking, but our
+    // pil_resize works on Luma8 which has equivalent data. The two-pass BOX filter
+    // (NEAREST) produces averages; the conversion back to "1" thresholds them.
+    if explicit_mode == Some("1") {
+        // Image is already Luma8 with {0,255}. Resize via pil_resize (which uses
+        // the BOX filter for NEAREST, matching PIL's behavior for mode "1").
         let result = pil_resize(img, w, h, *filter, explicit_mode);
-        return Ok(preserve_mode(img, result));
+        // After resize, threshold back to binary {0, 255}: pixel >= 128 => 255 else 0
+        let gray = result.to_luma8();
+        let (rw, rh) = gray.dimensions();
+        let mut out = image::GrayImage::new(rw, rh);
+        for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
+            op[0] = if ip[0] >= 128 { 255 } else { 0 };
+        }
+        return Ok(preserve_mode(img, DynamicImage::ImageLuma8(out)));
     }
     let result = pil_resize(img, w, h, *filter, explicit_mode);
     Ok(preserve_mode(img, result))
@@ -680,7 +696,18 @@ pub fn execute_thumbnail(
     let scale = (w as f64 / cur_w as f64).min(h as f64 / cur_h as f64);
     let new_w = (cur_w as f64 * scale) as u32;
     let new_h = (cur_h as f64 * scale) as u32;
-    let result = pil_resize(img, new_w.max(1), new_h.max(1), *filter, explicit_mode);
+    let new_w = new_w.max(1);
+    let new_h = new_h.max(1);
+    // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
+    let effective_filter = match explicit_mode {
+        Some("1") | Some("P") => ResampleFilter::Nearest,
+        _ => *filter,
+    };
+    let result = match explicit_mode {
+        Some("F") => resize_f(img, new_w, new_h, &effective_filter)?,
+        Some("I") => resize_i(img, new_w, new_h, &effective_filter)?,
+        _ => pil_resize(img, new_w, new_h, effective_filter, explicit_mode),
+    };
     Ok(preserve_mode(img, result))
 }
 

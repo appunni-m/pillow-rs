@@ -118,8 +118,7 @@ class Draw:
         """Draw a bitmap. Pixel iteration done in Rust."""
         if fill is None:
             fill = (0, 0, 0)
-        bmp = bitmap.convert("1")
-        self._draw.bitmap((float(xy[0]), float(xy[1])), bmp._rust_image, fill)
+        self._draw.bitmap((float(xy[0]), float(xy[1])), bitmap._rust_image, fill)
         self._sync()
 
     def _get_font(self, font):
@@ -223,15 +222,29 @@ class Draw:
         return (left, top, right, bottom)
 
     def shape(self, shape, fill=None, outline=None):
-        """Draw a shape defined by an Outline or sequence of coordinates."""
+        """Draw a shape defined by an Outline or sequence of coordinates.
+
+        PIL's ImagingDrawOutline always fills the polygon entirely (ignoring
+        the `fill` parameter). When both outline and fill are given, the
+        outline color overwrites the fill — matching PIL's double-pass:
+        draw_outline(shape, fill_ink, 1) then draw_outline(shape, ink, 0).
+        """
         if isinstance(shape, Outline):
             shape.close()
             xy = shape._points
-            self.polygon(xy, fill=fill, outline=outline)
+            # PIL's draw_outline fills the entire polygon — it never draws
+            # a 1px border. The effective color is outline (if given) since
+            # it is always drawn last (overwriting fill).
+            if outline is not None:
+                self.polygon(xy, fill=outline, outline=None)
+            elif fill is not None:
+                self.polygon(xy, fill=fill, outline=None)
         elif isinstance(shape, (list, tuple)):
-            # Accept a single polygon-like sequence of (x,y) pairs
             if all(isinstance(p, (list, tuple)) and len(p) == 2 for p in shape):
-                self.polygon(shape, fill=fill, outline=outline)
+                if outline is not None:
+                    self.polygon(shape, fill=outline, outline=None)
+                elif fill is not None:
+                    self.polygon(shape, fill=fill, outline=None)
             else:
                 raise TypeError(f"Unsupported shape format")
         else:
@@ -247,7 +260,11 @@ class Draw:
              stroke_width=0, stroke_fill=None, embedded_color=False):
         font = self._get_font(font)
         if hasattr(font, '_rust_font'):
-            self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font._rust_font)
+            # Use PIL-compatible text rendering: get L-mode mask via getmask2
+            # then draw_bitmap (matching ImagingFill2 behavior exactly).
+            if fill is not None:
+                mask, offset = font.getmask2(text, mode="L")
+                self.bitmap((xy[0] + offset[0], xy[1] + offset[1]), mask, fill=fill)
         elif hasattr(font, 'getmask'):
             raise NotImplementedError("PIL ImageFont not yet supported")
         else:

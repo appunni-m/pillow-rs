@@ -183,11 +183,14 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a 1-bit bitmap image at position (x, y) with fill color.
+    /// Draw a bitmap image at position (x, y) with fill color.
     ///
-    /// For RGB/RGBA modes, uses the RGBA compositing pipeline.
-    /// For other modes, writes fill values directly in the mode's native pixel format,
-    /// matching PIL's `draw_bitmap` behavior.
+    /// The bitmap acts as a transparency mask. Valid bitmap modes:
+    /// - "1": binary mask (non-zero → fill)
+    /// - "L": alpha mask (0-255 opacity)
+    /// - "RGBA"/"RGBa": alpha channel at byte offset +3
+    ///
+    /// Matching PIL's `ImagingFill2` behavior exactly.
     pub fn bitmap(
         &mut self,
         x: i32,
@@ -196,31 +199,66 @@ impl Draw {
         fill: Option<(u8, u8, u8, u8)>,
     ) -> Result<(), PilError> {
         let color = fill.unwrap_or((255, 255, 255, 255));
-        let bmp_data = bitmap.getdata(None)?;
+        let bmp_mode = bitmap.mode()?;
+        // Validate mask mode — PIL only accepts "1", "L", "RGBA", "RGBa"
+        let is_valid_mask = matches!(bmp_mode.as_str(), "1" | "L" | "RGBA" | "RGBa");
+        if !is_valid_mask {
+            return Err(PilError::ValueError("bad transparency mask".to_string()));
+        }
         let (bmp_w, bmp_h) = bitmap.size()?;
+        let raw_data = bitmap.getdata(None)?;
+        let bmp_stride: usize = match bmp_mode.as_str() {
+            "1" | "L" => 1,
+            "RGBA" | "RGBa" => 4,
+            _ => unreachable!(),
+        };
+
+        // Helper: get mask value (alpha) at pixel (px, py)
+        let mask_val = |px: u32, py: u32, data: &[u8]| -> u8 {
+            let idx = (py * bmp_w + px) as usize;
+            match bmp_mode.as_str() {
+                "1" => {
+                    if idx < data.len() && data[idx] > 0 { 255 } else { 0 }
+                }
+                "L" => {
+                    if idx < data.len() { data[idx] } else { 0 }
+                }
+                "RGBA" | "RGBa" => {
+                    let pixel_idx = idx * bmp_stride;
+                    if pixel_idx + 3 < data.len() { data[pixel_idx + 3] } else { 0 }
+                }
+                _ => 0,
+            }
+        };
+
+        // PIL's BLEND: DIV255(a * (255 - mask) + b * mask)
+        let pil_blend = |bg: u8, fg: u8, m: u8| -> u8 {
+            if m == 0 { return bg; }
+            if m == 255 { return fg; }
+            ((bg as u16 * (255u16 - m as u16) + fg as u16 * m as u16 + 127u16) / 255u16) as u8
+        };
 
         let mode = self.effective_mode();
 
         match mode.as_str() {
             "RGB" | "RGBA" => {
-                // Use RGBA compositing pipeline
                 let img = self.image.materialize()?;
                 let (img_w, img_h) = (img.width(), img.height());
                 let mut canvas = img.to_rgba8();
 
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                canvas.put_pixel(
-                                    dx as u32,
-                                    dy as u32,
-                                    image::Rgba([color.0, color.1, color.2, color.3]),
-                                );
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let existing = canvas.get_pixel(dx as u32, dy as u32);
+                            let r = pil_blend(existing[0], color.0, m);
+                            let g = pil_blend(existing[1], color.1, m);
+                            let b = pil_blend(existing[2], color.2, m);
+                            let a = pil_blend(existing[3], color.3, m);
+                            canvas.put_pixel(dx as u32, dy as u32, image::Rgba([r, g, b, a]));
                         }
                     }
                 }
@@ -235,13 +273,13 @@ impl Draw {
                 let ink = color.0;
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                luma.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let v = if m == 255 { ink } else { pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m) };
+                            luma.put_pixel(dx as u32, dy as u32, image::Luma([v]));
                         }
                     }
                 }
@@ -256,13 +294,13 @@ impl Draw {
                 let ink = color.0;
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                luma.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let v = if m == 255 { ink } else { pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m) };
+                            luma.put_pixel(dx as u32, dy as u32, image::Luma([v]));
                         }
                     }
                 }
@@ -274,16 +312,18 @@ impl Draw {
                 let (img_w, img_h) = (img.width(), img.height());
                 let mut la = img.to_luma_alpha8();
                 let ink_l = color.0;
-                let ink_a = 0u8;
+                let ink_a = 255u8;
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                la.put_pixel(dx as u32, dy as u32, image::LumaA([ink_l, ink_a]));
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let existing = la.get_pixel(dx as u32, dy as u32);
+                            let l = if m == 255 { ink_l } else { pil_blend(existing[0], ink_l, m) };
+                            let a = if m == 255 { ink_a } else { pil_blend(existing[1], ink_a, m) };
+                            la.put_pixel(dx as u32, dy as u32, image::LumaA([l, a]));
                         }
                     }
                 }
@@ -298,13 +338,17 @@ impl Draw {
                 let ink = [color.0, 0u8, 0u8, 0u8];
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                rgba.put_pixel(dx as u32, dy as u32, image::Rgba(ink));
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let existing = rgba.get_pixel(dx as u32, dy as u32);
+                            let c = if m == 255 { ink[0] } else { pil_blend(existing[0], ink[0], m) };
+                            let m_ch = if m == 255 { ink[1] } else { pil_blend(existing[1], ink[1], m) };
+                            let y_ch = if m == 255 { ink[2] } else { pil_blend(existing[2], ink[2], m) };
+                            let k = if m == 255 { ink[3] } else { pil_blend(existing[3], ink[3], m) };
+                            rgba.put_pixel(dx as u32, dy as u32, image::Rgba([c, m_ch, y_ch, k]));
                         }
                     }
                 }
@@ -326,14 +370,14 @@ impl Draw {
                     let ink = color.0;
                     for py in 0..bmp_h {
                         for px in 0..bmp_w {
-                            let idx = (py * bmp_w + px) as usize;
-                            if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                                let dx = x + px as i32;
-                                let dy = y + py as i32;
-                                if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h
-                                {
-                                    indices.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
-                                }
+                            let m = mask_val(px, py, &raw_data);
+                            if m == 0 { continue; }
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h
+                            {
+                                let v = if m == 255 { ink } else { pil_blend(indices.get_pixel(dx as u32, dy as u32)[0], ink, m) };
+                                indices.put_pixel(dx as u32, dy as u32, image::Luma([v]));
                             }
                         }
                     }
@@ -345,14 +389,14 @@ impl Draw {
                     let ink = color.0;
                     for py in 0..bmp_h {
                         for px in 0..bmp_w {
-                            let idx = (py * bmp_w + px) as usize;
-                            if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                                let dx = x + px as i32;
-                                let dy = y + py as i32;
-                                if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h
-                                {
-                                    luma.put_pixel(dx as u32, dy as u32, image::Luma([ink]));
-                                }
+                            let m = mask_val(px, py, &raw_data);
+                            if m == 0 { continue; }
+                            let dx = x + px as i32;
+                            let dy = y + py as i32;
+                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h
+                            {
+                                let v = if m == 255 { ink } else { pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m) };
+                                luma.put_pixel(dx as u32, dy as u32, image::Luma([v]));
                             }
                         }
                     }
@@ -370,13 +414,17 @@ impl Draw {
                 let ink = [color.0, color.1, color.2, color.3];
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                rgba.put_pixel(dx as u32, dy as u32, image::Rgba(ink));
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let existing = rgba.get_pixel(dx as u32, dy as u32);
+                            let b0 = if m == 255 { ink[0] } else { pil_blend(existing[0], ink[0], m) };
+                            let b1 = if m == 255 { ink[1] } else { pil_blend(existing[1], ink[1], m) };
+                            let b2 = if m == 255 { ink[2] } else { pil_blend(existing[2], ink[2], m) };
+                            let b3 = if m == 255 { ink[3] } else { pil_blend(existing[3], ink[3], m) };
+                            rgba.put_pixel(dx as u32, dy as u32, image::Rgba([b0, b1, b2, b3]));
                         }
                     }
                 }
@@ -393,17 +441,17 @@ impl Draw {
                 let mut canvas = img.to_rgba8();
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
-                        let idx = (py * bmp_w + px) as usize;
-                        if idx < bmp_data.len() && bmp_data[idx] > 0 {
-                            let dx = x + px as i32;
-                            let dy = y + py as i32;
-                            if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
-                                canvas.put_pixel(
-                                    dx as u32,
-                                    dy as u32,
-                                    image::Rgba([color.0, color.1, color.2, color.3]),
-                                );
-                            }
+                        let m = mask_val(px, py, &raw_data);
+                        if m == 0 { continue; }
+                        let dx = x + px as i32;
+                        let dy = y + py as i32;
+                        if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
+                            let existing = canvas.get_pixel(dx as u32, dy as u32);
+                            let r = if m == 255 { color.0 } else { pil_blend(existing[0], color.0, m) };
+                            let g = if m == 255 { color.1 } else { pil_blend(existing[1], color.1, m) };
+                            let b = if m == 255 { color.2 } else { pil_blend(existing[2], color.2, m) };
+                            let a = if m == 255 { color.3 } else { pil_blend(existing[3], color.3, m) };
+                            canvas.put_pixel(dx as u32, dy as u32, image::Rgba([r, g, b, a]));
                         }
                     }
                 }
@@ -710,7 +758,12 @@ impl Draw {
         }
     }
 
-    /// RGBA compositing for text (existing pipeline, used for RGB/RGBA modes).
+    /// RGBA compositing for text (used for RGB and RGBA modes).
+    ///
+    /// Pixels from the font renderer have the glyph coverage in the alpha channel
+    /// and the fill color in the RGB channels. This function blends them onto the
+    /// destination canvas using PIL's BLEND formula for all four channels,
+    /// including proper alpha blending when the destination is RGBA.
     fn text_compose_rgba(
         &mut self,
         x: i32,
@@ -722,6 +775,8 @@ impl Draw {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
         let (img_w, img_h) = (canvas.width(), canvas.height());
+        let mode = self.effective_mode();
+        let blend_alpha = mode == "RGBA";
 
         for py in 0..h {
             for px in 0..w {
@@ -734,10 +789,11 @@ impl Draw {
                     let dx = (x as u32 + px).min(img_w - 1);
                     let dy = (y as u32 + py).min(img_h - 1);
                     if sa == 255 {
+                        let out_a = if blend_alpha { 255u8 } else { 255u8 };
                         canvas.put_pixel(
                             dx,
                             dy,
-                            Rgba([pixels[off], pixels[off + 1], pixels[off + 2], 255]),
+                            Rgba([pixels[off], pixels[off + 1], pixels[off + 2], out_a]),
                         );
                     } else {
                         let dp = canvas.get_pixel(dx, dy);
@@ -749,7 +805,11 @@ impl Draw {
                                 blend_u8(pixels[off], dp[0], sa, inv),
                                 blend_u8(pixels[off + 1], dp[1], sa, inv),
                                 blend_u8(pixels[off + 2], dp[2], sa, inv),
-                                255,
+                                if blend_alpha {
+                                    blend_u8(255u8, dp[3], sa, inv)
+                                } else {
+                                    255u8
+                                },
                             ]),
                         );
                     }

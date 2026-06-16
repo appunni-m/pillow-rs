@@ -28,20 +28,30 @@ impl PyImage {
         color: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         // Thin binding: extract Python types, delegate logic to core
-        let (hex, single, rgb, rgba, la) = if let Some(val) = color {
+        let (hex, single, rgb, rgba, la, int32_val, float_val) = if let Some(val) = color {
             (
                 val.extract::<String>().ok(),
                 val.extract::<u8>().ok(),
                 val.extract::<(u8, u8, u8)>().ok(),
                 val.extract::<(u8, u8, u8, u8)>().ok(),
                 val.extract::<(u8, u8)>().ok(),
+                val.extract::<i32>().ok(),
+                val.extract::<f64>().ok(),
             )
         } else {
-            (None, None, None, None, None)
+            (None, None, None, None, None, None, None)
         };
-        let c =
-            pillow_rs_core::color::resolve_new_color(mode, hex.as_deref(), single, rgb, rgba, la)
-                .map_err(map_error)?;
+        let c = pillow_rs_core::color::resolve_new_color(
+            mode,
+            hex.as_deref(),
+            single,
+            rgb,
+            rgba,
+            la,
+            int32_val,
+            float_val,
+        )
+        .map_err(map_error)?;
         let img = RsImage::new(size.0, size.1, mode, c).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }

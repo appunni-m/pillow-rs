@@ -408,7 +408,10 @@ pub fn pil_resize(
         _ => 4usize,
     };
 
-    // Handle NEAREST/Box: use direct nearest-neighbor sampling
+    // NEAREST/Box: PIL uses ImagingTransform with AFFINE, not ImagingResample.
+    // The AFFINE transform maps: sx = (int)((dx + 0.5) * sw/dw - 0.5)
+    // This is SINGLE-pixel mapping (no averaging), even during downscaling.
+    // We special-case this to match PIL's exact NEAREST behavior.
     if matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box) {
         let sw_f = sw as f64;
         let sh_f = sh as f64;
@@ -418,18 +421,18 @@ pub fn pil_resize(
         let mut out_bytes: Vec<u8> = Vec::with_capacity(n * channels);
         for dy in 0..dh {
             for dx in 0..dw {
-                // PIL: floor((dx + 0.5) * sw / dw)
-                let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as u32;
-                let sy = ((dy as f64 + 0.5) * sh_f / dh_f).floor() as u32;
-                let sx = sx.min(sw - 1);
-                let sy = sy.min(sh - 1);
+                // PIL AFFINE transform: ximg = a0*dx + a2, a2 = 0.5*a0 - 0.5
+                // Simplifies to: sx = (int)((dx + 0.5) * sw/dw - 0.5)
+                let sx = ((dx as f64 + 0.5) * sw_f / dw_f - 0.5) as i64;
+                let sy = ((dy as f64 + 0.5) * sh_f / dh_f - 0.5) as i64;
+                let sx = sx.max(0).min(sw as i64 - 1) as u32;
+                let sy = sy.max(0).min(sh as i64 - 1) as u32;
                 let p = pixel_at(&work, sx, sy);
-                for &v in p[..channels].iter() {
-                    out_bytes.push(pil_round(v));
+                for c in 0..channels {
+                    out_bytes.push(pil_round(p[c]));
                 }
             }
         }
-        // Build result from bytes
         let result = raw_to_dynamic(&out_bytes, dw, dh, channels);
         let result = if needs_alpha {
             unpremultiply_alpha(&result)

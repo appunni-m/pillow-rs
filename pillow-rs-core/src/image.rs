@@ -398,6 +398,18 @@ impl Image {
             PipelineOp::Composite { .. } => true,
             PipelineOp::CompositeModule { .. } => true,
 
+            // Draw ops — palette-safe (write single-byte index values directly)
+            PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. } => true,
+
             // Enhance ops — NOT safe for P-mode (need color)
             // Filter ops — NOT safe (need color)
             // Convert / Quantize — NOT safe (change mode)
@@ -514,7 +526,8 @@ impl Image {
         // Ops that change the image mode fundamentally should clear explicit_mode
         let explicit_mode = match &op {
             PipelineOp::Grayscale | PipelineOp::Convert { .. } | PipelineOp::Quantize { .. } => None,
-            // Draw ops always produce RGBA output regardless of input mode
+            // Draw ops: preserve explicit_mode for P-mode (draw on palette indices),
+            // but clear for other modes (draw produces RGBA).
             PipelineOp::DrawLine { .. }
             | PipelineOp::DrawRectangle { .. }
             | PipelineOp::DrawRoundedRect { .. }
@@ -524,7 +537,13 @@ impl Image {
             | PipelineOp::DrawArc { .. }
             | PipelineOp::DrawChord { .. }
             | PipelineOp::DrawPieslice { .. }
-            | PipelineOp::DrawPoint { .. } => None,
+            | PipelineOp::DrawPoint { .. } => {
+                if source.explicit_mode() == Some("P") || matches!(source, Image::Paletted(_)) {
+                    Some("P".to_string())
+                } else {
+                    None
+                }
+            }
             _ => source.explicit_mode().map(|s| s.to_string()),
         };
         let source_palette = source.extract_palette();
@@ -856,27 +875,11 @@ impl Image {
         }
         let img = self.materialize()?;
 
-        // F/I modes: stored as L8 internally, output 4 LE bytes per pixel
+        // F/I modes: stored as RGBA8 internally (f32/i32 LE bytes packed as RGBA).
+        // Read the raw bytes directly — img.as_bytes() already contains the correct
+        // f32/i32 LE representation (4 bytes per pixel).
         if matches!(mode, "F" | "I") {
-            let gray = img.to_luma8();
-            let (w, h) = gray.dimensions();
-            let mut out = Vec::with_capacity((w * h * 4) as usize);
-            if mode == "F" {
-                for y in 0..h {
-                    for x in 0..w {
-                        let v = gray.get_pixel(x, y)[0] as f32;
-                        out.extend_from_slice(&v.to_le_bytes());
-                    }
-                }
-            } else {
-                for y in 0..h {
-                    for x in 0..w {
-                        let v = gray.get_pixel(x, y)[0] as i32;
-                        out.extend_from_slice(&v.to_le_bytes());
-                    }
-                }
-            }
-            return Ok(out);
+            return Ok(img.as_bytes().to_vec());
         }
 
         // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
