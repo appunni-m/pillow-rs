@@ -48,7 +48,13 @@ impl Image {
         if w == 0 || h == 0 {
             return Err(PilError::ValueError("thumbnail size must be > 0".into()));
         }
-        let filter = filter.unwrap_or(ResampleFilter::Bicubic);
+        let mut filter = filter.unwrap_or(ResampleFilter::Bicubic);
+        // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
+        if let Some(m) = self.explicit_mode() {
+            if m == "1" || m == "P" {
+                filter = ResampleFilter::Nearest;
+            }
+        }
         let new_self = Image::push_op(self, PipelineOp::Thumbnail { w, h, filter });
         *self = new_self;
         Ok(())
