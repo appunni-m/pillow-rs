@@ -3,10 +3,36 @@
 //! is encountered. They implement the same algorithms as the Draw methods
 //! in draw/mod.rs, but operate directly on DynamicImage to avoid circular
 //! recursion (Draw methods now push PipelineOps).
+//!
+//! P-mode (palette-indexed) images are handled specially: drawing preserves
+//! the Luma8 index buffer and writes palette index values directly, matching
+//! PIL's behavior (fill colors use their R channel as the palette index).
 
 use crate::draw::{bresenham_line, plot, scanline_polygon_fill};
 use crate::error::PilError;
-use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use image::{DynamicImage, GrayImage, Rgba, RgbaImage};
+
+/// Helper: draw on an image, preserving P-mode (Luma8) when possible.
+/// For P-mode (`mode == Some("P")` with Luma8 input), converts to RGBA
+/// temporarily for drawing, then converts back to Luma8 by taking the
+/// R channel (all channels remain equal for P-mode drawing, so this is
+/// lossless and preserves palette index values).
+/// For all other modes, works on RGBA as before.
+fn draw_preserve_p_mode<F>(img: &DynamicImage, mode: Option<&str>, draw_fn: F) -> DynamicImage
+where
+    F: Fn(&mut RgbaImage),
+{
+    let is_p_mode = matches!(img, DynamicImage::ImageLuma8(_)) && mode == Some("P");
+    let mut canvas = img.to_rgba8();
+    draw_fn(&mut canvas);
+    if is_p_mode {
+        // Convert back to Luma8 by extracting R channel (R=G=B for P-mode indices)
+        let (w, h) = canvas.dimensions();
+        DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| image::Luma([canvas.get_pixel(x, y)[0]])))
+    } else {
+        DynamicImage::ImageRgba8(canvas)
+    }
+}
 
 /// Draw a line directly on a canvas (Bresenham).
 fn draw_line_on_canvas(
@@ -675,10 +701,11 @@ pub fn op_draw_line(
     y1: i32,
     fill: (u8, u8, u8, u8),
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    draw_line_on_canvas(&mut canvas, x0, y0, x1, y1, fill, width);
-    Ok(DynamicImage::ImageRgba8(canvas))
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        draw_line_on_canvas(canvas, x0, y0, x1, y1, fill, width);
+    }))
 }
 
 pub fn op_draw_rectangle(
@@ -690,10 +717,11 @@ pub fn op_draw_rectangle(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    draw_rect_on_canvas(&mut canvas, x0, y0, x1, y1, fill, outline, width);
-    Ok(DynamicImage::ImageRgba8(canvas))
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
+    }))
 }
 
 pub fn op_draw_rounded_rect(
@@ -706,11 +734,12 @@ pub fn op_draw_rounded_rect(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let r = radius.round() as i32;
     let d = r * 2;
     if d <= 0 || x1 <= x0 + 1 || y1 <= y0 + 1 {
-        return op_draw_rectangle(img, x0, y0, x1, y1, fill, outline, 1);
+        return op_draw_rectangle(img, x0, y0, x1, y1, fill, outline, 1, _mode);
     }
 
     let mut result = img.clone();
@@ -728,6 +757,7 @@ pub fn op_draw_rounded_rect(
             Some(fc),
             None,
             0,
+            _mode,
         )?;
         result = op_draw_pieslice(
             &result,
@@ -740,6 +770,7 @@ pub fn op_draw_rounded_rect(
             Some(fc),
             None,
             0,
+            _mode,
         )?;
         result = op_draw_pieslice(
             &result,
@@ -752,6 +783,7 @@ pub fn op_draw_rounded_rect(
             Some(fc),
             None,
             0,
+            _mode,
         )?;
         result = op_draw_pieslice(
             &result,
@@ -764,31 +796,32 @@ pub fn op_draw_rounded_rect(
             Some(fc),
             None,
             0,
+            _mode,
         )?;
         // Center body rectangle
-        result = op_draw_rectangle(&result, x0 + r, y0, x1 - r, y1, Some(fc), None, 1)?;
+        result = op_draw_rectangle(&result, x0 + r, y0, x1 - r, y1, Some(fc), None, 1, _mode)?;
         // Side rectangles
         if x1 - r > x0 + r + 1 {
-            result = op_draw_rectangle(&result, x0 + r + 1, y0, x1 - r - 1, y1, Some(fc), None, 1)?;
+            result = op_draw_rectangle(&result, x0 + r + 1, y0, x1 - r - 1, y1, Some(fc), None, 1, _mode)?;
         }
         let rect_left = if x0 + r > x0 { x0 + r } else { x0 + 1 };
         if rect_left < x1 - r {
-            result = op_draw_rectangle(&result, x0, y0 + r, rect_left, y1 - r, Some(fc), None, 1)?;
-            result = op_draw_rectangle(&result, x1 - r, y0 + r, x1, y1 - r, Some(fc), None, 1)?;
+            result = op_draw_rectangle(&result, x0, y0 + r, rect_left, y1 - r, Some(fc), None, 1, _mode)?;
+            result = op_draw_rectangle(&result, x1 - r, y0 + r, x1, y1 - r, Some(fc), None, 1, _mode)?;
         }
     }
 
     if let Some(oc) = outline {
         // Corner arcs
-        result = op_draw_arc(&result, x0, y0, x0 + d, y0 + d, 180.0, 270.0, Some(oc), 1)?;
-        result = op_draw_arc(&result, x1 - d, y0, x1, y0 + d, 270.0, 360.0, Some(oc), 1)?;
-        result = op_draw_arc(&result, x1 - d, y1 - d, x1, y1, 0.0, 90.0, Some(oc), 1)?;
-        result = op_draw_arc(&result, x0, y1 - d, x0 + d, y1, 90.0, 180.0, Some(oc), 1)?;
+        result = op_draw_arc(&result, x0, y0, x0 + d, y0 + d, 180.0, 270.0, Some(oc), 1, _mode)?;
+        result = op_draw_arc(&result, x1 - d, y0, x1, y0 + d, 270.0, 360.0, Some(oc), 1, _mode)?;
+        result = op_draw_arc(&result, x1 - d, y1 - d, x1, y1, 0.0, 90.0, Some(oc), 1, _mode)?;
+        result = op_draw_arc(&result, x0, y1 - d, x0 + d, y1, 90.0, 180.0, Some(oc), 1, _mode)?;
         // Edge lines
-        result = op_draw_line(&result, x0 + r, y0, x1 - r, y0, oc, 1)?;
-        result = op_draw_line(&result, x1, y0 + r, x1, y1 - r, oc, 1)?;
-        result = op_draw_line(&result, x1 - r, y1, x0 + r, y1, oc, 1)?;
-        result = op_draw_line(&result, x0, y1 - r, x0, y0 + r, oc, 1)?;
+        result = op_draw_line(&result, x0 + r, y0, x1 - r, y0, oc, 1, _mode)?;
+        result = op_draw_line(&result, x1, y0 + r, x1, y1 - r, oc, 1, _mode)?;
+        result = op_draw_line(&result, x1 - r, y1, x0 + r, y1, oc, 1, _mode)?;
+        result = op_draw_line(&result, x0, y1 - r, x0, y0 + r, oc, 1, _mode)?;
     }
 
     Ok(result)
@@ -803,10 +836,11 @@ pub fn op_draw_ellipse(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    draw_ellipse_on_canvas(&mut canvas, x0, y0, x1, y1, fill, outline);
-    Ok(DynamicImage::ImageRgba8(canvas))
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline);
+    }))
 }
 
 pub fn op_draw_circle(
@@ -817,6 +851,7 @@ pub fn op_draw_circle(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     op_draw_ellipse(
         img,
@@ -827,6 +862,7 @@ pub fn op_draw_circle(
         fill,
         outline,
         width,
+        _mode,
     )
 }
 
@@ -836,10 +872,12 @@ pub fn op_draw_polygon(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    draw_polygon_on_canvas(&mut canvas, points, fill, outline);
-    Ok(DynamicImage::ImageRgba8(canvas))
+    let pts = points.to_vec();
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        draw_polygon_on_canvas(canvas, &pts, fill, outline);
+    }))
 }
 
 pub fn op_draw_arc(
@@ -852,19 +890,12 @@ pub fn op_draw_arc(
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    draw_arc_on_canvas(
-        &mut canvas,
-        x0,
-        y0,
-        x1,
-        y1,
-        start,
-        end,
-        fill.unwrap_or((0, 0, 0, 255)),
-    );
-    Ok(DynamicImage::ImageRgba8(canvas))
+    let fc = fill.unwrap_or((0, 0, 0, 255));
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        draw_arc_on_canvas(canvas, x0, y0, x1, y1, start, end, fc);
+    }))
 }
 
 pub fn op_draw_chord(
@@ -878,9 +909,10 @@ pub fn op_draw_chord(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if let Some(fc) = fill {
-        op_draw_pieslice(img, x0, y0, x1, y1, start, end, Some(fc), outline, width)
+        op_draw_pieslice(img, x0, y0, x1, y1, start, end, Some(fc), outline, width, _mode)
     } else {
         op_draw_arc(
             img,
@@ -892,6 +924,7 @@ pub fn op_draw_chord(
             end,
             outline.or(Some((0, 0, 0, 255))),
             width,
+            _mode,
         )
     }
 }
@@ -907,21 +940,24 @@ pub fn op_draw_pieslice(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    draw_pieslice_on_canvas(&mut canvas, x0, y0, x1, y1, start, end, fill, outline);
-    Ok(DynamicImage::ImageRgba8(canvas))
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        draw_pieslice_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline);
+    }))
 }
 
 pub fn op_draw_point(
     img: &DynamicImage,
     points: &[(i32, i32)],
     fill: (u8, u8, u8, u8),
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mut canvas = img.to_rgba8();
-    let (img_w, img_h) = (canvas.width(), canvas.height());
-    for &(x, y) in points {
-        plot(&mut canvas, x, y, fill, img_w, img_h, false);
-    }
-    Ok(DynamicImage::ImageRgba8(canvas))
+    let pts = points.to_vec();
+    Ok(draw_preserve_p_mode(img, _mode, |canvas| {
+        let (img_w, img_h) = (canvas.width(), canvas.height());
+        for &(x, y) in &pts {
+            plot(canvas, x, y, fill, img_w, img_h, false);
+        }
+    }))
 }

@@ -76,7 +76,7 @@ class Image:
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
         # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
-        nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "I": "L", "F": "L", "P": "L"}
+        nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "P": "L"}
         rust_mode = nonstandard.get(mode, mode)
         # Convert list colors to tuples (JSON fixtures pass lists, PIL accepts both)
         if isinstance(color, list):
@@ -269,11 +269,29 @@ class Image:
         return self._rust_image.getpixel_formatted(xy, self.mode)
 
     def putpixel(self, xy: Tuple[int, int], value):
-        """Set pixel value at (x, y). Accepts int, tuple, or list."""
+        """Set pixel value at (x, y). Accepts int, tuple, or list.
+
+        PIL semantics for int values on multi-band images:
+        first band = value, remaining bands = 0.
+        The RGBA tuple sent to Rust is mapped back via preserve_mode.
+        """
         if isinstance(value, int):
-            self._rust_image.putpixel(xy, (value, value, value, 255))
+            # PIL: int value fills band 0, remaining bands = 0
+            bands = len(self.getbands())
+            if bands == 1:
+                self._rust_image.putpixel(xy, (value, value, value, 255))
+            elif bands == 2:
+                self._rust_image.putpixel(xy, (value, 0, 0, 0))
+            elif bands == 3:
+                self._rust_image.putpixel(xy, (value, 0, 0, 0))
+            else:
+                self._rust_image.putpixel(xy, (value, 0, 0, 0))
+        elif len(value) == 2:
+            # 2-band mode (LA): send as (L, 0, 0, A) so preserve_mode extracts L and A
+            l_val, a_val = value
+            self._rust_image.putpixel(xy, (l_val, 0, 0, a_val))
         elif len(value) == 3:
-            self._rust_image.putpixel(xy, (*value, 255))
+            self._rust_image.putpixel(xy, (*value, 0))
         elif len(value) == 4:
             self._rust_image.putpixel(xy, tuple(value))
         else:
@@ -333,19 +351,19 @@ class Image:
         self._rust_image.alpha_composite(im._rust_image)
 
     def getcolors(self, maxcolors=256):
-        """Return list of (count, color) tuples or None if too many colors."""
+        """Return list of [count, color] pairs or None if too many colors."""
         result = self._rust_image.getcolors(maxcolors)
         if result is None:
             return None
-        # Convert raw bytes to proper tuples (matching PIL format)
+        # Convert raw bytes: color as int for single-band, list for multi-band
         n_bands = len(self.getbands())
         out = []
         for count, raw_color in result:
             if n_bands == 1:
                 color = raw_color[0]
             else:
-                color = tuple(raw_color)
-            out.append((count, color))
+                color = list(raw_color)
+            out.append([count, color])
         return out
 
     def getdata(self, band=None):
@@ -358,7 +376,21 @@ class Image:
         return [tuple(raw[i:i+n_bands]) for i in range(0, len(raw), n_bands)]
 
     def putdata(self, data, scale=1.0, offset=0.0):
-        """Replace pixel data from a sequence. Flattening done in Rust."""
+        """Replace pixel data from a sequence. Flattening done in Rust.
+
+        PIL semantics for int values in multi-band images:
+        first band = value, remaining bands = 0.
+        """
+        n_bands = len(self.getbands())
+        if n_bands > 1:
+            expanded = []
+            for item in data:
+                if isinstance(item, int):
+                    pixel = [item] + [0] * (n_bands - 1)
+                    expanded.append(tuple(pixel))
+                else:
+                    expanded.append(tuple(item))
+            data = expanded
         self._rust_image.putdata(data)
 
     def getprojection(self):
@@ -384,9 +416,14 @@ class Image:
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
         if callable(lut):
-            # Function-based: convert to LUT
-            table = [lut(i) for i in range(256)]
+            # Function-based: convert to LUT, replicate per band (matching PIL)
+            n_bands = len(self.getbands())
+            table = [lut(i) for i in range(256)] * n_bands
             lut = bytes(int(v) & 0xFF for v in table)
+        # Eager validation matching PIL: exactly 256 * bands entries required
+        n_bands = len(self.getbands())
+        if len(lut) != 256 * n_bands:
+            raise ValueError("wrong number of lut entries")
         return Image(self._rust_image.point(list(lut)))
 
     def effect_spread(self, distance):
@@ -561,22 +598,40 @@ class Image:
         _QImage, _qRgb, QPixmap = self._qt_imports()
         return QPixmap.fromImage(self.toqimage())
 
-    @classmethod
-    def frombytes(cls, mode, size, data, decoder_name="raw", *args):
-        """Create image from raw pixel bytes."""
+    def frombytes(self, data, decoder_name="raw", *args):
+        """Create image from raw pixel bytes or replace in-place.
+
+        Supports both calling patterns matching PIL API:
+        - Image.frombytes(mode, size, data) → creates new image (class method)
+        - im.frombytes(data) → replaces pixel data in-place (instance method)
+        """
         from ._core import Image as RustImage
-        img = cls(RustImage.frombytes(mode, size, bytes(data)))
+
+        # Detect class method: Image.frombytes(mode, size, data, ...)
+        # Positional args after self shift: data=mode, decoder_name=size, args[0]=pixel_data
+        # Also handles: img.frombytes(data) where self is an instance with _rust_image
+        if hasattr(self, '_rust_image'):
+            # Instance method: im.frombytes(data, decoder_name, *args)
+            mode = self.mode
+            size = self.size
+            self._rust_image = RustImage.frombytes(mode, size, bytes(data))
+            return self
+
+        # Class method: Image.frombytes(mode, size, data, ...)
+        mode = self if isinstance(self, str) else data
+        size = data if isinstance(self, str) else decoder_name
+        pixel_data = decoder_name if isinstance(self, str) else args[0] if args else None
+        result = Image(RustImage.frombytes(mode, size, bytes(pixel_data)))
         if mode in ("1", "P", "CMYK", "HSV", "YCbCr", "I", "F"):
-            img._explicit_mode = mode
-        # Extract palette for P-mode images so getpalette() works
+            result._explicit_mode = mode
         if mode == "P":
             try:
-                p = img._rust_image.palette()
+                p = result._rust_image.palette()
                 if p:
-                    img._palette = list(p)
+                    result._palette = list(p)
             except Exception:
                 pass
-        return img
+        return result
 
     @classmethod
     def fromarray(cls, obj, mode=None):
@@ -618,7 +673,8 @@ class Image:
         """Apply function to each pixel via LUT."""
         if args:
             func = args[0]
-            table = [func(i) & 0xFF for i in range(256)]
+            n_bands = len(image.getbands())
+            table = [func(i) & 0xFF for i in range(256)] * n_bands
             lut = bytes(table)
             return Image(image._rust_image.point(list(lut)))
         raise ValueError("eval requires a function argument")

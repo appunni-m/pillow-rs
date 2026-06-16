@@ -1994,10 +1994,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::PutAlpha { alpha } = op {
-                    Ok(op_put_alpha(img, *alpha))
+                    Ok(op_put_alpha(img, *alpha, mode))
                 } else {
                     Err(PilError::ValueError("expected PutAlpha op".into()))
                 }
@@ -2069,7 +2069,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             m.insert($key, OpEntry::cpu_only($func));
         };
     }
-    draw_entry!("DrawLine", |img, op, _mode| {
+    draw_entry!("DrawLine", |img, op, mode| {
         if let PipelineOp::DrawLine {
             x0,
             y0,
@@ -2079,12 +2079,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_line(img, *x0, *y0, *x1, *y1, *fill, *width)
+            op_draw_line(img, *x0, *y0, *x1, *y1, *fill, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawLine".into()))
         }
     });
-    draw_entry!("DrawRectangle", |img, op, _mode| {
+    draw_entry!("DrawRectangle", |img, op, mode| {
         if let PipelineOp::DrawRectangle {
             x0,
             y0,
@@ -2095,12 +2095,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_rectangle(img, *x0, *y0, *x1, *y1, *fill, *outline, *width)
+            op_draw_rectangle(img, *x0, *y0, *x1, *y1, *fill, *outline, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawRectangle".into()))
         }
     });
-    draw_entry!("DrawRoundedRect", |img, op, _mode| {
+    draw_entry!("DrawRoundedRect", |img, op, mode| {
         if let PipelineOp::DrawRoundedRect {
             x0,
             y0,
@@ -2112,12 +2112,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_rounded_rect(img, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width)
+            op_draw_rounded_rect(img, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawRoundedRect".into()))
         }
     });
-    draw_entry!("DrawEllipse", |img, op, _mode| {
+    draw_entry!("DrawEllipse", |img, op, mode| {
         if let PipelineOp::DrawEllipse {
             x0,
             y0,
@@ -2128,12 +2128,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_ellipse(img, *x0, *y0, *x1, *y1, *fill, *outline, *width)
+            op_draw_ellipse(img, *x0, *y0, *x1, *y1, *fill, *outline, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawEllipse".into()))
         }
     });
-    draw_entry!("DrawCircle", |img, op, _mode| {
+    draw_entry!("DrawCircle", |img, op, mode| {
         if let PipelineOp::DrawCircle {
             cx,
             cy,
@@ -2143,12 +2143,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_circle(img, *cx, *cy, *radius, *fill, *outline, *width)
+            op_draw_circle(img, *cx, *cy, *radius, *fill, *outline, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawCircle".into()))
         }
     });
-    draw_entry!("DrawPolygon", |img, op, _mode| {
+    draw_entry!("DrawPolygon", |img, op, mode| {
         if let PipelineOp::DrawPolygon {
             points,
             fill,
@@ -2156,12 +2156,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_polygon(img, points, *fill, *outline, *width)
+            op_draw_polygon(img, points, *fill, *outline, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawPolygon".into()))
         }
     });
-    draw_entry!("DrawArc", |img, op, _mode| {
+    draw_entry!("DrawArc", |img, op, mode| {
         if let PipelineOp::DrawArc {
             x0,
             y0,
@@ -2173,12 +2173,12 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             width,
         } = op
         {
-            op_draw_arc(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *width)
+            op_draw_arc(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *width, mode)
         } else {
             Err(PilError::ValueError("expected DrawArc".into()))
         }
     });
-    draw_entry!("DrawChord", |img, op, _mode| {
+    draw_entry!("DrawChord", |img, op, mode| {
         if let PipelineOp::DrawChord {
             x0,
             y0,
@@ -2192,13 +2192,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         } = op
         {
             op_draw_chord(
-                img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width,
+                img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width, mode,
             )
         } else {
             Err(PilError::ValueError("expected DrawChord".into()))
         }
     });
-    draw_entry!("DrawPieslice", |img, op, _mode| {
+    draw_entry!("DrawPieslice", |img, op, mode| {
         if let PipelineOp::DrawPieslice {
             x0,
             y0,
@@ -2212,15 +2212,15 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         } = op
         {
             op_draw_pieslice(
-                img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width,
+                img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width, mode,
             )
         } else {
             Err(PilError::ValueError("expected DrawPieslice".into()))
         }
     });
-    draw_entry!("DrawPoint", |img, op, _mode| {
+    draw_entry!("DrawPoint", |img, op, mode| {
         if let PipelineOp::DrawPoint { points, fill } = op {
-            op_draw_point(img, points, *fill)
+            op_draw_point(img, points, *fill, mode)
         } else {
             Err(PilError::ValueError("expected DrawPoint".into()))
         }

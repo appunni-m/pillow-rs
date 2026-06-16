@@ -494,11 +494,12 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
         image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
         _ => 4,
     };
-    let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands {
-        (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect()
-    } else {
-        vec![lut; n_bands]
-    };
+    // PIL requires EXACTLY 256 * n_bands lut entries
+    let expected = 256 * n_bands;
+    if lut.len() != expected {
+        return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    let band_luts: Vec<&[u8]> = (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect();
     // For single-channel images (mode "1", "L", "P"), operate on Luma8 directly
     // to avoid precision loss through RGBA round-trip.
     if n_bands == 1 {
@@ -581,13 +582,12 @@ pub fn op_point(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError
         image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
         _ => 4,
     };
-    // Per-band LUTs: if lut has 256*n_bands entries, split into per-band segments
-    let band_luts: Vec<&[u8]> = if lut.len() >= 256 * n_bands {
-        (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect()
-    } else {
-        // Single LUT: apply same to all bands
-        vec![lut; n_bands]
-    };
+    // PIL requires EXACTLY 256 * n_bands lut entries
+    let expected = 256 * n_bands;
+    if lut.len() != expected {
+        return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    let band_luts: Vec<&[u8]> = (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect();
     // For single-channel images, operate on Luma8 directly
     // to avoid precision loss through RGBA round-trip.
     if n_bands == 1 {
@@ -842,7 +842,43 @@ pub fn op_put_data(
 
 // ── PutAlpha ──
 
-pub fn op_put_alpha(img: &DynamicImage, alpha: u8) -> DynamicImage {
+pub fn op_put_alpha(img: &DynamicImage, alpha: u8, explicit_mode: Option<&str>) -> DynamicImage {
+    // Handle explicit PIL modes that need special treatment
+    if let Some(mode) = explicit_mode {
+        match mode {
+            "CMYK" => {
+                // PIL putalpha on CMYK converts to RGBA (proper color space),
+                // sets alpha, and returns RGBA.
+                // CMYK→RGB: R = 255*(1-C/255)*(1-K/255), etc.
+                let raw = img.as_bytes();
+                let (w, h) = img.dimensions();
+                let mut rgba = RgbaImage::new(w, h);
+                for (i, p) in rgba.pixels_mut().enumerate() {
+                    let c = raw[i * 4] as f64 / 255.0;
+                    let m = raw[i * 4 + 1] as f64 / 255.0;
+                    let y = raw[i * 4 + 2] as f64 / 255.0;
+                    let k = raw[i * 4 + 3] as f64 / 255.0;
+                    p[0] = (255.0 * (1.0 - c) * (1.0 - k) + 0.5) as u8;
+                    p[1] = (255.0 * (1.0 - m) * (1.0 - k) + 0.5) as u8;
+                    p[2] = (255.0 * (1.0 - y) * (1.0 - k) + 0.5) as u8;
+                    p[3] = alpha;
+                }
+                return DynamicImage::ImageRgba8(rgba);
+            }
+            "P" => {
+                // PIL putalpha on P converts to PA (palette index + alpha).
+                // Stored as Luma8, convert to LumaA8 with alpha.
+                let luma = img.to_luma8();
+                let mut la = GrayAlphaImage::new(luma.width(), luma.height());
+                for (o, i) in la.pixels_mut().zip(luma.pixels()) {
+                    o[0] = i[0];
+                    o[1] = alpha;
+                }
+                return DynamicImage::ImageLumaA8(la);
+            }
+            _ => {}
+        }
+    }
     let out = match img.color() {
         image::ColorType::L8 => {
             let luma = img.to_luma8();

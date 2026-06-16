@@ -2,7 +2,7 @@
 //! These implement PIL-compatible color mode conversion, quantization, and palette remapping.
 
 use image::DynamicImage;
-
+use image::GenericImageView;
 use crate::color::{pil_grayscale, pil_grayscale_truncate};
 use crate::error::PilError;
 use crate::image::preserve_mode;
@@ -121,24 +121,33 @@ pub fn op_convert(
             Ok(DynamicImage::ImageLuma8(out))
         }
         ColorMode::I => {
-            // Convert to int32 mode: grayscale values stored as RGBA (int32 LE)
-            let gray = pil_grayscale(img);
-            let (w, h) = gray.dimensions();
+            // Convert to int32 mode: PIL stores rounded grayscale as int32 LE in RGBA.
+            // Use the luma formula directly (no intermediate u8 truncation).
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
             let mut out = image::RgbaImage::new(w, h);
-            for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                let val = gp[0] as i32;
+            for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
+                let r = px[0] as i32;
+                let g = px[1] as i32;
+                let b = px[2] as i32;
+                // PIL's rounded luma: (19595*R + 38470*G + 7471*B + 32768) >> 16
+                let val = (19595i32 * r + 38470i32 * g + 7471i32 * b + 32768) >> 16;
                 let le = val.to_le_bytes();
                 *op = image::Rgba([le[0], le[1], le[2], le[3]]);
             }
             Ok(DynamicImage::ImageRgba8(out))
         }
         ColorMode::F => {
-            // Convert to float32 mode: grayscale values stored as RGBA (f32 LE)
-            let gray = pil_grayscale(img);
-            let (w, h) = gray.dimensions();
+            // Convert to float32 mode using PIL's exact formula from rgb2f:
+            //   v = (r*299 + g*587 + b*114) / 1000.0F
+            // This computes the sum in integer arithmetic (matching PIL's `L` macro)
+            // then divides by 1000.0F as float, matching PIL pixel-for-pixel.
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
             let mut out = image::RgbaImage::new(w, h);
-            for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                let val = gp[0] as f32;
+            for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
+                let sum = px[0] as i32 * 299 + px[1] as i32 * 587 + px[2] as i32 * 114;
+                let val = sum as f32 / 1000.0_f32;
                 let le = val.to_le_bytes();
                 *op = image::Rgba([le[0], le[1], le[2], le[3]]);
             }
@@ -161,6 +170,16 @@ pub fn op_convert(
                 ]);
             }
             Ok(DynamicImage::ImageRgba8(out))
+        }
+        ColorMode::HSV => {
+            // Convert to HSV: RGB→HSV using PIL's exact algorithm.
+            // HSV is stored in an Rgb8 container (H→R, S→G, V→B).
+            Ok(crate::color::rgb_to_hsv(img))
+        }
+        ColorMode::YCbCr => {
+            // Convert to YCbCr: RGB→YCbCr using PIL's BT.601 fixed-point.
+            // YCbCr is stored in an Rgb8 container (Y→R, Cb→G, Cr→B).
+            Ok(crate::color::rgb_to_ycbcr(img))
         }
         _ => Err(PilError::NotImplementedError(format!(
             "Convert to {:?} not yet implemented",
@@ -249,12 +268,33 @@ pub fn op_remap_palette(
 /// Extract a single band/channel from the image as an L-mode output.
 /// index: 0=R, 1=G, 2=B, 3=A (for RGBA), 0=only band for L/LA
 pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
+    let (w, h) = img.dimensions();
     let mut gray = image::GrayImage::new(w, h);
-    let ch = (index.min(3)) as usize;
-    for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
-        gp[0] = rp[ch];
+    let idx = index as usize;
+    // Extract band from native format to avoid RGBA round-trip losing channels.
+    // LA mode stored as La8: [L, A] at bytes 0, 1 per pixel.
+    // RGB/RGBA/CMYK stored in their respective formats.
+    match img {
+        DynamicImage::ImageLumaA8(ref la) => {
+            // La8: [L, A] per pixel, stride 2
+            for (gp, lp) in gray.pixels_mut().zip(la.pixels()) {
+                gp[0] = lp[idx.min(1)];
+            }
+        }
+        DynamicImage::ImageRgba8(ref rgba) => {
+            let ch = idx.min(3);
+            for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
+                gp[0] = rp[ch];
+            }
+        }
+        _ => {
+            // Fallback: convert to RGBA and extract
+            let rgba = img.to_rgba8();
+            let ch = idx.min(3);
+            for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
+                gp[0] = rp[ch];
+            }
+        }
     }
     Ok(DynamicImage::ImageLuma8(gray))
 }

@@ -101,17 +101,30 @@ pub fn resolve_new_color(
     rgb: Option<(u8, u8, u8)>,
     rgba: Option<(u8, u8, u8, u8)>,
     la: Option<(u8, u8)>,
+    int32_val: Option<i32>,
+    float_val: Option<f64>,
 ) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
     if let Some(s) = hex_str {
         return parse_color_str(s);
     }
-    let is_luma = mode == "L" || mode == "LA";
+    // For I mode with i32 value, pack as 4-byte LE
+    if mode == "I" {
+        if let Some(v) = int32_val {
+            let bytes = v.to_le_bytes();
+            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+        }
+    }
+    // For F mode with f64 value, pack as 4-byte LE f32
+    if mode == "F" {
+        if let Some(v) = float_val {
+            let f = v as f32;
+            let bytes = f.to_le_bytes();
+            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+        }
+    }
     if let Some(v) = single_value {
-        if is_luma {
-            return Ok((v, v, v, 255));
-        } else {
-            return Ok((v, 0, 0, 255));
-        } // PIL: single int to RGB = (R,0,0)
+        // PIL: single int for multi-band images = first band = value, rest = 0
+        return Ok((v, 0, 0, 0));
     }
     if let Some((l, a)) = la {
         return Ok((l, l, l, a));
@@ -340,6 +353,112 @@ pub fn f32_to_l(img: &DynamicImage) -> image::GrayImage {
         gp[0] = l;
     }
     gray
+}
+
+/// RGB → HSV using PIL's exact algorithm from rgb2hsv in libImaging/Convert.c.
+/// Based on CPython's colorsys module. All inputs/outputs are u8 (0-255).
+/// PIL uses float (f32) for intermediate values (rc, gc, bc, cr, h), only
+/// promoting to double when combining with `2.0`/`4.0`/`6.0`/`255.0` literals.
+/// The result is stored back to f32, and the final `(int)(h * 255.0)` truncates.
+/// This function matches PIL pixel-for-pixel by mimicking the exact precision
+/// flow: f32 divisions → f64 promotions for constant arithmetic → f32 storage.
+pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let mut out = image::RgbImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+        let r = ip[0];
+        let g = ip[1];
+        let b = ip[2];
+        let maxc = r.max(g.max(b));
+        let minc = r.min(g.min(b));
+        let v = maxc;
+        let (uh, us) = if minc == maxc {
+            (0u8, 0u8)
+        } else {
+            // All intermediate computations in f32, matching PIL's `float` type
+            let cr = (maxc - minc) as f32;
+            let rc = (maxc as f32 - r as f32) / cr;
+            let gc = (maxc as f32 - g as f32) / cr;
+            let bc = (maxc as f32 - b as f32) / cr;
+
+            // Compute h_val in f64 (PIL promotes to double due to 2.0/4.0 literals),
+            // then immediately cast back to f32 for storage in `h`.
+            let h_float: f32 = if r == maxc {
+                (bc as f64 - gc as f64) as f32
+            } else if g == maxc {
+                (2.0_f64 + rc as f64 - bc as f64) as f32
+            } else {
+                (4.0_f64 + gc as f64 - rc as f64) as f32
+            };
+
+            // PIL: h = fmod((h / 6.0 + 1.0), 1.0)
+            // h is float (f32), 6.0/1.0 are double literals → promotion to double.
+            // The fmod result is stored back to float (f32).
+            let h_double = h_float as f64;
+            let h_fmod = ((h_double / 6.0) + 1.0) % 1.0;
+            let h_stored = h_fmod as f32;  // PIL stores h back to float here
+
+            // PIL: uh = (int)(h * 255.0) — float promoted to double for multiplication
+            // with 255.0 (double literal), then truncated
+            let s_float = cr / maxc as f32;  // s = cr / maxc in f32
+            let us = ((s_float as f64) * 255.0) as u8;
+            let uh = ((h_stored as f64) * 255.0) as u8;
+
+            (uh, us)
+        };
+        *op = image::Rgb([uh, us, v]);
+    }
+    DynamicImage::ImageRgb8(out)
+}
+
+/// RGB → YCbCr using PIL's exact lookup-table-based ITU-R BT.601 conversion.
+/// Uses precomputed tables matching PIL's ConvertYCbCr.c with SCALE=6.
+/// Table formula: table[i] = (int)(i * coeff * 64 + 0.5)
+pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
+    use std::sync::OnceLock;
+
+    fn make_table(coeff: f64) -> [i32; 256] {
+        let mut t = [0i32; 256];
+        for i in 0..256 {
+            t[i] = (i as f64 * coeff * 64.0 + 0.5) as i32;
+        }
+        t
+    }
+
+    static Y_R: OnceLock<[i32; 256]> = OnceLock::new();
+    static Y_G: OnceLock<[i32; 256]> = OnceLock::new();
+    static Y_B: OnceLock<[i32; 256]> = OnceLock::new();
+    static CB_R: OnceLock<[i32; 256]> = OnceLock::new();
+    static CB_G: OnceLock<[i32; 256]> = OnceLock::new();
+    static CB_B: OnceLock<[i32; 256]> = OnceLock::new();
+    static CR_G: OnceLock<[i32; 256]> = OnceLock::new();
+    static CR_B: OnceLock<[i32; 256]> = OnceLock::new();
+
+    let y_r = Y_R.get_or_init(|| make_table(0.299));
+    let y_g = Y_G.get_or_init(|| make_table(0.587));
+    let y_b = Y_B.get_or_init(|| make_table(0.114));
+    let cb_r = CB_R.get_or_init(|| make_table(-0.16874));
+    let cb_g = CB_G.get_or_init(|| make_table(-0.33126));
+    let cb_b = CB_B.get_or_init(|| make_table(0.5));
+    let cr_g = CR_G.get_or_init(|| make_table(-0.41869));
+    let cr_b = CR_B.get_or_init(|| make_table(-0.08131));
+
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let mut out = image::RgbImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+        let r = ip[0] as usize;
+        let g = ip[1] as usize;
+        let b = ip[2] as usize;
+
+        let y = ((y_r[r] + y_g[g] + y_b[b]) >> 6) as u8;
+        let cb = (((cb_r[r] + cb_g[g] + cb_b[b]) >> 6) + 128) as u8;
+        let cr = (((cb_b[r] + cr_g[g] + cr_b[b]) >> 6) + 128) as u8; // Cr_R = Cb_B
+
+        *op = image::Rgb([y, cb, cr]);
+    }
+    DynamicImage::ImageRgb8(out)
 }
 
 /// YCbCr → RGB using PIL's exact lookup-table-based ITU-R BT.601 conversion.
