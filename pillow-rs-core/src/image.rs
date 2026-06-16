@@ -845,31 +845,57 @@ impl Image {
     }
 
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
+        self.tobytes_formatted(self.explicit_mode().unwrap_or(""))
+    }
+
+    /// Like tobytes() but takes an explicit mode override (for Python-side modes like F/I).
+    pub fn tobytes_formatted(&self, mode: &str) -> Result<Vec<u8>, PilError> {
         // Fast path for Paletted: return raw index bytes
         if let Image::Paletted(data) = self {
             return Ok(data.indices.as_raw().to_vec());
         }
         let img = self.materialize()?;
-        // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
-        // Only when the materialized image is still grayscale (not after convert etc.)
-        if let Some(mode) = self.explicit_mode() {
-            if mode == "1" && img.color() == image::ColorType::L8 {
-                let gray = img.to_luma8();
-                let (w, h) = gray.dimensions();
-                let row_bytes = w.div_ceil(8) as usize;
-                let mut packed = vec![0u8; row_bytes * h as usize];
-                for y in 0..h as usize {
-                    for x in 0..w as usize {
-                        let pixel = gray.get_pixel(x as u32, y as u32)[0];
-                        if pixel != 0 {
-                            let byte_idx = y * row_bytes + x / 8;
-                            let bit_idx = 7 - (x % 8);
-                            packed[byte_idx] |= 1 << bit_idx;
-                        }
+
+        // F/I modes: stored as L8 internally, output 4 LE bytes per pixel
+        if matches!(mode, "F" | "I") {
+            let gray = img.to_luma8();
+            let (w, h) = gray.dimensions();
+            let mut out = Vec::with_capacity((w * h * 4) as usize);
+            if mode == "F" {
+                for y in 0..h {
+                    for x in 0..w {
+                        let v = gray.get_pixel(x, y)[0] as f32;
+                        out.extend_from_slice(&v.to_le_bytes());
                     }
                 }
-                return Ok(packed);
+            } else {
+                for y in 0..h {
+                    for x in 0..w {
+                        let v = gray.get_pixel(x, y)[0] as i32;
+                        out.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
             }
+            return Ok(out);
+        }
+
+        // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
+        if mode == "1" && img.color() == image::ColorType::L8 {
+            let gray = img.to_luma8();
+            let (w, h) = gray.dimensions();
+            let row_bytes = w.div_ceil(8) as usize;
+            let mut packed = vec![0u8; row_bytes * h as usize];
+            for y in 0..h as usize {
+                for x in 0..w as usize {
+                    let pixel = gray.get_pixel(x as u32, y as u32)[0];
+                    if pixel != 0 {
+                        let byte_idx = y * row_bytes + x / 8;
+                        let bit_idx = 7 - (x % 8);
+                        packed[byte_idx] |= 1 << bit_idx;
+                    }
+                }
+            }
+            return Ok(packed);
         }
         Ok(img.as_bytes().to_vec())
     }

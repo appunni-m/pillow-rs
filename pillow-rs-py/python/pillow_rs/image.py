@@ -254,7 +254,7 @@ class Image:
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        data = self._rust_image.tobytes()
+        data = self._rust_image.tobytes_formatted(self.mode)
         # Handle raw encoder formats: "BGRA" swaps B and R channels
         if encoder_name == "raw" and args and args[0] in ("BGRA", "BGR"):
             fmt = args[0]
