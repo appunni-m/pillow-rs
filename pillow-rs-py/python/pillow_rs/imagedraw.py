@@ -262,9 +262,13 @@ class Draw:
         if hasattr(font, '_rust_font'):
             # Use PIL-compatible text rendering: get L-mode mask via getmask2
             # then draw_bitmap (matching ImagingFill2 behavior exactly).
-            if fill is not None:
+            # For modes 1, P, I, F: use the original Rust text pipeline since
+            # these require binary fontmode (FT_LOAD_TARGET_MONO).
+            if fill is not None and self._orig_mode in ("RGB", "RGBA"):
                 mask, offset = font.getmask2(text, mode="L")
                 self.bitmap((xy[0] + offset[0], xy[1] + offset[1]), mask, fill=fill)
+            else:
+                self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font._rust_font)
         elif hasattr(font, 'getmask'):
             raise NotImplementedError("PIL ImageFont not yet supported")
         else:
