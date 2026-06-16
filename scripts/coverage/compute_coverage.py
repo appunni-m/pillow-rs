@@ -183,7 +183,7 @@ def infer_functions(nodeid, fixture_map, static_map):
     For static tests: tries file::class::test, class::test, bare test name.
     """
     # Check if this is a fixture test
-    if "test_fixture_parity[" in nodeid or "test_fixture_parity.py::" in nodeid:
+    if "test_parity[" in nodeid or "test_parity.py::" in nodeid or "test_fixture_parity[" in nodeid or "test_fixture_parity.py::" in nodeid:
         # Extract parametrize ID: "test_fixture_parity[Image_resize_L]" → "Image_resize_L"
         m = re.search(r'\[([^\]]+)\]', nodeid)
         if m:

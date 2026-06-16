@@ -23,6 +23,13 @@ _BAND_NAMES = {
 class Image:
     """A high-performance image class backed by Rust. Pillow-compatible API."""
 
+    # Resampling constants matching PIL.Image.<name> access pattern
+    NEAREST = Resampling.NEAREST
+    BILINEAR = Resampling.BILINEAR
+    BICUBIC = Resampling.BICUBIC
+    LANCZOS = Resampling.LANCZOS
+    Resampling = Resampling
+
     def __init__(self, rust_image=None):
         if RustImage is None:
             raise ImportError("pillow-rs Rust extension not available.")
@@ -123,6 +130,8 @@ class Image:
     ) -> "Image":
         if isinstance(resample, int):
             resample = Resampling.from_int(resample)
+        # Ensure size is a tuple (JSON deserialization may produce a list)
+        size = tuple(size)
         rust_image = self._rust_image.resize(size, resample)
         return Image(rust_image)
 
