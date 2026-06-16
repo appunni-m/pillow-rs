@@ -4,8 +4,7 @@ modules:
   Image:
     class_methods:
     - name: open
-      signature: 'open(fp: str|bytes|Path, mode: str=''r'', formats: list|None=None)
-        -> Image'
+      signature: 'open(fp: str|bytes|Path, mode: str=''r'', formats: list|None=None) -> Image'
       supported_modes:
       - L
       - LA
@@ -31,8 +30,7 @@ modules:
       supported_targets:
       - cpu
     - name: new
-      signature: 'new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0)
-        -> Image'
+      signature: 'new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0) -> Image'
       supported_modes:
       - 1
       - CMYK
@@ -91,12 +89,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     methods:
     - name: save
-      signature: 'save(self, fp: str|Path|IO[bytes], format: str|None=None, **params)
-        -> None'
+      signature: 'save(self, fp: str|Path|IO[bytes], format: str|None=None, **params) -> None'
       supported_formats:
       - PNG
       - JPEG
@@ -123,8 +119,8 @@ modules:
       supported_targets:
       - cpu
     - name: resize
-      signature: 'resize(self, size: tuple[int,int]|list[int], resample: int|None=None,
-        box: tuple|None=None, reducing_gap: float|None=None) -> Image'
+      signature: 'resize(self, size: tuple[int,int]|list[int], resample: int|None=None, box: tuple|None=None, reducing_gap:
+        float|None=None) -> Image'
       supported_modes:
       - 1
       - CMYK
@@ -166,8 +162,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: crop
       signature: 'crop(self, box: tuple[float,float,float,float]|None=None) -> Image'
       supported_modes:
@@ -203,12 +198,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: rotate
-      signature: 'rotate(self, angle: float, resample: Resampling=NEAREST, expand:
-        int|bool=False, center: tuple|None=None, translate: tuple|None=None, fillcolor:
-        float|tuple|str|None=None) -> Image'
+      signature: 'rotate(self, angle: float, resample: Resampling=NEAREST, expand: int|bool=False, center: tuple|None=None,
+        translate: tuple|None=None, fillcolor: float|tuple|str|None=None) -> Image'
       supported_modes:
       - '1'
       - CMYK
@@ -233,8 +226,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: transpose
       signature: 'transpose(self, method: Transpose) -> Image'
       supported_modes:
@@ -258,11 +250,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: convert
-      signature: 'convert(self, mode: str|None=None, matrix: tuple[float,...]|None=None,
-        dither: Dither|None=None, palette: Palette=WEB, colors: int=256) -> Image'
+      signature: 'convert(self, mode: str|None=None, matrix: tuple[float,...]|None=None, dither: Dither|None=None, palette:
+        Palette=WEB, colors: int=256) -> Image'
       supported_modes:
       - L
       - LA
@@ -304,8 +295,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: paste
       signature: 'paste(self, im: Image|str|float|tuple[float,...], box: Image|tuple[int,int,int,int]|tuple[int,int]|None=None,
         mask: Image|None=None) -> None'
@@ -346,11 +336,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: filter
-      signature: 'filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter])
-        -> Image'
+      signature: 'filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter]) -> Image'
       supported_modes:
       - '1'
       - CMYK
@@ -383,8 +371,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: copy
       signature: copy(self) -> Image
       supported_modes:
@@ -402,8 +389,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: split
       signature: split(self) -> tuple[Image,...]
       supported_modes:
@@ -420,17 +406,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getbands
       signature: getbands(self) -> tuple[str,...]
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -439,18 +424,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: thumbnail
-      signature: 'thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC,
-        reducing_gap: float|None=2.0) -> None'
+      signature: 'thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC, reducing_gap: float|None=2.0) ->
+        None'
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - size:
         - 100
@@ -467,17 +451,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: tobytes
       signature: 'tobytes(self, encoder_name: str=''raw'', *args) -> bytes'
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       - encoder_name: raw
@@ -487,11 +470,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: alpha_composite
-      signature: 'alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source:
-        Sequence[int]=(0,0)) -> None'
+      signature: 'alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source: Sequence[int]=(0,0)) -> None'
       supported_modes:
       - LA
       - RGBA
@@ -504,8 +485,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: close
       signature: close(self) -> None
       supported_modes:
@@ -542,17 +522,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getchannel
       signature: 'getchannel(self, channel: int|str) -> Image'
       supported_modes:
-        - CMYK
-        - L
-        - LA
-        - RGB
-        - RGBA
-        - YCbCr
+      - CMYK
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - YCbCr
       param_variants:
       - channel: R
       - channel: G
@@ -565,8 +544,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getcolors
       signature: 'getcolors(self, maxcolors: int=256) -> list[tuple[int,tuple[int,...]]]|list[tuple[int,float]]|None'
       supported_modes:
@@ -586,8 +564,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getdata
       signature: 'getdata(self, band: int|None=None) -> core.ImagingCore'
       supported_modes:
@@ -605,18 +582,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getextrema
       signature: getextrema(self) -> tuple[float,float]|tuple[tuple[int,int],...]
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -625,8 +601,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getpixel
       signature: 'getpixel(self, xy: tuple[int,int]|list[int]) -> float|tuple[int,...]|None'
       supported_modes:
@@ -647,17 +622,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getprojection
       signature: getprojection(self) -> tuple[list[int],list[int]]
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -666,18 +640,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: histogram
-      signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
-        -> list[int]'
+      signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None) -> list[int]'
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       - mask: image
@@ -687,8 +659,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: load
       signature: load(self) -> PixelAccess|None
       supported_modes:
@@ -706,8 +677,7 @@ modules:
       supported_targets:
       - cpu
     - name: point
-      signature: 'point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None)
-        -> Image'
+      signature: 'point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None) -> Image'
       supported_modes:
       - '1'
       - L
@@ -723,17 +693,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: putalpha
       signature: 'putalpha(self, alpha: Image|int) -> None'
       supported_modes:
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - alpha: int
       - alpha: image
@@ -743,19 +712,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: putdata
-      signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0,
-        offset: float=0.0) -> None'
+      signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0, offset: float=0.0) -> None'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - data: sequence
       edge_cases: []
@@ -764,11 +731,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: putpixel
-      signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int])
-        -> None'
+      signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int]) -> None'
       supported_modes:
       - L
       - LA
@@ -788,11 +753,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: quantize
-      signature: 'quantize(self, colors: int=256, method: int|None=None, kmeans: int=0,
-        palette: Image|None=None, dither: Dither=FLOYDSTEINBERG) -> Image'
+      signature: 'quantize(self, colors: int=256, method: int|None=None, kmeans: int=0, palette: Image|None=None, dither:
+        Dither=FLOYDSTEINBERG) -> Image'
       supported_modes:
       - L
       - RGB
@@ -806,17 +770,15 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: reduce
-      signature: 'reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None)
-        -> Image'
+      signature: 'reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None) -> Image'
       supported_modes:
-        - CMYK
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - CMYK
+      - L
+      - LA
+      - RGB
+      - RGBA
       param_variants:
       - factor: 2
       edge_cases: []
@@ -825,18 +787,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: seek
       signature: 'seek(self, frame: int) -> None'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - frame: 0
       edge_cases: []
@@ -847,13 +808,13 @@ modules:
     - name: tell
       signature: tell(self) -> int
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -862,17 +823,16 @@ modules:
       supported_targets:
       - cpu
     - name: transform
-      signature: 'transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler,
-        data: Sequence|None=None, resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None)
-        -> Image'
+      signature: 'transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler, data: Sequence|None=None,
+        resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None) -> Image'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants: []
       edge_cases: []
       status: implemented
@@ -880,15 +840,14 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: verify
       signature: verify(self) -> None
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -899,13 +858,13 @@ modules:
     - name: effect_spread
       signature: 'effect_spread(self, distance: int) -> Image'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - distance: 3
       edge_cases: []
@@ -914,18 +873,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: entropy
-      signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
-        -> float'
+      signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None) -> float'
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       - mask: image
@@ -935,18 +892,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: draft
       signature: 'draft(self, mode: str|None, size: tuple[int,int]|None) -> tuple[str,tuple[int,int,float,float]]|None'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants: []
       edge_cases: []
       status: implemented
@@ -954,11 +910,10 @@ modules:
       supported_targets:
       - cpu
     - name: remap_palette
-      signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None)
-        -> Image'
+      signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None) -> Image'
       supported_modes:
-        - L
-        - P
+      - L
+      - P
       param_variants:
       - dest_map: list
       edge_cases: []
@@ -967,8 +922,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: tobitmap
       signature: 'tobitmap(self, name: str=''image'') -> bytes'
       supported_modes:
@@ -1041,9 +995,9 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: getxmp
       signature: getxmp(*args, **kwargs)
       status: implemented
@@ -1170,16 +1124,15 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: blend
       signature: 'blend(im1: Image, im2: Image, alpha: float) -> Image'
       supported_modes:
-        - CMYK
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - CMYK
+      - L
+      - LA
+      - RGB
+      - RGBA
       param_variants:
       - alpha: 0.5
       edge_cases: []
@@ -1188,18 +1141,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: composite
       signature: 'composite(image1: Image, image2: Image, mask: Image) -> Image'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -1208,18 +1160,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: eval
       signature: 'eval(image: Image, *args: Callable[[int],float]) -> Image'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - {}
       edge_cases: []
@@ -1228,8 +1179,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: fromarray
       signature: 'fromarray(obj: SupportsArrayInterface, mode: str|None=None) -> Image'
       supported_modes:
@@ -1244,19 +1194,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: frombytes
-      signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray,
-        decoder_name: str=''raw'', *args) -> Image'
+      signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray, decoder_name: str=''raw'', *args) -> Image'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - mode: RGB
         size:
@@ -1268,18 +1216,17 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: effect_noise
       signature: 'effect_noise(size: tuple[int,int], sigma: float) -> Image'
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - P
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - P
+      - RGB
+      - RGBA
       param_variants:
       - size:
         - 100
@@ -1291,8 +1238,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: alpha_composite
       signature: alpha_composite(*args, **kwargs)
       status: implemented
@@ -1302,8 +1248,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - LA
       - RGBA
@@ -1352,8 +1297,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - '1'
       - L
@@ -1375,8 +1319,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - '1'
       - L
@@ -1392,8 +1335,7 @@ modules:
   ImageDraw:
     methods:
     - name: arc
-      signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width:
-        int=1) -> None'
+      signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width: int=1) -> None'
       supported_modes: &id003
       - '1'
       - L
@@ -1412,11 +1354,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: line
-      signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None)
-        -> None'
+      signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None) -> None'
       supported_modes: *id003
       param_variants:
       - xy: line
@@ -1428,11 +1368,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: rectangle
-      signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1)
-        -> None'
+      signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1445,11 +1383,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: ellipse
-      signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1)
-        -> None'
+      signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1459,11 +1395,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: polygon
-      signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1)
-        -> None'
+      signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: polygon
@@ -1473,12 +1407,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: text
-      signature: 'text(self, xy: tuple[float,float], text: str, fill=None, font=None,
-        anchor: str|None=None, spacing: float=4, align: str=''left'', direction: str|None=None,
-        features: list|None=None, language: str|None=None, stroke_width: float=0,
+      signature: 'text(self, xy: tuple[float,float], text: str, fill=None, font=None, anchor: str|None=None, spacing: float=4,
+        align: str=''left'', direction: str|None=None, features: list|None=None, language: str|None=None, stroke_width: float=0,
         stroke_fill=None, embedded_color: bool=False) -> None'
       supported_modes: *id003
       param_variants:
@@ -1492,12 +1424,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: multiline_text
-      signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None,
-        font=None, anchor=None, spacing: float=4, align: str=''left'', direction=None,
-        features=None, language=None, stroke_width: float=0, stroke_fill=None, embedded_color=False,
+      signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None, font=None, anchor=None, spacing: float=4,
+        align: str=''left'', direction=None, features=None, language=None, stroke_width: float=0, stroke_fill=None, embedded_color=False,
         *, font_size=None) -> None'
       supported_modes: *id003
       param_variants:
@@ -1513,11 +1443,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: circle
-      signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None,
-        width: int=1) -> None'
+      signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy:
@@ -1530,11 +1458,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: rounded_rectangle
-      signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None,
-        outline=None, width: int=1, *, corners: tuple|None=None) -> None'
+      signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None, outline=None, width: int=1, *, corners:
+        tuple|None=None) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1545,11 +1472,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: regular_polygon
-      signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0,
-        fill=None, outline=None, width: int=1) -> None'
+      signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0, fill=None, outline=None, width:
+        int=1) -> None'
       supported_modes: *id003
       param_variants: []
       edge_cases: []
@@ -1558,11 +1484,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: chord
-      signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None,
-        width: int=1) -> None'
+      signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1574,11 +1498,9 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: pieslice
-      signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None,
-        outline=None, width: int=1) -> None'
+      signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1590,8 +1512,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: bitmap
       signature: 'bitmap(self, xy: Sequence[int], bitmap: Image, fill=None) -> None'
       supported_modes: *id003
@@ -1603,8 +1524,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: point
       signature: 'point(self, xy: Coords, fill=None) -> None'
       supported_modes: *id003
@@ -1618,12 +1538,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: textbbox
-      signature: textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
-        direction=None, features=None, language=None, stroke_width=0, embedded_color=False,
-        *, font_size=None) -> tuple[float,float,float,float]
+      signature: textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left', direction=None, features=None,
+        language=None, stroke_width=0, embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
       supported_modes:
       - RGB
       - RGBA
@@ -1636,12 +1554,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: multiline_textbbox
-      signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4,
-        align='left', direction=None, features=None, language=None, stroke_width=0,
-        embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
+      signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left', direction=None, features=None,
+        language=None, stroke_width=0, embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
       supported_modes:
       - RGB
       - RGBA
@@ -1654,11 +1570,10 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: textlength
-      signature: textlength(self, text, font=None, direction=None, features=None,
-        language=None, embedded_color=False, *, font_size=None) -> float
+      signature: textlength(self, text, font=None, direction=None, features=None, language=None, embedded_color=False, *,
+        font_size=None) -> float
       supported_modes:
       - RGB
       - RGBA
@@ -1671,8 +1586,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: getfont
       signature: getfont(*args, **kwargs)
       status: implemented
@@ -1682,8 +1596,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: shape
       signature: shape(*args, **kwargs)
       status: implemented
@@ -1700,23 +1613,21 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - '1'
-        - CMYK
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - '1'
+      - CMYK
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: CONTOUR
       signature: ImageFilter.CONTOUR
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: DETAIL
       signature: ImageFilter.DETAIL
@@ -1724,8 +1635,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: EDGE_ENHANCE
       signature: ImageFilter.EDGE_ENHANCE
@@ -1733,22 +1643,20 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - '1'
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - '1'
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: EDGE_ENHANCE_MORE
       signature: ImageFilter.EDGE_ENHANCE_MORE
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: EMBOSS
       signature: ImageFilter.EMBOSS
@@ -1756,8 +1664,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: FIND_EDGES
       signature: ImageFilter.FIND_EDGES
@@ -1765,8 +1672,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: SHARPEN
       signature: ImageFilter.SHARPEN
@@ -1774,26 +1680,24 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - '1'
-        - CMYK
-        - HSV
-        - I
-        - L
-        - LA
-        - RGB
-        - RGBA
-        - YCbCr
+      - '1'
+      - CMYK
+      - HSV
+      - I
+      - L
+      - LA
+      - RGB
+      - RGBA
+      - YCbCr
     - name: SMOOTH
       signature: ImageFilter.SMOOTH
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: SMOOTH_MORE
       signature: ImageFilter.SMOOTH_MORE
@@ -1801,8 +1705,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: GaussianBlur
       signature: 'ImageFilter.GaussianBlur(radius: float|Sequence[float]=2)'
@@ -1810,8 +1713,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: BoxBlur
       signature: 'ImageFilter.BoxBlur(radius: float|Sequence[float])'
@@ -1819,109 +1721,97 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: UnsharpMask
-      signature: 'ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold:
-        int=3)'
+      signature: 'ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold: int=3)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: Kernel
-      signature: 'ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float],
-        scale: float|None=None, offset: float=0)'
+      signature: 'ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float], scale: float|None=None, offset: float=0)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: MaxFilter
       signature: 'ImageFilter.MaxFilter(size: int=3)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: MinFilter
       signature: 'ImageFilter.MinFilter(size: int=3)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: MedianFilter
       signature: 'ImageFilter.MedianFilter(size: int=3)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: ModeFilter
       signature: 'ImageFilter.ModeFilter(size: int=3)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: RankFilter
       signature: 'ImageFilter.RankFilter(size: int, rank: int)'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: Color3DLUT
-      signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3,
-        target_mode: str|None=None)'
+      signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3, target_mode: str|None=None)'
       supported_modes:
       - RGB
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
   ImageEnhance:
     classes:
     - name: Brightness
@@ -1930,8 +1820,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: Color
       signature: 'Color(image: Image.Image) .enhance(factor: float) -> Image'
@@ -1939,8 +1828,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: Contrast
       signature: 'Contrast(image: Image.Image) .enhance(factor: float) -> Image'
@@ -1948,8 +1836,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: Sharpness
       signature: 'Sharpness(image: Image.Image) .enhance(factor: float) -> Image'
@@ -1957,56 +1844,49 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
   ImageOps:
     functions:
     - name: autocontrast
-      signature: 'autocontrast(image: Image, cutoff: float|tuple=0, ignore: int|Sequence|None=None,
-        mask: Image|None=None, preserve_tone: bool=False) -> Image'
+      signature: 'autocontrast(image: Image, cutoff: float|tuple=0, ignore: int|Sequence|None=None, mask: Image|None=None,
+        preserve_tone: bool=False) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - LA
       - RGB
       - RGBA
     - name: colorize
-      signature: 'colorize(image: Image, black: str|tuple, white: str|tuple, mid=None,
-        blackpoint: int=0, whitepoint: int=255, midpoint: int=127) -> Image'
+      signature: 'colorize(image: Image, black: str|tuple, white: str|tuple, mid=None, blackpoint: int=0, whitepoint: int=255,
+        midpoint: int=127) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - RGB
     - name: contain
-      signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC)
-        -> Image'
+      signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: cover
-      signature: 'cover(image: Image, size: tuple[int,int], method: int=BICUBIC) ->
-        Image'
+      signature: 'cover(image: Image, size: tuple[int,int], method: int=BICUBIC) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: crop
       signature: 'crop(image: Image, border: int=0) -> Image'
@@ -2014,8 +1894,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: equalize
       signature: 'equalize(image: Image, mask: Image|None=None) -> Image'
@@ -2023,32 +1902,28 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - LA
       - RGB
       - RGBA
     - name: expand
-      signature: 'expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0)
+      signature: 'expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0) -> Image'
+      status: implemented
+      supported_targets:
+      - cpu
+      - gpu
+      - simd
+      supported_modes: *id002
+    - name: fit
+      signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed: float=0.0, centering: tuple[float,float]=(0.5,0.5))
         -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
-      supported_modes: *id002
-    - name: fit
-      signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed:
-        float=0.0, centering: tuple[float,float]=(0.5,0.5)) -> Image'
-      status: implemented
-      supported_targets:
-      - cpu
-      - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: flip
       signature: 'flip(image: Image) -> Image'
@@ -2056,8 +1931,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: grayscale
       signature: 'grayscale(image: Image) -> Image'
@@ -2065,8 +1939,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - LA
@@ -2079,8 +1952,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - LA
@@ -2092,18 +1964,16 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: pad
-      signature: 'pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None,
-        centering: tuple[float,float]=(0.5,0.5)) -> Image'
+      signature: 'pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None, centering: tuple[float,float]=(0.5,0.5))
+        -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: posterize
       signature: 'posterize(image: Image, bits: int) -> Image'
@@ -2111,8 +1981,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - LA
@@ -2124,8 +1993,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id002
     - name: solarize
       signature: 'solarize(image: Image, threshold: int=128) -> Image'
@@ -2133,8 +2001,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - L
       - LA
@@ -2146,54 +2013,47 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
     - name: deform
-      signature: 'deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR)
-        -> Image'
+      signature: 'deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
   ImageChops:
     functions:
     - name: add
-      signature: 'add(image1: Image, image2: Image, scale: float=1.0, offset: float=0)
-        -> Image'
+      signature: 'add(image1: Image, image2: Image, scale: float=1.0, offset: float=0) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: add_modulo
       signature: 'add_modulo(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: blend
       signature: 'blend(image1: Image, image2: Image, alpha: float) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id001
     - name: composite
       signature: 'composite(image1: Image, image2: Image, mask: Image) -> Image'
@@ -2201,108 +2061,99 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: constant
       signature: 'constant(image: Image, value: int) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: darker
       signature: 'darker(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: difference
       signature: 'difference(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: duplicate
       signature: 'duplicate(image: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: hard_light
       signature: 'hard_light(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: invert
       signature: 'invert(image: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: lighter
       signature: 'lighter(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: logical_and
       signature: 'logical_and(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - '1'
     - name: logical_or
@@ -2311,8 +2162,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - '1'
     - name: logical_xor
@@ -2321,8 +2171,7 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
       - '1'
     - name: multiply
@@ -2331,33 +2180,30 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: offset
       signature: 'offset(image: Image, xoffset: int, yoffset: int|None=None) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - RGB
-        - RGBA
+      - L
+      - RGB
+      - RGBA
     - name: overlay
       signature: 'overlay(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes: *id001
     - name: screen
       signature: 'screen(image1: Image, image2: Image) -> Image'
@@ -2365,53 +2211,48 @@ modules:
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: soft_light
       signature: 'soft_light(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: subtract
-      signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset:
-        float=0) -> Image'
+      signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset: float=0) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
     - name: subtract_modulo
       signature: 'subtract_modulo(image1: Image, image2: Image) -> Image'
       status: implemented
       supported_targets:
       - cpu
       - gpu
-      - wasm
-      - wasm_gpu
+      - simd
       supported_modes:
-        - L
-        - LA
-        - RGB
-        - RGBA
+      - L
+      - LA
+      - RGB
+      - RGBA
   ImageColor:
     functions:
     - name: getrgb
@@ -2420,8 +2261,8 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - RGB
+      - L
+      - RGB
     - name: getcolor
       signature: 'getcolor(color: str, mode: str) -> int|tuple[int,...]'
       status: implemented
@@ -2438,46 +2279,45 @@ modules:
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: getcolor
-      signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) ->
-        int'
+      signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) -> int'
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: getdata
       signature: getdata(self) -> tuple[str, Sequence[int]|bytes|bytearray]
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: save
       signature: 'save(self, fp: str|IO[str]) -> None'
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
     - name: tobytes
       signature: tobytes(self) -> bytes
       status: implemented
       supported_targets:
       - cpu
       supported_modes:
-        - L
-        - P
-        - RGB
+      - L
+      - P
+      - RGB
   ImageFont:
     functions:
     - name: load
@@ -2499,8 +2339,8 @@ modules:
       - RGB
       - RGBA
     - name: truetype
-      signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
-        encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
+      signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0, encoding: str='''', layout_engine:
+        Layout|None=None) -> FreeTypeFont'
       status: implemented
       supported_targets:
       - cpu
