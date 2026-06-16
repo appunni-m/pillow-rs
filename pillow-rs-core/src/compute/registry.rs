@@ -150,6 +150,18 @@ pub enum OpId {
     Fit,
     Transform,
     PutData,
+    // ── New GPU ops (manifest-driven) ──
+    CropBorder,
+    Expand,
+    Merge,
+    RemapPalette,
+    Pad,
+    Rotate,
+    Color3DLut,
+    // ── Category B fixes (shaders existed, dispatch was broken) ──
+    GaussianBlur,
+    Autocontrast,
+    Equalize,
 }
 
 /// GPU operation definition — holds compiled shader metadata.
@@ -384,6 +396,18 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::PutPixel { .. } => Some(OpId::PutPixel),
         PipelineOp::PutData { .. } => Some(OpId::PutData),
         PipelineOp::PutAlpha { .. } => Some(OpId::PutAlpha),
+        // ── New GPU ops ──
+        PipelineOp::CropBorder { .. } => Some(OpId::CropBorder),
+        PipelineOp::Expand { .. } => Some(OpId::Expand),
+        PipelineOp::Merge { .. } => Some(OpId::Merge),
+        PipelineOp::RemapPalette { .. } => Some(OpId::RemapPalette),
+        PipelineOp::Pad { .. } => Some(OpId::Pad),
+        PipelineOp::Rotate { .. } => Some(OpId::Rotate),
+        // ── Category B fixes ──
+        PipelineOp::GaussianBlur { .. } => Some(OpId::GaussianBlur),
+        PipelineOp::Autocontrast { .. } => Some(OpId::Autocontrast),
+        PipelineOp::Equalize => Some(OpId::Equalize),
+        PipelineOp::Color3DLut { .. } => Some(OpId::Color3DLut),
         _ => None,
     }
 }
@@ -651,6 +675,59 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── PutData: data length ──
         PipelineOp::PutData { data } => vec![data.len() as u32],
 
+        // ── CropBorder: border ──
+        PipelineOp::CropBorder { border } => vec![*border],
+
+        // ── Expand: border, src_w, src_h, fill_color ──
+        PipelineOp::Expand { border, fill } => {
+            let (r, g, b, a) = *fill;
+            vec![*border, 0, 0, (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)]
+        }
+
+        // ── Merge: num_bands ──
+        PipelineOp::Merge { bands, .. } => vec![bands.len() as u32],
+
+        // ── RemapPalette: LUT data ──
+        PipelineOp::RemapPalette { dest_map } => {
+            let mut params = dest_map.iter().map(|&v| v as u32).collect::<Vec<u32>>();
+            params.resize(256, 0);
+            params
+        }
+
+        // ── Pad: src_w, src_h, fill, centering_x, centering_y, scale_x, scale_y ──
+        PipelineOp::Pad { w, h, color, centering, .. } => {
+            let fill = match color {
+                Some((r, g, b, a)) => (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24),
+                None => 0xff000000u32,
+            };
+            let cx = (centering.0.clamp(0.0, 1.0) * 65536.0) as u32;
+            let cy = (centering.1.clamp(0.0, 1.0) * 65536.0) as u32;
+            vec![*w, *h, fill, cx, cy, 65536u32, 65536u32]
+        }
+
+        // ── Rotate: cos_theta, sin_theta, fill ──
+        PipelineOp::Rotate { angle, fill, .. } => {
+            let cos_t = (angle.cos() as f32).to_bits();
+            let sin_t = (angle.sin() as f32).to_bits();
+            let fill_color = match fill {
+                Some((r, g, b, a)) => (*r as u32) | ((*g as u32) << 8) | ((*b as u32) << 16) | ((*a as u32) << 24),
+                None => 0u32,
+            };
+            vec![cos_t, sin_t, fill_color]
+        }
+
+        // ── GaussianBlur: sigma ──
+        PipelineOp::GaussianBlur { sigma } => vec![(*sigma as f32).to_bits()],
+
+        // ── Autocontrast: cutoff ──
+        PipelineOp::Autocontrast { cutoff } => vec![(*cutoff as f32).to_bits()],
+
+        // ── Equalize: no params ──
+        PipelineOp::Equalize => vec![],
+
+        // ── Color3DLut: size dims ──
+        PipelineOp::Color3DLut { size, .. } => vec![size.0, size.1, size.2],
+
         // ── Everything else (no GPU support / no params) ──
         _ => vec![],
     }
@@ -733,18 +810,24 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Rotate",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Rotate {
-                angle,
-                expand,
-                fill,
-            } = op
-            {
-                execute_rotate(img, *angle, *expand, *fill, mode)
-            } else {
-                Err(PilError::ValueError("expected Rotate op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Rotate {
+                    angle,
+                    expand,
+                    fill,
+                } = op
+                {
+                    execute_rotate(img, *angle, *expand, *fill, mode)
+                } else {
+                    Err(PilError::ValueError("expected Rotate op".into()))
+                }
+            },
+            "rotate.wgsl"
+        ),
     );
     m.insert(
         "Transpose",
@@ -836,16 +919,22 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "RemapPalette",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::RemapPalette { dest_map } = op {
-                let arr: &[u8; 256] = dest_map.as_slice().try_into().map_err(|_| {
-                    PilError::ValueError("remap_palette: expected 256-byte dest_map".into())
-                })?;
-                op_remap_palette(img, arr, mode)
-            } else {
-                Err(PilError::ValueError("expected RemapPalette op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::RemapPalette { dest_map } = op {
+                    let arr: &[u8; 256] = dest_map.as_slice().try_into().map_err(|_| {
+                        PilError::ValueError("remap_palette: expected 256-byte dest_map".into())
+                    })?;
+                    op_remap_palette(img, arr, mode)
+                } else {
+                    Err(PilError::ValueError("expected RemapPalette op".into()))
+                }
+            },
+            "remap_palette.wgsl"
+        ),
     );
 
     // ── Filter ──
@@ -1190,20 +1279,26 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Pad",
-        OpEntry::cpu_only(|img, op, mode| {
-            if let PipelineOp::Pad {
-                w,
-                h,
-                filter,
-                color,
-                centering,
-            } = op
-            {
-                op_pad(img, *w, *h, *filter, *color, *centering, mode)
-            } else {
-                Err(PilError::ValueError("expected Pad op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Pad {
+                    w,
+                    h,
+                    filter,
+                    color,
+                    centering,
+                } = op
+                {
+                    op_pad(img, *w, *h, *filter, *color, *centering, mode)
+                } else {
+                    Err(PilError::ValueError("expected Pad op".into()))
+                }
+            },
+            "pad.wgsl"
+        ),
     );
     m.insert(
         "Scale",
@@ -1223,23 +1318,35 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Expand",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Expand { border, fill } = op {
-                op_expand(img, *border, *fill)
-            } else {
-                Err(PilError::ValueError("expected Expand op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Expand { border, fill } = op {
+                    op_expand(img, *border, *fill)
+                } else {
+                    Err(PilError::ValueError("expected Expand op".into()))
+                }
+            },
+            "expand.wgsl"
+        ),
     );
     m.insert(
         "CropBorder",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::CropBorder { border } = op {
-                op_crop_border(img, *border)
-            } else {
-                Err(PilError::ValueError("expected CropBorder op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::CropBorder { border } = op {
+                    op_crop_border(img, *border)
+                } else {
+                    Err(PilError::ValueError("expected CropBorder op".into()))
+                }
+            },
+            "crop_border.wgsl"
+        ),
     );
 
     // ── ImageChops ──
@@ -1660,17 +1767,23 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     // ── Module fns ──
     m.insert(
         "Merge",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Merge { mode, bands } = op {
-                let arc_bands: Vec<std::sync::Arc<crate::image::Image>> = bands
-                    .iter()
-                    .map(|im| std::sync::Arc::new(im.clone()))
-                    .collect();
-                op_merge(img, mode, &arc_bands)
-            } else {
-                Err(PilError::ValueError("expected Merge op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Merge { mode, bands } = op {
+                    let arc_bands: Vec<std::sync::Arc<crate::image::Image>> = bands
+                        .iter()
+                        .map(|im| std::sync::Arc::new(im.clone()))
+                        .collect();
+                    op_merge(img, mode, &arc_bands)
+                } else {
+                    Err(PilError::ValueError("expected Merge op".into()))
+                }
+            },
+            "merge.wgsl"
+        ),
     );
     m.insert(
         "BlendModule",
@@ -1808,18 +1921,24 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     m.insert(
         "Color3DLut",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::Color3DLut {
-                size,
-                table,
-                channels,
-            } = op
-            {
-                op_color3dlut(img, *size, table, *channels)
-            } else {
-                Err(PilError::ValueError("expected Color3DLut op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::Color3DLut {
+                    size,
+                    table,
+                    channels,
+                } = op
+                {
+                    op_color3dlut(img, *size, table, *channels)
+                } else {
+                    Err(PilError::ValueError("expected Color3DLut op".into()))
+                }
+            },
+            "color_3dlut.wgsl"
+        ),
     );
     m.insert(
         "PutAlpha",

@@ -1,10 +1,18 @@
 """Fixture-based parity tests — JSON-driven, no per-operation dispatch.
 
+GOAL: Every manifest "implemented" function must have a JSON fixture and pass PIL-RSPIL parity.
+  - manifest.yaml → ops_registry.py → generate_fixtures.py → tests/fixtures/*.json
+  - manifest is the SINGLE source of truth: status, targets, modes all come from it
+  - no per-operation dispatch code — the engine is generic, fixtures carry all metadata
+  - failures here drive implementation of missing GPU shaders, PipelineOps, and Rust code
+
 Reads JSON fixtures from tests/fixtures/. Each fixture is self-describing:
 it contains the operation type, module, target, params, input image bytes,
 and expected output. The test engine is a thin shell that calls the shared
 execution_engine.execute() function via the RSPIL backend.
 
+REUSABLE: JSON fixtures are language-agnostic. JS/WASM tests consume identical
+fixtures and use the same execution patterns via the shared execution engine.
 @pytest.mark.covers markers are auto-generated from fixture operation metadata.
 """
 import json, hashlib

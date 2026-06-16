@@ -316,8 +316,8 @@ impl GpuInner {
 
         let num_bindings = count_shader_bindings(shader_source);
 
-        // Supported: 2-5 binding shaders. 0/1/>5 are invalid.
-        if num_bindings < 2 || num_bindings > 5 {
+        // Supported: 2-6 binding shaders. 0/1/>6 are invalid.
+        if num_bindings < 2 || num_bindings > 6 {
             return None;
         }
 

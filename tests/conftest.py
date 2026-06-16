@@ -1,7 +1,15 @@
 """Test configuration for pillow-rs PIL-RSPIL parity testing.
 
+GOAL: Every manifest entry marked "implemented" must pass PIL-RSPIL parity.
+  - 0 stubs, 1 ignored (show only), all else implemented
+  - manifest.yaml is the SINGLE source of truth for API surface and targets
+  - failures drive implementation: manifest declares intent, tests enforce it
+
 Each test runs against both PIL (reference) and RSPIL (pillow-rs),
 then compares results to verify identical behavior.
+
+REUSABLE: This file is Python-specific but the JSON fixture system in
+tests/fixtures/ is language-agnostic — JS/WASM tests consume the same fixtures.
 """
 import pytest
 import yaml
