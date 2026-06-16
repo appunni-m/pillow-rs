@@ -203,6 +203,10 @@ impl PyImage {
         self.inner.tobytes().map_err(map_error)
     }
 
+    fn tobytes_formatted(&self, mode: &str) -> PyResult<Vec<u8>> {
+        self.inner.tobytes_formatted(mode).map_err(map_error)
+    }
+
     /// Return palette data (RGB triples) for P-mode quantized images.
     fn palette(&self) -> Option<Vec<u8>> {
         self.inner.palette()
