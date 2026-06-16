@@ -1,57 +1,36 @@
-//! Channel split operations — these are IMMEDIATE operations (not pipeline ops).
+//! Channel split operations — pipelined via ExtractBand.
 
 use crate::error::PilError;
 use crate::image::Image;
-use image::GrayImage;
-
-/// Channel split using pre-allocation pattern.
-fn split_channels(raw: &[u8], channels: usize, n: usize, w: u32, h: u32) -> Vec<Image> {
-    let mut bufs: Vec<Vec<u8>> = (0..channels).map(|_| vec![0u8; n]).collect();
-
-    for (i, chunk) in raw.chunks_exact(channels).enumerate() {
-        for c in 0..channels {
-            bufs[c][i] = chunk[c];
-        }
-    }
-
-    bufs.into_iter()
-        .map(|buf| {
-            Image::Loaded(
-                image::DynamicImage::ImageLuma8(
-                    GrayImage::from_raw(w, h, buf).expect("split: buffer size mismatch"),
-                ),
-                None,
-            )
-        })
-        .collect()
-}
+use crate::pipeline::PipelineOp;
 
 impl Image {
-    /// Split the image into individual bands (immediate operation).
+    /// Split the image into individual bands (pipelined via ExtractBand).
+    /// Each output band is a lazy Pipeline image that extracts one channel on materialize.
     pub fn split(&self) -> Result<Vec<Image>, PilError> {
         // PIL: P-mode has 1 band → return a copy preserving mode + palette
         if let Image::Paletted(data) = self {
             return Ok(vec![Image::Paletted(data.clone())]);
         }
-        let img = self.materialize()?;
-        let (w, h) = (img.width(), img.height());
-        let n = (w * h) as usize;
 
-        let bands = match img {
-            image::DynamicImage::ImageLuma8(gray) => {
-                vec![Image::Loaded(
-                    image::DynamicImage::ImageLuma8(gray.clone()),
-                    None,
-                )]
-            }
-            image::DynamicImage::ImageLumaA8(ga) => split_channels(ga.as_raw(), 2, n, w, h),
-            image::DynamicImage::ImageRgb8(rgb) => split_channels(rgb.as_raw(), 3, n, w, h),
-            image::DynamicImage::ImageRgba8(rgba) => split_channels(rgba.as_raw(), 4, n, w, h),
-            _ => {
-                let rgba = img.to_rgba8();
-                split_channels(rgba.as_raw(), 4, n, w, h)
-            }
+        // Determine band count from the image
+        let img = self.materialize()?;
+        let n_bands = match img.color() {
+            image::ColorType::L8 | image::ColorType::L16 => 1,
+            image::ColorType::La8 | image::ColorType::La16 => 2,
+            image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+            _ => 4, // Rgba8, Rgba16, or fallback
         };
+
+        // Create N pipeline images, each extracting one band
+        let bands: Vec<Image> = (0..n_bands)
+            .map(|i| {
+                Image::push_op(
+                    self,
+                    PipelineOp::ExtractBand { index: i as u8 },
+                )
+            })
+            .collect();
 
         Ok(bands)
     }

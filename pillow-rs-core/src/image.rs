@@ -1053,6 +1053,7 @@ impl Image {
 
     /// Extract a single channel as an L-mode image.
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
+        // Validate channel index (requires materialized image for band count)
         let img = self.materialize()?;
         let bands = img.color().channel_count();
         let ch = if channel < 0 {
@@ -1067,13 +1068,13 @@ impl Image {
                 bands - 1
             )));
         }
-        let rgba = img.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        let mut gray = image::GrayImage::new(w, h);
-        for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
-            gp[0] = rp[ch.min(3)];
-        }
-        Ok(Image::Loaded(DynamicImage::ImageLuma8(gray), None))
+        // Defer extraction via pipeline
+        Ok(Image::push_op(
+            self,
+            PipelineOp::ExtractBand {
+                index: ch as u8,
+            },
+        ))
     }
 
     /// Set/replace alpha channel. Preserves mode: L→LA, RGB→RGBA, LA→LA, RGBA→RGBA.

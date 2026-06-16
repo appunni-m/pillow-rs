@@ -288,6 +288,30 @@ pub enum PipelineOp {
     PutAlpha {
         alpha: u8,
     },
+
+    // ── Channel extraction ──
+    ExtractBand {
+        index: u8,
+    },
+
+    // ── Gradient generation (ImageModule) ──
+    LinearGradient {
+        mode: ColorMode,
+    },
+    RadialGradient {
+        mode: ColorMode,
+    },
+
+    // ── Fractal generation (ImageModule) ──
+    EffectMandelbrot {
+        w: u32,
+        h: u32,
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        quality: u32,
+    },
 }
 
 // ── Support types ──

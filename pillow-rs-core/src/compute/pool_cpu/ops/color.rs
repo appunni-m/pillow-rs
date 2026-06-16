@@ -260,3 +260,16 @@ pub fn op_remap_palette(
     }
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
+
+/// Extract a single band/channel from the image as an L-mode output.
+/// index: 0=R, 1=G, 2=B, 3=A (for RGBA), 0=only band for L/LA
+pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, PilError> {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut gray = image::GrayImage::new(w, h);
+    let ch = (index.min(3)) as usize;
+    for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
+        gp[0] = rp[ch];
+    }
+    Ok(DynamicImage::ImageLuma8(gray))
+}
