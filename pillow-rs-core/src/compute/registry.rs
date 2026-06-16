@@ -282,6 +282,16 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::LinearGradient { .. } => "LinearGradient",
         PipelineOp::RadialGradient { .. } => "RadialGradient",
         PipelineOp::EffectMandelbrot { .. } => "EffectMandelbrot",
+        PipelineOp::DrawLine { .. } => "DrawLine",
+        PipelineOp::DrawRectangle { .. } => "DrawRectangle",
+        PipelineOp::DrawRoundedRect { .. } => "DrawRoundedRect",
+        PipelineOp::DrawEllipse { .. } => "DrawEllipse",
+        PipelineOp::DrawCircle { .. } => "DrawCircle",
+        PipelineOp::DrawPolygon { .. } => "DrawPolygon",
+        PipelineOp::DrawArc { .. } => "DrawArc",
+        PipelineOp::DrawChord { .. } => "DrawChord",
+        PipelineOp::DrawPieslice { .. } => "DrawPieslice",
+        PipelineOp::DrawPoint { .. } => "DrawPoint",
     }
 }
 
@@ -748,6 +758,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
     };
     use crate::compute::pool_cpu::ops::color::{op_convert, op_extract_band, op_quantize, op_remap_palette};
+    use crate::compute::pool_cpu::ops::draw::{
+        op_draw_arc, op_draw_chord, op_draw_circle, op_draw_ellipse, op_draw_line,
+        op_draw_pieslice, op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
+    };
     use crate::compute::pool_cpu::ops::effects::{
         op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_mandelbrot,
         op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste, op_point, op_put_alpha,
@@ -2017,4 +2031,61 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             }
         }),
     );
+
+    // ── ImageDraw ops (CPU-only for now) ──
+    macro_rules! draw_entry {
+        ($key:expr, $func:expr) => {
+            m.insert($key, OpEntry::cpu_only($func));
+        };
+    }
+    draw_entry!("DrawLine", |img, op, _mode| {
+        if let PipelineOp::DrawLine { x0, y0, x1, y1, fill, width } = op {
+            op_draw_line(img, *x0, *y0, *x1, *y1, *fill, *width)
+        } else { Err(PilError::ValueError("expected DrawLine".into())) }
+    });
+    draw_entry!("DrawRectangle", |img, op, _mode| {
+        if let PipelineOp::DrawRectangle { x0, y0, x1, y1, fill, outline, width } = op {
+            op_draw_rectangle(img, *x0, *y0, *x1, *y1, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawRectangle".into())) }
+    });
+    draw_entry!("DrawRoundedRect", |img, op, _mode| {
+        if let PipelineOp::DrawRoundedRect { x0, y0, x1, y1, radius, fill, outline, width } = op {
+            op_draw_rounded_rect(img, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawRoundedRect".into())) }
+    });
+    draw_entry!("DrawEllipse", |img, op, _mode| {
+        if let PipelineOp::DrawEllipse { x0, y0, x1, y1, fill, outline, width } = op {
+            op_draw_ellipse(img, *x0, *y0, *x1, *y1, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawEllipse".into())) }
+    });
+    draw_entry!("DrawCircle", |img, op, _mode| {
+        if let PipelineOp::DrawCircle { cx, cy, radius, fill, outline, width } = op {
+            op_draw_circle(img, *cx, *cy, *radius, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawCircle".into())) }
+    });
+    draw_entry!("DrawPolygon", |img, op, _mode| {
+        if let PipelineOp::DrawPolygon { points, fill, outline, width } = op {
+            op_draw_polygon(img, points, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawPolygon".into())) }
+    });
+    draw_entry!("DrawArc", |img, op, _mode| {
+        if let PipelineOp::DrawArc { x0, y0, x1, y1, start, end, fill, width } = op {
+            op_draw_arc(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *width)
+        } else { Err(PilError::ValueError("expected DrawArc".into())) }
+    });
+    draw_entry!("DrawChord", |img, op, _mode| {
+        if let PipelineOp::DrawChord { x0, y0, x1, y1, start, end, fill, outline, width } = op {
+            op_draw_chord(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawChord".into())) }
+    });
+    draw_entry!("DrawPieslice", |img, op, _mode| {
+        if let PipelineOp::DrawPieslice { x0, y0, x1, y1, start, end, fill, outline, width } = op {
+            op_draw_pieslice(img, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width)
+        } else { Err(PilError::ValueError("expected DrawPieslice".into())) }
+    });
+    draw_entry!("DrawPoint", |img, op, _mode| {
+        if let PipelineOp::DrawPoint { points, fill } = op {
+            op_draw_point(img, points, *fill)
+        } else { Err(PilError::ValueError("expected DrawPoint".into())) }
+    });
 }

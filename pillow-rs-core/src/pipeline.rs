@@ -312,6 +312,68 @@ pub enum PipelineOp {
         y1: f64,
         quality: u32,
     },
+
+    // ── ImageDraw ops (geometric) ──
+    DrawLine {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        fill: (u8, u8, u8, u8),
+        width: u32,
+    },
+    DrawRectangle {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawRoundedRect {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        radius: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawEllipse {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawCircle {
+        cx: i32, cy: i32, radius: i32,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawPolygon {
+        points: Vec<(i32, i32)>,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawArc {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        start: f64, end: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawChord {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        start: f64, end: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawPieslice {
+        x0: i32, y0: i32, x1: i32, y1: i32,
+        start: f64, end: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    },
+    DrawPoint {
+        points: Vec<(i32, i32)>,
+        fill: (u8, u8, u8, u8),
+    },
 }
 
 // ── Support types ──
