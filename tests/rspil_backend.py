@@ -1,6 +1,13 @@
 """RSPIL backend — used by tests to execute operations via pillow_rs.
 
-Implements the same 7 handler methods as pil_backend.py so the shared
+GOAL: Provide a PIL-compatible backend interface so all tests run identically
+  against both PIL (reference) and RSPIL (pillow-rs). Every manifest implemented
+  function must have a backend handler here.
+  - manifest.yaml drives which handlers are needed
+  - backend delegates to pillow_rs Rust core (no Python logic)
+  - shared with JS/WASM tests via the fixture JSON format
+
+Implements the same handler methods as scripts/coverage/pil_backend.py so the shared
 execution engine can dispatch identically for both PIL and RSPIL.
 """
 

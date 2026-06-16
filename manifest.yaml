@@ -966,6 +966,9 @@ modules:
       pillow_since: '1.0'
       supported_targets:
       - cpu
+      - gpu
+      - wasm
+      - wasm_gpu
     - name: tobitmap
       signature: 'tobitmap(self, name: str=''image'') -> bytes'
       supported_modes:
