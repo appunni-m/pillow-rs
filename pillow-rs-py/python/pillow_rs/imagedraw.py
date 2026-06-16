@@ -134,11 +134,11 @@ class Draw:
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
                        align="left", direction=None, features=None, language=None,
                        stroke_width=0, stroke_fill=None, embedded_color=False, **kwargs):
-        """Draw multiple lines of text. Text layout done in Rust."""
-        font = self._get_font(font)
-        rust_font = font._rust_font if hasattr(font, '_rust_font') else font
-        self._draw.multiline_text((float(xy[0]), float(xy[1])), str(text), fill, rust_font, int(spacing))
-        self._sync()
+        """Draw multiple lines of text. Delegates to text() for PIL-parity rendering."""
+        self.text(xy, text, fill=fill, font=font, anchor=anchor, spacing=spacing,
+                  align=align, direction=direction, features=features,
+                  language=language, stroke_width=stroke_width,
+                  stroke_fill=stroke_fill, embedded_color=embedded_color)
 
     def textbbox(self, xy, text, font=None, **kwargs):
         if font is None:
