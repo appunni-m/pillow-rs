@@ -261,6 +261,12 @@ pub enum PipelineOp {
     PointOp {
         lut: Vec<u8>,
     },
+    // ── 3D Color Lookup Table ──
+    Color3DLut {
+        size: (u32, u32, u32),
+        table: Vec<f64>,
+        channels: u32,
+    },
     Transform {
         w: u32,
         h: u32,

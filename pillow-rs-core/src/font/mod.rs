@@ -125,6 +125,28 @@ impl Font {
         fill: (u8, u8, u8, u8),
         spacing: f32,
     ) -> (u32, u32, Vec<u8>) {
+        self.render_text_impl(text, fill, spacing, false)
+    }
+
+    /// Render text in binary mode (fontmode="1").
+    /// Coverage values are thresholded at 128: >= 128 → 255, < 128 → 0.
+    /// This matches PIL's FT_LOAD_TARGET_MONO behavior for modes "1", "P", "I", "F".
+    pub fn render_text_binary(
+        &self,
+        text: &str,
+        fill: (u8, u8, u8, u8),
+        spacing: f32,
+    ) -> (u32, u32, Vec<u8>) {
+        self.render_text_impl(text, fill, spacing, true)
+    }
+
+    fn render_text_impl(
+        &self,
+        text: &str,
+        fill: (u8, u8, u8, u8),
+        spacing: f32,
+        binary: bool,
+    ) -> (u32, u32, Vec<u8>) {
         match self {
             Font::TrueType(ttf) => {
                 if text.is_empty() {
@@ -145,9 +167,14 @@ impl Font {
                     for y in 0..metrics.height {
                         for x in 0..metrics.width {
                             let cov = bitmap[y * metrics.width + x];
-                            if cov > 0 {
+                            let effective_cov = if binary {
+                                if cov >= 128 { 255u8 } else { 0u8 }
+                            } else {
+                                cov
+                            };
+                            if effective_cov > 0 {
                                 let off = (y * metrics.width + x) * 4;
-                                let alpha = (cov as u16 * fill.3 as u16 / 255) as u8;
+                                let alpha = (effective_cov as u16 * fill.3 as u16 / 255) as u8;
                                 if alpha > 0 {
                                     rgba[off] = fill.0;
                                     rgba[off + 1] = fill.1;
@@ -189,23 +216,35 @@ impl Font {
                                     if dst_off + 3 < canvas.len() {
                                         let sa = rgba[idx + 3] as u16;
                                         let da = canvas[dst_off + 3] as u16;
-                                        let out_a = sa + da * (255 - sa) / 255;
+                                        let out_a = if binary {
+                                            sa.max(da as u16)
+                                        } else {
+                                            sa + da * (255 - sa) / 255
+                                        };
                                         if out_a > 0 {
-                                            canvas[dst_off] = ((rgba[idx] as u16 * sa
-                                                + canvas[dst_off] as u16 * da * (255 - sa) / 255)
-                                                / out_a)
-                                                as u8;
-                                            canvas[dst_off + 1] = ((rgba[idx + 1] as u16 * sa
-                                                + canvas[dst_off + 1] as u16 * da * (255 - sa)
-                                                    / 255)
-                                                / out_a)
-                                                as u8;
-                                            canvas[dst_off + 2] = ((rgba[idx + 2] as u16 * sa
-                                                + canvas[dst_off + 2] as u16 * da * (255 - sa)
-                                                    / 255)
-                                                / out_a)
-                                                as u8;
-                                            canvas[dst_off + 3] = out_a as u8;
+                                            if binary {
+                                                canvas[dst_off] = rgba[idx];
+                                                canvas[dst_off + 1] = rgba[idx + 1];
+                                                canvas[dst_off + 2] = rgba[idx + 2];
+                                                canvas[dst_off + 3] = out_a as u8;
+                                            } else {
+                                                canvas[dst_off] = ((rgba[idx] as u16 * sa
+                                                    + canvas[dst_off] as u16 * da * (255 - sa)
+                                                        / 255)
+                                                    / out_a)
+                                                    as u8;
+                                                canvas[dst_off + 1] = ((rgba[idx + 1] as u16 * sa
+                                                    + canvas[dst_off + 1] as u16 * da * (255 - sa)
+                                                        / 255)
+                                                    / out_a)
+                                                    as u8;
+                                                canvas[dst_off + 2] = ((rgba[idx + 2] as u16 * sa
+                                                    + canvas[dst_off + 2] as u16 * da * (255 - sa)
+                                                        / 255)
+                                                    / out_a)
+                                                    as u8;
+                                                canvas[dst_off + 3] = out_a as u8;
+                                            }
                                         }
                                     }
                                 }
@@ -217,7 +256,13 @@ impl Font {
 
                 (w, h, canvas)
             }
-            Font::Bitmap(bf) => bf.render_text(text, fill, spacing),
+            Font::Bitmap(bf) => {
+                if binary {
+                    bf.render_text_binary(text, fill, spacing)
+                } else {
+                    bf.render_text(text, fill, spacing)
+                }
+            }
         }
     }
 }

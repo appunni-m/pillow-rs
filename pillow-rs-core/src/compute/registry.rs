@@ -262,6 +262,7 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::EffectNoise { .. } => "EffectNoise",
         PipelineOp::PointOp { .. } => "PointOp",
         PipelineOp::Transform { .. } => "Transform",
+        PipelineOp::Color3DLut { .. } => "Color3DLut",
         PipelineOp::PutPixel { .. } => "PutPixel",
         PipelineOp::PutData { .. } => "PutData",
         PipelineOp::PutAlpha { .. } => "PutAlpha",
@@ -667,7 +668,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     };
     use crate::compute::pool_cpu::ops::color::{op_convert, op_quantize, op_remap_palette};
     use crate::compute::pool_cpu::ops::effects::{
-        op_alpha_composite, op_blend_module, op_composite_module, op_effect_noise,
+        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_noise,
         op_effect_spread, op_eval, op_merge, op_paste, op_point, op_put_alpha, op_put_data,
         op_put_pixel, op_transform,
     };
@@ -1804,6 +1805,21 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             },
             "put_data.wgsl"
         ),
+    );
+    m.insert(
+        "Color3DLut",
+        OpEntry::cpu_only(|img, op, _mode| {
+            if let PipelineOp::Color3DLut {
+                size,
+                table,
+                channels,
+            } = op
+            {
+                op_color3dlut(img, *size, table, *channels)
+            } else {
+                Err(PilError::ValueError("expected Color3DLut op".into()))
+            }
+        }),
     );
     m.insert(
         "PutAlpha",

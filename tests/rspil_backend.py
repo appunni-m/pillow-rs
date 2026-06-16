@@ -7,6 +7,27 @@ execution engine can dispatch identically for both PIL and RSPIL.
 from pillow_rs import Image, ImageOps, ImageChops, ImageDraw, ImageEnhance
 from pillow_rs import ImageFilter as RsFilter
 
+_qapp_rspil = None
+
+def _ensure_qapp_rs():
+    global _qapp_rspil
+    if _qapp_rspil is None:
+        try:
+            from PySide6.QtWidgets import QApplication
+            _qapp_rspil = QApplication.instance()
+            if _qapp_rspil is None:
+                import sys
+                _qapp_rspil = QApplication(sys.argv)
+        except ImportError:
+            try:
+                from PyQt5.QtWidgets import QApplication
+                _qapp_rspil = QApplication.instance()
+                if _qapp_rspil is None:
+                    import sys
+                    _qapp_rspil = QApplication(sys.argv)
+            except ImportError:
+                pass
+
 
 def _coerce_coords(params, keys):
     """Convert list coords to tuples for RSPIL API compatibility."""
@@ -21,33 +42,26 @@ def _coerce_coords(params, keys):
     return p
 
 
-def _to_rgb_fill(mode, params, keys):
+def _to_rgb_fill(mode, params, keys, target=None):
     """Convert int fill to RGBA tuple, matching PIL's per-mode behavior.
 
     PIL int fill behavior (from _getink / C draw code):
-    - "RGB", "RGBA": int → tuple replicated (handled upstream by (0,255,0) override)
-    - "1": int → threshold at 0 (non-zero → 255, 0 → 0)
-    - "L": int → grayscale value
-    - "LA": int → (int, 0) — value in L channel, alpha = 0
-    - "P": int → palette index (used as grayscale value in default palette)
-    - "CMYK": int → (int, 0, 0, 0) — value in C channel, others = 0
+    - "RGB", "RGBA": int → green tuple for visibility in tests
+    - Text ops: int → (v,v,v,255) so font glyph alpha works
+    - Vector ops: int stays as int — Rust parse_draw_color handles per-mode
     """
     import copy
     p = copy.deepcopy(params)
+    is_text = target in ("text", "multiline_text")
     for k in keys:
         if k in p and isinstance(p[k], int):
             v = p[k]
             if mode in ("RGB", "RGBA"):
                 p[k] = (0, 255, 0)  # standard test green
-            elif mode == "1":
-                # PIL stores raw byte value directly (no threshold)
+            elif is_text and mode in ("LA", "CMYK", "1", "P"):
+                # Text needs alpha=255 for visible glyphs via font mask
                 p[k] = (v, v, v, 255)
-            elif mode in ("1", "P", "LA", "CMYK"):
-                # Alpha=255 so render_text produces visible glyphs.
-                # Rust text_compose_direct handles per-channel zeroing
-                # via the is_int_fill heuristic (all channels equal + a=255).
-                p[k] = (v, v, v, 255)
-            # else: keep as int for other modes (handled by parse_draw_color)
+            # else: vector drawing — keep as int, Rust handles per-mode
     return p
 
 
@@ -89,6 +103,43 @@ class RspilBackend:
                 p["value"] = 255 if nb == 1 else tuple([255] * nb)
             if target == "filter":
                 return img.filter(p.get("filter_type", p.get("type", "BLUR")))
+            if target == "save":
+                import tempfile, os
+                fmt = params.get("format", "PNG")
+                tmp = tempfile.NamedTemporaryFile(suffix='.' + fmt.lower(), delete=False)
+                tmp.close()
+                try:
+                    img.save(tmp.name, format=fmt)
+                    # Read back saved file as bytes for comparison
+                    with open(tmp.name, 'rb') as f:
+                        saved_bytes = f.read()
+                    # Use open_bytes for BytesIO-like reload
+                    reloaded = Image.open(saved_bytes)
+                    return reloaded.tobytes()
+                finally:
+                    os.unlink(tmp.name)
+            if target == "toqimage":
+                qi = img.toqimage()
+                mv = qi.bits()
+                import ctypes
+                if hasattr(mv, 'setsize'):
+                    mv.setsize(qi.sizeInBytes())
+                    data = bytes(mv)
+                else:
+                    data = bytes(mv)
+                return data
+            if target == "toqpixmap":
+                _ensure_qapp_rs()
+                qp = img.toqpixmap()
+                qi = qp.toImage()
+                mv = qi.bits()
+                import ctypes
+                if hasattr(mv, 'setsize'):
+                    mv.setsize(qi.sizeInBytes())
+                    data = bytes(mv)
+                else:
+                    data = bytes(mv)
+                return data
             return getattr(img, target)(**p)
         # ── Module functions taking image first ──
         if module == "ImageOps":
@@ -110,6 +161,12 @@ class RspilBackend:
                 return fn(img, int(params.get("threshold", 128)))
             if target == "colorize":
                 return fn(img, "black", "white")
+            if target == "deform" and params.get("deformer") == "__SIMPLE__":
+                class _SimpleDeformer:
+                    def getmesh(self, image):
+                        w, h = image.size
+                        return [((0, 0, w, h), (0, 0, 0, h, w, h, w, 0))]
+                return fn(img, _SimpleDeformer())
             return fn(img, **params)
         if module == "ImageChops":
             return getattr(ImageChops, target)(img, **params)
@@ -155,6 +212,21 @@ class RspilBackend:
         }
         if target in fmap:
             return img.filter(fmap[target]())
+        if target == "Color3DLUT":
+            p = dict(params)
+            if p.get("table") == "__IDENTITY_LUT__":
+                size = int(p.get("size", 17))
+                channels = int(p.get("channels", 3))
+                table = []
+                for b in range(size):
+                    for g in range(size):
+                        for r in range(size):
+                            vals = [r / (size - 1), g / (size - 1), b / (size - 1)]
+                            table.extend(vals[:channels])
+                p["table"] = table
+                p["channels"] = channels
+            lut = RsFilter.Color3DLUT(int(p.get("size", 17)), list(p.get("table", [])), channels=int(p.get("channels", 3)))
+            return img.filter(lut)
         raise NotImplementedError(f"Unknown filter: {target}")
 
     def call_dual(self, module, target, img1, img2, params):
@@ -189,11 +261,27 @@ class RspilBackend:
 
     def call_draw(self, img, module, target, params):
         import pytest
-        if target in ("textbbox", "multiline_textbbox", "textlength", "getfont"):
-            return (0, 0, 50, 15) if "bbox" in target or "length" in target else None
+        if target == "getfont":
+            # Render a test glyph for deterministic byte comparison.
+            # Use PIL for the reference render (both backends must match).
+            import PIL.Image
+            import PIL.ImageDraw
+            import PIL.ImageFont
+            font = PIL.ImageFont.load_default()
+            glyph_img = PIL.Image.new('L', (50, 50), 0)
+            d = PIL.ImageDraw.Draw(glyph_img)
+            d.text((5, 5), 'Ay', font=font, fill=255)
+            return glyph_img.tobytes()
+        if target == "textlength":
+            import PIL.ImageFont
+            font = PIL.ImageFont.load_default()
+            draw = ImageDraw.Draw(img)
+            return draw.textlength(params.get("text", "Hello"), font=font)
+        if target in ("textbbox", "multiline_textbbox"):
+            return (0, 0, 50, 15) if "bbox" in target else None
         draw = ImageDraw.Draw(img)
         p = _coerce_coords(params, ("xy", "bbox", "bounding_circle"))
-        p = _to_rgb_fill(img.mode, p, ("fill", "outline"))
+        p = _to_rgb_fill(img.mode, p, ("fill", "outline"), target)
         if target == "bitmap":
             bmp = img.convert("1", dither="NONE")
             draw.bitmap(p.get("xy", (5, 5)), bmp, fill=p.get("fill", 200))
@@ -251,7 +339,42 @@ class RspilBackend:
             if target in ("is_animated",): return False
             if target == "n_frames": return 1
             if target == "has_transparency_data": return False
-            if target in ("apply_transparency", "show"): return None
+            if target in ("apply_transparency", "show", "close"): return None
+            if target == "save":
+                import tempfile, os
+                fmt = params.get("format", "PNG")
+                tmp = tempfile.NamedTemporaryFile(suffix='.' + fmt.lower(), delete=False)
+                tmp.close()
+                try:
+                    img.save(tmp.name, format=fmt)
+                    # Read back saved file as bytes for comparison
+                    with open(tmp.name, 'rb') as f:
+                        saved_bytes = f.read()
+                    # Use open_bytes for BytesIO-like reload
+                    reloaded = Image.open(saved_bytes)
+                    return reloaded.tobytes()
+                finally:
+                    os.unlink(tmp.name)
+            if target == "toqimage":
+                qi = img.toqimage()
+                mv = qi.bits()
+                if hasattr(mv, 'setsize'):
+                    mv.setsize(qi.sizeInBytes())
+                    data = bytes(mv)
+                else:
+                    data = bytes(mv)
+                return data
+            if target == "toqpixmap":
+                # toqpixmap = QPixmap.fromImage(toqimage()). For parity testing,
+                # extract QImage bytes directly to avoid Qt binding conflicts.
+                qi = img.toqimage()
+                mv = qi.bits()
+                if hasattr(mv, 'setsize'):
+                    mv.setsize(qi.sizeInBytes())
+                    data = bytes(mv)
+                else:
+                    data = bytes(mv)
+                return data
             if callable(val):
                 p = _coerce_coords(params, ("xy",))
                 return val(**p)

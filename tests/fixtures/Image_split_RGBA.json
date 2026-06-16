@@ -23,10 +23,10 @@
   "expected": {
     "result_type": "value",
     "value": [
-      "<PIL.Image.Image image mode=L size=100x100 at 0x744A5136C980>",
-      "<PIL.Image.Image image mode=L size=100x100 at 0x744A5136FA40>",
-      "<PIL.Image.Image image mode=L size=100x100 at 0x744A5136C1D0>",
-      "<PIL.Image.Image image mode=L size=100x100 at 0x744A5136FE00>"
+      "<PIL.Image.Image image mode=L size=100x100 at 0x72E7026884D0>",
+      "<PIL.Image.Image image mode=L size=100x100 at 0x72E702688410>",
+      "<PIL.Image.Image image mode=L size=100x100 at 0x72E702689AF0>",
+      "<PIL.Image.Image image mode=L size=100x100 at 0x72E7026881A0>"
     ]
   }
 }
