@@ -225,3 +225,5 @@ use internet to research exact algo
 If needed wrote separate code for each mode
 
 NEVER use git without explicit user permission. Use `git diff`, `git log`, `git show` for read-only operations. Never `git checkout`, `git revert`, `git stash`, or `git commit` without asking first.
+
+Never change fixture output it's generared

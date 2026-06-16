@@ -9,16 +9,28 @@ use crate::pipeline::PipelineOp;
 
 /// Normalize image contrast. Clips the darkest and lightest `cutoff` percent.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if mode == "LA" || mode == "RGBA" {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
     Ok(Image::push_op(image, PipelineOp::Autocontrast { cutoff }))
 }
 
 /// Equalize the image histogram.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if mode == "LA" || mode == "RGBA" {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
     Ok(Image::push_op(image, PipelineOp::Equalize))
 }
 
 /// Invert all pixel values (negative).
 pub fn invert(image: &Image) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if mode == "LA" || mode == "RGBA" {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
     Ok(Image::push_op(image, PipelineOp::Invert))
 }
 
@@ -34,6 +46,10 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 
 /// Reduce number of bits per color channel.
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if mode == "LA" || mode == "RGBA" {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
     Ok(Image::push_op(
         image,
         PipelineOp::Posterize {
@@ -44,6 +60,10 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
 
 /// Invert all pixel values above threshold.
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if mode == "LA" || mode == "RGBA" {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
     Ok(Image::push_op(image, PipelineOp::Solarize { threshold }))
 }
 
@@ -58,6 +78,11 @@ pub fn colorize(
     black: (u8, u8, u8),
     white: (u8, u8, u8),
 ) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if mode != "L" {
+        // PIL raises AssertionError for non-L modes
+        return Err(PilError::AssertionError(String::new()));
+    }
     Ok(Image::push_op(image, PipelineOp::Colorize { black, white }))
 }
 

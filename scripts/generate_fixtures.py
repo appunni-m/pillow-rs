@@ -93,6 +93,10 @@ def generate_one(input_path):
             import ctypes
             libc = ctypes.CDLL('libc.so.6')
             libc.srand(1)
+        if op["module"] == "Image" and op["target"] == "effect_spread":
+            import ctypes
+            libc = ctypes.CDLL('libc.so.6')
+            libc.srand(42)
         try:
             result = CALL_STYLE[call_style](pil, img, img2, op["target"], params)
         except Exception as e:

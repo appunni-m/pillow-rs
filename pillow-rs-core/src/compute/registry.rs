@@ -1119,8 +1119,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
+                if let Some(m) = mode {
+                    if m == "LA" || m == "RGBA" {
+                        return Err(PilError::OsError(format!("not supported for mode {m}")));
+                    }
+                }
                 if let PipelineOp::Autocontrast { cutoff } = op {
                     op_autocontrast(img, *cutoff)
                 } else {
@@ -1135,8 +1140,13 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
+                if let Some(m) = mode {
+                    if m == "LA" || m == "RGBA" {
+                        return Err(PilError::OsError(format!("not supported for mode {m}")));
+                    }
+                }
                 if matches!(op, PipelineOp::Equalize) {
                     op_equalize(img)
                 } else {
@@ -1151,7 +1161,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Invert) {
                     op_invert(img)

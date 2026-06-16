@@ -89,8 +89,7 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
     """Colorize grayscale image — delegates to Rust."""
-    if image.mode != "L":
-        image = image.convert("L")
+    # PIL raises AssertionError for non-L modes; Rust does the same
     if isinstance(black, str):
         from PIL.ImageColor import getrgb
         black = getrgb(black)
