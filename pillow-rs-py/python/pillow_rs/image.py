@@ -141,9 +141,7 @@ class Image:
 
     def crop(self, box: Tuple[int, int, int, int]) -> "Image":
         left, top, right, bottom = box
-        width = right - left
-        height = bottom - top
-        rust_image = self._rust_image.crop((left, top, width, height))
+        rust_image = self._rust_image.crop_box(left, top, right, bottom)
         return Image(rust_image)
 
     def rotate(
@@ -155,7 +153,6 @@ class Image:
         translate: Optional[Tuple[float, float]] = None,
         fillcolor: Optional[Any] = None,
     ) -> "Image":
-        angle = angle % 360
         rust_image = self._rust_image.rotate(float(angle), expand, fillcolor)
         return Image(rust_image)
 
@@ -173,15 +170,10 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
-        # PIL: convert() without mode arg is a copy in the same mode
+        # PIL: convert() without mode arg is a copy in the same mode.
+        # Same-mode check is handled in Rust's convert().
         if mode is None:
             mode = self.mode
-        # PIL: converting to the same mode is a no-op (returns copy)
-        if mode == self.mode:
-            return self.copy()
-        # For all modes, let Rust handle the conversion via PipelineOp.
-        # Rust's op_convert implements proper conversion formulas for all modes
-        # including CMYK, YCbCr, HSV, I, F, and P (WEB palette quantization).
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
@@ -258,11 +250,7 @@ class Image:
         data = self._rust_image.tobytes_formatted(self.mode)
         # Handle raw encoder formats: "BGRA" swaps B and R channels
         if encoder_name == "raw" and args and args[0] in ("BGRA", "BGR"):
-            fmt = args[0]
-            nchan = 4 if fmt == "BGRA" else 3
-            ba = bytearray(data)
-            ba[0::nchan], ba[2::nchan] = ba[2::nchan], ba[0::nchan]
-            return bytes(ba)
+            return self._rust_image.tobytes_formatted_swap(self.mode, args[0])
         return data
 
     def getpixel(self, xy: Tuple[int, int]):
@@ -274,29 +262,12 @@ class Image:
 
         PIL semantics for int values on multi-band images:
         first band = value, remaining bands = 0.
-        The RGBA tuple sent to Rust is mapped back via preserve_mode.
+        Mode-aware expansion handled in Rust.
         """
-        if isinstance(value, int):
-            # PIL: int value fills band 0, remaining bands = 0
-            bands = len(self.getbands())
-            if bands == 1:
-                self._rust_image.putpixel(xy, (value, value, value, 255))
-            elif bands == 2:
-                self._rust_image.putpixel(xy, (value, 0, 0, 0))
-            elif bands == 3:
-                self._rust_image.putpixel(xy, (value, 0, 0, 0))
-            else:
-                self._rust_image.putpixel(xy, (value, 0, 0, 0))
-        elif len(value) == 2:
-            # 2-band mode (LA): send as (L, 0, 0, A) so preserve_mode extracts L and A
-            l_val, a_val = value
-            self._rust_image.putpixel(xy, (l_val, 0, 0, a_val))
-        elif len(value) == 3:
-            self._rust_image.putpixel(xy, (*value, 0))
-        elif len(value) == 4:
-            self._rust_image.putpixel(xy, tuple(value))
+        if isinstance(value, (int, list, tuple)):
+            self._rust_image.putpixel_mode(xy, value)
         else:
-            self._rust_image.putpixel(xy, (value[0], value[0], value[0], 255))
+            self._rust_image.putpixel_mode(xy, value)
 
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
@@ -314,10 +285,7 @@ class Image:
 
     def getextrema(self):
         """Min/max pixel values per band. Returns tuple matching PIL format."""
-        result = self._rust_image.getextrema()
-        if len(result) == 1:
-            return tuple(result[0])
-        return tuple(tuple(v) for v in result)
+        return self._rust_image.getextrema_formatted()
 
     def histogram(self, mask=None, extrema=None):
         """Image histogram per band."""
@@ -353,28 +321,11 @@ class Image:
 
     def getcolors(self, maxcolors=256):
         """Return list of [count, color] pairs or None if too many colors."""
-        result = self._rust_image.getcolors(maxcolors)
-        if result is None:
-            return None
-        # Convert raw bytes: color as int for single-band, list for multi-band
-        n_bands = len(self.getbands())
-        out = []
-        for count, raw_color in result:
-            if n_bands == 1:
-                color = raw_color[0]
-            else:
-                color = list(raw_color)
-            out.append([count, color])
-        return out
+        return self._rust_image.getcolors_formatted(maxcolors)
 
     def getdata(self, band=None):
         """Return pixel data as sequence of tuples (matching PIL)."""
-        raw = self._rust_image.getdata(band if band is not None else -1)
-        n_bands = len(self.getbands())
-        if n_bands == 1:
-            return list(raw)  # PIL returns flat list of ints
-        # Group flat bytes into tuples
-        return [tuple(raw[i:i+n_bands]) for i in range(0, len(raw), n_bands)]
+        return self._rust_image.getdata_formatted(band if band is not None else -1)
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixel data from a sequence. Flattening done in Rust.
@@ -410,10 +361,8 @@ class Image:
         if callable(lut):
             lut = bytes(lut(i) & 0xFF for i in range(256))
             return Image(self._rust_image.point_replicated(list(lut), n_bands))
-        # Pre-built LUT: validate exact length (PIL requires 256 * bands)
-        if len(lut) != 256 * n_bands:
-            raise ValueError("wrong number of lut entries")
-        return Image(self._rust_image.point(list(lut)))
+        # LUT validation (PIL requires 256 * n_bands entries) handled in Rust
+        return Image(self._rust_image.point_validated(list(lut)))
 
     def effect_spread(self, distance):
         """Simple spread/blur effect."""
@@ -464,23 +413,13 @@ class Image:
         (678 bytes). Full custom palette has 256 colors (768 bytes).
         """
         if hasattr(self, '_palette'):
-            pal = list(self._palette)
-            # Trim trailing zero triples to match PIL
-            last = len(pal)
-            while last >= 3 and pal[last-3] == 0 and pal[last-2] == 0 and pal[last-1] == 0:
-                last -= 3
-            return pal[:last]
-        # Try to get palette from Rust image (Paletted variant or Pipeline with palette)
+            # Trim trailing zero triples to match PIL (done in Rust)
+            return self._rust_image.getpalette_trimmed()
         try:
-            p = self._rust_image.palette()
+            p = self._rust_image.getpalette_trimmed()
             if p:
                 self._palette = list(p)
-                pal = list(self._palette)
-                # Trim trailing zero triples
-                last = len(pal)
-                while last >= 3 and pal[last-3] == 0 and pal[last-2] == 0 and pal[last-1] == 0:
-                    last -= 3
-                return pal[:last]
+                return p
         except Exception:
             pass
         return None

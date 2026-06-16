@@ -19,17 +19,9 @@ class ImagePalette:
         """Given an rgb tuple, allocate palette entry."""
         if not isinstance(color, (tuple, list)):
             raise ValueError(f"unknown color specifier: {repr(color)}")
-
-        color = tuple(color)
-        if self.mode == "RGB" and len(color) >= 4 and color[3] != 255:
-            raise ValueError("cannot add non-opaque RGBA color to RGB palette")
-        if self.mode == "RGBA" and len(color) == 3:
-            color = color + (255,)
-
-        r, g, b = color[0], color[1], color[2]
-        a = color[3] if self.mode == "RGBA" and len(color) >= 4 else 255
-
-        return _core.palette_getcolor_append(self.palette, r, g, b, a, self.mode)
+        palette_bytes, idx = _core.palette_getcolor_validate(self.palette, list(color), self.mode)
+        self.palette = list(palette_bytes)
+        return idx
 
     def getdata(self):
         """Return palette data as (mode, raw_data)."""
@@ -38,8 +30,7 @@ class ImagePalette:
     def save(self, fp):
         """Save palette to text file."""
         if isinstance(fp, str):
-            with open(fp, "w") as f:
-                f.write(_core.palette_to_text(self.palette, self.mode))
+            _core.palette_save_to_file(self.palette, self.mode, fp)
         else:
             fp.write(_core.palette_to_text(self.palette, self.mode))
 

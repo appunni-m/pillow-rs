@@ -397,11 +397,11 @@ pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
             // The fmod result is stored back to float (f32).
             let h_double = h_float as f64;
             let h_fmod = ((h_double / 6.0) + 1.0) % 1.0;
-            let h_stored = h_fmod as f32;  // PIL stores h back to float here
+            let h_stored = h_fmod as f32; // PIL stores h back to float here
 
             // PIL: uh = (int)(h * 255.0) — float promoted to double for multiplication
             // with 255.0 (double literal), then truncated
-            let s_float = cr / maxc as f32;  // s = cr / maxc in f32
+            let s_float = cr / maxc as f32; // s = cr / maxc in f32
             let us = ((s_float as f64) * 255.0) as u8;
             let uh = ((h_stored as f64) * 255.0) as u8;
 
@@ -655,4 +655,37 @@ pub fn convert_from_nonstandard(
         "P" => Some(p_to_rgb(img, palette)),
         _ => None,
     }
+}
+
+/// Validate a color for palette mode and append it.
+/// Handles mode-specific logic:
+/// - RGB mode: reject non-opaque RGBA colors (alpha != 255)
+/// - RGBA mode: auto-fill missing alpha to 255
+/// Delegates to `palette_getcolor_append` for the actual append.
+pub fn palette_getcolor_validate(
+    palette: &mut Vec<u8>,
+    color: &[u8],
+    mode: &str,
+) -> Result<usize, String> {
+    if color.len() < 3 {
+        return Err("color must have at least 3 elements".into());
+    }
+    let r = color[0];
+    let g = color[1];
+    let b = color[2];
+    if mode == "RGB" && color.len() >= 4 && color[3] != 255 {
+        return Err("cannot add non-opaque RGBA color to RGB palette".into());
+    }
+    let a = if mode == "RGBA" && color.len() >= 4 {
+        color[3]
+    } else {
+        255
+    };
+    palette_getcolor_append(palette, r, g, b, a, mode)
+}
+
+/// Save palette data to a text file.
+pub fn palette_save_to_file(palette: &[u8], mode: &str, path: &str) -> Result<(), String> {
+    let text = palette_to_text(palette, mode);
+    std::fs::write(path, &text).map_err(|e| format!("Cannot write palette file: {}", e))
 }

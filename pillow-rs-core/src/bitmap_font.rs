@@ -243,3 +243,32 @@ impl BitmapFont {
         (total_w, line_h, canvas)
     }
 }
+
+/// Compute default bitmap font bounding box.
+/// Uses fixed 6 px width and 11 px height per character (PIL default font).
+pub fn font_default_bbox(text: &str) -> (i32, i32, i32, i32) {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let max_width = lines.iter().map(|l| l.len()).max().unwrap_or(0) as i32 * 6;
+    let total_height = lines.len() as i32 * 11;
+    (0, 0, max_width, total_height)
+}
+
+/// Compute default bitmap font text length (width in pixels).
+pub fn font_default_length(text: &str) -> u32 {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let max_line = lines.iter().map(|l| l.len()).max().unwrap_or(0);
+    max_line as u32 * 6
+}
+
+/// Compute default bitmap font mask size for fallback blank mask.
+/// Returns (width, height) with minimum of 1 for each dimension.
+pub fn font_default_mask_size(text: &str) -> (u32, u32) {
+    let w = font_default_length(text);
+    let h = if text.contains('\n') {
+        let line_count = text.chars().filter(|&c| c == '\n').count() + 1;
+        (line_count * 11) as u32
+    } else {
+        11
+    };
+    (w.max(1), h.max(1))
+}

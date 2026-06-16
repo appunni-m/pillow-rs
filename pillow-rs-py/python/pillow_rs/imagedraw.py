@@ -1,5 +1,6 @@
 """ImageDraw — drawing primitives. Pillow-compatible module."""
 from ._core import ImageDraw as RustDraw
+from ._core import outline_curve as _outline_curve
 from .image import Image
 
 
@@ -17,15 +18,11 @@ class Outline:
         self._points.append((int(x), int(y)))
 
     def curve(self, x1, y1, x2, y2, x3, y3):
-        # Cubic Bezier approximation: subdivide into line segments
+        # Cubic Bezier approximation: subdivide into line segments in Rust
         x0, y0 = self._points[-1]
         steps = 20
-        for i in range(1, steps + 1):
-            t = i / steps
-            u = 1 - t
-            x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
-            y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
-            self._points.append((int(round(x)), int(round(y))))
+        new_points = _outline_curve([float(x0), float(y0), float(x1), float(y1), float(x2), float(y2), float(x3), float(y3)], steps)
+        self._points.extend(map(tuple, new_points))
 
     def close(self):
         if len(self._points) > 2 and self._points[0] != self._points[-1]:
@@ -62,8 +59,7 @@ class Draw:
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
         if fill is None:
             fill = (0, 0, 0)
-        pts = [(int(p[0]), int(p[1])) for p in xy]
-        self._draw.line(pts, fill, width if width > 0 else 1)
+        self._draw.line(xy, fill, width if width > 0 else 1)
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
@@ -77,8 +73,7 @@ class Draw:
         self._sync()
 
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
-        pts = [(int(p[0]), int(p[1])) for p in xy]
-        self._draw.polygon(pts, fill, outline, width)
+        self._draw.polygon(xy, fill, outline, width)
         self._sync()
 
     def point(self, xy, fill=None):
@@ -86,8 +81,7 @@ class Draw:
             fill = (0, 0, 0)
         if isinstance(xy[0], (int, float)):
             xy = [xy]
-        pts = [(int(p[0]), int(p[1])) for p in xy]
-        self._draw.point(pts, fill)
+        self._draw.point(xy, fill)
         self._sync()
 
     def arc(self, xy, start, end, fill=None, width=1):
@@ -141,22 +135,10 @@ class Draw:
                   stroke_fill=stroke_fill, embedded_color=embedded_color)
 
     def textbbox(self, xy, text, font=None, **kwargs):
-        if font is None:
-            font = self._get_font(None)
-        if hasattr(font, 'getbbox'):
-            w, h = font.getbbox(str(text))
-            return (xy[0], xy[1], xy[0] + w, xy[1] + h)
-        return (xy[0], xy[1], xy[0] + 80, xy[1] + 12)
+        return self._draw.textbbox(xy, str(text), font)
 
     def textlength(self, text, font=None, **kwargs):
-        if font is None:
-            font = self._get_font(None)
-        if hasattr(font, 'getlength'):
-            return font.getlength(str(text))
-        if hasattr(font, 'getbbox'):
-            bbox = font.getbbox(str(text))
-            return bbox[2] - bbox[0]
-        return len(str(text)) * 8
+        return self._draw.textlength(str(text), font)
 
     def getfont(self):
         """Return the current font."""
@@ -166,60 +148,7 @@ class Draw:
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
-        text = str(text)
-        font = self._get_font(font)
-
-        lines = text.split('\n')
-        if len(lines) == 1:
-            return self.textbbox(xy, text, font=font)
-
-        # Calculate line height (font height + spacing)
-        if font and hasattr(font, 'getbbox'):
-            _, h = font.getbbox('A')
-            line_height = h + spacing
-        else:
-            line_height = 12 + spacing
-
-        # Calculate widths for each line
-        widths = []
-        for line in lines:
-            if font and hasattr(font, 'getbbox'):
-                w, _ = font.getbbox(line)
-                widths.append(w)
-            else:
-                widths.append(len(line) * 8)
-
-        max_width = max(widths) if widths else 0
-        x0, y0 = float(xy[0]), float(xy[1])
-
-        left = float('inf')
-        top = float('inf')
-        right = float('-inf')
-        bottom = float('-inf')
-
-        for i, line in enumerate(lines):
-            line_y = y0 + i * line_height
-
-            if align == 'center':
-                line_x = x0 + (max_width - widths[i]) / 2.0
-            elif align == 'right':
-                line_x = x0 + max_width - widths[i]
-            else:  # left
-                line_x = x0
-
-            if font and hasattr(font, 'getbbox'):
-                w, h = font.getbbox(line)
-                left = min(left, line_x)
-                top = min(top, line_y)
-                right = max(right, line_x + w)
-                bottom = max(bottom, line_y + h)
-            else:
-                left = min(left, line_x)
-                top = min(top, line_y)
-                right = max(right, line_x + widths[i])
-                bottom = max(bottom, line_y + line_height)
-
-        return (left, top, right, bottom)
+        return self._draw.multiline_textbbox(xy, str(text), font, spacing, align)
 
     def shape(self, shape, fill=None, outline=None):
         """Draw a shape defined by an Outline or sequence of coordinates.

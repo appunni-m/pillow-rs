@@ -51,7 +51,8 @@ def convert(image: Image, mode: str) -> Image:
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
     from . import _core
-    return Image(_core.image_merge(mode, [b._rust_image for b in bands]))
+    rust_bands = tuple(b._rust_image for b in bands)
+    return Image(_core.image_merge(mode, rust_bands))
 
 
 def blend(im1: Image, im2: Image, alpha: float) -> Image:
