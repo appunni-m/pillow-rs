@@ -29,6 +29,7 @@ class Image:
     BICUBIC = Resampling.BICUBIC
     LANCZOS = Resampling.LANCZOS
     Resampling = Resampling
+    Transpose = Transpose
 
     def __init__(self, rust_image=None):
         if RustImage is None:
@@ -381,17 +382,7 @@ class Image:
         PIL semantics for int values in multi-band images:
         first band = value, remaining bands = 0.
         """
-        n_bands = len(self.getbands())
-        if n_bands > 1:
-            expanded = []
-            for item in data:
-                if isinstance(item, int):
-                    pixel = [item] + [0] * (n_bands - 1)
-                    expanded.append(tuple(pixel))
-                else:
-                    expanded.append(tuple(item))
-            data = expanded
-        self._rust_image.putdata(data)
+        self._rust_image.putdata_formatted(data, len(self.getbands()))
 
     def getprojection(self):
         """Return horizontal and vertical projections."""
@@ -415,13 +406,11 @@ class Image:
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
-        if callable(lut):
-            # Function-based: convert to LUT, replicate per band (matching PIL)
-            n_bands = len(self.getbands())
-            table = [lut(i) for i in range(256)] * n_bands
-            lut = bytes(int(v) & 0xFF for v in table)
-        # Eager validation matching PIL: exactly 256 * bands entries required
         n_bands = len(self.getbands())
+        if callable(lut):
+            lut = bytes(lut(i) & 0xFF for i in range(256))
+            return Image(self._rust_image.point_replicated(list(lut), n_bands))
+        # Pre-built LUT: validate exact length (PIL requires 256 * bands)
         if len(lut) != 256 * n_bands:
             raise ValueError("wrong number of lut entries")
         return Image(self._rust_image.point(list(lut)))

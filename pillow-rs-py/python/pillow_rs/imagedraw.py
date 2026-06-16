@@ -270,7 +270,8 @@ class Draw:
             else:
                 self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font._rust_font)
         elif hasattr(font, 'getmask'):
-            raise NotImplementedError("PIL ImageFont not yet supported")
+            mask = font.getmask(text, mode="1" if self._orig_mode == "1" else "L")
+            self.bitmap(xy, mask, fill=fill)
         else:
             self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font)
         self._sync()

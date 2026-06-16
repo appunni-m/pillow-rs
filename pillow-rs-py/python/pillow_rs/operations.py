@@ -154,9 +154,7 @@ def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw"
 def eval(image: Image, *args):
     """Apply a function to each pixel. The first arg is a callable."""
     if args and callable(args[0]):
-        func = args[0]
-        lut = bytes(func(i) & 0xFF for i in range(256))
-        return image.point(lut)
+        return image.point(args[0])
     raise NotImplementedError("eval: requires a callable")
 
 
