@@ -10,10 +10,11 @@ Status: Draft
 | API surface (which ops exist) | `manifest.yaml` | Canonical catalog of all operations |
 | Status (implemented/stub/ignored) | `manifest.yaml` | Coverage tracking |
 | Supported modes per operation | `manifest.yaml` | Coverage per-mode tracking |
-| Parameter variations to test | `fixtures/*.json` cases array | Test data, not API metadata |
+| Parameter variations to test | `fixtures/input/jsons/*.json` cases array | Test data, not API metadata |
 | How to execute an operation | `engine.py` get_call_style() | Derived from module name, 35-line function |
-| How to compare outputs | `fixtures/*.json` assert.method | Declared per case |
-| Reference output data | `fixtures/output/images/*.png` | Viewable, pixel-exact |
+| How to compare outputs | `fixtures/outputs/jsons/*.json` assert.method | Declared per case |
+| Reference output images | `fixtures/outputs/images/*.png` | Viewable, pixel-exact |
+| Reference output raw bytes | `fixtures/outputs/raws/*.bin` | Float/I-mode exact bytes |
 
 ## 2. Core Principles
 
@@ -127,22 +128,26 @@ tests/fixtures/
   "cases": [
     {
       "id": "L_50x50",
-      "input": {"source": "reference_rgb", "size": [100, 100], "mode": "L"},
+      "mode": "L",
+      "input": {"source": "reference_rgb", "size": [500, 500]},
       "params": {"size": [50, 50]}
     },
     {
       "id": "L_25x25",
-      "input": {"source": "reference_rgb", "size": [100, 100], "mode": "L"},
+      "mode": "L",
+      "input": {"source": "reference_rgb", "size": [500, 500]},
       "params": {"size": [25, 25]}
     },
     {
       "id": "RGB_50x50",
-      "input": {"source": "reference_rgb", "size": [100, 100], "mode": "RGB"},
+      "mode": "RGB",
+      "input": {"source": "reference_rgb", "size": [500, 500]},
       "params": {"size": [50, 50]}
     },
     {
       "id": "RGBA_50x50",
-      "input": {"source": "reference_rgb", "size": [100, 100], "mode": "RGBA"},
+      "mode": "RGBA",
+      "input": {"source": "reference_rgb", "size": [500, 500]},
       "params": {"size": [50, 50]}
     }
   ]
@@ -181,7 +186,7 @@ tests/fixtures/
 
 ### 5.3 Value-returning operation
 
-Input (`fixtures/input/ImageColor_getcolor.json`):
+Input (`fixtures/input/jsons/ImageColor_getcolor.json`):
 ```json
 {
   "format_version": 2,
@@ -217,7 +222,7 @@ Output (`fixtures/outputs/jsons/ImageColor_getcolor.json`):
 
 ### 5.4 Draw operation with fill variations
 
-Input (`fixtures/input/ImageDraw_text.json`):
+Input (`fixtures/input/jsons/ImageDraw_text.json`):
 ```json
 {
   "format_version": 2,
@@ -226,17 +231,17 @@ Input (`fixtures/input/ImageDraw_text.json`):
     "target": "text"
   },
   "cases": [
-    {"id": "L_fill200",  "input": {"source": "reference_rgb", "size": [100, 100], "mode": "L"},   "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
-    {"id": "L_fill128",  "input": {"source": "reference_rgb", "size": [100, 100], "mode": "L"},   "params": {"xy": [5, 5], "text": "Hello", "fill": 128}},
-    {"id": "RGB_fill200","input": {"source": "reference_rgb", "size": [100, 100], "mode": "RGB"}, "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
-    {"id": "LA_fill200", "input": {"source": "reference_rgb", "size": [100, 100], "mode": "LA"},  "params": {"xy": [5, 5], "text": "Hello", "fill": 200}}
+    {"id": "L_fill200",  "mode": "L",   "input": {"source": "reference_rgb", "size": [500, 500]}, "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
+    {"id": "L_fill128",  "mode": "L",   "input": {"source": "reference_rgb", "size": [500, 500]}, "params": {"xy": [5, 5], "text": "Hello", "fill": 128}},
+    {"id": "RGB_fill200","mode": "RGB", "input": {"source": "reference_rgb", "size": [500, 500]}, "params": {"xy": [5, 5], "text": "Hello", "fill": 200}},
+    {"id": "LA_fill200", "mode": "LA",  "input": {"source": "reference_rgb", "size": [500, 500]}, "params": {"xy": [5, 5], "text": "Hello", "fill": 200}}
   ]
 }
 ```
 
 ### 5.5 Dual-input operation
 
-Input (`fixtures/input/ImageChops_blend.json`):
+Input (`fixtures/input/jsons/ImageChops_blend.json`):
 ```json
 {
   "format_version": 2,
@@ -245,8 +250,8 @@ Input (`fixtures/input/ImageChops_blend.json`):
     "target": "blend"
   },
   "cases": [
-    {"id": "L_alpha05", "input": {"source": "reference_rgb", "size": [100, 100], "mode": "L"},  "input2": {"source": "reference_rgb", "size": [100, 100], "mode": "L"},  "params": {"alpha": 0.5}},
-    {"id": "RGB_alpha03","input": {"source": "reference_rgb", "size": [100, 100], "mode": "RGB"},"input2": {"source": "reference_rgb", "size": [100, 100], "mode": "RGB"},"params": {"alpha": 0.3}}
+    {"id": "L_alpha05",  "mode": "L",  "input": {"source": "reference_rgb", "size": [500, 500]}, "input2": {"source": "reference_rgb", "size": [500, 500]}, "params": {"alpha": 0.5}},
+    {"id": "RGB_alpha03","mode": "RGB","input": {"source": "reference_rgb", "size": [500, 500]}, "input2": {"source": "reference_rgb", "size": [500, 500]}, "params": {"alpha": 0.3}}
   ]
 }
 ```
@@ -278,7 +283,7 @@ Input:
 ```json
 {
   "cases": [
-    {"id": "neg_size", "input": {"source": "reference_rgb", "size": [100, 100], "mode": "L"}, "params": {"size": [-1, -1]}}
+    {"id": "neg_size", "mode": "L", "input": {"source": "reference_rgb", "size": [500, 500]}, "params": {"size": [-1, -1]}}
   ]
 }
 ```
@@ -295,20 +300,20 @@ Output:
 ## 6. Input Specification
 
 ```json
-// Default — from reference PNG
-{"source": "reference_rgb", "size": [100, 100], "mode": "L"}
+// Default — from reference PNG (mode comes from case-level "mode" field)
+{"source": "reference_rgb", "size": [500, 500]}
 
 // Constant color
-{"source": "constant", "size": [100, 100], "mode": "RGB", "color": 128}
+{"source": "constant", "size": [500, 500], "color": 128}
 
 // Exact bytes (for frombytes tests)
-{"source": "bytes", "size": [100, 100], "mode": "L", "bytes": "hex..."}
+{"source": "bytes", "size": [500, 500], "bytes": "hex..."}
 
 // No input (for module functions like ImageColor.getcolor)
 null
 ```
 
-`create_input(backend, spec)` handles all four cases. Identical for PIL and RSPIL.
+`create_input(backend, mode, spec)` — mode is passed separately from the case, input spec only describes source.
 
 ## 7. The Generic Engine
 
@@ -416,8 +421,11 @@ def _stat_to_dict(stat):
 ### 7.3 Assert method implementations (7 methods)
 
 ```python
+OUTPUTS_DIR = Path(__file__).parent / "fixtures" / "outputs"
+
 def _load_reference(path):
-    full = OUTPUT_DIR / path
+    """Reference paths are relative to fixtures/outputs/."""
+    full = OUTPUTS_DIR / path
     if path.endswith('.png'):
         return Image.open(str(full))
     return open(str(full), 'rb').read()
@@ -465,51 +473,64 @@ ASSERT = {
 # tests/test_parity.py
 import json, pytest
 from pathlib import Path
-from engine import CALL_STYLE, ASSERT, create_input, get_call_style, OUTPUT_DIR
+from engine import CALL_STYLE, ASSERT, create_input, get_call_style
 import pillow_rs as rspil
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+INPUT_DIR = FIXTURES_DIR / "input" / "jsons"
+OUTPUT_DIR = FIXTURES_DIR / "outputs" / "jsons"
 
 def _discover():
-    for fpath in sorted(FIXTURES_DIR.glob("*.json")):
+    for fpath in sorted(INPUT_DIR.glob("*.json")):
         yield pytest.param(fpath.name, id=fpath.stem)
 
 @pytest.mark.parametrize("fixture_file", _discover())
 def test_parity(fixture_file):
-    fx = json.loads((FIXTURES_DIR / fixture_file).read_text())
-    op = fx["operation"]
+    inp = json.loads((INPUT_DIR / fixture_file).read_text())
+    out = json.loads((OUTPUT_DIR / fixture_file).read_text())
+    op = inp["operation"]
     call_style = get_call_style(op["module"], op["target"])
 
-    for i, case in enumerate(fx["cases"]):
-        img = create_input(rspil, case.get("input"))
-        img2 = create_input(rspil, case.get("input2"))
+    # Build case lookup from output
+    out_cases = {c["id"]: c for c in out["cases"]}
+
+    for i, case in enumerate(inp["cases"]):
+        img = create_input(rspil, case["mode"], case.get("input"))
+        img2 = create_input(rspil, case["mode"], case.get("input2"))
         params = dict(case.get("params", {}))
+
+        assertion = out_cases[case["id"]]["assert"]
 
         try:
             result = CALL_STYLE[call_style](rspil, img, img2, op["target"], params)
         except Exception as e:
-            if case["assert"]["method"] == "error":
-                assert ASSERT["error"](case["assert"], e), f"[{i}] error mismatch"
+            if assertion["method"] == "error":
+                assert ASSERT["error"](assertion, e), f"[{case['id']}] error mismatch"
                 continue
             raise
 
-        assert ASSERT[case["assert"]["method"]](case["assert"], result), \
-            f"[{i}] {case['assert']['method']} mismatch"
+        assert ASSERT[assertion["method"]](assertion, result), \
+            f"[{case['id']}] {assertion['method']} mismatch"
 ```
 
-### 7.5 Fixture generator (~50 lines)
+### 7.5 Fixture generator (~45 lines)
 
 ```python
 # scripts/generate_fixtures.py
-import json, hashlib, sys
+import json, sys
 from pathlib import Path
 import PIL.Image, PIL.ImageDraw, PIL.ImageFilter, PIL.ImageChops
 import PIL.ImageOps, PIL.ImageEnhance, PIL.ImageColor, PIL.ImagePalette
 import PIL.ImageFont, PIL.ImageStat, PIL.ImageSequence
 
-# Same engine, but with PIL modules as the backend
 sys.path.insert(0, str(Path(__file__).parent.parent / "tests"))
 from engine import CALL_STYLE, get_call_style, create_input, _to_json_compat
+
+FIXTURES_DIR = Path(__file__).parent.parent / "tests" / "fixtures"
+INPUT_DIR = FIXTURES_DIR / "input" / "jsons"
+OUTPUT_JSONS_DIR = FIXTURES_DIR / "outputs" / "jsons"
+OUTPUT_IMAGES_DIR = FIXTURES_DIR / "outputs" / "images"
+OUTPUT_RAWS_DIR = FIXTURES_DIR / "outputs" / "raws"
 
 class PilBackend:
     Image = PIL.Image; ImageFilter = PIL.ImageFilter; ImageChops = PIL.ImageChops
@@ -517,71 +538,88 @@ class PilBackend:
     ImageColor = PIL.ImageColor; ImagePalette = PIL.ImagePalette
     ImageFont = PIL.ImageFont; ImageStat = PIL.ImageStat; ImageSequence = PIL.ImageSequence
 
-OUTPUT_DIR = Path(__file__).parent.parent / "tests" / "fixtures" / "output"
 pil = PilBackend()
 
-def generate(fixture_spec, fixture_path):
-    op = fixture_spec["operation"]
+def generate(input_path, output_path):
+    """Read input JSON, run PIL, write output JSON + reference files."""
+    inp = json.loads(input_path.read_text())
+    op = inp["operation"]
     call_style = get_call_style(op["module"], op["target"])
 
-    for case in fixture_spec["cases"]:
-        img = create_input(pil, case.get("input"))
-        img2 = create_input(pil, case.get("input2"))
+    out = {"format_version": 2, "operation": op, "cases": []}
+
+    for case in inp["cases"]:
+        img = create_input(pil, case["mode"], case.get("input"))
+        img2 = create_input(pil, case["mode"], case.get("input2"))
         params = dict(case.get("params", {}))
         result = CALL_STYLE[call_style](pil, img, img2, op["target"], params)
 
-        method = case["assert"]["method"]
-        if method == "image":
-            ref_path = OUTPUT_DIR / case["assert"]["reference"]
-            ref_path.parent.mkdir(parents=True, exist_ok=True)
-            result.save(str(ref_path))
-        elif method == "image_list":
-            for i, band in enumerate(result):
-                ref_path = OUTPUT_DIR / case["assert"]["references"][i]
-                ref_path.parent.mkdir(parents=True, exist_ok=True)
-                band.save(str(ref_path))
-        elif method in ("exact", "float"):
-            case["assert"]["value"] = result
-        elif method == "json":
-            case["assert"]["value"] = _to_json_compat(result)
-        elif method == "string":
-            case["assert"]["value"] = repr(result)
-        # error case: value stays as-is (exception type + message pattern)
+        stem = input_path.stem
+        cid = case["id"]
 
-    with open(fixture_path, 'w') as f:
-        json.dump(fixture_spec, f, indent=2)
+        if hasattr(result, 'tobytes') or hasattr(result, 'save'):
+            # Image result → save as PNG
+            ref = f"images/{stem}_{cid}.png"
+            (OUTPUT_IMAGES_DIR / f"{stem}_{cid}.png").parent.mkdir(parents=True, exist_ok=True)
+            result.save(str(OUTPUT_IMAGES_DIR / f"{stem}_{cid}.png"))
+            out["cases"].append({"id": cid, "assert": {"method": "image", "reference": ref}})
+        elif isinstance(result, (list, tuple)) and len(result) > 0 and hasattr(result[0], 'tobytes'):
+            # Image list → save each as PNG
+            refs = []
+            for j, band in enumerate(result):
+                ref = f"images/{stem}_{cid}_{j}.png"
+                (OUTPUT_IMAGES_DIR / f"{stem}_{cid}_{j}.png").parent.mkdir(parents=True, exist_ok=True)
+                band.save(str(OUTPUT_IMAGES_DIR / f"{stem}_{cid}_{j}.png"))
+                refs.append(ref)
+            out["cases"].append({"id": cid, "assert": {"method": "image_list", "references": refs}})
+        elif isinstance(result, (int, float, str, bool, list, dict, type(None))):
+            # Value result
+            out["cases"].append({"id": cid, "assert": {"method": "exact", "value": result}})
+
+    OUTPUT_JSONS_DIR.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(out, indent=2))
 ```
+
 
 ## 8. Directory Structure
 
 ```
 tests/
-├── test_reference.png
-├── test_parity.py              ← generic test runner (~25 lines)
-├── engine.py                   ← get_call_style + CALL_STYLE + ASSERT + create_input (~130 lines)
+├── test_reference.png               ← source image for input creation
+├── test_parity.py                   ← generic test runner (~25 lines)
+├── engine.py                        ← get_call_style + CALL_STYLE + ASSERT + create_input (~130 lines)
 ├── fixtures/
-│   ├── Image_resize.json       ← all modes + param variations for resize
-│   ├── ImageDraw_text.json     ← all modes + fill variations for text
-│   ├── ImageColor_getcolor.json
-│   ├── ...
-│   └── output/
-│       ├── images/
-│       │   ├── Image_resize_L_50x50.png
-│       │   ├── Image_resize_L_25x25.png
-│       │   ├── Image_resize_RGB_50x50.png
+│   ├── input/
+│   │   ├── jsons/                   ← hand-written test specs (one per operation)
+│   │   │   ├── Image_resize.json
+│   │   │   ├── ImageDraw_text.json
+│   │   │   ├── ImageColor_getcolor.json
+│   │   │   └── ...
+│   │   ├── images/                  ← source images (when source is "file")
+│   │   └── raws/                    ← exact input bytes (when source is "bytes")
+│   └── outputs/
+│       ├── jsons/                   ← PIL-generated expected results
+│       │   ├── Image_resize.json
+│       │   ├── ImageDraw_text.json
+│       │   ├── ImageColor_getcolor.json
 │       │   └── ...
-│       └── raw/
-│           └── Image_convert_F.bin
+│       ├── images/                  ← viewable reference PNGs
+│       │   ├── Image_resize_0.png
+│       │   ├── Image_resize_1.png
+│       │   └── ...
+│       └── raws/                    ← float/I-mode raw byte references
+│           └── Image_convert_F_0.bin
 
 scripts/
-└── generate_fixtures.py        ← fixture generator (~50 lines)
+└── generate_fixtures.py             ← fixture generator (~50 lines)
 ```
 
 ## 9. File Count Reduction
 
 | Aspect | Before | After |
 |--------|--------|-------|
-| Fixture files | ~670 JSON files (one per op+mode) | ~178 JSON files (one per op, array of mode/param cases) |
+| Input spec files | 0 (params buried in FIXTURE_META) | ~178 JSON (one per op, hand-written) |
+| Output spec files | ~670 JSON (one per op+mode, hex blobs) | ~178 JSON (one per op, machine-generated) |
 | Output images | Embedded as hex in JSON | ~500 viewable PNGs + ~5 .bin files |
 | Engine files | 5 files, ~1,500 lines | 2 files, ~180 lines |
 | Per-op branches | ~120 if/elif across backends | 0 (data-driven lookup) |
