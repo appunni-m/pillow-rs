@@ -430,6 +430,8 @@ CALL_STYLE = {
 # ── Assertion methods ───────────────────────────────────────────
 
 OUTPUTS_DIR = Path(__file__).parent / "fixtures" / "outputs"
+# May be overridden at test time by test_parity.py for fixtures_2 support.
+# _load_reference reads OUTPUTS_DIR at call time, so overriding works correctly.
 
 def _load_reference(path):
     """Reference paths are relative to fixtures/outputs/."""

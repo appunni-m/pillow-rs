@@ -774,6 +774,580 @@ fn map_pixels_to_palette(
     indices
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── Octree quantization (FASTOCTREE) — PIL's algorithm for RGBA images ──
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// PIL's Quantize.FASTOCTREE (method=2) uses a multi-dimensional color cube
+// approach. Two cubes are created at different bit depths:
+//   - Fine cube:   higher resolution  (e.g., 4×4×4×0 = 4096 buckets for RGB)
+//   - Coarse cube: lower resolution   (e.g., 2×2×2×0 = 64 buckets for RGB)
+//
+// With alpha, a 4th dimension is added:
+//   - Fine:   3×4×3×3 = 8192 buckets
+//   - Coarse: 2×2×2×2 = 256 buckets
+//
+// Algorithm:
+//   1. Populate fine cube from pixel data
+//   2. Derive coarse cube from fine cube (resolution reduction)
+//   3. Count used coarse buckets, limit to n_colors
+//   4. Sort fine buckets by popularity, take remaining slots
+//   5. Subtract fine colors from coarse to avoid double-counting
+//   6. Build lookup cube (coarse resolution first, then fine overlay)
+//   7. Map each pixel to its palette index via lookup cube
+
+/// Bit depths for fine and coarse cubes (R, G, B, A) — RGB mode (no alpha).
+const CUBE_LEVELS_RGB: [u32; 8] = [4, 4, 4, 0, 2, 2, 2, 0];
+/// Bit depths for fine and coarse cubes — RGBA mode (with alpha).
+const CUBE_LEVELS_RGBA: [u32; 8] = [3, 4, 3, 3, 2, 2, 2, 2];
+
+/// A color accumulator bucket: sum of pixel values + count.
+#[derive(Debug, Clone, Default)]
+struct ColorBucket {
+    count: u32,
+    r: u64,
+    g: u64,
+    b: u64,
+    a: u64,
+}
+
+/// Multi-dimensional color cube indexed by reduced-precision channel values.
+///
+/// The index is computed as a packed bitfield:
+///   `index = (r << r_offset) | (g << g_offset) | (b << b_offset) | (a << a_offset)`
+/// where each channel is reduced to `bits` bits (right-shifted by `8 - bits`).
+#[derive(Debug, Clone)]
+struct ColorCube {
+    r_bits: u32,
+    g_bits: u32,
+    b_bits: u32,
+    a_bits: u32,
+    r_shift: u32, // 8 - r_bits
+    g_shift: u32,
+    b_shift: u32,
+    a_shift: u32,
+    r_offset: u32,
+    g_offset: u32,
+    b_offset: u32,
+    a_offset: u32,
+    size: usize,
+    buckets: Vec<ColorBucket>,
+}
+
+impl ColorCube {
+    fn new(r_bits: u32, g_bits: u32, b_bits: u32, a_bits: u32) -> Self {
+        let r_offset = 0;
+        let g_offset = r_bits;
+        let b_offset = r_bits + g_bits;
+        let a_offset = r_bits + g_bits + b_bits;
+        let total_bits = r_bits + g_bits + b_bits + a_bits;
+        let size = 1usize << total_bits;
+
+        ColorCube {
+            r_bits,
+            g_bits,
+            b_bits,
+            a_bits,
+            r_shift: 8u32.saturating_sub(r_bits),
+            g_shift: 8u32.saturating_sub(g_bits),
+            b_shift: 8u32.saturating_sub(b_bits),
+            a_shift: 8u32.saturating_sub(a_bits),
+            r_offset,
+            g_offset,
+            b_offset,
+            a_offset,
+            size,
+            buckets: vec![ColorBucket::default(); size],
+        }
+    }
+
+    /// Compute the bucket index for a pixel with channel values r,g,b,a.
+    #[inline]
+    fn offset(&self, r: u8, g: u8, b: u8, a: u8) -> usize {
+        let ri = (r >> self.r_shift) as usize;
+        let gi = (g >> self.g_shift) as usize;
+        let bi = (b >> self.b_shift) as usize;
+        let ai = (a >> self.a_shift) as usize;
+        (ri << self.r_offset)
+            | (gi << self.g_offset)
+            | (bi << self.b_offset)
+            | (ai << self.a_offset)
+    }
+
+    /// Add a pixel to the cube.
+    #[inline]
+    fn add_color(&mut self, r: u8, g: u8, b: u8, a: u8) {
+        let idx = self.offset(r, g, b, a);
+        let bucket = &mut self.buckets[idx];
+        bucket.count += 1;
+        bucket.r += r as u64;
+        bucket.g += g as u64;
+        bucket.b += b as u64;
+        bucket.a += a as u64;
+    }
+
+    /// Count non-empty buckets.
+    fn count_used(&self) -> u32 {
+        self.buckets.iter().filter(|b| b.count > 0).count() as u32
+    }
+}
+
+/// Copy fine-bucket values into a coarser cube (resolution reduction).
+///
+/// Iterates over all fine-bucket positions; for each non-empty bucket, maps
+/// its channel values to the coarser resolution and accumulates into the
+/// destination cube.
+fn copy_fine_to_coarse(fine: &ColorCube, coarse: &mut ColorCube) {
+    // Iterate over all fine-bucket positions
+    for fi in 0..fine.size {
+        let fb = &fine.buckets[fi];
+        if fb.count == 0 {
+            continue;
+        }
+        // Reconstruct fine-resolution channel indices from the flat index
+        let fr = (fi >> fine.r_offset) & ((1usize << fine.r_bits) - 1);
+        let fg = (fi >> fine.g_offset) & ((1usize << fine.g_bits) - 1);
+        let fb_val = (fi >> fine.b_offset) & ((1usize << fine.b_bits) - 1);
+        let fa = (fi >> fine.a_offset) & ((1usize << fine.a_bits) - 1);
+
+        // Scale down to coarse resolution
+        let cr = if fine.r_bits > coarse.r_bits {
+            fr >> (fine.r_bits - coarse.r_bits)
+        } else {
+            fr
+        };
+        let cg = if fine.g_bits > coarse.g_bits {
+            fg >> (fine.g_bits - coarse.g_bits)
+        } else {
+            fg
+        };
+        let cb = if fine.b_bits > coarse.b_bits {
+            fb_val >> (fine.b_bits - coarse.b_bits)
+        } else {
+            fb_val
+        };
+        let ca = if fine.a_bits > coarse.a_bits {
+            fa >> (fine.a_bits - coarse.a_bits)
+        } else {
+            fa
+        };
+
+        let ci = (cr << coarse.r_offset)
+            | (cg << coarse.g_offset)
+            | (cb << coarse.b_offset)
+            | (ca << coarse.a_offset);
+
+        let dst = &mut coarse.buckets[ci];
+        if dst.count == 0 {
+            *dst = fb.clone();
+        } else {
+            dst.count += fb.count;
+            dst.r += fb.r;
+            dst.g += fb.g;
+            dst.b += fb.b;
+            dst.a += fb.a;
+        }
+    }
+}
+
+/// Create a sorted palette (bucket references) from non-empty buckets,
+/// sorted by count descending.
+fn create_sorted_palette(cube: &ColorCube) -> Vec<&ColorBucket> {
+    let mut result: Vec<&ColorBucket> = cube.buckets.iter().filter(|b| b.count > 0).collect();
+    result.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.r.cmp(&b.r)));
+    result
+}
+
+/// Subtract the pixel values in `palette` entries from the coarse cube.
+/// Returns the updated count of used coarse buckets after subtraction.
+fn subtract_buckets_from_cube(palette: &[&ColorBucket], coarse: &mut ColorCube) -> u32 {
+    for pb in palette {
+        // Average the bucket to get a representative pixel
+        let avg_r = (pb.r / pb.count as u64) as u8;
+        let avg_g = (pb.g / pb.count as u64) as u8;
+        let avg_b = (pb.b / pb.count as u64) as u8;
+        let avg_a = (pb.a / pb.count as u64) as u8;
+
+        let ci = coarse.offset(avg_r, avg_g, avg_b, avg_a);
+        let dst = &mut coarse.buckets[ci];
+        if dst.count >= pb.count {
+            dst.count -= pb.count;
+            dst.r = dst.r.saturating_sub(pb.r);
+            dst.g = dst.g.saturating_sub(pb.g);
+            dst.b = dst.b.saturating_sub(pb.b);
+            dst.a = dst.a.saturating_sub(pb.a);
+        } else {
+            dst.count = 0;
+            dst.r = 0;
+            dst.g = 0;
+            dst.b = 0;
+            dst.a = 0;
+        }
+    }
+    coarse.count_used()
+}
+
+/// Build a lookup cube and populate it with palette indices.
+struct LookupCube {
+    buckets: Vec<u8>, // stores palette index per lookup position
+    r_shift: u32,
+    g_shift: u32,
+    b_shift: u32,
+    a_shift: u32,
+    r_bits: u32,
+    g_bits: u32,
+    b_bits: u32,
+    a_bits: u32,
+    r_offset: u32,
+    g_offset: u32,
+    b_offset: u32,
+    a_offset: u32,
+}
+
+impl LookupCube {
+    fn new(r_bits: u32, g_bits: u32, b_bits: u32, a_bits: u32) -> Self {
+        let total_bits = r_bits + g_bits + b_bits + a_bits;
+        let size = 1usize << total_bits;
+        LookupCube {
+            buckets: vec![0u8; size],
+            r_shift: 8u32.saturating_sub(r_bits),
+            g_shift: 8u32.saturating_sub(g_bits),
+            b_shift: 8u32.saturating_sub(b_bits),
+            a_shift: 8u32.saturating_sub(a_bits),
+            r_bits,
+            g_bits,
+            b_bits,
+            a_bits,
+            r_offset: 0,
+            g_offset: r_bits,
+            b_offset: r_bits + g_bits,
+            a_offset: r_bits + g_bits + b_bits,
+        }
+    }
+
+    #[inline]
+    fn lookup(&self, r: u8, g: u8, b: u8, a: u8) -> u8 {
+        let ri = (r >> self.r_shift) as usize;
+        let gi = (g >> self.g_shift) as usize;
+        let bi = (b >> self.b_shift) as usize;
+        let ai = (a >> self.a_shift) as usize;
+        let idx = (ri << self.r_offset)
+            | (gi << self.g_offset)
+            | (bi << self.b_offset)
+            | (ai << self.a_offset);
+        self.buckets[idx]
+    }
+
+    #[inline]
+    fn set(&mut self, idx: usize, val: u8) {
+        self.buckets[idx] = val;
+    }
+}
+
+/// Main octree quantization function, matching PIL's Quantize.FASTOCTREE.
+///
+/// `pixels` is flat RGBA byte data (4 bytes per pixel).
+/// Returns (palette_indices, palette_bytes_rgba).
+fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<u8>, Vec<u8>) {
+    let has_alpha = true;
+    let levels = if has_alpha {
+        CUBE_LEVELS_RGBA
+    } else {
+        CUBE_LEVELS_RGB
+    };
+
+    let fine_bits = [levels[0], levels[1], levels[2], levels[3]];
+    let coarse_bits = [levels[4], levels[5], levels[6], levels[7]];
+
+    let mut fine_cube = ColorCube::new(fine_bits[0], fine_bits[1], fine_bits[2], fine_bits[3]);
+    // Coarse cube for counting
+    let coarse_cube_src = ColorCube::new(coarse_bits[0], coarse_bits[1], coarse_bits[2], coarse_bits[3]);
+
+    let n = (w * h) as usize;
+
+    // Step 1: Add all pixels to fine cube
+    for i in 0..n {
+        let base = i * 4;
+        let r = pixels[base];
+        let g = pixels[base + 1];
+        let b = pixels[base + 2];
+        let a = pixels[base + 3];
+        fine_cube.add_color(r, g, b, a);
+    }
+
+    // Step 2: Copy fine to coarse
+    let mut coarse = coarse_cube_src;
+    copy_fine_to_coarse(&fine_cube, &mut coarse);
+
+    // Step 3: Count used coarse buckets, limit to n_colors
+    let n_coarse_colors = coarse.count_used() as usize;
+    let n_coarse = n_coarse_colors.min(n_colors);
+    let n_fine = n_colors.saturating_sub(n_coarse);
+
+    // Step 4: Create sorted fine palette, take top entries
+    let sorted_fine = create_sorted_palette(&fine_cube);
+    let n_fine_actual = n_fine.min(sorted_fine.len());
+
+    // Step 5: Subtract fine colors from coarse
+    let fine_palette = &sorted_fine[..n_fine_actual];
+    if !fine_palette.is_empty() {
+        // First pass: subtract
+        subtract_buckets_from_cube(fine_palette, &mut coarse);
+        // Iteratively adjust: some coarse buckets may have become empty,
+        // re-count and adjust if needed
+        let mut coarse_used = coarse.count_used() as usize;
+        let mut fine_entries = n_fine_actual;
+        while coarse_used + fine_entries > n_colors && fine_entries > 0 {
+            fine_entries -= 1;
+            // Re-subtract with fewer fine entries
+            let fine_sub = &sorted_fine[..fine_entries];
+            // Re-create coarse cube
+            let mut coarse2 = ColorCube::new(coarse_bits[0], coarse_bits[1], coarse_bits[2], coarse_bits[3]);
+            copy_fine_to_coarse(&fine_cube, &mut coarse2);
+            subtract_buckets_from_cube(fine_sub, &mut coarse2);
+            coarse_used = coarse2.count_used() as usize;
+            coarse = coarse2;
+        }
+        // Determine final counts
+        let n_coarse_final = coarse_used;
+        let n_fine_final = fine_entries;
+        let total_colors = n_coarse_final + n_fine_final;
+
+        if total_colors == 0 {
+            // Fallback: all colors empty — use fine palette directly
+            let mut out_indices = vec![0u8; n];
+            let mut palette_rgba = vec![0u8; n_colors * 4];
+            for ci in 0..n_colors.min(n_fine_actual) {
+                let b = fine_palette[ci];
+                palette_rgba[ci * 4] = (b.r / b.count as u64) as u8;
+                palette_rgba[ci * 4 + 1] = (b.g / b.count as u64) as u8;
+                palette_rgba[ci * 4 + 2] = (b.b / b.count as u64) as u8;
+                palette_rgba[ci * 4 + 3] = (b.a / b.count as u64) as u8;
+            }
+            // Pad remaining
+            for ci in n_fine_actual..n_colors {
+                let src = if n_fine_actual > 0 { n_fine_actual - 1 } else { 0 };
+                let src_pal = [
+                    palette_rgba[src * 4],
+                    palette_rgba[src * 4 + 1],
+                    palette_rgba[src * 4 + 2],
+                    palette_rgba[src * 4 + 3],
+                ];
+                palette_rgba[ci * 4..ci * 4 + 4].copy_from_slice(&src_pal);
+            }
+            // Map pixels to nearest by brute force
+            for i in 0..n {
+                let base = i * 4;
+                let r = pixels[base] as i32;
+                let g = pixels[base + 1] as i32;
+                let b = pixels[base + 2] as i32;
+                let pa_val = pixels[base + 3] as i32;
+                let mut best_dist = i32::MAX;
+                let mut best_idx = 0u8;
+                for ci in 0..n_colors.min(n_fine_actual.max(1)) {
+                    let pr = palette_rgba[ci * 4] as i32;
+                    let pg = palette_rgba[ci * 4 + 1] as i32;
+                    let pb = palette_rgba[ci * 4 + 2] as i32;
+                    let ppa = palette_rgba[ci * 4 + 3] as i32;
+                    let dr = r - pr;
+                    let dg = g - pg;
+                    let db = b - pb;
+                    let da = pa_val - ppa;
+                    let dist = dr * dr + dg * dg + db * db + da * da;
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_idx = ci as u8;
+                    }
+                }
+                out_indices[i] = best_idx;
+            }
+            return (out_indices, palette_rgba);
+        }
+
+        // Build coarse lookup cube
+        let coarse_palette = create_sorted_palette(&coarse);
+        let n_coarse_final = coarse_palette.len().min(n_coarse_final);
+
+        // Combined palette: coarse entries first, then fine entries
+        let mut combined_palette: Vec<[u8; 4]> = Vec::with_capacity(n_colors);
+        let mut lookup = LookupCube::new(coarse_bits[0], coarse_bits[1], coarse_bits[2], coarse_bits[3]);
+
+        // Insert coarse palette entries into lookup cube
+        for (pi, bucket) in coarse_palette.iter().enumerate().take(n_coarse_final) {
+            let avg_r = (bucket.r / bucket.count as u64) as u8;
+            let avg_g = (bucket.g / bucket.count as u64) as u8;
+            let avg_b = (bucket.b / bucket.count as u64) as u8;
+            let avg_a = (bucket.a / bucket.count as u64) as u8;
+            combined_palette.push([avg_r, avg_g, avg_b, avg_a]);
+
+            // Set this index for all fine-resolution positions that map to this coarse bucket
+            // Walk fine-resolution positions and set those that map to this coarse bucket
+            let ci = coarse.offset(avg_r, avg_g, avg_b, avg_a);
+            // Find all fine positions that map to this coarse bucket index
+            let cr_offset = coarse_bits[0]; // r bits in coarse
+            let cg_offset = coarse_bits[0] + coarse_bits[1];
+            let cb_offset = coarse_bits[0] + coarse_bits[1] + coarse_bits[2];
+            let ca_offset = coarse_bits[0] + coarse_bits[1] + coarse_bits[2] + coarse_bits[3];
+
+            // Expand coarse index to all fine sub-positions
+            // For each channel, the fine sub-range is:
+            //   fine_start = coarse_val << (fine_bits - coarse_bits)
+            //   fine_end = ((coarse_val + 1) << (fine_bits - coarse_bits)) - 1
+            let cr = ci & ((1usize << cr_offset) - 1);
+            let cg = (ci >> cr_offset) & ((1usize << (cg_offset - cr_offset)) - 1);
+            let cb_val = (ci >> cg_offset) & ((1usize << (cb_offset - cg_offset)) - 1);
+            let ca = if ca_offset > cb_offset {
+                ci >> cb_offset
+            } else {
+                0
+            };
+
+            let fine_r_start = cr << (fine_bits[0] - coarse_bits[0]);
+            let fine_r_end = ((cr + 1) << (fine_bits[0] - coarse_bits[0])) - 1;
+            let fine_g_start = cg << (fine_bits[1] - coarse_bits[1]);
+            let fine_g_end = ((cg + 1) << (fine_bits[1] - coarse_bits[1])) - 1;
+            let fine_b_start = cb_val << (fine_bits[2] - coarse_bits[2]);
+            let fine_b_end = ((cb_val + 1) << (fine_bits[2] - coarse_bits[2])) - 1;
+            let fine_a_start = ca << (fine_bits[3] - coarse_bits[3]);
+            let fine_a_end = ((ca + 1) << (fine_bits[3] - coarse_bits[3])) - 1;
+
+            for fri in fine_r_start..=fine_r_end {
+                for fgi in fine_g_start..=fine_g_end {
+                    for fbi in fine_b_start..=fine_b_end {
+                        for fai in fine_a_start..=fine_a_end {
+                            let fidx = (fri << lookup.r_offset)
+                                | (fgi << lookup.g_offset)
+                                | (fbi << lookup.b_offset)
+                                | (fai << lookup.a_offset);
+                            lookup.set(fidx, pi as u8);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Insert fine palette entries (overlay on lookup cube)
+        for (fi, bucket) in fine_palette.iter().enumerate().take(n_fine_final) {
+            let avg_r = (bucket.r / bucket.count as u64) as u8;
+            let avg_g = (bucket.g / bucket.count as u64) as u8;
+            let avg_b = (bucket.b / bucket.count as u64) as u8;
+            let avg_a = (bucket.a / bucket.count as u64) as u8;
+            combined_palette.push([avg_r, avg_g, avg_b, avg_a]);
+
+            // Set this fine palette entry at its exact fine-resolution position
+            let fine_idx = fine_cube.offset(avg_r, avg_g, avg_b, avg_a);
+            // Map back to lookup cube at coarse resolution
+            let fr = (fine_idx >> fine_cube.r_offset) & ((1usize << fine_cube.r_bits) - 1);
+            let fg = (fine_idx >> fine_cube.g_offset) & ((1usize << fine_cube.g_bits) - 1);
+            let fb = (fine_idx >> fine_cube.b_offset) & ((1usize << fine_cube.b_bits) - 1);
+            let fa = (fine_idx >> fine_cube.a_offset) & ((1usize << fine_cube.a_bits) - 1);
+
+            // The lookup cube uses coarse-resolution bits for the non-fine channels,
+            // but for fine entries we set the exact position at FULL fine resolution
+            let lookup_idx = (fr << lookup.r_offset)
+                | (fg << lookup.g_offset)
+                | (fb << lookup.b_offset)
+                | (fa << lookup.a_offset);
+            lookup.set(lookup_idx, (n_coarse_final + fi) as u8);
+        }
+
+        // Pad palette to n_colors
+        while combined_palette.len() < n_colors {
+            let last = combined_palette.last().copied().unwrap_or([0u8; 4]);
+            combined_palette.push(last);
+        }
+
+        // Step 7: Map pixels
+        let mut out_indices = Vec::with_capacity(n);
+        for i in 0..n {
+            let base = i * 4;
+            let idx = lookup.lookup(pixels[base], pixels[base + 1], pixels[base + 2], pixels[base + 3]);
+            out_indices.push(idx);
+        }
+
+        let palette_bytes: Vec<u8> = combined_palette
+            .iter()
+            .flat_map(|c| c.to_vec())
+            .collect();
+
+        return (out_indices, palette_bytes);
+    }
+
+    // Fallback: no fine colors needed. Use only coarse palette.
+    let sorted_coarse = create_sorted_palette(&coarse);
+    let n_coarse_used = n_colors.min(sorted_coarse.len());
+
+    let mut combined_palette = Vec::with_capacity(n_colors);
+    let mut lookup = LookupCube::new(fine_bits[0], fine_bits[1], fine_bits[2], fine_bits[3]);
+
+    for (pi, bucket) in sorted_coarse.iter().enumerate().take(n_coarse_used) {
+        let avg_r = (bucket.r / bucket.count as u64) as u8;
+        let avg_g = (bucket.g / bucket.count as u64) as u8;
+        let avg_b = (bucket.b / bucket.count as u64) as u8;
+        let avg_a = (bucket.a / bucket.count as u64) as u8;
+        combined_palette.push([avg_r, avg_g, avg_b, avg_a]);
+
+        // Set all fine positions that map to this coarse bucket
+        let ci = coarse.offset(avg_r, avg_g, avg_b, avg_a);
+        let cr = ci & ((1usize << coarse.r_bits) - 1);
+        let cg = (ci >> coarse.r_bits) & ((1usize << coarse.g_bits) - 1);
+        let cb_val = (ci >> (coarse.r_bits + coarse.g_bits)) & ((1usize << coarse.b_bits) - 1);
+        let ca_val = if coarse.a_bits > 0 {
+            ci >> (coarse.r_bits + coarse.g_bits + coarse.b_bits)
+        } else {
+            0
+        };
+
+        let fr_start = cr << (fine_bits[0] - coarse_bits[0]);
+        let fr_end = ((cr + 1) << (fine_bits[0] - coarse_bits[0])) - 1;
+        let fg_start = cg << (fine_bits[1] - coarse_bits[1]);
+        let fg_end = ((cg + 1) << (fine_bits[1] - coarse_bits[1])) - 1;
+        let fb_start = cb_val << (fine_bits[2] - coarse_bits[2]);
+        let fb_end = ((cb_val + 1) << (fine_bits[2] - coarse_bits[2])) - 1;
+        let fa_start = ca_val << (fine_bits[3] - coarse_bits[3]);
+        let fa_end = ((ca_val + 1) << (fine_bits[3] - coarse_bits[3])) - 1;
+
+        for fri in fr_start..=fr_end {
+            for fgi in fg_start..=fg_end {
+                for fbi in fb_start..=fb_end {
+                    for fai in fa_start..=fa_end {
+                        let fidx = (fri << lookup.r_offset)
+                            | (fgi << lookup.g_offset)
+                            | (fbi << lookup.b_offset)
+                            | (fai << lookup.a_offset);
+                        lookup.set(fidx, pi as u8);
+                    }
+                }
+            }
+        }
+    }
+
+    // Pad palette
+    while combined_palette.len() < n_colors {
+        let last = combined_palette.last().copied().unwrap_or([0u8; 4]);
+        combined_palette.push(last);
+    }
+
+    // Map pixels
+    let mut out_indices = Vec::with_capacity(n);
+    for i in 0..n {
+        let base = i * 4;
+        let idx = lookup.lookup(pixels[base], pixels[base + 1], pixels[base + 2], pixels[base + 3]);
+        out_indices.push(idx);
+    }
+
+    let palette_bytes: Vec<u8> = combined_palette
+        .iter()
+        .flat_map(|c| c.to_vec())
+        .collect();
+
+    (out_indices, palette_bytes)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── Image.quantize method ──
+// ═══════════════════════════════════════════════════════════════════════════════
+
 // ── WEB palette (PIL's default fixed palette for convert("P")) ──
 //
 // PIL's convert("P") with default palette=Palette.WEB uses a fixed 226-color palette:
@@ -1062,6 +1636,9 @@ fn find_nearest_web(r: u8, g: u8, b: u8) -> (u8, u8, u8, u8) {
 impl Image {
     /// Reduce the number of colors in the image using median cut.
     /// PIL-compatible: `quantize(colors=256, method=None, kmeans=0, palette=None, dither=1)`.
+    ///
+    /// For RGBA images, PIL uses FASTOCTREE (method=2) by default instead of
+    /// MEDIANCUT. We dispatch accordingly here.
     pub fn quantize(
         &self,
         colors: u32,
@@ -1071,15 +1648,34 @@ impl Image {
     ) -> Result<Image, PilError> {
         let n_colors = colors.clamp(2, 256) as usize;
         let img = self.materialize()?;
-        let rgb = img.to_rgb8();
-        let (w, h) = rgb.dimensions();
-        let rgb_raw = rgb.into_raw();
-        let (indices, palette) = median_cut_quantize_rgb(&rgb_raw, n_colors);
+        let (w, h) = (img.width(), img.height());
+
+        // PIL uses FASTOCTREE for RGBA mode (method=2 by default for RGBA).
+        let is_rgba = matches!(img.color(), image::ColorType::Rgba8)
+            || self.explicit_mode().map_or(false, |m| m == "RGBA");
+
+        let (indices, palette_bytes) = if is_rgba {
+            // Use FASTOCTREE (octree) algorithm for RGBA
+            let rgba = img.to_rgba8();
+            let rgba_raw = rgba.into_raw();
+            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors);
+            // Octree returns RGBA palette; PIL's P mode stores RGB palette
+            // (alpha is preserved in the palette but output mode is P)
+            let pal_rgb: Vec<u8> = pal.chunks(4).flat_map(|c| [c[0], c[1], c[2]]).collect();
+            (idx, pal_rgb)
+        } else {
+            // Standard median cut for RGB and other modes
+            let rgb = img.to_rgb8();
+            let rgb_raw = rgb.into_raw();
+            let (idx, pal) = median_cut_quantize_rgb(&rgb_raw, n_colors);
+            let pal_bytes: Vec<u8> = pal.iter().flat_map(|c| [c[0], c[1], c[2]]).collect();
+            (idx, pal_bytes)
+        };
+
         let mut out = image::GrayImage::new(w, h);
         for (i, pixel) in out.pixels_mut().enumerate() {
             pixel[0] = indices.get(i).copied().unwrap_or(0);
         }
-        let palette_bytes: Vec<u8> = palette.iter().flat_map(|c| [c[0], c[1], c[2]]).collect();
         Ok(Image::Pipeline {
             source: Arc::new(Image::Loaded(
                 DynamicImage::ImageLuma8(out),

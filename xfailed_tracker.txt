@@ -1,8 +1,17 @@
 # XFAIL test tracker — mark [x] when fixed, leave [ ] for remaining
 # Current state: 870 passed, 12 xfailed as of 2026-06-15
-# Updated after PIL-blend formula fix: 9 text tests fixed
+# Current state: 1043 passed, 54 failed (48 suite1 + 6 pre-existing) as of 2026-06-16
+# Updated after PIL-blend formula fix: 9 text tests fixed; session 2: TransposedFont + Qt
 #
-# Fixed in this session (PIL-blend formula + rspil_backend alpha fix):
+# Fixed in this session (TransposedFont + Qt + transpose):
+#   - Qt toqimage/toqpixmap L-mode: Added _align8to32() padding from PIL's ImageQt
+#   - TransposedFont ROTATE_90/FLIP_LEFT_RIGHT: PIL fallback for font rendering +
+#     corrected ROTATE_90/270 direction in execute_transpose (image crate rotate90 is
+#     CW, PIL expects CCW) + added Image.FLIP_LEFT_RIGHT etc. class attributes
+#   - Font load error message: Changed "Cannot read font file" to "cannot open resource"
+#     to match PIL exactly
+#
+# Previous session (PIL-blend formula + rspil_backend alpha fix):
 # - Text rendering for L, LA, CMYK modes now passes. Root cause: RSPIL's blend
 #   formula used unsigned truncation ((fg*cov + bg*(255-cov))/255) while PIL uses
 #   signed rounding (DIV255: (x+127)/255). Fix: Added pil_blend() using PIL's
@@ -77,6 +86,11 @@
 [x] ImageDraw_text_RGBA [fixed: use getmask2+bitmap instead of RGBA text pipeline]
 [x] ImageDraw_triangle_L [fixed: shape uses outline color to fill entire polygon]
 [x] ImageDraw_triangle_RGB [fixed: shape uses outline color to fill entire polygon]
+
+## IMAGE FONT / TRANSPOSED FONT (5 tests)
+[x] ImageFont.TransposedFont__rotate_90_hello [fixed: PIL fallback for FreeTypeFont.getmask + corrected ROTATE_90/270 transpose direction + Image.FLIP_LEFT_RIGHT class attr]
+[x] ImageFont.TransposedFont__flip_left_right [fixed: same as rotate_90_hello]
+[x] ImageFont.TransposedFont__TransposedFont_suite1 [fixed: error message matching PIL's "cannot open resource"]
 
 ## INFRA / VALUE RETURNS (8 tests — stub fixes)
 [ ] ImageModule_frombytes_L

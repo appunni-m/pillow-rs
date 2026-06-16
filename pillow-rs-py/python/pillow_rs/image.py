@@ -30,6 +30,14 @@ class Image:
     LANCZOS = Resampling.LANCZOS
     Resampling = Resampling
     Transpose = Transpose
+    # Transpose constants matching PIL.Image.<name> access pattern
+    FLIP_LEFT_RIGHT = Transpose.FLIP_LEFT_RIGHT
+    FLIP_TOP_BOTTOM = Transpose.FLIP_TOP_BOTTOM
+    ROTATE_90 = Transpose.ROTATE_90
+    ROTATE_180 = Transpose.ROTATE_180
+    ROTATE_270 = Transpose.ROTATE_270
+    TRANSPOSE = Transpose.TRANSPOSE
+    TRANSVERSE = Transpose.TRANSVERSE
 
     def __init__(self, rust_image=None):
         if RustImage is None:
@@ -482,6 +490,31 @@ class Image:
             "toqimage/toqpixmap requires PyQt5, PyQt6, PySide2, or PySide6"
         )
 
+    @staticmethod
+    def _align8to32(data: bytes, width: int, mode: str) -> bytes:
+        """Convert each scanline from 8-bit to 32-bit aligned (PIL compatibility).
+
+        PIL's ImageQt._toqclass_helper calls align8to32() to pad each row to a
+        4-byte boundary, which is what QImage expects internally. Without this
+        padding, QImage(buffer, w, h, fmt) will overread the buffer and pick up
+        garbage padding bytes.
+        """
+        bits_per_pixel = {"1": 1, "L": 8, "P": 8}.get(mode, 8)
+        bits_per_line = bits_per_pixel * width
+        full_bytes_per_line, remaining_bits = divmod(bits_per_line, 8)
+        bytes_per_line = full_bytes_per_line + (1 if remaining_bits else 0)
+        extra_padding = -bytes_per_line % 4
+        if not extra_padding:
+            return data
+        rows = len(data) // bytes_per_line
+        padded = bytearray(rows * (bytes_per_line + extra_padding))
+        for i in range(rows):
+            src_start = i * bytes_per_line
+            dst_start = i * (bytes_per_line + extra_padding)
+            padded[dst_start:dst_start + bytes_per_line] = data[src_start:src_start + bytes_per_line]
+            # Remaining bytes are already zero from bytearray initialization
+        return bytes(padded)
+
     def toqimage(self):
         """Convert to Qt QImage. Matches PIL's ImageQt._toqclass_helper format mapping."""
         QImage, qRgb, _QPixmap = self._qt_imports()
@@ -492,13 +525,16 @@ class Image:
 
         if mode == "1":
             raw_data = self.tobytes("raw", "1")
+            raw_data = self._align8to32(raw_data, w, "1")
             fmt = QImage.Format_Mono
         elif mode == "L":
             raw_data = self.tobytes("raw", "L")
+            raw_data = self._align8to32(raw_data, w, "L")
             fmt = QImage.Format_Indexed8
             colortable = [qRgb(i, i, i) for i in range(256)]
         elif mode == "P":
             raw_data = self.tobytes("raw", "P")
+            raw_data = self._align8to32(raw_data, w, "P")
             fmt = QImage.Format_Indexed8
             palette = self.getpalette()
             if palette:

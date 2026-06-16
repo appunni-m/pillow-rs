@@ -178,11 +178,16 @@ impl Image {
                 // PIL: any non-zero value in mode "1" is white (255)
                 image::Luma([if color.0 > 0 { 255 } else { 0 }]),
             )),
-            // P-mode: stored as Paletted with default grayscale palette
+            // P-mode: PIL creates a palette where index 0 maps to the given color,
+            // with all other entries zero (not the web palette).
             "P" => {
+                let mut pal = vec![0u8; 768];
+                pal[0] = color.0;
+                pal[1] = color.1;
+                pal[2] = color.2;
                 return Ok(Image::Paletted(PalettedData {
-                    indices: image::GrayImage::from_pixel(width, height, image::Luma([color.0])),
-                    palette: default_palette(),
+                    indices: image::GrayImage::from_pixel(width, height, image::Luma([0u8])),
+                    palette: pal,
                 }));
             }
             "CMYK" => DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
@@ -1055,9 +1060,28 @@ impl Image {
     /// pixel colors. Non-Paletted images are materialized normally.
     /// This is for ops (paste, composite, filter, etc.) — NOT for save/tobytes.
     pub fn materialize_for_ops(&self) -> Result<DynamicImage, PilError> {
-        self.paletted_to_rgb()
-            .map(Ok)
-            .unwrap_or_else(|| self.materialize())
+        // Fast path: Paletted images have direct palette→RGB conversion
+        if let Some(rgb) = self.paletted_to_rgb() {
+            return Ok(rgb);
+        }
+        // Pipeline-based P-mode images need palette→RGB conversion
+        if matches!(self, Image::Pipeline { .. }) && self.explicit_mode() == Some("P") {
+            let img = self.materialize()?; // Luma8 indices
+            if let Some(palette) = self.palette() {
+                let (w, h) = img.dimensions();
+                let indices = img.to_luma8();
+                let rgb = image::RgbImage::from_fn(w, h, |x, y| {
+                    let idx = indices.get_pixel(x, y)[0] as usize;
+                    let p = idx * 3;
+                    let r = palette.get(p).copied().unwrap_or(0);
+                    let g = palette.get(p + 1).copied().unwrap_or(0);
+                    let b = palette.get(p + 2).copied().unwrap_or(0);
+                    image::Rgb([r, g, b])
+                });
+                return Ok(DynamicImage::ImageRgb8(rgb));
+            }
+        }
+        self.materialize()
     }
 
     /// Convert Paletted image to RGB for rendering/saving. Returns None for non-Paletted.

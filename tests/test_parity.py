@@ -1,6 +1,6 @@
 """Generic PIL-RSPIL parity test runner.
 
-Discovers fixture pairs from fixtures/input/jsons/ and fixtures/outputs/jsons/.
+Discovers fixture pairs from fixtures/input/jsons/ and fixtures_2/input/jsons/.
 One parametrized test per individual case — each is tracked separately in coverage.
 Zero per-operation logic — the engine handles everything.
 """
@@ -21,54 +21,76 @@ except ImportError:
     pass
 
 from engine import CALL_STYLE, ASSERT, _pilify, create_input, get_call_style
+import engine as _engine
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-INPUT_DIR = FIXTURES_DIR / "input" / "jsons"
-OUTPUT_DIR = FIXTURES_DIR / "outputs" / "jsons"
+FIXTURES_DIRS = {
+    "fixtures": Path(__file__).parent / "fixtures",
+    "fixtures_2": Path(__file__).parent / "fixtures_2",
+}
 
 
 def _discover():
-    """Yield one parametrized test per fixture case.
+    """Yield one parametrized test per fixture case from all fixture directories.
 
     Each yield produces a pytest.param with:
-      - (fixture_file, case_id) as the test args
+      - (fixtures_base, fixture_file, case_id) as the test args
       - id = "Module.target_caseId" (e.g., "Image.resize_Image_resize_L")
       - marks = @pytest.mark.covers("Module.target", mode="L")
     """
-    for fpath in sorted(INPUT_DIR.glob("*.json")):
-        if not (OUTPUT_DIR / fpath.name).exists():
+    seen = set()
+
+    for base_name, base_dir in FIXTURES_DIRS.items():
+        input_dir = base_dir / "input" / "jsons"
+        output_dir = base_dir / "outputs" / "jsons"
+
+        if not input_dir.exists():
             continue
-        inp = json.loads(fpath.read_text())
-        out = json.loads((OUTPUT_DIR / fpath.name).read_text())
-        op = inp["operation"]
-        target = f"{op.get('module', '?')}.{op['target']}"
-        out_cases = {c["id"]: c for c in out["cases"]}
 
-        for case in inp["cases"]:
-            cid = case["id"]
-            if cid not in out_cases:
+        for fpath in sorted(input_dir.glob("*.json")):
+            if not (output_dir / fpath.name).exists():
                 continue
-            mode = case.get("mode", "")
-            param_id = f"{fpath.stem}__{cid}"
+            inp = json.loads(fpath.read_text())
+            out = json.loads((output_dir / fpath.name).read_text())
+            op = inp["operation"]
+            target = f"{op.get('module', '?')}.{op['target']}"
+            out_cases = {c["id"]: c for c in out["cases"]}
 
-            # Build @pytest.mark.covers marker for coverage tracking
-            marker_kwargs = {}
-            if mode:
-                marker_kwargs["mode"] = mode
-            covers_marker = getattr(pytest.mark, "covers")(target, **marker_kwargs)
+            for case in inp["cases"]:
+                cid = case["id"]
+                if cid not in out_cases:
+                    continue
+                mode = case.get("mode", "")
+                param_id = f"{fpath.stem}__{cid}"
 
-            yield pytest.param(
-                fpath.name, cid,
-                id=param_id,
-                marks=[covers_marker],
-            )
+                # Guard against case ID collisions across fixture directories
+                assert param_id not in seen, f"Collision: {param_id}"
+                seen.add(param_id)
+
+                # Build @pytest.mark.covers marker for coverage tracking
+                marker_kwargs = {}
+                if mode:
+                    marker_kwargs["mode"] = mode
+                covers_marker = getattr(pytest.mark, "covers")(target, **marker_kwargs)
+
+                yield pytest.param(
+                    base_name, fpath.name, cid,
+                    id=param_id,
+                    marks=[covers_marker],
+                )
 
 
-@pytest.mark.parametrize("fixture_file,case_id", _discover())
-def test_parity(fixture_file, case_id):
+@pytest.mark.parametrize("fixtures_base,fixture_file,case_id", _discover())
+def test_parity(fixtures_base, fixture_file, case_id):
     """Run a single fixture case and assert PIL parity."""
-    inp = json.loads((INPUT_DIR / fixture_file).read_text())
-    out = json.loads((OUTPUT_DIR / fixture_file).read_text())
+    base_dir = Path(__file__).parent / fixtures_base
+    input_dir = base_dir / "input" / "jsons"
+    output_dir = base_dir / "outputs" / "jsons"
+
+    # Override OUTPUTS_DIR so _load_reference reads from the correct directory
+    _engine.OUTPUTS_DIR = base_dir / "outputs"
+
+    inp = json.loads((input_dir / fixture_file).read_text())
+    out = json.loads((output_dir / fixture_file).read_text())
     op = inp["operation"]
     call_style = get_call_style(op["module"], op["target"])
 
@@ -126,16 +148,21 @@ def test_coverage_complete():
                     op = f"{mod_name}.{cls['name']}"
                     op_modes[op] = set(cls.get("supported_modes", []))
 
-    # Build {operation_name: {modes with fixture cases}} from fixture JSONs
+    # Build {operation_name: {modes with fixture cases}} from ALL fixture directories
     fixture_modes = {}
-    for fpath in sorted(INPUT_DIR.glob("*.json")):
-        stem = fpath.stem
-        fx = json.loads(fpath.read_text())
-        fixture_modes[stem] = set()
-        for case in fx.get("cases", []):
-            mode = case.get("mode", "")
-            if mode:
-                fixture_modes[stem].add(mode)
+    for base_name, base_dir in FIXTURES_DIRS.items():
+        input_dir = base_dir / "input" / "jsons"
+        if not input_dir.exists():
+            continue
+        for fpath in sorted(input_dir.glob("*.json")):
+            stem = fpath.stem
+            if stem not in fixture_modes:
+                fixture_modes[stem] = set()
+            fx = json.loads(fpath.read_text())
+            for case in fx.get("cases", []):
+                mode = case.get("mode", "")
+                if mode:
+                    fixture_modes[stem].add(mode)
 
     # Check gaps
     missing_ops = []

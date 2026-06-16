@@ -58,14 +58,27 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
 
 /// Composite image1 over image2 using mask.
 /// PIL: `Image.composite(image1, image2, mask)`
-pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, PilError> {
-    Ok(Image::push_op(
+/// `mode` is an optional mode override (e.g. "P" when composite is called on P-mode images).
+pub fn composite(image1: &Image, image2: &Image, mask: &Image, mode: Option<&str>) -> Result<Image, PilError> {
+    let mut result = Image::push_op(
         image1,
         PipelineOp::CompositeModule {
             other: Arc::new(image2.clone()),
             mask: Arc::new(mask.clone()),
         },
-    ))
+    );
+    // Override explicit_mode if provided (e.g., for P-mode images where the
+    // Python wrapper stores the mode externally on the Python Image object).
+    if let Some(m) = mode {
+        if let Image::Pipeline {
+            ref mut explicit_mode,
+            ..
+        } = result
+        {
+            *explicit_mode = Some(m.to_string());
+        }
+    }
+    Ok(result)
 }
 
 /// Apply a lookup table to each pixel.

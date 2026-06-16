@@ -677,7 +677,8 @@ impl PyImage {
         let im1 = image1.borrow();
         let im2 = image2.borrow();
         let m = mask.borrow();
-        pillow_rs_core::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner)
+        let mode = im1.inner.explicit_mode();
+        pillow_rs_core::ops::module_fns::composite(&im1.inner, &im2.inner, &m.inner, mode)
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -2103,7 +2104,8 @@ fn image_composite(
     let b1 = image1.borrow();
     let b2 = image2.borrow();
     let bm = mask.borrow();
-    let rs = pillow_rs_core::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner)
+    let mode = b1.inner.explicit_mode();
+    let rs = pillow_rs_core::ops::module_fns::composite(&b1.inner, &b2.inner, &bm.inner, mode)
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
