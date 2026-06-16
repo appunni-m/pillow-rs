@@ -3,6 +3,35 @@ from ._core import ImageDraw as RustDraw
 from .image import Image
 
 
+class Outline:
+    """Experimental outline API for ImageDraw.shape().
+    Mirrors PIL's ImageDraw.Outline (C-level _Outline)."""
+
+    def __init__(self):
+        self._points = []
+
+    def move(self, x, y):
+        self._points = [(int(x), int(y))]
+
+    def line(self, x, y):
+        self._points.append((int(x), int(y)))
+
+    def curve(self, x1, y1, x2, y2, x3, y3):
+        # Cubic Bezier approximation: subdivide into line segments
+        x0, y0 = self._points[-1]
+        steps = 20
+        for i in range(1, steps + 1):
+            t = i / steps
+            u = 1 - t
+            x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+            y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+            self._points.append((int(round(x)), int(round(y))))
+
+    def close(self):
+        if len(self._points) > 2 and self._points[0] != self._points[-1]:
+            self._points.append(self._points[0])
+
+
 class Draw:
     """Draw lines, rectangles, ellipses, polygons, and text on images."""
 
@@ -22,7 +51,12 @@ class Draw:
         # Standard modes: the RGBA canvas must be converted back to native format.
         _RAW_MODES = {"F", "I"}
         if self._orig_mode not in _RAW_MODES and drawn.mode != self._orig_mode:
-            drawn = drawn.convert(self._orig_mode)
+            # Use no-dither conversion for binary modes to avoid Floyd-Steinberg
+            # dither artifacts in the background. PIL draws directly on the native
+            # canvas (no RGBA intermediate), so the conversion back must be lossless
+            # for unmodified pixels (0/255 -> 0/255).
+            dither_arg = "NONE" if self._orig_mode == "1" else None
+            drawn = drawn.convert(self._orig_mode, dither=dither_arg)
         self._image._rust_image = drawn._rust_image
 
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
@@ -108,15 +142,19 @@ class Draw:
         self._sync()
 
     def textbbox(self, xy, text, font=None, **kwargs):
-        if font and hasattr(font, 'getbbox'):
+        if font is None:
+            font = self._get_font(None)
+        if hasattr(font, 'getbbox'):
             w, h = font.getbbox(str(text))
             return (xy[0], xy[1], xy[0] + w, xy[1] + h)
         return (xy[0], xy[1], xy[0] + 80, xy[1] + 12)
 
     def textlength(self, text, font=None, **kwargs):
-        if font and hasattr(font, 'getlength'):
+        if font is None:
+            font = self._get_font(None)
+        if hasattr(font, 'getlength'):
             return font.getlength(str(text))
-        if font and hasattr(font, 'getbbox'):
+        if hasattr(font, 'getbbox'):
             bbox = font.getbbox(str(text))
             return bbox[2] - bbox[0]
         return len(str(text)) * 8
@@ -185,8 +223,12 @@ class Draw:
         return (left, top, right, bottom)
 
     def shape(self, shape, fill=None, outline=None):
-        """Draw a shape defined by a sequence of coordinates."""
-        if isinstance(shape, (list, tuple)):
+        """Draw a shape defined by an Outline or sequence of coordinates."""
+        if isinstance(shape, Outline):
+            shape.close()
+            xy = shape._points
+            self.polygon(xy, fill=fill, outline=outline)
+        elif isinstance(shape, (list, tuple)):
             # Accept a single polygon-like sequence of (x,y) pairs
             if all(isinstance(p, (list, tuple)) and len(p) == 2 for p in shape):
                 self.polygon(shape, fill=fill, outline=outline)

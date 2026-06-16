@@ -145,35 +145,19 @@ pub fn op_convert(
             Ok(DynamicImage::ImageRgba8(out))
         }
         ColorMode::CMYK => {
-            // Convert to CMYK: RGB → CMYK conversion (PIL inversion formula)
+            // PIL's default CMYK conversion: simple inverse (no K computation).
+            // C = 255 - R, M = 255 - G, Y = 255 - B, K = 0.
+            // This matches PIL's ImagingConvertCMYK with INVERSE=1: it inverts
+            // RGB values and stores the result as RGBA where K is always 0.
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             let mut out = image::RgbaImage::new(w, h);
             for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-                let r = ip[0] as f64 / 255.0;
-                let g = ip[1] as f64 / 255.0;
-                let b = ip[2] as f64 / 255.0;
-                let k = 1.0 - r.max(g.max(b));
-                let c = if k < 1.0 {
-                    (1.0 - r - k) / (1.0 - k)
-                } else {
-                    0.0
-                };
-                let m = if k < 1.0 {
-                    (1.0 - g - k) / (1.0 - k)
-                } else {
-                    0.0
-                };
-                let y = if k < 1.0 {
-                    (1.0 - b - k) / (1.0 - k)
-                } else {
-                    0.0
-                };
                 *op = image::Rgba([
-                    (c * 255.0 + 0.5) as u8,
-                    (m * 255.0 + 0.5) as u8,
-                    (y * 255.0 + 0.5) as u8,
-                    (k * 255.0 + 0.5) as u8,
+                    255u8.wrapping_sub(ip[0]),
+                    255u8.wrapping_sub(ip[1]),
+                    255u8.wrapping_sub(ip[2]),
+                    0u8,
                 ]);
             }
             Ok(DynamicImage::ImageRgba8(out))
@@ -218,10 +202,11 @@ pub fn op_quantize(
 /// PIL builds inverse lookup: inverse[dest_map[i]] = i, all else -> 0
 pub fn op_remap_palette(
     img: &DynamicImage,
-    dest_map: &[u8; 256],
+    dest_map: &[u8],
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    // PIL builds inverse lookup: inverse[dest_map[i]] = i, all else -> 0
+    // PIL: dest_map maps position-in-list → old index.
+    // inverse[old_idx] = position. Only iterate actual entries, not padding.
     let mut inverse = [0u8; 256];
     for (i, &old_pos) in dest_map.iter().enumerate() {
         let old_idx = old_pos as usize;

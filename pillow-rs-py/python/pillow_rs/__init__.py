@@ -16,7 +16,7 @@ from . import imagesequence as ImageSequence
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
 from .image import Image
 from .operations import (
-    blend, composite, convert, crop, effect_mandelbrot, fromarray, frombuffer,
+    alpha_composite, blend, composite, convert, crop, effect_mandelbrot, fromarray, frombuffer,
     linear_gradient, merge, new, open, radial_gradient, resize, rotate, save,
 )
 
@@ -30,6 +30,7 @@ __all__ = [
     "Resampling", "Transpose", "Dither", "Palette",
     "open", "new", "save", "resize", "crop", "rotate", "convert", "merge", "blend", "composite",
     "linear_gradient", "radial_gradient", "effect_mandelbrot", "frombuffer", "fromarray",
+    "alpha_composite",
 ]
 
 def enable_backend(name):

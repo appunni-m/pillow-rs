@@ -25,6 +25,15 @@ import PIL.ImageSequence
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 
+# Set up headless QApplication for Qt operations (toqpixmap needs it)
+try:
+    from PySide6.QtWidgets import QApplication
+    _qt_app = QApplication.instance()
+    if _qt_app is None:
+        _qt_app = QApplication([])
+except ImportError:
+    pass
+
 from engine import CALL_STYLE, get_call_style, create_input
 
 FIXTURES_DIR = ROOT / "tests" / "fixtures"
@@ -76,10 +85,55 @@ def generate_one(input_path):
         img = create_input(pil, mode, _pilify(case.get("input")))
         img2 = create_input(pil, mode, _pilify(case.get("input2")))
         params = _pilify(dict(case.get("params", {})))
-        result = CALL_STYLE[call_style](pil, img, img2, op["target"], params)
+        # Seed srand() for deterministic effect_noise output.
+        # PIL's effect_noise uses C rand() with global state; without a fixed
+        # seed the output varies per process. Pillow-rs uses a deterministic
+        # PRNG seeded with 1, so match that here.
+        if op["module"] == "ImageModule" and op["target"] == "effect_noise":
+            import ctypes
+            libc = ctypes.CDLL('libc.so.6')
+            libc.srand(1)
+        try:
+            result = CALL_STYLE[call_style](pil, img, img2, op["target"], params)
+        except Exception as e:
+            out["cases"].append({
+                "id": cid,
+                "assert": {
+                    "method": "error",
+                    "exception": type(e).__name__,
+                    "message_contains": str(e).split("(")[0].strip().split(":")[0].strip()[:100],
+                },
+            })
+            continue
 
         # ── Determine result type and produce assertion ──
-        if hasattr(result, 'tobytes') or hasattr(result, 'save'):
+        # Convert Qt QImage/QPixmap to raw bytes (from toqimage/toqpixmap)
+        qt_classes = []
+        try:
+            from PySide6.QtGui import QImage, QPixmap
+            qt_classes = [QImage, QPixmap]
+        except ImportError:
+            pass
+        if qt_classes and any(isinstance(result, cls) for cls in qt_classes):
+            # QPixmap → QImage first
+            if isinstance(result, QPixmap):
+                result = result.toImage()
+            # Extract raw bytes from QImage
+            ptr = result.bits()
+            if hasattr(ptr, 'setsize'):
+                ptr.setsize(result.sizeInBytes())
+            result = bytes(ptr)
+        if isinstance(result, bytes):
+            # Raw bytes → save as .bin file (e.g. toqimage, toqpixmap)
+            ref = f"raws/{stem}_{cid}.bin"
+            bin_path = OUTPUT_RAWS_DIR / f"{stem}_{cid}.bin"
+            bin_path.parent.mkdir(parents=True, exist_ok=True)
+            bin_path.write_bytes(result)
+            out["cases"].append({
+                "id": cid,
+                "assert": {"method": "image", "reference": ref},
+            })
+        elif hasattr(result, 'tobytes') or hasattr(result, 'save'):
             # Exif objects have tobytes() but are not images — convert to dict
             if type(result).__name__ == 'Exif':
                 val = dict(result)
@@ -92,10 +146,18 @@ def generate_one(input_path):
             ref = f"images/{stem}_{cid}.png"
             img_path = OUTPUT_IMAGES_DIR / f"{stem}_{cid}.png"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            if result.mode == "CMYK":
-                result = result.convert("RGB")
-            if result.mode in ("CMYK", "PA", "HSV", "YCbCr", "F", "I"):
-                result = result.convert("RGB")
+            if result.mode in ("PA", "HSV", "YCbCr", "F", "I", "CMYK"):
+                # These modes cannot be saved as PNG losslessly.
+                # Save raw bytes for binary comparison instead.
+                ref = f"raws/{stem}_{cid}.bin"
+                bin_path = OUTPUT_RAWS_DIR / f"{stem}_{cid}.bin"
+                bin_path.parent.mkdir(parents=True, exist_ok=True)
+                bin_path.write_bytes(result.tobytes())
+                out["cases"].append({
+                    "id": cid,
+                    "assert": {"method": "image", "reference": ref},
+                })
+                continue
             result.save(str(img_path))
             out["cases"].append({
                 "id": cid,

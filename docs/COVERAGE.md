@@ -1,294 +1,533 @@
 # pillow-rs Coverage Report
 
-> Auto-generated: 2026-06-14 21:10:30 | Pillow parity tested
+> Auto-generated: 2026-06-16 14:22:14 | Pillow v12.2.0 parity tested
 
-## Trust Summary
+## Summary
 
 | Metric | Value |
 |--------|-------|
-| **Total tests** | 564 |
-| **Passing** | 564 |
-| **Failed** | 0 |
-| **Skipped** | 0 |
-| **Implemented functions** | 145 |
-| **Trusted (PIL parity tested)** | 145 |
-| **Untested** | 0 |
-| **Stubs** | 5 |
-| **Trust score** | **145/145 (100%)** |
+| **Total functions implemented** | 172 |
+| **CPU backend ops** | 171 |
+| **SIMD backend ops** | 56 |
+| **GPU backend ops** | 121 |
+| **Test cases** | 643 |
+| **Passing** | 559 |
+| **Failing** | 84 |
 
 ## Performance Benchmarks
 
-*Multiple = PIL time / pillow-rs time. >1.0 = pillow-rs is faster.*
+*Multiple = PIL time / pillow-rs time. >1.0 = pillow-rs faster.*
 
 | Operation | Speedup | Faster? |
 |-----------|---------|---------|
-| resize_2k_to_1k | 33.07× | ✅ |
-| crop_2k | 0.65× | ❌ |
-| convert_2k_RGB_to_L | 2.00× | ✅ |
-| transpose_2k_FLIP | 3.51× | ✅ |
-| filter_2k_BLUR | 73.62× | ✅ |
-| paste_2k | 1.03× | ✅ |
-| invert_2k | 2.96× | ✅ |
+| resize_2k_to_1k | 34.37× | ✅ |
+| crop_2k | 0.51× | ❌ |
+| convert_2k_RGB_to_L | 1.04× | ✅ |
+| transpose_2k | 3.30× | ✅ |
+| filter_2k_BLUR | 79.68× | ✅ |
+| paste_2k | 1.06× | ✅ |
+| invert_2k | 3.35× | ✅ |
 
-**Average speedup: 16.69×**
+**Average speedup: 17.62×**
 
-## Module Status
+---
 
-| Module | Implemented | Trusted | Untested | Trust % |
-|--------|------------|---------|----------|---------|
-| Image | 48 | 48 | 0 | 100% |
-| ImageChops | 21 | 21 | 0 | 100% |
-| ImageColor | 2 | 2 | 0 | 100% |
-| ImageDraw | 14 | 14 | 0 | 100% |
-| ImageEnhance | 4 | 4 | 0 | 100% |
-| ImageFilter | 19 | 19 | 0 | 100% |
-| ImageFont | 5 | 5 | 0 | 100% |
-| ImageModule | 9 | 9 | 0 | 100% |
-| ImageOps | 16 | 16 | 0 | 100% |
-| ImagePalette | 5 | 5 | 0 | 100% |
-| ImageSequence | 1 | 1 | 0 | 100% |
-| ImageStat | 1 | 1 | 0 | 100% |
-
-## ⬜ Remaining Stubs
-
-- `Image.toqimage`
-- `Image.toqpixmap`
-- `ImageDraw.shape`
-- `ImageModule.effect_mandelbrot`
-- `ImageModule.frombuffer`
-
-## Mode × Operation Coverage Matrix
-
-*✅ = passing, ⚠️ = xfailed (in progress), ⬜ = supported but not tested, N/A = PIL doesn't support this mode*
+## CPU Backend
 
 ### Image
 
-| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | HSV | I | F |
-|-----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
-| `alpha_composite` | N/A | N/A | N/A | N/A | N/A | ⬜ | N/A | N/A | N/A | N/A |
-| `apply_transparency` | N/A | ✅ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
-| `convert` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `copy` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `crop` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `draft` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `effect_spread` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `entropy` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `filter` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A |
-| `frombytes` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `get_child_images` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `get_flattened_data` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getbands` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getbbox` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getchannel` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
-| `getcolors` | ✅ | ✅ | ⬜ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getdata` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getexif` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `getim` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getpalette` | N/A | ✅ | N/A | ⬜ | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `getpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getprojection` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `getxmp` | N/A | ✅ | N/A | N/A | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `histogram` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `load` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `new` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `open` | N/A | ✅ | ⬜ | N/A | ✅ | ⬜ | N/A | N/A | N/A | N/A |
-| `paste` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ | N/A | N/A | N/A |
-| `point` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
-| `putalpha` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `putdata` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `putpalette` | N/A | ⬜ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
-| `putpixel` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `quantize` | N/A | ✅ | N/A | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `reduce` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `remap_palette` | N/A | ✅ | N/A | ✅ | N/A | N/A | N/A | N/A | N/A | N/A |
-| `resize` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
-| `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `seek` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `split` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `tell` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `thumbnail` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `tobitmap` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| `tobytes` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `transpose` | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `verify` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `alpha_composite` | · | · | ⬜ | · | · | ✅ | · | · | · | · | · |
+| `apply_transparency` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `close` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `convert` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `copy` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `crop` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `draft` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `effect_spread` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | · | · | · | · |
+| `entropy` | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | · | · | · | · | · |
+| `filter` | ⬜ | ⬜ | ⬜ | ⬜ | ❌ | ⬜ | ⬜ | · | · | · | · |
+| `frombytes` | · | ⬜ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `get_child_images` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `get_flattened_data` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `getbands` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getbbox` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getchannel` | · | ✅ | ✅ | · | ✅ | ✅ | ✅ | ❌ | · | · | · |
+| `getcolors` | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | · | · | · | · | · |
+| `getdata` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `getexif` | · | ❌ | · | · | ❌ | · | · | · | · | · | · |
+| `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `getim` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `getpalette` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `getpixel` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getprojection` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getxmp` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `histogram` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `load` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `open` | · | ⬜ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `paste` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `point` | ✅ | ✅ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · | · |
+| `putalpha` | · | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `putdata` | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | · | · | · | · |
+| `putpalette` | · | ✅ | · | ✅ | · | · | · | · | · | · | · |
+| `putpixel` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | · | · | · | · | · |
+| `quantize` | · | ✅ | · | · | ✅ | ❌ | · | · | · | · | · |
+| `reduce` | · | ✅ | ✅ | · | ✅ | ✅ | ❌ | · | · | · | · |
+| `remap_palette` | · | ✅ | · | ✅ | · | · | · | · | · | · | · |
+| `resize` | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | · |
+| `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | · | · | · | · |
+| `save` | · | · | · | · | · | · | · | · | · | · | · |
+| `seek` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `split` | · | ✅ | ❌ | · | ✅ | ✅ | · | · | · | · | · |
+| `tell` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `thumbnail` | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | · | · | · | · | · |
+| `tobitmap` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `tobytes` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `toqimage` | · | · | · | · | · | · | · | · | · | · | · |
+| `toqpixmap` | · | · | · | · | · | · | · | · | · | · | · |
+| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | · | · | · | · |
+| `transpose` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `verify` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
 
 ### ImageChops
 
-| Operation | 1 | L | LA | P | RGB | RGBA |
-|-----------|-------|-------|-------|-------|-------|-------|
-| `add` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `add_modulo` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `blend` | N/A | ✅ | N/A | N/A | ✅ | N/A |
-| `composite` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
-| `constant` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
-| `darker` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `difference` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `duplicate` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
-| `hard_light` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `invert` | N/A | ✅ | N/A | ✅ | ✅ | N/A |
-| `lighter` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `logical_and` | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `logical_or` | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `logical_xor` | ✅ | N/A | N/A | N/A | N/A | N/A |
-| `multiply` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `offset` | N/A | ✅ | N/A | N/A | ✅ | ✅ |
-| `overlay` | N/A | ✅ | N/A | N/A | ✅ | N/A |
-| `screen` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `soft_light` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `subtract` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
-| `subtract_modulo` | N/A | ✅ | ✅ | N/A | ✅ | ✅ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `add` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `add_modulo` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `blend` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `composite` | · | ✅ | · | ⬜ | ⬜ | · | · | · | · | · | · |
+| `constant` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `darker` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `difference` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `duplicate` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `hard_light` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `invert` | · | ✅ | · | ⬜ | ✅ | · | · | · | · | · | · |
+| `lighter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `logical_and` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `logical_or` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `logical_xor` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `multiply` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `offset` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+| `overlay` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `screen` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `soft_light` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `subtract` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `subtract_modulo` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
 
 ### ImageColor
 
-| Operation | L | RGB |
-|-----------|-------|-------|
-| `getcolor` | ✅ | ✅ |
-| `getrgb` | ✅ | ✅ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `getcolor` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `getrgb` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
 
 ### ImageDraw
 
-| Operation | 1 | L | LA | P | RGB | RGBA | CMYK |
-|-----------|-------|-------|-------|-------|-------|-------|-------|
-| `arc` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `bitmap` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
-| `chord` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `circle` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `ellipse` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `line` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `multiline_text` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
-| `pieslice` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `point` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `polygon` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `rectangle` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `regular_polygon` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
-| `rounded_rectangle` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
-| `text` | ⬜ | ✅ | ⬜ | ⬜ | ✅ | ✅ | ⬜ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `arc` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `bitmap` | ⬜ | ❌ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `chord` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `circle` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `ellipse` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `getfont` | · | · | · | · | · | · | · | · | · | · | · |
+| `line` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `multiline_text` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | · | · | · | · |
+| `multiline_textbbox` | · | ✅ | · | · | ⬜ | ⬜ | · | · | · | · | · |
+| `pieslice` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `point` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `polygon` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `rectangle` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `regular_polygon` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `rounded_rectangle` | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | · | · | · | · |
+| `shape` | · | · | · | · | · | · | · | · | · | · | · |
+| `text` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | · | · | · | · |
+| `textbbox` | · | ✅ | · | · | ⬜ | ⬜ | · | · | · | · | · |
+| `textlength` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
 
 ### ImageEnhance
 
-| Operation | L | LA | RGB | RGBA |
-|-----------|-------|-------|-------|-------|
-| `Brightness` | ✅ | ⬜ | ✅ | ⬜ |
-| `Color` | ✅ | ⬜ | ✅ | ⬜ |
-| `Contrast` | ✅ | ⬜ | ✅ | ⬜ |
-| `Sharpness` | ✅ | ⬜ | ✅ | ⬜ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `Brightness` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Color` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Contrast` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Sharpness` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
 
 ### ImageFilter
 
-| Operation | 1 | L | LA | RGB | RGBA | CMYK | HSV | I |
-|-----------|-------|-------|-------|-------|-------|-------|-------|-------|
-| `BLUR` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A |
-| `BoxBlur` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `CONTOUR` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `DETAIL` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `EDGE_ENHANCE` | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `EDGE_ENHANCE_MORE` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `EMBOSS` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `FIND_EDGES` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `GaussianBlur` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `Kernel` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `MaxFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `MedianFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `MinFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `ModeFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `RankFilter` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `SHARPEN` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `SMOOTH` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `SMOOTH_MORE` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `UnsharpMask` | N/A | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `BLUR` | ✅ | ✅ | ✅ | · | ✅ | ✅ | ✅ | · | · | · | · |
+| `BoxBlur` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `CONTOUR` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Color3DLUT` | · | · | · | · | ✅ | · | · | · | · | · | · |
+| `DETAIL` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `EDGE_ENHANCE` | ✅ | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `EDGE_ENHANCE_MORE` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `EMBOSS` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `FIND_EDGES` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `GaussianBlur` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Kernel` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MaxFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MedianFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MinFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `ModeFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `RankFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `SHARPEN` | ✅ | ✅ | ✅ | · | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | · |
+| `SMOOTH` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `SMOOTH_MORE` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `UnsharpMask` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
 
 ### ImageFont
 
-| Operation | L | RGB | RGBA |
-|-----------|-------|-------|-------|
-| `load` | ✅ | ✅ | ⬜ |
-| `load_default` | ✅ | ✅ | ⬜ |
-| `load_default_imagefont` | ✅ | ✅ | ⬜ |
-| `load_path` | ✅ | ✅ | ⬜ |
-| `truetype` | ✅ | ✅ | ⬜ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `font_variant` | · | · | · | · | · | · | · | · | · | · | · |
+| `get_variation_axes` | · | · | · | · | · | · | · | · | · | · | · |
+| `get_variation_names` | · | · | · | · | · | · | · | · | · | · | · |
+| `getbbox` | · | · | · | · | · | · | · | · | · | · | · |
+| `getlength` | · | · | · | · | · | · | · | · | · | · | · |
+| `getmask` | · | · | · | · | · | · | · | · | · | · | · |
+| `getmask2` | · | · | · | · | · | · | · | · | · | · | · |
+| `getmetrics` | · | · | · | · | · | · | · | · | · | · | · |
+| `getname` | · | · | · | · | · | · | · | · | · | · | · |
+| `load` | · | ⬜ | · | · | ✅ | ⬜ | · | · | · | · | · |
+| `load_default` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+| `load_default_imagefont` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+| `load_path` | · | ⬜ | · | · | ✅ | ⬜ | · | · | · | · | · |
+| `set_variation_by_axes` | · | · | · | · | · | · | · | · | · | · | · |
+| `set_variation_by_name` | · | · | · | · | · | · | · | · | · | · | · |
+| `truetype` | · | ✅ | · | · | ⬜ | ⬜ | · | · | · | · | · |
 
 ### ImageModule
 
-| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | HSV | I | F |
-|-----------|-------|-------|-------|-------|-------|-------|-------|-------|-------|-------|
-| `alpha_composite` | N/A | ⬜ | N/A | N/A | ⬜ | ⬜ | N/A | N/A | N/A | N/A |
-| `blend` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `composite` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `effect_noise` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `eval` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | N/A | N/A |
-| `frombytes` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | N/A | N/A | N/A |
-| `merge` | N/A | ✅ | ✅ | N/A | ✅ | ✅ | N/A | N/A | N/A | N/A |
-| `new` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| `open` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `alpha_composite` | · | · | ⬜ | · | · | ✅ | · | · | · | · | · |
+| `blend` | · | ✅ | ⬜ | · | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `composite` | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · |
+| `effect_mandelbrot` | · | · | · | · | · | · | · | · | · | · | · |
+| `effect_noise` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `eval` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `fromarray` | · | ⬜ | · | · | ⬜ | ⬜ | · | · | · | · | · |
+| `frombuffer` | · | · | · | · | · | · | · | · | · | · | · |
+| `frombytes` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `linear_gradient` | · | ✅ | · | · | · | · | · | · | · | · | · |
+| `merge` | · | ⬜ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `new` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `open` | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `radial_gradient` | · | ✅ | · | · | · | · | · | · | · | · | · |
 
 ### ImageOps
 
-| Operation | L | LA | P | RGB | RGBA |
-|-----------|-------|-------|-------|-------|-------|
-| `autocontrast` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `colorize` | ✅ | N/A | N/A | ⬜ | N/A |
-| `contain` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `cover` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `crop` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `equalize` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `expand` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `fit` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `flip` | ✅ | ⬜ | N/A | ✅ | ✅ |
-| `grayscale` | ✅ | ✅ | ⬜ | ✅ | ✅ |
-| `invert` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `mirror` | ✅ | ⬜ | N/A | ✅ | ✅ |
-| `pad` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `posterize` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `scale` | ✅ | ⬜ | N/A | ✅ | ⬜ |
-| `solarize` | ✅ | ⬜ | N/A | ✅ | ⬜ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `autocontrast` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `colorize` | · | ✅ | · | · | ⬜ | · | · | · | · | · | · |
+| `contain` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `cover` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `crop` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `deform` | · | · | · | · | · | · | · | · | · | · | · |
+| `equalize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `exif_transpose` | · | · | · | · | · | · | · | · | · | · | · |
+| `expand` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `fit` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `flip` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `grayscale` | · | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `invert` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `mirror` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `pad` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `posterize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `scale` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `solarize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
 
 ### ImagePalette
 
-| Operation | L | P | RGB |
-|-----------|-------|-------|-------|
-| `copy` | ✅ | ⬜ | ✅ |
-| `getcolor` | ✅ | ⬜ | ✅ |
-| `getdata` | ✅ | ⬜ | ✅ |
-| `save` | ✅ | ⬜ | ✅ |
-| `tobytes` | ✅ | ⬜ | ✅ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `copy` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `getcolor` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `getdata` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `save` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `tobytes` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
 
 ### ImageSequence
 
-| Operation | L | RGB |
-|-----------|-------|-------|
-| `Iterator` | ✅ | ✅ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `Iterator` | · | ⬜ | · | · | ✅ | · | · | · | · | · | · |
 
 ### ImageStat
 
-| Operation | L | RGB | RGBA |
-|-----------|-------|-------|-------|
-| `Stat` | ✅ | ✅ | ⬜ |
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `Stat` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+
+---
+
+## SIMD Backend
+
+### Image
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `convert` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `crop` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `paste` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `point` | ✅ | ✅ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · | · |
+| `putalpha` | · | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `putdata` | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · |
+| `putpixel` | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · | · |
+| `quantize` | · | ✅ | · | · | ✅ | ⬜ | · | · | · | · | · |
+| `reduce` | · | ✅ | ✅ | · | ✅ | ✅ | ⬜ | · | · | · | · |
+| `resize` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | · |
+| `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `thumbnail` | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | ✅ | · | · | · | · | · |
+| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `transpose` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+
+### ImageChops
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `add` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `add_modulo` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `constant` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `darker` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `difference` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `duplicate` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `hard_light` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `lighter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `logical_and` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `logical_or` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `logical_xor` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `multiply` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `offset` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+| `overlay` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `screen` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `soft_light` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `subtract` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageEnhance
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `Brightness` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Contrast` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Sharpness` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageFilter
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `BoxBlur` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Kernel` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MaxFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MinFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `RankFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageModule
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `eval` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `merge` | · | ⬜ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+
+### ImageOps
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `colorize` | · | ✅ | · | · | ⬜ | · | · | · | · | · | · |
+| `contain` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `cover` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `crop` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `equalize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `expand` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `fit` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `flip` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `grayscale` | · | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `invert` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `mirror` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `pad` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `posterize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `scale` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `solarize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+
+---
+
+## GPU Backend
+
+### Image
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `alpha_composite` | · | · | ⬜ | · | · | ✅ | · | · | · | · | · |
+| `convert` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `copy` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `crop` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| `effect_spread` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `entropy` | ✅ | ⬜ | ✅ | ⬜ | ✅ | ✅ | · | · | · | · | · |
+| `filter` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `getbands` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getbbox` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getchannel` | · | ✅ | ✅ | · | ✅ | ✅ | ✅ | ⬜ | · | · | · |
+| `getcolors` | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ✅ | · | · | · | · | · |
+| `getdata` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `getextrema` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `getpixel` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `getprojection` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `histogram` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `paste` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `point` | ✅ | ✅ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · | · |
+| `putalpha` | · | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `putdata` | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · |
+| `putpixel` | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · | · |
+| `quantize` | · | ✅ | · | · | ✅ | ⬜ | · | · | · | · | · |
+| `reduce` | · | ✅ | ✅ | · | ✅ | ✅ | ⬜ | · | · | · | · |
+| `remap_palette` | · | ✅ | · | ✅ | · | · | · | · | · | · | · |
+| `resize` | ⬜ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | · |
+| `rotate` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `split` | · | ✅ | ⬜ | · | ✅ | ✅ | · | · | · | · | · |
+| `thumbnail` | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | ✅ | · | · | · | · | · |
+| `tobytes` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `transform` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `transpose` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+
+### ImageChops
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `add` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `add_modulo` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `blend` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `composite` | · | ✅ | · | ⬜ | ⬜ | · | · | · | · | · | · |
+| `constant` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `darker` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `difference` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `duplicate` | · | ✅ | · | ✅ | ✅ | · | · | · | · | · | · |
+| `hard_light` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `invert` | · | ✅ | · | ⬜ | ✅ | · | · | · | · | · | · |
+| `lighter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `logical_and` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `logical_or` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `logical_xor` | ✅ | · | · | · | · | · | · | · | · | · | · |
+| `multiply` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `offset` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+| `overlay` | · | ✅ | · | · | ✅ | · | · | · | · | · | · |
+| `screen` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `soft_light` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `subtract` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `subtract_modulo` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageDraw
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `arc` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `bitmap` | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `chord` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `circle` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `ellipse` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `getfont` | · | · | · | · | · | · | · | · | · | · | · |
+| `line` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `multiline_text` | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | · | · | · | · |
+| `multiline_textbbox` | · | ✅ | · | · | ⬜ | ⬜ | · | · | · | · | · |
+| `pieslice` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `point` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `polygon` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `rectangle` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `regular_polygon` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `rounded_rectangle` | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ | · | · | · | · |
+| `text` | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | · | · | · | · |
+| `textbbox` | · | ✅ | · | · | ⬜ | ⬜ | · | · | · | · | · |
+| `textlength` | · | ✅ | · | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageEnhance
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `Brightness` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Color` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Contrast` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Sharpness` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageFilter
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `BLUR` | ✅ | ✅ | ✅ | · | ✅ | ✅ | ✅ | · | · | · | · |
+| `BoxBlur` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `CONTOUR` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Color3DLUT` | · | · | · | · | ✅ | · | · | · | · | · | · |
+| `DETAIL` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `EDGE_ENHANCE` | ✅ | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `EDGE_ENHANCE_MORE` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `EMBOSS` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `FIND_EDGES` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `GaussianBlur` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `Kernel` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MaxFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MedianFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `MinFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `ModeFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `RankFilter` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `SHARPEN` | ✅ | ✅ | ✅ | · | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | · |
+| `SMOOTH` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `SMOOTH_MORE` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `UnsharpMask` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+
+### ImageModule
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `alpha_composite` | · | · | ⬜ | · | · | ✅ | · | · | · | · | · |
+| `blend` | · | ✅ | ⬜ | · | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `composite` | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | · | · | · | · |
+| `effect_noise` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · |
+| `eval` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `frombytes` | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | · | · | · | · |
+| `merge` | · | ⬜ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `new` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `open` | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### ImageOps
+
+| Operation | 1 | L | LA | P | RGB | RGBA | CMYK | YCbCr | HSV | I | F |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| `autocontrast` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `colorize` | · | ✅ | · | · | ⬜ | · | · | · | · | · | · |
+| `contain` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `cover` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `crop` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `deform` | · | · | · | · | · | · | · | · | · | · | · |
+| `equalize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `exif_transpose` | · | · | · | · | · | · | · | · | · | · | · |
+| `expand` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `fit` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `flip` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `grayscale` | · | ✅ | ✅ | ✅ | ✅ | ✅ | · | · | · | · | · |
+| `invert` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `mirror` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `pad` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `posterize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
+| `scale` | · | ✅ | ✅ | · | ✅ | ✅ | · | · | · | · | · |
+| `solarize` | · | ✅ | ⬜ | · | ✅ | ⬜ | · | · | · | · | · |
 
 
-## Reverse Verification
+## Legend
 
-Every test in the trust report validates PIL-RSPIL parity:
-- Tests create identical inputs for both `PIL.Image` and `pillow_rs.Image`
-- Apply the same operation with identical parameters
-- Assert pixel-exact binary equality or value equality
-- No tests verify only signature existence or stub behavior
+| Symbol | Meaning |
+|--------|---------|
+| ✅ | Tested and passing |
+| ❌ | Tested and failing |
+| ⬜ | Implemented but not tested |
+| ⚠️ | Expected failure (xfail) |
+| `-` | Not implemented for this backend |
+| `·` | PIL doesn't support this mode for this operation |
 
-**Verification method:** `assert_images_equal(rs_img, pil_img)` for image output,
-`assert_values_equal(rs_val, pil_val)` for non-image values. Fixture tests use
-SHA-256 hash comparison with tolerance for lossy operations.
+---
 
-## How Coverage Mapping Works
-
-Coverage mapping derives from two auto-discovered sources — no separate mapping file:
-
-1. **Fixture JSONs** (365 files in `tests/fixtures/`): Each fixture declares
-   `operation.module` + `operation.target` in its JSON metadata.
-   The test runner (`test_fixture_parity.py`) auto-generates
-   `@pytest.mark.covers` markers from this metadata at collection time.
-
-2. **Static decorators**: Tests in `tests/test_*.py` files with
-   `@pytest.mark.covers("Module.function")` decorators are parsed directly.
-
-*Report generated by `scripts/coverage/compute_coverage.py --md`*
+*Generated by `scripts/coverage/generate_multi_backend_coverage.py`*

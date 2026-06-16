@@ -78,6 +78,9 @@ class Image:
         # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
         nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "I": "L", "F": "L", "P": "L"}
         rust_mode = nonstandard.get(mode, mode)
+        # Convert list colors to tuples (JSON fixtures pass lists, PIL accepts both)
+        if isinstance(color, list):
+            color = tuple(color)
         rust_image = RustImage.new(rust_mode, size, color)
         img = cls(rust_image)
         if mode in nonstandard:
@@ -163,31 +166,28 @@ class Image:
 
     def convert(
         self,
-        mode: str,
+        mode: Optional[str] = None,
         matrix: Optional[Tuple[float, ...]] = None,
         dither: Optional[str] = None,
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
-        # Handle non-standard modes at Python level
-        if mode in ("CMYK", "YCbCr", "HSV", "I", "F"):
-            rgb = self._rust_image.convert("RGB", matrix=None, dither=None, palette=palette, colors=colors)
-            img = Image(rgb)
-            img._explicit_mode = mode
-            return img
-        if mode == "P":
-            # Quantize then tag as palette mode
-            rust_image = self._rust_image.quantize(colors=min(colors, 256), dither=(dither is not None))
-            img = Image(rust_image)
-            img._explicit_mode = "P"
-            return img
+        # PIL: convert() without mode arg is a copy in the same mode
+        if mode is None:
+            mode = self.mode
+        # PIL: converting to the same mode is a no-op (returns copy)
+        if mode == self.mode:
+            return self.copy()
+        # For all modes, let Rust handle the conversion via PipelineOp.
+        # Rust's op_convert implements proper conversion formulas for all modes
+        # including CMYK, YCbCr, HSV, I, F, and P (WEB palette quantization).
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
         )
         img = Image(rust_image)
-        if mode == "1":
-            img._explicit_mode = "1"
+        if mode in ("CMYK", "YCbCr", "HSV", "I", "F", "P", "1"):
+            img._explicit_mode = mode
         return img
 
     def paste(
@@ -329,7 +329,7 @@ class Image:
         return _PixelAccessStub(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
-        """Alpha composite im over self."""
+        """Alpha composite im over self. Returns None (mutates in-place)."""
         self._rust_image.alpha_composite(im._rust_image)
 
     def getcolors(self, maxcolors=256):
@@ -470,21 +470,56 @@ class Image:
         """Display image. Not applicable in headless/test environments."""
         pass
 
+    @staticmethod
+    def _qt_imports():
+        """Return (QImage, qRgb, QPixmap) from the already-loaded Qt binding.
+
+        Detects which Qt binding is present in sys.modules first, so we never
+        load a second binding into the same process (which would abort Qt).
+        Prefers the binding that created the QApplication instance.
+        """
+        import sys
+
+        # Determine which binding created the QApplication (if any)
+        app_binding = None
+        for binding, widget_mod in [
+            ("PyQt6", "PyQt6.QtWidgets"),
+            ("PyQt5", "PyQt5.QtWidgets"),
+            ("PySide6", "PySide6.QtWidgets"),
+            ("PySide2", "PySide2.QtWidgets"),
+        ]:
+            if widget_mod in sys.modules:
+                try:
+                    mod = sys.modules[widget_mod]
+                    app = mod.QApplication.instance()
+                    if app is not None:
+                        app_binding = binding
+                        break
+                except Exception:
+                    pass
+
+        # Try app_binding first, then any loaded binding, then fallback
+        for binding, mod_names in [
+            ("PyQt6",     ("PyQt6.QtGui",)),
+            ("PyQt5",     ("PyQt5.QtGui",)),
+            ("PySide6",   ("PySide6.QtGui",)),
+            ("PySide2",   ("PySide2.QtGui",)),
+        ]:
+            if app_binding and binding != app_binding:
+                continue
+            try:
+                mod = __import__(mod_names[0], fromlist=["QImage", "qRgb", "QPixmap"])
+                return mod.QImage, mod.qRgb, mod.QPixmap
+            except ImportError:
+                continue
+
+        raise ImportError(
+            "toqimage/toqpixmap requires PyQt5, PyQt6, PySide2, or PySide6"
+        )
+
     def toqimage(self):
         """Convert to Qt QImage. Matches PIL's ImageQt._toqclass_helper format mapping."""
-        try:
-            from PyQt6.QtGui import QImage, qRgb
-        except ImportError:
-            try:
-                from PyQt5.QtGui import QImage, qRgb
-            except ImportError:
-                try:
-                    from PySide6.QtGui import QImage, qRgb
-                except ImportError:
-                    try:
-                        from PySide2.QtGui import QImage, qRgb
-                    except ImportError:
-                        raise ImportError("toqimage requires PyQt5, PyQt6, PySide2, or PySide6")
+        QImage, qRgb, _QPixmap = self._qt_imports()
 
         mode = self.mode
         w, h = self.size
@@ -522,19 +557,7 @@ class Image:
 
     def toqpixmap(self):
         """Convert to Qt QPixmap. Requires PyQt5, PyQt6, PySide2, or PySide6."""
-        try:
-            from PyQt6.QtGui import QPixmap
-        except ImportError:
-            try:
-                from PyQt5.QtGui import QPixmap
-            except ImportError:
-                try:
-                    from PySide6.QtGui import QPixmap
-                except ImportError:
-                    try:
-                        from PySide2.QtGui import QPixmap
-                    except ImportError:
-                        raise ImportError("toqpixmap requires PyQt5, PyQt6, PySide2, or PySide6")
+        _QImage, _qRgb, QPixmap = self._qt_imports()
         return QPixmap.fromImage(self.toqimage())
 
     @classmethod

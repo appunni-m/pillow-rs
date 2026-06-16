@@ -157,6 +157,11 @@ class FreeTypeFont:
         """
         if all(v is None for v in (font, size, index, encoding, layout_engine)):
             return self
+        # Default font (loaded via load_default) has no source path/bytes.
+        # Fall back to calling load_default again with the new size.
+        if getattr(self, '_is_default', False):
+            new_size = self.size if size is None else float(size)
+            return load_default(size=new_size)
         return FreeTypeFont(
             font=font if font is not None else self._font_source(),
             size=self.size if size is None else float(size),
@@ -279,7 +284,17 @@ def load_default(size=None):
     font = object.__new__(FreeTypeFont)
     font._rust_font = RustFont.load_default(float(size))
     font.size = float(size)
+    font._is_default = True
     return font
+
+
+def load_default_imagefont(size=None):
+    """Load default font — alias for compatibility with fixture naming.
+
+    :param size: Font size in pixels (default 10).
+    :return: A FreeTypeFont instance backed by the default bitmap font.
+    """
+    return load_default(size)
 
 
 def truetype(font, size=10, index=0, encoding="", layout_engine=None):

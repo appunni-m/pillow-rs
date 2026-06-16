@@ -1048,7 +1048,17 @@ pub fn simd_put_data(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::PutData { data } = op {
-        super::scalar::put_data(&mut pixels, mode_code, data);
+        // Pad short data to avoid out-of-bounds in scalar::put_data
+        let needed = pixels.len() * 4;
+        let padded: Vec<u8> = if data.len() < needed {
+            let mut p = Vec::with_capacity(needed);
+            p.extend_from_slice(data);
+            p.resize(needed, 0u8);
+            p
+        } else {
+            data.to_vec()
+        };
+        super::scalar::put_data(&mut pixels, mode_code, &padded);
     }
     Ok(dynimg_from_rgba(pixels, w, h))
 }

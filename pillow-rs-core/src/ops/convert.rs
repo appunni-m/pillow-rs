@@ -98,6 +98,74 @@ impl Image {
 
         let dither_enum = parse_dither(dither);
 
+        // Special case: converting to binary mode "1" — must eagerly execute
+        // because the pipeline's scalar::convert doesn't handle binary threshold/dither.
+        if mode == "1" {
+            let img = self.materialize()?;
+            // Use truncated grayscale (PIL uses integer truncation, not rounding)
+            let gray = if let Some(src_mode) = self.explicit_mode() {
+                if src_mode == "CMYK" {
+                    crate::color::cmyk_to_grayscale(&img)
+                } else if is_nonstandard_mode(src_mode) {
+                    let rgb = crate::color::convert_from_nonstandard(src_mode, &img, None)
+                        .unwrap_or_else(|| img.to_rgb8().into());
+                    crate::color::pil_grayscale_truncate(&rgb)
+                } else {
+                    crate::color::pil_grayscale_truncate(&img)
+                }
+            } else {
+                crate::color::pil_grayscale_truncate(&img)
+            };
+            let (w, h) = gray.dimensions();
+            let mut out = image::GrayImage::new(w, h);
+            match dither_enum {
+                Some(DitherMethod::None) => {
+                    // Threshold at 128 (PIL: pixel >= 128 -> 255, else 0)
+                    for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
+                        op[0] = if gp[0] >= 128 { 255 } else { 0 };
+                    }
+                }
+                _ => {
+                    // Floyd-Steinberg dither (PIL's tobilevel with error diffusion)
+                    // Uses PIL's exact error propagation pattern (scaled by 16).
+                    // Key detail: after the inner loop, PIL writes errors[w] = l0
+                    // so the next row's last pixel reads the down/down-right error
+                    // from this row's last pixel.
+                    let mut errors = vec![0i32; (w + 1) as usize];
+                    let src: Vec<i32> = gray.pixels().map(|p| p[0] as i32).collect();
+                    let wu = w as usize;
+                    for y in 0..h as usize {
+                        let mut l = 0i32;
+                        let mut l0: i32 = 0;
+                        let mut l1: i32 = 0;
+                        for x in 0..wu {
+                            let idx = y * wu + x;
+                            let acc = l + errors[x + 1];
+                            let v = src[idx] + acc / 16;
+                            let v = v.clamp(0, 255);
+                            let new = if v > 128 { 255i32 } else { 0i32 };
+                            out.get_pixel_mut(x as u32, y as u32)[0] = new as u8;
+                            l = v - new;
+                            let l2 = l;
+                            let d2 = l + l;
+                            l += d2;
+                            errors[x] = l + l0;
+                            l += d2;
+                            l0 = l + l1;
+                            l1 = l2;
+                            l += d2;
+                        }
+                        // PIL: after the loop, propagate l0 to errors[w] for next row
+                        errors[wu] = l0;
+                    }
+                }
+            }
+            return Ok(Image::Loaded(
+                DynamicImage::ImageLuma8(out),
+                Some("1".to_string()),
+            ));
+        }
+
         // Special case: converting to P-mode uses PIL's default WEB palette
         // with Floyd-Steinberg dither, not median cut quantize. We eagerly execute
         // here so the palette is stored on the result Pipeline, enabling subsequent

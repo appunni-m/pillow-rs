@@ -4,7 +4,8 @@ modules:
   Image:
     class_methods:
     - name: open
-      signature: 'open(fp: str|bytes|Path, mode: str=''r'', formats: list|None=None) -> Image'
+      signature: 'open(fp: str|bytes|Path, mode: str=''r'', formats: list|None=None)
+        -> Image'
       supported_modes:
       - L
       - LA
@@ -30,9 +31,10 @@ modules:
       supported_targets:
       - cpu
     - name: new
-      signature: 'new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0) -> Image'
+      signature: 'new(mode: str, size: tuple[int,int]|list[int], color: float|tuple|str|None=0)
+        -> Image'
       supported_modes:
-      - 1
+      - '1'
       - CMYK
       - F
       - HSV
@@ -84,15 +86,13 @@ modules:
       - zero_width
       - zero_height
       - invalid_mode
-      status: implemented
+      status: ignored
       pillow_since: '1.0'
-      supported_targets:
-      - cpu
-      - gpu
-      - simd
+      supported_targets: []
     methods:
     - name: save
-      signature: 'save(self, fp: str|Path|IO[bytes], format: str|None=None, **params) -> None'
+      signature: 'save(self, fp: str|Path|IO[bytes], format: str|None=None, **params)
+        -> None'
       supported_formats:
       - PNG
       - JPEG
@@ -119,10 +119,10 @@ modules:
       supported_targets:
       - cpu
     - name: resize
-      signature: 'resize(self, size: tuple[int,int]|list[int], resample: int|None=None, box: tuple|None=None, reducing_gap:
-        float|None=None) -> Image'
+      signature: 'resize(self, size: tuple[int,int]|list[int], resample: int|None=None,
+        box: tuple|None=None, reducing_gap: float|None=None) -> Image'
       supported_modes:
-      - 1
+      - '1'
       - CMYK
       - HSV
       - I
@@ -166,7 +166,7 @@ modules:
     - name: crop
       signature: 'crop(self, box: tuple[float,float,float,float]|None=None) -> Image'
       supported_modes:
-      - 1
+      - '1'
       - CMYK
       - F
       - HSV
@@ -200,8 +200,9 @@ modules:
       - gpu
       - simd
     - name: rotate
-      signature: 'rotate(self, angle: float, resample: Resampling=NEAREST, expand: int|bool=False, center: tuple|None=None,
-        translate: tuple|None=None, fillcolor: float|tuple|str|None=None) -> Image'
+      signature: 'rotate(self, angle: float, resample: Resampling=NEAREST, expand:
+        int|bool=False, center: tuple|None=None, translate: tuple|None=None, fillcolor:
+        float|tuple|str|None=None) -> Image'
       supported_modes:
       - '1'
       - CMYK
@@ -234,7 +235,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       param_variants:
       - method: FLIP_LEFT_RIGHT
@@ -252,14 +253,14 @@ modules:
       - gpu
       - simd
     - name: convert
-      signature: 'convert(self, mode: str|None=None, matrix: tuple[float,...]|None=None, dither: Dither|None=None, palette:
-        Palette=WEB, colors: int=256) -> Image'
+      signature: 'convert(self, mode: str|None=None, matrix: tuple[float,...]|None=None,
+        dither: Dither|None=None, palette: Palette=WEB, colors: int=256) -> Image'
       supported_modes:
       - L
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       - CMYK
       - YCbCr
@@ -338,7 +339,8 @@ modules:
       - gpu
       - simd
     - name: filter
-      signature: 'filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter]) -> Image'
+      signature: 'filter(self, filter: ImageFilter.Filter|type[ImageFilter.Filter])
+        -> Image'
       supported_modes:
       - '1'
       - CMYK
@@ -379,7 +381,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       param_variants:
       - {}
@@ -426,8 +428,8 @@ modules:
       - gpu
       - simd
     - name: thumbnail
-      signature: 'thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC, reducing_gap: float|None=2.0) ->
-        None'
+      signature: 'thumbnail(self, size: tuple[float,float], resample: Resampling=BICUBIC,
+        reducing_gap: float|None=2.0) -> None'
       supported_modes:
       - '1'
       - L
@@ -472,7 +474,8 @@ modules:
       - gpu
       - simd
     - name: alpha_composite
-      signature: 'alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source: Sequence[int]=(0,0)) -> None'
+      signature: 'alpha_composite(self, im: Image, dest: Sequence[int]=(0,0), source:
+        Sequence[int]=(0,0)) -> None'
       supported_modes:
       - LA
       - RGBA
@@ -493,7 +496,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       param_variants:
       - {}
@@ -609,7 +612,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       param_variants:
       - xy:
@@ -642,7 +645,8 @@ modules:
       - gpu
       - simd
     - name: histogram
-      signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None) -> list[int]'
+      signature: 'histogram(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
+        -> list[int]'
       supported_modes:
       - '1'
       - L
@@ -667,7 +671,7 @@ modules:
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       param_variants:
       - {}
@@ -677,7 +681,8 @@ modules:
       supported_targets:
       - cpu
     - name: point
-      signature: 'point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None) -> Image'
+      signature: 'point(self, lut: Sequence|Callable|ImagePointHandler, mode: str|None=None)
+        -> Image'
       supported_modes:
       - '1'
       - L
@@ -714,7 +719,8 @@ modules:
       - gpu
       - simd
     - name: putdata
-      signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0, offset: float=0.0) -> None'
+      signature: 'putdata(self, data: Sequence|ImagingCore|NumpyArray, scale: float=1.0,
+        offset: float=0.0) -> None'
       supported_modes:
       - '1'
       - CMYK
@@ -733,13 +739,14 @@ modules:
       - gpu
       - simd
     - name: putpixel
-      signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int]) -> None'
+      signature: 'putpixel(self, xy: tuple[int,int], value: float|tuple[int,...]|list[int])
+        -> None'
       supported_modes:
       - L
       - LA
       - RGB
       - RGBA
-      - 1
+      - '1'
       - P
       param_variants:
       - xy:
@@ -755,8 +762,8 @@ modules:
       - gpu
       - simd
     - name: quantize
-      signature: 'quantize(self, colors: int=256, method: int|None=None, kmeans: int=0, palette: Image|None=None, dither:
-        Dither=FLOYDSTEINBERG) -> Image'
+      signature: 'quantize(self, colors: int=256, method: int|None=None, kmeans: int=0,
+        palette: Image|None=None, dither: Dither=FLOYDSTEINBERG) -> Image'
       supported_modes:
       - L
       - RGB
@@ -772,7 +779,8 @@ modules:
       - gpu
       - simd
     - name: reduce
-      signature: 'reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None) -> Image'
+      signature: 'reduce(self, factor: int|tuple[int,int], box: tuple[int,int,int,int]|None=None)
+        -> Image'
       supported_modes:
       - CMYK
       - L
@@ -823,8 +831,9 @@ modules:
       supported_targets:
       - cpu
     - name: transform
-      signature: 'transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler, data: Sequence|None=None,
-        resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None) -> Image'
+      signature: 'transform(self, size: tuple[int,int], method: Transform|ImageTransformHandler,
+        data: Sequence|None=None, resample: int=NEAREST, fill: int=1, fillcolor: float|tuple|str|None=None)
+        -> Image'
       supported_modes:
       - '1'
       - CMYK
@@ -875,7 +884,8 @@ modules:
       - gpu
       - simd
     - name: entropy
-      signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None) -> float'
+      signature: 'entropy(self, mask: Image|None=None, extrema: tuple[float,float]|None=None)
+        -> float'
       supported_modes:
       - '1'
       - L
@@ -910,7 +920,8 @@ modules:
       supported_targets:
       - cpu
     - name: remap_palette
-      signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None) -> Image'
+      signature: 'remap_palette(self, dest_map: list[int], source_palette: bytes|bytearray|None=None)
+        -> Image'
       supported_modes:
       - L
       - P
@@ -926,7 +937,7 @@ modules:
     - name: tobitmap
       signature: 'tobitmap(self, name: str=''image'') -> bytes'
       supported_modes:
-      - 1
+      - '1'
       param_variants:
       - {}
       - name: test
@@ -1191,12 +1202,10 @@ modules:
       edge_cases: []
       status: implemented
       pillow_since: '1.0'
-      supported_targets:
-      - cpu
-      - gpu
-      - simd
+      supported_targets: []
     - name: frombytes
-      signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray, decoder_name: str=''raw'', *args) -> Image'
+      signature: 'frombytes(mode: str, size: tuple[int,int], data: bytes|bytearray,
+        decoder_name: str=''raw'', *args) -> Image'
       supported_modes:
       - '1'
       - CMYK
@@ -1335,7 +1344,8 @@ modules:
   ImageDraw:
     methods:
     - name: arc
-      signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width: int=1) -> None'
+      signature: 'arc(self, xy: Coords, start: float, end: float, fill=None, width:
+        int=1) -> None'
       supported_modes: &id003
       - '1'
       - L
@@ -1356,7 +1366,8 @@ modules:
       - gpu
       - simd
     - name: line
-      signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None) -> None'
+      signature: 'line(self, xy: Coords, fill=None, width: int=0, joint: str|None=None)
+        -> None'
       supported_modes: *id003
       param_variants:
       - xy: line
@@ -1370,7 +1381,8 @@ modules:
       - gpu
       - simd
     - name: rectangle
-      signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1) -> None'
+      signature: 'rectangle(self, xy: Coords, fill=None, outline=None, width: int=1)
+        -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1385,7 +1397,8 @@ modules:
       - gpu
       - simd
     - name: ellipse
-      signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1) -> None'
+      signature: 'ellipse(self, xy: Coords, fill=None, outline=None, width: int=1)
+        -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1397,7 +1410,8 @@ modules:
       - gpu
       - simd
     - name: polygon
-      signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1) -> None'
+      signature: 'polygon(self, xy: Coords, fill=None, outline=None, width: int=1)
+        -> None'
       supported_modes: *id003
       param_variants:
       - xy: polygon
@@ -1409,8 +1423,9 @@ modules:
       - gpu
       - simd
     - name: text
-      signature: 'text(self, xy: tuple[float,float], text: str, fill=None, font=None, anchor: str|None=None, spacing: float=4,
-        align: str=''left'', direction: str|None=None, features: list|None=None, language: str|None=None, stroke_width: float=0,
+      signature: 'text(self, xy: tuple[float,float], text: str, fill=None, font=None,
+        anchor: str|None=None, spacing: float=4, align: str=''left'', direction: str|None=None,
+        features: list|None=None, language: str|None=None, stroke_width: float=0,
         stroke_fill=None, embedded_color: bool=False) -> None'
       supported_modes: *id003
       param_variants:
@@ -1426,8 +1441,9 @@ modules:
       - gpu
       - simd
     - name: multiline_text
-      signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None, font=None, anchor=None, spacing: float=4,
-        align: str=''left'', direction=None, features=None, language=None, stroke_width: float=0, stroke_fill=None, embedded_color=False,
+      signature: 'multiline_text(self, xy: tuple[float,float], text: str, fill=None,
+        font=None, anchor=None, spacing: float=4, align: str=''left'', direction=None,
+        features=None, language=None, stroke_width: float=0, stroke_fill=None, embedded_color=False,
         *, font_size=None) -> None'
       supported_modes: *id003
       param_variants:
@@ -1445,7 +1461,8 @@ modules:
       - gpu
       - simd
     - name: circle
-      signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None, width: int=1) -> None'
+      signature: 'circle(self, xy: Sequence[float], radius: float, fill=None, outline=None,
+        width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy:
@@ -1460,8 +1477,8 @@ modules:
       - gpu
       - simd
     - name: rounded_rectangle
-      signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None, outline=None, width: int=1, *, corners:
-        tuple|None=None) -> None'
+      signature: 'rounded_rectangle(self, xy: Coords, radius: float=0, fill=None,
+        outline=None, width: int=1, *, corners: tuple|None=None) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1474,8 +1491,8 @@ modules:
       - gpu
       - simd
     - name: regular_polygon
-      signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0, fill=None, outline=None, width:
-        int=1) -> None'
+      signature: 'regular_polygon(self, bounding_circle, n_sides: int, rotation: float=0,
+        fill=None, outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants: []
       edge_cases: []
@@ -1486,7 +1503,8 @@ modules:
       - gpu
       - simd
     - name: chord
-      signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None, width: int=1) -> None'
+      signature: 'chord(self, xy: Coords, start: float, end: float, fill=None, outline=None,
+        width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1500,7 +1518,8 @@ modules:
       - gpu
       - simd
     - name: pieslice
-      signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None, outline=None, width: int=1) -> None'
+      signature: 'pieslice(self, xy: Coords, start: float, end: float, fill=None,
+        outline=None, width: int=1) -> None'
       supported_modes: *id003
       param_variants:
       - xy: box
@@ -1540,8 +1559,9 @@ modules:
       - gpu
       - simd
     - name: textbbox
-      signature: textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left', direction=None, features=None,
-        language=None, stroke_width=0, embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
+      signature: textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
+        direction=None, features=None, language=None, stroke_width=0, embedded_color=False,
+        *, font_size=None) -> tuple[float,float,float,float]
       supported_modes:
       - RGB
       - RGBA
@@ -1556,8 +1576,9 @@ modules:
       - gpu
       - simd
     - name: multiline_textbbox
-      signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left', direction=None, features=None,
-        language=None, stroke_width=0, embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
+      signature: multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4,
+        align='left', direction=None, features=None, language=None, stroke_width=0,
+        embedded_color=False, *, font_size=None) -> tuple[float,float,float,float]
       supported_modes:
       - RGB
       - RGBA
@@ -1572,8 +1593,8 @@ modules:
       - gpu
       - simd
     - name: textlength
-      signature: textlength(self, text, font=None, direction=None, features=None, language=None, embedded_color=False, *,
-        font_size=None) -> float
+      signature: textlength(self, text, font=None, direction=None, features=None,
+        language=None, embedded_color=False, *, font_size=None) -> float
       supported_modes:
       - RGB
       - RGBA
@@ -1724,7 +1745,8 @@ modules:
       - simd
       supported_modes: *id002
     - name: UnsharpMask
-      signature: 'ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold: int=3)'
+      signature: 'ImageFilter.UnsharpMask(radius: float=2, percent: int=150, threshold:
+        int=3)'
       status: implemented
       supported_targets:
       - cpu
@@ -1732,7 +1754,8 @@ modules:
       - simd
       supported_modes: *id002
     - name: Kernel
-      signature: 'ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float], scale: float|None=None, offset: float=0)'
+      signature: 'ImageFilter.Kernel(size: tuple[int,int], kernel: Sequence[float],
+        scale: float|None=None, offset: float=0)'
       status: implemented
       supported_targets:
       - cpu
@@ -1804,7 +1827,8 @@ modules:
       - RGB
       - RGBA
     - name: Color3DLUT
-      signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3, target_mode: str|None=None)'
+      signature: 'ImageFilter.Color3DLUT(size: int|tuple, table, channels: int=3,
+        target_mode: str|None=None)'
       supported_modes:
       - RGB
       status: implemented
@@ -1849,8 +1873,8 @@ modules:
   ImageOps:
     functions:
     - name: autocontrast
-      signature: 'autocontrast(image: Image, cutoff: float|tuple=0, ignore: int|Sequence|None=None, mask: Image|None=None,
-        preserve_tone: bool=False) -> Image'
+      signature: 'autocontrast(image: Image, cutoff: float|tuple=0, ignore: int|Sequence|None=None,
+        mask: Image|None=None, preserve_tone: bool=False) -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -1862,8 +1886,8 @@ modules:
       - RGB
       - RGBA
     - name: colorize
-      signature: 'colorize(image: Image, black: str|tuple, white: str|tuple, mid=None, blackpoint: int=0, whitepoint: int=255,
-        midpoint: int=127) -> Image'
+      signature: 'colorize(image: Image, black: str|tuple, white: str|tuple, mid=None,
+        blackpoint: int=0, whitepoint: int=255, midpoint: int=127) -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -1873,7 +1897,8 @@ modules:
       - L
       - RGB
     - name: contain
-      signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC) -> Image'
+      signature: 'contain(image: Image, size: tuple[int,int], method: int=BICUBIC)
+        -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -1881,7 +1906,8 @@ modules:
       - simd
       supported_modes: *id002
     - name: cover
-      signature: 'cover(image: Image, size: tuple[int,int], method: int=BICUBIC) -> Image'
+      signature: 'cover(image: Image, size: tuple[int,int], method: int=BICUBIC) ->
+        Image'
       status: implemented
       supported_targets:
       - cpu
@@ -1909,7 +1935,8 @@ modules:
       - RGB
       - RGBA
     - name: expand
-      signature: 'expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0) -> Image'
+      signature: 'expand(image: Image, border: int|tuple=0, fill: str|int|tuple=0)
+        -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -1917,8 +1944,8 @@ modules:
       - simd
       supported_modes: *id002
     - name: fit
-      signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed: float=0.0, centering: tuple[float,float]=(0.5,0.5))
-        -> Image'
+      signature: 'fit(image: Image, size: tuple[int,int], method: int=BICUBIC, bleed:
+        float=0.0, centering: tuple[float,float]=(0.5,0.5)) -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -1967,8 +1994,8 @@ modules:
       - simd
       supported_modes: *id002
     - name: pad
-      signature: 'pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None, centering: tuple[float,float]=(0.5,0.5))
-        -> Image'
+      signature: 'pad(image: Image, size: tuple[int,int], method: int=BICUBIC, color=None,
+        centering: tuple[float,float]=(0.5,0.5)) -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -2015,7 +2042,8 @@ modules:
       - gpu
       - simd
     - name: deform
-      signature: 'deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR) -> Image'
+      signature: 'deform(image: Image, deformer: SupportsGetMesh, resample: int=BILINEAR)
+        -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -2024,7 +2052,8 @@ modules:
   ImageChops:
     functions:
     - name: add
-      signature: 'add(image1: Image, image2: Image, scale: float=1.0, offset: float=0) -> Image'
+      signature: 'add(image1: Image, image2: Image, scale: float=1.0, offset: float=0)
+        -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -2230,7 +2259,8 @@ modules:
       - RGB
       - RGBA
     - name: subtract
-      signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset: float=0) -> Image'
+      signature: 'subtract(image1: Image, image2: Image, scale: float=1.0, offset:
+        float=0) -> Image'
       status: implemented
       supported_targets:
       - cpu
@@ -2283,7 +2313,8 @@ modules:
       - P
       - RGB
     - name: getcolor
-      signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) -> int'
+      signature: 'getcolor(self, color: tuple[int,...], image: Image|None=None) ->
+        int'
       status: implemented
       supported_targets:
       - cpu
@@ -2339,8 +2370,8 @@ modules:
       - RGB
       - RGBA
     - name: truetype
-      signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0, encoding: str='''', layout_engine:
-        Layout|None=None) -> FreeTypeFont'
+      signature: 'truetype(font: StrOrBytesPath|BinaryIO, size: float=10, index: int=0,
+        encoding: str='''', layout_engine: Layout|None=None) -> FreeTypeFont'
       status: implemented
       supported_targets:
       - cpu

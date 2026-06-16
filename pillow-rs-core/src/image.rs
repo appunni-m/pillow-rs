@@ -433,7 +433,9 @@ impl Image {
                 // holds palette indices. For palette-safe ops, operate on indices
                 // directly (preserving P-mode). For other ops, convert to RGB so
                 // filters, enhance, etc. work on actual colors.
-                if matches!(**source, Image::Paletted(_)) {
+                let is_p_mode = matches!(**source, Image::Paletted(_))
+                    || source.explicit_mode() == Some("P");
+                if is_p_mode {
                     let all_safe = ops.iter().all(Self::is_palette_safe_op);
                     if all_safe {
                         // Operate directly on palette indices (Luma8 = index bytes)
@@ -444,6 +446,23 @@ impl Image {
                     // Non-safe ops: convert to RGB
                     if let Some(rgb) = source.paletted_to_rgb() {
                         img = rgb;
+                    } else {
+                        // Pipeline with P-mode Loaded source: indices in img (Luma8),
+                        // palette stored on pipeline. Convert indices to RGB.
+                        let palette = _palette.clone().or_else(|| source.palette());
+                        if let Some(palette) = palette {
+                        let (w, h) = (img.width(), img.height());
+                        let indices = img.to_luma8();
+                        let rgb = image::RgbImage::from_fn(w, h, |x, y| {
+                            let idx = indices.get_pixel(x, y)[0] as usize;
+                            let p = idx * 3;
+                            let r = palette.get(p).copied().unwrap_or(0);
+                            let g = palette.get(p + 1).copied().unwrap_or(0);
+                            let b = palette.get(p + 2).copied().unwrap_or(0);
+                            image::Rgb([r, g, b])
+                        });
+                            img = DynamicImage::ImageRgb8(rgb);
+                        }
                     }
                 }
 
@@ -492,7 +511,22 @@ impl Image {
     /// If the current Image is already a Pipeline, appends to its ops vec.
     /// Otherwise wraps in a new Pipeline.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
-        let explicit_mode = source.explicit_mode().map(|s| s.to_string());
+        // Ops that change the image mode fundamentally should clear explicit_mode
+        let explicit_mode = match &op {
+            PipelineOp::Grayscale | PipelineOp::Convert { .. } | PipelineOp::Quantize { .. } => None,
+            // Draw ops always produce RGBA output regardless of input mode
+            PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. } => None,
+            _ => source.explicit_mode().map(|s| s.to_string()),
+        };
         let source_palette = source.extract_palette();
         match source {
             Image::Pipeline {
@@ -938,6 +972,7 @@ impl Image {
     fn extract_palette(&self) -> Option<Vec<u8>> {
         match self {
             Image::Paletted(data) => Some(data.palette.clone()),
+            Image::Pipeline { palette, .. } => palette.clone(),
             _ => None,
         }
     }
@@ -1349,12 +1384,22 @@ impl Image {
     /// PIL creates an inverse mapping: old_value_not_in_dest_map -> 0.
     pub fn remap_palette(&self, dest_map: &[u8]) -> Result<Image, PilError> {
         // Defer remap via pipeline — PipelineOp::RemapPalette handles P/L/RGB modes
-        Ok(Image::push_op(
+        // PIL: remap_palette always returns a P-mode image (palette indices).
+        let mut result = Image::push_op(
             self,
             PipelineOp::RemapPalette {
                 dest_map: dest_map.to_vec(),
             },
-        ))
+        );
+        // Always tag the result as P-mode, regardless of source mode.
+        if let Image::Pipeline {
+            explicit_mode: ref mut em,
+            ..
+        } = &mut result
+        {
+            *em = Some("P".to_string());
+        }
+        Ok(result)
     }
 }
 /// Decode a paletted PNG from a reader, returning the index bytes + palette.
