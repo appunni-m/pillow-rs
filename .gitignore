@@ -18,3 +18,4 @@ venv/
 tests/fixtures/
 tests/fixtures/
 pybak/
+libnull.rlib
