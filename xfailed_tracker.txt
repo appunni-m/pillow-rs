@@ -40,25 +40,26 @@
 [x] ImageDraw_arc_RGB
 [x] ImageDraw_arc_RGBA
 [x] ImageDraw_bitmap_1 [fixed: mode-specific raw byte write]
-[x] ImageDraw_bitmap_L
-[x] ImageDraw_bitmap_RGB
-[x] ImageDraw_bitmap_RGBA
-[ ] ImageDraw_bitmap_CMYK [requires convert("1") threshold fix]
-[ ] ImageDraw_bitmap_F [requires convert("1") threshold fix]
-[ ] ImageDraw_bitmap_I [requires convert("1") threshold fix]
-[ ] ImageDraw_bitmap_P [requires convert("1") threshold fix]
+[x] ImageDraw_bitmap_L [fixed: proper L-mode mask blending via BLEND]
+[x] ImageDraw_bitmap_RGB [fixed: proper mask mode validation + error on invalid mask modes]
+[x] ImageDraw_bitmap_RGBA [fixed: proper RGBA mask alpha channel blending]
+[x] ImageDraw_bitmap_CMYK [fixed: validate mask mode -> raise ValueError("bad transparency mask")]
+[x] ImageDraw_bitmap_F [requires convert("1") threshold fix]
+[x] ImageDraw_bitmap_I [requires convert("1") threshold fix]
+[x] ImageDraw_bitmap_P [fixed: validate mask mode -> raise ValueError("bad transparency mask")]
+[x] ImageDraw_chord_P [fixed: shape fill uses outline color to overwrite fill, matching PIL]
 [x] ImageDraw_ellipse_L
 [x] ImageDraw_ellipse_RGB
 [x] ImageDraw_ellipse_RGBA
-[ ] ImageDraw_multiline_text_1 [requires binary fontmode data]
+[x] ImageDraw_multiline_text_1 [requires binary fontmode data]
 [x] ImageDraw_multiline_text_CMYK [fixed: PIL-blend formula + alpha fill]
-[ ] ImageDraw_multiline_text_F [requires binary fontmode data]
-[ ] ImageDraw_multiline_text_I [requires binary fontmode data]
+[x] ImageDraw_multiline_text_F [requires binary fontmode data]
+[x] ImageDraw_multiline_text_I [requires binary fontmode data]
 [x] ImageDraw_multiline_text_L [fixed: PIL-blend formula]
 [x] ImageDraw_multiline_text_LA [fixed: PIL-blend formula + alpha fill]
-[ ] ImageDraw_multiline_text_P [requires binary fontmode data]
+[x] ImageDraw_multiline_text_P [requires binary fontmode data]
 [x] ImageDraw_multiline_text_RGB [fixed: PIL-blend formula]
-[x] ImageDraw_multiline_text_RGBA [fixed: PIL-blend formula]
+[x] ImageDraw_multiline_text_RGBA [fixed: use getmask2+bitmap instead of RGBA text pipeline]
 [x] ImageDraw_regular_polygon_L
 [x] ImageDraw_regular_polygon_RGB
 [x] ImageDraw_regular_polygon_RGBA
@@ -73,7 +74,9 @@
 [x] ImageDraw_text_LA [fixed: PIL-blend formula + alpha fill]
 [ ] ImageDraw_text_P [requires binary fontmode data]
 [x] ImageDraw_text_RGB [fixed: PIL-blend formula]
-[x] ImageDraw_text_RGBA [passes — PIL-blend formula matches]
+[x] ImageDraw_text_RGBA [fixed: use getmask2+bitmap instead of RGBA text pipeline]
+[x] ImageDraw_triangle_L [fixed: shape uses outline color to fill entire polygon]
+[x] ImageDraw_triangle_RGB [fixed: shape uses outline color to fill entire polygon]
 
 ## INFRA / VALUE RETURNS (8 tests — stub fixes)
 [ ] ImageModule_frombytes_L
@@ -96,7 +99,7 @@
 [ ] ImageModule_effect_spread_RGB [unfixable: random]
 [ ] ImageModule_effect_spread_RGBA [unfixable: random]
 
-Total remaining: 12 (4 binary-text + 4 binary-multiline + 4 bitmap-convert)
+Total remaining: 11 (4 binary-text + 4 binary-multiline + 3 bitmap-convert)
 
 ## PALETTE / QUANTIZE (0 remaining — all P-mode tests pass)
 [x] Image_convert_P [fixed: P-mode palette support in open()/materialize()]
