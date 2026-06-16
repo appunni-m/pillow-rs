@@ -413,13 +413,12 @@ class Image:
         (678 bytes). Full custom palette has 256 colors (768 bytes).
         """
         if hasattr(self, '_palette'):
-            # Trim trailing zero triples to match PIL (done in Rust)
-            return self._rust_image.getpalette_trimmed()
+            return self._palette
         try:
             p = self._rust_image.getpalette_trimmed()
             if p:
                 self._palette = list(p)
-                return p
+                return self._palette
         except Exception:
             pass
         return None
