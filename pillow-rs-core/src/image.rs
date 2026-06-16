@@ -1300,57 +1300,13 @@ impl Image {
     /// For other modes, operates on RGB color values.
     /// PIL creates an inverse mapping: old_value_not_in_dest_map -> 0.
     pub fn remap_palette(&self, dest_map: &[u8]) -> Result<Image, PilError> {
-        let img = self.materialize()?;
-
-        // PIL builds inverse lookup: inverse[dest_map[i]] = i, all else -> 0
-        let mut inverse = [0u8; 256];
-        for (i, &old_pos) in dest_map.iter().enumerate() {
-            let old_idx = old_pos as usize;
-            if old_idx < 256 {
-                inverse[old_idx] = i as u8;
-            }
-        }
-
-        // P-mode: operate on palette indices directly
-        if self.explicit_mode() == Some("P") {
-            let gray = img.to_luma8();
-            let (w, h) = gray.dimensions();
-            let mut out = image::GrayImage::new(w, h);
-            for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
-                op[0] = inverse[ip[0] as usize];
-            }
-            let palette = self.palette().unwrap_or_else(crate::image::default_palette);
-            return Ok(Image::Paletted(PalettedData {
-                indices: out,
-                palette,
-            }));
-        }
-
-        // L-mode: operate on each luma value, returning P-mode output
-        if img.color() == image::ColorType::L8 {
-            let gray = img.to_luma8();
-            let (w, h) = gray.dimensions();
-            let mut out = image::GrayImage::new(w, h);
-            for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
-                op[0] = inverse[ip[0] as usize];
-            }
-            let palette = self.palette().unwrap_or_else(crate::image::default_palette);
-            return Ok(Image::Paletted(PalettedData {
-                indices: out,
-                palette,
-            }));
-        }
-
-        // Non-P, non-L: operate on each RGB channel
-        let rgb = img.to_rgb8();
-        let (w, h) = rgb.dimensions();
-        let mut out = image::RgbImage::new(w, h);
-        for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-            op[0] = inverse[ip[0] as usize];
-            op[1] = inverse[ip[1] as usize];
-            op[2] = inverse[ip[2] as usize];
-        }
-        Ok(Image::Loaded(DynamicImage::ImageRgb8(out), None))
+        // Defer remap via pipeline — PipelineOp::RemapPalette handles P/L/RGB modes
+        Ok(Image::push_op(
+            self,
+            PipelineOp::RemapPalette {
+                dest_map: dest_map.to_vec(),
+            },
+        ))
     }
 }
 /// Decode a paletted PNG from a reader, returning the index bytes + palette.
