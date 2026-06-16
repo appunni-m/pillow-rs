@@ -207,7 +207,7 @@ impl PyImage {
         self.inner.palette()
     }
 
-    fn apply_transparency(&self) -> PyResult<()> {
+    fn apply_transparency(&mut self) -> PyResult<()> {
         self.inner.apply_transparency().map_err(map_error)
     }
 
@@ -486,9 +486,8 @@ impl PyImage {
                     .map_err(map_error)
             }
             "MESH" => {
-                let mesh_data = data.ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err("MESH requires data")
-                })?;
+                let mesh_data = data
+                    .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("MESH requires data"))?;
                 self.inner
                     .transform_mesh(size, mesh_data, fill)
                     .map(|i| PyImage { inner: i })
@@ -1265,7 +1264,10 @@ impl PyDraw {
     }
 }
 
-fn parse_draw_color(val: Option<&Bound<'_, PyAny>>, mode: Option<&str>) -> PyResult<(u8, u8, u8, u8)> {
+fn parse_draw_color(
+    val: Option<&Bound<'_, PyAny>>,
+    mode: Option<&str>,
+) -> PyResult<(u8, u8, u8, u8)> {
     let v = match val {
         Some(v) => v,
         None => return Ok((0, 0, 0, 255)), // default black

@@ -168,7 +168,11 @@ impl Font {
                         for x in 0..metrics.width {
                             let cov = bitmap[y * metrics.width + x];
                             let effective_cov = if binary {
-                                if cov >= 128 { 255u8 } else { 0u8 }
+                                if cov >= 128 {
+                                    255u8
+                                } else {
+                                    0u8
+                                }
                             } else {
                                 cov
                             };

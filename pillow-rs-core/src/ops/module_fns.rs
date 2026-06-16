@@ -227,16 +227,8 @@ pub fn effect_mandelbrot(
     }
 
     // PIL's exact stride computation
-    let dr = if w > 1 {
-        width / (w - 1) as f64
-    } else {
-        0.0
-    };
-    let di = if h > 1 {
-        height / (h - 1) as f64
-    } else {
-        0.0
-    };
+    let dr = if w > 1 { width / (w - 1) as f64 } else { 0.0 };
+    let di = if h > 1 { height / (h - 1) as f64 } else { 0.0 };
 
     // PIL uses escape radius 100.0 (NOT the common 4.0)
     let radius = 100.0f64;

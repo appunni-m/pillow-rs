@@ -4,15 +4,16 @@
 // Mode-aware: fill color respects image mode channels.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
+//
+// Source dimensions come from header width/height (= cur_w/cur_h).
+// Output dimensions computed as (width + 2*border, height + 2*border).
 
 struct Params {
-    width: u32,    // output width
-    height: u32,   // output height
+    width: u32,    // source width (from header = cur_w)
+    height: u32,   // source height (from header = cur_h)
     mode: u32,     // 0=L, 1=LA, 2=RGB, 3=RGBA
     _pad: u32,
     border: u32,   // border width in pixels
-    src_w: u32,    // source width
-    src_h: u32,    // source height
     fill: u32,     // packed fill color (0xAABBGGRR)
 }
 
@@ -28,13 +29,15 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if gid.x >= params.width || gid.y >= params.height { return; }
-
     let b = params.border;
-    let idx = gid.y * params.width + gid.x;
+    let out_w = params.width + 2u * b;
+    let out_h = params.height + 2u * b;
+    if gid.x >= out_w || gid.y >= out_h { return; }
+
+    let idx = gid.y * out_w + gid.x;
 
     // Check if pixel is in the border region
-    if gid.x < b || gid.x >= b + params.src_w || gid.y < b || gid.y >= b + params.src_h {
+    if gid.x < b || gid.x >= b + params.width || gid.y < b || gid.y >= b + params.height {
         // Border pixel: use fill color
         let f = params.fill;
         let fr = f & 0xffu;
@@ -52,7 +55,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // Inner pixel: copy from source
         let src_x = gid.x - b;
         let src_y = gid.y - b;
-        let pixel = input[src_y * params.src_w + src_x];
+        let pixel = input[src_y * params.width + src_x];
 
         let r = pixel & 0xffu;
         let g = (pixel >> 8u) & 0xffu;

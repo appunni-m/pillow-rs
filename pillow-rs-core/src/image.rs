@@ -368,13 +368,17 @@ impl Image {
         match op {
             // Geometry ops — operate on pixels regardless of meaning
             PipelineOp::Crop { .. } => true,
-            PipelineOp::Resize { filter, .. } => matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box),
+            PipelineOp::Resize { filter, .. } => {
+                matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box)
+            }
             PipelineOp::Rotate { .. } => true, // Always uses nearest for P-mode
             PipelineOp::Transpose { .. } => true,
             PipelineOp::Transform { .. } => true, // Always uses nearest for P-mode
             PipelineOp::EffectSpread { .. } => true,
             PipelineOp::Reduce { .. } => true,
-            PipelineOp::Thumbnail { filter, .. } => matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box),
+            PipelineOp::Thumbnail { filter, .. } => {
+                matches!(filter, ResampleFilter::Nearest | ResampleFilter::Box)
+            }
 
             // Value ops — apply function/LUT to each pixel value (index)
             PipelineOp::PointOp { .. } => true,
@@ -468,7 +472,7 @@ impl Image {
                 || explicit_mode.as_deref() == Some("P") =>
             {
                 let mut img = source.materialize()?; // Paletted → Luma8 (indices)
-                // Check if all ops are palette-safe
+                                                     // Check if all ops are palette-safe
                 if ops.iter().all(Self::is_palette_safe_op) {
                     let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
                     img = crate::compute::execute_batch(b, ops, &img, Some("P"))?;
@@ -595,7 +599,16 @@ impl Image {
             let max_val = sorted[sorted.len() - 1];
             if (max_val - min_val).abs() < f64::EPSILON {
                 return Ok(vec![vec![
-                    n_pixels as f64, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    n_pixels as f64,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
                 ]]);
             }
             let scale = 255.0 / (max_val - min_val);
@@ -607,8 +620,16 @@ impl Image {
                 }
             }
             let count = n_pixels as f64;
-            let sum: f64 = hist.iter().enumerate().map(|(i, &c)| i as f64 * c as f64).sum();
-            let sum2: f64 = hist.iter().enumerate().map(|(i, &c)| (i as f64) * (i as f64) * c as f64).sum();
+            let sum: f64 = hist
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| i as f64 * c as f64)
+                .sum();
+            let sum2: f64 = hist
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| (i as f64) * (i as f64) * c as f64)
+                .sum();
             let mean = sum / count;
             let rms = (sum2 / count).sqrt();
             let var = (sum2 - sum * sum / count) / count;
@@ -633,8 +654,16 @@ impl Image {
                 }
             }
             return Ok(vec![vec![
-                count, sum, sum2, mean, median, rms, var, stddev,
-                min_bin as f64, max_bin as f64,
+                count,
+                sum,
+                sum2,
+                mean,
+                median,
+                rms,
+                var,
+                stddev,
+                min_bin as f64,
+                max_bin as f64,
             ]]);
         }
 
@@ -725,7 +754,9 @@ impl Image {
         let min = sorted[0];
         let max = sorted[sorted.len() - 1];
         let median = sorted[sorted.len() / 2];
-        vec![vec![count, sum, sum2, mean, median, rms, var, stddev, min, max]]
+        vec![vec![
+            count, sum, sum2, mean, median, rms, var, stddev, min, max,
+        ]]
     }
 
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
@@ -849,12 +880,31 @@ impl Image {
     }
 
     /// Apply transparency mask to image.
-    /// PIL: For P-mode images with palette transparency, converts to RGBA.
-    /// For RGBA, already has alpha. For other modes, does nothing. Returns None.
-    pub fn apply_transparency(&self) -> Result<(), PilError> {
-        // PIL's apply_transparency is mainly for P-mode palette transparency.
-        // For L, LA, RGB, RGBA: no-op. For P-mode with transparency: convert to RGBA.
-        // Currently a no-op for all modes — palette transparency not yet implemented.
+    /// PIL: For P-mode images with palette transparency, converts the palette
+    /// from RGB to RGBA format, setting alpha=0 for transparent entries.
+    /// For non-P-mode images, this is a no-op.
+    /// Our implementation: For Paletted images, expands palette indices to
+    /// full RGBA pixels with alpha=255 (since we don't store separate
+    /// transparency info). For other modes, no-op.
+    pub fn apply_transparency(&mut self) -> Result<(), PilError> {
+        // Extract Paletted data via clone to avoid borrow issues with self-mutation
+        let pal_data = match self {
+            Image::Paletted(data) => Some((data.indices.clone(), data.palette.clone())),
+            _ => None,
+        };
+
+        if let Some((indices, palette)) = pal_data {
+            let (w, h) = indices.dimensions();
+            let rgba = image::RgbaImage::from_fn(w, h, |x, y| {
+                let idx = indices.get_pixel(x, y)[0] as usize;
+                let base = idx * 3;
+                let r = palette.get(base).copied().unwrap_or(0);
+                let g = palette.get(base + 1).copied().unwrap_or(0);
+                let b = palette.get(base + 2).copied().unwrap_or(0);
+                image::Rgba([r, g, b, 255])
+            });
+            *self = Image::Loaded(DynamicImage::ImageRgba8(rgba), None);
+        }
         Ok(())
     }
 
@@ -1071,9 +1121,7 @@ impl Image {
         // Defer extraction via pipeline
         Ok(Image::push_op(
             self,
-            PipelineOp::ExtractBand {
-                index: ch as u8,
-            },
+            PipelineOp::ExtractBand { index: ch as u8 },
         ))
     }
 
