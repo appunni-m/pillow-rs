@@ -218,102 +218,175 @@ pillow-rs-js/       wasm-bindgen — thin wrapper, ~200 lines
 
 ---
 
+## Deferred Pipeline
+
+Every image operation in pillow-rs is recorded as a `PipelineOp` enum variant — it is **not executed immediately**. Execution is deferred until the image is materialized (on `save()`, `tobytes()`, or explicit `.materialize()`).
+
+### How it works
+
+```rust
+// These do NOT process pixels — they only record operations:
+let img = Image::open("photo.jpg")?;
+let img = img.resize((800, 600), Some("LANCZOS"))?;     // records Resize op
+let img = img.filter("BLUR")?;                           // records Filter3x3 op
+let img = img.convert("L")?;                             // records Convert op
+
+// Execution happens here — all 3 ops run in one pass:
+img.save("output.png", None)?;
+```
+
+### Why deferred execution matters
+
+| Naive approach | Deferred pipeline |
+|----------------|-------------------|
+| `resize` → allocate new 800×600 image → return | `resize` → push `PipelineOp::Resize` onto list → return (zero copy) |
+| `filter` → allocate new image → return | `filter` → push `PipelineOp::Filter3x3` onto list → return |
+| `convert` → allocate new image → return | `convert` → push `PipelineOp::Convert` onto list → return |
+| **3 allocations, 3 full-image passes** | **3 ops recorded, 1 allocation, 1 pass** |
+
+At materialize time, the entire op chain is dispatched through the compute backend:
+
+```rust
+// compute/mod.rs — batch execution
+pub fn execute_batch(
+    backend: Backend,
+    ops: &[PipelineOp],      // 3 ops, not 3 separate images
+    img: &DynamicImage,      // source image, decoded once
+    mode: Option<&str>,
+) -> Result<DynamicImage>
+```
+
+### P-mode preservation
+
+For paletted images (mode `P`), the pipeline checks whether ALL ops are "palette-safe" — operations like `crop`, `resize` (nearest), `transpose`, and `invert` that work on palette indices without needing actual color values. If so, the entire chain executes directly on the 1-byte index buffer, avoiding the expensive palette → RGB conversion entirely:
+
+```rust
+// image.rs:460 — palette-safe fast path
+if is_p_mode && ops.iter().all(Self::is_palette_safe_op) {
+    return execute_batch(b, ops, &img, Some("P")); // operates on indices
+}
+// Otherwise: convert P → RGB, then execute ops on actual colors
+```
+
+### What it enables
+
+- **Zero-copy chaining** — `resize → crop → filter → save` processes pixels once
+- **Backend selection** — the full op list is inspected to pick the best backend (CPU, GPU, SIMD)
+- **Future GPU fusion** — shaders for consecutive ops can be fused into a single compute pass
+- **Palette efficiency** — P-mode images stay as 1-byte indices through the entire chain
+
+The pipeline currently records **60+ operation types** spanning geometry, color, filters, compositing, drawing, effects, and gradients — all in `pillow-rs-core/src/pipeline.rs`.
+
+---
+
+## Manifest-Driven Development
+
+`manifest.yaml` is the **single source of truth** for the entire project. It defines every function, its signature, supported color modes, parameter variants, and edge cases — all in one machine-readable file.
+
+### What it drives
+
+```
+manifest.yaml
+    │
+    ├──→ scripts/generate_stubs.py      → Rust stub functions in pillow-rs-core
+    ├──→ scripts/generate_fixtures.py   → Test fixtures (inputs + expected outputs)
+    ├──→ scripts/bench/bench_spec.py    → Benchmark specification (166 functions)
+    ├──→ scripts/coverage/compute_coverage.py → Trust verification per function
+    ├──→ tests/test_parity.py           → Pytest parametrization (1,555 tests)
+    └──→ docs/COVERAGE.md              → Auto-generated coverage report
+```
+
+### Why it matters
+
+| Without manifest | With manifest |
+|------------------|---------------|
+| Manually sync stubs ↔ tests ↔ docs | **One edit updates everything** |
+| Unknown which modes a function supports | Explicit `supported_modes` per function |
+| Ad-hoc test generation per function | **Uniform fixture-based tests** from a single spec |
+| Coverage gaps invisible | `compute_coverage.py` catches every gap |
+| No way to track Pillow version parity | Tracks `pillow_since` per function |
+
+Adding a new function is one edit to `manifest.yaml`, then run the generators. Tests, stubs, benchmark specs, and coverage tracking all update automatically from that single definition.
+
+---
+
 ## Project Structure
 
 ```
 .
-├── manifest.yaml              API surface definition (single source of truth)
-├── BENCHMARKS.md              Auto-generated full benchmark report
-├── pillow-rs-core/
-│   ├── src/
-│   │   ├── image.rs           Image struct, pixel access, mode handling
-│   │   ├── lazy.rs            LazyImage (deferred decode)
-│   │   ├── ops/               Operation modules
-│   │   │   ├── filter.rs      Convolution filters
-│   │   │   ├── chops.rs       Channel operations
-│   │   │   ├── imageops.rs    PIL.ImageOps
-│   │   │   ├── enhance.rs     ImageEnhance
-│   │   │   ├── resize.rs      Resize, thumbnail, reduce
-│   │   │   ├── crop.rs        Crop, copy, paste
-│   │   │   ├── convert.rs     Mode/format conversion
-│   │   │   ├── draw/          ImageDraw (per-mode native paths)
-│   │   │   └── ...
-│   │   └── gpu/
-│   │       ├── mod.rs         GpuEngine (flag-controlled)
-│   │       └── shaders/       WGSL compute shaders (5 families)
-│   └── benches/
-│       ├── native_cpu.rs      Criterion benchmarks (50+ functions)
-│       └── bench_utils.rs     Shared benchmarking helpers
-├── pillow-rs-py/              PyO3 bindings
-│   └── python/pillow_rs/      Pure delegation Python wrappers
-├── pillow-rs-js/              wasm-bindgen
-│   └── bench_page/            Browser benchmark page + harness
+├── manifest.yaml                  API surface definition (single source of truth)
+├── BENCHMARKS.md                  Auto-generated benchmark report
+├── pillow-rs-core/src/
+│   ├── image.rs                   Image struct, pixel access, mode handling
+│   ├── color.rs                   Color parsing and palette ops
+│   ├── error.rs                   Error types (thiserror)
+│   ├── format.rs                  Format detection
+│   ├── pipeline.rs                Streaming operation pipeline
+│   ├── ops/
+│   │   ├── filter.rs              Convolution filters
+│   │   ├── chops.rs               Channel operations
+│   │   ├── imageops.rs            PIL.ImageOps
+│   │   ├── enhance.rs             ImageEnhance
+│   │   ├── resize.rs              Resize, thumbnail, reduce
+│   │   ├── crop.rs                Crop, copy
+│   │   ├── convert.rs             Mode/format conversion
+│   │   ├── rotate.rs              Arbitrary rotation
+│   │   ├── transpose.rs           Flip, mirror, transpose
+│   │   ├── transform.rs           Affine/perspective transforms
+│   │   ├── quantize.rs            Color quantization
+│   │   ├── paste.rs               Paste and alpha compositing
+│   │   ├── split.rs               Band splitting and merging
+│   │   ├── module_fns.rs          Misc Image module functions
+│   │   └── draw/                  ImageDraw (per-mode native paths)
+│   ├── bitmap_font.rs             Built-in bitmap font (PIL default)
+│   ├── font/                      TrueType font (fontdue)
+│   ├── compute/                   GPU/SIMD compute backends (mod, registry, pools)
+│   └── formats/                   Image format encode/decode
+├── pillow-rs-py/
+│   ├── src/lib.rs                 PyO3 bindings (all delegation to core)
+│   └── python/pillow_rs/          Pure-delegation Python wrappers
+├── pillow-rs-js/
+│   ├── src/lib.rs                 wasm-bindgen (all delegation to core)
+│   ├── tests/                     WASM test harness (browser + Node.js)
+│   └── bench_page/                Browser benchmark page
 ├── scripts/
-│   ├── bench/                 Benchmark orchestration (bench_all.sh)
-│   ├── coverage/              Coverage computation & validation
-│   └── generate_stubs.py      Manifest → Rust stub generator
-└── tests/                     PIL parity test suite (1,555 tests)
+│   ├── bench/                     Benchmark orchestration (bench_all.sh)
+│   ├── coverage/                  Coverage computation & validation
+│   ├── build_and_test.sh          Build + generate fixtures + run tests
+│   ├── ci_coverage.sh             Full CI pipeline
+│   ├── generate_fixtures.py       Manifest → test fixtures
+│   └── generate_stubs.py          Manifest → Rust stubs
+├── tests/
+│   ├── test_parity.py             PIL parity test suite (1,555 tests)
+│   ├── engine.py                  Test execution engine
+│   ├── conftest.py                Pytest configuration
+│   └── fixtures/                  Test fixtures (inputs + expected outputs)
+└── docs/                          Coverage reports + research docs
 ```
 
 ---
 
 ## Development
 
-### Manifest-driven workflow
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide — setup, manifest-driven workflow, code style, testing, and benchmarking.
 
-All work starts from `manifest.yaml` — the single source of truth for the API surface. To add a function:
-
-1. Define signature, modes, and variants in `manifest.yaml`
-2. Run `python scripts/generate_stubs.py` to scaffold Rust stubs
-3. Implement in `pillow-rs-core/src/ops/<module>.rs`
-4. Add binding delegation in `pillow-rs-py/src/lib.rs`
-5. Add Python wrapper in `pillow-rs-py/python/pillow_rs/`
-6. Write PIL parity tests in `tests/`
-7. Add test→function mapping in `scripts/coverage/coverage_map.json`
-8. Run `python -m pytest tests/ --json-report --json-report-file=/tmp/report.json`
-9. Validate: `python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json`
-
-### Code quality
+Quick reference:
 
 ```bash
-# Lint (CI gate)
-cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --check
+# Build
+cd pillow-rs-py && maturin develop --release    # Python
+cd pillow-rs-js && wasm-pack build --target web # WASM
 
-# Run all tests
-python -m pytest tests/ --json-report --json-report-file=/tmp/report.json
-
-# Run core tests (includes GPU validation tests)
+# Test
+python -m pytest tests/ --timeout=300
 cargo test -p pillow-rs-core
 
-# Full CI pipeline
-bash scripts/ci_coverage.sh
-```
-
-**Quality standards:**
-- No `unwrap()` or `expect()` outside `#[cfg(test)]`
-- `thiserror` for error types in core library
-- `&str` over `String`, `&[T]` over `Vec<T>` in function parameters
-- `#[derive(Debug)]` on all public types
-- All `pub` functions have `///` doc comments with `# Examples`
-
-### Running benchmarks
-
-```bash
-# Full benchmark suite (all 166 functions, 6 targets)
+# Benchmark (full suite)
 bash scripts/bench/bench_all.sh full
 
-# Incremental (only changed code since last run)
-bash scripts/bench/bench_all.sh incremental
-
-# Priority tier only (12 most-used ops)
-bash scripts/bench/bench_all.sh --group priority
-
-# Specific functions
-bash scripts/bench/bench_all.sh --only resize,crop
+# Lint
+cargo fmt && cargo clippy --all-targets --all-features -- -D warnings
 ```
-
-Output goes to `BENCHMARKS.md`. Uses SHA-256 cache keys so unchanged functions skip re-benchmarking.
 
 ---
 
@@ -341,9 +414,9 @@ Contributions are welcome — whether it's fixing PIL parity, adding GPU dispatc
 | Resource | Description |
 |----------|-------------|
 | **[docs/COVERAGE.md](docs/COVERAGE.md)** | Full API coverage report (auto-generated) |
-| **[docs/COVERAGE_WASM.md](docs/COVERAGE_WASM.md)** | WASM-specific coverage |
 | **[BENCHMARKS.md](BENCHMARKS.md)** | Benchmark results across all 6 targets |
 | **[manifest.yaml](manifest.yaml)** | Complete API surface definition |
+| **[CONTRIBUTING.md](CONTRIBUTING.md)** | Development setup, workflow, and code style |
 | **[Pillow Docs](https://pillow.readthedocs.io/)** | Upstream Pillow API reference |
 
 ---
