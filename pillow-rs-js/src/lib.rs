@@ -1061,7 +1061,8 @@ impl ImageChops {
     }
     #[wasm_bindgen(js_name = "composite")]
     pub fn comp(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
-        module_fns::composite(&a.inner, &b.inner, &m.inner, None)
+        let mode = a.inner.explicit_mode();
+        module_fns::composite(&a.inner, &b.inner, &m.inner, mode)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
