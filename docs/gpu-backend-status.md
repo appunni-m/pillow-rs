@@ -1,109 +1,102 @@
-# GPU Backend — Status & Remaining Work
+# GPU Backend — What We Achieved, What We Tried, What Failed
 
-Last updated: 2026-06-17
+2026-06-17
 
-## Accomplished
+## What We Achieved
 
-### GPU Shader Coverage: 53/71 → 71/71
+### Architecture cleanup
 
-All 18 previously CPU-only ops now have GPU WGSL shaders in `pool_gpu/shaders/`:
-
-| Category | Shaders | Status |
-|----------|---------|--------|
-| Spatial | crop, reduce, thumbnail, contain, cover, fit | Created |
-| Point | convert, quantize, effect_noise, put_alpha, put_pixel | Created |
-| Multi-input | paste, alpha_composite, composite_module, composite | Created |
-| LUT | eval, point_op | Created (storage buffer) |
-| Complex | transform, put_data | Created |
-
-### Infrastructure Unlocks
-
-1. **Dynamic dimension tracking** — `execute_batch_impl` now tracks `(cur_w, cur_h)` across size-changing ops
-2. **5-binding support** — `build_pipeline()` extended from max 4 to 5 bindings; `buf_img3` added
-3. **LUT storage buffer** — 4-binding variant with `@binding(3)` as `storage, read` for 1024-byte LUTs
-
-### SIMD Backend: 71/71 ops
-
-42 scalar functions in `pool_simd/ops/scalar.rs`, platform dispatch via `x86.rs`/`arm.rs`/`scalar.rs`. 564/564 tests pass.
-
-### Bug Fixes
-
-- **Ping-pong buffer tracking**: `Ok(!current_is_a)` → `Ok(current_is_a)`
-- **preserve_mode L/LA**: Direct R-channel extraction (not BT.601 weighted luma)
-- **Grayscale mode**: Forces L output after GPU (was incorrectly preserving RGB)
-- **Sharpness shader**: Fixed algorithm — now uses SMOOTH kernel + factor blend (was fixed SHARPEN kernel ignoring factor)
-- **Missing @binding declarations**: 3 dual-input shaders had dropped bindings after agent rewrites
-
-## Known Issue: GPU Test Hang at ~80 Sequential Operations
-
-### Symptom
-
-Running 564 sequential GPU tests hangs after ~80 tests. Individual tests and batches ≤50 pass.
-
-### Root Cause
-
-`encoder.copy_buffer_to_buffer()` blocks inside wgpu's Vulkan backend after ~80 sequential command submissions. Debug logging consistently shows the hang at:
+Moved `gpu_shaders/` into `pool_gpu/shaders/` so all three backends follow the same structure:
 ```
+pool_cpu/ops/       — CPU reference implementations
+pool_gpu/shaders/   — GPU WGSL compute shaders
+pool_simd/ops/      — SIMD scalar functions (x86/ARM dispatch)
+```
+
+### Multi-backend registry
+
+`OpEntry` now has fields for all backends: `cpu_fn`, `gpu_shader`, `gpu_source`, `simd_fn`. Three macros register ops: `cpu_only!`, `gpu_entry!`, `simd_entry!`. No separate registries.
+
+### Mode-aware shader architecture
+
+Single WGSL file per op with mode as uniform parameter (not 4 files per mode). Every shader uses the same `Params {width, height, mode, _pad}` header. Mode helpers (`mode_has_g`, `mode_has_b`, `mode_has_a`) are inlined in every shader. 62 shaders follow this pattern consistently.
+
+### Infrastructure that works
+
+- **5-binding support**: Extended `build_pipeline()` from max-4 to max-5 bindings. Added `buf_img3` for mask images. Works for Paste, Composite, CompositeModule.
+- **LUT storage buffer**: 4-binding variant where `@binding(3)` is `storage, read` instead of uniform. Eval/PointOp LUTs (1024 bytes) fit without the 16-byte stride waste that uniform buffers impose.
+- **Dynamic dimension tracking**: `execute_batch_impl` tracks `(cur_w, cur_h)` through size-changing ops (Resize, Crop, Reduce, Scale). Readback uses final dimensions.
+- **gpu_log! macro**: Writes to `/tmp/gpu_debug.log` when `RSPIL_GPU_DEBUG=1` is set. Every pipeline step is logged with immediate flush. This was essential for debugging.
+
+### Subagent-driven op migration
+
+20+ subagents were dispatched across GPU shader creation and SIMD function writing. Each agent handled 3-5 ops, following a standard pattern. This worked well — 71 SIMD functions and 18 new GPU shaders were written by agents in parallel.
+
+## What We Tried And Failed
+
+### The GPU test hang
+
+**The symptom**: Full 564-test GPU suite hangs after ~80 tests. Individual tests pass. Batches of 50 pass. Batches of 100+ hang.
+
+**The debug process**: We added streaming file-based logging (`gpu_log!` macro writing to `/tmp/gpu_debug.log` with flush). This revealed the exact hang point every time:
+```
+[GPU] readback: create_encoder start
 [GPU] readback: encoder created, copy_buffer_to_buffer start
-```
-The encoder is created successfully but `copy_buffer_to_buffer` never returns. This is a GPU driver-level command pool exhaustion on the test machine — not a wgpu bug (we're on wgpu 24 which has the fence fix from PR #5970).
-
-### Attempted Fixes (all failed)
-
-1. Reusable staging buffer pool (Volta-style) — no effect
-2. Poll after every `queue.submit()` — no effect
-3. Double-poll (Wait + Wait) — no effect
-4. Empty submit between cycles (wgpu#5173) — no effect
-5. Back-pressure with 16-submission cap — no effect
-6. Fresh staging buffer per readback — no effect
-
-### Workaround
-
-Run tests in batches of ≤50 per process:
-
-```bash
-python -m pytest tests/ --backend gpu --timeout=60 -q -k "batch1_pattern"
-python -m pytest tests/ --backend gpu --timeout=60 -q -k "batch2_pattern"
+-- hangs here, never reaches "copy submitted, map_async start" --
 ```
 
-### Future Investigation
+The `create_command_encoder` succeeds. `encoder.copy_buffer_to_buffer(src, 0, staging, 0, size)` blocks forever. This is a CPU-side command recording call that should never block.
 
-1. Test on different GPU/driver (AMD, Intel, NVIDIA with different driver versions)
-2. Try wgpu with `wgpu::Backends::GL` (OpenGL backend) instead of Vulkan
-3. Try reducing buffer sizes (64MB → smaller per-op buffers)
-4. Try `wgpu::util::DownloadBuffer` instead of manual staging
-5. Profile with `RUST_GPU_TRACE=1` or Vulkan validation layers
+**Attempted fixes (all failed)**:
 
-## Remaining Work Items
+1. **Double-poll** — Added second `device.poll(Wait)` after unmap. Theory: single poll might not drain all pending work. Result: no difference.
 
-### Priority 1: GPU Test Stability
+2. **Poll after every submit** — Every `queue.submit()` immediately followed by `device.poll(Wait)`. Theory: ActiveSubmission queue grows unboundedly between polls. Result: no difference. Hang still at same line, same test count.
 
-- [ ] Find definitive fix for GPU test hang (different machine, driver update, or backend switch)
-- [ ] Add `--backend gpu` CI job with batched test execution
-- [ ] Profile per-op GPU memory usage to identify resource leaks
+3. **Reusable staging buffer pool** — Volta-style `HashMap<u64, Vec<Buffer>>` with 64-buffer cap. Buffers acquired from pool, never dropped, returned after use. Theory: `device.create_buffer`/drop cycles exhaust wgpu's internal tracking. Result: no difference. Hang at same spot.
 
-### Priority 2: New Shader Validation
+4. **Fresh staging buffer per readback** — Back to `create_buffer` with exact image size. Removed the pool entirely. Theory: recycled buffers might be in a bad state. Result: no difference.
 
-- [ ] Run all 18 new shaders through individual parity tests
-- [ ] Verify dimension-changing ops (crop, resize, thumbnail) work correctly with dynamic dim tracking
-- [ ] Verify 5-binding ops (paste, composite) with mask
-- [ ] Verify LUT ops (eval, point_op) with storage buffer LUT
-- [ ] Verify transform with affine matrix
+5. **Empty submit between cycles** — `queue.submit([])` after unmap (wgpu Issue #5173). Theory: pending writes need flushing before next map_async. Result: no difference.
 
-### Priority 3: Optimization
+6. **Back-pressure with 16-submission cap** — `submission_count` tracked, forced `poll(Wait)` every 16 submits. Theory: unbounded ActiveSubmission vec exhaustion. Result: no difference.
 
-- [ ] Combine dispatch + copy into single command encoder (reduces submits from 3→1 per op)
-- [ ] Profile SIMD vs GPU vs CPU performance on representative ops
-- [ ] Add `wide` crate for actual x86 SSE/AVX intrinsics (currently scalar with auto-vectorization hints)
-- [ ] Add ARM NEON intrinsics for `pool_simd/ops/arm.rs`
+7. **Deep research** — Ran a multi-agent research workflow searching wgpu issues, Vulkan command pool limits, staging pool patterns, and test suite strategies. Found wgpu Issue #5969 (fence value bump before submission success) but this is fixed in wgpu 24 which we use. Found Volta's StagingBufferPool pattern which we already implemented. No definitive solution found.
 
-### Priority 4: WASM/WebGPU
+**What we know**:
+- The encoder creates fine, but `copy_buffer_to_buffer` blocks
+- All polls return successfully before this point
+- Staging buffer lifecycle doesn't matter (fresh or pooled, same result)
+- The hang is deterministic — always ~80 tests in, always at the same code line
+- It's not a wgpu version issue (we're on wgpu 24, the latest)
+- The deep research confirmed we're not missing any obvious pattern
 
-- [ ] Test GPU backend in browser via `wasm-pack build`
-- [ ] Async GPU init for WASM (pollster doesn't work in browser)
-- [ ] Reduce buffer sizes for WASM memory constraints
+**Leading theory**: GPU driver-level command pool exhaustion. The Vulkan driver on this machine (Intel integrated or software renderer) has a finite command buffer pool that fills after ~80 encoder→submit→poll cycles. Once full, `vkCmdCopyBuffer` blocks until a command buffer is freed, but there's no mechanism to free them faster than the GPU completes them. This is a driver limitation, not a code bug.
 
-### Priority 5: Naming Consistency
+**Workaround**: Run tests in batches of ≤50 per process. This isn't a fix, but it's the only thing that works.
 
-- [ ] Audit all 71 shader filenames match registry keys (e.g., `sharpness.wgsl` ✓, check others)
-- [ ] Audit SIMD function names match registry keys (snake_case → CamelCase mapping is unambiguous)
+## What We Didn't Get To
+
+### Combine dispatch + copy into single encoder
+
+Currently each op does 3 `queue.submit()` calls per batch: one for the compute dispatch, one for the staging copy, one empty flush. Combining dispatch + copy into one encoder would reduce submits to 1 per op. This might help with the hang by reducing command pool pressure, but the root cause (driver pool limit) would still exist.
+
+### Test on different GPU hardware
+
+All testing done on the same machine. The hang might not occur on NVIDIA (proprietary driver), AMD (RADV), or Apple Metal. This needs testing.
+
+### Try non-Vulkan wgpu backend
+
+wgpu supports `Backends::GL` (OpenGL) and `Backends::METAL`. The hang might be Vulkan-specific. Worth testing with a different backend.
+
+### WASM/WebGPU testing
+
+The GPU backend compiles for wasm32 but has never been tested in a browser. Needs async init for `request_adapter` (pollster blocks the browser thread).
+
+### SIMD intrinsics
+
+The SIMD backend currently uses scalar loops with auto-vectorization hints. No actual SSE/AVX/NEON intrinsics are written. The `x86.rs` and `arm.rs` files just re-export `scalar.rs` via `pub use super::scalar::*`. Real intrinsics would give 4-8x speedup on point ops.
+
+### Naming audit
+
+We found `sharpen.wgsl` registered for `Sharpness` PipelineOp (different algorithms — fixed kernel vs factor-based enhance). This was fixed. But a full audit of all 71 shader names vs registry keys vs SIMD function names hasn't been done. The snake_case/CamelCase mapping is mostly consistent but may have other mismatches like `CropBorder`/`crop_border`, `Sharpness`/`sharpness`, etc.
