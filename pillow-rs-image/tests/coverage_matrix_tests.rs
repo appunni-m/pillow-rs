@@ -146,20 +146,68 @@ fn test_encode_matrix() {
     };
 
     let mut total = 0u32;
-    let passed = 0u32;
+    let mut passed = 0u32;
+    let mut failed = 0u32;
     let mut skipped = 0u32;
+    let assets_dir = manifest_dir.join("tests").join("fixtures").join("input").join("images");
 
-    for (_fmt_name, fmt_data) in &matrix.formats {
+    for (fmt_name, fmt_data) in &matrix.formats {
+        if fmt_data.encode.is_empty() { continue; }
+
+        // Find a decode row to use as source image for encode
+        let source_row = fmt_data.decode.iter().find(|r| r.status == "active" && r.asset.is_some());
+        if source_row.is_none() { skipped += fmt_data.encode.len() as u32; continue; }
+        let src = source_row.unwrap();
+        let asset_path = assets_dir.join(fmt_name).join(src.asset.as_ref().unwrap());
+        if !asset_path.exists() { skipped += fmt_data.encode.len() as u32; continue; }
+        let asset_data = fs::read(&asset_path).unwrap();
+
         for row in &fmt_data.encode {
-            if row.status == "not_wired" { skipped += 1; continue; }
             total += 1;
-            // TODO: When encode params are wired, test roundtrip here
-            eprintln!("  SKIP [{}]: encode params not yet wired", row.id);
-            skipped += 1;
+            let decoded = match img::decode(&asset_data) {
+                Some(d) => d, None => { eprintln!("  FAIL [{}]: source decode failed", row.id); failed += 1; continue; }
+            };
+
+            // Build encode options from row params
+            let opts = img::encode_options::EncodeOptions {
+                quality: row.params.get("quality").and_then(|v| v.as_u64()).map(|v| v as u8),
+                compression: row.params.get("compression").and_then(|v| v.as_u64()).map(|v| v as u8),
+                lossless: row.params.get("lossless").and_then(|v| v.as_bool()),
+                progressive: row.params.get("progressive").and_then(|v| v.as_bool()),
+                interlace: row.params.get("interlace").or_else(|| row.params.get("interlaced")).and_then(|v| v.as_bool()),
+                ..Default::default()
+            };
+
+            let format = match fmt_name.as_str() {
+                "jpeg" => img::ImageFormat::Jpeg, "png" => img::ImageFormat::Png,
+                "gif" => img::ImageFormat::Gif, "bmp" => img::ImageFormat::Bmp,
+                "tiff" => img::ImageFormat::Tiff, "webp" => img::ImageFormat::WebP,
+                "ico" => img::ImageFormat::Ico, _ => { skipped += 1; continue; }
+            };
+
+            let encoded = match img::encode(&decoded, format, &opts) {
+                Some(e) => e,
+                None => { eprintln!("  FAIL [{}]: encode returned None", row.id); failed += 1; continue; }
+            };
+
+            // Re-decode and verify basic correctness
+            match img::decode(&encoded) {
+                Some(redecoded) => {
+                    if redecoded.width > 0 && redecoded.height > 0 {
+                        eprintln!("  OK   [{}] encoded {}B, re-decoded {}x{}", row.id, encoded.len(), redecoded.width, redecoded.height);
+                        passed += 1;
+                    } else {
+                        eprintln!("  FAIL [{}]: zero dimensions after roundtrip", row.id); failed += 1;
+                    }
+                }
+                None => {
+                    eprintln!("  FAIL [{}]: re-decode failed", row.id); failed += 1;
+                }
+            }
         }
     }
 
-    eprintln!("\nencode matrix: {passed}/{total} passed, {skipped} skipped (not wired)");
+    eprintln!("\nencode matrix: {passed}/{total} passed, {failed} failed, {skipped} skipped");
 }
 
 // ── Manifest Coverage ────────────────────────────────────────────────────

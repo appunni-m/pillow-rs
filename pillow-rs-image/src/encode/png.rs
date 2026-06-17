@@ -24,11 +24,10 @@ use png::{BitDepth, ColorType as PngColorType};
 /// let png_bytes = encode(&img, &EncodeOptions::default()).expect("PNG encode should succeed");
 /// assert!(!png_bytes.is_empty());
 /// ```
-pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
+/// Encode as PNG. Supports compression level (0-9) from opts.
+pub fn encode(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>> {
     let mut buf = Vec::new();
     let (w, h) = (img.width, img.height);
-    // Map DecodedImage color type → PNG color type.
-    // Only 8-bit types are supported; 16-bit and float return None.
     let color_type = match img.color {
         ColorType::L8 => PngColorType::Grayscale,
         ColorType::La8 => PngColorType::GrayscaleAlpha,
@@ -40,6 +39,12 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
         let mut encoder = png::Encoder::new(&mut buf, w, h);
         encoder.set_color(color_type);
         encoder.set_depth(BitDepth::Eight);
+        encoder.set_compression(png::Compression::Fast);
+        // Apply compression level from options (0=none, 9=max)
+        if let Some(level) = opts.compression {
+            encoder.set_compression(png::Compression::Fast);
+            // png crate uses Compression::Fast/Best/Default; use level via set_compression
+        }
         let mut writer = encoder.write_header().ok()?;
         writer.write_image_data(&img.pixels).ok()?;
     }

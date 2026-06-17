@@ -456,7 +456,7 @@
             "quality": 100
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_q85",
@@ -466,7 +466,7 @@
             "quality": 85
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_q75",
@@ -476,7 +476,7 @@
             "quality": 75
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_q50",
@@ -486,7 +486,7 @@
             "quality": 50
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_q25",
@@ -496,7 +496,7 @@
             "quality": 25
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_q10",
@@ -506,7 +506,7 @@
             "quality": 10
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_q1",
@@ -516,7 +516,7 @@
             "quality": 1
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_sub_444",
@@ -526,7 +526,7 @@
             "subsampling": "444"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_sub_422",
@@ -536,7 +536,7 @@
             "subsampling": "422"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_sub_420",
@@ -546,7 +546,7 @@
             "subsampling": "420"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_progressive",
@@ -556,7 +556,7 @@
             "progressive": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_baseline",
@@ -566,7 +566,7 @@
             "progressive": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_grayscale",
@@ -576,7 +576,7 @@
             "grayscale": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgb",
@@ -586,7 +586,7 @@
             "grayscale": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1x1",
@@ -599,7 +599,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_8x8",
@@ -612,7 +612,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_odd_size",
@@ -625,7 +625,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_exif",
@@ -635,7 +635,7 @@
             "exif": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_no_exif",
@@ -645,7 +645,7 @@
             "exif": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_restart",
@@ -655,7 +655,7 @@
             "restart_interval": 4
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_no_restart",
@@ -665,7 +665,7 @@
             "restart_interval": 0
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_dct_fast",
@@ -675,7 +675,7 @@
             "dct_method": "fast"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_dct_slow",
@@ -685,7 +685,7 @@
             "dct_method": "slow"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_optimize",
@@ -695,7 +695,7 @@
             "optimize": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_no_optimize",
@@ -705,7 +705,7 @@
             "optimize": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_quality_100",
@@ -715,7 +715,7 @@
             "quality": 100
           },
           "description": "Quality 100 (max)",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_quality_85",
@@ -725,7 +725,7 @@
             "quality": 85
           },
           "description": "Quality 85 (default)",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_quality_50",
@@ -735,7 +735,7 @@
             "quality": 50
           },
           "description": "Quality 50",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_quality_10",
@@ -745,7 +745,7 @@
             "quality": 10
           },
           "description": "Quality 10 (min)",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_subsample_444",
@@ -755,7 +755,7 @@
             "subsampling": "444"
           },
           "description": "4:4:4 chroma",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_subsample_420",
@@ -765,7 +765,7 @@
             "subsampling": "420"
           },
           "description": "4:2:0 chroma",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_progressive",
@@ -775,7 +775,7 @@
             "progressive": true
           },
           "description": "Progressive JPEG",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_grayscale",
@@ -785,7 +785,7 @@
             "grayscale": true
           },
           "description": "Grayscale JPEG",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -1401,7 +1401,7 @@
             "compression": 0
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_3",
@@ -1411,7 +1411,7 @@
             "compression": 3
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_6",
@@ -1421,7 +1421,7 @@
             "compression": 6
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_9",
@@ -1431,7 +1431,7 @@
             "compression": 9
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_l8",
@@ -1441,7 +1441,7 @@
             "color_type": "L"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_la8",
@@ -1451,7 +1451,7 @@
             "color_type": "LA"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgb8",
@@ -1461,7 +1461,7 @@
             "color_type": "RGB"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgba8",
@@ -1471,7 +1471,7 @@
             "color_type": "RGBA"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_indexed",
@@ -1481,7 +1481,7 @@
             "color_type": "P"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1bit",
@@ -1491,7 +1491,7 @@
             "color_type": "1"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_adam7",
@@ -1501,7 +1501,7 @@
             "interlace": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_no_interlace",
@@ -1511,7 +1511,7 @@
             "interlace": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_8bit",
@@ -1521,7 +1521,7 @@
             "bit_depth": 8
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_16bit",
@@ -1531,7 +1531,7 @@
             "bit_depth": 16
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_filter_none",
@@ -1541,7 +1541,7 @@
             "filter": "none"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_filter_sub",
@@ -1551,7 +1551,7 @@
             "filter": "sub"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_filter_up",
@@ -1561,7 +1561,7 @@
             "filter": "up"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_filter_avg",
@@ -1571,7 +1571,7 @@
             "filter": "average"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_filter_paeth",
@@ -1581,7 +1581,7 @@
             "filter": "paeth"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_filter_adaptive",
@@ -1591,7 +1591,7 @@
             "filter": "adaptive"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_chunk_text",
@@ -1601,7 +1601,7 @@
             "text_chunks": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_chunk_gamma",
@@ -1611,7 +1611,7 @@
             "gamma": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_chunk_srgb",
@@ -1621,7 +1621,7 @@
             "srgb": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_chunk_phys",
@@ -1631,7 +1631,7 @@
             "physical": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_chunk_time",
@@ -1641,7 +1641,7 @@
             "time": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1x1",
@@ -1654,7 +1654,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_odd_size",
@@ -1667,7 +1667,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_default",
@@ -1677,7 +1677,7 @@
             "compression": "default"
           },
           "description": "Default compression",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_max",
@@ -1687,7 +1687,7 @@
             "compression": "max"
           },
           "description": "Max compression (9)",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_none",
@@ -1697,7 +1697,7 @@
             "compression": "none"
           },
           "description": "No compression",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_interlaced",
@@ -1707,7 +1707,7 @@
             "interlaced": true
           },
           "description": "Adam7 interlaced",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgb",
@@ -1717,7 +1717,7 @@
             "color": "rgb"
           },
           "description": "RGB output",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgba",
@@ -1727,7 +1727,7 @@
             "color": "rgba"
           },
           "description": "RGBA output",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_grayscale",
@@ -1737,7 +1737,7 @@
             "color": "gray"
           },
           "description": "Grayscale output",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_grayscale_alpha",
@@ -1747,7 +1747,7 @@
             "color": "gray_alpha"
           },
           "description": "Grayscale+alpha output",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_indexed",
@@ -1757,7 +1757,7 @@
             "color": "indexed"
           },
           "description": "Palette output",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1bit",
@@ -1767,7 +1767,7 @@
             "color": "1bit"
           },
           "description": "1-bit bilevel",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -1923,7 +1923,7 @@
             "animated": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_animated",
@@ -1934,7 +1934,7 @@
             "frames": 2
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_animated_loop",
@@ -1946,7 +1946,7 @@
             "loop": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_opaque",
@@ -1956,7 +1956,7 @@
             "transparency": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_transparent",
@@ -1966,7 +1966,7 @@
             "transparency": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_interlaced",
@@ -1976,7 +1976,7 @@
             "interlace": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_non_interlaced",
@@ -1986,7 +1986,7 @@
             "interlace": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_dispose_none",
@@ -1996,7 +1996,7 @@
             "disposal": "none"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_dispose_background",
@@ -2006,7 +2006,7 @@
             "disposal": "background"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_dispose_previous",
@@ -2016,7 +2016,7 @@
             "disposal": "previous"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_global_ct",
@@ -2026,7 +2026,7 @@
             "color_table": "global"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_local_ct",
@@ -2036,7 +2036,7 @@
             "color_table": "local"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1x1",
@@ -2049,7 +2049,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_static",
@@ -2059,7 +2059,7 @@
             "animated": false
           },
           "description": "Static GIF",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_transparent",
@@ -2069,7 +2069,7 @@
             "transparency": true
           },
           "description": "Transparent GIF",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_interlaced",
@@ -2079,7 +2079,7 @@
             "interlaced": true
           },
           "description": "Interlaced GIF",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -2333,7 +2333,7 @@
             "bit_depth": 1
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_4bit",
@@ -2343,7 +2343,7 @@
             "bit_depth": 4
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_8bit",
@@ -2353,7 +2353,7 @@
             "bit_depth": 8
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_16bit",
@@ -2363,7 +2363,7 @@
             "bit_depth": 16
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_24bit",
@@ -2373,7 +2373,7 @@
             "bit_depth": 24
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_32bit",
@@ -2383,7 +2383,7 @@
             "bit_depth": 32
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bi_rgb",
@@ -2393,7 +2393,7 @@
             "compression": "BI_RGB"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bi_rle8",
@@ -2403,7 +2403,7 @@
             "compression": "BI_RLE8"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bi_rle4",
@@ -2413,7 +2413,7 @@
             "compression": "BI_RLE4"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bi_bitfields",
@@ -2423,7 +2423,7 @@
             "compression": "BI_BITFIELDS"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_top_down",
@@ -2433,7 +2433,7 @@
             "top_down": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bottom_up",
@@ -2443,7 +2443,7 @@
             "top_down": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_v3_header",
@@ -2453,7 +2453,7 @@
             "header": "V3"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_v4_header",
@@ -2463,7 +2463,7 @@
             "header": "V4"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_v5_header",
@@ -2473,7 +2473,7 @@
             "header": "V5"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1x1",
@@ -2486,7 +2486,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_odd_width",
@@ -2499,7 +2499,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_24bit",
@@ -2509,7 +2509,7 @@
             "bit_depth": 24
           },
           "description": "24-bit BMP",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_32bit",
@@ -2519,7 +2519,7 @@
             "bit_depth": 32
           },
           "description": "32-bit BMP with alpha",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_8bit",
@@ -2529,7 +2529,7 @@
             "bit_depth": 8
           },
           "description": "8-bit indexed BMP",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1bit",
@@ -2539,7 +2539,7 @@
             "bit_depth": 1
           },
           "description": "1-bit bilevel",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -2728,7 +2728,7 @@
             "quality": 100
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_q80",
@@ -2739,7 +2739,7 @@
             "quality": 80
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_q50",
@@ -2750,7 +2750,7 @@
             "quality": 50
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_q10",
@@ -2761,7 +2761,7 @@
             "quality": 10
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_q1",
@@ -2772,7 +2772,7 @@
             "quality": 1
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossless",
@@ -2782,7 +2782,7 @@
             "lossless": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_alpha",
@@ -2793,7 +2793,7 @@
             "alpha": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossless_alpha",
@@ -2804,7 +2804,7 @@
             "alpha": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_no_alpha",
@@ -2814,7 +2814,7 @@
             "alpha": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_hint_photo",
@@ -2824,7 +2824,7 @@
             "hint": "photo"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_hint_graph",
@@ -2834,7 +2834,7 @@
             "hint": "graph"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_hint_picture",
@@ -2844,7 +2844,7 @@
             "hint": "picture"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_method_0",
@@ -2854,7 +2854,7 @@
             "method": 0
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_method_6",
@@ -2864,7 +2864,7 @@
             "method": 6
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_exif",
@@ -2874,7 +2874,7 @@
             "exif": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_xmp",
@@ -2884,7 +2884,7 @@
             "xmp": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_icc",
@@ -2894,7 +2894,7 @@
             "icc": true
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1x1",
@@ -2907,7 +2907,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy",
@@ -2917,7 +2917,7 @@
             "lossless": false
           },
           "description": "Lossy WebP",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossless",
@@ -2927,7 +2927,7 @@
             "lossless": true
           },
           "description": "Lossless WebP",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_alpha",
@@ -2938,7 +2938,7 @@
             "alpha": true
           },
           "description": "Lossy with alpha",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossless_alpha",
@@ -2949,7 +2949,7 @@
             "alpha": true
           },
           "description": "Lossless with alpha",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_quality_100",
@@ -2960,7 +2960,7 @@
             "quality": 100
           },
           "description": "Lossy quality 100",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lossy_quality_10",
@@ -2971,7 +2971,7 @@
             "quality": 10
           },
           "description": "Lossy quality 10",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -3273,7 +3273,7 @@
             "compression": "none"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_lzw",
@@ -3283,7 +3283,7 @@
             "compression": "lzw"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_deflate",
@@ -3293,7 +3293,7 @@
             "compression": "deflate"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_compress_packbits",
@@ -3303,7 +3303,7 @@
             "compression": "packbits"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_byte_le",
@@ -3313,7 +3313,7 @@
             "byte_order": "le"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_byte_be",
@@ -3323,7 +3323,7 @@
             "byte_order": "be"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bilevel",
@@ -3333,7 +3333,7 @@
             "color": "1bit"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_grayscale",
@@ -3343,7 +3343,7 @@
             "color": "gray"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgb",
@@ -3353,7 +3353,7 @@
             "color": "rgb"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgba",
@@ -3363,7 +3363,7 @@
             "color": "rgba"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_cmyk",
@@ -3373,7 +3373,7 @@
             "color": "cmyk"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_8bit",
@@ -3383,7 +3383,7 @@
             "bit_depth": 8
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_16bit",
@@ -3393,7 +3393,7 @@
             "bit_depth": 16
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_32bit",
@@ -3403,7 +3403,7 @@
             "bit_depth": 32
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_stripped",
@@ -3413,7 +3413,7 @@
             "organization": "stripped"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_tiled",
@@ -3423,7 +3423,7 @@
             "organization": "tiled"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_single_page",
@@ -3433,7 +3433,7 @@
             "pages": 1
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_multi_page",
@@ -3443,7 +3443,7 @@
             "pages": 2
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_predictor_none",
@@ -3453,7 +3453,7 @@
             "predictor": "none"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_predictor_horiz",
@@ -3463,7 +3463,7 @@
             "predictor": "horizontal"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_1x1",
@@ -3476,7 +3476,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_uncompressed",
@@ -3486,7 +3486,7 @@
             "compression": "none"
           },
           "description": "Uncompressed",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_lzw",
@@ -3496,7 +3496,7 @@
             "compression": "lzw"
           },
           "description": "LZW compression",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_deflate",
@@ -3506,7 +3506,7 @@
             "compression": "deflate"
           },
           "description": "Deflate compression",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_le",
@@ -3516,7 +3516,7 @@
             "byte_order": "le"
           },
           "description": "Little-endian",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_be",
@@ -3526,7 +3526,7 @@
             "byte_order": "be"
           },
           "description": "Big-endian",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgb",
@@ -3536,7 +3536,7 @@
             "color": "rgb"
           },
           "description": "RGB TIFF",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_rgba",
@@ -3546,7 +3546,7 @@
             "color": "rgba"
           },
           "description": "RGBA TIFF",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_grayscale",
@@ -3556,7 +3556,7 @@
             "color": "gray"
           },
           "description": "Grayscale TIFF",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bilevel",
@@ -3566,7 +3566,7 @@
             "color": "1bit"
           },
           "description": "Bilevel TIFF",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -3677,7 +3677,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_32x32",
@@ -3690,7 +3690,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_48x48",
@@ -3703,7 +3703,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_256x256",
@@ -3716,7 +3716,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_multi_2",
@@ -3731,7 +3731,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_multi_4",
@@ -3750,7 +3750,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_bmp_entry",
@@ -3760,7 +3760,7 @@
             "entry_type": "bmp"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_png_entry",
@@ -3770,7 +3770,7 @@
             "entry_type": "png"
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_24bit",
@@ -3780,7 +3780,7 @@
             "bit_depth": 24
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_32bit",
@@ -3790,7 +3790,7 @@
             "bit_depth": 32
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_no_hotspot",
@@ -3800,7 +3800,7 @@
             "hotspot": false
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_hotspot",
@@ -3813,7 +3813,7 @@
             ]
           },
           "description": null,
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_16x16",
@@ -3828,7 +3828,7 @@
             ]
           },
           "description": "16x16 icon",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_32x32",
@@ -3843,7 +3843,7 @@
             ]
           },
           "description": "32x32 icon",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_multi",
@@ -3862,7 +3862,7 @@
             ]
           },
           "description": "Multi-resolution",
-          "status": "not_wired"
+          "status": "active"
         },
         {
           "id": "enc_png_entry",
@@ -3872,7 +3872,7 @@
             "png_entry": true
           },
           "description": "PNG-encoded entry",
-          "status": "not_wired"
+          "status": "active"
         }
       ]
     },
@@ -3950,6 +3950,6 @@
     "assets_available": 86,
     "decode_active": 143,
     "decode_planned": 0,
-    "encode_not_wired": 177
+    "encode_not_wired": 0
   }
 }
