@@ -9,6 +9,7 @@
 //! Reference: IJG libjpeg `jidctint.c` (Thomas G. Lane, 1991-1998)
 //!            ISO/IEC 10918-1 / ITU-T T.81 (JPEG Standard)
 
+use std::io::Write;
 use crate::types::{ColorType, DecodedImage};
 
 // ── IDCT Constants (matching IJG jidctint.c) ──────────────────────────────
@@ -1454,20 +1455,6 @@ fn fancy_upsample(
 /// Progressive JPEG reconstruction: accumulate coefficients across multiple
 /// scans, then run IDCT and assemble the output.
 fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
-    eprintln!("PROGRESSIVE RECONSTRUCT: {} scans, {}x{}, {} comps",
-        info.scans.len(), info.width, info.height, info.num_components);
-
-    // Print first scan info
-    if let Some(s) = info.scans.first() {
-        eprintln!("  First scan: ss={}, se={}, ah={}, al={}, {} comps, entropy=[{},{})",
-            s.ss, s.se, s.ah, s.al, s.components.len(), s.entropy_start, s.entropy_end);
-        for c in &s.components {
-            let has_dc = s.dc_huff_tables.get(c.dc_tbl as usize).and_then(|t| t.as_ref()).is_some();
-            let has_ac = s.ac_huff_tables.get(c.ac_tbl as usize).and_then(|t| t.as_ref()).is_some();
-            eprintln!("    comp_idx={}: dc_tbl={}({}) ac_tbl={}({})",
-                c.comp_index, c.dc_tbl, if has_dc {"OK"} else {"MISSING"}, c.ac_tbl, if has_ac {"OK"} else {"MISSING"});
-        }
-    }
     let mcu_width = (info.max_h_samp as u32) * 8;
     let mcu_height = (info.max_v_samp as u32) * 8;
     let num_mcus_x = ((info.width as u32) + mcu_width - 1) / mcu_width;
@@ -1519,12 +1506,22 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
         zigzag_order[JPEG_NATURAL_ORDER[zi]] = zi;
     }
 
+    eprintln!("  allocated: tblocks={} cbuffers={}", coeff_storage.len(), comp_buffers.len());
+
+    // Print entropy_end for scan 0 and 6
+    if let Some(s0) = info.scans.get(0) { eprintln!("  scan[0] end={}", s0.entropy_end); }
+    if let Some(s6) = info.scans.get(6) { eprintln!("  scan[6] end={}", s6.entropy_end); }
+
+    eprintln!("  LOOP START");
     // Process each scan in order
-    for scan in &info.scans {
+    for (scan_idx, scan) in info.scans.iter().enumerate() {
+        eprintln!("  S[{}] attempting...", scan_idx);
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
+            eprintln!("  S[{}] empty segments start={} end={}", scan_idx, scan.entropy_start, scan.entropy_end);
             continue;
         }
+        eprintln!("  S[{}] ss={} se={} ah={} al={} segs={}", scan_idx, scan.ss, scan.se, scan.ah, scan.al, segs.segments.len());
 
         let mut dc_predictors: Vec<i32> = vec![0; info.num_components as usize];
         let mut seg_idx = 0;
@@ -1560,8 +1557,7 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                     let comp = &info.components[comp_idx];
 
                     if is_dc_first {
-                        let dc_table = scan.dc_huff_tables[scan_comp.dc_tbl as usize]
-                            .as_ref()?;
+                        let dc_table = scan.dc_huff_tables[scan_comp.dc_tbl as usize].as_ref()?;
                         for by in 0..comp.v_samp as usize {
                             for bx in 0..comp.h_samp as usize {
                                 let block_idx = (mcu_y * comp.v_samp as usize + by)
@@ -1572,22 +1568,20 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                     let bits = br.read_bits(dc_cat as u32)?;
                                     dc_predictors[comp_idx] += extend(bits, dc_cat);
                                 }
-                                coeff_storage[comp_idx][block_idx][0] = dc_predictors[comp_idx];
+                                coeff_storage[comp_idx][block_idx][0] = dc_predictors[comp_idx] << scan.al;
                             }
                         }
                     } else if is_dc_refine {
-                        let dc_table = scan.dc_huff_tables[scan_comp.dc_tbl as usize]
-                            .as_ref()?;
+                        // DC refinement reads 1 RAW BIT per block (no Huffman)
                         let bit = 1i32 << scan.al;
                         for by in 0..comp.v_samp as usize {
                             for bx in 0..comp.h_samp as usize {
                                 let block_idx = (mcu_y * comp.v_samp as usize + by)
                                     * (comp_buf_width[comp_idx] / 8)
                                     + (mcu_x * comp.h_samp as usize + bx);
-                                let sym = dc_table.decode(&mut br)?;
-                                if sym != 0 {
-                                    let c = &mut coeff_storage[comp_idx][block_idx][0];
-                                    if *c >= 0 { *c += bit; } else { *c -= bit; }
+                                let raw_bit = br.read_bits(1)?;
+                                if raw_bit != 0 {
+                                    coeff_storage[comp_idx][block_idx][0] |= bit;
                                 }
                             }
                         }
@@ -1770,25 +1764,11 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     // Parse JPEG headers
     let info = parse_jpeg(data)?;
 
-    // Validate we have all required tables
     if info.scan_components.is_empty() {
         return None;
     }
 
-    // Check all required tables exist
-    for scan_comp in &info.scan_components {
-        if info.dc_huff_tables.len() <= scan_comp.dc_tbl as usize
-            || info.dc_huff_tables[scan_comp.dc_tbl as usize].is_none()
-        {
-            return None;
-        }
-        if info.ac_huff_tables.len() <= scan_comp.ac_tbl as usize
-            || info.ac_huff_tables[scan_comp.ac_tbl as usize].is_none()
-        {
-            return None;
-        }
-    }
-
+    // Validate quantization tables
     for comp in &info.components {
         if info.quant_tables.len() <= comp.quant_tbl as usize
             || info.quant_tables[comp.quant_tbl as usize].is_none()
@@ -1801,6 +1781,19 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     if info.progressive {
         progressive_reconstruct(&info, data)
     } else {
+        // Baseline: validate Huffman tables before decode
+        for scan_comp in &info.scan_components {
+            if info.dc_huff_tables.len() <= scan_comp.dc_tbl as usize
+                || info.dc_huff_tables[scan_comp.dc_tbl as usize].is_none()
+            {
+                return None;
+            }
+            if info.ac_huff_tables.len() <= scan_comp.ac_tbl as usize
+                || info.ac_huff_tables[scan_comp.ac_tbl as usize].is_none()
+            {
+                return None;
+            }
+        }
         reconstruct_image(&info, data)
     }
 }

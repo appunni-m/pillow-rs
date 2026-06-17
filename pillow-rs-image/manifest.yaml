@@ -140,6 +140,39 @@ formats:
       description: Progressive with spectral selection
       test_assets:
       - progressive_spectral.jpg
+    encode_edge_cases:
+    - id: enc_quality_100
+      description: Quality 100 (max)
+      params:
+        quality: 100
+    - id: enc_quality_85
+      description: Quality 85 (default)
+      params:
+        quality: 85
+    - id: enc_quality_50
+      description: Quality 50
+      params:
+        quality: 50
+    - id: enc_quality_10
+      description: Quality 10 (min)
+      params:
+        quality: 10
+    - id: enc_subsample_444
+      description: 4:4:4 chroma
+      params:
+        subsampling: '444'
+    - id: enc_subsample_420
+      description: 4:2:0 chroma
+      params:
+        subsampling: '420'
+    - id: enc_progressive
+      description: Progressive JPEG
+      params:
+        progressive: true
+    - id: enc_grayscale
+      description: Grayscale JPEG
+      params:
+        grayscale: true
   png:
     name: PNG
     extensions:
@@ -313,6 +346,47 @@ formats:
       test_assets:
       - apng_animated.png
       notes: Decode first frame only (matching base PNG behavior)
+    encode_edge_cases:
+    - id: enc_compress_default
+      description: Default compression
+      params:
+        compression: default
+    - id: enc_compress_max
+      description: Max compression (9)
+      params:
+        compression: max
+    - id: enc_compress_none
+      description: No compression
+      params:
+        compression: none
+    - id: enc_interlaced
+      description: Adam7 interlaced
+      params:
+        interlaced: true
+    - id: enc_rgb
+      description: RGB output
+      params:
+        color: rgb
+    - id: enc_rgba
+      description: RGBA output
+      params:
+        color: rgba
+    - id: enc_grayscale
+      description: Grayscale output
+      params:
+        color: gray
+    - id: enc_grayscale_alpha
+      description: Grayscale+alpha output
+      params:
+        color: gray_alpha
+    - id: enc_indexed
+      description: Palette output
+      params:
+        color: indexed
+    - id: enc_1bit
+      description: 1-bit bilevel
+      params:
+        color: 1bit
   gif:
     name: GIF
     extensions:
@@ -362,6 +436,19 @@ formats:
       test_assets:
       - empty.gif
       expect_error: true
+    encode_edge_cases:
+    - id: enc_static
+      description: Static GIF
+      params:
+        animated: false
+    - id: enc_transparent
+      description: Transparent GIF
+      params:
+        transparency: true
+    - id: enc_interlaced
+      description: Interlaced GIF
+      params:
+        interlaced: true
   bmp:
     name: BMP
     extensions:
@@ -446,6 +533,23 @@ formats:
       test_assets:
       - not_bmp.bmp
       expect_error: true
+    encode_edge_cases:
+    - id: enc_24bit
+      description: 24-bit BMP
+      params:
+        bit_depth: 24
+    - id: enc_32bit
+      description: 32-bit BMP with alpha
+      params:
+        bit_depth: 32
+    - id: enc_8bit
+      description: 8-bit indexed BMP
+      params:
+        bit_depth: 8
+    - id: enc_1bit
+      description: 1-bit bilevel
+      params:
+        bit_depth: 1
   webp:
     name: WebP
     extensions:
@@ -512,6 +616,35 @@ formats:
       test_assets:
       - truncated.webp
       expect_error: true
+    encode_edge_cases:
+    - id: enc_lossy
+      description: Lossy WebP
+      params:
+        lossless: false
+    - id: enc_lossless
+      description: Lossless WebP
+      params:
+        lossless: true
+    - id: enc_lossy_alpha
+      description: Lossy with alpha
+      params:
+        lossless: false
+        alpha: true
+    - id: enc_lossless_alpha
+      description: Lossless with alpha
+      params:
+        lossless: true
+        alpha: true
+    - id: enc_lossy_quality_100
+      description: Lossy quality 100
+      params:
+        lossless: false
+        quality: 100
+    - id: enc_lossy_quality_10
+      description: Lossy quality 10
+      params:
+        lossless: false
+        quality: 10
   tiff:
     name: TIFF
     extensions:
@@ -620,6 +753,43 @@ formats:
       test_assets:
       - bad_ifd.tiff
       expect_error: true
+    encode_edge_cases:
+    - id: enc_uncompressed
+      description: Uncompressed
+      params:
+        compression: none
+    - id: enc_lzw
+      description: LZW compression
+      params:
+        compression: lzw
+    - id: enc_deflate
+      description: Deflate compression
+      params:
+        compression: deflate
+    - id: enc_le
+      description: Little-endian
+      params:
+        byte_order: le
+    - id: enc_be
+      description: Big-endian
+      params:
+        byte_order: be
+    - id: enc_rgb
+      description: RGB TIFF
+      params:
+        color: rgb
+    - id: enc_rgba
+      description: RGBA TIFF
+      params:
+        color: rgba
+    - id: enc_grayscale
+      description: Grayscale TIFF
+      params:
+        color: gray
+    - id: enc_bilevel
+      description: Bilevel TIFF
+      params:
+        color: 1bit
   ico:
     name: ICO
     extensions:
@@ -657,6 +827,31 @@ formats:
       description: 256x256 icon (modern)
       test_assets:
       - 256x256.ico
+    encode_edge_cases:
+    - id: enc_16x16
+      description: 16x16 icon
+      params:
+        sizes:
+        - &id001 !!python/tuple
+          - 16
+          - 16
+    - id: enc_32x32
+      description: 32x32 icon
+      params:
+        sizes:
+        - &id002 !!python/tuple
+          - 32
+          - 32
+    - id: enc_multi
+      description: Multi-resolution
+      params:
+        sizes:
+        - *id001
+        - *id002
+    - id: enc_png_entry
+      description: PNG-encoded entry
+      params:
+        png_entry: true
   avif:
     name: AVIF
     extensions:
@@ -703,6 +898,7 @@ formats:
       description: Animated AVIF (decode first frame)
       test_assets:
       - animated.avif
+    encode_edge_cases: []
 cross_format:
   detect:
   - id: jpeg_as_jpeg
