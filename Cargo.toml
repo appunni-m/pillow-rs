@@ -29,8 +29,9 @@ deprecated = "allow"
 
 [workspace.lints.clippy]
 # ── Safety: hard errors that block CI ──
+# .unwrap() is banned — use .expect("why this can't fail") to document invariants,
+# or proper error propagation with Result/Option.
 unwrap_used = "deny"
-expect_used = "deny"
 todo = "deny"
 
 # ── Performance: hard errors that block CI ──

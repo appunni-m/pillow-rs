@@ -233,10 +233,10 @@ struct GpuInner {
 impl GpuInner {
     /// Acquire a staging buffer of exactly `size_bytes` from the pool, or None if pool is empty.
     fn acquire_staging(&self, size_bytes: u64) -> Option<wgpu::Buffer> {
-        let mut pool = self.staging_pool.lock().unwrap();
+        let mut pool = self.staging_pool.lock().expect("internal invariant");
         if let Some(buffers) = pool.get_mut(&size_bytes) {
             if let Some(buf) = buffers.pop() {
-                let mut count = self.staging_count.lock().unwrap();
+                let mut count = self.staging_count.lock().expect("internal invariant");
                 *count = (*count).saturating_sub(1);
                 return Some(buf);
             }
@@ -246,14 +246,14 @@ impl GpuInner {
 
     /// Return a staging buffer to the pool for reuse. If pool is full (64 limit), drops it.
     fn release_staging(&self, buffer: wgpu::Buffer, size_bytes: u64) {
-        let count = self.staging_count.lock().unwrap();
+        let count = self.staging_count.lock().expect("internal invariant");
         if *count >= 64 {
             return; // Pool full, drop the buffer
         }
         drop(count);
-        let mut pool = self.staging_pool.lock().unwrap();
+        let mut pool = self.staging_pool.lock().expect("internal invariant");
         pool.entry(size_bytes).or_default().push(buffer);
-        let mut count = self.staging_count.lock().unwrap();
+        let mut count = self.staging_count.lock().expect("internal invariant");
         *count += 1;
     }
 }

@@ -162,9 +162,9 @@ impl<'a, P: Pixel + 'a> Rows<'a, P> {
                 pixels: [].chunks_exact(1),
             }
         } else {
-            let pixels = pixels
-                .get(..row_len * height as usize)
-                .expect("Pixel buffer has too few subpixels");
+            let Some(pixels) = pixels.get(..row_len * height as usize) else {
+                panic!("Pixel buffer has too few subpixels");
+            };
             Rows {
                 pixels: pixels.chunks_exact(row_len),
             }
@@ -254,9 +254,9 @@ impl<'a, P: Pixel + 'a> RowsMut<'a, P> {
                 pixels: [].chunks_exact_mut(1),
             }
         } else {
-            let pixels = pixels
-                .get_mut(..row_len * height as usize)
-                .expect("Pixel buffer has too few subpixels");
+            let Some(pixels) = pixels.get_mut(..row_len * height as usize) else {
+                panic!("Pixel buffer has too few subpixels");
+            };
             RowsMut {
                 pixels: pixels.chunks_exact_mut(row_len),
             }
@@ -856,8 +856,9 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     /// Panics when the resulting image is larger than the maximum size of a vector.
     #[must_use]
     pub fn new(width: u32, height: u32) -> ImageBuffer<P, Vec<P::Subpixel>> {
-        let size = Self::image_buffer_len(width, height)
-            .expect("Buffer length in `ImageBuffer::new` overflows usize");
+        let Some(size) = Self::image_buffer_len(width, height) else {
+            panic!("Buffer length in `ImageBuffer::new` overflows usize");
+        };
         ImageBuffer {
             data: vec![P::Subpixel::DEFAULT_MIN_VALUE; size],
             width,

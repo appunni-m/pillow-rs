@@ -86,17 +86,17 @@ fn active() -> &'static Mutex<HashSet<Backend>> {
 }
 
 pub fn enable_backend(b: Backend) -> bool {
-    active().lock().unwrap().insert(b)
+    active().lock().expect("internal invariant").insert(b)
 }
 pub fn disable_backend(b: Backend) -> bool {
-    active().lock().unwrap().remove(&b)
+    active().lock().expect("internal invariant").remove(&b)
 }
 pub fn backend_enabled(b: Backend) -> bool {
-    active().lock().unwrap().contains(&b)
+    active().lock().expect("internal invariant").contains(&b)
 }
 
 pub fn active_backends() -> Vec<Backend> {
-    let a = active().lock().unwrap();
+    let a = active().lock().expect("internal invariant");
     let mut v: Vec<Backend> = a.iter().copied().collect();
     v.sort_by_key(|b| std::cmp::Reverse(*b as u8));
     v
@@ -131,7 +131,7 @@ pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Backend {
     if let Some(b) = explicit {
         return b;
     }
-    let active_set = active().lock().unwrap();
+    let active_set = active().lock().expect("internal invariant");
     for pool in pools() {
         if active_set.contains(&pool.name()) && ops.iter().all(|op| pool.supports(op)) {
             return pool.name();

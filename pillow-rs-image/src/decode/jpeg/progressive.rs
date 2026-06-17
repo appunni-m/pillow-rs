@@ -142,16 +142,19 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                         k += 16;
                                         continue; // ZRL
                                     }
-                                    if size > 0 {
-                                        k += run;
-                                        if k > se || k >= 64 {
-                                            break;
-                                        }
-                                        let bits = br.read_bits(size as u32)?;
-                                        let val = extend(bits, size);
-                                        coeff_storage[comp_idx][block_idx][k] = val << scan.al;
-                                        k += 1;
+                                    if size == 0 {
+                                        // EOB: size==0, run>0, run!=15 -> remaining band is zero
+                                        break;
                                     }
+                                    // size > 0: new non-zero coefficient
+                                    k += run;
+                                    if k > se || k >= 64 {
+                                        break;
+                                    }
+                                    let bits = br.read_bits(size as u32)?;
+                                    let val = extend(bits, size);
+                                    coeff_storage[comp_idx][block_idx][k] = val << scan.al;
+                                    k += 1;
                                 }
                             }
                         }

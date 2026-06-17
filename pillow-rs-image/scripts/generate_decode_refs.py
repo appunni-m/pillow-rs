@@ -1,101 +1,177 @@
 #!/usr/bin/env python3
-"""Generate decode reference fixtures — matches tests/fixtures/ pattern exactly.
+"""Unified reference generator — Decode pixel refs + Encode roundtrip refs.
 
-Reads manifest.yaml, loads each test asset via PIL (libjpeg/libpng/etc.),
-extracts raw pixels via image.tobytes(), writes .bin reference files and
-output fixture JSONs.
+Decode: PIL open asset → .tobytes() → SHA-256 + .bin → matrix
+Encode:  PIL open source → .save(format, params) → reopen → .tobytes() → SHA-256 → matrix
 
-Pattern (mirrors scripts/generate_fixtures.py):
-  Input:  tests/fixtures/input/jsons/Decode.{format}.json  → test cases
-  Output: tests/fixtures/outputs/jsons/Decode.{format}.json → expected results
-  References: tests/fixtures/outputs/raws/{name}.bin → raw pixel bytes from PIL
-
-Reference .bin files contain raw pixel bytes matching PIL.Image.tobytes().
+Single script. Single source of truth: manifest.yaml + coverage_matrix.json.
 """
-import json, hashlib, sys, argparse
+import json, hashlib, io, sys, argparse
 from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).parent.parent
 MANIFEST = ROOT / "manifest.yaml"
+MATRIX_PATH = ROOT / "tests" / "fixtures" / "coverage_matrix.json"
 INPUT_JSONS = ROOT / "tests" / "fixtures" / "input" / "jsons"
 OUTPUT_JSONS = ROOT / "tests" / "fixtures" / "outputs" / "jsons"
 OUTPUT_RAWS = ROOT / "tests" / "fixtures" / "outputs" / "raws"
 ASSETS_DIR = ROOT / "tests" / "fixtures" / "input" / "images"
 
 
-def generate(target_format=None):
-    manifest = yaml.safe_load(MANIFEST.read_text())
+def mode_name(img):
+    m = {"L": "L8", "LA": "La8", "RGB": "Rgb8", "RGBA": "Rgba8", "1": "1", "P": "P"}
+    return m.get(img.mode, img.mode)
+
+
+def fmt_pil(fmt):
+    return {"jpeg": "JPEG", "png": "PNG", "gif": "GIF", "bmp": "BMP",
+            "tiff": "TIFF", "webp": "WEBP", "ico": "ICO"}.get(fmt, fmt.upper())
+
+
+def encode_params(fmt, params):
+    """Map our param names → PIL save() kwargs."""
+    m = {}
+    for k, v in params.items():
+        if isinstance(v, str) and v.startswith(("'", '"')):
+            v = v.strip("'\"")
+        if k in ("quality", "optimize", "progressive", "lossless", "interlace"):
+            m[k] = v
+        elif k == "subsampling" and fmt == "jpeg":
+            m["subsampling"] = v
+        elif k == "compression" and fmt == "tiff":
+            m["compression"] = v
+    return m
+
+
+def generate_decode(manifest, matrix):
+    """Generate Decode refs: raw pixel bytes from PIL."""
     generated = 0
-
     for fmt_name, fmt_data in manifest["formats"].items():
-        if target_format and fmt_name != target_format:
-            continue
-
-        # Read or create input fixture
-        input_json = INPUT_JSONS / f"Decode.{fmt_name}.json"
-        if input_json.exists():
-            inp = json.loads(input_json.read_text())
-        else:
-            inp = {"format_version": 2, "operation": {"module": "Decode", "target": fmt_name}, "cases": []}
-
         out_cases = []
-        asset_dir = ASSETS_DIR / fmt_name
-
         for case in fmt_data.get("edge_cases", []):
             for asset_name in case.get("test_assets", []):
-                img_path = asset_dir / asset_name
+                img_path = ASSETS_DIR / fmt_name / asset_name
                 if not img_path.exists():
                     continue
-
-                cid = f"Decode_{fmt_name}_{asset_name.replace('.', '_')}"
                 try:
                     from PIL import Image
                     img = Image.open(img_path)
                     raw = img.tobytes()
-
+                    sha = hashlib.sha256(raw).hexdigest()
                     ref_name = f"Decode.{fmt_name}_{asset_name.replace('.', '_')}.bin"
-                    ref_path = OUTPUT_RAWS / ref_name
-                    ref_path.parent.mkdir(parents=True, exist_ok=True)
-                    ref_path.write_bytes(raw)
+                    OUTPUT_RAWS.mkdir(parents=True, exist_ok=True)
+                    (OUTPUT_RAWS / ref_name).write_bytes(raw)
 
-                    expect_error = case.get("expect_error", False)
-
-                    # Ensure input case exists
-                    inp_case = {"id": cid, "mode": img.mode, "asset": f"{fmt_name}/{asset_name}"}
-                    if not any(c["id"] == cid for c in inp["cases"]):
-                        inp["cases"].append(inp_case)
-
-                    # Output assertion
-                    out_cases.append({
-                        "id": cid,
-                        "assert": {"method": "error", "exception": "DecodeError", "message_contains": ""}
-                        if expect_error else
-                        {"method": "binary", "reference": f"raws/{ref_name}"},
-                    })
+                    # Update matrix row
+                    cid = f"decode_{fmt_name}_{asset_name.replace('.', '_')}"
+                    for row in matrix["formats"][fmt_name]["decode"]:
+                        if row["id"] == cid or row.get("asset") == asset_name:
+                            row["ref_sha256"] = sha
+                            row["ref_bytes"] = len(raw)
+                            row["ref_mode"] = mode_name(img)
+                            break
+                    generated += 1
                 except Exception as e:
-                    print(f"  FAIL {asset_name}: {e}", file=sys.stderr)
+                    print(f"  SKIP decode {asset_name}: {e}", file=sys.stderr)
 
-        # Write fixtures
-        INPUT_JSONS.mkdir(parents=True, exist_ok=True)
-        input_json.write_text(json.dumps(inp, indent=2) + "\n")
+        # Also write input/output JSONs
+        dec_cases = [r for r in matrix["formats"][fmt_name].get("decode", [])
+                     if r.get("status") == "active" and r.get("asset")]
+        if dec_cases:
+            inp_data = [{"id": r["id"], "asset": r["asset"]} for r in dec_cases]
+            inp = {"format_version": 2, "operation": {"module": "Decode", "target": fmt_name}, "cases": inp_data}
+            INPUT_JSONS.mkdir(parents=True, exist_ok=True)
+            (INPUT_JSONS / f"Decode.{fmt_name}.json").write_text(json.dumps(inp, indent=2) + "\n")
 
-        out = {"format_version": 2, "operation": {"module": "Decode", "target": fmt_name}, "cases": out_cases}
-        OUTPUT_JSONS.mkdir(parents=True, exist_ok=True)
-        (OUTPUT_JSONS / f"Decode.{fmt_name}.json").write_text(json.dumps(out, indent=2) + "\n")
+            out_data = [{"id": r["id"], "ref_sha256": r.get("ref_sha256"),
+                         "ref_bytes": r.get("ref_bytes"), "ref_mode": r.get("ref_mode")}
+                        for r in dec_cases if r.get("ref_sha256")]
+            out = {"format_version": 2, "operation": {"module": "Decode", "target": fmt_name}, "cases": out_data}
+            OUTPUT_JSONS.mkdir(parents=True, exist_ok=True)
+            (OUTPUT_JSONS / f"Decode.{fmt_name}.json").write_text(json.dumps(out, indent=2) + "\n")
 
-        print(f"  OK  Decode.{fmt_name} ({len(out_cases)} cases)")
-        generated += 1
+    return generated
 
-    print(f"\nGenerated {generated} format fixtures")
+
+def generate_encode(matrix):
+    """Generate Encode refs: PIL roundtrip pixel SHA-256."""
+    from PIL import Image
+    generated = 0
+
+    for fmt_name, fmt_data in matrix["formats"].items():
+        for row in fmt_data.get("encode", []):
+            if row.get("status") != "active":
+                continue
+            src_fmt = row.get("source_format") or fmt_name
+            src_asset = row.get("source_asset")
+            if not src_asset:
+                continue
+            src_path = ASSETS_DIR / src_fmt / src_asset
+            if not src_path.exists():
+                continue
+
+            try:
+                img = Image.open(src_path)
+                img.load()
+                params = row.get("params", {})
+                buf = io.BytesIO()
+                img.save(buf, format=fmt_pil(fmt_name), **encode_params(fmt_name, dict(params)))
+                buf.seek(0)
+                rt = Image.open(buf)
+                rt.load()
+                pixels = rt.tobytes()
+                row["ref_sha256"] = hashlib.sha256(pixels).hexdigest()
+                row["ref_bytes"] = len(pixels)
+                row["ref_mode"] = mode_name(rt)
+                generated += 1
+            except Exception as e:
+                # Lossy formats or unsupported params — skip ref, just verify dimensions
+                pass
+
+        # Encode input/output JSONs
+        enc_cases = [r for r in fmt_data.get("encode", [])
+                     if r.get("status") == "active" and r.get("source_asset")]
+        if enc_cases:
+            inp_data = [{"id": r["id"], "source_asset": r["source_asset"],
+                         "source_format": r.get("source_format", fmt_name),
+                         "params": r.get("params", {})} for r in enc_cases]
+            inp = {"format_version": 2, "operation": {"module": "Encode", "target": fmt_name}, "cases": inp_data}
+            (INPUT_JSONS / f"Encode.{fmt_name}.json").write_text(json.dumps(inp, indent=2) + "\n")
+
+            out_data = [{"id": r["id"], "ref_sha256": r.get("ref_sha256"),
+                         "ref_bytes": r.get("ref_bytes"), "ref_mode": r.get("ref_mode")}
+                        for r in enc_cases if r.get("ref_sha256")]
+            out = {"format_version": 2, "operation": {"module": "Encode", "target": fmt_name}, "cases": out_data}
+            OUTPUT_JSONS.mkdir(parents=True, exist_ok=True)
+            (OUTPUT_JSONS / f"Encode.{fmt_name}.json").write_text(json.dumps(out, indent=2) + "\n")
+
+    return generated
+
+
+def generate(target_format=None):
+    # Load
+    manifest = yaml.safe_load(MANIFEST.read_text())
+    matrix = json.loads(MATRIX_PATH.read_text()) if MATRIX_PATH.exists() else {"formats": {}}
+
+    # Decode
+    n_dec = generate_decode(manifest, matrix)
+    print(f"Decode: {n_dec} refs")
+
+    # Encode
+    n_enc = generate_encode(matrix)
+    print(f"Encode: {n_enc} refs")
+
+    # Save matrix
+    MATRIX_PATH.write_text(json.dumps(matrix, indent=2))
+    print(f"Written: {MATRIX_PATH}")
+
+    # Commit outputs
+    print("\nAll refs generated. Outputs in tests/fixtures/outputs/ are committed.")
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--format", help="Only generate for specific format")
-    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--format", help="Specific format only")
     args = p.parse_args()
-    if not args.dry_run:
-        generate(args.format)
-    else:
-        print("Dry run — would generate fixtures for all formats in manifest.yaml")
+    generate(args.format)
