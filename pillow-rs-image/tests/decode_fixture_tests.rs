@@ -268,3 +268,79 @@ fn test_manifest_coverage() {
         "manifest.yaml must define at least one test case"
     );
 }
+
+// ── Encode roundtrip tests ──────────────────────────────────────────────
+
+#[test]
+fn test_encode_roundtrip() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixtures_dir = manifest_dir.join("tests").join("fixtures");
+    let images_dir = fixtures_dir.join("input").join("images");
+    let input_jsons = fixtures_dir.join("input").join("jsons");
+
+    if !input_jsons.is_dir() {
+        eprintln!("SKIP: no fixtures found.");
+        return;
+    }
+
+    let mut total = 0u32;
+    let mut passed = 0u32;
+    let mut failed = 0u32;
+    // Only test formats that have encode support
+    let encodable: std::collections::HashSet<&str> =
+        ["png", "bmp", "gif", "tiff", "jpeg"].iter().copied().collect();
+
+    for entry in fs::read_dir(&input_jsons).unwrap().flatten() {
+        let input_path = entry.path();
+        let fname = input_path.file_name().unwrap().to_str().unwrap();
+        // Get format name from fixture: "Decode.jpeg.json" → "jpeg"
+        let fmt = fname.strip_prefix("Decode.").and_then(|s| s.strip_suffix(".json")).unwrap_or("");
+        if !encodable.contains(fmt) { continue; }
+
+        let inp: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&input_path).unwrap()).unwrap();
+
+        for case in inp["cases"].as_array().unwrap() {
+            let cid = case["id"].as_str().unwrap();
+            let asset_rel = case["asset"].as_str().unwrap();
+            let asset_path = images_dir.join(asset_rel);
+            if !asset_path.exists() { continue; }
+            total += 1;
+
+            let asset_data = match fs::read(&asset_path) { Ok(d) => d, Err(_) => { failed += 1; continue; } };
+            let decoded = match img::decode(&asset_data) {
+                Some(d) => d,
+                None => { eprintln!("  SKIP [{cid}]: decode failed for roundtrip"); continue; }
+            };
+
+            // Encode → Decode → Compare
+            let fmt_enum = match fmt {
+                "jpeg" => img::ImageFormat::Jpeg, "png" => img::ImageFormat::Png,
+                "gif" => img::ImageFormat::Gif, "bmp" => img::ImageFormat::Bmp,
+                "tiff" => img::ImageFormat::Tiff, "webp" => img::ImageFormat::WebP,
+                _ => { eprintln!("  SKIP [{cid}]: no encoder"); continue; }
+            };
+            let encoded = match img::encode(&decoded, fmt_enum) {
+                Some(e) => e,
+                None => { eprintln!("  SKIP [{cid}]: encode not implemented"); continue; }
+            };
+            let redecoded = match img::decode(&encoded) {
+                Some(d) => d,
+                None => { eprintln!("  FAIL [{cid}]: re-decode after encode failed"); failed += 1; continue; }
+            };
+
+            if decoded.as_bytes() == redecoded.as_bytes() {
+                eprintln!("  OK   [{cid}] roundtrip {}B", decoded.as_bytes().len());
+                passed += 1;
+            } else {
+                let diffs = decoded.as_bytes().iter().zip(redecoded.as_bytes().iter()).filter(|(a,b)| a!=b).count();
+                eprintln!("  FAIL [{cid}]: roundtrip {diffs} bytes differ");
+                failed += 1;
+            }
+        }
+    }
+
+    eprintln!("\nencode roundtrip: {passed}/{total} passed, {failed} failed");
+    if total == 0 { eprintln!("No encodable fixtures found."); }
+    if failed > 0 { panic!("{failed} roundtrip test(s) failed"); }
+}
