@@ -167,6 +167,58 @@ pub(crate) struct FilterCoeffs {
     pub(crate) weights: Vec<Vec<i64>>, // 22-bit fixed-point weights
 }
 
+pub(crate) struct FilterCoeffsF64 {
+    pub(crate) xmin: Vec<i64>,
+    pub(crate) count: Vec<usize>,
+    pub(crate) weights: Vec<Vec<f64>>, // double-precision weights (for I/F modes)
+}
+
+/// PIL's ROUND_UP: (int)((f) >= 0.0 ? (f) + 0.5 : (f) - 0.5)
+pub(crate) fn round_up(f: f64) -> f64 {
+    if f >= 0.0 { (f + 0.5).trunc() } else { (f - 0.5).trunc() }
+}
+
+/// Precompute f64 (double-precision) coefficients matching PIL's 32-bit image resample.
+pub(crate) fn precompute_coeffs_f64(
+    out_size: u32,
+    in_size: u32,
+    kernel: fn(f64) -> f64,
+    support: f64,
+) -> FilterCoeffsF64 {
+    let scale = in_size as f64 / out_size as f64;
+    let filterscale = scale.max(1.0);
+    let ss = 1.0 / filterscale;
+    let src_support = support * filterscale;
+    let n = out_size as usize;
+    let mut xmin = Vec::with_capacity(n);
+    let mut count = Vec::with_capacity(n);
+    let mut weights: Vec<Vec<f64>> = Vec::with_capacity(n);
+    for ox in 0..n {
+        let center = (ox as f64 + 0.5) * scale;
+        let mut x0 = (center - src_support + 0.5).trunc() as i64;
+        let mut x1 = (center + src_support + 0.5).trunc() as i64;
+        if x0 < 0 { x0 = 0; }
+        if x1 > in_size as i64 { x1 = in_size as i64; }
+        let cnt = (x1 - x0) as usize;
+        xmin.push(x0);
+        count.push(cnt);
+        if cnt == 0 { weights.push(Vec::new()); continue; }
+        let mut w: Vec<f64> = Vec::with_capacity(cnt);
+        let mut wsum = 0.0;
+        for ix in 0..cnt {
+            let sx = x0 + ix as i64;
+            let val = kernel((sx as f64 + 0.5 - center) * ss);
+            w.push(val);
+            wsum += val;
+        }
+        if wsum > 0.0 {
+            for val in &mut w { *val /= wsum; }
+        }
+        weights.push(w);
+    }
+    FilterCoeffsF64 { xmin, count, weights }
+}
+
 pub(crate) fn precompute_coeffs(
     out_size: u32,
     in_size: u32,

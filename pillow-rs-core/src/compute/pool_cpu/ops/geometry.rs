@@ -9,7 +9,7 @@ use std::f64;
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::pil_resize::{pil_resize, precompute_coeffs, precompute_coeffs_float, FilterCoeffs};
+use crate::ops::pil_resize::{pil_resize, precompute_coeffs, precompute_coeffs_f64, precompute_coeffs_float, round_up, FilterCoeffs};
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 // ── Resample filter conversion ──
@@ -311,59 +311,47 @@ fn resize_i(
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
-    // Two-pass separable approach for non-NEAREST filters (matching PIL's ImagingResample)
-    // Use PIL's standard double-precision precomputation for exact weight matching.
-    let h_coeffs = precompute_coeffs(dst_w, sw, kernel, support);
-    let v_coeffs = precompute_coeffs(dst_h, sh, kernel, support);
+    // PIL: for INT32 images, coefficients stay as double-precision (not fixed-point).
+    // Use f64 accumulation + ROUND_UP matching PIL's ImagingResample for 32-bit types.
+    let h_coeffs_f64 = precompute_coeffs_f64(dst_w, sw, kernel, support);
+    let v_coeffs_f64 = precompute_coeffs_f64(dst_h, sh, kernel, support);
 
-    const PRECISION_BITS: i64 = 22;
-    const HALF_PRECISION: i64 = 1 << (PRECISION_BITS - 1);
+    // Allocate intermediate buffer (sh rows x dw cols) as f64
+    let mut intermediate: Vec<f64> = vec![0.0f64; (sh * dst_w) as usize];
 
-    // Allocate intermediate buffer (sh rows x dw cols) as i32, matching PIL's
-    // ImagingResample behavior (horizontal pass rounds to output type).
-    let mut intermediate: Vec<i32> = vec![0i32; (sh * dst_w) as usize];
-
-    // Horizontal pass: for each source row, compute each output column's weighted sum,
-    // round to i32 (matching PIL's intermediate quantization with fixed-point weights).
+    // Horizontal pass: f64 accumulation, matching PIL's double-precision path
     for sy in 0..sh {
         let src_row_base = (sy * sw) as usize;
         for dx in 0..dst_w {
-            let x0 = h_coeffs.xmin[dx as usize];
-            let cnt = h_coeffs.count[dx as usize];
-            if cnt == 0 {
-                continue;
-            }
-            let mut acc: i64 = 0;
-            for (cix, &w) in h_coeffs.weights[dx as usize].iter().enumerate() {
+            let x0 = h_coeffs_f64.xmin[dx as usize];
+            let cnt = h_coeffs_f64.count[dx as usize];
+            if cnt == 0 { continue; }
+            let mut acc: f64 = 0.0;
+            for (cix, &w) in h_coeffs_f64.weights[dx as usize].iter().enumerate() {
                 let sx = (x0 + cix as i64) as usize;
-                acc += w * src_ints[src_row_base + sx] as i64;
+                acc += w * src_ints[src_row_base + sx] as f64;
             }
-            // Round fixed-point sum to i32
-            let val = ((acc + HALF_PRECISION) >> PRECISION_BITS) as i32;
-            intermediate[(sy * dst_w + dx) as usize] = val;
+            // PIL: ROUND_UP(ss)
+            intermediate[(sy * dst_w + dx) as usize] = round_up(acc);
         }
     }
 
-    // Vertical pass: for each output column, compute each output row's weighted sum,
-    // round to i32 (final output).
+    // Vertical pass
     let mut out_ints: Vec<i32> = Vec::with_capacity(n);
     for dy in 0..dst_h {
-        let y0 = v_coeffs.xmin[dy as usize];
-        let cnt = v_coeffs.count[dy as usize];
+        let y0 = v_coeffs_f64.xmin[dy as usize];
+        let cnt = v_coeffs_f64.count[dy as usize];
         if cnt == 0 {
-            for _ in 0..dst_w {
-                out_ints.push(0i32);
-            }
+            for _ in 0..dst_w { out_ints.push(0i32); }
             continue;
         }
         for dx in 0..dst_w {
-            let mut acc: i64 = 0;
-            for (cix, &w) in v_coeffs.weights[dy as usize].iter().enumerate() {
+            let mut acc: f64 = 0.0;
+            for (cix, &w) in v_coeffs_f64.weights[dy as usize].iter().enumerate() {
                 let sy = (y0 + cix as i64) as usize;
-                acc += w * intermediate[(sy * dst_w as usize) + dx as usize] as i64;
+                acc += w * intermediate[(sy * dst_w as usize) + dx as usize];
             }
-            let out_val = ((acc + HALF_PRECISION) >> PRECISION_BITS) as i32;
-            out_ints.push(out_val);
+            out_ints.push(round_up(acc) as i32);
         }
     }
 
