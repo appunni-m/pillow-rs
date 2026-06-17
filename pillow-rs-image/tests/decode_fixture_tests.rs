@@ -322,7 +322,8 @@ fn test_encode_roundtrip() {
                 "tiff" => img::ImageFormat::Tiff, "webp" => img::ImageFormat::WebP,
                 _ => { eprintln!("  SKIP [{cid}]: no encoder"); continue; }
             };
-            let encoded = match img::encode(&decoded, fmt_enum) {
+            use img::encode_options::EncodeOptions;
+            let encoded = match img::encode(&decoded, fmt_enum, &EncodeOptions::default()) {
                 Some(e) => e,
                 None => { eprintln!("  SKIP [{cid}]: encode not implemented"); continue; }
             };

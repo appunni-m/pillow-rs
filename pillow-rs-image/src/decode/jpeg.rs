@@ -1581,6 +1581,8 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
     }
 
     eprintln!("progressive: LOOP START {} scans", info.scans.len());
+    // Track MCU count for verification
+    let mut scan_done: usize = 0;
     // Process each scan in order
     for (scan_idx, scan) in info.scans.iter().enumerate() {
         eprintln!("progressive: SCAN {} ss={} se={} ah={} al={} ncomp={} entropy={}-{}",
@@ -1686,13 +1688,17 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                     + (mcu_x * comp.h_samp as usize + bx);
                                 let mut k = ss;
                                 while k <= se && k < 64 {
-                                    // TRACE: log every 16th block for scan 4
-                                    if scan_idx == 4 && block_idx % 16 == 0 && ss == 6 {
-                                        eprintln!("AC_FIRST S[{}] MCU={},{} blk={},{} k={}",
-                                            scan_idx, mcu_x, mcu_y, bx, by, k);
+                                    // TRACE: scan 4, block 154 (failing in ac_refine)
+                                    if scan_idx == 4 && block_idx == 154 {
+                                        eprintln!("AC_FIRST S4 blk154 k={} before_decode", k);
                                     }
                                     let sym = ac_table.decode(&mut br)?;
-                                    if sym == 0x00 { break; } // EOB
+                                    if sym == 0x00 {
+                                        if scan_idx == 4 && block_idx == 154 {
+                                            eprintln!("AC_FIRST S4 blk154 EOB at k={}", k);
+                                        }
+                                        break; // EOB
+                                    }
                                     let run = (sym >> 4) as usize;
                                     let size = (sym & 0x0F) as u8;
                                     if size == 0 && run == 15 {
@@ -1704,6 +1710,10 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                         if k > se || k >= 64 { break; }
                                         let bits = br.read_bits(size as u32)?;
                                         let val = extend(bits, size);
+                                        if scan_idx == 4 && block_idx == 154 {
+                                            eprintln!("AC_FIRST S4 blk154 set k={} val={} bits={} size={}",
+                                                k, val << al, bits, size);
+                                        }
                                         coeff_storage[comp_idx][block_idx][k] = val << al;
                                         k += 1;
                                     }

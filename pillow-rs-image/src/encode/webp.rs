@@ -9,13 +9,11 @@
 //! - `Rgba8` → WebPEncodeLosslessRGBA
 //! - `L8`    → Expanded to RGB, then WebPEncodeLosslessRGB
 //! - `La8`   → Alpha stripped, expanded to RGB, then WebPEncodeLosslessRGB
-
 use crate::types::{ColorType, DecodedImage};
-
+use crate::encode_options::EncodeOptions;
 // ---------------------------------------------------------------------------
 // libwebp C FFI declarations — encoder functions
 // ---------------------------------------------------------------------------
-
 extern "C" {
     /// Lossless WebP encode from RGB (3 bytes/pixel).
     /// Returns size of output buffer (0 on failure).
@@ -27,7 +25,6 @@ extern "C" {
         stride: i32,
         output: *mut *mut u8,
     ) -> usize;
-
     /// Lossless WebP encode from RGBA (4 bytes/pixel).
     fn WebPEncodeLosslessRGBA(
         rgba: *const u8,
@@ -36,15 +33,12 @@ extern "C" {
         stride: i32,
         output: *mut *mut u8,
     ) -> usize;
-
     /// Free a buffer allocated by libwebp.
     fn WebPFree(ptr: *mut u8);
 }
-
 // ---------------------------------------------------------------------------
 // Encoder
 // ---------------------------------------------------------------------------
-
 /// Encode a `DecodedImage` as lossless WebP bytes using libwebp.
 ///
 /// Supported color types:
@@ -62,14 +56,13 @@ extern "C" {
 /// use pillow_rs_image::encode::webp::encode;
 ///
 /// let img = DecodedImage::new(2, 2, vec![255, 0, 128, 0, 255, 64], ColorType::Rgb8);
-/// let webp = encode(&img).expect("WebP encode should succeed");
+/// let webp = encode(&img, &EncodeOptions::default()).expect("WebP encode should succeed");
 /// assert!(!webp.is_empty());
 /// ```
-pub fn encode(img: &DecodedImage) -> Option<Vec<u8>> {
+pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     let (w, h) = (img.width, img.height);
     let w_i32 = w as i32;
     let h_i32 = h as i32;
-
     match img.color {
         ColorType::Rgb8 => {
             let stride = w_i32 * 3;
@@ -80,7 +73,7 @@ pub fn encode(img: &DecodedImage) -> Option<Vec<u8>> {
                     w_i32,
                     h_i32,
                     stride,
-                    &mut output,
+                   &mut output,
                 )
             };
             if size == 0 || output.is_null() {
@@ -99,7 +92,7 @@ pub fn encode(img: &DecodedImage) -> Option<Vec<u8>> {
                     w_i32,
                     h_i32,
                     stride,
-                    &mut output,
+                   &mut output,
                 )
             };
             if size == 0 || output.is_null() {
@@ -155,46 +148,40 @@ pub fn encode(img: &DecodedImage) -> Option<Vec<u8>> {
         _ => None,
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::decode;
-
     /// Decode a WebP → re-encode → decode → verify pixels are bit-exact
     /// (lossless WebP guarantees this).
     fn roundtrip(webp_bytes: &[u8]) {
         let original = decode::webp::decode(webp_bytes).expect("decode should succeed");
-        let encoded = encode(&original).expect("encode should succeed");
+        let encoded = encode(&original, &EncodeOptions::default()).expect("encode should succeed");
         let decoded = decode::webp::decode(&encoded).expect("re-decode should succeed");
-
         assert_eq!(original.width, decoded.width, "width mismatch");
         assert_eq!(original.height, decoded.height, "height mismatch");
         assert_eq!(original.color, decoded.color, "color type mismatch");
         assert_eq!(original.pixels, decoded.pixels, "pixel data mismatch");
     }
-
     #[test]
     fn test_encode_rgb8() {
         let pixels: Vec<u8> = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128];
         let img = DecodedImage::new(2, 2, pixels, ColorType::Rgb8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         assert!(encoded.len() > 20);
         // Verify WebP RIFF header
         assert_eq!(&encoded[0..4], b"RIFF");
         assert_eq!(&encoded[8..12], b"WEBP");
     }
-
     #[test]
     fn test_encode_rgba8() {
         let pixels: Vec<u8> = vec![
             255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 128, 128, 128, 0,
         ];
         let img = DecodedImage::new(2, 2, pixels, ColorType::Rgba8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         assert_eq!(&encoded[0..4], b"RIFF");
         assert_eq!(&encoded[8..12], b"WEBP");
-
         // Decode back — the decoder always tries RGB first, which drops alpha,
         // so the re-decoded result is Rgb8 (not Rgba8). This matches the
         // decoder's current behaviour.
@@ -204,15 +191,13 @@ mod tests {
         assert_eq!(decoded.width, 2);
         assert_eq!(decoded.height, 2);
     }
-
     #[test]
     fn test_encode_l8_expands_to_rgb() {
         let pixels: Vec<u8> = vec![0, 128, 255, 64];
         let img = DecodedImage::new(2, 2, pixels, ColorType::L8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         assert_eq!(&encoded[0..4], b"RIFF");
         assert_eq!(&encoded[8..12], b"WEBP");
-
         // Decode back — encoder expands L8 to RGB,
         // decoder returns Rgb8 since there's no alpha
         let decoded = decode::webp::decode(&encoded).expect("re-decode failed");
@@ -220,31 +205,26 @@ mod tests {
         // (it was encoded as RGB from the expanded L8 data)
         assert_eq!(decoded.color, ColorType::Rgb8);
     }
-
     #[test]
     fn test_encode_la8_strips_alpha_and_expands() {
         let pixels: Vec<u8> = vec![128, 255, 64, 128, 200, 0];
         let img = DecodedImage::new(1, 3, pixels, ColorType::La8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         let decoded = decode::webp::decode(&encoded).expect("re-decode failed");
         // La8 → RGB (no alpha after stripping)
         assert_eq!(decoded.color, ColorType::Rgb8);
     }
-
     #[test]
     fn test_encode_unsupported_type_returns_none() {
         let img = DecodedImage::new(1, 1, vec![0; 6], ColorType::Rgb16);
-        assert!(encode(&img).is_none());
+        assert!(encode(&img, &EncodeOptions::default()).is_none());
     }
-
     #[test]
     fn test_roundtrip_rgb() {
         let webp = make_test_webp_rgb();
         roundtrip(&webp);
     }
-
     // ── helpers ───────────────────────────────────────────────────────────────
-
     fn make_test_webp_rgb() -> Vec<u8> {
         // Create a 4×4 RGB test pattern, encode as WebP
         let mut pixels = Vec::with_capacity(4 * 4 * 3);
@@ -256,6 +236,6 @@ mod tests {
             }
         }
         let img = DecodedImage::new(4, 4, pixels, ColorType::Rgb8);
-        encode(&img).unwrap()
+        encode(&img, &EncodeOptions::default()).unwrap()
     }
 }

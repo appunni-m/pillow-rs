@@ -4,10 +4,9 @@
 //! - `L8`: raw palette indices with a grayscale palette
 //! - `Rgb8`: quantized to a 256-color palette
 //! - `Rgba8`: quantized to a 256-color palette plus transparency
-
 use crate::types::{ColorType, DecodedImage};
+use crate::encode_options::EncodeOptions;
 use gif::{Encoder, Frame, Repeat};
-
 /// Encode a `DecodedImage` as GIF bytes.
 ///
 /// For L8 images the pixel values are used directly as palette indices with a
@@ -15,15 +14,13 @@ use gif::{Encoder, Frame, Repeat};
 /// most 256 unique colors using a simple nearest-neighbor approach.
 ///
 /// Returns `None` for unsupported color types or images with no pixels.
-pub fn encode(img: &DecodedImage) -> Option<Vec<u8>> {
+pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     let w = img.width as u16;
     let h = img.height as u16;
     if w == 0 || h == 0 {
         return None;
     }
-
     let mut buf = Vec::new();
-
     // Each arm must drop `encoder` (which borrows `buf`) before returning.
     let _result = match img.color {
         ColorType::L8 => {
@@ -35,62 +32,51 @@ pub fn encode(img: &DecodedImage) -> Option<Vec<u8>> {
                 palette.push(v); // G
                 palette.push(v); // B
             }
-
             let mut frame = Frame::default();
             frame.width = w;
             frame.height = h;
             frame.palette = Some(palette);
             frame.buffer = std::borrow::Cow::Owned(img.pixels.clone());
-
             {
                 let mut encoder = Encoder::new(&mut buf, w, h, &[]).ok()?;
                 encoder.set_repeat(Repeat::Infinite).ok()?;
                 encoder.write_frame(&frame).ok()?;
             }
-
             Some(())
         }
         ColorType::Rgb8 => {
             let (palette, indices) = quantize_rgb(&img.pixels)?;
-
             let mut frame = Frame::default();
             frame.width = w;
             frame.height = h;
             frame.palette = Some(palette);
             frame.buffer = std::borrow::Cow::Owned(indices);
-
             {
                 let mut encoder = Encoder::new(&mut buf, w, h, &[]).ok()?;
                 encoder.set_repeat(Repeat::Infinite).ok()?;
                 encoder.write_frame(&frame).ok()?;
             }
-
             Some(())
         }
         ColorType::Rgba8 => {
             let (palette, indices, transparent_idx) = quantize_rgba(&img.pixels);
-
             let mut frame = Frame::default();
             frame.width = w;
             frame.height = h;
             frame.palette = Some(palette);
             frame.transparent = transparent_idx;
             frame.buffer = std::borrow::Cow::Owned(indices);
-
             {
                 let mut encoder = Encoder::new(&mut buf, w, h, &[]).ok()?;
                 encoder.set_repeat(Repeat::Infinite).ok()?;
                 encoder.write_frame(&frame).ok()?;
             }
-
             Some(())
         }
         _ => None,
     };
-
     if _result.is_some() { Some(buf) } else { None }
 }
-
 /// Quantize RGB8 pixels to a palette (max 256 colors).
 ///
 /// Returns `(palette, indices)` where palette is a flat vec of RGB triplets
@@ -99,10 +85,8 @@ fn quantize_rgb(pixels: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
     if pixels.len() % 3 != 0 {
         return None;
     }
-
     let mut palette: Vec<[u8; 3]> = Vec::new();
     let mut indices = Vec::with_capacity(pixels.len() / 3);
-
     for chunk in pixels.chunks_exact(3) {
         let color = [chunk[0], chunk[1], chunk[2]];
         match find_color(&palette, &color) {
@@ -120,7 +104,6 @@ fn quantize_rgb(pixels: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
             }
         }
     }
-
     // Flatten palette to RGB triplets
     let mut flat = Vec::with_capacity(palette.len() * 3);
     for c in &palette {
@@ -128,10 +111,8 @@ fn quantize_rgb(pixels: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
         flat.push(c[1]);
         flat.push(c[2]);
     }
-
     Some((flat, indices))
 }
-
 /// Quantize RGBA8 pixels to a palette with optional transparency.
 ///
 /// Returns `(palette, indices, optional_transparent_index)`.
@@ -141,14 +122,11 @@ fn quantize_rgba(pixels: &[u8]) -> (Vec<u8>, Vec<u8>, Option<u8>) {
     let mut transparent_idx: Option<u8> = None;
     let pixel_count = pixels.len() / 4;
     let mut indices = Vec::with_capacity(pixel_count);
-
     // First pass: collect unique opaque (R,G,B) colors
     let mut transparent_color: Option<[u8; 3]> = None;
-
     for chunk in pixels.chunks_exact(4) {
         let alpha = chunk[3];
         let rgb = [chunk[0], chunk[1], chunk[2]];
-
         if alpha < 128 {
             // Transparent pixel — note the color
             transparent_idx = Some(0);
@@ -173,7 +151,6 @@ fn quantize_rgba(pixels: &[u8]) -> (Vec<u8>, Vec<u8>, Option<u8>) {
             }
         }
     }
-
     // Build flat palette. If we have transparent pixels, index 0 is the
     // transparent entry (use the first transparent color found).
     let mut flat = Vec::with_capacity(palette.len() * 3);
@@ -187,20 +164,16 @@ fn quantize_rgba(pixels: &[u8]) -> (Vec<u8>, Vec<u8>, Option<u8>) {
         flat.push(c[1]);
         flat.push(c[2]);
     }
-
     (flat, indices, transparent_idx)
 }
-
 /// Find a color in the palette. Returns its index if found.
 fn find_color(palette: &[[u8; 3]], color: &[u8; 3]) -> Option<usize> {
     palette.iter().position(|c| c == color)
 }
-
 /// Find a color in the palette starting from `start` offset.
 fn find_color_in_range(palette: &[[u8; 3]], start: usize, color: &[u8; 3]) -> Option<usize> {
     palette[start..].iter().position(|c| c == color).map(|i| i + start)
 }
-
 /// Find the nearest color in the palette by Euclidean distance.
 fn find_nearest(palette: &[[u8; 3]], color: &[u8; 3]) -> usize {
     let mut best = 0;
@@ -217,7 +190,6 @@ fn find_nearest(palette: &[[u8; 3]], color: &[u8; 3]) -> usize {
     }
     best
 }
-
 /// Find the nearest color in the palette starting from `start` offset.
 fn find_nearest_in_range(palette: &[[u8; 3]], start: usize, color: &[u8; 3]) -> usize {
     let mut best = start;
@@ -234,36 +206,31 @@ fn find_nearest_in_range(palette: &[[u8; 3]], start: usize, color: &[u8; 3]) -> 
     }
     best
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::decode;
-
     #[test]
     fn test_encode_l8_roundtrip() {
         // Build a simple GIF, decode, re-encode, decode, compare
         let gif = make_minimal_gif();
         let original = decode::gif::decode(&gif).expect("decode should succeed");
-        let encoded = encode(&original).expect("encode should succeed");
+        let encoded = encode(&original, &EncodeOptions::default()).expect("encode should succeed");
         let decoded = decode::gif::decode(&encoded).expect("re-decode should succeed");
-
         assert_eq!(original.width, decoded.width);
         assert_eq!(original.height, decoded.height);
         assert_eq!(original.color, decoded.color);
         assert_eq!(original.pixels, decoded.pixels);
     }
-
     #[test]
     fn test_encode_l8_from_pixels() {
         let pixels: Vec<u8> = vec![0, 128, 200, 255];
         let img = DecodedImage::new(2, 2, pixels.clone(), ColorType::L8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         let decoded = decode::gif::decode(&encoded).expect("re-decode should succeed");
         // GIF decode returns palette indices (L8)
         assert_eq!(decoded.pixels, pixels);
     }
-
     #[test]
     fn test_encode_rgb8_from_pixels() {
         let pixels: Vec<u8> = vec![
@@ -273,11 +240,10 @@ mod tests {
             128, 128, 128, // gray
         ];
         let img = DecodedImage::new(2, 2, pixels, ColorType::Rgb8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         assert!(encoded.len() > 6);
         assert_eq!(&encoded[..6], b"GIF89a");
     }
-
     #[test]
     fn test_encode_rgba8_from_pixels() {
         let pixels: Vec<u8> = vec![
@@ -287,26 +253,21 @@ mod tests {
             128, 128, 128, 0, // gray transparent
         ];
         let img = DecodedImage::new(2, 2, pixels, ColorType::Rgba8);
-        let encoded = encode(&img).expect("encode should succeed");
+        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         assert!(encoded.len() > 6);
         assert_eq!(&encoded[..6], b"GIF89a");
     }
-
     #[test]
     fn test_unsupported_color_type() {
         let img = DecodedImage::new(1, 1, vec![0, 0, 0, 0, 0, 0], ColorType::Rgb16);
-        assert!(encode(&img).is_none());
+        assert!(encode(&img, &EncodeOptions::default()).is_none());
     }
-
     // ── helpers ───────────────────────────────────────────────────────────
-
     /// Build a minimal 2x2 GIF with 4 grayscale palette entries.
     fn make_minimal_gif() -> Vec<u8> {
         use gif::Encoder as GifEncoder;
         use gif::Repeat;
-
         let mut buf = Vec::new();
-
         // Create a grayscale palette: 4 colors
         let palette: Vec<u8> = vec![
             0, 0, 0,       // black
@@ -314,20 +275,17 @@ mod tests {
             170, 170, 170, // light gray
             255, 255, 255, // white
         ];
-
         let mut frame = Frame::default();
         frame.width = 2;
         frame.height = 2;
         frame.palette = Some(palette);
         // Pixels: black, dark gray, light gray, white
         frame.buffer = std::borrow::Cow::Borrowed(&[0u8, 1, 2, 3]);
-
         {
             let mut encoder = GifEncoder::new(&mut buf, 2, 2, &[]).unwrap();
             encoder.set_repeat(Repeat::Infinite).unwrap();
             encoder.write_frame(&frame).unwrap();
         }
-
         buf
     }
 }

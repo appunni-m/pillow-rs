@@ -51,7 +51,16 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     decode::decode_format(data, format)
 }
 
-/// Encode a DecodedImage into the specified format.
-pub fn encode(img: &DecodedImage, format: ImageFormat) -> Option<Vec<u8>> {
-    encode::encode_format(img, format)
+/// Encode a DecodedImage into the specified format with given options.
+pub fn encode(img: &DecodedImage, format: ImageFormat, opts: &EncodeOptions) -> Option<Vec<u8>> {
+    encode::encode_format(img, format, opts)
 }
+
+/// Encode with default options.
+pub fn encode_default(img: &DecodedImage, format: ImageFormat) -> Option<Vec<u8>> {
+    encode(img, format, &EncodeOptions::default())
+}
+pub mod encode_options;
+
+use crate::encode_options::EncodeOptions;
+use crate::types::*;
