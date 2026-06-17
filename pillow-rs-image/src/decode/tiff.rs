@@ -20,10 +20,17 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     let mut decoder = tiff::decoder::Decoder::new(Cursor::new(data)).ok()?;
     let (w, h) = decoder.dimensions().ok()?;
     let color_type = decoder.colortype().ok()?;
-
     let result = decoder.read_image().ok()?;
 
     match color_type {
+        tiff::ColorType::Gray(1) => {
+            // Bilevel (Gray(1)): tiff 0.11+ returns packed 1-bit data directly.
+            if let tiff::decoder::DecodingResult::U8(img) = result {
+                Some(DecodedImage::new(w, h, img, ColorType::L8))
+            } else {
+                None
+            }
+        }
         tiff::ColorType::Gray(8) => {
             if let tiff::decoder::DecodingResult::U8(img) = result {
                 Some(DecodedImage::new(w, h, img, ColorType::L8))

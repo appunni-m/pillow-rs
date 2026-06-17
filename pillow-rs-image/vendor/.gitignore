@@ -1,0 +1,7 @@
+# libwebp vendor files — these are platform-specific artifacts
+# extracted from the system libwebp-dev package for development.
+# On a fresh checkout, run: scripts/setup_webp.sh
+libwebp.so
+libwebp.so.7
+libwebp.a
+include/

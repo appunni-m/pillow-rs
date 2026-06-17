@@ -329,7 +329,7 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
         0
     };
 
-    let palette = if pal_count > 0 {
+    let _palette = if pal_count > 0 {
         read_palette(&mut r, pal_count)?
     } else {
         Vec::new()
@@ -347,78 +347,63 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     let height_usize = h as usize;
 
     let pixels: Vec<u8> = if compression == 1 {
-        // BI_RLE8
+        // BI_RLE8 — return raw palette indices
         let mut remaining = Vec::new();
         r.read_to_end(&mut remaining).ok()?;
-        let indices = decode_rle8(&remaining, width_usize, height_usize)?;
-        // Map through palette to RGB
-        let mut rgb = Vec::with_capacity(width_usize * height_usize * 3);
-        for idx in &indices {
-            let pal = &palette[*idx as usize % pal_count as usize];
-            rgb.extend_from_slice(&[pal[2], pal[1], pal[0]]); // palette is B,G,R
-        }
-        rgb
+        decode_rle8(&remaining, width_usize, height_usize)?
     } else if compression == 2 {
-        // BI_RLE4
+        // BI_RLE4 — return raw palette indices
         let mut remaining = Vec::new();
         r.read_to_end(&mut remaining).ok()?;
-        let indices = decode_rle4(&remaining, width_usize, height_usize)?;
-        let mut rgb = Vec::with_capacity(width_usize * height_usize * 3);
-        for idx in &indices {
-            let pal = &palette[*idx as usize % pal_count as usize];
-            rgb.extend_from_slice(&[pal[2], pal[1], pal[0]]);
-        }
-        rgb
+        decode_rle4(&remaining, width_usize, height_usize)?
     } else {
         // BI_RGB or BI_BITFIELDS — uncompressed scanlines
         let stride = row_size(bit_depth, w);
         let mut raw = vec![0u8; stride * height_usize];
         r.read_exact(&mut raw).ok()?;
 
-        let mut out = Vec::with_capacity(width_usize * height_usize * 4);
-
-        for row in 0..height_usize {
-            // Bottom‑up: last row in data is the first display row.
-            let src_row = if top_down {
-                row
-            } else {
-                height_usize - 1 - row
-            };
-            let offset = src_row * stride;
-
-            match bit_depth {
-                1 => {
-                    // 1 bpp — each bit is a palette index (MSB = leftmost pixel).
-                    for col in 0..width_usize {
-                        let byte = raw[offset + col / 8];
-                        let bit = (byte >> (7 - (col % 8))) & 1;
-                        let pal = &palette[bit as usize % pal_count as usize];
-                        out.extend_from_slice(&[pal[2], pal[1], pal[0]]);
-                    }
+        match bit_depth {
+            1 => {
+                // 1 bpp — packed bits, skip stride padding (PIL mode '1' parity)
+                let packed_per_row = (width_usize + 7) / 8;
+                let mut out = Vec::with_capacity(packed_per_row * height_usize);
+                for row in 0..height_usize {
+                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let offset = src_row * stride;
+                    out.extend_from_slice(&raw[offset..offset + packed_per_row]);
                 }
-                4 => {
-                    // 4 bpp — two indices per byte.
+                out
+            }
+            4 => {
+                // 4 bpp — expand nibbles to full-byte indices
+                let mut out = Vec::with_capacity(width_usize * height_usize);
+                for row in 0..height_usize {
+                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let offset = src_row * stride;
                     for col in 0..width_usize {
                         let byte = raw[offset + col / 2];
-                        let idx = if col % 2 == 0 {
-                            (byte >> 4) & 0x0F
-                        } else {
-                            byte & 0x0F
-                        };
-                        let pal = &palette[idx as usize % pal_count as usize];
-                        out.extend_from_slice(&[pal[2], pal[1], pal[0]]);
+                        let idx = if col % 2 == 0 { (byte >> 4) & 0x0F } else { byte & 0x0F };
+                        out.push(idx);
                     }
                 }
-                8 => {
-                    // 8 bpp — each byte is a palette index.
-                    for col in 0..width_usize {
-                        let idx = raw[offset + col];
-                        let pal = &palette[idx as usize % pal_count as usize];
-                        out.extend_from_slice(&[pal[2], pal[1], pal[0]]);
-                    }
+                out
+            }
+            8 => {
+                // 8 bpp — raw palette indices, skip stride padding (PIL mode 'P' parity)
+                let mut out = Vec::with_capacity(width_usize * height_usize);
+                for row in 0..height_usize {
+                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let offset = src_row * stride;
+                    out.extend_from_slice(&raw[offset..offset + width_usize]);
                 }
-                16 => {
-                    // 16 bpp — RGB555 or BI_BITFIELDS.
+                out
+            }
+            16 => {
+                // 16 bpp — RGB555 or BI_BITFIELDS
+                let mut out = Vec::with_capacity(width_usize * height_usize * 3);
+                for row in 0..height_usize {
+                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let offset = src_row * stride;
                     for col in 0..width_usize {
                         let lo = raw[offset + col * 2] as u32;
                         let hi = raw[offset + col * 2 + 1] as u32;
@@ -429,8 +414,14 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                         out.extend_from_slice(&[rv, gv, bv]);
                     }
                 }
-                24 => {
-                    // 24 bpp — BGR order.
+                out
+            }
+            24 => {
+                // 24 bpp — BGR order
+                let mut out = Vec::with_capacity(width_usize * height_usize * 3);
+                for row in 0..height_usize {
+                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let offset = src_row * stride;
                     for col in 0..width_usize {
                         let b = raw[offset + col * 3];
                         let g = raw[offset + col * 3 + 1];
@@ -438,45 +429,38 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                         out.extend_from_slice(&[r, g, b]);
                     }
                 }
-                32 => {
-                    // 32 bpp — BGRA order.
+                out
+            }
+            32 => {
+                // 32 bpp — BGRA → RGB (strip alpha, PIL parity)
+                let mut out = Vec::with_capacity(width_usize * height_usize * 3);
+                for row in 0..height_usize {
+                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let offset = src_row * stride;
                     for col in 0..width_usize {
                         let b = raw[offset + col * 4];
                         let g = raw[offset + col * 4 + 1];
                         let r = raw[offset + col * 4 + 2];
-                        let a = raw[offset + col * 4 + 3];
-                        out.extend_from_slice(&[r, g, b, a]);
+                        // Skip alpha byte
+                        out.extend_from_slice(&[r, g, b]);
                     }
                 }
-                _ => return None,
+                out
             }
+            _ => return None,
         }
-
-        out
     };
 
     // Determine output color type
-    let color = match bit_depth {
-        32 => ColorType::Rgba8,
-        16 if am != 0 => ColorType::Rgba8,
-        _ => ColorType::Rgb8,
+    let color = if bit_depth <= 8 || compression == 1 || compression == 2 {
+        ColorType::L8
+    } else if bit_depth == 32 {
+        ColorType::Rgb8
+    } else if bit_depth == 16 && am != 0 {
+        ColorType::Rgba8
+    } else {
+        ColorType::Rgb8
     };
-
-    // 32-bit BI_RGB gives BGRA data (4 bytes/px)
-    // 32-bit BI_BITFIELDS also gives RGBA data (4 bytes/px when am != 0)
-    // All others give RGB data (3 bytes/px)
-    let expected_byte_count = match color {
-        ColorType::Rgba8 => width_usize * height_usize * 4,
-        _ => width_usize * height_usize * 3,
-    };
-
-    if pixels.len() != expected_byte_count {
-        // In case the pixel pipeline already output 3 bytes/px for 32-bit,
-        // we need to fix it.
-        // This only happens when bit_depth == 32 and compression != BI_BITFIELDS with alpha.
-        // Actually, our 32-bit path always produces RGBA, so this is fine.
-        return None;
-    }
 
     Some(DecodedImage::new(w, h, pixels, color))
 }
