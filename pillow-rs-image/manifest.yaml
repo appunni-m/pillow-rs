@@ -1238,14 +1238,14 @@ formats:
       description: 16x16 icon
       params:
         sizes:
-        - &id001 !!python/tuple
+        - &id001 
           - 16
           - 16
     - id: enc_32x32
       description: 32x32 icon
       params:
         sizes:
-        - &id002 !!python/tuple
+        - &id002 
           - 32
           - 32
     - id: enc_multi
