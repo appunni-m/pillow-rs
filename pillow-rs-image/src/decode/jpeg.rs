@@ -33,9 +33,12 @@ const FIX_3_072711026: i32 = 25172;
 const DCTSIZE: usize = 8;
 const DCTSIZE2: usize = 64;
 
+/// Full-precision multiply matching IJG's MULTIPLY macro (no premature descale).
+/// Returns v * c at CONST_BITS (2^13) scale.
+/// The descaling happens later in the DESCALE operations.
 #[inline(always)]
 fn mpy(v: i32, c: i32) -> i32 {
-    ((v as i64 * c as i64) >> CONST_BITS) as i32
+    (v as i64 * c as i64) as i32
 }
 
 #[inline(always)]
@@ -43,8 +46,13 @@ fn descale(x: i32, shift: i32) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
+/// IJG-style range_limit: clamps (x + 128) to [0, 255].
+///
+/// The IDCT produces values centered around 0 (pixel - CENTERJSAMPLE).
+/// This function adds back the level shift (128) and clamps to valid range.
 #[inline(always)]
 fn range_limit(x: i32) -> u8 {
+    let x = x + 128;
     if x < 0 {
         0
     } else if x > 255 {
@@ -104,14 +112,14 @@ pub fn jpeg_idct_islow(block: &mut [i32; DCTSIZE2], workspace: &mut [i32; DCTSIZ
         let o2 = t2 + z2 + z3;
         let o3 = t3 + z1 + z4;
 
-        workspace[c] = descale(tmp10 + o3, PASS1_BITS);
-        workspace[c + DCTSIZE * 7] = descale(tmp10 - o3, PASS1_BITS);
-        workspace[c] = descale(tmp11 + o2, PASS1_BITS);
-        workspace[c + DCTSIZE * 6] = descale(tmp11 - o2, PASS1_BITS);
-        workspace[c + DCTSIZE * 2] = descale(tmp12 + o1, PASS1_BITS);
-        workspace[c + DCTSIZE * 5] = descale(tmp12 - o1, PASS1_BITS);
-        workspace[c + DCTSIZE * 3] = descale(tmp13 + o0, PASS1_BITS);
-        workspace[c + DCTSIZE * 4] = descale(tmp13 - o0, PASS1_BITS);
+        workspace[c] = descale(tmp10 + o3, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE * 7] = descale(tmp10 - o3, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE] = descale(tmp11 + o2, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE * 6] = descale(tmp11 - o2, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE * 2] = descale(tmp12 + o1, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE * 5] = descale(tmp12 - o1, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE * 3] = descale(tmp13 + o0, CONST_BITS - PASS1_BITS);
+        workspace[c + DCTSIZE * 4] = descale(tmp13 - o0, CONST_BITS - PASS1_BITS);
     }
 
     // Pass 2: rows from workspace → block (in-place with range limiting)
@@ -231,8 +239,8 @@ impl YccColorConverter {
             cr_r_tab[i] = ((91881i64 * x as i64 + 32768) >> 16) as i32;
             // FIX(1.77200) = 116130
             cb_b_tab[i] = ((116130i64 * x as i64 + 32768) >> 16) as i32;
-            // -FIX(0.71414) = -46792
-            cr_g_tab[i] = (-46792i64 * x as i64) as i32;
+            // -FIX(0.71414) = -46802
+            cr_g_tab[i] = (-46802i64 * x as i64) as i32;
             // -FIX(0.34414) = -22554, + ONE_HALF for the G channel shift
             cb_g_tab[i] = ((-22554i64 * x as i64) + 32768) as i32;
         }
@@ -661,16 +669,12 @@ fn parse_dqt(
             }
         }
 
-        // De-zigzag: convert from zigzag order to natural (row-major) order
-        let mut table_natural = [0u16; 64];
-        for i in 0..64 {
-            table_natural[JPEG_NATURAL_ORDER[i]] = table_zigzag[i];
-        }
-
+        // Store quantization table in zigzag order (as read from the DQT marker).
+        // Dequantization happens in zigzag order so we keep this layout.
         while quant_tables.len() <= table_id {
             quant_tables.push(None);
         }
-        quant_tables[table_id] = Some(table_natural);
+        quant_tables[table_id] = Some(table_zigzag);
     }
 
     Some(())
@@ -982,6 +986,87 @@ fn decode_block(
     true
 }
 
+/// IJG-style fancy chroma upsampling — 3/4+1/4 triangle filter matching jdsample.c.
+///
+/// For each 2×2 (or 2×1) chroma block, produces (h_ratio × v_ratio) luma-sized pixels
+/// using a triangle interpolation kernel:
+/// - Even output pixels (aligned with chroma grid): copy chroma sample directly.
+/// - Odd output pixels (between chroma samples): `(3×left + 1×right + 2) >> 2`.
+///
+/// Edge handling: at right/bottom buffer edges, the last valid chroma sample is
+/// used as the "next" sample, matching libjpeg's edge behaviour.
+fn fancy_upsample_to_luma_size(
+    src: &[u8],
+    src_w: usize,
+    src_h: usize,
+    h_ratio: usize,
+    v_ratio: usize,
+    dst_w: usize,
+    dst_h: usize,
+) -> Vec<u8> {
+    if h_ratio == 1 && v_ratio == 1 {
+        // No upsampling needed: copy directly (buffer may be larger than dst area)
+        let mut out = Vec::with_capacity(dst_w * dst_h);
+        for y in 0..dst_h {
+            let row = y * src_w;
+            for x in 0..dst_w {
+                out.push(src[row + x]);
+            }
+        }
+        return out;
+    }
+
+    // Step 1: horizontal upsampling — intermediate buffer (dst_w × src_h)
+    let mut horiz = vec![0u8; dst_w * src_h];
+    for y in 0..src_h {
+        let src_row = y * src_w;
+        let dst_row = y * dst_w;
+        for x in 0..dst_w {
+            let sx = x / h_ratio;
+            if (x % h_ratio) == 0 {
+                // Even output column — aligned with chroma sample
+                horiz[dst_row + x] = src[src_row + sx];
+            } else {
+                // Odd output column — between chroma samples, interpolate
+                let left = src[src_row + sx] as u32;
+                let right = if sx + 1 < src_w {
+                    src[src_row + sx + 1] as u32
+                } else {
+                    left
+                };
+                let val = (left * 3 + right + 2) >> 2;
+                horiz[dst_row + x] = val.min(255) as u8;
+            }
+        }
+    }
+
+    // Step 2: vertical upsampling — final output (dst_w × dst_h)
+    let mut out = vec![128u8; dst_w * dst_h];
+    for y in 0..dst_h {
+        let sy = y / v_ratio;
+        let dst_row = y * dst_w;
+        if (y % v_ratio) == 0 {
+            let src_row = sy * dst_w;
+            for x in 0..dst_w {
+                out[dst_row + x] = horiz[src_row + x];
+            }
+        } else {
+            let top_row = sy * dst_w;
+            let bottom_row = if sy + 1 < src_h {
+                (sy + 1) * dst_w
+            } else {
+                top_row
+            };
+            for x in 0..dst_w {
+                let v = (horiz[top_row + x] as u32 * 3 + horiz[bottom_row + x] as u32 + 2) >> 2;
+                out[dst_row + x] = v.min(255) as u8;
+            }
+        }
+    }
+
+    out
+}
+
 // ── Image Reconstruction ──────────────────────────────────────────────────
 
 /// Reconstruct a full image from decoded JPEG components.
@@ -1158,36 +1243,29 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
     } else if info.num_components == 3 {
         // Color: YCbCr -> RGB
         let y_buf = &comp_buffers[0];
-        let cb_buf = &comp_buffers[1];
-        let cr_buf = &comp_buffers[2];
         let y_w = comp_buf_width[0];
-        let cb_w = comp_buf_width[1];
-        let cr_w = comp_buf_width[2];
 
         // Upsampling ratios (chroma relative to luma)
         let h_ratio = info.max_h_samp / info.components[1].h_samp;
         let v_ratio = info.max_v_samp / info.components[1].v_samp;
 
-        let mut pixels = Vec::with_capacity(w * h * 3);
+        // Pre-upsample chroma buffers using libjpeg-style fancy interpolation
+        // (3/4 + 1/4 triangle filter, matching IJG jdsample.c)
+        let cb_upsampled = fancy_upsample_to_luma_size(
+            &comp_buffers[1], comp_buf_width[1], comp_buf_height[1],
+            h_ratio as usize, v_ratio as usize, w, h,
+        );
+        let cr_upsampled = fancy_upsample_to_luma_size(
+            &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
+            h_ratio as usize, v_ratio as usize, w, h,
+        );
 
+        let mut pixels = Vec::with_capacity(w * h * 3);
         for y in 0..h {
             for x in 0..w {
                 let y_val = y_buf[y * y_w + x];
-
-                // Chroma coordinates with nearest-neighbor upsampling
-                let cx = x / h_ratio as usize;
-                let cy = y / v_ratio as usize;
-
-                let cb_val = if cx < cb_w {
-                    cb_buf[cy * cb_w + cx]
-                } else {
-                    128
-                };
-                let cr_val = if cx < cr_w {
-                    cr_buf[cy * cr_w + cx]
-                } else {
-                    128
-                };
+                let cb_val = cb_upsampled[y * w + x];
+                let cr_val = cr_upsampled[y * w + x];
 
                 let (r, g, b) = converter.ycc_to_rgb(y_val, cb_val, cr_val);
                 pixels.push(r);
