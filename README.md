@@ -88,11 +88,7 @@ pip install pillow-rs
 
 Requires Python **3.8+**. Pre-built wheels available for Linux, macOS, and Windows on x86_64 and arm64.
 
-For NumPy array interop, install the optional dependency:
-
-```bash
-pip install pillow-rs[numpy]
-```
+**Zero required dependencies.** `Image.fromarray()` works with numpy arrays (and any object with `.tobytes()` or `.__array_interface__`) via duck-typing — no numpy install needed.
 
 ### JavaScript / WASM
 

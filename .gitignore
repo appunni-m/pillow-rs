@@ -12,11 +12,11 @@ dist/
 /pkg/
 /node_modules/
 coverage/report.json
+.report.json
 .python-version
 venv/
 .venv/
 tests/fixtures/
-tests/fixtures/
-pybak/
 libnull.rlib
 tests/fixtures_2/
+pybak/
