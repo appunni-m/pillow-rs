@@ -416,15 +416,16 @@ impl HuffTable {
     /// Decode one Huffman symbol from the bit reader.
     fn decode(&self, br: &mut BitReader) -> Option<u8> {
         // Read first bit
-        let mut code = br.read_bits(1)? as i32;
+        let first_bit = br.read_bits(1)?;
+        let mut code = first_bit as i32;
         let mut l = 1i32;
 
         // Keep reading until we have a valid code
         while code > self.maxcode[l as usize] {
             l += 1;
             if l > 16 {
-                eprintln!("HUF_DECODE: no code after 16 bits, code={} maxcode[16]={}",
-                    code, self.maxcode[16]);
+                eprintln!("HUF_FAIL: 16bits code={} first_bit={} br.pos={} br.bits={}",
+                    code, first_bit, br.pos, br.bits);
                 return None;
             }
             let bit = br.read_bits(1)?;
@@ -434,10 +435,8 @@ impl HuffTable {
         // Look up the symbol
         let idx = code + self.valoffset[l as usize];
         if idx < 0 || idx >= self.values.len() as i32 {
-            // Debug: log the failure details
-            eprintln!("HUF_DECODE: l={} code={} idx={} valoff={} nvals={} max[{}]={}",
-                l, code, idx, self.valoffset[l as usize], self.values.len(),
-                l, self.maxcode[l as usize]);
+            eprintln!("HUF_IDX_OOB: l={} code={} idx={} nvals={}",
+                l, code, idx, self.values.len());
             return None;
         }
         Some(self.values[idx as usize])
@@ -1761,9 +1760,11 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                             }
                                             k += 1;
                                         } else {
-                                            // Dump BR state before Huffman decode
-                                            eprintln!("AC_REFINE huff_attempt MCU={},{} blk={},{} k={} br.pos={} br.bits={} eob={}",
-                                                mcu_x, mcu_y, bx, by, k, br.pos, br.bits, ac_refine_eobrun);
+                                            // Dump coefficient at failing position
+                                            if k == 22 && mcu_x == 5 && mcu_y == 4 {
+                                                eprintln!("AC_REFINE k=22 MCU=5,4 blk={},{} coeff[22]={} eob={} bits={}",
+                                                    bx, by, coeffs[22], ac_refine_eobrun, br.bits);
+                                            }
                                             let sym = match ac_table.decode(&mut br) {
                                                 Some(s) => s,
                                                 None => {
