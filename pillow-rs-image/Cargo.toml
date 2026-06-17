@@ -6,7 +6,7 @@ description = "Zero-dependency pixel-perfect image decoders (JPEG, PNG, GIF, BMP
 
 [dependencies]
 log = "0.4"
-png = "0.17"
+png = "0.17.16"
 gif = "0.14"
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
