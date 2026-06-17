@@ -31,13 +31,13 @@ The compute module uses a pool-based dispatch architecture:
 
 Read these files in order to understand the current state:
 
-1. **`pillow-rs-core/src/compute/mod.rs`** — Backend enum, `BackendImpl` trait, router, activation
-2. **`pillow-rs-core/src/compute/registry.rs`** — OpEntry, gpu_entry! macro, variant_key, extract_params
-3. **`pillow-rs-core/src/compute/pool_gpu/mod.rs`** — Full GPU backend: BufferPool, GpuInner, bind group layout, dispatch loop
-4. **`pillow-rs-core/src/compute/pool_cpu/mod.rs`** — CPU pool reference
-5. **`pillow-rs-core/src/compute/gpu_shaders/invert.wgsl`** — Canonical shader example
-6. **`pillow-rs-core/src/pipeline.rs`** — All PipelineOp variants
-7. **`pillow-rs-core/src/image.rs`** — `materialize()`, `preserve_mode()`, `push_op()`
+1. **`pillow-rs/src/compute/mod.rs`** — Backend enum, `BackendImpl` trait, router, activation
+2. **`pillow-rs/src/compute/registry.rs`** — OpEntry, gpu_entry! macro, variant_key, extract_params
+3. **`pillow-rs/src/compute/pool_gpu/mod.rs`** — Full GPU backend: BufferPool, GpuInner, bind group layout, dispatch loop
+4. **`pillow-rs/src/compute/pool_cpu/mod.rs`** — CPU pool reference
+5. **`pillow-rs/src/compute/gpu_shaders/invert.wgsl`** — Canonical shader example
+6. **`pillow-rs/src/pipeline.rs`** — All PipelineOp variants
+7. **`pillow-rs/src/image.rs`** — `materialize()`, `preserve_mode()`, `push_op()`
 8. **`manifest.yaml`** — `supported_targets` field per function (cpu, gpu, wasm, wasm_gpu)
 
 Identify gaps: which ops are CPU-only in the registry, which shaders exist but aren't registered, which ops need mode-aware variants.
@@ -143,7 +143,7 @@ grep -L "struct Params" gpu_shaders/*.wgsl  # Missing Params
 
 # For code-based backends (SIMD):
 grep -L "mode_has" pool_simd/ops/*.rs    # Missing mode helpers
-cargo check -p pillow-rs-core            # Must compile clean
+cargo check -p pillow-rs            # Must compile clean
 ```
 
 ### Phase 5: Fix Bugs Found During Testing

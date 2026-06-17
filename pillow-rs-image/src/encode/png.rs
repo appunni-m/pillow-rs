@@ -79,7 +79,7 @@ mod tests {
         let img = DecodedImage::new(2, 2, vec![0, 128, 255, 64], ColorType::L8);
         let encoded = encode(&img).expect("encode should succeed");
         assert!(encoded.len() > 20); // reasonable size
-        // Verify it starts with PNG signature
+                                     // Verify it starts with PNG signature
         assert_eq!(&encoded[..8], b"\x89PNG\r\n\x1a\n");
     }
 
@@ -102,7 +102,9 @@ mod tests {
 
     #[test]
     fn test_encode_rgba8() {
-        let pixels: Vec<u8> = vec![255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 128, 128, 128, 0];
+        let pixels: Vec<u8> = vec![
+            255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 128, 128, 128, 0,
+        ];
         let img = DecodedImage::new(2, 2, pixels.clone(), ColorType::Rgba8);
         let encoded = encode(&img).unwrap();
         let decoded = decode::png::decode(&encoded).unwrap();
@@ -127,8 +129,8 @@ mod tests {
         let ihdr_data = [
             0, 0, 0, 1, // width = 1
             0, 0, 0, 1, // height = 1
-            8,          // bit depth = 8
-            0,          // color type = grayscale
+            8, // bit depth = 8
+            0, // color type = grayscale
             0, 0, 0, 0, //
         ];
         let mut ihdr = Vec::new();

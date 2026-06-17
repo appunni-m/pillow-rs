@@ -238,7 +238,7 @@ fn test_jpeg_decode_baseline() {
 - Interlaced vs progressive
 - Edge cases: 1×1, maximum dimensions, corrupt input
 
-## 8. Integration with pillow-rs-core
+## 8. Integration with pillow-rs
 
 ### 8.1 Changes required
 
@@ -316,7 +316,7 @@ Zero C dependencies. All MIT or MIT-compatible.
 - Implement all types in `pillow-rs-image/src/types/`
 - Complete JPEG decoder: Huffman + IDCT + YCbCr→RGB
 - 100+ JPEG tests against libjpeg reference
-- Replace `image::open` in pillow-rs-core
+- Replace `image::open` in pillow-rs
 
 ### Phase 2: PNG + GIF + BMP (week 2)
 - Wire up `png`, `gif` crates
@@ -338,7 +338,7 @@ Zero C dependencies. All MIT or MIT-compatible.
 
 ## 11. Success Criteria
 
-- [ ] `image` crate removed from pillow-rs-core Cargo.toml
+- [ ] `image` crate removed from pillow-rs Cargo.toml
 - [ ] All 778 suite0 tests pass with new decoder
 - [ ] All 1148 total tests pass (suite0 + suite1)
 - [ ] 100+ tests per format in pillow-rs-image

@@ -23,11 +23,11 @@
 | `scripts/bench_wasm_gpu.mjs` | Node.js harness: WASM + experimental WebGPU |
 | `scripts/bench_browser.mjs` | Puppeteer script: drives headless Chrome for both browser targets |
 | `scripts/bench_reference_images/` | Directory with downloaded benchmark images |
-| `pillow-rs-core/benches/native_cpu.rs` | Criterion benchmarks for all functions (CPU path) |
-| `pillow-rs-core/benches/native_gpu.rs` | Criterion-style benchmarks with wgpu dispatch |
-| `pillow-rs-core/benches/bench_utils.rs` | Shared helpers: load ref images, create test inputs |
-| `pillow-rs-core/src/gpu/mod.rs` | GPU compute dispatcher (empty now, filled incrementally) |
-| `pillow-rs-core/src/gpu/shaders/*.wgsl` | WGSL compute shaders (one per op family) |
+| `pillow-rs/benches/native_cpu.rs` | Criterion benchmarks for all functions (CPU path) |
+| `pillow-rs/benches/native_gpu.rs` | Criterion-style benchmarks with wgpu dispatch |
+| `pillow-rs/benches/bench_utils.rs` | Shared helpers: load ref images, create test inputs |
+| `pillow-rs/src/gpu/mod.rs` | GPU compute dispatcher (empty now, filled incrementally) |
+| `pillow-rs/src/gpu/shaders/*.wgsl` | WGSL compute shaders (one per op family) |
 | `pillow-rs-js/bench_page/index.html` | Page served to headless Chrome for browser benchmarks |
 | `pillow-rs-js/bench_page/bench_runner.js` | JS that calls WASM functions and reports timings |
 | `package.json` (modify) | Add `puppeteer` devDependency, bench scripts |
@@ -49,8 +49,8 @@
 - [ ] **Step 1: Create directories**
 
 ```bash
-mkdir -p pillow-rs-core/benches
-mkdir -p pillow-rs-core/src/gpu/shaders
+mkdir -p pillow-rs/benches
+mkdir -p pillow-rs/src/gpu/shaders
 mkdir -p pillow-rs-js/bench_page
 mkdir -p scripts/bench_reference_images
 mkdir -p target/benchmarks
@@ -474,13 +474,13 @@ git commit -m "feat: add Pillow baseline benchmarking scripts
 ### Task 2: Native CPU benchmark harness (criterion)
 
 **Files:**
-- Create: `pillow-rs-core/benches/bench_utils.rs`
-- Create: `pillow-rs-core/benches/native_cpu.rs`
-- Modify: `pillow-rs-core/Cargo.toml` (add `[[bench]]` + dev-deps)
+- Create: `pillow-rs/benches/bench_utils.rs`
+- Create: `pillow-rs/benches/native_cpu.rs`
+- Modify: `pillow-rs/Cargo.toml` (add `[[bench]]` + dev-deps)
 
 - [ ] **Step 1: Add benchmark dependencies to Cargo.toml**
 
-Modify `pillow-rs-core/Cargo.toml` — add after `[dependencies]`:
+Modify `pillow-rs/Cargo.toml` — add after `[dependencies]`:
 
 ```toml
 [dev-dependencies]
@@ -493,9 +493,9 @@ harness = false
 
 - [ ] **Step 2: Write benchmark utilities**
 
-Create `pillow-rs-core/benches/bench_utils.rs`:
+Create `pillow-rs/benches/bench_utils.rs`:
 ```rust
-use pillow_rs_core::image::Image;
+use pillow_rs::image::Image;
 use std::path::PathBuf;
 
 /// Get path to reference images directory
@@ -526,10 +526,10 @@ pub fn load_ref_grayscale() -> Image {
 
 - [ ] **Step 3: Write native CPU benchmark harness**
 
-Create `pillow-rs-core/benches/native_cpu.rs`:
+Create `pillow-rs/benches/native_cpu.rs`:
 ```rust
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use pillow_rs_core::image::Image;
+use pillow_rs::image::Image;
 use std::path::PathBuf;
 
 mod bench_utils;
@@ -566,7 +566,7 @@ fn bench_save(c: &mut Criterion) {
             let mut buf = Vec::new();
             // Use our internal save - requires a writer
             // For benchmarking, save to /dev/null equivalent
-            pillow_rs_core::format::save_to_bytes(&img, "PNG").unwrap();
+            pillow_rs::format::save_to_bytes(&img, "PNG").unwrap();
             black_box(());
         })
     });
@@ -630,7 +630,7 @@ fn bench_paste(c: &mut Criterion) {
         b.iter(|| {
             let mut clone = img.clone();
             // Using internal paste function
-            pillow_rs_core::ops::paste::paste_image(
+            pillow_rs::ops::paste::paste_image(
                 &mut clone, &paste_src, (100, 100), None,
             ).unwrap();
             black_box(clone);
@@ -722,7 +722,7 @@ fn bench_filter_min(c: &mut Criterion) {
 
 fn bench_invert(c: &mut Criterion) {
     bench_image_op(c, "invert", |img| {
-        pillow_rs_core::ops::chops::invert(&img).unwrap()
+        pillow_rs::ops::chops::invert(&img).unwrap()
     });
 }
 
@@ -731,7 +731,7 @@ fn bench_chops_add(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/add", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::add(&a, &b, 1.0, 0.0).unwrap();
+            let result = pillow_rs::ops::chops::add(&a, &b, 1.0, 0.0).unwrap();
             black_box(result);
         })
     });
@@ -742,7 +742,7 @@ fn bench_chops_multiply(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/multiply", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::multiply(&a, &b).unwrap();
+            let result = pillow_rs::ops::chops::multiply(&a, &b).unwrap();
             black_box(result);
         })
     });
@@ -753,7 +753,7 @@ fn bench_chops_darker(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/darker", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::darker(&a, &b).unwrap();
+            let result = pillow_rs::ops::chops::darker(&a, &b).unwrap();
             black_box(result);
         })
     });
@@ -764,7 +764,7 @@ fn bench_chops_lighter(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/lighter", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::lighter(&a, &b).unwrap();
+            let result = pillow_rs::ops::chops::lighter(&a, &b).unwrap();
             black_box(result);
         })
     });
@@ -775,7 +775,7 @@ fn bench_chops_screen(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/screen", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::screen(&a, &b).unwrap();
+            let result = pillow_rs::ops::chops::screen(&a, &b).unwrap();
             black_box(result);
         })
     });
@@ -786,7 +786,7 @@ fn bench_chops_difference(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/difference", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::difference(&a, &b).unwrap();
+            let result = pillow_rs::ops::chops::difference(&a, &b).unwrap();
             black_box(result);
         })
     });
@@ -797,7 +797,7 @@ fn bench_chops_subtract(c: &mut Criterion) {
     let b = load_ref_2k();
     c.bench_function("chops/subtract", |bencher| {
         bencher.iter(|| {
-            let result = pillow_rs_core::ops::chops::subtract(&a, &b, 1.0, 0.0).unwrap();
+            let result = pillow_rs::ops::chops::subtract(&a, &b, 1.0, 0.0).unwrap();
             black_box(result);
         })
     });
@@ -920,7 +920,7 @@ criterion_main!(benches);
 - [ ] **Step 4: Verify benchmark compiles and runs**
 
 ```bash
-cargo bench -p pillow-rs-core --no-run 2>&1 | tail -5
+cargo bench -p pillow-rs --no-run 2>&1 | tail -5
 ```
 
 Expected: Compiles without errors.
@@ -928,7 +928,7 @@ Expected: Compiles without errors.
 - [ ] **Step 5: Run benchmarks (quick test)**
 
 ```bash
-cargo bench -p pillow-rs-core -- --quick --sample-size 10 2>&1 | tail -20
+cargo bench -p pillow-rs -- --quick --sample-size 10 2>&1 | tail -20
 ```
 
 Expected: Benchmark output with timings.
@@ -936,7 +936,7 @@ Expected: Benchmark output with timings.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pillow-rs-core/benches/ pillow-rs-core/Cargo.toml
+git add pillow-rs/benches/ pillow-rs/Cargo.toml
 git commit -m "feat: add native CPU criterion benchmarks
 
 37 benchmark functions covering priority ops, filters, chops, and misc.
@@ -971,90 +971,90 @@ CACHE_DIR = ROOT / "target" / "benchmarks"
 CACHE_FILE = CACHE_DIR / "cache.json"
 
 SHARED_FILES = [
-    "pillow-rs-core/src/image.rs",
-    "pillow-rs-core/src/lazy.rs",
-    "pillow-rs-core/src/error.rs",
-    "pillow-rs-core/src/color.rs",
-    "pillow-rs-core/Cargo.toml",
+    "pillow-rs/src/image.rs",
+    "pillow-rs/src/lazy.rs",
+    "pillow-rs/src/error.rs",
+    "pillow-rs/src/color.rs",
+    "pillow-rs/Cargo.toml",
 ]
 
 # Map function name → source file for cache key computation
 FUNC_SOURCE_MAP = {
-    "resize": "pillow-rs-core/src/ops/resize.rs",
-    "crop": "pillow-rs-core/src/ops/crop.rs",
-    "rotate": "pillow-rs-core/src/ops/rotate.rs",
-    "convert": "pillow-rs-core/src/ops/convert.rs",
-    "transpose": "pillow-rs-core/src/ops/transpose.rs",
-    "paste": "pillow-rs-core/src/ops/paste.rs",
-    "filter": "pillow-rs-core/src/ops/filter.rs",
-    "split": "pillow-rs-core/src/ops/split.rs",
-    "quantize": "pillow-rs-core/src/ops/quantize.rs",
-    "reduce": "pillow-rs-core/src/ops/transform.rs",
-    "thumbnail": "pillow-rs-core/src/ops/resize.rs",  # shares resize.rs
-    "open": "pillow-rs-core/src/format.rs",
-    "save": "pillow-rs-core/src/format.rs",
-    "to_bytes": "pillow-rs-core/src/ops/imageops.rs",
-    "new": "pillow-rs-core/src/image.rs",
-    "autocontrast": "pillow-rs-core/src/ops/imageops.rs",
-    "equalize": "pillow-rs-core/src/ops/imageops.rs",
-    "invert": "pillow-rs-core/src/ops/chops.rs",
-    "posterize": "pillow-rs-core/src/ops/imageops.rs",
-    "solarize": "pillow-rs-core/src/ops/imageops.rs",
-    "grayscale": "pillow-rs-core/src/ops/imageops.rs",
-    "flip": "pillow-rs-core/src/ops/imageops.rs",
-    "mirror": "pillow-rs-core/src/ops/imageops.rs",
-    "colorize": "pillow-rs-core/src/ops/imageops.rs",
-    "contain": "pillow-rs-core/src/ops/imageops.rs",
-    "cover": "pillow-rs-core/src/ops/imageops.rs",
-    "fit": "pillow-rs-core/src/ops/imageops.rs",
-    "pad": "pillow-rs-core/src/ops/imageops.rs",
-    "scale": "pillow-rs-core/src/ops/imageops.rs",
-    "expand": "pillow-rs-core/src/ops/imageops.rs",
-    "point": "pillow-rs-core/src/ops/imageops.rs",
-    "putalpha": "pillow-rs-core/src/ops/imageops.rs",
-    "putpixel": "pillow-rs-core/src/ops/imageops.rs",
-    "getpixel": "pillow-rs-core/src/ops/imageops.rs",
-    "getbbox": "pillow-rs-core/src/ops/imageops.rs",
-    "getcolors": "pillow-rs-core/src/ops/imageops.rs",
-    "getextrema": "pillow-rs-core/src/ops/imageops.rs",
-    "histogram": "pillow-rs-core/src/ops/analysis.rs",
-    "entropy": "pillow-rs-core/src/ops/analysis.rs",
-    "getprojection": "pillow-rs-core/src/ops/analysis.rs",
-    "effect_spread": "pillow-rs-core/src/ops/imageops.rs",
-    "alpha_composite": "pillow-rs-core/src/ops/paste.rs",
-    "add": "pillow-rs-core/src/ops/chops.rs",
-    "subtract": "pillow-rs-core/src/ops/chops.rs",
-    "multiply": "pillow-rs-core/src/ops/chops.rs",
-    "darker": "pillow-rs-core/src/ops/chops.rs",
-    "lighter": "pillow-rs-core/src/ops/chops.rs",
-    "difference": "pillow-rs-core/src/ops/chops.rs",
-    "screen": "pillow-rs-core/src/ops/chops.rs",
-    "overlay": "pillow-rs-core/src/ops/chops.rs",
-    "hard_light": "pillow-rs-core/src/ops/chops.rs",
-    "soft_light": "pillow-rs-core/src/ops/chops.rs",
-    "add_modulo": "pillow-rs-core/src/ops/chops.rs",
-    "subtract_modulo": "pillow-rs-core/src/ops/chops.rs",
-    "logical_and": "pillow-rs-core/src/ops/chops.rs",
-    "logical_or": "pillow-rs-core/src/ops/chops.rs",
-    "logical_xor": "pillow-rs-core/src/ops/chops.rs",
-    "constant": "pillow-rs-core/src/ops/chops.rs",
-    "duplicate": "pillow-rs-core/src/ops/chops.rs",
-    "offset": "pillow-rs-core/src/ops/chops.rs",
-    "Brightness": "pillow-rs-core/src/ops/enhance.rs",
-    "Color": "pillow-rs-core/src/ops/enhance.rs",
-    "Contrast": "pillow-rs-core/src/ops/enhance.rs",
-    "Sharpness": "pillow-rs-core/src/ops/enhance.rs",
-    "arc": "pillow-rs-core/src/draw/arc.rs",
-    "line": "pillow-rs-core/src/draw/line.rs",
-    "rectangle": "pillow-rs-core/src/draw/rectangle.rs",
-    "ellipse": "pillow-rs-core/src/draw/ellipse.rs",
-    "text": "pillow-rs-core/src/draw/text.rs",
-    "circle": "pillow-rs-core/src/draw/circle.rs",
-    "rounded_rectangle": "pillow-rs-core/src/draw/rounded_rectangle.rs",
-    "chord": "pillow-rs-core/src/draw/chord.rs",
-    "pieslice": "pillow-rs-core/src/draw/pieslice.rs",
-    "polygon": "pillow-rs-core/src/draw/polygon.rs",
-    "regular_polygon": "pillow-rs-core/src/draw/regular_polygon.rs",
+    "resize": "pillow-rs/src/ops/resize.rs",
+    "crop": "pillow-rs/src/ops/crop.rs",
+    "rotate": "pillow-rs/src/ops/rotate.rs",
+    "convert": "pillow-rs/src/ops/convert.rs",
+    "transpose": "pillow-rs/src/ops/transpose.rs",
+    "paste": "pillow-rs/src/ops/paste.rs",
+    "filter": "pillow-rs/src/ops/filter.rs",
+    "split": "pillow-rs/src/ops/split.rs",
+    "quantize": "pillow-rs/src/ops/quantize.rs",
+    "reduce": "pillow-rs/src/ops/transform.rs",
+    "thumbnail": "pillow-rs/src/ops/resize.rs",  # shares resize.rs
+    "open": "pillow-rs/src/format.rs",
+    "save": "pillow-rs/src/format.rs",
+    "to_bytes": "pillow-rs/src/ops/imageops.rs",
+    "new": "pillow-rs/src/image.rs",
+    "autocontrast": "pillow-rs/src/ops/imageops.rs",
+    "equalize": "pillow-rs/src/ops/imageops.rs",
+    "invert": "pillow-rs/src/ops/chops.rs",
+    "posterize": "pillow-rs/src/ops/imageops.rs",
+    "solarize": "pillow-rs/src/ops/imageops.rs",
+    "grayscale": "pillow-rs/src/ops/imageops.rs",
+    "flip": "pillow-rs/src/ops/imageops.rs",
+    "mirror": "pillow-rs/src/ops/imageops.rs",
+    "colorize": "pillow-rs/src/ops/imageops.rs",
+    "contain": "pillow-rs/src/ops/imageops.rs",
+    "cover": "pillow-rs/src/ops/imageops.rs",
+    "fit": "pillow-rs/src/ops/imageops.rs",
+    "pad": "pillow-rs/src/ops/imageops.rs",
+    "scale": "pillow-rs/src/ops/imageops.rs",
+    "expand": "pillow-rs/src/ops/imageops.rs",
+    "point": "pillow-rs/src/ops/imageops.rs",
+    "putalpha": "pillow-rs/src/ops/imageops.rs",
+    "putpixel": "pillow-rs/src/ops/imageops.rs",
+    "getpixel": "pillow-rs/src/ops/imageops.rs",
+    "getbbox": "pillow-rs/src/ops/imageops.rs",
+    "getcolors": "pillow-rs/src/ops/imageops.rs",
+    "getextrema": "pillow-rs/src/ops/imageops.rs",
+    "histogram": "pillow-rs/src/ops/analysis.rs",
+    "entropy": "pillow-rs/src/ops/analysis.rs",
+    "getprojection": "pillow-rs/src/ops/analysis.rs",
+    "effect_spread": "pillow-rs/src/ops/imageops.rs",
+    "alpha_composite": "pillow-rs/src/ops/paste.rs",
+    "add": "pillow-rs/src/ops/chops.rs",
+    "subtract": "pillow-rs/src/ops/chops.rs",
+    "multiply": "pillow-rs/src/ops/chops.rs",
+    "darker": "pillow-rs/src/ops/chops.rs",
+    "lighter": "pillow-rs/src/ops/chops.rs",
+    "difference": "pillow-rs/src/ops/chops.rs",
+    "screen": "pillow-rs/src/ops/chops.rs",
+    "overlay": "pillow-rs/src/ops/chops.rs",
+    "hard_light": "pillow-rs/src/ops/chops.rs",
+    "soft_light": "pillow-rs/src/ops/chops.rs",
+    "add_modulo": "pillow-rs/src/ops/chops.rs",
+    "subtract_modulo": "pillow-rs/src/ops/chops.rs",
+    "logical_and": "pillow-rs/src/ops/chops.rs",
+    "logical_or": "pillow-rs/src/ops/chops.rs",
+    "logical_xor": "pillow-rs/src/ops/chops.rs",
+    "constant": "pillow-rs/src/ops/chops.rs",
+    "duplicate": "pillow-rs/src/ops/chops.rs",
+    "offset": "pillow-rs/src/ops/chops.rs",
+    "Brightness": "pillow-rs/src/ops/enhance.rs",
+    "Color": "pillow-rs/src/ops/enhance.rs",
+    "Contrast": "pillow-rs/src/ops/enhance.rs",
+    "Sharpness": "pillow-rs/src/ops/enhance.rs",
+    "arc": "pillow-rs/src/draw/arc.rs",
+    "line": "pillow-rs/src/draw/line.rs",
+    "rectangle": "pillow-rs/src/draw/rectangle.rs",
+    "ellipse": "pillow-rs/src/draw/ellipse.rs",
+    "text": "pillow-rs/src/draw/text.rs",
+    "circle": "pillow-rs/src/draw/circle.rs",
+    "rounded_rectangle": "pillow-rs/src/draw/rounded_rectangle.rs",
+    "chord": "pillow-rs/src/draw/chord.rs",
+    "pieslice": "pillow-rs/src/draw/pieslice.rs",
+    "polygon": "pillow-rs/src/draw/polygon.rs",
+    "regular_polygon": "pillow-rs/src/draw/regular_polygon.rs",
     # Fallback for any others — check all ops files
 }
 
@@ -1081,13 +1081,13 @@ def compute_cache_key(func_name: str) -> str:
     else:
         # Check if it's a filter/enhance/chops function — try known files
         for candidate in [
-            f"pillow-rs-core/src/ops/{func_name.lower()}.rs",
-            f"pillow-rs-core/src/ops/filter.rs",
-            f"pillow-rs-core/src/ops/chops.rs",
-            f"pillow-rs-core/src/ops/enhance.rs",
-            f"pillow-rs-core/src/ops/imageops.rs",
-            f"pillow-rs-core/src/ops/convert.rs",
-            f"pillow-rs-core/src/ops/mod.rs",
+            f"pillow-rs/src/ops/{func_name.lower()}.rs",
+            f"pillow-rs/src/ops/filter.rs",
+            f"pillow-rs/src/ops/chops.rs",
+            f"pillow-rs/src/ops/enhance.rs",
+            f"pillow-rs/src/ops/imageops.rs",
+            f"pillow-rs/src/ops/convert.rs",
+            f"pillow-rs/src/ops/mod.rs",
         ]:
             h = file_hash(Path(candidate))
             if h:
@@ -1471,7 +1471,7 @@ cd "$ROOT"
 if [ "$MODE" = "incremental" ] && ! echo "$STALE" | grep -q "STALE"; then
     echo "  (skipped — no changes)"
 else
-    cargo bench -p pillow-rs-core --bench native_cpu \
+    cargo bench -p pillow-rs --bench native_cpu \
         -- --output-format bencher 2>&1 | tee "$BENCH_DIR/native_cpu_raw.txt" || true
     # Convert criterion bencher output to our JSON format
     python3 -c "
@@ -1964,17 +1964,17 @@ Two passes: CPU (--disable-webgpu) and GPU (WebGPU enabled)."
 ### Task 8: GPU infrastructure — WGSL shaders + dispatcher
 
 **Files:**
-- Create: `pillow-rs-core/src/gpu/mod.rs`
-- Create: `pillow-rs-core/src/gpu/shaders/blur.wgsl`
-- Create: `pillow-rs-core/src/gpu/shaders/color_ops.wgsl`
-- Create: `pillow-rs-core/src/gpu/shaders/resample.wgsl`
-- Create: `pillow-rs-core/src/gpu/shaders/blend.wgsl`
-- Create: `pillow-rs-core/src/gpu/shaders/convolve.wgsl`
-- Modify: `pillow-rs-core/src/lib.rs` (add `pub mod gpu;`)
+- Create: `pillow-rs/src/gpu/mod.rs`
+- Create: `pillow-rs/src/gpu/shaders/blur.wgsl`
+- Create: `pillow-rs/src/gpu/shaders/color_ops.wgsl`
+- Create: `pillow-rs/src/gpu/shaders/resample.wgsl`
+- Create: `pillow-rs/src/gpu/shaders/blend.wgsl`
+- Create: `pillow-rs/src/gpu/shaders/convolve.wgsl`
+- Modify: `pillow-rs/src/lib.rs` (add `pub mod gpu;`)
 
 - [ ] **Step 1: Create GPU module skeleton**
 
-Create `pillow-rs-core/src/gpu/mod.rs`:
+Create `pillow-rs/src/gpu/mod.rs`:
 ```rust
 //! GPU compute dispatcher for image operations.
 //!
@@ -2036,7 +2036,7 @@ pub const CONVOLVE_SHADER: &str = include_wgsl!("convolve");
 
 - [ ] **Step 2: Create WGSL shaders**
 
-Create `pillow-rs-core/src/gpu/shaders/blur.wgsl`:
+Create `pillow-rs/src/gpu/shaders/blur.wgsl`:
 ```wgsl
 // Box blur compute shader — separable 2-pass (horizontal + vertical)
 // Shared between native wgpu and browser WebGPU
@@ -2067,7 +2067,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 ```
 
-Create `pillow-rs-core/src/gpu/shaders/color_ops.wgsl`:
+Create `pillow-rs/src/gpu/shaders/color_ops.wgsl`:
 ```wgsl
 // Color operation shaders: invert, solarize, posterize, grayscale
 // Operation selected via uniform op_code
@@ -2114,7 +2114,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 ```
 
-Create `pillow-rs-core/src/gpu/shaders/resample.wgsl`:
+Create `pillow-rs/src/gpu/shaders/resample.wgsl`:
 ```wgsl
 // Bilinear resampling compute shader (resize/thumbnail)
 // For higher-quality filters, extend with separable convolution passes
@@ -2142,7 +2142,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 ```
 
-Create `pillow-rs-core/src/gpu/shaders/blend.wgsl`:
+Create `pillow-rs/src/gpu/shaders/blend.wgsl`:
 ```wgsl
 // Image blending operations
 @group(0) @binding(0) var<uniform> op_code: u32;  // 0=multiply, 1=screen, 2=overlay, 3=hard_light, 4=soft_light, 5=difference, 6=add, 7=subtract
@@ -2190,7 +2190,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 ```
 
-Create `pillow-rs-core/src/gpu/shaders/convolve.wgsl`:
+Create `pillow-rs/src/gpu/shaders/convolve.wgsl`:
 ```wgsl
 // Generic 3x3 convolution shader (filter kernels: BLUR, CONTOUR, DETAIL, etc.)
 @group(0) @binding(0) var<uniform> kernel: array<f32, 9>;
@@ -2235,7 +2235,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 - [ ] **Step 3: Register GPU module in lib.rs**
 
-Modify `pillow-rs-core/src/lib.rs` — add after existing module declarations:
+Modify `pillow-rs/src/lib.rs` — add after existing module declarations:
 ```rust
 pub mod gpu;
 ```
@@ -2243,7 +2243,7 @@ pub mod gpu;
 - [ ] **Step 4: Verify compilation with GPU module**
 
 ```bash
-cargo build -p pillow-rs-core 2>&1 | tail -10
+cargo build -p pillow-rs 2>&1 | tail -10
 ```
 
 Expected: Compiles (wgpu is already a dependency). Shaders compile at build time (embedded via `include_str!`).
@@ -2251,7 +2251,7 @@ Expected: Compiles (wgpu is already a dependency). Shaders compile at build time
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pillow-rs-core/src/gpu/ pillow-rs-core/src/lib.rs
+git add pillow-rs/src/gpu/ pillow-rs/src/lib.rs
 git commit -m "feat: add GPU compute module with WGSL shaders
 
 5 shader families: blur, color_ops, resample, blend, convolve.
@@ -2351,8 +2351,8 @@ Verifies: manifest parsing, Pillow baseline, cache, aggregator, output format."
 
 ```bash
 # Make a trivial change to trigger cache invalidation
-echo "// benchmark test" >> pillow-rs-core/src/ops/resize.rs
-git add pillow-rs-core/src/ops/resize.rs
+echo "// benchmark test" >> pillow-rs/src/ops/resize.rs
+git add pillow-rs/src/ops/resize.rs
 git commit -m "test: pre-commit benchmark hook test"
 # Should run incremental benchmarks
 ```
@@ -2369,7 +2369,7 @@ Expected: BENCHMARKS.md appears in the commit.
 
 ```bash
 git reset HEAD~1
-git checkout -- pillow-rs-core/src/ops/resize.rs
+git checkout -- pillow-rs/src/ops/resize.rs
 ```
 
 ---

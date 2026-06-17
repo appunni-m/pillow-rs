@@ -330,7 +330,12 @@ impl<T: Primitive> Pixel for Luma<T> {
 
     fn channels4(&self) -> (T, T, T, T) {
         let c = self.0;
-        (c[0], T::DEFAULT_MAX_VALUE, T::DEFAULT_MAX_VALUE, T::DEFAULT_MAX_VALUE)
+        (
+            c[0],
+            T::DEFAULT_MAX_VALUE,
+            T::DEFAULT_MAX_VALUE,
+            T::DEFAULT_MAX_VALUE,
+        )
     }
 
     fn from_channels(a: T, _b: T, _c: T, _d: T) -> Luma<T> {
@@ -348,13 +353,22 @@ impl<T: Primitive> Pixel for Luma<T> {
     }
 
     fn to_rgb(&self) -> Rgb<T> {
-        let mut pix = Rgb([T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE]);
+        let mut pix = Rgb([
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+        ]);
         pix.from_color(self);
         pix
     }
 
     fn to_rgba(&self) -> Rgba<T> {
-        let mut pix = Rgba([T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE]);
+        let mut pix = Rgba([
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+        ]);
         pix.from_color(self);
         pix
     }
@@ -369,33 +383,53 @@ impl<T: Primitive> Pixel for Luma<T> {
         pix
     }
 
-    fn map<F>(&self, f: F) -> Luma<T> where F: FnMut(T) -> T {
+    fn map<F>(&self, f: F) -> Luma<T>
+    where
+        F: FnMut(T) -> T,
+    {
         let mut this = *self;
         this.apply(f);
         this
     }
 
-    fn apply<F>(&mut self, mut f: F) where F: FnMut(T) -> T {
+    fn apply<F>(&mut self, mut f: F)
+    where
+        F: FnMut(T) -> T,
+    {
         for v in &mut self.0 {
             *v = f(*v);
         }
     }
 
-    fn map_with_alpha<F, G>(&self, f: F, _g: G) -> Luma<T> where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn map_with_alpha<F, G>(&self, f: F, _g: G) -> Luma<T>
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         self.map(f)
     }
 
-    fn apply_with_alpha<F, G>(&mut self, f: F, _g: G) where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn apply_with_alpha<F, G>(&mut self, f: F, _g: G)
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         self.apply(f);
     }
 
-    fn map2<F>(&self, other: &Luma<T>, f: F) -> Luma<T> where F: FnMut(T, T) -> T {
+    fn map2<F>(&self, other: &Luma<T>, f: F) -> Luma<T>
+    where
+        F: FnMut(T, T) -> T,
+    {
         let mut this = *self;
         this.apply2(other, f);
         this
     }
 
-    fn apply2<F>(&mut self, other: &Luma<T>, mut f: F) where F: FnMut(T, T) -> T {
+    fn apply2<F>(&mut self, other: &Luma<T>, mut f: F)
+    where
+        F: FnMut(T, T) -> T,
+    {
         for (a, &b) in self.0.iter_mut().zip(other.0.iter()) {
             *a = f(*a, b);
         }
@@ -454,13 +488,22 @@ impl<T: Primitive> Pixel for LumaA<T> {
     }
 
     fn to_rgb(&self) -> Rgb<T> {
-        let mut pix = Rgb([T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE]);
+        let mut pix = Rgb([
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+        ]);
         pix.from_color(self);
         pix
     }
 
     fn to_rgba(&self) -> Rgba<T> {
-        let mut pix = Rgba([T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE]);
+        let mut pix = Rgba([
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+        ]);
         pix.from_color(self);
         pix
     }
@@ -475,36 +518,56 @@ impl<T: Primitive> Pixel for LumaA<T> {
         *self
     }
 
-    fn map<F>(&self, f: F) -> LumaA<T> where F: FnMut(T) -> T {
+    fn map<F>(&self, f: F) -> LumaA<T>
+    where
+        F: FnMut(T) -> T,
+    {
         let mut this = *self;
         this.apply(f);
         this
     }
 
-    fn apply<F>(&mut self, mut f: F) where F: FnMut(T) -> T {
+    fn apply<F>(&mut self, mut f: F)
+    where
+        F: FnMut(T) -> T,
+    {
         for v in &mut self.0 {
             *v = f(*v);
         }
     }
 
-    fn map_with_alpha<F, G>(&self, f: F, g: G) -> LumaA<T> where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn map_with_alpha<F, G>(&self, f: F, g: G) -> LumaA<T>
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         let mut this = *self;
         this.apply_with_alpha(f, g);
         this
     }
 
-    fn apply_with_alpha<F, G>(&mut self, mut f: F, mut g: G) where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn apply_with_alpha<F, G>(&mut self, mut f: F, mut g: G)
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         self.0[0] = f(self.0[0]);
         self.0[1] = g(self.0[1]);
     }
 
-    fn map2<F>(&self, other: &LumaA<T>, f: F) -> LumaA<T> where F: FnMut(T, T) -> T {
+    fn map2<F>(&self, other: &LumaA<T>, f: F) -> LumaA<T>
+    where
+        F: FnMut(T, T) -> T,
+    {
         let mut this = *self;
         this.apply2(other, f);
         this
     }
 
-    fn apply2<F>(&mut self, other: &LumaA<T>, mut f: F) where F: FnMut(T, T) -> T {
+    fn apply2<F>(&mut self, other: &LumaA<T>, mut f: F)
+    where
+        F: FnMut(T, T) -> T,
+    {
         for (a, &b) in self.0.iter_mut().zip(other.0.iter()) {
             *a = f(*a, b);
         }
@@ -562,7 +625,12 @@ impl<T: Primitive + Enlargeable> Pixel for Rgb<T> {
     }
 
     fn to_rgba(&self) -> Rgba<T> {
-        let mut pix = Rgba([T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE]);
+        let mut pix = Rgba([
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+        ]);
         pix.from_color(self);
         pix
     }
@@ -579,33 +647,53 @@ impl<T: Primitive + Enlargeable> Pixel for Rgb<T> {
         pix
     }
 
-    fn map<F>(&self, f: F) -> Rgb<T> where F: FnMut(T) -> T {
+    fn map<F>(&self, f: F) -> Rgb<T>
+    where
+        F: FnMut(T) -> T,
+    {
         let mut this = *self;
         this.apply(f);
         this
     }
 
-    fn apply<F>(&mut self, mut f: F) where F: FnMut(T) -> T {
+    fn apply<F>(&mut self, mut f: F)
+    where
+        F: FnMut(T) -> T,
+    {
         for v in &mut self.0 {
             *v = f(*v);
         }
     }
 
-    fn map_with_alpha<F, G>(&self, f: F, _g: G) -> Rgb<T> where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn map_with_alpha<F, G>(&self, f: F, _g: G) -> Rgb<T>
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         self.map(f)
     }
 
-    fn apply_with_alpha<F, G>(&mut self, f: F, _g: G) where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn apply_with_alpha<F, G>(&mut self, f: F, _g: G)
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         self.apply(f);
     }
 
-    fn map2<F>(&self, other: &Rgb<T>, f: F) -> Rgb<T> where F: FnMut(T, T) -> T {
+    fn map2<F>(&self, other: &Rgb<T>, f: F) -> Rgb<T>
+    where
+        F: FnMut(T, T) -> T,
+    {
         let mut this = *self;
         this.apply2(other, f);
         this
     }
 
-    fn apply2<F>(&mut self, other: &Rgb<T>, mut f: F) where F: FnMut(T, T) -> T {
+    fn apply2<F>(&mut self, other: &Rgb<T>, mut f: F)
+    where
+        F: FnMut(T, T) -> T,
+    {
         for (a, &b) in self.0.iter_mut().zip(other.0.iter()) {
             *a = f(*a, b);
         }
@@ -664,7 +752,11 @@ impl<T: Primitive + Enlargeable> Pixel for Rgba<T> {
     }
 
     fn to_rgb(&self) -> Rgb<T> {
-        let mut pix = Rgb([T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE, T::DEFAULT_MIN_VALUE]);
+        let mut pix = Rgb([
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+            T::DEFAULT_MIN_VALUE,
+        ]);
         pix.from_color(self);
         pix
     }
@@ -685,38 +777,58 @@ impl<T: Primitive + Enlargeable> Pixel for Rgba<T> {
         pix
     }
 
-    fn map<F>(&self, f: F) -> Rgba<T> where F: FnMut(T) -> T {
+    fn map<F>(&self, f: F) -> Rgba<T>
+    where
+        F: FnMut(T) -> T,
+    {
         let mut this = *self;
         this.apply(f);
         this
     }
 
-    fn apply<F>(&mut self, mut f: F) where F: FnMut(T) -> T {
+    fn apply<F>(&mut self, mut f: F)
+    where
+        F: FnMut(T) -> T,
+    {
         for v in &mut self.0 {
             *v = f(*v);
         }
     }
 
-    fn map_with_alpha<F, G>(&self, f: F, g: G) -> Rgba<T> where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn map_with_alpha<F, G>(&self, f: F, g: G) -> Rgba<T>
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         let mut this = *self;
         this.apply_with_alpha(f, g);
         this
     }
 
-    fn apply_with_alpha<F, G>(&mut self, mut f: F, mut g: G) where F: FnMut(T) -> T, G: FnMut(T) -> T {
+    fn apply_with_alpha<F, G>(&mut self, mut f: F, mut g: G)
+    where
+        F: FnMut(T) -> T,
+        G: FnMut(T) -> T,
+    {
         for v in self.0[..3].iter_mut() {
             *v = f(*v);
         }
         self.0[3] = g(self.0[3]);
     }
 
-    fn map2<F>(&self, other: &Rgba<T>, f: F) -> Rgba<T> where F: FnMut(T, T) -> T {
+    fn map2<F>(&self, other: &Rgba<T>, f: F) -> Rgba<T>
+    where
+        F: FnMut(T, T) -> T,
+    {
         let mut this = *self;
         this.apply2(other, f);
         this
     }
 
-    fn apply2<F>(&mut self, other: &Rgba<T>, mut f: F) where F: FnMut(T, T) -> T {
+    fn apply2<F>(&mut self, other: &Rgba<T>, mut f: F)
+    where
+        F: FnMut(T, T) -> T,
+    {
         for (a, &b) in self.0.iter_mut().zip(other.0.iter()) {
             *a = f(*a, b);
         }
@@ -904,7 +1016,7 @@ fn rgb_to_luma<T: Primitive + Enlargeable>(rgb: &[T]) -> T {
     let l = <T::Larger as Primitive>::from_f32(
         rgb[0].to_f32() * (SRGB_LUMA[0] as f32 / SRGB_LUMA_DIV as f32)
             + rgb[1].to_f32() * (SRGB_LUMA[1] as f32 / SRGB_LUMA_DIV as f32)
-            + rgb[2].to_f32() * (SRGB_LUMA[2] as f32 / SRGB_LUMA_DIV as f32)
+            + rgb[2].to_f32() * (SRGB_LUMA[2] as f32 / SRGB_LUMA_DIV as f32),
     );
     T::clamp_from(l)
 }

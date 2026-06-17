@@ -4,8 +4,8 @@
 //! `GenericImage` traits that form the foundation of the image type system,
 //! matching the `image` crate's API.
 
-use super::color::{Luma, LumaA, Rgb, Rgba};
 use super::buffer::ImageBuffer;
+use super::color::{Luma, LumaA, Rgb, Rgba};
 
 // ---------------------------------------------------------------------------
 // Primitive

@@ -31,13 +31,13 @@ To find PIL's actual algorithm:
    ```bash
    python3 -c "from PIL import X; print(X.Y.filterargs)" 2>&1
    ```
-4. Compare with the current Rust implementation at `pillow-rs-core/src/`
+4. Compare with the current Rust implementation at `pillow-rs/src/`
 
 ### Implement Phase
 
 To implement the fix:
 
-1. Read the current Rust code in `pillow-rs-core/src/image.rs` or `pillow-rs-core/src/ops/*.rs`
+1. Read the current Rust code in `pillow-rs/src/image.rs` or `pillow-rs/src/ops/*.rs`
 2. Edit to match PIL's algorithm exactly — same math, same rounding, same border handling
 3. Build: `maturin develop --manifest-path pillow-rs-py/Cargo.toml --release`
 

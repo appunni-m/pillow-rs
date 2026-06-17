@@ -7,7 +7,7 @@
 [![CI](https://img.shields.io/badge/ci-passing-brightgreen?style=flat-square)](#)
 [![PyPI](https://img.shields.io/badge/pypi-pillow--rs-blue?style=flat-square)](https://pypi.org/project/pillow-rs/)
 [![npm](https://img.shields.io/badge/npm-@pillow--rs/wasm-red?style=flat-square)](https://www.npmjs.com/package/@pillow-rs/wasm)
-[![Crates.io](https://img.shields.io/crates/v/pillow-rs-core?style=flat-square)](https://crates.io/crates/pillow-rs-core)
+[![Crates.io](https://img.shields.io/crates/v/pillow-rs?style=flat-square)](https://crates.io/crates/pillow-rs)
 [![License](https://img.shields.io/badge/license-MIT--CMU-lightgrey?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue?style=flat-square)](#)
 [![Rust](https://img.shields.io/badge/rust-1.75+-red?style=flat-square)](#)
@@ -123,7 +123,7 @@ cd pillow-rs-py && maturin develop --release
 cd pillow-rs-js && wasm-pack build --target web
 ```
 
-`maturin develop` compiles both `pillow-rs-core` and `pillow-rs-py` — no separate build step needed.
+`maturin develop` compiles both `pillow-rs` and `pillow-rs-py` — no separate build step needed.
 
 ---
 
@@ -193,10 +193,10 @@ pillow-rs is **on average 2.2× faster** than Pillow on native CPU across 166 be
 
 ### GPU path (experimental)
 
-GPU compute via **wgpu / WebGPU** with shared WGSL shaders. Shaders exist for 42 functions in `pillow-rs-core/src/gpu/shaders/`. Dispatch methods currently return descriptive errors — GPU is not yet wired.
+GPU compute via **wgpu / WebGPU** with shared WGSL shaders. Shaders exist for 42 functions in `pillow-rs/src/gpu/shaders/`. Dispatch methods currently return descriptive errors — GPU is not yet wired.
 
 ```rust
-use pillow_rs_core::gpu::GpuEngine;
+use pillow_rs::gpu::GpuEngine;
 let engine = GpuEngine::new_sync(); // None if no GPU
 let result = engine.map_or_else(
     || img.filter("BLUR"),       // CPU fallback
@@ -209,7 +209,7 @@ let result = engine.map_or_else(
 ## Architecture
 
 ```
-pillow-rs-core/     Pure Rust image library — ZERO binding dependencies
+pillow-rs/     Pure Rust image library — ZERO binding dependencies
 pillow-rs-py/       PyO3 bindings — thin wrapper, ~200 lines
 pillow-rs-js/       wasm-bindgen — thin wrapper, ~200 lines
 ```
@@ -275,7 +275,7 @@ if is_p_mode && ops.iter().all(Self::is_palette_safe_op) {
 - **Future GPU fusion** — shaders for consecutive ops can be fused into a single compute pass
 - **Palette efficiency** — P-mode images stay as 1-byte indices through the entire chain
 
-The pipeline currently records **60+ operation types** spanning geometry, color, filters, compositing, drawing, effects, and gradients — all in `pillow-rs-core/src/pipeline.rs`.
+The pipeline currently records **60+ operation types** spanning geometry, color, filters, compositing, drawing, effects, and gradients — all in `pillow-rs/src/pipeline.rs`.
 
 ---
 
@@ -288,7 +288,7 @@ The pipeline currently records **60+ operation types** spanning geometry, color,
 ```
 manifest.yaml
     │
-    ├──→ scripts/generate_stubs.py      → Rust stub functions in pillow-rs-core
+    ├──→ scripts/generate_stubs.py      → Rust stub functions in pillow-rs
     ├──→ scripts/generate_fixtures.py   → Test fixtures (inputs + expected outputs)
     ├──→ scripts/bench/bench_spec.py    → Benchmark specification (166 functions)
     ├──→ scripts/coverage/compute_coverage.py → Trust verification per function
@@ -316,7 +316,7 @@ Adding a new function is one edit to `manifest.yaml`, then run the generators. T
 .
 ├── manifest.yaml                  API surface definition (single source of truth)
 ├── BENCHMARKS.md                  Auto-generated benchmark report
-├── pillow-rs-core/src/
+├── pillow-rs/src/
 │   ├── image.rs                   Image struct, pixel access, mode handling
 │   ├── color.rs                   Color parsing and palette ops
 │   ├── error.rs                   Error types (thiserror)
@@ -379,7 +379,7 @@ cd pillow-rs-js && wasm-pack build --target web # WASM
 
 # Test
 python -m pytest tests/ --timeout=300
-cargo test -p pillow-rs-core
+cargo test -p pillow-rs
 
 # Benchmark (full suite)
 bash scripts/bench/bench_all.sh full

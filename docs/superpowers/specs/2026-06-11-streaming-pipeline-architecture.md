@@ -181,7 +181,7 @@ execute_gpu(engine):
 ## File Structure
 
 ```
-pillow-rs-core/
+pillow-rs/
 ├── src/
 │   ├── image.rs          ← Image enum + all op delegations (thin)
 │   ├── pipeline.rs       ← PipelineOp enum + materialize() + execute_gpu()
@@ -198,7 +198,7 @@ pillow-rs-core/
 ├── tests/                 ← ALL existing PIL parity tests MUST pass
 └── benches/               ← criterion benchmarks
 
-pillow-rs-core-legacy/     ← EXISTING CODE COPIED (not deleted)
+pillow-rs-legacy/     ← EXISTING CODE COPIED (not deleted)
 ```
 
 ## What Gets Replaced
@@ -219,7 +219,7 @@ pillow-rs-core-legacy/     ← EXISTING CODE COPIED (not deleted)
 
 ## Implementation Sequence
 
-1. Copy existing `pillow-rs-core/src/` → `pillow-rs-core-legacy/`
+1. Copy existing `pillow-rs/src/` → `pillow-rs-legacy/`
 2. Define `PipelineOp` enum with all 96 variants
 3. Define `Image` enum with `Pipeline` variant
 4. Implement `materialize()` fused execution for CPU

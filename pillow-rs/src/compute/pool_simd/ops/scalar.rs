@@ -2422,7 +2422,10 @@ mod tests {
     // ── Bilinear interpolation tests ──
 
     #[test]
-    #[expect(clippy::bad_bit_mask, reason = "Verify extracted byte components are in valid u8 range")]
+    #[expect(
+        clippy::bad_bit_mask,
+        reason = "Verify extracted byte components are in valid u8 range"
+    )]
     fn test_resize_bilinear_same_size_rgba() {
         // Bilinear with same dimensions: at pixel center (dx+0.5)*src/dst = dx+0.5,
         // so each dst pixel center is halfway between two src pixels -> not identity.

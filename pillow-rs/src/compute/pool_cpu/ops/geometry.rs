@@ -9,9 +9,7 @@ use std::f64;
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::pil_resize::{
-    pil_resize, precompute_coeffs_f64, round_up,
-};
+use crate::ops::pil_resize::{pil_resize, precompute_coeffs_f64, round_up};
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 // ── Resample filter conversion ──

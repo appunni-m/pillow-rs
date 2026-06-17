@@ -4,7 +4,7 @@
 
 **Goal:** Create the full workspace with every Pillow function exposed as a stub, working Python package (`from RSPIL import Image`), working WASM build, manifest-driven coverage reporting, test infrastructure, and CI pipeline. All functions exist with correct signatures but raise `NotImplementedError` until Phase 2.
 
-**Architecture:** Workspace with three crates — `pillow-rs-core` (pure Rust, all image logic, zero binding deps), `pillow-rs-py` (PyO3 thin wrappers), `pillow-rs-js` (wasm-bindgen thin wrappers). `manifest.yaml` is the single source of truth defining every Pillow function, its signature, supported modes, parameter variants, and edge cases. Tests drive coverage computation.
+**Architecture:** Workspace with three crates — `pillow-rs` (pure Rust, all image logic, zero binding deps), `pillow-rs-py` (PyO3 thin wrappers), `pillow-rs-js` (wasm-bindgen thin wrappers). `manifest.yaml` is the single source of truth defining every Pillow function, its signature, supported modes, parameter variants, and edge cases. Tests drive coverage computation.
 
 **Tech Stack:** Rust 2021 edition, `image` crate 0.25, `pyo3` 0.24, `wasm-bindgen` 0.2, `thiserror`, `rayon`, maturin, wasm-pack, pytest
 
@@ -22,7 +22,7 @@
 ```toml
 [workspace]
 members = [
-    "pillow-rs-core",
+    "pillow-rs",
     "pillow-rs-py",
     "pillow-rs-js",
 ]
@@ -95,25 +95,25 @@ git commit -m "feat: initialize cargo workspace"
 
 ---
 
-### Task 2: pillow-rs-core Crate Scaffolding
+### Task 2: pillow-rs Crate Scaffolding
 
 **Files:**
-- Create: `pillow-rs-core/Cargo.toml`
-- Create: `pillow-rs-core/src/lib.rs`
-- Create: `pillow-rs-core/src/error.rs`
+- Create: `pillow-rs/Cargo.toml`
+- Create: `pillow-rs/src/lib.rs`
+- Create: `pillow-rs/src/error.rs`
 
-- [ ] **Step 1: Create pillow-rs-core/Cargo.toml**
+- [ ] **Step 1: Create pillow-rs/Cargo.toml**
 
 ```toml
 [package]
-name = "pillow-rs-core"
+name = "pillow-rs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Pure Rust image processing — Pillow reimplementation core"
 
 [lib]
-name = "pillow_rs_core"
+name = "pillow_rs"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp"] }
@@ -128,7 +128,7 @@ rayon = "1.7"
 default = []
 ```
 
-- [ ] **Step 2: Create pillow-rs-core/src/error.rs**
+- [ ] **Step 2: Create pillow-rs/src/error.rs**
 
 ```rust
 use thiserror::Error;
@@ -161,7 +161,7 @@ pub enum PilError {
 }
 ```
 
-- [ ] **Step 3: Create pillow-rs-core/src/lib.rs (minimal)**
+- [ ] **Step 3: Create pillow-rs/src/lib.rs (minimal)**
 
 ```rust
 pub mod error;
@@ -170,17 +170,17 @@ pub use error::PilError;
 
 - [ ] **Step 4: Build and test core**
 
-Run: `cargo build -p pillow-rs-core`
+Run: `cargo build -p pillow-rs`
 Expected: Compiles successfully.
 
-Run: `cargo test -p pillow-rs-core`
+Run: `cargo test -p pillow-rs`
 Expected: 0 tests run, OK.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pillow-rs-core/
-git commit -m "feat: scaffold pillow-rs-core with error types"
+git add pillow-rs/
+git commit -m "feat: scaffold pillow-rs with error types"
 ```
 
 ---
@@ -188,12 +188,12 @@ git commit -m "feat: scaffold pillow-rs-core with error types"
 ### Task 3: Core Image Types (color, lazy, image)
 
 **Files:**
-- Create: `pillow-rs-core/src/color.rs`
-- Create: `pillow-rs-core/src/lazy.rs`
-- Create: `pillow-rs-core/src/image.rs`
-- Modify: `pillow-rs-core/src/lib.rs`
+- Create: `pillow-rs/src/color.rs`
+- Create: `pillow-rs/src/lazy.rs`
+- Create: `pillow-rs/src/image.rs`
+- Modify: `pillow-rs/src/lib.rs`
 
-- [ ] **Step 1: Create pillow-rs-core/src/color.rs**
+- [ ] **Step 1: Create pillow-rs/src/color.rs**
 
 ```rust
 use image::ColorType;
@@ -221,7 +221,7 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
 }
 ```
 
-- [ ] **Step 2: Create pillow-rs-core/src/lazy.rs**
+- [ ] **Step 2: Create pillow-rs/src/lazy.rs**
 
 ```rust
 use image::{DynamicImage, ImageFormat};
@@ -268,7 +268,7 @@ impl LazyImage {
 }
 ```
 
-- [ ] **Step 3: Create pillow-rs-core/src/image.rs (skeleton)**
+- [ ] **Step 3: Create pillow-rs/src/image.rs (skeleton)**
 
 ```rust
 use image::{DynamicImage, ImageFormat};
@@ -349,7 +349,7 @@ impl Image {
 }
 ```
 
-- [ ] **Step 4: Update pillow-rs-core/src/lib.rs**
+- [ ] **Step 4: Update pillow-rs/src/lib.rs**
 
 ```rust
 pub mod error;
@@ -366,10 +366,10 @@ pub use image::Image;
 - [ ] **Step 5: Create placeholder mod files**
 
 ```bash
-mkdir -p pillow-rs-core/src/ops pillow-rs-core/src/formats pillow-rs-core/src/draw pillow-rs-core/src/font
+mkdir -p pillow-rs/src/ops pillow-rs/src/formats pillow-rs/src/draw pillow-rs/src/font
 ```
 
-Create `pillow-rs-core/src/ops/mod.rs`:
+Create `pillow-rs/src/ops/mod.rs`:
 ```rust
 pub mod resize;
 pub mod crop;
@@ -382,20 +382,20 @@ pub mod filter;
 pub mod enhance;
 ```
 
-Create `pillow-rs-core/src/formats/mod.rs`:
+Create `pillow-rs/src/formats/mod.rs`:
 ```rust
 // Format handling stubs — implemented in Phase 2
 ```
 
 - [ ] **Step 6: Build and verify**
 
-Run: `cargo build -p pillow-rs-core`
+Run: `cargo build -p pillow-rs`
 Expected: Compiles successfully.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add pillow-rs-core/
+git add pillow-rs/
 git commit -m "feat: core image types — Image, LazyImage, color parsing"
 ```
 
@@ -404,20 +404,20 @@ git commit -m "feat: core image types — Image, LazyImage, color parsing"
 ### Task 4: Core Operation Stubs
 
 **Files:**
-- Create: `pillow-rs-core/src/ops/resize.rs`
-- Create: `pillow-rs-core/src/ops/crop.rs`
-- Create: `pillow-rs-core/src/ops/rotate.rs`
-- Create: `pillow-rs-core/src/ops/transpose.rs`
-- Create: `pillow-rs-core/src/ops/convert.rs`
-- Create: `pillow-rs-core/src/ops/paste.rs`
-- Create: `pillow-rs-core/src/ops/split.rs`
-- Create: `pillow-rs-core/src/ops/filter.rs`
-- Create: `pillow-rs-core/src/ops/enhance.rs`
-- Modify: `pillow-rs-core/src/image.rs` (add delegation methods)
+- Create: `pillow-rs/src/ops/resize.rs`
+- Create: `pillow-rs/src/ops/crop.rs`
+- Create: `pillow-rs/src/ops/rotate.rs`
+- Create: `pillow-rs/src/ops/transpose.rs`
+- Create: `pillow-rs/src/ops/convert.rs`
+- Create: `pillow-rs/src/ops/paste.rs`
+- Create: `pillow-rs/src/ops/split.rs`
+- Create: `pillow-rs/src/ops/filter.rs`
+- Create: `pillow-rs/src/ops/enhance.rs`
+- Modify: `pillow-rs/src/image.rs` (add delegation methods)
 
 - [ ] **Step 1: Create resize stub**
 
-`pillow-rs-core/src/ops/resize.rs`:
+`pillow-rs/src/ops/resize.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -450,7 +450,7 @@ impl Image {
 
 - [ ] **Step 2: Create crop stub**
 
-`pillow-rs-core/src/ops/crop.rs`:
+`pillow-rs/src/ops/crop.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -465,7 +465,7 @@ impl Image {
 
 - [ ] **Step 3: Create rotate stub**
 
-`pillow-rs-core/src/ops/rotate.rs`:
+`pillow-rs/src/ops/rotate.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -479,7 +479,7 @@ impl Image {
 
 - [ ] **Step 4: Create transpose stub**
 
-`pillow-rs-core/src/ops/transpose.rs`:
+`pillow-rs/src/ops/transpose.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -493,7 +493,7 @@ impl Image {
 
 - [ ] **Step 5: Create convert stub**
 
-`pillow-rs-core/src/ops/convert.rs`:
+`pillow-rs/src/ops/convert.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -514,7 +514,7 @@ impl Image {
 
 - [ ] **Step 6: Create paste stub**
 
-`pillow-rs-core/src/ops/paste.rs`:
+`pillow-rs/src/ops/paste.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -539,7 +539,7 @@ impl Image {
 
 - [ ] **Step 7: Create split stub**
 
-`pillow-rs-core/src/ops/split.rs`:
+`pillow-rs/src/ops/split.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -557,7 +557,7 @@ impl Image {
 
 - [ ] **Step 8: Create filter stub**
 
-`pillow-rs-core/src/ops/filter.rs`:
+`pillow-rs/src/ops/filter.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -571,7 +571,7 @@ impl Image {
 
 - [ ] **Step 9: Create enhance stub**
 
-`pillow-rs-core/src/ops/enhance.rs`:
+`pillow-rs/src/ops/enhance.rs`:
 ```rust
 use crate::error::PilError;
 use crate::image::Image;
@@ -597,7 +597,7 @@ impl Image {
 
 - [ ] **Step 10: Add save and thumbnail methods to Image**
 
-`pillow-rs-core/src/image.rs` — append:
+`pillow-rs/src/image.rs` — append:
 ```rust
 impl Image {
     pub fn save(&mut self, _path: &str, _format: Option<&str>) -> Result<(), PilError> {
@@ -612,13 +612,13 @@ impl Image {
 
 - [ ] **Step 11: Build and verify all stubs compile**
 
-Run: `cargo build -p pillow-rs-core`
+Run: `cargo build -p pillow-rs`
 Expected: Compiles successfully.
 
 - [ ] **Step 12: Commit**
 
 ```bash
-git add pillow-rs-core/src/ops/ pillow-rs-core/src/image.rs
+git add pillow-rs/src/ops/ pillow-rs/src/image.rs
 git commit -m "feat: add core operation stubs (resize, crop, rotate, transpose, convert, paste, split, filter, enhance)"
 ```
 
@@ -650,7 +650,7 @@ name = "_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-pillow-rs-core = { path = "../pillow-rs-core" }
+pillow-rs = { path = "../pillow-rs" }
 pyo3 = { version = "0.24", features = ["extension-module", "abi3", "abi3-py38"] }
 ```
 
@@ -684,9 +684,9 @@ features = ["pyo3/extension-module"]
 
 ```rust
 use pyo3::prelude::*;
-use pillow_rs_core::image::Image as RsImage;
-use pillow_rs_core::error::PilError;
-use pillow_rs_core::ops;
+use pillow_rs::image::Image as RsImage;
+use pillow_rs::error::PilError;
+use pillow_rs::ops;
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -700,7 +700,7 @@ impl PyImage {
         // Delegate color parsing to Python layer — core only receives parsed RGBA
         let c = if let Some(val) = color {
             if let Ok(hex_str) = val.extract::<String>() {
-                pillow_rs_core::color::parse_color_str(&hex_str)
+                pillow_rs::color::parse_color_str(&hex_str)
                     .map_err(|e| map_error(e))?
             } else if let Ok(i) = val.extract::<u8>() {
                 (i, i, i, 255)
@@ -939,7 +939,7 @@ description = "wasm-bindgen bindings for pillow-rs — Pillow in the browser"
 crate-type = ["cdylib"]
 
 [dependencies]
-pillow-rs-core = { path = "../pillow-rs-core" }
+pillow-rs = { path = "../pillow-rs" }
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
@@ -953,8 +953,8 @@ opt-level = "s"
 
 ```rust
 use wasm_bindgen::prelude::*;
-use pillow_rs_core::image::Image as RsImage;
-use pillow_rs_core::error::PilError;
+use pillow_rs::image::Image as RsImage;
+use pillow_rs::error::PilError;
 
 #[wasm_bindgen]
 extern "C" {
@@ -2042,7 +2042,7 @@ git commit -m "feat: coverage computation script — reads manifest + pytest jso
 """
 Generate Rust stub functions from manifest.yaml.
 Reads the manifest and produces Rust code with unimplemented!() bodies
-for every function that doesn't yet exist in pillow-rs-core/src/ops/.
+for every function that doesn't yet exist in pillow-rs/src/ops/.
 """
 import yaml
 import sys
@@ -2067,7 +2067,7 @@ def main():
     manifest_path = sys.argv[1] if len(sys.argv) > 1 else "manifest.yaml"
     manifest = load_manifest(manifest_path)
 
-    ops_dir = Path("pillow-rs-core/src/ops")
+    ops_dir = Path("pillow-rs/src/ops")
     existing = set()
     # Find existing impl blocks per file
     for rs_file in ops_dir.glob("*.rs"):
@@ -2258,7 +2258,7 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo test -p pillow-rs-core
+      - run: cargo test -p pillow-rs
 
   python-tests:
     needs: core-tests
@@ -2330,7 +2330,7 @@ git commit -m "feat: CI pipeline — core tests, Python matrix, WASM build, benc
 
 ```bash
 # 1. Core
-cargo test -p pillow-rs-core
+cargo test -p pillow-rs
 cargo clippy --all-targets --all-features -- -D warnings
 
 # 2. Python

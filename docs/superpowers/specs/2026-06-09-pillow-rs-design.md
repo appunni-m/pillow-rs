@@ -17,7 +17,7 @@ Reference project: [Puhu](https://github.com/bgunebakan/puhu) (Rust-based Pillow
 
 ```
 pillow-rs/
-├── pillow-rs-core/       # Pure Rust, zero binding dependencies
+├── pillow-rs/       # Pure Rust, zero binding dependencies
 ├── pillow-rs-py/         # PyO3 bindings → Python wheel
 ├── pillow-rs-js/         # wasm-bindgen → npm package
 ├── manifest.yaml          # API surface definition (single source of truth)
@@ -26,12 +26,12 @@ pillow-rs/
 └── scripts/               # Stub generation, coverage computation
 ```
 
-**Core rule:** `pillow-rs-core` operates on `DynamicImage` and Rust primitives only. It never touches Python objects, JS objects, file paths, or network. All I/O and type conversion lives in the binding crates.
+**Core rule:** `pillow-rs` operates on `DynamicImage` and Rust primitives only. It never touches Python objects, JS objects, file paths, or network. All I/O and type conversion lives in the binding crates.
 
 ### Component Tree
 
 ```
-pillow-rs-core/src/
+pillow-rs/src/
 ├── lib.rs               # Re-exports
 ├── image.rs             # RsImage struct (DynamicImage wrapper)
 ├── lazy.rs              # LazyImage — deferred load (adopted from Puhu)
@@ -110,7 +110,7 @@ Python / JavaScript call
          │
          ▼
 ┌───────────────────┐
-│ pillow-rs-core    │  Pure Rust, operates on DynamicImage
+│ pillow-rs    │  Pure Rust, operates on DynamicImage
 │ RsImage::resize() │  Delegates to image crate / custom impl
 └────────┬──────────┘
          │

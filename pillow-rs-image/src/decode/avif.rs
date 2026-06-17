@@ -15,9 +15,9 @@
 //!   - AVIF Specification: https://aomediacodec.github.io/av1-avif/
 //!   - ISOBMFF (ISO 14496-12)
 
-use crate::types::DecodedImage;
 #[cfg(feature = "avif")]
 use crate::types::ColorType;
+use crate::types::DecodedImage;
 
 /// Maximum reasonable image dimension to avoid OOM on corrupted data
 #[cfg(feature = "avif")]
@@ -75,9 +75,14 @@ fn decode_avif(data: &[u8]) -> Option<DecodedImage> {
                 break;
             }
             let hi = u64::from_be_bytes([
-                data[offset + 8], data[offset + 9], data[offset + 10],
-                data[offset + 11], data[offset + 12], data[offset + 13],
-                data[offset + 14], data[offset + 15],
+                data[offset + 8],
+                data[offset + 9],
+                data[offset + 10],
+                data[offset + 11],
+                data[offset + 12],
+                data[offset + 13],
+                data[offset + 14],
+                data[offset + 15],
             ]);
             hi as usize
         } else {
@@ -192,14 +197,8 @@ fn parse_avif_dimensions(data: &[u8]) -> Option<(u32, u32)> {
                 let payload = data.get(offset + 8..offset + box_size)?;
                 // Payload = version(1) + flags(3) + width(4) + height(4) = 12 bytes
                 if payload.len() >= 12 {
-                    let w = u32::from_be_bytes([
-                        payload[4], payload[5],
-                        payload[6], payload[7],
-                    ]);
-                    let h = u32::from_be_bytes([
-                        payload[8], payload[9],
-                        payload[10], payload[11],
-                    ]);
+                    let w = u32::from_be_bytes([payload[4], payload[5], payload[6], payload[7]]);
+                    let h = u32::from_be_bytes([payload[8], payload[9], payload[10], payload[11]]);
                     if w > 0 && h > 0 && w <= MAX_DIM && h <= MAX_DIM {
                         return Some((w, h));
                     }

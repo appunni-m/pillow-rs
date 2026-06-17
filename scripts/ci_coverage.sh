@@ -9,7 +9,7 @@ echo "=== 2. Rust clippy ==="
 cargo clippy --all-targets --all-features -- -D warnings
 
 echo "=== 3. Rust core tests ==="
-cargo test -p pillow-rs-core
+cargo test -p pillow-rs
 
 echo "=== 4. Python parity tests ==="
 python -m pytest tests/ -q --json-report --json-report-file=/tmp/report.json

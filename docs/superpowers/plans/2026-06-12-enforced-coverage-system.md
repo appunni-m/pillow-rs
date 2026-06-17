@@ -829,7 +829,7 @@ Expected: convert tests pass (CMYK/YCbCr/HSV conversion works), new() tests may 
 
 - [ ] **Step 3: If tests fail, fix implementation**
 
-If `Image.new("CMYK", ...)` doesn't raise the same error as PIL, edit `pillow-rs-core/src/image.rs` in the `Image::new()` method to add the error case.
+If `Image.new("CMYK", ...)` doesn't raise the same error as PIL, edit `pillow-rs/src/image.rs` in the `Image::new()` method to add the error case.
 
 - [ ] **Step 4: Commit**
 
@@ -1257,7 +1257,7 @@ runs the WASM operation, and compares output hashes.
 set -e
 
 echo "=== 1. Rust core tests ==="
-cargo test -p pillow-rs-core
+cargo test -p pillow-rs
 
 echo "=== 2. Python parity tests ==="
 python -m pytest tests/ -q --json-report --json-report-file=/tmp/report.json

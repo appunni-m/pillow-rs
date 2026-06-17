@@ -5,11 +5,11 @@
 //!
 //! Architecture:
 //!   &[u8] → decode() → DecodedImage { width, height, pixels, color }
-//!   pillow-rs-core wraps DecodedImage into DynamicImage/Image::Loaded.
+//!   pillow-rs wraps DecodedImage into DynamicImage/Image::Loaded.
 
-pub mod types;
 pub mod decode;
 pub mod encode;
+pub mod types;
 
 pub use types::*;
 

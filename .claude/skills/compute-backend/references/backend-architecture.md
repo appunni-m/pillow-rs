@@ -3,7 +3,7 @@
 ## Module Structure
 
 ```
-pillow-rs-core/src/compute/
+pillow-rs/src/compute/
 ├── mod.rs              # Backend enum, BackendImpl trait, router, activation
 ├── registry.rs         # OpEntry, gpu_entry! macro, variant_key, extract_params, register_all
 ├── pool_cpu/

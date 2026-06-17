@@ -6,7 +6,7 @@ A correct `manifest.yaml` must satisfy 5 invariants:
 
 | # | Invariant | How to Verify |
 |---|-----------|---------------|
-| **I1** | Every implemented public API function is in manifest | Compare manifest names against `grep "pub fn" pillow-rs-core/src/image.rs` + `grep "def " pillow-rs-py/python/pillow_rs/image.py` |
+| **I1** | Every implemented public API function is in manifest | Compare manifest names against `grep "pub fn" pillow-rs/src/image.rs` + `grep "def " pillow-rs-py/python/pillow_rs/image.py` |
 | **I2** | Every manifest entry marked "implemented" actually works | Check that Python methods delegate to real Rust implementations (not stubs/no-ops) |
 | **I3** | `supported_targets` matches reality | Cross-reference with `compute/registry.rs` — if GPU shader exists, `gpu` must be in targets |
 | **I4** | `status` field is accurate | `implemented` = full PIL parity with tests; `stub` = placeholder only; `ignored` = intentionally skipped |
@@ -44,7 +44,7 @@ python3 scripts/verify_thin_client.py
 | `linear_gradient` | `operations.py:108` | List comprehension generating pixel bytes |
 | `radial_gradient` | `operations.py:119` | Nested `for` loops, `**0.5`, `min()`, `int()` |
 
-**Fix:** Move to `pillow-rs-core/src/`, add `PipelineOp` variants, delegate from Python.
+**Fix:** Move to `pillow-rs/src/`, add `PipelineOp` variants, delegate from Python.
 
 ---
 

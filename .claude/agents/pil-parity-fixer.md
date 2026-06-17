@@ -30,7 +30,7 @@ Read `xfailed_tracker.txt`. Pick the next `[ ]` entry. Mark it `[>]` (in progres
 - Documentation is often wrong — always check runtime values
 
 ### 3. Read Current Rust Implementation
-- Search `pillow-rs-core/src/image.rs` or `pillow-rs-core/src/ops/*.rs` for the operation
+- Search `pillow-rs/src/image.rs` or `pillow-rs/src/ops/*.rs` for the operation
 - Identify the exact code block
 - Compare with PIL's algorithm — note all differences
 

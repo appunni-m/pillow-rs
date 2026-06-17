@@ -1,12 +1,12 @@
 [package]
-name = "pillow-rs-core"
+name = "pillow-rs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Pure Rust image processing — Pillow reimplementation core"
+description = "Pure Rust image processing — Pillow reimplementation"
 
 [lib]
-name = "pillow_rs_core"
+name = "pillow_rs"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp", "ico"] }

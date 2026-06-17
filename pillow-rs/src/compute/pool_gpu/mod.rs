@@ -748,8 +748,7 @@ impl GpuInner {
             ops.iter().map(extract_second_image).collect();
 
         // Pre-materialize third images for 3-input ops (Composite/Paste mask).
-        let third_images: Vec<Option<DynamicImage>> =
-            ops.iter().map(extract_third_image).collect();
+        let third_images: Vec<Option<DynamicImage>> = ops.iter().map(extract_third_image).collect();
 
         let mut current_is_a = true;
         let mut cur_w = w;

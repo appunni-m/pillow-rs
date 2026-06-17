@@ -181,14 +181,9 @@ pub fn jpeg_idct_islow(block: &mut [i32; DCTSIZE2], workspace: &mut [i32; DCTSIZ
 ///
 /// Source: IJG libjpeg `jpeg_natural_order` (from jdhuff.c / jdhuff.h)
 const JPEG_NATURAL_ORDER: [usize; 64] = [
-    0, 1, 8, 16, 9, 2, 3, 10,
-    17, 24, 32, 25, 18, 11, 4, 5,
-    12, 19, 26, 33, 40, 48, 41, 34,
-    27, 20, 13, 6, 7, 14, 21, 28,
-    35, 42, 49, 56, 57, 50, 43, 36,
-    29, 22, 15, 23, 30, 37, 44, 51,
-    58, 59, 52, 45, 38, 31, 39, 46,
-    53, 60, 61, 54, 47, 55, 62, 63,
+    0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20,
+    13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59,
+    52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
 ];
 
 /// Sign extension for DC/AC coefficient additional bits (Figure F.12).
@@ -640,7 +635,11 @@ fn parse_sof0(data: &[u8], pos: &mut usize) -> Option<(u16, u16, Vec<FrameCompon
 }
 
 /// Parse DQT (Define Quantization Table).
-fn parse_dqt(data: &[u8], pos: &mut usize, quant_tables: &mut Vec<Option<[u16; 64]>>) -> Option<()> {
+fn parse_dqt(
+    data: &[u8],
+    pos: &mut usize,
+    quant_tables: &mut Vec<Option<[u16; 64]>>,
+) -> Option<()> {
     let length = read_u16(data, pos)?;
     let end = *pos + (length as usize) - 2;
 
@@ -991,8 +990,7 @@ fn decode_block(
 ///   Entropy decode -> Dequantize -> De-zigzag -> IDCT -> YCbCr -> RGB
 fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
     // Extract entropy segments (between RST markers)
-    let entropy_segments =
-        extract_entropy_segments(data, info.entropy_start, info.eoi_pos);
+    let entropy_segments = extract_entropy_segments(data, info.entropy_start, info.eoi_pos);
 
     if entropy_segments.segments.is_empty() {
         return None;
@@ -1180,8 +1178,16 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
                 let cx = x / h_ratio as usize;
                 let cy = y / v_ratio as usize;
 
-                let cb_val = if cx < cb_w { cb_buf[cy * cb_w + cx] } else { 128 };
-                let cr_val = if cx < cr_w { cr_buf[cy * cr_w + cx] } else { 128 };
+                let cb_val = if cx < cb_w {
+                    cb_buf[cy * cb_w + cx]
+                } else {
+                    128
+                };
+                let cr_val = if cx < cr_w {
+                    cr_buf[cy * cr_w + cx]
+                } else {
+                    128
+                };
 
                 let (r, g, b) = converter.ycc_to_rgb(y_val, cb_val, cr_val);
                 pixels.push(r);
@@ -1380,17 +1386,18 @@ mod tests {
         let val = table.decode(&mut br);
         assert_eq!(val, Some(5));
 
-        // ... continue reading bits
+        // Fourth bit: 0 -> code 0 -> symbol 5
         let val = table.decode(&mut br);
-        assert_eq!(val, Some(10)); // bit 4 = 0, wait...
+        assert_eq!(val, Some(5)); // bit 4 = 0
 
         // Let me trace: byte 0b11001010
-        // bit 0: 1 -> code 1 -> values[1] = 10 ✓
-        // bit 1: 1 -> code 1 -> values[1] = 10 ✓
-        // bit 2: 0 -> code 0 -> values[0] = 5 ✓
-        // bit 3: 0 -> code 0 -> values[0] = 5
+        // bit 7: 1 -> code 1 -> values[1] = 10
+        // bit 6: 1 -> code 1 -> values[1] = 10
+        // bit 5: 0 -> code 0 -> values[0] = 5
+        // bit 4: 0 -> code 0 -> values[0] = 5
+        // bit 3: 1 -> code 1 -> values[0] = 10
         let val = table.decode(&mut br);
-        assert_eq!(val, Some(5));
+        assert_eq!(val, Some(10));
     }
 
     #[test]

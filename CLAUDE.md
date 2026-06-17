@@ -7,7 +7,7 @@ A full-featured reimplementation of Pillow in Rust targeting **Python** (via PyO
 ## Architecture
 
 Workspace with three crates:
-- `pillow-rs-core/` — Pure Rust, all image logic, ZERO binding dependencies
+- `pillow-rs/` — Pure Rust, all image logic, ZERO binding dependencies
 - `pillow-rs-py/` — PyO3 bindings, thin wrapper (~200 lines max)
 - `pillow-rs-js/` — wasm-bindgen, thin wrapper (~200 lines max)
 
@@ -20,7 +20,7 @@ Binding files in `pillow-rs-py/python/pillow_rs/` MUST be thin wrappers:
 - **NO** `import math`, `import tempfile`, `import os`, `import subprocess`
 - **NO** arithmetic (`+`, `-`, `*`, `/`, `min`, `max`, `sorted`, `sum`)
 - **NO** `if/elif/else` beyond isinstance checks, None defaults, or mode dispatch
-- All logic lives in `pillow-rs-core/src/`; bindings delegate via `_core.xxx()` or `_rust_image.xxx()`
+- All logic lives in `pillow-rs/src/`; bindings delegate via `_core.xxx()` or `_rust_image.xxx()`
 - Coordinate parsing, font dispatch, text layout, palette search → ALL in Rust
 
 ## Reference Code
@@ -51,7 +51,7 @@ Binding files in `pillow-rs-py/python/pillow_rs/` MUST be thin wrappers:
 ### Building
 - Python: `maturin develop --release` (from `pillow-rs-py/`)
 - WASM: `wasm-pack build --target web` (from `pillow-rs-js/`)
-- Core tests: `cargo test --manifest-path pillow-rs-core/Cargo.toml`
+- Core tests: `cargo test --manifest-path pillow-rs/Cargo.toml`
 
 ## Drawing Architecture — Per-Mode Native Pixel Paths
 
@@ -133,11 +133,11 @@ After this refactor, the following code becomes dead and should be removed:
 All work starts from `manifest.yaml`. To add a new function:
 1. Add its entry to `manifest.yaml` (signature, modes, variants, edge cases)
 2. Run `scripts/generate_stubs.py` to create the stub in core
-3. Implement the function in `pillow-rs-core/src/ops/<module>.rs`
+3. Implement the function in `pillow-rs/src/ops/<module>.rs`
 4. Add binding delegation in `pillow-rs-py/src/lib.rs`
 5. Add Python wrapper in `pillow-rs-py/python/pillow_rs/` (Image class, or new module)
 6. Register new module in `pillow-rs-py/python/pillow_rs/__init__.py`
-7. Update `pillow-rs-core/src/ops/mod.rs` if new module added
+7. Update `pillow-rs/src/ops/mod.rs` if new module added
 8. Write PIL parity tests in `tests/` using `assert_images_equal()` or `assert_values_equal()`
 9. **CRITICAL**: Add a JSON fixture in `tests/fixtures/` with `operation.module` + `operation.target`. Coverage mapping is auto-discovered from fixtures and `@pytest.mark.covers` markers — no separate mapping file needed.
 10. Run `python -m pytest tests/ --json-report --json-report-file=/tmp/report.json`
@@ -146,7 +146,7 @@ All work starts from `manifest.yaml`. To add a new function:
 ### Building (correct commands)
 - Python: `maturin develop --manifest-path pillow-rs-py/Cargo.toml` (from repo root)
 - WASM: `wasm-pack build --target web` (from `pillow-rs-js/`)
-- Core tests: `cargo test -p pillow-rs-core`
+- Core tests: `cargo test -p pillow-rs`
 
 ### Full build + test (single safe command)
 - **ALWAYS use this script** — it handles read-only fixtures, regeneration, and cache clearing safely:

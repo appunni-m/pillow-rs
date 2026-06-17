@@ -8,7 +8,7 @@ cargo fmt --check 2>&1 | tail -3
 
 echo ""
 echo "=== clippy (core) ==="
-cargo clippy -p pillow-rs-core 2>&1 | tail -5
+cargo clippy -p pillow-rs 2>&1 | tail -5
 
 echo ""
 echo "=== clippy (py bindings) ==="

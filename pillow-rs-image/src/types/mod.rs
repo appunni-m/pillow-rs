@@ -1,7 +1,7 @@
 //! The pillow-rs-image type system.
 //!
 //! This module provides the core image types matching the `image` crate's API,
-//! allowing `pillow-rs-core` to swap `use image::*` for `use pillow_rs_image::*`.
+//! allowing `pillow-rs` to swap `use image::*` for `use pillow_rs_image::*`.
 
 pub mod buffer;
 pub mod color;
@@ -11,11 +11,23 @@ pub mod traits;
 
 // Re-exports matching the `image` crate's top-level API.
 pub use self::buffer::{
-    ConvertBuffer, GrayAlphaImage, GrayImage, ImageBuffer, Rgb32FImage, RgbImage, Rgba32FImage,
-    RgbaImage,
+    ConvertBuffer,
     // Iterators
-    EnumeratePixels, EnumeratePixelsMut, EnumerateRows, EnumerateRowsMut,
-    Pixels, PixelsMut, Rows, RowsMut,
+    EnumeratePixels,
+    EnumeratePixelsMut,
+    EnumerateRows,
+    EnumerateRowsMut,
+    GrayAlphaImage,
+    GrayImage,
+    ImageBuffer,
+    Pixels,
+    PixelsMut,
+    Rgb32FImage,
+    RgbImage,
+    Rgba32FImage,
+    RgbaImage,
+    Rows,
+    RowsMut,
 };
 pub use self::color::{
     ColorType, ExtendedColorType, FromColor, FromPrimitive, Luma, LumaA, Rgb, Rgba,
@@ -76,7 +88,12 @@ pub struct DecodedImage {
 impl DecodedImage {
     /// Create a new decoded image.
     pub fn new(width: u32, height: u32, pixels: Vec<u8>, color: ColorType) -> Self {
-        Self { width, height, pixels, color }
+        Self {
+            width,
+            height,
+            pixels,
+            color,
+        }
     }
 
     /// Return raw pixel bytes for comparison against PIL reference.

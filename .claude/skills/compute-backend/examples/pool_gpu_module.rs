@@ -2,7 +2,7 @@
 // This file illustrates every key design decision in the GPU backend,
 // serving as a template for future backends (SIMD, WebGPU-native, etc.).
 //
-// Located at: pillow-rs-core/src/compute/pool_gpu/mod.rs
+// Located at: pillow-rs/src/compute/pool_gpu/mod.rs
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DESIGN DECISION 1: BufferPool with ping-pong double-buffering

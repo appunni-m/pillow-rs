@@ -65,14 +65,14 @@ pip install pillow numpy pyyaml pytest pytest-timeout pytest-json-report pytest-
 git clone https://github.com/pillow-rs/pillow-rs
 cd pillow-rs
 
-# Python — builds pillow-rs-core + pillow-rs-py in one command
+# Python — builds pillow-rs + pillow-rs-py in one command
 cd pillow-rs-py && maturin develop --release
 
-# WASM — builds pillow-rs-core + pillow-rs-js in one command
+# WASM — builds pillow-rs + pillow-rs-js in one command
 cd pillow-rs-js && wasm-pack build --target web
 
-# Core tests only — compiles and tests pillow-rs-core
-cargo test -p pillow-rs-core
+# Core tests only — compiles and tests pillow-rs
+cargo test -p pillow-rs
 ```
 
 `maturin develop` and `wasm-pack build` both compile the entire dependency tree. Core gets built automatically — no separate `cargo build` step.
@@ -94,7 +94,7 @@ python -m pytest tests/ -q --timeout=300
 ### Three-crate architecture
 
 ```
-pillow-rs-core/     Pure Rust image library — ZERO binding dependencies
+pillow-rs/     Pure Rust image library — ZERO binding dependencies
 pillow-rs-py/       PyO3 bindings — thin wrapper (~200 lines, all delegation)
 pillow-rs-js/       wasm-bindgen — thin wrapper (~200 lines, all delegation)
 ```
@@ -104,13 +104,13 @@ pillow-rs-js/       wasm-bindgen — thin wrapper (~200 lines, all delegation)
 **Core never touches:** Python objects, JS objects, file paths, network, environment variables, or any platform-specific API. All I/O and type conversion live in the binding crates.
 
 ```
-✅ pillow-rs-core/src/ops/filter.rs:
+✅ pillow-rs/src/ops/filter.rs:
    pub fn blur(img: &Image, radius: f32) -> Result<Image>
 
 ✅ pillow-rs-py/src/lib.rs:
    #[pyfunction]
    fn blur(img: &PyImage, radius: f32) -> PyResult<PyImage> {
-       Ok(PyImage { inner: pillow_rs_core::ops::filter::blur(&img.inner, radius)? })
+       Ok(PyImage { inner: pillow_rs::ops::filter::blur(&img.inner, radius)? })
    }
 
 ✅ pillow-rs-py/python/pillow_rs/image.py:
@@ -163,7 +163,7 @@ Each mode writes pixels in its native byte layout — 1 byte for L, 3 for RGB, 4
 ```
 manifest.yaml
     │
-    ├──→ scripts/generate_stubs.py        → Rust stubs in pillow-rs-core/src/ops/
+    ├──→ scripts/generate_stubs.py        → Rust stubs in pillow-rs/src/ops/
     ├──→ scripts/generate_fixtures.py     → Test fixtures (inputs + expected outputs)
     ├──→ scripts/bench/bench_spec.py      → Benchmark specification (166 functions)
     ├──→ scripts/coverage/compute_coverage.py → Trust verification per function
@@ -189,7 +189,7 @@ manifest.yaml
      supported_targets: [cpu]
    ```
 
-2. **Generate stubs** — `python scripts/generate_stubs.py` scaffolds Rust function signatures in `pillow-rs-core/src/ops/`
+2. **Generate stubs** — `python scripts/generate_stubs.py` scaffolds Rust function signatures in `pillow-rs/src/ops/`
 
 3. **Implement** — Fill in the Rust implementation in the generated stub file
 
@@ -197,7 +197,7 @@ manifest.yaml
    ```rust
    #[pyfunction]
    fn my_function(img: &PyImage, param: i32) -> PyResult<PyImage> {
-       Ok(PyImage { inner: pillow_rs_core::ops::my_module::my_function(&img.inner, param)? })
+       Ok(PyImage { inner: pillow_rs::ops::my_module::my_function(&img.inner, param)? })
    }
    ```
 
@@ -207,7 +207,7 @@ manifest.yaml
        return _core.my_function(self._image, param)
    ```
 
-6. **Register module** — If new ops file: add `pub mod my_module;` to `pillow-rs-core/src/ops/mod.rs`
+6. **Register module** — If new ops file: add `pub mod my_module;` to `pillow-rs/src/ops/mod.rs`
 
 7. **Generate fixtures** — `python scripts/generate_fixtures.py` creates test fixtures from manifest
 
@@ -230,7 +230,7 @@ manifest.yaml
    python -m pytest tests/ -k "test_name_here" -v --tb=long --timeout=300
    ```
 3. Compare RSPIL output vs Pillow output to understand the mismatch
-4. Fix the Rust implementation in `pillow-rs-core/src/ops/<module>.rs`
+4. Fix the Rust implementation in `pillow-rs/src/ops/<module>.rs`
 5. Re-run the single test to confirm the fix
 6. Run the full suite to check for regressions:
    ```bash
@@ -276,8 +276,8 @@ python -m pytest tests/ -k "not suite1 and not suite2 and not suite3" -q --timeo
 ### Rust core tests
 
 ```bash
-cargo test -p pillow-rs-core
-cargo test -p pillow-rs-core -- --nocapture   # show output
+cargo test -p pillow-rs
+cargo test -p pillow-rs -- --nocapture   # show output
 ```
 
 ### Test architecture
@@ -356,7 +356,7 @@ cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Check a specific crate
-cargo clippy -p pillow-rs-core --all-targets -- -D warnings
+cargo clippy -p pillow-rs --all-targets -- -D warnings
 ```
 
 ### Pre-commit checklist
@@ -404,7 +404,7 @@ Research → implement → validate cycle for fixing PIL parity test failures.
 **What it does:**
 1. Reads `xfailed_tracker.txt` to find the next failing test
 2. Researches Pillow's actual C/Python source code for the exact algorithm
-3. Implements the algorithm in Rust in `pillow-rs-core/src/ops/`
+3. Implements the algorithm in Rust in `pillow-rs/src/ops/`
 4. Validates with the single failing test
 5. Updates `xfailed_tracker.txt`
 
@@ -417,7 +417,7 @@ GPU/SIMD/WebGPU compute backend development.
 **When to use:** "add GPU support for ops", "implement pool_simd", "migrate shaders", "make shaders mode-aware"
 
 **What it does:**
-- Guides shader creation in `pillow-rs-core/src/compute/gpu_shaders/`
+- Guides shader creation in `pillow-rs/src/compute/gpu_shaders/`
 - Registers ops in `compute/registry.rs` with cpu_fn + gpu_shader entries
 - Ensures CPU fallback for every GPU op
 
@@ -486,11 +486,11 @@ Configuration in `pillow-rs-js/package.json`:
 ### crates.io (Rust)
 
 ```bash
-cargo publish -p pillow-rs-core
+cargo publish -p pillow-rs
 ```
 
-Configuration in `pillow-rs-core/Cargo.toml`:
-- `name = "pillow-rs-core"`
+Configuration in `pillow-rs/Cargo.toml`:
+- `name = "pillow-rs"`
 - `license = "MIT-CMU"` (from workspace)
 
 ### Release checklist

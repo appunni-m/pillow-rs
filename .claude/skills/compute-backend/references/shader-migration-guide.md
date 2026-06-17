@@ -225,6 +225,6 @@ done
 grep -l "@binding" gpu_shaders/*.wgsl | wc -l
 
 # 5. Build and test
-cargo check -p pillow-rs-core
+cargo check -p pillow-rs
 maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
 ```

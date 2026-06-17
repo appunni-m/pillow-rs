@@ -98,8 +98,7 @@ fn decode_entry(data: &[u8], index: usize, _count: usize) -> Option<DecodedImage
     let _planes = u16::from_le_bytes([entry[4], entry[5]]);
     let _bpp = u16::from_le_bytes([entry[6], entry[7]]);
     let data_size = u32::from_le_bytes([entry[8], entry[9], entry[10], entry[11]]) as usize;
-    let data_offset =
-        u32::from_le_bytes([entry[12], entry[13], entry[14], entry[15]]) as usize;
+    let data_offset = u32::from_le_bytes([entry[12], entry[13], entry[14], entry[15]]) as usize;
 
     // Validate bounds
     if data_size == 0 || data_offset == 0 {
@@ -424,7 +423,7 @@ mod tests {
         ico.push(0); // reserved
         ico.extend_from_slice(&1u16.to_le_bytes()); // planes
         ico.extend_from_slice(&32u16.to_le_bytes()); // bpp
-        // data size and offset will be patched
+                                                     // data size and offset will be patched
 
         let data_offset = ico.len() + 8; // after size(4) + offset(4)
         let mut bmp_data = Vec::new();
@@ -450,7 +449,7 @@ mod tests {
         let row0 = vec![0u8, 0, 255, 255, 0, 255, 0, 255]; // red, green (BGRA)
         bmp_data.extend_from_slice(&row1); // bottom row first
         bmp_data.extend_from_slice(&row0); // top row last
-        // AND mask row (dummy)
+                                           // AND mask row (dummy)
         bmp_data.extend_from_slice(&[0u8; 4]);
 
         let data_size = bmp_data.len();
@@ -562,8 +561,8 @@ mod tests {
         let ihdr_data = [
             0, 0, 0, 1, // width
             0, 0, 0, 1, // height
-            8,          // bit depth
-            3,          // color type = indexed
+            8, // bit depth
+            3, // color type = indexed
             0, 0, 0, 0, // compression, filter, interlace
         ];
         let ihdr_len = ihdr_data.len() as u32;
