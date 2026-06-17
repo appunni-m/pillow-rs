@@ -141,6 +141,82 @@ formats:
       test_assets:
       - progressive_spectral.jpg
     encode_edge_cases:
+    - id: enc_q100
+      description: 
+      params: {'quality': 100}
+    - id: enc_q85
+      description: 
+      params: {'quality': 85}
+    - id: enc_q75
+      description: 
+      params: {'quality': 75}
+    - id: enc_q50
+      description: 
+      params: {'quality': 50}
+    - id: enc_q25
+      description: 
+      params: {'quality': 25}
+    - id: enc_q10
+      description: 
+      params: {'quality': 10}
+    - id: enc_q1
+      description: 
+      params: {'quality': 1}
+    - id: enc_sub_444
+      description: 
+      params: {'subsampling': '444'}
+    - id: enc_sub_422
+      description: 
+      params: {'subsampling': '422'}
+    - id: enc_sub_420
+      description: 
+      params: {'subsampling': '420'}
+    - id: enc_progressive
+      description: 
+      params: {'progressive': True}
+    - id: enc_baseline
+      description: 
+      params: {'progressive': False}
+    - id: enc_grayscale
+      description: 
+      params: {'grayscale': True}
+    - id: enc_rgb
+      description: 
+      params: {'grayscale': False}
+    - id: enc_1x1
+      description: 
+      params: {'size': [1, 1]}
+    - id: enc_8x8
+      description: 
+      params: {'size': [8, 8]}
+    - id: enc_odd_size
+      description: 
+      params: {'size': [17, 17]}
+    - id: enc_exif
+      description: 
+      params: {'exif': True}
+    - id: enc_no_exif
+      description: 
+      params: {'exif': False}
+    - id: enc_restart
+      description: 
+      params: {'restart_interval': 4}
+    - id: enc_no_restart
+      description: 
+      params: {'restart_interval': 0}
+    - id: enc_dct_fast
+      description: 
+      params: {'dct_method': 'fast'}
+    - id: enc_dct_slow
+      description: 
+      params: {'dct_method': 'slow'}
+    - id: enc_optimize
+      description: 
+      params: {'optimize': True}
+    - id: enc_no_optimize
+      description: 
+      params: {'optimize': False}
+
     - id: enc_quality_100
       description: Quality 100 (max)
       params:
@@ -347,6 +423,88 @@ formats:
       - apng_animated.png
       notes: Decode first frame only (matching base PNG behavior)
     encode_edge_cases:
+    - id: enc_compress_0
+      description: 
+      params: {'compression': 0}
+    - id: enc_compress_3
+      description: 
+      params: {'compression': 3}
+    - id: enc_compress_6
+      description: 
+      params: {'compression': 6}
+    - id: enc_compress_9
+      description: 
+      params: {'compression': 9}
+    - id: enc_l8
+      description: 
+      params: {'color_type': 'L'}
+    - id: enc_la8
+      description: 
+      params: {'color_type': 'LA'}
+    - id: enc_rgb8
+      description: 
+      params: {'color_type': 'RGB'}
+    - id: enc_rgba8
+      description: 
+      params: {'color_type': 'RGBA'}
+    - id: enc_indexed
+      description: 
+      params: {'color_type': 'P'}
+    - id: enc_1bit
+      description: 
+      params: {'color_type': '1'}
+    - id: enc_adam7
+      description: 
+      params: {'interlace': True}
+    - id: enc_no_interlace
+      description: 
+      params: {'interlace': False}
+    - id: enc_8bit
+      description: 
+      params: {'bit_depth': 8}
+    - id: enc_16bit
+      description: 
+      params: {'bit_depth': 16}
+    - id: enc_filter_none
+      description: 
+      params: {'filter': 'none'}
+    - id: enc_filter_sub
+      description: 
+      params: {'filter': 'sub'}
+    - id: enc_filter_up
+      description: 
+      params: {'filter': 'up'}
+    - id: enc_filter_avg
+      description: 
+      params: {'filter': 'average'}
+    - id: enc_filter_paeth
+      description: 
+      params: {'filter': 'paeth'}
+    - id: enc_filter_adaptive
+      description: 
+      params: {'filter': 'adaptive'}
+    - id: enc_chunk_text
+      description: 
+      params: {'text_chunks': True}
+    - id: enc_chunk_gamma
+      description: 
+      params: {'gamma': True}
+    - id: enc_chunk_srgb
+      description: 
+      params: {'srgb': True}
+    - id: enc_chunk_phys
+      description: 
+      params: {'physical': True}
+    - id: enc_chunk_time
+      description: 
+      params: {'time': True}
+    - id: enc_1x1
+      description: 
+      params: {'size': [1, 1]}
+    - id: enc_odd_size
+      description: 
+      params: {'size': [17, 17]}
+
     - id: enc_compress_default
       description: Default compression
       params:
@@ -437,6 +595,46 @@ formats:
       - empty.gif
       expect_error: true
     encode_edge_cases:
+    - id: enc_static
+      description: 
+      params: {'animated': False}
+    - id: enc_animated
+      description: 
+      params: {'animated': True, 'frames': 2}
+    - id: enc_animated_loop
+      description: 
+      params: {'animated': True, 'frames': 3, 'loop': True}
+    - id: enc_opaque
+      description: 
+      params: {'transparency': False}
+    - id: enc_transparent
+      description: 
+      params: {'transparency': True}
+    - id: enc_interlaced
+      description: 
+      params: {'interlace': True}
+    - id: enc_non_interlaced
+      description: 
+      params: {'interlace': False}
+    - id: enc_dispose_none
+      description: 
+      params: {'disposal': 'none'}
+    - id: enc_dispose_background
+      description: 
+      params: {'disposal': 'background'}
+    - id: enc_dispose_previous
+      description: 
+      params: {'disposal': 'previous'}
+    - id: enc_global_ct
+      description: 
+      params: {'color_table': 'global'}
+    - id: enc_local_ct
+      description: 
+      params: {'color_table': 'local'}
+    - id: enc_1x1
+      description: 
+      params: {'size': [1, 1]}
+
     - id: enc_static
       description: Static GIF
       params:
@@ -534,6 +732,58 @@ formats:
       - not_bmp.bmp
       expect_error: true
     encode_edge_cases:
+    - id: enc_1bit
+      description: 
+      params: {'bit_depth': 1}
+    - id: enc_4bit
+      description: 
+      params: {'bit_depth': 4}
+    - id: enc_8bit
+      description: 
+      params: {'bit_depth': 8}
+    - id: enc_16bit
+      description: 
+      params: {'bit_depth': 16}
+    - id: enc_24bit
+      description: 
+      params: {'bit_depth': 24}
+    - id: enc_32bit
+      description: 
+      params: {'bit_depth': 32}
+    - id: enc_bi_rgb
+      description: 
+      params: {'compression': 'BI_RGB'}
+    - id: enc_bi_rle8
+      description: 
+      params: {'compression': 'BI_RLE8'}
+    - id: enc_bi_rle4
+      description: 
+      params: {'compression': 'BI_RLE4'}
+    - id: enc_bi_bitfields
+      description: 
+      params: {'compression': 'BI_BITFIELDS'}
+    - id: enc_top_down
+      description: 
+      params: {'top_down': True}
+    - id: enc_bottom_up
+      description: 
+      params: {'top_down': False}
+    - id: enc_v3_header
+      description: 
+      params: {'header': 'V3'}
+    - id: enc_v4_header
+      description: 
+      params: {'header': 'V4'}
+    - id: enc_v5_header
+      description: 
+      params: {'header': 'V5'}
+    - id: enc_1x1
+      description: 
+      params: {'size': [1, 1]}
+    - id: enc_odd_width
+      description: 
+      params: {'size': [17, 16]}
+
     - id: enc_24bit
       description: 24-bit BMP
       params:
@@ -617,6 +867,61 @@ formats:
       - truncated.webp
       expect_error: true
     encode_edge_cases:
+    - id: enc_lossy_q100
+      description: 
+      params: {'lossless': False, 'quality': 100}
+    - id: enc_lossy_q80
+      description: 
+      params: {'lossless': False, 'quality': 80}
+    - id: enc_lossy_q50
+      description: 
+      params: {'lossless': False, 'quality': 50}
+    - id: enc_lossy_q10
+      description: 
+      params: {'lossless': False, 'quality': 10}
+    - id: enc_lossy_q1
+      description: 
+      params: {'lossless': False, 'quality': 1}
+    - id: enc_lossless
+      description: 
+      params: {'lossless': True}
+    - id: enc_lossy_alpha
+      description: 
+      params: {'lossless': False, 'alpha': True}
+    - id: enc_lossless_alpha
+      description: 
+      params: {'lossless': True, 'alpha': True}
+    - id: enc_no_alpha
+      description: 
+      params: {'alpha': False}
+    - id: enc_hint_photo
+      description: 
+      params: {'hint': 'photo'}
+    - id: enc_hint_graph
+      description: 
+      params: {'hint': 'graph'}
+    - id: enc_hint_picture
+      description: 
+      params: {'hint': 'picture'}
+    - id: enc_method_0
+      description: 
+      params: {'method': 0}
+    - id: enc_method_6
+      description: 
+      params: {'method': 6}
+    - id: enc_exif
+      description: 
+      params: {'exif': True}
+    - id: enc_xmp
+      description: 
+      params: {'xmp': True}
+    - id: enc_icc
+      description: 
+      params: {'icc': True}
+    - id: enc_1x1
+      description: 
+      params: {'size': [1, 1]}
+
     - id: enc_lossy
       description: Lossy WebP
       params:
@@ -754,6 +1059,70 @@ formats:
       - bad_ifd.tiff
       expect_error: true
     encode_edge_cases:
+    - id: enc_compress_none
+      description: 
+      params: {'compression': 'none'}
+    - id: enc_compress_lzw
+      description: 
+      params: {'compression': 'lzw'}
+    - id: enc_compress_deflate
+      description: 
+      params: {'compression': 'deflate'}
+    - id: enc_compress_packbits
+      description: 
+      params: {'compression': 'packbits'}
+    - id: enc_byte_le
+      description: 
+      params: {'byte_order': 'le'}
+    - id: enc_byte_be
+      description: 
+      params: {'byte_order': 'be'}
+    - id: enc_bilevel
+      description: 
+      params: {'color': '1bit'}
+    - id: enc_grayscale
+      description: 
+      params: {'color': 'gray'}
+    - id: enc_rgb
+      description: 
+      params: {'color': 'rgb'}
+    - id: enc_rgba
+      description: 
+      params: {'color': 'rgba'}
+    - id: enc_cmyk
+      description: 
+      params: {'color': 'cmyk'}
+    - id: enc_8bit
+      description: 
+      params: {'bit_depth': 8}
+    - id: enc_16bit
+      description: 
+      params: {'bit_depth': 16}
+    - id: enc_32bit
+      description: 
+      params: {'bit_depth': 32}
+    - id: enc_stripped
+      description: 
+      params: {'organization': 'stripped'}
+    - id: enc_tiled
+      description: 
+      params: {'organization': 'tiled'}
+    - id: enc_single_page
+      description: 
+      params: {'pages': 1}
+    - id: enc_multi_page
+      description: 
+      params: {'pages': 2}
+    - id: enc_predictor_none
+      description: 
+      params: {'predictor': 'none'}
+    - id: enc_predictor_horiz
+      description: 
+      params: {'predictor': 'horizontal'}
+    - id: enc_1x1
+      description: 
+      params: {'size': [1, 1]}
+
     - id: enc_uncompressed
       description: Uncompressed
       params:
@@ -828,6 +1197,43 @@ formats:
       test_assets:
       - 256x256.ico
     encode_edge_cases:
+    - id: enc_16x16
+      description: 
+      params: {'sizes': [(16, 16)]}
+    - id: enc_32x32
+      description: 
+      params: {'sizes': [(32, 32)]}
+    - id: enc_48x48
+      description: 
+      params: {'sizes': [(48, 48)]}
+    - id: enc_256x256
+      description: 
+      params: {'sizes': [(256, 256)]}
+    - id: enc_multi_2
+      description: 
+      params: {'sizes': [(16, 16), (32, 32)]}
+    - id: enc_multi_4
+      description: 
+      params: {'sizes': [(16, 16), (32, 32), (48, 48), (256, 256)]}
+    - id: enc_bmp_entry
+      description: 
+      params: {'entry_type': 'bmp'}
+    - id: enc_png_entry
+      description: 
+      params: {'entry_type': 'png'}
+    - id: enc_24bit
+      description: 
+      params: {'bit_depth': 24}
+    - id: enc_32bit
+      description: 
+      params: {'bit_depth': 32}
+    - id: enc_no_hotspot
+      description: 
+      params: {'hotspot': False}
+    - id: enc_hotspot
+      description: 
+      params: {'hotspot': [8, 8]}
+
     - id: enc_16x16
       description: 16x16 icon
       params:

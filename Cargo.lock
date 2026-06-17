@@ -24,6 +24,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a3a1fd6f75306b68087b831f025c712524bcb19aad54e557b1129cfa0a2b207"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -142,6 +151,16 @@ checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
 dependencies = [
  "cfg-if",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "console_log"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be8aed40e4edbf4d3b4431ab260b63fdc40f5780a4766824329ea0f1eefe3c0f"
+dependencies = [
+ "log",
+ "web-sys",
 ]
 
 [[package]]
@@ -763,6 +782,7 @@ dependencies = [
  "bytemuck",
  "csscolorparser",
  "fontdue",
+ "log",
  "pillow-rs-image",
  "png 0.18.1",
  "pollster",
@@ -777,6 +797,7 @@ dependencies = [
  "flate2",
  "gif",
  "jpeg-encoder",
+ "log",
  "png 0.17.16",
  "serde_json",
  "serde_yaml",
@@ -788,7 +809,9 @@ name = "pillow-rs-js"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "console_log",
  "js-sys",
+ "log",
  "pillow-rs",
  "wasm-bindgen",
 ]
@@ -799,6 +822,7 @@ version = "0.1.0"
 dependencies = [
  "pillow-rs",
  "pyo3",
+ "pyo3-log",
 ]
 
 [[package]]
@@ -908,6 +932,17 @@ checksum = "78f9cf92ba9c409279bc3305b5409d90db2d2c22392d443a87df3a1adad59e33"
 dependencies = [
  "libc",
  "pyo3-build-config",
+]
+
+[[package]]
+name = "pyo3-log"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45192e5e4a4d2505587e27806c7b710c231c40c56f3bfc19535d0bb25df52264"
+dependencies = [
+ "arc-swap",
+ "log",
+ "pyo3",
 ]
 
 [[package]]

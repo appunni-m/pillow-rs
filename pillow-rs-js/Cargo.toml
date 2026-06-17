@@ -10,9 +10,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pillow-rs = { path = "../pillow-rs" }
+log = "0.4"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
+console_log = "1.0"
 
 [profile.release]
 lto = true

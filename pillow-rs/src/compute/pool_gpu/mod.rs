@@ -5,7 +5,7 @@
 macro_rules! gpu_log {
     ($($arg:tt)*) => {{
         let msg = format!($($arg)*);
-        eprintln!("{}", msg);
+        log::debug!("{}", msg);
         if std::env::var("RSPIL_GPU_DEBUG").is_ok() {
             use std::io::Write;
             if let Ok(mut f) = std::fs::OpenOptions::new()

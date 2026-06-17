@@ -48,7 +48,7 @@ impl BackendImpl for SimdPool {
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
         let op_keys: Vec<&str> = ops.iter().map(|op| registry::variant_key(op)).collect();
-        eprintln!(
+        log::debug!(
             "[SIMD] {} op(s) {}x{}: {:?}",
             ops.len(),
             img.width(),
