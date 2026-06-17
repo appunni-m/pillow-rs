@@ -1712,6 +1712,9 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                         let mut eob_run: u32 = 0;
                         let blocks_y = comp.v_samp as usize;
                         let blocks_x = comp.h_samp as usize;
+                        if mcu_x == 5 && mcu_y == 4 {
+                            eprintln!("AC_REFINE MCU=5,4 first blk: br.pos={} br.bits={}", br.pos, br.bits);
+                        }
                         for by in 0..blocks_y {
                             for bx in 0..blocks_x {
                                 let block_idx = (mcu_y * blocks_y + by)
