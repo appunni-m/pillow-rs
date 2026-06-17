@@ -263,7 +263,11 @@ pub fn op_pad(
     let mut padded = DynamicImage::new_rgba8(w, h);
     for py in 0..h {
         for px in 0..w {
-            padded.put_pixel(px, py, pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]));
+            padded.put_pixel(
+                px,
+                py,
+                pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]),
+            );
         }
     }
     let ox = ((w as f64 - nw as f64) * centering.0) as i64;
@@ -321,7 +325,11 @@ pub fn op_expand(
     let mut expanded = DynamicImage::new_rgba8(new_w, new_h);
     for py in 0..new_h {
         for px in 0..new_w {
-            expanded.put_pixel(px, py, pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]));
+            expanded.put_pixel(
+                px,
+                py,
+                pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]),
+            );
         }
     }
     let src_rgba = img.to_rgba8();

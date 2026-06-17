@@ -270,8 +270,8 @@ fn resize_i(
     let dh_f = dst_h as f64;
 
     // PIL-compatible scale factor for kernel widening during downscaling
-    let sx_scale = (sw_f / dw_f).max(1.0);
-    let sy_scale = (sh_f / dh_f).max(1.0);
+    let compute::pool_cpu::ops::effects::TABLE_SCALE = (sw_f / dw_f).max(1.0);
+    let compute::pool_cpu::ops::effects::TABLE_SCALE = (sh_f / dh_f).max(1.0);
 
     let n = (dst_w * dst_h) as usize;
 
@@ -291,9 +291,10 @@ fn resize_i(
             }
         }
         let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let out = pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
-            PilError::ValueError("resize_i: failed to create output buffer".into())
-        })?;
+        let out =
+            pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
+                PilError::ValueError("resize_i: failed to create output buffer".into())
+            })?;
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
@@ -465,7 +466,8 @@ fn rotate_arbitrary_generic(
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         3 => DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(dw, dh, out).expect("rotate_arbitrary: buffer size mismatch"),
+            pillow_rs_image::RgbImage::from_raw(dw, dh, out)
+                .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         4 => DynamicImage::ImageRgba8(
             pillow_rs_image::RgbaImage::from_raw(dw, dh, out)
@@ -710,7 +712,10 @@ pub fn execute_thumbnail(
     // This matches PIL's ImagingReduce then ImagingResample two-step.
     // Skip reducing_gap for modes with alpha (LA, RGBA) to avoid premultiply issues.
     let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest)
-        && !matches!(img.color(), pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::Rgba8);
+        && !matches!(
+            img.color(),
+            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::Rgba8
+        );
     let mut work_img = img.clone();
     if needs_reduce {
         let scale_x = cur_w as f64 / new_w as f64;

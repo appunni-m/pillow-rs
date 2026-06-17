@@ -85,7 +85,7 @@ fn expand_indexed_palette(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Ve
     let num_pixels = (w as u64 * h as u64) as usize;
     match bit_depth {
         BitDepth::One => {
-            let row_bytes = ((w + 7) / 8) as usize;
+            let row_bytes = w.div_ceil(8) as usize;
             let mut pixels = Vec::with_capacity(num_pixels);
             for row in 0..h as usize {
                 let start = row * row_bytes;
@@ -98,7 +98,7 @@ fn expand_indexed_palette(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Ve
             pixels
         }
         BitDepth::Two => {
-            let row_bytes = ((w * 2 + 7) / 8) as usize;
+            let row_bytes = (w * 2).div_ceil(8) as usize;
             let mut pixels = Vec::with_capacity(num_pixels);
             for row in 0..h as usize {
                 let start = row * row_bytes;
@@ -111,7 +111,7 @@ fn expand_indexed_palette(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Ve
             pixels
         }
         BitDepth::Four => {
-            let row_bytes = ((w * 4 + 7) / 8) as usize;
+            let row_bytes = (w * 4).div_ceil(8) as usize;
             let mut pixels = Vec::with_capacity(num_pixels);
             for row in 0..h as usize {
                 let start = row * row_bytes;
@@ -139,7 +139,7 @@ fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<D
         }
         BitDepth::Two => {
             // 2-bit: each byte holds 4 pixels (2 bits each, MSB first)
-            let row_bytes = ((w * 2 + 7) / 8) as usize;
+            let row_bytes = (w * 2).div_ceil(8) as usize;
             let mut pixels = Vec::with_capacity(num_pixels);
             for row in 0..h as usize {
                 let start = row * row_bytes;
@@ -148,14 +148,14 @@ fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<D
                     let shift = 6 - ((col % 4) * 2);
                     let val = (byte >> shift) & 3;
                     // Scale 0..3 to 0..255
-                    pixels.push((val * 255 / 3) as u8);
+                    pixels.push((val * 255 / 3));
                 }
             }
             Some(DecodedImage::new(w, h, pixels, ColorType::L8))
         }
         BitDepth::Four => {
             // 4-bit: each byte holds 2 pixels (high nibble first, MSB-first)
-            let row_bytes = ((w * 4 + 7) / 8) as usize;
+            let row_bytes = (w * 4).div_ceil(8) as usize;
             let mut pixels = Vec::with_capacity(num_pixels);
             for row in 0..h as usize {
                 let start = row * row_bytes;
@@ -163,7 +163,7 @@ fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<D
                     let byte = buf.get(start + col / 2).copied().unwrap_or(0);
                     let val = if col % 2 == 0 { byte >> 4 } else { byte & 0x0F };
                     // Scale 0..15 to 0..255
-                    pixels.push((val * 255 / 15) as u8);
+                    pixels.push((val * 255 / 15));
                 }
             }
             Some(DecodedImage::new(w, h, pixels, ColorType::L8))

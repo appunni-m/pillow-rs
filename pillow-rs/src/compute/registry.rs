@@ -70,7 +70,6 @@ macro_rules! simd_entry {
 }
 
 pub(crate) use gpu_entry;
-pub(crate) use simd_entry;
 
 static REGISTRY: OnceLock<HashMap<&'static str, OpEntry>> = OnceLock::new();
 
@@ -755,7 +754,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         }
 
         // ── GaussianBlur: sigma ──
-        PipelineOp::GaussianBlur { sigma } => vec![(*sigma as f32).to_bits()],
+        PipelineOp::GaussianBlur { sigma } => vec![(*sigma).to_bits()],
 
         // ── Autocontrast: cutoff ──
         PipelineOp::Autocontrast { cutoff } => vec![(*cutoff as f32).to_bits()],
@@ -825,9 +824,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     };
     use crate::compute::pool_cpu::ops::filter::{
         execute_box_blur, execute_filter3x3, execute_filter5x5, execute_gaussian_blur,
-        execute_max_filter, execute_max_filter_with_mode, execute_median_filter,
-        execute_median_filter_with_mode, execute_min_filter, execute_min_filter_with_mode,
-        execute_rank_filter, execute_rank_filter_with_mode,
+        execute_max_filter_with_mode, execute_median_filter_with_mode,
+        execute_min_filter_with_mode, execute_rank_filter_with_mode,
     };
     use crate::compute::pool_cpu::ops::geometry::{
         execute_crop, execute_reduce, execute_resize, execute_rotate, execute_thumbnail,

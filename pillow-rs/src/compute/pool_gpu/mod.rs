@@ -317,7 +317,7 @@ impl GpuInner {
         let num_bindings = count_shader_bindings(shader_source);
 
         // Supported: 2-6 binding shaders. 0/1/>6 are invalid.
-        if num_bindings < 2 || num_bindings > 6 {
+        if !(2..=6).contains(&num_bindings) {
             return None;
         }
 
@@ -1062,9 +1062,13 @@ impl BackendImpl for GpuPool {
             // Bypass preserve_mode — use the override color type directly
             match ct {
                 pillow_rs_image::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
-                pillow_rs_image::ColorType::La8 => Ok(DynamicImage::ImageLumaA8(result.to_luma_alpha8())),
+                pillow_rs_image::ColorType::La8 => {
+                    Ok(DynamicImage::ImageLumaA8(result.to_luma_alpha8()))
+                }
                 pillow_rs_image::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
-                pillow_rs_image::ColorType::Rgba8 => Ok(DynamicImage::ImageRgba8(result.to_rgba8())),
+                pillow_rs_image::ColorType::Rgba8 => {
+                    Ok(DynamicImage::ImageRgba8(result.to_rgba8()))
+                }
                 _ => Ok(crate::image::preserve_mode(img, result)),
             }
         } else {

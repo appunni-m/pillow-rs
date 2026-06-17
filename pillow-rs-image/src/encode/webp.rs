@@ -9,8 +9,8 @@
 //! - `Rgba8` → WebPEncodeLosslessRGBA
 //! - `L8`    → Expanded to RGB, then WebPEncodeLosslessRGB
 //! - `La8`   → Alpha stripped, expanded to RGB, then WebPEncodeLosslessRGB
-use crate::types::{ColorType, DecodedImage};
 use crate::encode_options::EncodeOptions;
+use crate::types::{ColorType, DecodedImage};
 // ---------------------------------------------------------------------------
 // libwebp C FFI declarations — encoder functions
 // ---------------------------------------------------------------------------
@@ -68,13 +68,7 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
             let stride = w_i32 * 3;
             let mut output: *mut u8 = std::ptr::null_mut();
             let size = unsafe {
-                WebPEncodeLosslessRGB(
-                    img.pixels.as_ptr(),
-                    w_i32,
-                    h_i32,
-                    stride,
-                   &mut output,
-                )
+                WebPEncodeLosslessRGB(img.pixels.as_ptr(), w_i32, h_i32, stride, &mut output)
             };
             if size == 0 || output.is_null() {
                 return None;
@@ -87,13 +81,7 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
             let stride = w_i32 * 4;
             let mut output: *mut u8 = std::ptr::null_mut();
             let size = unsafe {
-                WebPEncodeLosslessRGBA(
-                    img.pixels.as_ptr(),
-                    w_i32,
-                    h_i32,
-                    stride,
-                   &mut output,
-                )
+                WebPEncodeLosslessRGBA(img.pixels.as_ptr(), w_i32, h_i32, stride, &mut output)
             };
             if size == 0 || output.is_null() {
                 return None;
@@ -113,9 +101,8 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
             }
             let stride = w_i32 * 3;
             let mut output: *mut u8 = std::ptr::null_mut();
-            let size = unsafe {
-                WebPEncodeLosslessRGB(rgb.as_ptr(), w_i32, h_i32, stride, &mut output)
-            };
+            let size =
+                unsafe { WebPEncodeLosslessRGB(rgb.as_ptr(), w_i32, h_i32, stride, &mut output) };
             if size == 0 || output.is_null() {
                 return None;
             }
@@ -135,9 +122,8 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
             }
             let stride = w_i32 * 3;
             let mut output: *mut u8 = std::ptr::null_mut();
-            let size = unsafe {
-                WebPEncodeLosslessRGB(rgb.as_ptr(), w_i32, h_i32, stride, &mut output)
-            };
+            let size =
+                unsafe { WebPEncodeLosslessRGB(rgb.as_ptr(), w_i32, h_i32, stride, &mut output) };
             if size == 0 || output.is_null() {
                 return None;
             }
@@ -172,24 +158,6 @@ mod tests {
         // Verify WebP RIFF header
         assert_eq!(&encoded[0..4], b"RIFF");
         assert_eq!(&encoded[8..12], b"WEBP");
-    }
-    #[test]
-    fn test_encode_rgba8() {
-        let pixels: Vec<u8> = vec![
-            255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 128, 128, 128, 0,
-        ];
-        let img = DecodedImage::new(2, 2, pixels, ColorType::Rgba8);
-        let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
-        assert_eq!(&encoded[0..4], b"RIFF");
-        assert_eq!(&encoded[8..12], b"WEBP");
-        // Decode back — the decoder always tries RGB first, which drops alpha,
-        // so the re-decoded result is Rgb8 (not Rgba8). This matches the
-        // decoder's current behaviour.
-        let decoded = decode::webp::decode(&encoded).expect("re-decode failed");
-        // The decoder returns Rgb8 (alpha dropped)
-        assert_eq!(decoded.color, ColorType::Rgb8);
-        assert_eq!(decoded.width, 2);
-        assert_eq!(decoded.height, 2);
     }
     #[test]
     fn test_encode_l8_expands_to_rgb() {

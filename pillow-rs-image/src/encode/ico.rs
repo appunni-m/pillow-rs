@@ -4,8 +4,8 @@
 //! 32-bit BGRA entry, wrapping the pixel data in a BITMAPINFOHEADER + AND
 //! mask. Supports RGBA8 (4 bytes/pixel), RGB8 (converts to RGBA), and L8
 //! (converts to RGBA).
-use crate::types::{ColorType, DecodedImage};
 use crate::encode_options::EncodeOptions;
+use crate::types::{ColorType, DecodedImage};
 /// Encode a `DecodedImage` as an ICO file (single 32-bit BGRA entry).
 ///
 /// The output is a valid ICO container with one directory entry pointing to
@@ -41,7 +41,7 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     let row_bytes = w * 4;
     let pixel_data_size = row_bytes * h;
     // AND mask: 1 bit per pixel, each row padded to 4-byte boundary
-    let and_mask_row_bytes = ((w + 31) / 32) * 4;
+    let and_mask_row_bytes = w.div_ceil(32) * 4;
     let and_mask_size = and_mask_row_bytes * h;
     // ICO BMP data: DIB header + pixels + AND mask
     let bmp_data_size = dib_header_size as usize + pixel_data_size + and_mask_size;
@@ -51,8 +51,8 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     data.extend_from_slice(&[0u8; 2]); // reserved
     data.extend_from_slice(&1u16.to_le_bytes()); // type = ICO (1)
     data.extend_from_slice(&1u16.to_le_bytes()); // count = 1
-    // --- Directory entry (16 bytes) ---
-    // Width/height: 0 means 256; otherwise actual value
+                                                 // --- Directory entry (16 bytes) ---
+                                                 // Width/height: 0 means 256; otherwise actual value
     if w == 256 {
         data.push(0);
     } else {
@@ -69,10 +69,10 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     data.extend_from_slice(&32u16.to_le_bytes()); // bits per pixel
     data.extend_from_slice(&(bmp_data_size as u32).to_le_bytes()); // size of BMP data
     data.extend_from_slice(&(data_offset as u32).to_le_bytes()); // offset of BMP data
-    // --- BMP data: BITMAPINFOHEADER (40 bytes) ---
+                                                                 // --- BMP data: BITMAPINFOHEADER (40 bytes) ---
     data.extend_from_slice(&dib_header_size.to_le_bytes()); // biSize
     data.extend_from_slice(&(w as u32).to_le_bytes()); // biWidth
-    // ICO convention: height is doubled to include AND mask rows
+                                                       // ICO convention: height is doubled to include AND mask rows
     data.extend_from_slice(&((h as u32) * 2).to_le_bytes()); // biHeight
     data.extend_from_slice(&1u16.to_le_bytes()); // biPlanes
     data.extend_from_slice(&32u16.to_le_bytes()); // biBitCount
@@ -82,7 +82,7 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     data.extend_from_slice(&0i32.to_le_bytes()); // biYPelsPerMeter
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
-    // --- Pixel data (bottom-up BGRA) ---
+                                                 // --- Pixel data (bottom-up BGRA) ---
     for y in (0..h).rev() {
         let row_start = y * row_bytes;
         data.extend_from_slice(&bgra[row_start..row_start + row_bytes]);
@@ -202,7 +202,7 @@ mod tests {
         ico.extend_from_slice(&[0u8; 2]); // reserved
         ico.extend_from_slice(&1u16.to_le_bytes()); // type = ICO
         ico.extend_from_slice(&1u16.to_le_bytes()); // count = 1
-        // Directory entry
+                                                    // Directory entry
         ico.push(2); // width
         ico.push(2); // height
         ico.push(0); // colors
@@ -223,14 +223,14 @@ mod tests {
         bmp_data.extend_from_slice(&0u32.to_le_bytes()); // y pels
         bmp_data.extend_from_slice(&0u32.to_le_bytes()); // colors used
         bmp_data.extend_from_slice(&0u32.to_le_bytes()); // important colors
-        // Pixel data (32-bit BGRA, bottom-up)
-        // Row 1 (bottom): BGRA blue(0,0,255,255), white(255,255,255,255)
+                                                         // Pixel data (32-bit BGRA, bottom-up)
+                                                         // Row 1 (bottom): BGRA blue(0,0,255,255), white(255,255,255,255)
         bmp_data.extend_from_slice(&[255, 0, 0, 255]); // blue in BGRA
         bmp_data.extend_from_slice(&[255, 255, 255, 255]); // white in BGRA
-        // Row 0 (top): BGRA red(255,0,0,255), green(0,255,0,255)
+                                                           // Row 0 (top): BGRA red(255,0,0,255), green(0,255,0,255)
         bmp_data.extend_from_slice(&[0, 0, 255, 255]); // red in BGRA
         bmp_data.extend_from_slice(&[0, 255, 0, 255]); // green in BGRA
-        // AND mask (all zeros)
+                                                       // AND mask (all zeros)
         bmp_data.extend_from_slice(&[0u8; 8]); // 2 rows * 4 bytes padding
         let data_size = bmp_data.len();
         ico.extend_from_slice(&(data_size as u32).to_le_bytes());

@@ -186,7 +186,11 @@ impl Image {
                 pal[1] = color.1;
                 pal[2] = color.2;
                 return Ok(Image::Paletted(PalettedData {
-                    indices: pillow_rs_image::GrayImage::from_pixel(width, height, pillow_rs_image::Luma([0u8])),
+                    indices: pillow_rs_image::GrayImage::from_pixel(
+                        width,
+                        height,
+                        pillow_rs_image::Luma([0u8]),
+                    ),
                     palette: pal,
                 }));
             }
@@ -423,18 +427,15 @@ impl Image {
             Image::Loaded(img, _) => Ok(img.clone()),
             Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
             Image::Path { path, .. } => {
-                let file_data =
-                    std::fs::read(path).map_err(|e| PilError::Io(e))?;
-                let decoded = pillow_rs_image::decode(&file_data).ok_or_else(|| {
-                    PilError::UnidentifiedImageError(path.display().to_string())
-                })?;
+                let file_data = std::fs::read(path).map_err(PilError::Io)?;
+                let decoded = pillow_rs_image::decode(&file_data)
+                    .ok_or_else(|| PilError::UnidentifiedImageError(path.display().to_string()))?;
                 DynamicImage::from_decoded(&decoded)
                     .ok_or_else(|| PilError::ValueError("decode buffer error".into()))
             }
             Image::Bytes { data, .. } => {
-                let decoded = pillow_rs_image::decode(data).ok_or_else(|| {
-                    PilError::UnidentifiedImageError("unknown format".into())
-                })?;
+                let decoded = pillow_rs_image::decode(data)
+                    .ok_or_else(|| PilError::UnidentifiedImageError("unknown format".into()))?;
                 DynamicImage::from_decoded(&decoded)
                     .ok_or_else(|| PilError::ValueError("decode buffer error".into()))
             }
@@ -1045,14 +1046,16 @@ impl Image {
     pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
         match self.paletted_to_rgb() {
             Some(img) => {
-                let encoded = pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
-                    .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
+                let encoded =
+                    pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
+                        .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
                 Ok(encoded)
             }
             None => {
                 let img = self.materialize()?;
-                let encoded = pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
-                    .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
+                let encoded =
+                    pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
+                        .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
                 Ok(encoded)
             }
         }
@@ -1089,15 +1092,18 @@ impl Image {
     /// Convert Paletted image to RGB for rendering/saving. Returns None for non-Paletted.
     pub(crate) fn paletted_to_rgb(&self) -> Option<DynamicImage> {
         if let Image::Paletted(data) = self {
-            let rgb =
-                pillow_rs_image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
+            let rgb = pillow_rs_image::RgbImage::from_fn(
+                data.indices.width(),
+                data.indices.height(),
+                |x, y| {
                     let idx = data.indices.get_pixel(x, y)[0] as usize;
                     let p = idx * 3;
                     let r = data.palette.get(p).copied().unwrap_or(0);
                     let g = data.palette.get(p + 1).copied().unwrap_or(0);
                     let b = data.palette.get(p + 2).copied().unwrap_or(0);
                     pillow_rs_image::Rgb([r, g, b])
-                });
+                },
+            );
             Some(DynamicImage::ImageRgb8(rgb))
         } else {
             None
@@ -1193,7 +1199,9 @@ impl Image {
                 }
                 Ok(out)
             }
-            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 | pillow_rs_image::ColorType::Rgb32F => {
+            pillow_rs_image::ColorType::Rgb8
+            | pillow_rs_image::ColorType::Rgb16
+            | pillow_rs_image::ColorType::Rgb32F => {
                 let rgb = img.to_rgb8();
                 Ok(rgb.into_raw())
             }
@@ -1627,7 +1635,8 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
             let (w, h) = rgba.dimensions();
             let luma: Vec<u8> = rgba.pixels().map(|px| px[0]).collect();
             DynamicImage::ImageLuma8(
-                pillow_rs_image::GrayImage::from_raw(w, h, luma).unwrap_or_else(|| result.to_luma8()),
+                pillow_rs_image::GrayImage::from_raw(w, h, luma)
+                    .unwrap_or_else(|| result.to_luma8()),
             )
         }
         pillow_rs_image::ColorType::La8 => {

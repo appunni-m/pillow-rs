@@ -4,8 +4,8 @@
 //! - `L8`: raw palette indices with a grayscale palette
 //! - `Rgb8`: quantized to a 256-color palette
 //! - `Rgba8`: quantized to a 256-color palette plus transparency
-use crate::types::{ColorType, DecodedImage};
 use crate::encode_options::EncodeOptions;
+use crate::types::{ColorType, DecodedImage};
 use gif::{Encoder, Frame, Repeat};
 /// Encode a `DecodedImage` as GIF bytes.
 ///
@@ -75,14 +75,18 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
         }
         _ => None,
     };
-    if _result.is_some() { Some(buf) } else { None }
+    if _result.is_some() {
+        Some(buf)
+    } else {
+        None
+    }
 }
 /// Quantize RGB8 pixels to a palette (max 256 colors).
 ///
 /// Returns `(palette, indices)` where palette is a flat vec of RGB triplets
 /// and indices are the per-pixel palette index values.
 fn quantize_rgb(pixels: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
-    if pixels.len() % 3 != 0 {
+    if !pixels.len().is_multiple_of(3) {
         return None;
     }
     let mut palette: Vec<[u8; 3]> = Vec::new();
@@ -172,7 +176,10 @@ fn find_color(palette: &[[u8; 3]], color: &[u8; 3]) -> Option<usize> {
 }
 /// Find a color in the palette starting from `start` offset.
 fn find_color_in_range(palette: &[[u8; 3]], start: usize, color: &[u8; 3]) -> Option<usize> {
-    palette[start..].iter().position(|c| c == color).map(|i| i + start)
+    palette[start..]
+        .iter()
+        .position(|c| c == color)
+        .map(|i| i + start)
 }
 /// Find the nearest color in the palette by Euclidean distance.
 fn find_nearest(palette: &[[u8; 3]], color: &[u8; 3]) -> usize {
@@ -270,8 +277,8 @@ mod tests {
         let mut buf = Vec::new();
         // Create a grayscale palette: 4 colors
         let palette: Vec<u8> = vec![
-            0, 0, 0,       // black
-            85, 85, 85,    // dark gray
+            0, 0, 0, // black
+            85, 85, 85, // dark gray
             170, 170, 170, // light gray
             255, 255, 255, // white
         ];

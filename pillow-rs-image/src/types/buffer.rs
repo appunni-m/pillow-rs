@@ -699,11 +699,13 @@ where
     #[track_caller]
     pub fn get_pixel(&self, x: u32, y: u32) -> &P {
         match self.pixel_indices(x, y) {
-            None => panic!(
-                "Image index {:?} out of bounds {:?}",
-                (x, y),
-                (self.width, self.height)
-            ),
+            None => {
+                panic!(
+                    "Image index {:?} out of bounds {:?}",
+                    (x, y),
+                    (self.width, self.height)
+                )
+            }
             Some(pixel_indices) => <P as Pixel>::from_slice(&self.data[pixel_indices]),
         }
     }
@@ -803,11 +805,13 @@ where
     #[track_caller]
     pub fn get_pixel_mut(&mut self, x: u32, y: u32) -> &mut P {
         match self.pixel_indices(x, y) {
-            None => panic!(
-                "Image index {:?} out of bounds {:?}",
-                (x, y),
-                (self.width, self.height)
-            ),
+            None => {
+                panic!(
+                    "Image index {:?} out of bounds {:?}",
+                    (x, y),
+                    (self.width, self.height)
+                )
+            }
             Some(pixel_indices) => <P as Pixel>::from_slice_mut(&mut self.data[pixel_indices]),
         }
     }

@@ -3,7 +3,9 @@
 use crate::error::PilError;
 use crate::image::{preserve_mode, Image};
 use crate::pipeline::{ColorMode, ResampleFilter, TransformMethod};
-use pillow_rs_image::{DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use pillow_rs_image::{
+    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
+};
 use std::sync::Arc;
 
 // ── glibc-compatible PRNG ────────────────────────────────────────────────
@@ -125,24 +127,20 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     // Reconstruct DynamicImage from the output pixel data
     let result = match stride {
         1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
-                PilError::ValueError("effect_spread buffer error".into())
-            })?,
+            GrayImage::from_raw(w as u32, h as u32, out_pixels)
+                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
         2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
-                PilError::ValueError("effect_spread buffer error".into())
-            })?,
+            GrayAlphaImage::from_raw(w as u32, h as u32, out_pixels)
+                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
         3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
-                PilError::ValueError("effect_spread buffer error".into())
-            })?,
+            RgbImage::from_raw(w as u32, h as u32, out_pixels)
+                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
         _ => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(w as u32, h as u32, out_pixels).ok_or_else(|| {
-                PilError::ValueError("effect_spread buffer error".into())
-            })?,
+            RgbaImage::from_raw(w as u32, h as u32, out_pixels)
+                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
         ),
     };
     Ok(result)
@@ -842,7 +840,11 @@ pub fn op_put_pixel(
             Ok(DynamicImage::ImageRgb8(rgb))
         }
         DynamicImage::ImageRgba8(mut rgba) => {
-            rgba.put_pixel(x, y, pillow_rs_image::Rgba([color.0, color.1, color.2, color.3]));
+            rgba.put_pixel(
+                x,
+                y,
+                pillow_rs_image::Rgba([color.0, color.1, color.2, color.3]),
+            );
             Ok(DynamicImage::ImageRgba8(rgba))
         }
         _ => Err(PilError::NotImplementedError(

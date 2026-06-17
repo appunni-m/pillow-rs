@@ -328,7 +328,7 @@ fn _precompute_coeffs_impl(
 
         // Convert to fixed-point: (int)(weight * (1 << PRECISION_BITS) + (weight >= 0 ? 0.5 : -0.5))
         // PIL uses different rounding for positive and negative weights.
-        let mut w_fixed: Vec<i64> = w_f64
+        let w_fixed: Vec<i64> = w_f64
             .iter()
             .map(|&w| {
                 let scaled = w * PRECISION as f64;
@@ -523,7 +523,10 @@ pub fn pil_resize(
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !is_cmyk
         && !is_fi
-        && matches!(img.color(), pillow_rs_image::ColorType::Rgba8 | pillow_rs_image::ColorType::La8);
+        && matches!(
+            img.color(),
+            pillow_rs_image::ColorType::Rgba8 | pillow_rs_image::ColorType::La8
+        );
     let work = if needs_alpha {
         premultiply_alpha(img)
     } else {

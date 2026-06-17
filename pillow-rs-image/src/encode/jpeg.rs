@@ -18,21 +18,39 @@ pub fn encode(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>> {
     match img.color {
         ColorType::Rgb8 => {
             let enc = jpeg_encoder::Encoder::new(&mut buf, quality);
-            enc.encode(&img.pixels, w as u16, h as u16, jpeg_encoder::ColorType::Rgb).ok()?;
+            enc.encode(
+                &img.pixels,
+                w as u16,
+                h as u16,
+                jpeg_encoder::ColorType::Rgb,
+            )
+            .ok()?;
         }
         ColorType::L8 => {
             let enc = jpeg_encoder::Encoder::new(&mut buf, quality);
-            enc.encode(&img.pixels, w as u16, h as u16, jpeg_encoder::ColorType::Luma).ok()?;
+            enc.encode(
+                &img.pixels,
+                w as u16,
+                h as u16,
+                jpeg_encoder::ColorType::Luma,
+            )
+            .ok()?;
         }
         ColorType::Rgba8 => {
-            let rgb: Vec<u8> = img.pixels.chunks_exact(4).flat_map(|c| c[0..3].iter().copied()).collect();
+            let rgb: Vec<u8> = img
+                .pixels
+                .chunks_exact(4)
+                .flat_map(|c| c[0..3].iter().copied())
+                .collect();
             let enc = jpeg_encoder::Encoder::new(&mut buf, quality);
-            enc.encode(&rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb).ok()?;
+            enc.encode(&rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb)
+                .ok()?;
         }
         ColorType::La8 => {
             let gray: Vec<u8> = img.pixels.chunks_exact(2).map(|c| c[0]).collect();
             let enc = jpeg_encoder::Encoder::new(&mut buf, quality);
-            enc.encode(&gray, w as u16, h as u16, jpeg_encoder::ColorType::Luma).ok()?;
+            enc.encode(&gray, w as u16, h as u16, jpeg_encoder::ColorType::Luma)
+                .ok()?;
         }
         _ => return None,
     }

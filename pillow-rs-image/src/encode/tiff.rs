@@ -2,8 +2,8 @@
 //!
 //! Supports L8 (Grayscale 8-bit), Rgb8 (RGB 24-bit), and Rgba8 (RGBA 32-bit)
 //! color types. Uses uncompressed encoding for maximum compatibility.
-use crate::types::{ColorType, DecodedImage};
 use crate::encode_options::EncodeOptions;
+use crate::types::{ColorType, DecodedImage};
 use std::io::Cursor;
 use tiff::encoder::{colortype, TiffEncoder};
 /// Encode a `DecodedImage` as TIFF bytes.
@@ -78,9 +78,7 @@ mod tests {
     }
     #[test]
     fn test_encode_rgb8_from_pixels() {
-        let pixels: Vec<u8> = vec![
-            255, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128,
-        ];
+        let pixels: Vec<u8> = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128];
         let img = DecodedImage::new(2, 2, pixels.clone(), ColorType::Rgb8);
         let encoded = encode(&img, &EncodeOptions::default()).expect("encode should succeed");
         let decoded = decode::tiff::decode(&encoded).expect("re-decode should succeed");
@@ -117,7 +115,7 @@ mod tests {
         tiff.write_image::<colortype::RGB8>(
             2,
             2,
-           &[
+            &[
                 255, 0, 0, // red
                 0, 255, 0, // green
                 0, 0, 255, // blue
