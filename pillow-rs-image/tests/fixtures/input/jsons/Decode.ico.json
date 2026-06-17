@@ -4,5 +4,26 @@
     "module": "Decode",
     "target": "ico"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_ico_single_ico",
+      "mode": "RGB",
+      "asset": "ico/single.ico"
+    },
+    {
+      "id": "Decode_ico_multi_ico",
+      "mode": "RGB",
+      "asset": "ico/multi.ico"
+    },
+    {
+      "id": "Decode_ico_png_entry_ico",
+      "mode": "RGBA",
+      "asset": "ico/png_entry.ico"
+    },
+    {
+      "id": "Decode_ico_16x16_ico",
+      "mode": "RGB",
+      "asset": "ico/16x16.ico"
+    }
+  ]
 }

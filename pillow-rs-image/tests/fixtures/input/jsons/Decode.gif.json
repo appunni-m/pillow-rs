@@ -4,5 +4,31 @@
     "module": "Decode",
     "target": "gif"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_gif_static_gif",
+      "mode": "P",
+      "asset": "gif/static.gif"
+    },
+    {
+      "id": "Decode_gif_animated_gif",
+      "mode": "P",
+      "asset": "gif/animated.gif"
+    },
+    {
+      "id": "Decode_gif_transparent_gif",
+      "mode": "P",
+      "asset": "gif/transparent.gif"
+    },
+    {
+      "id": "Decode_gif_interlaced_gif",
+      "mode": "P",
+      "asset": "gif/interlaced.gif"
+    },
+    {
+      "id": "Decode_gif_1x1_gif",
+      "mode": "P",
+      "asset": "gif/1x1.gif"
+    }
+  ]
 }

@@ -4,5 +4,61 @@
     "module": "Decode",
     "target": "jpeg"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_jpeg_baseline_444_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/baseline_444.jpg"
+    },
+    {
+      "id": "Decode_jpeg_baseline_422_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/baseline_422.jpg"
+    },
+    {
+      "id": "Decode_jpeg_baseline_420_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/baseline_420.jpg"
+    },
+    {
+      "id": "Decode_jpeg_baseline_gray_jpg",
+      "mode": "L",
+      "asset": "jpeg/baseline_gray.jpg"
+    },
+    {
+      "id": "Decode_jpeg_progressive_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/progressive.jpg"
+    },
+    {
+      "id": "Decode_jpeg_q100_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/q100.jpg"
+    },
+    {
+      "id": "Decode_jpeg_q50_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/q50.jpg"
+    },
+    {
+      "id": "Decode_jpeg_q10_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/q10.jpg"
+    },
+    {
+      "id": "Decode_jpeg_q1_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/q1.jpg"
+    },
+    {
+      "id": "Decode_jpeg_restart_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/restart.jpg"
+    },
+    {
+      "id": "Decode_jpeg_baseline_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/baseline.jpg"
+    }
+  ]
 }

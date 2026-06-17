@@ -1,0 +1,61 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "frombytes"
+  },
+  "cases": [
+    {
+      "id": "Image.frombytes_L",
+      "mode": "L",
+      "input": {
+        "source": "constant",
+        "size": [4, 4],
+        "color": 0
+      },
+      "params": {
+        "data_hex": "000102030405060708090a0b0c0d0e0f",
+        "decoder_name": "raw"
+      }
+    },
+    {
+      "id": "Image.frombytes_LA",
+      "mode": "LA",
+      "input": {
+        "source": "constant",
+        "size": [4, 4],
+        "color": [0, 0]
+      },
+      "params": {
+        "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "decoder_name": "raw"
+      }
+    },
+    {
+      "id": "Image.frombytes_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "constant",
+        "size": [4, 4],
+        "color": [0, 0, 0, 0]
+      },
+      "params": {
+        "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "decoder_name": "raw"
+      }
+    },
+    {
+      "id": "raw_rgb",
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [4, 4],
+        "color": [0, 0, 0]
+      },
+      "params": {
+        "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+        "decoder_name": "raw"
+      }
+    }
+  ]
+}

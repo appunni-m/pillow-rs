@@ -1,0 +1,64 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageModule",
+    "target": "fromarray"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.fromarray_L",
+      "mode": "L",
+      "params": {
+        "mode": "L",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageModule.fromarray_RGB",
+      "mode": "RGB",
+      "params": {
+        "mode": "L",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageModule.fromarray_RGBA",
+      "mode": "RGBA",
+      "params": {
+        "mode": "L",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "L",
+      "input": null,
+      "params": {
+        "mode": "L",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "RGB",
+      "input": null,
+      "params": {
+        "mode": "RGB",
+        "size": [
+          100,
+          100
+        ]
+      }
+    }
+  ]
+}

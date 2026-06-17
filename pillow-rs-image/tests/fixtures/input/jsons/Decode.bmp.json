@@ -4,5 +4,36 @@
     "module": "Decode",
     "target": "bmp"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_bmp_1bit_bmp",
+      "mode": "1",
+      "asset": "bmp/1bit.bmp"
+    },
+    {
+      "id": "Decode_bmp_8bit_bmp",
+      "mode": "P",
+      "asset": "bmp/8bit.bmp"
+    },
+    {
+      "id": "Decode_bmp_24bit_bmp",
+      "mode": "RGB",
+      "asset": "bmp/24bit.bmp"
+    },
+    {
+      "id": "Decode_bmp_32bit_bmp",
+      "mode": "RGB",
+      "asset": "bmp/32bit.bmp"
+    },
+    {
+      "id": "Decode_bmp_1x1_bmp",
+      "mode": "RGB",
+      "asset": "bmp/1x1.bmp"
+    },
+    {
+      "id": "Decode_bmp_odd_width_bmp",
+      "mode": "RGB",
+      "asset": "bmp/odd_width.bmp"
+    }
+  ]
 }

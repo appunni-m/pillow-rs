@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/appunni/work/pil-wasm && echo '=== Rust Lint ===' && cargo fmt --check 2>&1 | tail -3 && echo '=== Clippy ===' && cargo clippy -p pillow-rs-core 2>&1 | tail -5"
+            "command": "cd /home/appunni/work/pil-wasm && echo '=== Rust Lint ===' && cargo fmt --check 2>&1 | tail -3 && echo '=== Clippy ===' && cargo clippy -p pillow-rs 2>&1 | tail -5"
           }
         ]
       }
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/appunni/work/pil-wasm && if echo \"$ARGUMENTS\" | grep -q 'pillow-rs-core/src\\|pillow-rs-py/src'; then cargo fmt 2>&1 | tail -1; fi"
+            "command": "cd /home/appunni/work/pil-wasm && if echo \"$ARGUMENTS\" | grep -q 'pillow-rs/src\\|pillow-rs-py/src'; then cargo fmt 2>&1 | tail -1; fi"
           }
         ]
       }

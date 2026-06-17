@@ -1,0 +1,81 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "getbands"
+  },
+  "cases": [
+    {
+      "id": "Image_getbands_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_getbands_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_getbands_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_getbands_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_getbands_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_getbands_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    }
+  ]
+}

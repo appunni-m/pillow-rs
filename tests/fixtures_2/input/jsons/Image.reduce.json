@@ -1,0 +1,85 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "reduce"
+  },
+  "cases": [
+    {
+      "id": "Image_reduce_CMYK_suite1",
+      "params": {
+        "factor": 2
+      },
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "Image_reduce_L_suite1",
+      "params": {
+        "factor": 2
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "Image_reduce_LA_suite1",
+      "params": {
+        "factor": 2
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          80,
+          80
+        ]
+      }
+    },
+    {
+      "id": "Image_reduce_RGB_suite1",
+      "params": {
+        "factor": 2
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          64,
+          64
+        ]
+      }
+    },
+    {
+      "id": "Image_reduce_RGBA_suite1",
+      "params": {
+        "factor": 2
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          128,
+          128
+        ]
+      }
+    }
+  ]
+}

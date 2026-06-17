@@ -24,7 +24,7 @@ Single `BENCHMARKS.md` generated every build (pre-commit), showing all `manifest
            │        │         │         │          │         │
            ▼        ▼         ▼         ▼          ▼         ▼
       ┌──────────────────────────────────────────────────────────┐
-      │              pillow-rs-core (shared ops)                 │
+      │              pillow-rs (shared ops)                 │
       │  open, resize, crop, rotate, transpose, thumbnail, ...   │
       └──────────────────────────────────────────────────────────┘
 ```
@@ -141,7 +141,7 @@ target/benchmarks/
 ## File Structure
 
 ```
-pillow-rs-core/
+pillow-rs/
 ├── benches/
 │   ├── native_cpu.rs          # criterion benchmarks (all functions)
 │   └── native_gpu.rs          # wgpu-accelerated benchmarks
@@ -173,7 +173,7 @@ BENCHMARKS.md                  # ← OUTPUT (auto-generated, committed)
 
 ## Shared WGSL Shader Pool
 
-Same WGSL shaders for both native wgpu and WebGPU targets. Stored in `pillow-rs-core/src/gpu/shaders/`. One shader per operation family.
+Same WGSL shaders for both native wgpu and WebGPU targets. Stored in `pillow-rs/src/gpu/shaders/`. One shader per operation family.
 
 ## Pre-Commit Hook
 

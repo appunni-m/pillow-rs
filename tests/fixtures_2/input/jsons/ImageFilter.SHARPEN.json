@@ -1,0 +1,127 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "SHARPEN"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter.SHARPEN_HSV_suite1",
+      "params": {},
+      "mode": "HSV",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter.SHARPEN_YCbCr_suite1",
+      "params": {},
+      "mode": "YCbCr",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_1_suite1",
+      "params": {},
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          80,
+          80
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_CMYK_suite1",
+      "params": {},
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          64,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_I_suite1",
+      "params": {},
+      "mode": "I",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          128,
+          128
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_L_suite1",
+      "params": {},
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          64,
+          128
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_LA_suite1",
+      "params": {},
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          128,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_RGB_suite1",
+      "params": {},
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_RGBA_suite1",
+      "params": {},
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          50,
+          200
+        ]
+      }
+    }
+  ]
+}

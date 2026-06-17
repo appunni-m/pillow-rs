@@ -1,0 +1,75 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageChops",
+    "target": "offset"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_offset_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xoffset": 5,
+        "yoffset": 5
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_offset_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xoffset": 5,
+        "yoffset": 5
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_offset_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xoffset": 5,
+        "yoffset": 5
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    }
+  ]
+}

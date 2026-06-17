@@ -4,5 +4,46 @@
     "module": "Decode",
     "target": "tiff"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_tiff_le_tiff",
+      "mode": "RGB",
+      "asset": "tiff/le.tiff"
+    },
+    {
+      "id": "Decode_tiff_uncompressed_tiff",
+      "mode": "RGB",
+      "asset": "tiff/uncompressed.tiff"
+    },
+    {
+      "id": "Decode_tiff_lzw_tiff",
+      "mode": "RGB",
+      "asset": "tiff/lzw.tiff"
+    },
+    {
+      "id": "Decode_tiff_deflate_tiff",
+      "mode": "RGB",
+      "asset": "tiff/deflate.tiff"
+    },
+    {
+      "id": "Decode_tiff_bilevel_tiff",
+      "mode": "1",
+      "asset": "tiff/bilevel.tiff"
+    },
+    {
+      "id": "Decode_tiff_gray_tiff",
+      "mode": "L",
+      "asset": "tiff/gray.tiff"
+    },
+    {
+      "id": "Decode_tiff_rgb_tiff",
+      "mode": "RGB",
+      "asset": "tiff/rgb.tiff"
+    },
+    {
+      "id": "Decode_tiff_rgba_tiff",
+      "mode": "RGBA",
+      "asset": "tiff/rgba.tiff"
+    }
+  ]
 }

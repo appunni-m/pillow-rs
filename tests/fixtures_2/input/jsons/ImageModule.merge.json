@@ -1,0 +1,178 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "merge"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.merge_L_suite1",
+      "params": {
+        "mode": "RGB",
+        "bands": [
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 255
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 128
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 0
+            }
+          }
+        ]
+      },
+      "mode": "L"
+    },
+    {
+      "id": "ImageModule.merge_LA_suite1",
+      "params": {
+        "mode": "RGB",
+        "bands": [
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 255
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 128
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 0
+            }
+          }
+        ]
+      },
+      "mode": "LA"
+    },
+    {
+      "id": "ImageModule.merge_RGBA_suite1",
+      "params": {
+        "mode": "RGB",
+        "bands": [
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 255
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 128
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 0
+            }
+          }
+        ]
+      },
+      "mode": "RGBA"
+    },
+    {
+      "id": "RGB_from_bands_suite1",
+      "params": {
+        "mode": "RGB",
+        "bands": [
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 255
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 128
+            }
+          },
+          {
+            "band_mode": "L",
+            "input": {
+              "source": "constant",
+              "size": [
+                50,
+                50
+              ],
+              "color": 0
+            }
+          }
+        ]
+      },
+      "mode": "RGB"
+    }
+  ]
+}

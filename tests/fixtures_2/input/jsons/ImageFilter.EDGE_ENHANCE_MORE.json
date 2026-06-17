@@ -1,0 +1,62 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "EDGE_ENHANCE_MORE"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_L_suite1",
+      "params": {},
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_LA_suite1",
+      "params": {},
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_RGB_suite1",
+      "params": {},
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          80,
+          80
+        ]
+      }
+    },
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_RGBA_suite1",
+      "params": {},
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          64,
+          64
+        ]
+      }
+    }
+  ]
+}

@@ -1,13 +1,13 @@
-//! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs-core.
-use pillow_rs_core::bitmap_font;
-use pillow_rs_core::color;
-use pillow_rs_core::draw;
-use pillow_rs_core::image;
-use pillow_rs_core::image::Image as RsImage;
-use pillow_rs_core::ops::{chops, imageops, module_fns};
+//! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs.
+use pillow_rs::bitmap_font;
+use pillow_rs::color;
+use pillow_rs::draw;
+use pillow_rs::image;
+use pillow_rs::image::Image as RsImage;
+use pillow_rs::ops::{chops, imageops, module_fns};
 use wasm_bindgen::prelude::*;
 
-fn err(e: pillow_rs_core::error::PilError) -> JsValue {
+fn err(e: pillow_rs::error::PilError) -> JsValue {
     JsValue::from_str(&e.to_string())
 }
 
@@ -96,7 +96,7 @@ impl Image {
     // Paste
     #[wasm_bindgen(js_name = "pasteImage")]
     pub fn paste_image(&mut self, src: &Image, x: i32, y: i32) -> Result<(), JsValue> {
-        use pillow_rs_core::ops::paste::PasteSource;
+        use pillow_rs::ops::paste::PasteSource;
         self.inner
             .paste(
                 PasteSource::Image(src.inner.clone()),
@@ -117,7 +117,7 @@ impl Image {
         rt: i32,
         bt: i32,
     ) -> Result<(), JsValue> {
-        use pillow_rs_core::ops::paste::PasteSource;
+        use pillow_rs::ops::paste::PasteSource;
         self.inner
             .paste(PasteSource::Color((r, g, b, a)), Some((l, t, rt, bt)), None)
             .map_err(err)
@@ -491,7 +491,7 @@ impl Image {
 }
 
 // ── ImageDraw ────────────────────────────────────────────────────
-use pillow_rs_core::draw::Draw;
+use pillow_rs::draw::Draw;
 
 #[wasm_bindgen]
 pub struct ImageDraw {
@@ -737,7 +737,7 @@ impl ImageDraw {
 }
 
 // ── ImageFont ────────────────────────────────────────────────────
-use pillow_rs_core::font::Font;
+use pillow_rs::font::Font;
 
 #[wasm_bindgen]
 pub struct ImageFont {
@@ -814,7 +814,7 @@ impl ImagePalette {
 // ── ImageStat ────────────────────────────────────────────────────
 #[wasm_bindgen]
 pub struct ImageStat {
-    inner: pillow_rs_core::image::StatResult,
+    inner: pillow_rs::image::StatResult,
 }
 #[wasm_bindgen]
 impl ImageStat {
@@ -823,8 +823,8 @@ impl ImageStat {
         let s = img.inner.stat_formatted().map_err(err)?;
         Ok(ImageStat { inner: s })
     }
-    fn val_to_js(&self, v: &pillow_rs_core::image::StatValue) -> JsValue {
-        use pillow_rs_core::image::StatValue;
+    fn val_to_js(&self, v: &pillow_rs::image::StatValue) -> JsValue {
+        use pillow_rs::image::StatValue;
         match v {
             StatValue::Int(i) => JsValue::from_f64(*i as f64),
             StatValue::Float(f) => JsValue::from_f64(*f),
@@ -900,7 +900,7 @@ impl Image {
     #[wasm_bindgen(js_name = "save")]
     pub fn save(&mut self) -> Result<Vec<u8>, JsValue> {
         // Returns PNG-encoded bytes for download (browser) or fs.writeFile (server).
-        // Uses the image crate's PNG encoder built into pillow-rs-core.
+        // Uses the image crate's PNG encoder built into pillow-rs.
         self.inner.to_png_bytes().map_err(err)
     }
 
@@ -1250,23 +1250,23 @@ pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
 /// Activate a compute backend. Returns true if the backend exists.
 #[wasm_bindgen]
 pub fn enable_backend(name: &str) -> bool {
-    pillow_rs_core::compute::Backend::parse(name)
-        .map(pillow_rs_core::compute::enable_backend)
+    pillow_rs::compute::Backend::parse(name)
+        .map(pillow_rs::compute::enable_backend)
         .unwrap_or(false)
 }
 
 /// Deactivate a compute backend. Returns true if it was active.
 #[wasm_bindgen]
 pub fn disable_backend(name: &str) -> bool {
-    pillow_rs_core::compute::Backend::parse(name)
-        .map(pillow_rs_core::compute::disable_backend)
+    pillow_rs::compute::Backend::parse(name)
+        .map(pillow_rs::compute::disable_backend)
         .unwrap_or(false)
 }
 
 /// List backends that exist on this machine.
 #[wasm_bindgen]
 pub fn available_backends() -> Vec<String> {
-    pillow_rs_core::compute::available_backends()
+    pillow_rs::compute::available_backends()
         .iter()
         .map(|b| format!("{:?}", b).to_lowercase())
         .collect()
@@ -1275,7 +1275,7 @@ pub fn available_backends() -> Vec<String> {
 /// List currently active backends (priority order).
 #[wasm_bindgen]
 pub fn active_backends() -> Vec<String> {
-    pillow_rs_core::compute::active_backends()
+    pillow_rs::compute::active_backends()
         .iter()
         .map(|b| format!("{:?}", b).to_lowercase())
         .collect()
@@ -1284,8 +1284,8 @@ pub fn active_backends() -> Vec<String> {
 /// Check if a specific backend is active.
 #[wasm_bindgen]
 pub fn backend_enabled(name: &str) -> bool {
-    pillow_rs_core::compute::Backend::parse(name)
-        .map(pillow_rs_core::compute::backend_enabled)
+    pillow_rs::compute::Backend::parse(name)
+        .map(pillow_rs::compute::backend_enabled)
         .unwrap_or(false)
 }
 
@@ -1572,8 +1572,7 @@ pub fn radial_gradient(mode: &str) -> Result<Image, JsValue> {
 
 #[wasm_bindgen(js_name = "mergeFn")]
 pub fn merge_fn(mode: &str, bands: Vec<Image>) -> Result<Image, JsValue> {
-    let inner_bands: Vec<pillow_rs_core::image::Image> =
-        bands.iter().map(|b| b.inner.clone()).collect();
+    let inner_bands: Vec<pillow_rs::image::Image> = bands.iter().map(|b| b.inner.clone()).collect();
     module_fns::merge(mode, &inner_bands)
         .map(|i| Image { inner: i })
         .map_err(err)

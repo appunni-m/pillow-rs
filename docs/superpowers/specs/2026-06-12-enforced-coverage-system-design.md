@@ -435,7 +435,7 @@ GPU exclusion list: operations that don't benefit from GPU (font rendering, pale
 set -e
 
 # 1. Run all tests
-cargo test -p pillow-rs-core
+cargo test -p pillow-rs
 pytest tests/ --json-report --json-report-file=/tmp/report.json
 node pillow-rs-js/tests/run.mjs
 

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `pillow-rs-image` — a zero-C-dependency, pixel-perfect image codec crate that replaces the `image` crate in `pillow-rs-core`. Own all types (DynamicImage, GrayImage, RgbImage, RgbaImage), all decoders (JPEG IJG IDCT, PNG/GIF/BMP/TIFF/WebP/ICO/AVIF), and all encoders.
+**Goal:** Build `pillow-rs-image` — a zero-C-dependency, pixel-perfect image codec crate that replaces the `image` crate in `pillow-rs`. Own all types (DynamicImage, GrayImage, RgbImage, RgbaImage), all decoders (JPEG IJG IDCT, PNG/GIF/BMP/TIFF/WebP/ICO/AVIF), and all encoders.
 
-**Architecture:** `pillow-rs-image` owns the type system (matching `image` crate API for drop-in replacement). Decode/encode modules per format. `pillow-rs-core` drops `image` crate dependency and uses `pillow-rs-image` instead. All formats tested against C library reference output (libjpeg, libpng, etc.) via 128+ test cases defined in `manifest.yaml`.
+**Architecture:** `pillow-rs-image` owns the type system (matching `image` crate API for drop-in replacement). Decode/encode modules per format. `pillow-rs` drops `image` crate dependency and uses `pillow-rs-image` instead. All formats tested against C library reference output (libjpeg, libpng, etc.) via 128+ test cases defined in `manifest.yaml`.
 
 **Tech Stack:** Pure Rust, zero C dependencies. IJG DCT_ISLOW IDCT for JPEG. `png`/`gif`/`tiff` crates (MIT, pure Rust) for those formats. Own WebP/BMP/ICO implementations. `zenavif`/`ravif` (feature-gated) for AVIF.
 
@@ -41,9 +41,9 @@
 | `pillow-rs-image/tests/decode_tests.rs` | Auto-discovered decode tests from manifest |
 | `pillow-rs-image/tests/encode_tests.rs` | Encode roundtrip tests |
 | `pillow-rs-image/scripts/generate_decode_refs.py` | Generate reference .bin from PIL |
-| `pillow-rs-core/src/image.rs` | Replace `image::open` with `pillow_rs_image::decode` |
-| `pillow-rs-core/Cargo.toml` | Drop `image` dep, add `pillow-rs-image` |
-| 23 files in `pillow-rs-core/src/` | Replace `use image::*` with `use pillow_rs_image::*` |
+| `pillow-rs/src/image.rs` | Replace `image::open` with `pillow_rs_image::decode` |
+| `pillow-rs/Cargo.toml` | Drop `image` dep, add `pillow-rs-image` |
+| 23 files in `pillow-rs/src/` | Replace `use image::*` with `use pillow_rs_image::*` |
 
 ---
 
@@ -844,7 +844,7 @@ git commit -m "feat(jpeg): Huffman decoder, marker parser, bit reader"
 - Modify: `pillow-rs-image/src/decode/jpeg.rs`
 - Create: `pillow-rs-image/test-assets/input/jpeg/baseline.jpg` (small 8×8 JPEG)
 
-Due to length, remaining tasks (JPEG decode pipeline, other format decoders, encoders, integration with pillow-rs-core) continue in the same pattern. Each task: write failing test → implement → verify → commit.
+Due to length, remaining tasks (JPEG decode pipeline, other format decoders, encoders, integration with pillow-rs) continue in the same pattern. Each task: write failing test → implement → verify → commit.
 
 ### Task 7: Reference Generation Script
 
@@ -1035,7 +1035,7 @@ git commit -m "test: fixture-based decode test runner"
 | 16 | ICO: wrap BMP/PNG, 6 reference tests | P1 |
 | 17 | AVIF: feature-gated `zenavif`, 6 reference tests | P2 |
 | 18 | Encode: all format encoders | P1 |
-| 19 | Integration: replace `image` crate in pillow-rs-core | P0 |
+| 19 | Integration: replace `image` crate in pillow-rs | P0 |
 | 20 | Full parity test suite (778+ tests) | P0 |
 | 21 | WASM build verification | P2 |
 

@@ -1,0 +1,87 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "open"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.open_1_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "1"
+    },
+    {
+      "id": "ImageModule.open_CMYK_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "CMYK"
+    },
+    {
+      "id": "ImageModule.open_F_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "F"
+    },
+    {
+      "id": "ImageModule.open_HSV_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "HSV"
+    },
+    {
+      "id": "ImageModule.open_I_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "I"
+    },
+    {
+      "id": "ImageModule.open_L_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "L"
+    },
+    {
+      "id": "ImageModule.open_LA_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "LA"
+    },
+    {
+      "id": "ImageModule.open_P_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "P"
+    },
+    {
+      "id": "ImageModule.open_RGBA_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "RGBA"
+    },
+    {
+      "id": "ImageModule.open_YCbCr_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "YCbCr"
+    },
+    {
+      "id": "rgb_10x10_suite1",
+      "params": {
+        "suffix": ".png"
+      },
+      "mode": "RGB"
+    }
+  ]
+}

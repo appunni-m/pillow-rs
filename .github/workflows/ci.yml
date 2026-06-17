@@ -16,7 +16,7 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo test -p pillow-rs-core
+      - run: cargo test -p pillow-rs
 
   python-tests:
     needs: core-tests

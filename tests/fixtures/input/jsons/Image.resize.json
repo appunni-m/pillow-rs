@@ -1,0 +1,179 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "resize"
+  },
+  "cases": [
+    {
+      "id": "Image_resize_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_CMYK",
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_HSV",
+      "mode": "HSV",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_I",
+      "mode": "I",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_resize_YCbCr",
+      "mode": "YCbCr",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": [
+          50,
+          50
+        ]
+      }
+    }
+  ]
+}

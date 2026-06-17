@@ -1,0 +1,25 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "get_variation_axes"
+  },
+  "cases": [
+    {
+      "id": "non_variable_font_suite1",
+      "params": {},
+      "mode": "RGB"
+    },
+    {
+      "id": "get_variation_axes_L_suite1",
+      "params": {},
+      "mode": "L"
+    },
+    {
+      "id": "get_variation_axes_RGBA_suite1",
+      "params": {},
+      "mode": "RGBA"
+    }
+  ]
+}

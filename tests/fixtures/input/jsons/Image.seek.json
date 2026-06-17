@@ -1,0 +1,107 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "seek"
+  },
+  "cases": [
+    {
+      "id": "Image_seek_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    },
+    {
+      "id": "Image_seek_CMYK",
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    },
+    {
+      "id": "Image_seek_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    },
+    {
+      "id": "Image_seek_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    },
+    {
+      "id": "Image_seek_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    },
+    {
+      "id": "Image_seek_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    },
+    {
+      "id": "Image_seek_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "frame": 0
+      }
+    }
+  ]
+}

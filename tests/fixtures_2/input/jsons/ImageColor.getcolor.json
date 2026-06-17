@@ -1,0 +1,26 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageColor",
+    "target": "getcolor"
+  },
+  "cases": [
+    {
+      "id": "ImageColor_getcolor_L_suite1",
+      "params": {
+        "color": "red",
+        "mode": "RGB"
+      },
+      "mode": "L"
+    },
+    {
+      "id": "ImageColor_getcolor_RGB_suite1",
+      "params": {
+        "color": "red",
+        "mode": "RGB"
+      },
+      "mode": "RGB"
+    }
+  ]
+}

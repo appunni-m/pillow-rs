@@ -1,0 +1,72 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageChops",
+    "target": "constant"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_constant_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "value": 128
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_constant_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "value": 128
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_constant_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "value": 128
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    }
+  ]
+}

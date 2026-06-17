@@ -1,0 +1,21 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "tobitmap"
+  },
+  "cases": [
+    {
+      "id": "Image_tobitmap_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    }
+  ]
+}

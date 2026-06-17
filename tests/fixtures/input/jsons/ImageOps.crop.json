@@ -1,0 +1,65 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageOps",
+    "target": "crop"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_crop_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "border": 5
+      }
+    },
+    {
+      "id": "ImageOps_crop_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "border": 5
+      }
+    },
+    {
+      "id": "ImageOps_crop_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "border": 5
+      }
+    },
+    {
+      "id": "ImageOps_crop_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "border": 5
+      }
+    }
+  ]
+}

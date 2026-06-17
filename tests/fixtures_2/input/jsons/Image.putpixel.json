@@ -1,0 +1,133 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "putpixel"
+  },
+  "cases": [
+    {
+      "id": "Image_putpixel_1_suite1",
+      "params": {
+        "xy": [
+          50,
+          50
+        ],
+        "value": 255
+      },
+      "mode": "1",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 1
+      }
+    },
+    {
+      "id": "Image_putpixel_L_suite1",
+      "params": {
+        "xy": [
+          50,
+          50
+        ],
+        "value": 255
+      },
+      "mode": "L",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "Image_putpixel_LA_suite1",
+      "params": {
+        "xy": [
+          50,
+          50
+        ],
+        "value": 255
+      },
+      "mode": "LA",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "Image_putpixel_P_suite1",
+      "params": {
+        "xy": [
+          50,
+          50
+        ],
+        "value": 255
+      },
+      "mode": "P",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 0
+      }
+    },
+    {
+      "id": "Image_putpixel_RGB_suite1",
+      "params": {
+        "xy": [
+          50,
+          50
+        ],
+        "value": 255
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [
+          32,
+          32
+        ],
+        "color": [
+          100,
+          150,
+          200
+        ]
+      }
+    },
+    {
+      "id": "Image_putpixel_RGBA_suite1",
+      "params": {
+        "xy": [
+          50,
+          50
+        ],
+        "value": 255
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": [
+          100,
+          150,
+          200,
+          200
+        ]
+      }
+    }
+  ]
+}

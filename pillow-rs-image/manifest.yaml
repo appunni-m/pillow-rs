@@ -1,612 +1,804 @@
-# pillow-rs-image manifest — single source of truth for format support
-# Every entry maps to a test that loads an image file and compares decoded
-# pixels byte-for-byte against C library reference output (libjpeg, libpng, etc.)
-
 version: 0.1.0
-
 formats:
   jpeg:
     name: JPEG
-    extensions: [.jpg, .jpeg]
-    magic: [0xFF, 0xD8]
-    decoder: own  # IJG DCT_ISLOW IDCT
+    extensions:
+    - .jpg
+    - .jpeg
+    magic:
+    - 255
+    - 216
+    decoder: own
     encoder: jpeg-encoder crate (pure Rust baseline DCT)
     status: in-progress
     edge_cases:
-      # Color subsampling
-      - id: subsampling_444
-        description: 4:4:4 chroma subsampling (no subsampling)
-        test_assets: [baseline_444.jpg]
-      - id: subsampling_422
-        description: 4:2:2 horizontal chroma subsampling
-        test_assets: [baseline_422.jpg]
-      - id: subsampling_420
-        description: 4:2:0 chroma subsampling (most common)
-        test_assets: [baseline_420.jpg]
-      - id: subsampling_411
-        description: 4:1:1 chroma subsampling
-        test_assets: [baseline_411.jpg]
-      - id: subsampling_gray
-        description: Grayscale (no chroma components)
-        test_assets: [baseline_gray.jpg]
-
-      # Color modes
-      - id: color_ycbcr
-        description: YCbCr color space (standard)
-        test_assets: [baseline_ycbcr.jpg]
-      - id: color_rgb
-        description: RGB color space (rare, Adobe)
-        test_assets: [baseline_rgb_jpeg.jpg]
-      - id: color_cmyk
-        description: CMYK color space (Adobe)
-        test_assets: [baseline_cmyk.jpg]
-
-      # Huffman table variants
-      - id: huffman_default
-        description: Default Huffman tables
-        test_assets: [baseline_default.jpg]
-      - id: huffman_optimized
-        description: Optimized/custom Huffman tables
-        test_assets: [baseline_optimized.jpg]
-      - id: huffman_progressive
-        description: Progressive JPEG (multiple scans)
-        test_assets: [progressive.jpg]
-
-      # Quantization
-      - id: quality_100
-        description: Quality 100 (minimal compression)
-        test_assets: [q100.jpg]
-      - id: quality_50
-        description: Quality 50 (medium compression)
-        test_assets: [q50.jpg]
-      - id: quality_10
-        description: Quality 10 (heavy compression, artifacts)
-        test_assets: [q10.jpg]
-      - id: quality_1
-        description: Quality 1 (maximum compression)
-        test_assets: [q1.jpg]
-
-      # Image dimensions
-      - id: size_minimal
-        description: Smallest valid JPEG (8x8 minimum)
-        test_assets: [8x8.jpg]
-      - id: size_odd
-        description: Odd dimensions requiring edge MCU handling
-        test_assets: [17x17.jpg, 33x33.jpg]
-      - id: size_large
-        description: Large image (4096x4096)
-        test_assets: [large.jpg]
-      - id: size_1x1
-        description: Single pixel
-        test_assets: [1x1.jpg]
-
-      # Restart markers
-      - id: restart_none
-        description: No restart markers
-        test_assets: [baseline_default.jpg]
-      - id: restart_interval
-        description: Restart markers every N MCUs
-        test_assets: [restart.jpg]
-
-      # EXIF / metadata
-      - id: exif_orientation
-        description: JPEG with EXIF orientation tag
-        test_assets: [exif_orientation.jpg]
-      - id: exif_thumbnail
-        description: JPEG with embedded thumbnail
-        test_assets: [exif_thumbnail.jpg]
-      - id: no_exif
-        description: JPEG without EXIF
-        test_assets: [no_exif.jpg]
-
-      # Corner cases
-      - id: trailing_data
-        description: JPEG with extra data after EOI marker
-        test_assets: [trailing_data.jpg]
-      - id: multiple_eoi
-        description: Multiple EOI markers
-        test_assets: [multiple_eoi.jpg]
-      - id: zero_length
-        description: Empty file (error expected)
-        test_assets: [empty.jpg]
-        expect_error: true
-      - id: truncated
-        description: Truncated JPEG (incomplete)
-        test_assets: [truncated.jpg]
-        expect_error: true
-      - id: corrupt_header
-        description: Corrupt JPEG header
-        test_assets: [corrupt.jpg]
-        expect_error: true
-
-      # Baseline vs progressive
-      - id: baseline_standard
-        description: Baseline DCT sequential
-        test_assets: [baseline.jpg]
-      - id: progressive_spectral
-        description: Progressive with spectral selection
-        test_assets: [progressive_spectral.jpg]
-
+    - id: subsampling_444
+      description: 4:4:4 chroma subsampling (no subsampling)
+      test_assets:
+      - baseline_444.jpg
+    - id: subsampling_422
+      description: 4:2:2 horizontal chroma subsampling
+      test_assets:
+      - baseline_422.jpg
+    - id: subsampling_420
+      description: 4:2:0 chroma subsampling (most common)
+      test_assets:
+      - baseline_420.jpg
+    - id: subsampling_411
+      description: 4:1:1 chroma subsampling
+      test_assets:
+      - baseline_411.jpg
+      status: planned
+    - id: subsampling_gray
+      description: Grayscale (no chroma components)
+      test_assets:
+      - baseline_gray.jpg
+    - id: color_ycbcr
+      description: YCbCr color space (standard)
+      test_assets:
+      - baseline_ycbcr.jpg
+      status: planned
+    - id: color_rgb
+      description: RGB color space (rare, Adobe)
+      test_assets:
+      - baseline_rgb_jpeg.jpg
+      status: planned
+    - id: color_cmyk
+      description: CMYK color space (Adobe)
+      test_assets:
+      - baseline_cmyk.jpg
+      status: planned
+    - id: huffman_default
+      description: Default Huffman tables
+      test_assets:
+      - baseline_default.jpg
+      status: planned
+    - id: huffman_optimized
+      description: Optimized/custom Huffman tables
+      test_assets:
+      - baseline_optimized.jpg
+      status: planned
+    - id: huffman_progressive
+      description: Progressive JPEG (multiple scans)
+      test_assets:
+      - progressive.jpg
+    - id: quality_100
+      description: Quality 100 (minimal compression)
+      test_assets:
+      - q100.jpg
+    - id: quality_50
+      description: Quality 50 (medium compression)
+      test_assets:
+      - q50.jpg
+    - id: quality_10
+      description: Quality 10 (heavy compression, artifacts)
+      test_assets:
+      - q10.jpg
+    - id: quality_1
+      description: Quality 1 (maximum compression)
+      test_assets:
+      - q1.jpg
+    - id: size_minimal
+      description: Smallest valid JPEG (8x8 minimum)
+      test_assets:
+      - 8x8.jpg
+      status: planned
+    - id: size_odd
+      description: Odd dimensions requiring edge MCU handling
+      test_assets:
+      - 17x17.jpg
+      - 33x33.jpg
+      status: planned
+    - id: size_large
+      description: Large image (4096x4096)
+      test_assets:
+      - large.jpg
+      status: planned
+    - id: size_1x1
+      description: Single pixel
+      test_assets:
+      - 1x1.jpg
+      status: planned
+    - id: restart_none
+      description: No restart markers
+      test_assets:
+      - baseline_default.jpg
+      status: planned
+    - id: restart_interval
+      description: Restart markers every N MCUs
+      test_assets:
+      - restart.jpg
+    - id: exif_orientation
+      description: JPEG with EXIF orientation tag
+      test_assets:
+      - exif_orientation.jpg
+      status: planned
+    - id: exif_thumbnail
+      description: JPEG with embedded thumbnail
+      test_assets:
+      - exif_thumbnail.jpg
+      status: planned
+    - id: no_exif
+      description: JPEG without EXIF
+      test_assets:
+      - no_exif.jpg
+      status: planned
+    - id: trailing_data
+      description: JPEG with extra data after EOI marker
+      test_assets:
+      - trailing_data.jpg
+      status: planned
+    - id: multiple_eoi
+      description: Multiple EOI markers
+      test_assets:
+      - multiple_eoi.jpg
+      status: planned
+    - id: zero_length
+      description: Empty file (error expected)
+      test_assets:
+      - empty.jpg
+      expect_error: true
+    - id: truncated
+      description: Truncated JPEG (incomplete)
+      test_assets:
+      - truncated.jpg
+      expect_error: true
+    - id: corrupt_header
+      description: Corrupt JPEG header
+      test_assets:
+      - corrupt.jpg
+      expect_error: true
+    - id: baseline_standard
+      description: Baseline DCT sequential
+      test_assets:
+      - baseline.jpg
+    - id: progressive_spectral
+      description: Progressive with spectral selection
+      test_assets:
+      - progressive_spectral.jpg
+      status: planned
   png:
     name: PNG
-    extensions: [.png]
-    magic: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    extensions:
+    - .png
+    magic:
+    - 137
+    - 80
+    - 78
+    - 71
+    - 13
+    - 10
+    - 26
+    - 10
     decoder: png crate (miniz_oxide backend)
     encoder: png crate (miniz_oxide deflate)
     status: planned
     edge_cases:
-      # Color types
-      - id: color_gray
-        description: Grayscale (color type 0)
-        test_assets: [gray.png]
-      - id: color_gray_alpha
-        description: Grayscale + alpha (color type 4)
-        test_assets: [gray_alpha.png]
-      - id: color_rgb
-        description: RGB (color type 2)
-        test_assets: [rgb.png]
-      - id: color_rgba
-        description: RGBA (color type 6)
-        test_assets: [rgba.png]
-      - id: color_indexed
-        description: Indexed/Palette (color type 3)
-        test_assets: [indexed.png]
-      - id: color_indexed_alpha
-        description: Indexed with tRNS transparency
-        test_assets: [indexed_alpha.png]
-
-      # Bit depths
-      - id: depth_1
-        description: 1-bit grayscale
-        test_assets: [1bit.png]
-      - id: depth_2
-        description: 2-bit grayscale
-        test_assets: [2bit.png]
-      - id: depth_4
-        description: 4-bit grayscale
-        test_assets: [4bit.png]
-      - id: depth_8
-        description: 8-bit per channel (standard)
-        test_assets: [8bit.png]
-      - id: depth_16
-        description: 16-bit per channel
-        test_assets: [16bit.png]
-
-      # Interlacing
-      - id: no_interlace
-        description: No interlacing (Adam7 off)
-        test_assets: [no_interlace.png]
-      - id: interlace_adam7
-        description: Adam7 interlacing
-        test_assets: [adam7.png]
-
-      # Filter methods
-      - id: filter_none
-        description: No filter
-        test_assets: [filter_none.png]
-      - id: filter_sub
-        description: Sub filter
-        test_assets: [filter_sub.png]
-      - id: filter_up
-        description: Up filter
-        test_assets: [filter_up.png]
-      - id: filter_average
-        description: Average filter
-        test_assets: [filter_average.png]
-      - id: filter_paeth
-        description: Paeth filter
-        test_assets: [filter_paeth.png]
-      - id: filter_mixed
-        description: Adaptive per-scanline filtering
-        test_assets: [filter_mixed.png]
-
-      # Compression levels
-      - id: compress_default
-        description: Default zlib compression (level 6)
-        test_assets: [compress_default.png]
-      - id: compress_none
-        description: No compression (store only)
-        test_assets: [compress_none.png]
-      - id: compress_max
-        description: Maximum compression (level 9)
-        test_assets: [compress_max.png]
-
-      # Chunk handling
-      - id: chunk_gama
-        description: PNG with gAMA chunk (gamma)
-        test_assets: [gama.png]
-      - id: chunk_srgb
-        description: PNG with sRGB chunk
-        test_assets: [srgb.png]
-      - id: chunk_iccp
-        description: PNG with iCCP color profile
-        test_assets: [iccp.png]
-      - id: chunk_text
-        description: PNG with tEXt/zTXt/iTXt metadata
-        test_assets: [text_chunks.png]
-      - id: chunk_time
-        description: PNG with tIME chunk
-        test_assets: [time_chunk.png]
-      - id: chunk_background
-        description: PNG with bKGD chunk
-        test_assets: [bkgd.png]
-      - id: chunk_phys
-        description: PNG with pHYs chunk (physical dimensions)
-        test_assets: [phys.png]
-
-      # Dimensions
-      - id: size_1x1
-        description: Single pixel
-        test_assets: [1x1.png]
-      - id: size_small
-        description: Small image (16x16)
-        test_assets: [16x16.png]
-      - id: size_large
-        description: Large image (4096x4096)
-        test_assets: [large.png]
-      - id: size_odd
-        description: Non-power-of-2 dimensions
-        test_assets: [odd_size.png]
-
-      # Error cases
-      - id: error_truncated
-        description: Truncated PNG file
-        test_assets: [truncated.png]
-        expect_error: true
-      - id: error_corrupt_crc
-        description: Corrupt chunk CRC
-        test_assets: [bad_crc.png]
-        expect_error: true
-      - id: error_wrong_magic
-        description: File with wrong PNG signature
-        test_assets: [not_a_png.png]
-        expect_error: true
-
-      # APNG (animated)
-      - id: apng_static
-        description: APNG with single frame (backward compatible)
-        test_assets: [apng_static.png]
-      - id: apng_animated
-        description: APNG with multiple frames
-        test_assets: [apng_animated.png]
-        notes: Decode first frame only (matching base PNG behavior)
-
+    - id: color_gray
+      description: Grayscale (color type 0)
+      test_assets:
+      - gray.png
+    - id: color_gray_alpha
+      description: Grayscale + alpha (color type 4)
+      test_assets:
+      - gray_alpha.png
+    - id: color_rgb
+      description: RGB (color type 2)
+      test_assets:
+      - rgb.png
+    - id: color_rgba
+      description: RGBA (color type 6)
+      test_assets:
+      - rgba.png
+    - id: color_indexed
+      description: Indexed/Palette (color type 3)
+      test_assets:
+      - indexed.png
+    - id: color_indexed_alpha
+      description: Indexed with tRNS transparency
+      test_assets:
+      - indexed_alpha.png
+      status: planned
+    - id: depth_1
+      description: 1-bit grayscale
+      test_assets:
+      - 1bit.png
+    - id: depth_2
+      description: 2-bit grayscale
+      test_assets:
+      - 2bit.png
+      status: planned
+    - id: depth_4
+      description: 4-bit grayscale
+      test_assets:
+      - 4bit.png
+      status: planned
+    - id: depth_8
+      description: 8-bit per channel (standard)
+      test_assets:
+      - 8bit.png
+    - id: depth_16
+      description: 16-bit per channel
+      test_assets:
+      - 16bit.png
+      status: planned
+    - id: no_interlace
+      description: No interlacing (Adam7 off)
+      test_assets:
+      - no_interlace.png
+    - id: interlace_adam7
+      description: Adam7 interlacing
+      test_assets:
+      - adam7.png
+    - id: filter_none
+      description: No filter
+      test_assets:
+      - filter_none.png
+    - id: filter_sub
+      description: Sub filter
+      test_assets:
+      - filter_sub.png
+      status: planned
+    - id: filter_up
+      description: Up filter
+      test_assets:
+      - filter_up.png
+      status: planned
+    - id: filter_average
+      description: Average filter
+      test_assets:
+      - filter_average.png
+      status: planned
+    - id: filter_paeth
+      description: Paeth filter
+      test_assets:
+      - filter_paeth.png
+      status: planned
+    - id: filter_mixed
+      description: Adaptive per-scanline filtering
+      test_assets:
+      - filter_mixed.png
+      status: planned
+    - id: compress_default
+      description: Default zlib compression (level 6)
+      test_assets:
+      - compress_default.png
+    - id: compress_none
+      description: No compression (store only)
+      test_assets:
+      - compress_none.png
+      status: planned
+    - id: compress_max
+      description: Maximum compression (level 9)
+      test_assets:
+      - compress_max.png
+    - id: chunk_gama
+      description: PNG with gAMA chunk (gamma)
+      test_assets:
+      - gama.png
+      status: planned
+    - id: chunk_srgb
+      description: PNG with sRGB chunk
+      test_assets:
+      - srgb.png
+    - id: chunk_iccp
+      description: PNG with iCCP color profile
+      test_assets:
+      - iccp.png
+      status: planned
+    - id: chunk_text
+      description: PNG with tEXt/zTXt/iTXt metadata
+      test_assets:
+      - text_chunks.png
+    - id: chunk_time
+      description: PNG with tIME chunk
+      test_assets:
+      - time_chunk.png
+      status: planned
+    - id: chunk_background
+      description: PNG with bKGD chunk
+      test_assets:
+      - bkgd.png
+      status: planned
+    - id: chunk_phys
+      description: PNG with pHYs chunk (physical dimensions)
+      test_assets:
+      - phys.png
+      status: planned
+    - id: size_1x1
+      description: Single pixel
+      test_assets:
+      - 1x1.png
+    - id: size_small
+      description: Small image (16x16)
+      test_assets:
+      - 16x16.png
+      status: planned
+    - id: size_large
+      description: Large image (4096x4096)
+      test_assets:
+      - large.png
+      status: planned
+    - id: size_odd
+      description: Non-power-of-2 dimensions
+      test_assets:
+      - odd_size.png
+    - id: error_truncated
+      description: Truncated PNG file
+      test_assets:
+      - truncated.png
+      expect_error: true
+    - id: error_corrupt_crc
+      description: Corrupt chunk CRC
+      test_assets:
+      - bad_crc.png
+      expect_error: true
+      status: planned
+    - id: error_wrong_magic
+      description: File with wrong PNG signature
+      test_assets:
+      - not_a_png.png
+      expect_error: true
+    - id: apng_static
+      description: APNG with single frame (backward compatible)
+      test_assets:
+      - apng_static.png
+      status: planned
+    - id: apng_animated
+      description: APNG with multiple frames
+      test_assets:
+      - apng_animated.png
+      notes: Decode first frame only (matching base PNG behavior)
+      status: planned
   gif:
     name: GIF
-    extensions: [.gif]
-    magic: [0x47, 0x49, 0x46]  # "GIF"
+    extensions:
+    - .gif
+    magic:
+    - 71
+    - 73
+    - 70
     decoder: gif crate (weezl LZW)
     encoder: gif crate
     status: planned
     edge_cases:
-      - id: static_gif
-        description: Single frame GIF
-        test_assets: [static.gif]
-      - id: animated_gif
-        description: Animated GIF (decode first frame)
-        test_assets: [animated.gif]
-      - id: transparent
-        description: GIF with transparency index
-        test_assets: [transparent.gif]
-      - id: interlaced
-        description: Interlaced GIF
-        test_assets: [interlaced.gif]
-      - id: color_table_global
-        description: Global color table only
-        test_assets: [global_ct.gif]
-      - id: color_table_local
-        description: Local per-frame color table
-        test_assets: [local_ct.gif]
-      - id: extension_gce
-        description: Graphic Control Extension (delay, disposal)
-        test_assets: [gce.gif]
-      - id: size_1x1
-        description: Single pixel GIF
-        test_assets: [1x1.gif]
-      - id: error_empty
-        description: Empty file
-        test_assets: [empty.gif]
-        expect_error: true
-
+    - id: static_gif
+      description: Single frame GIF
+      test_assets:
+      - static.gif
+    - id: animated_gif
+      description: Animated GIF (decode first frame)
+      test_assets:
+      - animated.gif
+    - id: transparent
+      description: GIF with transparency index
+      test_assets:
+      - transparent.gif
+    - id: interlaced
+      description: Interlaced GIF
+      test_assets:
+      - interlaced.gif
+    - id: color_table_global
+      description: Global color table only
+      test_assets:
+      - global_ct.gif
+      status: planned
+    - id: color_table_local
+      description: Local per-frame color table
+      test_assets:
+      - local_ct.gif
+      status: planned
+    - id: extension_gce
+      description: Graphic Control Extension (delay, disposal)
+      test_assets:
+      - gce.gif
+      status: planned
+    - id: size_1x1
+      description: Single pixel GIF
+      test_assets:
+      - 1x1.gif
+    - id: error_empty
+      description: Empty file
+      test_assets:
+      - empty.gif
+      expect_error: true
   bmp:
     name: BMP
-    extensions: [.bmp]
-    magic: [0x42, 0x4D]  # "BM"
+    extensions:
+    - .bmp
+    magic:
+    - 66
+    - 77
     decoder: own (direct impl)
     encoder: own
     status: planned
     edge_cases:
-      # Bit depths
-      - id: depth_1
-        description: 1-bit monochrome BMP
-        test_assets: [1bit.bmp]
-      - id: depth_4
-        description: 4-bit indexed BMP
-        test_assets: [4bit.bmp]
-      - id: depth_8
-        description: 8-bit indexed BMP
-        test_assets: [8bit.bmp]
-      - id: depth_16
-        description: 16-bit (RGB555)
-        test_assets: [16bit.bmp]
-      - id: depth_24
-        description: 24-bit RGB (most common)
-        test_assets: [24bit.bmp]
-      - id: depth_32
-        description: 32-bit RGBA
-        test_assets: [32bit.bmp]
-
-      # Compression types
-      - id: compression_none
-        description: BI_RGB (no compression)
-        test_assets: [uncompressed.bmp]
-      - id: compression_rle8
-        description: BI_RLE8 (8-bit RLE)
-        test_assets: [rle8.bmp]
-      - id: compression_rle4
-        description: BI_RLE4 (4-bit RLE)
-        test_assets: [rle4.bmp]
-      - id: compression_bitfields
-        description: BI_BITFIELDS (16/32 bit with masks)
-        test_assets: [bitfields.bmp]
-
-      # File layouts
-      - id: top_down
-        description: Top-down scanline order (negative height)
-        test_assets: [top_down.bmp]
-      - id: bottom_up
-        description: Bottom-up scanline order (standard)
-        test_assets: [bottom_up.bmp]
-      - id: os2_v1
-        description: OS/2 BMP v1 header
-        test_assets: [os2v1.bmp]
-      - id: v4_header
-        description: BITMAPV4HEADER (color space info)
-        test_assets: [v4header.bmp]
-      - id: v5_header
-        description: BITMAPV5HEADER (ICC profile)
-        test_assets: [v5header.bmp]
-
-      # Dimensions
-      - id: size_1x1
-        description: Single pixel
-        test_assets: [1x1.bmp]
-      - id: size_odd
-        description: Odd width (row padding required)
-        test_assets: [odd_width.bmp]
-
-      # Error cases
-      - id: error_not_bmp
-        description: File without BM magic
-        test_assets: [not_bmp.bmp]
-        expect_error: true
-
+    - id: depth_1
+      description: 1-bit monochrome BMP
+      test_assets:
+      - 1bit.bmp
+    - id: depth_4
+      description: 4-bit indexed BMP
+      test_assets:
+      - 4bit.bmp
+      status: planned
+    - id: depth_8
+      description: 8-bit indexed BMP
+      test_assets:
+      - 8bit.bmp
+    - id: depth_16
+      description: 16-bit (RGB555)
+      test_assets:
+      - 16bit.bmp
+      status: planned
+    - id: depth_24
+      description: 24-bit RGB (most common)
+      test_assets:
+      - 24bit.bmp
+    - id: depth_32
+      description: 32-bit RGBA
+      test_assets:
+      - 32bit.bmp
+    - id: compression_none
+      description: BI_RGB (no compression)
+      test_assets:
+      - uncompressed.bmp
+      status: planned
+    - id: compression_rle8
+      description: BI_RLE8 (8-bit RLE)
+      test_assets:
+      - rle8.bmp
+      status: planned
+    - id: compression_rle4
+      description: BI_RLE4 (4-bit RLE)
+      test_assets:
+      - rle4.bmp
+      status: planned
+    - id: compression_bitfields
+      description: BI_BITFIELDS (16/32 bit with masks)
+      test_assets:
+      - bitfields.bmp
+      status: planned
+    - id: top_down
+      description: Top-down scanline order (negative height)
+      test_assets:
+      - top_down.bmp
+      status: planned
+    - id: bottom_up
+      description: Bottom-up scanline order (standard)
+      test_assets:
+      - bottom_up.bmp
+      status: planned
+    - id: os2_v1
+      description: OS/2 BMP v1 header
+      test_assets:
+      - os2v1.bmp
+      status: planned
+    - id: v4_header
+      description: BITMAPV4HEADER (color space info)
+      test_assets:
+      - v4header.bmp
+      status: planned
+    - id: v5_header
+      description: BITMAPV5HEADER (ICC profile)
+      test_assets:
+      - v5header.bmp
+      status: planned
+    - id: size_1x1
+      description: Single pixel
+      test_assets:
+      - 1x1.bmp
+    - id: size_odd
+      description: Odd width (row padding required)
+      test_assets:
+      - odd_width.bmp
+    - id: error_not_bmp
+      description: File without BM magic
+      test_assets:
+      - not_bmp.bmp
+      expect_error: true
   webp:
     name: WebP
-    extensions: [.webp]
-    magic: [0x52, 0x49, 0x46, 0x46]  # "RIFF"
+    extensions:
+    - .webp
+    magic:
+    - 82
+    - 73
+    - 70
+    - 70
     decoder: own (VP8/VP8L)
     encoder: own
     status: planned
     edge_cases:
-      # Variants
-      - id: lossy_vp8
-        description: Lossy WebP (VP8 codec)
-        test_assets: [lossy.webp]
-      - id: lossless_vp8l
-        description: Lossless WebP (VP8L codec)
-        test_assets: [lossless.webp]
-      - id: extended
-        description: Extended WebP (VP8X container)
-        test_assets: [extended.webp]
-
-      # Alpha channel
-      - id: no_alpha
-        description: WebP without alpha
-        test_assets: [no_alpha.webp]
-      - id: with_alpha
-        description: WebP with alpha channel
-        test_assets: [with_alpha.webp]
-      - id: alpha_lossless
-        description: Lossless WebP with alpha
-        test_assets: [alpha_lossless.webp]
-
-      # Animation
-      - id: animated
-        description: Animated WebP (decode first frame)
-        test_assets: [animated.webp]
-
-      # Dimensions
-      - id: size_small
-        description: Small image (16x16)
-        test_assets: [16x16.webp]
-      - id: size_odd
-        description: Odd dimensions
-        test_assets: [odd.webp]
-
-      # Color profiles
-      - id: icc_profile
-        description: WebP with embedded ICC profile
-        test_assets: [icc.webp]
-      - id: xmp_metadata
-        description: WebP with XMP metadata
-        test_assets: [xmp.webp]
-      - id: exif_metadata
-        description: WebP with EXIF metadata
-        test_assets: [exif.webp]
-
-      # Error cases
-      - id: error_truncated
-        description: Truncated RIFF chunk
-        test_assets: [truncated.webp]
-        expect_error: true
-
+    - id: lossy_vp8
+      description: Lossy WebP (VP8 codec)
+      test_assets:
+      - lossy.webp
+    - id: lossless_vp8l
+      description: Lossless WebP (VP8L codec)
+      test_assets:
+      - lossless.webp
+    - id: extended
+      description: Extended WebP (VP8X container)
+      test_assets:
+      - extended.webp
+      status: planned
+    - id: no_alpha
+      description: WebP without alpha
+      test_assets:
+      - no_alpha.webp
+    - id: with_alpha
+      description: WebP with alpha channel
+      test_assets:
+      - with_alpha.webp
+    - id: alpha_lossless
+      description: Lossless WebP with alpha
+      test_assets:
+      - alpha_lossless.webp
+      status: planned
+    - id: animated
+      description: Animated WebP (decode first frame)
+      test_assets:
+      - animated.webp
+      status: planned
+    - id: size_small
+      description: Small image (16x16)
+      test_assets:
+      - 16x16.webp
+    - id: size_odd
+      description: Odd dimensions
+      test_assets:
+      - odd.webp
+      status: planned
+    - id: icc_profile
+      description: WebP with embedded ICC profile
+      test_assets:
+      - icc.webp
+      status: planned
+    - id: xmp_metadata
+      description: WebP with XMP metadata
+      test_assets:
+      - xmp.webp
+      status: planned
+    - id: exif_metadata
+      description: WebP with EXIF metadata
+      test_assets:
+      - exif.webp
+      status: planned
+    - id: error_truncated
+      description: Truncated RIFF chunk
+      test_assets:
+      - truncated.webp
+      expect_error: true
   tiff:
     name: TIFF
-    extensions: [.tiff, .tif]
-    magic: [0x49, 0x49, 0x2A, 0x00]  # Little-endian
-    magic_alt: [0x4D, 0x4D, 0x00, 0x2A]  # Big-endian
+    extensions:
+    - .tiff
+    - .tif
+    magic:
+    - 73
+    - 73
+    - 42
+    - 0
+    magic_alt:
+    - 77
+    - 77
+    - 0
+    - 42
     decoder: tiff crate (miniz_oxide backend)
     encoder: tiff crate
     status: planned
     edge_cases:
-      # Byte order
-      - id: byte_order_le
-        description: Little-endian TIFF (II)
-        test_assets: [le.tiff]
-      - id: byte_order_be
-        description: Big-endian TIFF (MM)
-        test_assets: [be.tiff]
-
-      # Compression
-      - id: compression_none
-        description: No compression
-        test_assets: [uncompressed.tiff]
-      - id: compression_lzw
-        description: LZW compression
-        test_assets: [lzw.tiff]
-      - id: compression_deflate
-        description: Deflate/ZIP compression
-        test_assets: [deflate.tiff]
-      - id: compression_packbits
-        description: PackBits compression
-        test_assets: [packbits.tiff]
-
-      # Color types
-      - id: bilevel
-        description: Black and white (PHOTOMETRIC_MINISWHITE/BLACK)
-        test_assets: [bilevel.tiff]
-      - id: grayscale
-        description: Grayscale
-        test_assets: [gray.tiff]
-      - id: palette
-        description: Palette/indexed color
-        test_assets: [palette.tiff]
-      - id: rgb
-        description: RGB
-        test_assets: [rgb.tiff]
-      - id: rgba
-        description: RGBA with extrasamples
-        test_assets: [rgba.tiff]
-      - id: cmyk
-        description: CMYK
-        test_assets: [cmyk.tiff]
-      - id: ycbcr
-        description: YCbCr
-        test_assets: [ycbcr.tiff]
-
-      # Bit depths
-      - id: depth_1
-        description: 1-bit
-        test_assets: [1bit.tiff]
-      - id: depth_8
-        description: 8-bit per channel
-        test_assets: [8bit.tiff]
-      - id: depth_16
-        description: 16-bit per channel
-        test_assets: [16bit.tiff]
-      - id: depth_float
-        description: 32-bit float (F-mode)
-        test_assets: [float32.tiff]
-
-      # Striped vs tiled
-      - id: stripped
-        description: Striped organization
-        test_assets: [stripped.tiff]
-      - id: tiled
-        description: Tiled organization
-        test_assets: [tiled.tiff]
-
-      # Multi-page
-      - id: single_page
-        description: Single IFD TIFF
-        test_assets: [single.tiff]
-      - id: multi_page
-        description: Multi-page TIFF (decode first page)
-        test_assets: [multipage.tiff]
-
-      # Error cases
-      - id: error_bad_ifd
-        description: Corrupt IFD entry
-        test_assets: [bad_ifd.tiff]
-        expect_error: true
-
+    - id: byte_order_le
+      description: Little-endian TIFF (II)
+      test_assets:
+      - le.tiff
+    - id: byte_order_be
+      description: Big-endian TIFF (MM)
+      test_assets:
+      - be.tiff
+      status: planned
+    - id: compression_none
+      description: No compression
+      test_assets:
+      - uncompressed.tiff
+    - id: compression_lzw
+      description: LZW compression
+      test_assets:
+      - lzw.tiff
+    - id: compression_deflate
+      description: Deflate/ZIP compression
+      test_assets:
+      - deflate.tiff
+    - id: compression_packbits
+      description: PackBits compression
+      test_assets:
+      - packbits.tiff
+      status: planned
+    - id: bilevel
+      description: Black and white (PHOTOMETRIC_MINISWHITE/BLACK)
+      test_assets:
+      - bilevel.tiff
+    - id: grayscale
+      description: Grayscale
+      test_assets:
+      - gray.tiff
+    - id: palette
+      description: Palette/indexed color
+      test_assets:
+      - palette.tiff
+      status: planned
+    - id: rgb
+      description: RGB
+      test_assets:
+      - rgb.tiff
+    - id: rgba
+      description: RGBA with extrasamples
+      test_assets:
+      - rgba.tiff
+    - id: cmyk
+      description: CMYK
+      test_assets:
+      - cmyk.tiff
+      status: planned
+    - id: ycbcr
+      description: YCbCr
+      test_assets:
+      - ycbcr.tiff
+      status: planned
+    - id: depth_1
+      description: 1-bit
+      test_assets:
+      - 1bit.tiff
+      status: planned
+    - id: depth_8
+      description: 8-bit per channel
+      test_assets:
+      - 8bit.tiff
+      status: planned
+    - id: depth_16
+      description: 16-bit per channel
+      test_assets:
+      - 16bit.tiff
+      status: planned
+    - id: depth_float
+      description: 32-bit float (F-mode)
+      test_assets:
+      - float32.tiff
+      status: planned
+    - id: stripped
+      description: Striped organization
+      test_assets:
+      - stripped.tiff
+      status: planned
+    - id: tiled
+      description: Tiled organization
+      test_assets:
+      - tiled.tiff
+      status: planned
+    - id: single_page
+      description: Single IFD TIFF
+      test_assets:
+      - single.tiff
+      status: planned
+    - id: multi_page
+      description: Multi-page TIFF (decode first page)
+      test_assets:
+      - multipage.tiff
+      status: planned
+    - id: error_bad_ifd
+      description: Corrupt IFD entry
+      test_assets:
+      - bad_ifd.tiff
+      expect_error: true
   ico:
     name: ICO
-    extensions: [.ico]
-    magic: [0x00, 0x00, 0x01, 0x00]
+    extensions:
+    - .ico
+    magic:
+    - 0
+    - 0
+    - 1
+    - 0
     decoder: own (BMP/PNG wrapper)
     encoder: own
     status: planned
     edge_cases:
-      - id: single_icon
-        description: Single icon entry
-        test_assets: [single.ico]
-      - id: multi_res
-        description: Multiple resolution entries
-        test_assets: [multi.ico]
-      - id: png_entry
-        description: ICO with embedded PNG data
-        test_assets: [png_entry.ico]
-      - id: bmp_entry
-        description: ICO with embedded BMP data (classic)
-        test_assets: [bmp_entry.ico]
-      - id: size_16x16
-        description: 16x16 icon (most common)
-        test_assets: [16x16.ico]
-      - id: size_256x256
-        description: 256x256 icon (modern)
-        test_assets: [256x256.ico]
-
+    - id: single_icon
+      description: Single icon entry
+      test_assets:
+      - single.ico
+    - id: multi_res
+      description: Multiple resolution entries
+      test_assets:
+      - multi.ico
+    - id: png_entry
+      description: ICO with embedded PNG data
+      test_assets:
+      - png_entry.ico
+    - id: bmp_entry
+      description: ICO with embedded BMP data (classic)
+      test_assets:
+      - bmp_entry.ico
+      status: planned
+    - id: size_16x16
+      description: 16x16 icon (most common)
+      test_assets:
+      - 16x16.ico
+    - id: size_256x256
+      description: 256x256 icon (modern)
+      test_assets:
+      - 256x256.ico
+      status: planned
   avif:
     name: AVIF
-    extensions: [.avif]
-    magic: [0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66]
+    extensions:
+    - .avif
+    magic:
+    - 0
+    - 0
+    - 0
+    - 28
+    - 102
+    - 116
+    - 121
+    - 112
+    - 97
+    - 118
+    - 105
+    - 102
     decoder: zenavif (rav1d, feature-gated)
     encoder: ravif (feature-gated)
     status: planned
     optional: true
     edge_cases:
-      - id: baseline
-        description: Baseline AVIF (8-bit, 4:2:0)
-        test_assets: [baseline.avif]
-      - id: high_bitdepth
-        description: 10-bit AVIF
-        test_assets: [10bit.avif]
-      - id: with_alpha
-        description: AVIF with alpha channel
-        test_assets: [alpha.avif]
-      - id: hdr
-        description: HDR AVIF (PQ/HLG transfer)
-        test_assets: [hdr.avif]
-      - id: grid
-        description: Grid AVIF (tiled image)
-        test_assets: [grid.avif]
-      - id: animated
-        description: Animated AVIF (decode first frame)
-        test_assets: [animated.avif]
-
-# ═══════════════════════════════════════════════════════════════════════
-# Cross-format test cases (format detection)
-# ═══════════════════════════════════════════════════════════════════════
-
+    - id: baseline
+      description: Baseline AVIF (8-bit, 4:2:0)
+      test_assets:
+      - baseline.avif
+      status: planned
+    - id: high_bitdepth
+      description: 10-bit AVIF
+      test_assets:
+      - 10bit.avif
+      status: planned
+    - id: with_alpha
+      description: AVIF with alpha channel
+      test_assets:
+      - alpha.avif
+      status: planned
+    - id: hdr
+      description: HDR AVIF (PQ/HLG transfer)
+      test_assets:
+      - hdr.avif
+      status: planned
+    - id: grid
+      description: Grid AVIF (tiled image)
+      test_assets:
+      - grid.avif
+      status: planned
+    - id: animated
+      description: Animated AVIF (decode first frame)
+      test_assets:
+      - animated.avif
+      status: planned
 cross_format:
   detect:
-    - id: jpeg_as_jpeg
-      input: baseline.jpg
-      expected_format: jpeg
-    - id: png_as_png
-      input: rgb.png
-      expected_format: png
-    - id: jpeg_with_png_ext
-      input: actually_jpeg.png
-      expected_format: jpeg
-      notes: Format detection by magic bytes, not extension
-    - id: empty_file
-      input: empty.bin
-      expected_format: null
-      expect_error: true
-    - id: random_data
-      input: random.bin
-      expected_format: null
-      expect_error: true
+  - id: jpeg_as_jpeg
+    input: baseline.jpg
+    expected_format: jpeg
+  - id: png_as_png
+    input: rgb.png
+    expected_format: png
+  - id: jpeg_with_png_ext
+    input: actually_jpeg.png
+    expected_format: jpeg
+    notes: Format detection by magic bytes, not extension
+  - id: empty_file
+    input: empty.bin
+    expected_format: null
+    expect_error: true
+  - id: random_data
+    input: random.bin
+    expected_format: null
+    expect_error: true

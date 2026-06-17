@@ -1,0 +1,28 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageChops",
+    "target": "logical_and"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_logical_and_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {},
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    }
+  ]
+}

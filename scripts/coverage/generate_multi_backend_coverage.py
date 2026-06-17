@@ -17,7 +17,7 @@ from collections import defaultdict
 
 ROOT = Path(__file__).parent.parent.parent
 MANIFEST_PATH = ROOT / "manifest.yaml"
-REGISTRY_PATH = ROOT / "pillow-rs-core" / "src" / "compute" / "registry.rs"
+REGISTRY_PATH = ROOT / "pillow-rs" / "src" / "compute" / "registry.rs"
 OUTPUT_PATH = ROOT / "docs" / "COVERAGE.md"
 
 ALL_MODES = ["1", "L", "LA", "P", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F"]

@@ -1,0 +1,149 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "regular_polygon"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_regular_polygon_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_CMYK",
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bounding_circle": [
+          25,
+          25,
+          15
+        ],
+        "n_sides": 5,
+        "fill": 200
+      }
+    }
+  ]
+}

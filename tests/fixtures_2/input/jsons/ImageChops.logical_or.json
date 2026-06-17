@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageChops",
+    "target": "logical_or"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_logical_or_1_suite1",
+      "params": {},
+      "mode": "1",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 1
+      },
+      "input2": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 1
+      }
+    }
+  ]
+}

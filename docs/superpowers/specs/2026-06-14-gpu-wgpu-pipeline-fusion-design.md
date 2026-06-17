@@ -4,7 +4,7 @@
 
 ## Context
 
-pillow-rs currently has a GPU scaffold in `pillow-rs-core/src/gpu/`:
+pillow-rs currently has a GPU scaffold in `pillow-rs/src/gpu/`:
 - `GpuEngine` struct with wgpu Device/Queue — initialization works
 - 5 WGSL shaders embedded via `include_str!` — structurally correct
 - 7 operation method stubs — ALL return `Err("GPU ... not yet wired")`
@@ -66,7 +66,7 @@ This design replaces the scaffold with a **trait-based compute backend** archite
 ### ComputeBackend Trait (Write Once)
 
 ```rust
-// pillow-rs-core/src/compute/mod.rs — NEVER EDITED AFTER CREATION
+// pillow-rs/src/compute/mod.rs — NEVER EDITED AFTER CREATION
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -110,7 +110,7 @@ pub trait ComputeBackend: Send + Sync {
 ### Declarative Op Map (Append Only)
 
 ```rust
-// pillow-rs-core/src/compute/op_map.rs
+// pillow-rs/src/compute/op_map.rs
 // 
 // TO ADD GPU SUPPORT FOR A NEW OPERATION:
 //   1. Write the WGSL shader in compute/gpu_shaders/<name>.wgsl
@@ -242,7 +242,7 @@ fn extract_params(op: &PipelineOp) -> Vec<u32> {
 ### GpuBackend (Write Once)
 
 ```rust
-// pillow-rs-core/src/compute/gpu_backend.rs — NEVER EDITED FOR NEW OPS
+// pillow-rs/src/compute/gpu_backend.rs — NEVER EDITED FOR NEW OPS
 
 pub struct GpuBackend {
     device: wgpu::Device,
@@ -541,22 +541,22 @@ fn get_backends() -> &'static [Box<dyn ComputeBackend>] {
 ```rust
 #[pyfunction]
 fn enable_gpu() -> PyResult<bool> {
-    Ok(pillow_rs_core::compute::enable_gpu())
+    Ok(pillow_rs::compute::enable_gpu())
 }
 
 #[pyfunction]
-fn disable_gpu() { pillow_rs_core::compute::disable_gpu(); }
+fn disable_gpu() { pillow_rs::compute::disable_gpu(); }
 
 #[pyfunction]
-fn gpu_available() -> bool { pillow_rs_core::compute::gpu_available(); }
+fn gpu_available() -> bool { pillow_rs::compute::gpu_available(); }
 ```
 
 ### WASM (`pillow-rs-js/src/lib.rs`)
 
 ```rust
-#[wasm_bindgen] pub fn enableGpu() -> bool { pillow_rs_core::compute::enable_gpu() }
-#[wasm_bindgen] pub fn disableGpu() { pillow_rs_core::compute::disable_gpu(); }
-#[wasm_bindgen] pub fn gpuAvailable() -> bool { pillow_rs_core::compute::gpu_available(); }
+#[wasm_bindgen] pub fn enableGpu() -> bool { pillow_rs::compute::enable_gpu() }
+#[wasm_bindgen] pub fn disableGpu() { pillow_rs::compute::disable_gpu(); }
+#[wasm_bindgen] pub fn gpuAvailable() -> bool { pillow_rs::compute::gpu_available(); }
 ```
 
 ## Shader Catalog (~55 WGSL files)
@@ -815,7 +815,7 @@ No `coverage_map.json` entry needed. `target="gpu"` is already accepted by the c
 
 ### Phase 6: Validation
 1. `cargo clippy --all-targets --all-features -- -D warnings`
-2. `cargo test -p pillow-rs-core`
+2. `cargo test -p pillow-rs`
 3. `python -m pytest tests/test_gpu.py tests/test_gpu_pipeline.py -v`
 4. Full suite: `python -m pytest tests/ --json-report --json-report-file=/tmp/report.json`
 5. Coverage: `python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json`

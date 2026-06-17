@@ -1,0 +1,199 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "bitmap"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw.bitmap_1_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_CMYK_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          80,
+          80
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          64,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_LA_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          128,
+          128
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          64,
+          128
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_P_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          128,
+          64
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_RGB_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          50,
+          200
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          200,
+          50
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_RGBA_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_bitmap_L_suite1",
+      "params": {
+        "xy": [
+          5,
+          5
+        ],
+        "fill": 200
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          80,
+          80
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          64,
+          64
+        ]
+      }
+    }
+  ]
+}

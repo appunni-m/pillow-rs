@@ -1,0 +1,37 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "getmask"
+  },
+  "cases": [
+    {
+      "id": "default_suite1",
+      "params": {
+        "text": "Hello"
+      }
+    },
+    {
+      "id": "getmask_L_suite1",
+      "params": {
+        "text": "Hello"
+      },
+      "mode": "L"
+    },
+    {
+      "id": "getmask_RGB_suite1",
+      "params": {
+        "text": "Hello"
+      },
+      "mode": "RGB"
+    },
+    {
+      "id": "getmask_RGBA_suite1",
+      "params": {
+        "text": "Hello"
+      },
+      "mode": "RGBA"
+    }
+  ]
+}

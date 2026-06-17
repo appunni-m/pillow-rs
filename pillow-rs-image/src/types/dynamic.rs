@@ -3,8 +3,8 @@
 //! Matches the `image` crate's `DynamicImage` API.
 
 use super::buffer::{
-    ConvertBuffer, GrayAlphaImage, GrayImage, ImageBuffer, Rgb32FImage, RgbImage,
-    Rgba32FImage, RgbaImage,
+    ConvertBuffer, GrayAlphaImage, GrayImage, ImageBuffer, Rgb32FImage, RgbImage, Rgba32FImage,
+    RgbaImage,
 };
 use super::color::{self, ColorType, Luma, LumaA, Rgb, Rgba};
 use super::traits::{GenericImageView, Pixel, Primitive};
@@ -652,57 +652,27 @@ impl DynamicImage {
             }
             DynamicImage::ImageLuma16(ref img) => {
                 let raw: &[u16] = img.as_raw();
-                unsafe {
-                    std::slice::from_raw_parts(
-                        raw.as_ptr() as *const u8,
-                        raw.len() * 2,
-                    )
-                }
+                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
             }
             DynamicImage::ImageLumaA16(ref img) => {
                 let raw: &[u16] = img.as_raw();
-                unsafe {
-                    std::slice::from_raw_parts(
-                        raw.as_ptr() as *const u8,
-                        raw.len() * 2,
-                    )
-                }
+                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
             }
             DynamicImage::ImageRgb16(ref img) => {
                 let raw: &[u16] = img.as_raw();
-                unsafe {
-                    std::slice::from_raw_parts(
-                        raw.as_ptr() as *const u8,
-                        raw.len() * 2,
-                    )
-                }
+                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
             }
             DynamicImage::ImageRgba16(ref img) => {
                 let raw: &[u16] = img.as_raw();
-                unsafe {
-                    std::slice::from_raw_parts(
-                        raw.as_ptr() as *const u8,
-                        raw.len() * 2,
-                    )
-                }
+                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
             }
             DynamicImage::ImageRgb32F(ref img) => {
                 let raw: &[f32] = img.as_raw();
-                unsafe {
-                    std::slice::from_raw_parts(
-                        raw.as_ptr() as *const u8,
-                        raw.len() * 4,
-                    )
-                }
+                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 4) }
             }
             DynamicImage::ImageRgba32F(ref img) => {
                 let raw: &[f32] = img.as_raw();
-                unsafe {
-                    std::slice::from_raw_parts(
-                        raw.as_ptr() as *const u8,
-                        raw.len() * 4,
-                    )
-                }
+                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 4) }
             }
         }
     }
@@ -805,11 +775,7 @@ impl GenericImageView for DynamicImage {
     }
 
     fn get_pixel(&self, x: u32, y: u32) -> Rgba<u8> {
-        dynamic_map!(
-            *self,
-            ref p,
-            p.get_pixel(x, y).to_rgba().into_color()
-        )
+        dynamic_map!(*self, ref p, p.get_pixel(x, y).to_rgba().into_color())
     }
 }
 

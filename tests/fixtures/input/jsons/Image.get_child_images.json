@@ -1,0 +1,33 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "get_child_images"
+  },
+  "cases": [
+    {
+      "id": "Image_get_child_images_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_get_child_images_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    }
+  ]
+}

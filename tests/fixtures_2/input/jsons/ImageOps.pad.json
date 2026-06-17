@@ -1,0 +1,82 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "pad"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_pad_L_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          128,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_pad_LA_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_pad_RGB_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          50,
+          200
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_pad_RGBA_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          200,
+          50
+        ]
+      }
+    }
+  ]
+}

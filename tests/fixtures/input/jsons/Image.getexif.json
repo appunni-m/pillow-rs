@@ -1,0 +1,27 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "getexif"
+  },
+  "cases": [
+    {
+      "id": "RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [256, 256]
+      },
+      "params": {}
+    },
+    {
+      "id": "L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [256, 256]
+      },
+      "params": {}
+    }
+  ]
+}

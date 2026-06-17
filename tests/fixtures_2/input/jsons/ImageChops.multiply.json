@@ -1,0 +1,112 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageChops",
+    "target": "multiply"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_multiply_L_suite1",
+      "params": {},
+      "mode": "L",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      },
+      "input2": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "ImageChops_multiply_LA_suite1",
+      "params": {},
+      "mode": "LA",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      },
+      "input2": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "ImageChops_multiply_RGB_suite1",
+      "params": {},
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [
+          32,
+          32
+        ],
+        "color": [
+          100,
+          150,
+          200
+        ]
+      },
+      "input2": {
+        "source": "constant",
+        "size": [
+          32,
+          32
+        ],
+        "color": [
+          100,
+          150,
+          200
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_multiply_RGBA_suite1",
+      "params": {},
+      "mode": "RGBA",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": [
+          100,
+          150,
+          200,
+          200
+        ]
+      },
+      "input2": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": [
+          100,
+          150,
+          200,
+          200
+        ]
+      }
+    }
+  ]
+}

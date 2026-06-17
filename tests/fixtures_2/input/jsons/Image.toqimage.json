@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "toqimage"
+  },
+  "cases": [
+    {
+      "id": "rgb_10x10_suite1",
+      "params": {},
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [
+          32,
+          32
+        ],
+        "color": [
+          100,
+          150,
+          200
+        ]
+      }
+    },
+    {
+      "id": "l_10x10_suite1",
+      "params": {},
+      "mode": "L",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    }
+  ]
+}

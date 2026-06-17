@@ -1,0 +1,57 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "split"
+  },
+  "cases": [
+    {
+      "id": "Image_split_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_split_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_split_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_split_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "close"
+  },
+  "cases": [
+    {
+      "id": "Image_close_1_suite1",
+      "params": {},
+      "mode": "1",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 1
+      }
+    },
+    {
+      "id": "Image_close_L_suite1",
+      "params": {},
+      "mode": "L",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "Image_close_LA_suite1",
+      "params": {},
+      "mode": "LA",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 128
+      }
+    },
+    {
+      "id": "Image_close_P_suite1",
+      "params": {},
+      "mode": "P",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": 0
+      }
+    },
+    {
+      "id": "Image_close_RGB_suite1",
+      "params": {},
+      "mode": "RGB",
+      "input": {
+        "source": "constant",
+        "size": [
+          32,
+          32
+        ],
+        "color": [
+          100,
+          150,
+          200
+        ]
+      }
+    },
+    {
+      "id": "Image_close_RGBA_suite1",
+      "params": {},
+      "mode": "RGBA",
+      "input": {
+        "source": "constant",
+        "size": [
+          10,
+          10
+        ],
+        "color": [
+          100,
+          150,
+          200,
+          200
+        ]
+      }
+    }
+  ]
+}

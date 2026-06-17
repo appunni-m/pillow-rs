@@ -1,0 +1,69 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "RankFilter"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_RankFilter_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": 3,
+        "rank": 2
+      }
+    },
+    {
+      "id": "ImageFilter_RankFilter_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": 3,
+        "rank": 2
+      }
+    },
+    {
+      "id": "ImageFilter_RankFilter_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": 3,
+        "rank": 2
+      }
+    },
+    {
+      "id": "ImageFilter_RankFilter_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "size": 3,
+        "rank": 2
+      }
+    }
+  ]
+}

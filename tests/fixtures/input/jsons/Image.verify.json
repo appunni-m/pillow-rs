@@ -1,0 +1,57 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "verify"
+  },
+  "cases": [
+    {
+      "id": "Image_verify_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_verify_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_verify_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_verify_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    }
+  ]
+}

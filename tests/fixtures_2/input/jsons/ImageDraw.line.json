@@ -1,0 +1,185 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "line"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_line_1_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          64,
+          128
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_line_CMYK_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          128,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_line_L_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_line_LA_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          50,
+          200
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_line_P_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          200,
+          50
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_line_RGB_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_line_RGBA_suite1",
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          32,
+          32
+        ]
+      }
+    }
+  ]
+}

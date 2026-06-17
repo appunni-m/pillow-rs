@@ -34,7 +34,10 @@ fn test_decode_fixtures() {
             match status {
                 Ok(s) if s.success() => eprintln!("References generated."),
                 Ok(s) => eprintln!("WARNING: reference generator failed (exit {})", s),
-                Err(e) => eprintln!("WARNING: cannot run reference generator: {} (PIL not installed?)", e),
+                Err(e) => eprintln!(
+                    "WARNING: cannot run reference generator: {} (PIL not installed?)",
+                    e
+                ),
             }
         }
     }
@@ -52,7 +55,9 @@ fn test_decode_fixtures() {
         let input_path = entry.path();
         let fname = input_path.file_name().unwrap().to_str().unwrap();
         let output_path = output_jsons.join(fname);
-        if !output_path.exists() { continue; }
+        if !output_path.exists() {
+            continue;
+        }
 
         let inp: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(&input_path).unwrap()).unwrap();
@@ -61,7 +66,9 @@ fn test_decode_fixtures() {
 
         // Index output cases by id
         let out_cases: HashMap<String, &serde_json::Value> = out["cases"]
-            .as_array().unwrap().iter()
+            .as_array()
+            .unwrap()
+            .iter()
             .map(|c| (c["id"].as_str().unwrap().to_string(), c))
             .collect();
 
@@ -73,13 +80,19 @@ fn test_decode_fixtures() {
 
             let asset_data = match fs::read(&asset_path) {
                 Ok(d) => d,
-                Err(_) => { eprintln!("  SKIP [{cid}]: asset missing"); continue; }
+                Err(_) => {
+                    eprintln!("  SKIP [{cid}]: asset missing");
+                    continue;
+                }
             };
 
             let decoded = match img::decode(&asset_data) {
                 Some(d) => d,
                 None => {
-                    if out_cases.get(cid).map_or(false, |c| c["assert"]["method"].as_str() == Some("error")) {
+                    if out_cases
+                        .get(cid)
+                        .map_or(false, |c| c["assert"]["method"].as_str() == Some("error"))
+                    {
                         eprintln!("  OK   [{cid}] (expected error)");
                         passed += 1;
                     } else {
@@ -92,7 +105,11 @@ fn test_decode_fixtures() {
 
             let oc = match out_cases.get(cid) {
                 Some(c) => c,
-                None => { eprintln!("  FAIL [{cid}]: no output case"); failed += 1; continue; }
+                None => {
+                    eprintln!("  FAIL [{cid}]: no output case");
+                    failed += 1;
+                    continue;
+                }
             };
 
             if oc["assert"]["method"].as_str() == Some("error") {
@@ -105,7 +122,11 @@ fn test_decode_fixtures() {
             let ref_path = fixtures_dir.join("outputs").join(ref_rel);
             let expected = match fs::read(&ref_path) {
                 Ok(d) => d,
-                Err(_) => { eprintln!("  FAIL [{cid}]: ref missing {}", ref_path.display()); failed += 1; continue; }
+                Err(_) => {
+                    eprintln!("  FAIL [{cid}]: ref missing {}", ref_path.display());
+                    failed += 1;
+                    continue;
+                }
             };
 
             let actual = decoded.as_bytes();
@@ -113,9 +134,17 @@ fn test_decode_fixtures() {
                 eprintln!("  OK   [{cid}] {} bytes", actual.len());
                 passed += 1;
             } else {
-                let diffs = actual.iter().zip(expected.iter()).filter(|(a,b)| a!=b).count();
-                eprintln!("  FAIL [{cid}]: {diffs}/{} bytes differ (got {}B, expected {}B)",
-                    actual.len().max(expected.len()), actual.len(), expected.len());
+                let diffs = actual
+                    .iter()
+                    .zip(expected.iter())
+                    .filter(|(a, b)| a != b)
+                    .count();
+                eprintln!(
+                    "  FAIL [{cid}]: {diffs}/{} bytes differ (got {}B, expected {}B)",
+                    actual.len().max(expected.len()),
+                    actual.len(),
+                    expected.len()
+                );
                 failed += 1;
             }
         }
@@ -133,13 +162,34 @@ fn test_decode_fixtures() {
 #[test]
 fn test_format_detection() {
     use img::ImageFormat;
-    assert_eq!(img::detect_format(b"\xff\xd8\xff\xe0\x00\x10\x4a\x46"), Some(ImageFormat::Jpeg));
-    assert_eq!(img::detect_format(b"\x89PNG\r\n\x1a\n\x00\x00\x00"), Some(ImageFormat::Png));
-    assert_eq!(img::detect_format(b"GIF89a\x00\x00\x00"), Some(ImageFormat::Gif));
-    assert_eq!(img::detect_format(b"BM\x00\x00\x00\x00\x00\x00"), Some(ImageFormat::Bmp));
-    assert_eq!(img::detect_format(b"II\x2a\x00\x00\x00\x00\x00"), Some(ImageFormat::Tiff));
-    assert_eq!(img::detect_format(b"\x00\x00\x01\x00\x00\x00\x00\x00"), Some(ImageFormat::Ico));
-    assert_eq!(img::detect_format(b"RIFF\x00\x00\x00\x00WEBP"), Some(ImageFormat::WebP));
+    assert_eq!(
+        img::detect_format(b"\xff\xd8\xff\xe0\x00\x10\x4a\x46"),
+        Some(ImageFormat::Jpeg)
+    );
+    assert_eq!(
+        img::detect_format(b"\x89PNG\r\n\x1a\n\x00\x00\x00"),
+        Some(ImageFormat::Png)
+    );
+    assert_eq!(
+        img::detect_format(b"GIF89a\x00\x00\x00"),
+        Some(ImageFormat::Gif)
+    );
+    assert_eq!(
+        img::detect_format(b"BM\x00\x00\x00\x00\x00\x00"),
+        Some(ImageFormat::Bmp)
+    );
+    assert_eq!(
+        img::detect_format(b"II\x2a\x00\x00\x00\x00\x00"),
+        Some(ImageFormat::Tiff)
+    );
+    assert_eq!(
+        img::detect_format(b"\x00\x00\x01\x00\x00\x00\x00\x00"),
+        Some(ImageFormat::Ico)
+    );
+    assert_eq!(
+        img::detect_format(b"RIFF\x00\x00\x00\x00WEBP"),
+        Some(ImageFormat::WebP)
+    );
     assert_eq!(img::detect_format(b""), None);
     assert_eq!(img::detect_format(b"\x00"), None);
 }
@@ -157,9 +207,8 @@ fn test_manifest_coverage() {
         return;
     }
 
-    let manifest: serde_json::Value = serde_yaml::from_str(
-        &fs::read_to_string(&manifest_path).unwrap()
-    ).unwrap();
+    let manifest: serde_json::Value =
+        serde_yaml::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
 
     let mut missing_assets = Vec::new();
     let mut total_cases = 0u32;
@@ -169,7 +218,10 @@ fn test_manifest_coverage() {
         let format_dir = assets_dir.join(fmt_name);
         for case in fmt_data["edge_cases"].as_array().unwrap() {
             let cid = case["id"].as_str().unwrap();
-            let expect_error = case.get("expect_error").and_then(|v| v.as_bool()).unwrap_or(false);
+            let expect_error = case
+                .get("expect_error")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             if let Some(assets) = case.get("test_assets") {
                 for asset in assets.as_array().unwrap() {
@@ -184,7 +236,9 @@ fn test_manifest_coverage() {
                 }
             } else if !expect_error {
                 // Edge case with no test_assets and not error-only — gap
-                missing_assets.push(format!("  {fmt_name}: {cid} (no test_assets, not error-only)"));
+                missing_assets.push(format!(
+                    "  {fmt_name}: {cid} (no test_assets, not error-only)"
+                ));
             }
         }
     }
@@ -207,5 +261,8 @@ fn test_manifest_coverage() {
 
     // Don't fail on missing assets — just report the gap.
     // This matches test_coverage_complete behavior: informational, not blocking.
-    assert!(total_cases > 0, "manifest.yaml must define at least one test case");
+    assert!(
+        total_cases > 0,
+        "manifest.yaml must define at least one test case"
+    );
 }

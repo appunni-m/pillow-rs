@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Redesign pillow-rs-core to a lazy streaming pipeline architecture where operations return `Image::Pipeline { source, ops }` without cloning pixel buffers. Only `save()`/`tobytes()`/`materialize()` execute the chain in a single fused pass.
+**Goal:** Redesign pillow-rs to a lazy streaming pipeline architecture where operations return `Image::Pipeline { source, ops }` without cloning pixel buffers. Only `save()`/`tobytes()`/`materialize()` execute the chain in a single fused pass.
 
-**Architecture:** New `Image` enum (`Loaded | Path | Bytes | Pipeline`) replaces `LazyImage`. 96 ops become `PipelineOp` variants. 70 ops remain immediate. `Pipeline::materialize()` does fused single-pass execution. PyO3 bindings release GIL via `py.allow_threads()`. Existing code preserved in `pillow-rs-core-legacy/`.
+**Architecture:** New `Image` enum (`Loaded | Path | Bytes | Pipeline`) replaces `LazyImage`. 96 ops become `PipelineOp` variants. 70 ops remain immediate. `Pipeline::materialize()` does fused single-pass execution. PyO3 bindings release GIL via `py.allow_threads()`. Existing code preserved in `pillow-rs-legacy/`.
 
 **Tech Stack:** Rust (image crate 0.25, wgpu), Python (PyO3 0.24, Pillow 12.2.0), JS (wasm-bindgen 0.2)
 
@@ -14,16 +14,16 @@
 
 | File | Action | Responsibility |
 |------|--------|---------------|
-| `pillow-rs-core-legacy/` | Create (copy) | Exact copy of pillow-rs-core/src/ for reference |
-| `pillow-rs-core/src/image.rs` | Rewrite | New Image enum + all ops delegation + materialize |
-| `pillow-rs-core/src/pipeline.rs` | Create | PipelineOp enum (96 variants) + execute() on CPU/GPU |
-| `pillow-rs-core/src/lazy.rs` | Delete | Replaced by Image enum directly |
-| `pillow-rs-core/src/ops/*.rs` | Rewrite | Each op file: argument types → PipelineOp variant + Image::op() impl |
-| `pillow-rs-core/src/color.rs` | Keep | SIMD LUT helpers — unchanged |
-| `pillow-rs-core/src/error.rs` | Keep | PilError — unchanged |
-| `pillow-rs-core/src/format.rs` | Keep | Format parsing — unchanged |
-| `pillow-rs-core/src/gpu/mod.rs` | Keep | GpuEngine + execute_gpu() — add pipeline runner |
-| `pillow-rs-core/src/lib.rs` | Modify | Remove `pub mod lazy`, add `pub mod pipeline` |
+| `pillow-rs-legacy/` | Create (copy) | Exact copy of pillow-rs/src/ for reference |
+| `pillow-rs/src/image.rs` | Rewrite | New Image enum + all ops delegation + materialize |
+| `pillow-rs/src/pipeline.rs` | Create | PipelineOp enum (96 variants) + execute() on CPU/GPU |
+| `pillow-rs/src/lazy.rs` | Delete | Replaced by Image enum directly |
+| `pillow-rs/src/ops/*.rs` | Rewrite | Each op file: argument types → PipelineOp variant + Image::op() impl |
+| `pillow-rs/src/color.rs` | Keep | SIMD LUT helpers — unchanged |
+| `pillow-rs/src/error.rs` | Keep | PilError — unchanged |
+| `pillow-rs/src/format.rs` | Keep | Format parsing — unchanged |
+| `pillow-rs/src/gpu/mod.rs` | Keep | GpuEngine + execute_gpu() — add pipeline runner |
+| `pillow-rs/src/lib.rs` | Modify | Remove `pub mod lazy`, add `pub mod pipeline` |
 | `pillow-rs-py/src/lib.rs` | Modify | All heavy ops: release GIL via `py.allow_threads()` |
 | `pillow-rs-js/src/lib.rs` | Modify | Update for new Image type |
 | `tests/test_image.py` | Modify | Expand coverage for pipeline edge cases |
@@ -35,27 +35,27 @@
 ### Task 1: Copy existing code to legacy folder
 
 **Files:**
-- Create: `pillow-rs-core-legacy/` (entire pillow-rs-core/src/ tree)
+- Create: `pillow-rs-legacy/` (entire pillow-rs/src/ tree)
 
 - [ ] **Step 1: Copy the source tree**
 
 ```bash
-cp -r /home/appunni/work/pil-wasm/pillow-rs-core/src /home/appunni/work/pil-wasm/pillow-rs-core-legacy/
-cp /home/appunni/work/pil-wasm/pillow-rs-core/Cargo.toml /home/appunni/work/pil-wasm/pillow-rs-core-legacy/Cargo.toml
-cp -r /home/appunni/work/pil-wasm/pillow-rs-core/benches /home/appunni/work/pil-wasm/pillow-rs-core-legacy/benches 2>/dev/null || true
+cp -r /home/appunni/work/pil-wasm/pillow-rs/src /home/appunni/work/pil-wasm/pillow-rs-legacy/
+cp /home/appunni/work/pil-wasm/pillow-rs/Cargo.toml /home/appunni/work/pil-wasm/pillow-rs-legacy/Cargo.toml
+cp -r /home/appunni/work/pil-wasm/pillow-rs/benches /home/appunni/work/pil-wasm/pillow-rs-legacy/benches 2>/dev/null || true
 ```
 
 - [ ] **Step 2: Verify copy**
 
 ```bash
-diff -r /home/appunni/work/pil-wasm/pillow-rs-core/src /home/appunni/work/pil-wasm/pillow-rs-core-legacy/src --brief || echo "Copy verified"
+diff -r /home/appunni/work/pil-wasm/pillow-rs/src /home/appunni/work/pil-wasm/pillow-rs-legacy/src --brief || echo "Copy verified"
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add pillow-rs-core-legacy/
-git commit -m "chore: copy pillow-rs-core to pillow-rs-core-legacy
+git add pillow-rs-legacy/
+git commit -m "chore: copy pillow-rs to pillow-rs-legacy
 
 Exact snapshot before streaming pipeline rewrite. Reference only."
 ```
@@ -65,13 +65,13 @@ Exact snapshot before streaming pipeline rewrite. Reference only."
 ### Task 2: Define PipelineOp enum + Image enum
 
 **Files:**
-- Create: `pillow-rs-core/src/pipeline.rs`
-- Rewrite: `pillow-rs-core/src/image.rs`
-- Modify: `pillow-rs-core/src/lib.rs`
+- Create: `pillow-rs/src/pipeline.rs`
+- Rewrite: `pillow-rs/src/image.rs`
+- Modify: `pillow-rs/src/lib.rs`
 
 - [ ] **Step 1: Create PipelineOp enum**
 
-Create `pillow-rs-core/src/pipeline.rs`:
+Create `pillow-rs/src/pipeline.rs`:
 
 ```rust
 //! Streaming pipeline — all image-producing operations recorded as PipelineOp variants.
@@ -190,7 +190,7 @@ pub enum DitherMethod { None, FloydSteinberg }
 
 - [ ] **Step 2: Define new Image enum**
 
-Rewrite `pillow-rs-core/src/image.rs`:
+Rewrite `pillow-rs/src/image.rs`:
 
 ```rust
 use image::{DynamicImage, ImageFormat, GenericImageView};
@@ -496,7 +496,7 @@ fn execute_op(img: &DynamicImage, op: &PipelineOp) -> Result<DynamicImage, PilEr
             Ok(DynamicImage::ImageRgba8(image::imageops::contrast(img, *factor as f32)))
         }
         // ... remaining PipelineOp variants follow the same pattern
-        // Each maps to its existing implementation from pillow-rs-core-legacy/src/ops/
+        // Each maps to its existing implementation from pillow-rs-legacy/src/ops/
 
         _ => Err(PilError::NotImplementedError(format!("PipelineOp {:?} not yet implemented", op))),
     }
@@ -521,7 +521,7 @@ fn channel_op_binary(img: &DynamicImage, other: &Arc<Image>, op: impl Fn(u8, u8)
 
 - [ ] **Step 3: Update lib.rs**
 
-Edit `pillow-rs-core/src/lib.rs`:
+Edit `pillow-rs/src/lib.rs`:
 
 ```rust
 pub mod color;
@@ -544,7 +544,7 @@ pub use image::Image;
 - [ ] **Step 4: Compile and fix**
 
 ```bash
-cargo build -p pillow-rs-core 2>&1 | head -30
+cargo build -p pillow-rs 2>&1 | head -30
 ```
 
 Fix any compilation errors (missing imports, type mismatches).
@@ -552,7 +552,7 @@ Fix any compilation errors (missing imports, type mismatches).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pillow-rs-core/src/pipeline.rs pillow-rs-core/src/image.rs pillow-rs-core/src/lib.rs
+git add pillow-rs/src/pipeline.rs pillow-rs/src/image.rs pillow-rs/src/lib.rs
 git commit -m "feat: new Image enum + PipelineOp enum for streaming pipeline
 
 - Image: Loaded | Path | Bytes | Pipeline variants
@@ -567,19 +567,19 @@ git commit -m "feat: new Image enum + PipelineOp enum for streaming pipeline
 ### Task 3: Rewrite ops to use PipelineOp
 
 **Files:**
-- Modify: `pillow-rs-core/src/ops/resize.rs`
-- Modify: `pillow-rs-core/src/ops/crop.rs`
-- Modify: `pillow-rs-core/src/ops/rotate.rs`
-- Modify: `pillow-rs-core/src/ops/transpose.rs`
-- Modify: `pillow-rs-core/src/ops/convert.rs`
-- Modify: `pillow-rs-core/src/ops/filter.rs`
-- Modify: `pillow-rs-core/src/ops/chops.rs`
-- Modify: `pillow-rs-core/src/ops/imageops.rs`
-- Modify: `pillow-rs-core/src/ops/enhance.rs`
-- Modify: `pillow-rs-core/src/ops/paste.rs`
-- Modify: `pillow-rs-core/src/ops/quantize.rs`
-- Modify: `pillow-rs-core/src/ops/transform.rs`
-- Modify: `pillow-rs-core/src/ops/module_fns.rs`
+- Modify: `pillow-rs/src/ops/resize.rs`
+- Modify: `pillow-rs/src/ops/crop.rs`
+- Modify: `pillow-rs/src/ops/rotate.rs`
+- Modify: `pillow-rs/src/ops/transpose.rs`
+- Modify: `pillow-rs/src/ops/convert.rs`
+- Modify: `pillow-rs/src/ops/filter.rs`
+- Modify: `pillow-rs/src/ops/chops.rs`
+- Modify: `pillow-rs/src/ops/imageops.rs`
+- Modify: `pillow-rs/src/ops/enhance.rs`
+- Modify: `pillow-rs/src/ops/paste.rs`
+- Modify: `pillow-rs/src/ops/quantize.rs`
+- Modify: `pillow-rs/src/ops/transform.rs`
+- Modify: `pillow-rs/src/ops/module_fns.rs`
 
 - [ ] **Step 1: Rewrite resize.rs**
 
@@ -588,7 +588,7 @@ Each op file's job is now only:
 2. `impl Image` method that creates a PipelineOp
 
 ```rust
-// pillow-rs-core/src/ops/resize.rs
+// pillow-rs/src/ops/resize.rs
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
@@ -667,8 +667,8 @@ Same pattern for all ops files. Each file's public functions become `impl Image`
 - [ ] **Step 5: Compile and commit**
 
 ```bash
-cargo build -p pillow-rs-core 2>&1 | grep error | head -20
-git add pillow-rs-core/src/ops/
+cargo build -p pillow-rs 2>&1 | grep error | head -20
+git add pillow-rs/src/ops/
 git commit -m "refactor: all 96 pipeline ops → PipelineOp variants"
 ```
 
@@ -745,14 +745,14 @@ Materializes pipeline before crossing PyO3 boundary."
 impl Image {
     #[wasm_bindgen(constructor)]
     pub fn new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> {
-        pillow_rs_core::image::Image::new(w, h, mode, (r, g, b, a))
+        pillow_rs::image::Image::new(w, h, mode, (r, g, b, a))
             .map(|i| Image { inner: i })
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = "open")]
     pub fn open(data: Vec<u8>) -> Result<Image, JsValue> {
-        pillow_rs_core::image::Image::open_bytes(data)
+        pillow_rs::image::Image::open_bytes(data)
             .map(|i| Image { inner: i })
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -885,7 +885,7 @@ grep -c "TBD" BENCHMARKS.md  # expected: 0
 - [ ] **Step 1: Full test suite**
 
 ```bash
-cargo test -p pillow-rs-core  # 29 GPU tests + all unit tests
+cargo test -p pillow-rs  # 29 GPU tests + all unit tests
 python -m pytest tests/ -v    # 200+ PIL parity tests
 ```
 
@@ -903,7 +903,7 @@ print(f'Empty cells: {dashes} (must be 0)')
 - [ ] **Step 3: GPU path verification**
 
 ```bash
-cargo test -p pillow-rs-core -- gpu::tests
+cargo test -p pillow-rs -- gpu::tests
 # Expected: 29 passed, 0 failed
 ```
 

@@ -221,11 +221,11 @@ Need adapter: `fn(&DynamicImage, &PipelineOp, Option<&str>) -> Result<DynamicIma
 
 | File | Gaps |
 |------|------|
-| `pillow-rs-core/src/ops/quantize.rs` | Gap 1 — rewire to push_op |
-| `pillow-rs-core/src/compute/pool_simd/` | Gap 2 — create adapter wrappers |
-| `pillow-rs-core/src/compute/registry.rs` | All gaps — OpId variants, op_id arms, registry entries |
-| `pillow-rs-core/src/pipeline.rs` | Gap 7 — DrawBitmap variant |
-| `pillow-rs-core/src/compute/pool_gpu/shaders/` | Gaps 4-6 — new WGSL shaders |
-| `pillow-rs-core/src/compute/pool_cpu/ops/` | Gaps 4-7 — CPU impls for new ops |
-| `pillow-rs-core/src/draw/mod.rs` | Gap 7 — bitmap/text pipeline |
-| `pillow-rs-core/src/ops/convert.rs` | Gap 8 — route all paths through push_op |
+| `pillow-rs/src/ops/quantize.rs` | Gap 1 — rewire to push_op |
+| `pillow-rs/src/compute/pool_simd/` | Gap 2 — create adapter wrappers |
+| `pillow-rs/src/compute/registry.rs` | All gaps — OpId variants, op_id arms, registry entries |
+| `pillow-rs/src/pipeline.rs` | Gap 7 — DrawBitmap variant |
+| `pillow-rs/src/compute/pool_gpu/shaders/` | Gaps 4-6 — new WGSL shaders |
+| `pillow-rs/src/compute/pool_cpu/ops/` | Gaps 4-7 — CPU impls for new ops |
+| `pillow-rs/src/draw/mod.rs` | Gap 7 — bitmap/text pipeline |
+| `pillow-rs/src/ops/convert.rs` | Gap 8 — route all paths through push_op |

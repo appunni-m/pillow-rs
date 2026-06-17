@@ -1,0 +1,65 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "getdata"
+  },
+  "cases": [
+    {
+      "id": "Image_getdata_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "band": null
+      }
+    },
+    {
+      "id": "Image_getdata_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "band": null
+      }
+    },
+    {
+      "id": "Image_getdata_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "band": null
+      }
+    },
+    {
+      "id": "Image_getdata_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "band": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "getpixel"
+  },
+  "cases": [
+    {
+      "id": "Image_getpixel_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_getpixel_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_getpixel_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_getpixel_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_getpixel_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "Image_getpixel_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          50,
+          50
+        ]
+      }
+    }
+  ]
+}

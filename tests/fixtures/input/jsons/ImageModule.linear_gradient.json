@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageModule",
+    "target": "linear_gradient"
+  },
+  "cases": [
+    {
+      "id": "L",
+      "mode": "L",
+      "input": null,
+      "params": {
+        "mode": "L"
+      }
+    }
+  ]
+}

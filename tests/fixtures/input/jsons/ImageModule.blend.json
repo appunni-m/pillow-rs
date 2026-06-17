@@ -1,0 +1,114 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageModule",
+    "target": "blend"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.blend_CMYK",
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "alpha": 0.5
+      }
+    },
+    {
+      "id": "ImageModule.blend_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "alpha": 0.5
+      }
+    },
+    {
+      "id": "ImageModule.blend_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "alpha": 0.5
+      }
+    },
+    {
+      "id": "ImageModule.blend_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "alpha": 0.5
+      }
+    },
+    {
+      "id": "L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "alpha": 0.5
+      }
+    }
+  ]
+}

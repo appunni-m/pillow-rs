@@ -1,0 +1,66 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageChops",
+    "target": "duplicate"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_duplicate_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {},
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_duplicate_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {},
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageChops_duplicate_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {},
+      "input2": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      }
+    }
+  ]
+}

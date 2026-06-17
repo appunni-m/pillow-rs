@@ -1,0 +1,121 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "putdata"
+  },
+  "cases": [
+    {
+      "id": "Image_putdata_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_CMYK",
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_putdata_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "data": [
+          128
+        ]
+      }
+    }
+  ]
+}

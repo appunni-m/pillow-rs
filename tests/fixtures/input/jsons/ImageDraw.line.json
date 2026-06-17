@@ -1,0 +1,177 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "line"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_line_1",
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_line_CMYK",
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_line_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_line_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_line_P",
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_line_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    },
+    {
+      "id": "ImageDraw_line_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "xy": [
+          [
+            10,
+            10
+          ],
+          [
+            40,
+            40
+          ]
+        ],
+        "fill": 200
+      }
+    }
+  ]
+}

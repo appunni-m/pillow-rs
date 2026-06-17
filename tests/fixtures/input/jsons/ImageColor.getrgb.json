@@ -1,0 +1,37 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageColor",
+    "target": "getrgb"
+  },
+  "cases": [
+    {
+      "id": "ImageColor_getrgb_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "color": "red"
+      }
+    },
+    {
+      "id": "ImageColor_getrgb_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "color": "red"
+      }
+    }
+  ]
+}

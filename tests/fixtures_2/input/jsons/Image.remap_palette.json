@@ -1,0 +1,46 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "remap_palette"
+  },
+  "cases": [
+    {
+      "id": "Image_remap_palette_L_suite1",
+      "params": {
+        "dest_map": [
+          0,
+          1
+        ]
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          64,
+          128
+        ]
+      }
+    },
+    {
+      "id": "Image_remap_palette_P_suite1",
+      "params": {
+        "dest_map": [
+          0,
+          1
+        ]
+      },
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          128,
+          64
+        ]
+      }
+    }
+  ]
+}

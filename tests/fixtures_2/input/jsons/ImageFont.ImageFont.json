@@ -1,0 +1,25 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "ImageFont"
+  },
+  "cases": [
+    {
+      "id": "ImageFont_ImageFont_L_suite1",
+      "params": {},
+      "mode": "L"
+    },
+    {
+      "id": "ImageFont_ImageFont_RGB_suite1",
+      "params": {},
+      "mode": "RGB"
+    },
+    {
+      "id": "ImageFont_ImageFont_RGBA_suite1",
+      "params": {},
+      "mode": "RGBA"
+    }
+  ]
+}

@@ -4,5 +4,86 @@
     "module": "Decode",
     "target": "png"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_png_gray_png",
+      "mode": "L",
+      "asset": "png/gray.png"
+    },
+    {
+      "id": "Decode_png_gray_alpha_png",
+      "mode": "LA",
+      "asset": "png/gray_alpha.png"
+    },
+    {
+      "id": "Decode_png_rgb_png",
+      "mode": "RGB",
+      "asset": "png/rgb.png"
+    },
+    {
+      "id": "Decode_png_rgba_png",
+      "mode": "RGBA",
+      "asset": "png/rgba.png"
+    },
+    {
+      "id": "Decode_png_indexed_png",
+      "mode": "P",
+      "asset": "png/indexed.png"
+    },
+    {
+      "id": "Decode_png_1bit_png",
+      "mode": "1",
+      "asset": "png/1bit.png"
+    },
+    {
+      "id": "Decode_png_8bit_png",
+      "mode": "L",
+      "asset": "png/8bit.png"
+    },
+    {
+      "id": "Decode_png_no_interlace_png",
+      "mode": "RGB",
+      "asset": "png/no_interlace.png"
+    },
+    {
+      "id": "Decode_png_adam7_png",
+      "mode": "RGB",
+      "asset": "png/adam7.png"
+    },
+    {
+      "id": "Decode_png_filter_none_png",
+      "mode": "RGB",
+      "asset": "png/filter_none.png"
+    },
+    {
+      "id": "Decode_png_compress_default_png",
+      "mode": "RGB",
+      "asset": "png/compress_default.png"
+    },
+    {
+      "id": "Decode_png_compress_max_png",
+      "mode": "RGB",
+      "asset": "png/compress_max.png"
+    },
+    {
+      "id": "Decode_png_srgb_png",
+      "mode": "RGB",
+      "asset": "png/srgb.png"
+    },
+    {
+      "id": "Decode_png_text_chunks_png",
+      "mode": "RGB",
+      "asset": "png/text_chunks.png"
+    },
+    {
+      "id": "Decode_png_1x1_png",
+      "mode": "RGB",
+      "asset": "png/1x1.png"
+    },
+    {
+      "id": "Decode_png_odd_size_png",
+      "mode": "RGB",
+      "asset": "png/odd_size.png"
+    }
+  ]
 }

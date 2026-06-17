@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "pillow-rs-core",
+    "pillow-rs",
     "pillow-rs-py",
     "pillow-rs-js",
     "pillow-rs-image",

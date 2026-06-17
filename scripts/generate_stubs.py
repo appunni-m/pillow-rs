@@ -13,7 +13,7 @@ def load_manifest(path: str) -> dict:
 def main():
     manifest_path = sys.argv[1] if len(sys.argv) > 1 else "manifest.yaml"
     manifest = load_manifest(manifest_path)
-    ops_dir = Path("pillow-rs-core/src/ops")
+    ops_dir = Path("pillow-rs/src/ops")
     existing = set()
     for rs_file in ops_dir.glob("*.rs"):
         for line in rs_file.read_text().split("\n"):

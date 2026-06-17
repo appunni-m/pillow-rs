@@ -867,11 +867,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     /// # Panics
     ///
     /// Panics when the resulting image is larger than the maximum size of a vector.
-    pub fn from_pixel(
-        width: u32,
-        height: u32,
-        pixel: P,
-    ) -> ImageBuffer<P, Vec<P::Subpixel>> {
+    pub fn from_pixel(width: u32, height: u32, pixel: P) -> ImageBuffer<P, Vec<P::Subpixel>> {
         let mut buf = ImageBuffer::new(width, height);
         for p in buf.pixels_mut() {
             *p = pixel;
@@ -884,11 +880,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
     /// # Panics
     ///
     /// Panics when the resulting image is larger than the maximum size of a vector.
-    pub fn from_fn<F>(
-        width: u32,
-        height: u32,
-        mut f: F,
-    ) -> ImageBuffer<P, Vec<P::Subpixel>>
+    pub fn from_fn<F>(width: u32, height: u32, mut f: F) -> ImageBuffer<P, Vec<P::Subpixel>>
     where
         F: FnMut(u32, u32) -> P,
     {

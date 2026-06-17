@@ -1,0 +1,33 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Image",
+    "target": "getxmp"
+  },
+  "cases": [
+    {
+      "id": "Image_getxmp_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    },
+    {
+      "id": "Image_getxmp_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {}
+    }
+  ]
+}

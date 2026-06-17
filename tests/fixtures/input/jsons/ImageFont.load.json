@@ -1,0 +1,41 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFont",
+    "target": "load"
+  },
+  "cases": [
+    {
+      "id": "ImageFont.load_L",
+      "mode": "L",
+      "params": {
+        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "size": 20
+      }
+    },
+    {
+      "id": "ImageFont.load_RGBA",
+      "mode": "RGBA",
+      "params": {
+        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "size": 20
+      }
+    },
+    {
+      "id": "dejavu_sans_16",
+      "params": {
+        "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "size": 16
+      },
+      "mode": "RGB"
+    },
+    {
+      "id": "liberation_serif_20",
+      "params": {
+        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "size": 20
+      },
+      "mode": "RGB"
+    }
+  ]
+}

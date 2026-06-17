@@ -1,0 +1,70 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "posterize"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.posterize_LA_suite1",
+      "params": {
+        "bits": 4
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageOps.posterize_RGBA_suite1",
+      "params": {
+        "bits": 4
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_posterize_L_suite1",
+      "params": {
+        "bits": 4
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          80,
+          80
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_posterize_RGB_suite1",
+      "params": {
+        "bits": 4
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          64,
+          64
+        ]
+      }
+    }
+  ]
+}

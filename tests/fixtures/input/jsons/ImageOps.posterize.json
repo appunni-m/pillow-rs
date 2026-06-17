@@ -1,0 +1,65 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageOps",
+    "target": "posterize"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.posterize_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bits": 4
+      }
+    },
+    {
+      "id": "ImageOps.posterize_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bits": 4
+      }
+    },
+    {
+      "id": "ImageOps_posterize_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bits": 4
+      }
+    },
+    {
+      "id": "ImageOps_posterize_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "bits": 4
+      }
+    }
+  ]
+}

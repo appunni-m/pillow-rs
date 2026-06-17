@@ -1,0 +1,82 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "cover"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_cover_L_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          200,
+          50
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_cover_LA_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          256,
+          256
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_cover_RGB_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          32,
+          32
+        ]
+      }
+    },
+    {
+      "id": "ImageOps_cover_RGBA_suite1",
+      "params": {
+        "size": [
+          25,
+          25
+        ]
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          80,
+          80
+        ]
+      }
+    }
+  ]
+}

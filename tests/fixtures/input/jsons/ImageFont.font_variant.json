@@ -1,0 +1,39 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFont",
+    "target": "font_variant"
+  },
+  "cases": [
+    {
+      "id": "larger_size",
+      "mode": "L",
+      "input": null,
+      "params": {
+        "size": 30
+      }
+    },
+    {
+      "id": "font_variant_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [256, 256]
+      },
+      "params": {
+        "size": 30
+      }
+    },
+    {
+      "id": "font_variant_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [256, 256]
+      },
+      "params": {
+        "size": 30
+      }
+    }
+  ]
+}

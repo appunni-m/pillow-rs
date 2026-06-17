@@ -27,10 +27,7 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
             BitDepth::Eight => Some(DecodedImage::new(w, h, buf, ColorType::La8)),
             BitDepth::Sixteen => {
                 // Reduce 16-bit (2 bytes/sample) to 8-bit by taking the high byte
-                let pixels: Vec<u8> = buf
-                    .chunks_exact(4)
-                    .flat_map(|c| vec![c[0], c[2]])
-                    .collect();
+                let pixels: Vec<u8> = buf.chunks_exact(4).flat_map(|c| vec![c[0], c[2]]).collect();
                 Some(DecodedImage::new(w, h, pixels, ColorType::La8))
             }
             _ => None,
@@ -60,50 +57,23 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
             _ => None,
         },
         PngColorType::Indexed => {
-            // Expand indexed/palette image to RGBA via the palette and optional
-            // transparency (tRNS) chunk.
-            let palette = reader.info().palette.as_ref()?;
-            let trns = reader.info().trns.as_deref().unwrap_or(&[]);
-            let num_pixels = (w as u64 * h as u64) as usize;
-            let mut rgba = Vec::with_capacity(num_pixels.saturating_mul(4));
-            for &idx in &buf {
-                let pi = idx as usize * 3;
-                let r = palette.get(pi).copied().unwrap_or(0);
-                let g = palette.get(pi + 1).copied().unwrap_or(0);
-                let b = palette.get(pi + 2).copied().unwrap_or(0);
-                let a = trns.get(idx as usize).copied().unwrap_or(255u8);
-                rgba.push(r);
-                rgba.push(g);
-                rgba.push(b);
-                rgba.push(a);
-            }
-            Some(DecodedImage::new(w, h, rgba, ColorType::Rgba8))
+            // Return raw palette indices (1 byte/pixel) — PIL does NOT
+            // auto-expand indexed PNGs. The png crate already fills `buf`
+            // with palette index values.
+            Some(DecodedImage::new(w, h, buf, ColorType::L8))
         }
     }
 }
 
 /// Decode a grayscale PNG, handling sub-8-bit packed pixel formats.
-fn decode_grayscale(
-    w: u32,
-    h: u32,
-    buf: &[u8],
-    bit_depth: BitDepth,
-) -> Option<DecodedImage> {
+fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<DecodedImage> {
     let num_pixels = (w as u64 * h as u64) as usize;
     match bit_depth {
         BitDepth::One => {
-            // 1-bit: each byte holds 8 pixels (MSB first per PNG spec)
-            let row_bytes = ((w + 7) / 8) as usize;
-            let mut pixels = Vec::with_capacity(num_pixels);
-            for row in 0..h as usize {
-                let start = row * row_bytes;
-                for col in 0..w as usize {
-                    let byte = buf.get(start + col / 8).copied().unwrap_or(0);
-                    let bit = 7 - (col % 8);
-                    pixels.push(if byte & (1 << bit) != 0 { 255 } else { 0 });
-                }
-            }
-            Some(DecodedImage::new(w, h, pixels, ColorType::L8))
+            // Return packed 1-bit data (MSB first, 8 pixels per byte) — PIL's
+            // `tobytes()` for mode "1" returns packed bits, not expanded bytes.
+            // The png crate already delivers packed scanlines in `buf`.
+            Some(DecodedImage::new(w, h, buf.to_vec(), ColorType::L8))
         }
         BitDepth::Two => {
             // 2-bit: each byte holds 4 pixels (2 bits each, MSB first)
@@ -129,11 +99,7 @@ fn decode_grayscale(
                 let start = row * row_bytes;
                 for col in 0..w as usize {
                     let byte = buf.get(start + col / 2).copied().unwrap_or(0);
-                    let val = if col % 2 == 0 {
-                        byte >> 4
-                    } else {
-                        byte & 0x0F
-                    };
+                    let val = if col % 2 == 0 { byte >> 4 } else { byte & 0x0F };
                     // Scale 0..15 to 0..255
                     pixels.push((val * 255 / 15) as u8);
                 }
@@ -164,8 +130,8 @@ mod tests {
         let ihdr_data = [
             0, 0, 0, 1, // width = 1
             0, 0, 0, 1, // height = 1
-            8,          // bit depth = 8
-            0,          // color type = grayscale
+            8, // bit depth = 8
+            0, // color type = grayscale
             0, 0, 0, 0, // compression, filter, interlace
         ];
         let mut ihdr = Vec::new();

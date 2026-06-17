@@ -4,5 +4,31 @@
     "module": "Decode",
     "target": "webp"
   },
-  "cases": []
+  "cases": [
+    {
+      "id": "Decode_webp_lossy_webp",
+      "mode": "RGB",
+      "asset": "webp/lossy.webp"
+    },
+    {
+      "id": "Decode_webp_lossless_webp",
+      "mode": "RGB",
+      "asset": "webp/lossless.webp"
+    },
+    {
+      "id": "Decode_webp_no_alpha_webp",
+      "mode": "RGB",
+      "asset": "webp/no_alpha.webp"
+    },
+    {
+      "id": "Decode_webp_with_alpha_webp",
+      "mode": "RGB",
+      "asset": "webp/with_alpha.webp"
+    },
+    {
+      "id": "Decode_webp_16x16_webp",
+      "mode": "RGB",
+      "asset": "webp/16x16.webp"
+    }
+  ]
 }

@@ -1,0 +1,65 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageOps",
+    "target": "solarize"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.solarize_LA",
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "threshold": 128
+      }
+    },
+    {
+      "id": "ImageOps.solarize_RGBA",
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "threshold": 128
+      }
+    },
+    {
+      "id": "ImageOps_solarize_L",
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "threshold": 128
+      }
+    },
+    {
+      "id": "ImageOps_solarize_RGB",
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "size": [
+          256,
+          256
+        ]
+      },
+      "params": {
+        "threshold": 128
+      }
+    }
+  ]
+}

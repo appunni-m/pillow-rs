@@ -1,0 +1,171 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "arc"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_arc_1_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "1",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_flower",
+        "size": [
+          64,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_arc_CMYK_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "CMYK",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_mountain",
+        "size": [
+          128,
+          128
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_arc_L_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "L",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_nature",
+        "size": [
+          64,
+          128
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_arc_LA_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "LA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_water",
+        "size": [
+          128,
+          64
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_arc_P_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "P",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_city",
+        "size": [
+          100,
+          100
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_arc_RGB_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "RGB",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_people",
+        "size": [
+          50,
+          200
+        ]
+      }
+    },
+    {
+      "id": "ImageDraw_arc_RGBA_suite1",
+      "params": {
+        "xy": [
+          10,
+          10,
+          40,
+          40
+        ],
+        "start": 0,
+        "end": 180,
+        "fill": 200
+      },
+      "mode": "RGBA",
+      "input": {
+        "source": "reference_rgb",
+        "reference": "ref_animal",
+        "size": [
+          200,
+          50
+        ]
+      }
+    }
+  ]
+}

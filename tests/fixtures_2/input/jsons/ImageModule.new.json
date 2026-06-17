@@ -1,0 +1,142 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "new"
+  },
+  "cases": [
+    {
+      "id": "ImageModule_new_1_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "1"
+    },
+    {
+      "id": "ImageModule_new_CMYK_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "CMYK"
+    },
+    {
+      "id": "ImageModule_new_F_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "F"
+    },
+    {
+      "id": "ImageModule_new_HSV_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "HSV"
+    },
+    {
+      "id": "ImageModule_new_I_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "I"
+    },
+    {
+      "id": "ImageModule_new_L_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "L"
+    },
+    {
+      "id": "ImageModule_new_LA_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "LA"
+    },
+    {
+      "id": "ImageModule_new_P_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "P"
+    },
+    {
+      "id": "ImageModule_new_RGB_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "RGB"
+    },
+    {
+      "id": "ImageModule_new_RGBA_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "RGBA"
+    },
+    {
+      "id": "ImageModule_new_YCbCr_suite1",
+      "params": {
+        "mode": "RGB",
+        "size": [
+          50,
+          50
+        ],
+        "color": 0
+      },
+      "mode": "YCbCr"
+    }
+  ]
+}

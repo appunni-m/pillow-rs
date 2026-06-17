@@ -1,0 +1,41 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFont",
+    "target": "FreeTypeFont"
+  },
+  "cases": [
+    {
+      "id": "liberation_serif_20",
+      "params": {
+        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "size": 20
+      },
+      "mode": "RGB"
+    },
+    {
+      "id": "dejavu_sans_16",
+      "params": {
+        "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "size": 16
+      },
+      "mode": "RGB"
+    },
+    {
+      "id": "FreeTypeFont_L",
+      "params": {
+        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "size": 20
+      },
+      "mode": "L"
+    },
+    {
+      "id": "FreeTypeFont_RGBA",
+      "params": {
+        "font": "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "size": 20
+      },
+      "mode": "RGBA"
+    }
+  ]
+}
