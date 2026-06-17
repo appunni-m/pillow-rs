@@ -47,7 +47,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         .collect();
 
     // Process each scan in order
-    for (scan_idx, scan) in info.scans.iter().enumerate() {
+    for (_scan_idx, scan) in info.scans.iter().enumerate() {
         // Extract entropy segments (split at RST markers within the scan data)
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
@@ -55,7 +55,6 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         }
 
         let is_dc_scan = scan.ss == 0 && scan.se == 0;
-        eprintln!("SCAN[{}]: ss={} se={} ah={} al={} ncomps={}", scan_idx, scan.ss, scan.se, scan.ah, scan.al, scan.components.len());
         let is_dc_first = is_dc_scan && scan.ah == 0;
         let is_dc_refine = is_dc_scan && scan.ah > 0;
         let is_ac_first = !is_dc_scan && scan.ah == 0;
@@ -123,7 +122,9 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                             }
                         }
                     } else if is_ac_first {
-                        // ── AC first scan (Huffman-coded AC run-length) ──
+                        // ── AC first scan — IJG jdphuff.c decode_mcu_AC_first ──
+                        // EOBRUN shared with AC_refine, persists across blocks.
+                        // When EOBRUN > 0: entire block is zero in this band → skip.
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize].as_ref()?;
                         for by in 0..comp.v_samp as usize {
                             for bx in 0..comp.h_samp as usize {
@@ -132,26 +133,28 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                     + (mcu_x * comp.h_samp as usize + bx);
                                 let mut k = scan.ss as usize;
                                 let se = scan.se as usize;
+
+                                if ac_refine_eobrun > 0 {
+                                    ac_refine_eobrun -= 1;
+                                    continue; // entire block is zero band
+                                }
+
                                 while k <= se && k < 64 {
                                     let sym = ac_table.decode(&mut br)?;
-                                    if sym == 0x00 {
-                                        break;
-                                    } // EOB
                                     let run = (sym >> 4) as usize;
                                     let size = (sym & 0x0F) as u8;
                                     if size == 0 && run == 15 {
-                                        k += 16;
-                                        continue; // ZRL
+                                        k += 16; continue; // ZRL
                                     }
                                     if size == 0 {
-                                        // EOB: size==0, run>0, run!=15 -> remaining band is zero
+                                        // EOB: EOBRUN = (1<<run) | extra, consume one for this block
+                                        ac_refine_eobrun = (1u32 << run) as u32;
+                                        if run > 0 { ac_refine_eobrun |= br.read_bits(run as u32)?; }
+                                        ac_refine_eobrun -= 1;
                                         break;
                                     }
-                                    // size > 0: new non-zero coefficient
                                     k += run;
-                                    if k > se || k >= 64 {
-                                        break;
-                                    }
+                                    if k > se || k >= 64 { break; }
                                     let bits = br.read_bits(size as u32)?;
                                     let val = extend(bits, size);
                                     coeff_storage[comp_idx][block_idx][k] = val << scan.al;
@@ -160,17 +163,11 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                             }
                         }
                     } else if is_ac_refine {
-                        // ── AC refinement scan (1-bit refinement + Huffman for new coeffs) ──
-                        // Algorithm: IJG libjpeg-turbo `jdphuff.c` `decode_mcu_AC_refine`
-                        //
-                        // Single unified per-position loop. At each position k in [Ss..Se]:
-                        //  - coeffs[k] != 0: always read 1 refinement bit
-                        //  - coeffs[k] == 0 && EOBRUN > 0: position consumed by EOBRUN (decrement)
-                        //  - coeffs[k] == 0 && EOBRUN == 0: Huffman-decode next symbol
-                        //    (which may be EOB setting new EOBRUN, ZRL, or new coefficient)
-                        //
-                        // EOBRUN is a POSITION counter (not block counter) and persists
-                        // across all blocks in the scan segment per IJG savable_state.
+                        // ── AC refinement scan — matches IJG jdphuff.c decode_mcu_AC_refine ──
+                        // Two-phase per-block: Phase 1 Huffman-decodes (only when EOBRUN==0),
+                        // Phase 2 refines remaining non-zero coefficients and EOBRUN--.
+                        // EOBRUN is a BLOCK counter (decremented once per block), not position.
+                        // See: docs/jdphuff-vs-ours.md
 
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize].as_ref()?;
                         let p1 = 1i32 << scan.al;
@@ -185,83 +182,78 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                 let coeffs = &mut coeff_storage[comp_idx][block_idx];
                                 let mut k = ss;
 
-                                // Unified per-position loop
-                                while k <= se && k < 64 {
-                                    if coeffs[k] != 0 {
-                                        // Non-zero: always refine (read 1 bit)
-                                        let bit = br.read_bits(1)?;
-                                        if bit != 0 {
-                                            if coeffs[k] >= 0 {
-                                                coeffs[k] += p1;
-                                            } else {
-                                                coeffs[k] += m1;
-                                            }
-                                        }
-                                        k += 1;
-                                    } else if ac_refine_eobrun > 0 {
-                                        // Zero position consumed by EOBRUN (per-position decrement)
-                                        ac_refine_eobrun -= 1;
-                                        k += 1;
-                                    } else {
-                                        // EOBRUN == 0: Huffman-decode at this zero position
-                                        let sym = ac_table.decode(&mut br)?;
-                                        let run = (sym >> 4) as usize;
-                                        let size = (sym & 0x0F) as u8;
-                                        if size == 0 && run == 15 {
-                                            // ZRL: skip 16 positions, refining non-zeros along the way
-                                            let end = (k + 16).min(se + 1).min(64);
-                                            while k < end {
-                                                if coeffs[k] != 0 {
-                                                    let bit = br.read_bits(1)?;
-                                                    if bit != 0 {
-                                                        if coeffs[k] >= 0 {
-                                                            coeffs[k] += p1;
-                                                        } else {
-                                                            coeffs[k] += m1;
-                                                        }
-                                                    }
-                                                }
-                                                k += 1;
-                                            }
-                                        } else if size == 0 {
-                                            // EOB: set EOBRUN (carries across blocks)
-                                            ac_refine_eobrun = 1u32 << run;
-                                            if run > 0 {
-                                                ac_refine_eobrun |= br.read_bits(run as u32)?;
-                                            }
-                                            // eobrun > 0 now; loop continues, consuming zero positions
-                                        } else {
-                                            // New non-zero coefficient after skipping `run` zeros
-                                            let mut r = run;
-                                            loop {
-                                                if k > se || k >= 64 {
-                                                    break;
-                                                }
-                                                if coeffs[k] != 0 {
-                                                    let bit = br.read_bits(1)?;
-                                                    if bit != 0 {
-                                                        if coeffs[k] >= 0 {
-                                                            coeffs[k] += p1;
-                                                        } else {
-                                                            coeffs[k] += m1;
-                                                        }
-                                                    }
-                                                } else {
-                                                    if r == 0 {
-                                                        break;
-                                                    }
-                                                    r -= 1;
-                                                }
-                                                k += 1;
-                                            }
-                                            if k > se || k >= 64 {
-                                                break;
-                                            }
+                                // Phase 1: Huffman decode (only when EOBRUN == 0)
+                                if ac_refine_eobrun == 0 {
+                                    while k <= se && k < 64 {
+                                        if coeffs[k] != 0 {
+                                            // Refine existing non-zero
                                             let bit = br.read_bits(1)?;
-                                            coeffs[k] = if bit != 0 { p1 } else { m1 };
+                                            if bit != 0 {
+                                                coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                            }
                                             k += 1;
+                                        } else {
+                                            let sym = ac_table.decode(&mut br)?;
+                                            let run = (sym >> 4) as usize;
+                                            let size = (sym & 0x0F) as u8;
+                                            if size == 0 && run == 15 {
+                                                // ZRL: skip 16 positions, refine non-zeros on the way
+                                                let end = (k + 16).min(se + 1).min(64);
+                                                while k < end {
+                                                    if coeffs[k] != 0 {
+                                                        let bit = br.read_bits(1)?;
+                                                        if bit != 0 {
+                                                            coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                        }
+                                                    }
+                                                    k += 1;
+                                                }
+                                            } else if size == 0 {
+                                                // EOB: EOBRUN = (1<<run) | extra_bits, then break → Phase 2
+                                                ac_refine_eobrun = (1u32 << run) as u32;
+                                                if run > 0 {
+                                                    ac_refine_eobrun |= br.read_bits(run as u32)?;
+                                                }
+                                                break;
+                                            } else {
+                                                // New non-zero: skip `run` zeros (refining non-zeros), place ±p1
+                                                let bit = br.read_bits(1)?;
+                                                let val = if bit != 0 { p1 } else { m1 };
+                                                let mut r = run;
+                                                loop {
+                                                    if k > se || k >= 64 { break; }
+                                                    if coeffs[k] != 0 {
+                                                        let bit = br.read_bits(1)?;
+                                                        if bit != 0 {
+                                                            coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                        }
+                                                    } else {
+                                                        if r == 0 { break; }
+                                                        r -= 1;
+                                                    }
+                                                    k += 1;
+                                                }
+                                                if k <= se && k < 64 {
+                                                    coeffs[k] = val;
+                                                    k += 1;
+                                                }
+                                            }
                                         }
                                     }
+                                }
+
+                                // Phase 2: EOBRUN handler — refine remaining non-zero coefficients
+                                if ac_refine_eobrun > 0 {
+                                    while k <= se && k < 64 {
+                                        if coeffs[k] != 0 {
+                                            let bit = br.read_bits(1)?;
+                                            if bit != 0 {
+                                                coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                            }
+                                        }
+                                        k += 1;
+                                    }
+                                    ac_refine_eobrun -= 1; // one BLOCK consumed
                                 }
                             }
                         }
@@ -278,7 +270,6 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         }
     }
 
-    eprintln!("FINAL_PASS");
     // ── Final pass: dequantize, IDCT, build component buffers ──
     let mut block_natural = [0i32; 64];
     let mut workspace = [0i32; 64];
