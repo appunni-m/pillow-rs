@@ -878,7 +878,7 @@ impl Image {
             ImageFormat::from_path(path)
                 .map_err(|_| PilError::UnknownFormat("Cannot determine format from path".into()))?
         };
-        let encoded = pillow_rs_image::encode(&img.into_decoded(), save_format)
+        let encoded = pillow_rs_image::encode_default(&img.into_decoded(), save_format)
             .ok_or_else(|| PilError::UnknownFormat("encoding failed".into()))?;
         std::fs::write(path, encoded).map_err(PilError::Io)?;
         Ok(())
@@ -1045,13 +1045,13 @@ impl Image {
     pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
         match self.paletted_to_rgb() {
             Some(img) => {
-                let encoded = pillow_rs_image::encode(&img.into_decoded(), ImageFormat::Png)
+                let encoded = pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
                     .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
                 Ok(encoded)
             }
             None => {
                 let img = self.materialize()?;
-                let encoded = pillow_rs_image::encode(&img.into_decoded(), ImageFormat::Png)
+                let encoded = pillow_rs_image::encode_default(&img.into_decoded(), ImageFormat::Png)
                     .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
                 Ok(encoded)
             }
