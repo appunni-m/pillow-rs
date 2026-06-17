@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "split"
+  },
+  "cases": [
+    {
+      "id": "Image_split_L_suite1",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_L_suite1_0.png"
+        ]
+      }
+    },
+    {
+      "id": "Image_split_LA_suite1",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_LA_suite1_0.png",
+          "images/Image.split_Image_split_LA_suite1_1.png"
+        ]
+      }
+    },
+    {
+      "id": "Image_split_RGB_suite1",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_RGB_suite1_0.png",
+          "images/Image.split_Image_split_RGB_suite1_1.png",
+          "images/Image.split_Image_split_RGB_suite1_2.png"
+        ]
+      }
+    },
+    {
+      "id": "Image_split_RGBA_suite1",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_RGBA_suite1_0.png",
+          "images/Image.split_Image_split_RGBA_suite1_1.png",
+          "images/Image.split_Image_split_RGBA_suite1_2.png",
+          "images/Image.split_Image_split_RGBA_suite1_3.png"
+        ]
+      }
+    }
+  ]
+}

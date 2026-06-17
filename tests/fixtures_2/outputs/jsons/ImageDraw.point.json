@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "point"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_point_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.point_ImageDraw_point_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_point_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.point_ImageDraw_point_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_point_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.point_ImageDraw_point_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_point_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.point_ImageDraw_point_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_point_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.point_ImageDraw_point_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_point_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.point_ImageDraw_point_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_point_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.point_ImageDraw_point_RGBA_suite1.png"
+      }
+    }
+  ]
+}

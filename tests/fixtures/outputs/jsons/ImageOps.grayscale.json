@@ -1,0 +1,45 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "grayscale"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_grayscale_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.grayscale_ImageOps_grayscale_L.png"
+      }
+    },
+    {
+      "id": "ImageOps_grayscale_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.grayscale_ImageOps_grayscale_LA.png"
+      }
+    },
+    {
+      "id": "ImageOps_grayscale_P",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.grayscale_ImageOps_grayscale_P.png"
+      }
+    },
+    {
+      "id": "ImageOps_grayscale_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.grayscale_ImageOps_grayscale_RGB.png"
+      }
+    },
+    {
+      "id": "ImageOps_grayscale_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.grayscale_ImageOps_grayscale_RGBA.png"
+      }
+    }
+  ]
+}

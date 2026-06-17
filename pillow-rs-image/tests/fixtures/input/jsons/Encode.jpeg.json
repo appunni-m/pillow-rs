@@ -1,0 +1,282 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Encode",
+    "target": "jpeg"
+  },
+  "cases": [
+    {
+      "id": "enc_q100",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 100
+      }
+    },
+    {
+      "id": "enc_q85",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 85
+      }
+    },
+    {
+      "id": "enc_q75",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 75
+      }
+    },
+    {
+      "id": "enc_q50",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 50
+      }
+    },
+    {
+      "id": "enc_q25",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 25
+      }
+    },
+    {
+      "id": "enc_q10",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 10
+      }
+    },
+    {
+      "id": "enc_q1",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 1
+      }
+    },
+    {
+      "id": "enc_sub_444",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "subsampling": "444"
+      }
+    },
+    {
+      "id": "enc_sub_422",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "subsampling": "422"
+      }
+    },
+    {
+      "id": "enc_sub_420",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "subsampling": "420"
+      }
+    },
+    {
+      "id": "enc_progressive",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "progressive": true
+      }
+    },
+    {
+      "id": "enc_baseline",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "progressive": false
+      }
+    },
+    {
+      "id": "enc_grayscale",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "grayscale": true
+      }
+    },
+    {
+      "id": "enc_rgb",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "grayscale": false
+      }
+    },
+    {
+      "id": "enc_1x1",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "size": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "enc_8x8",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "size": [
+          8,
+          8
+        ]
+      }
+    },
+    {
+      "id": "enc_odd_size",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "size": [
+          17,
+          17
+        ]
+      }
+    },
+    {
+      "id": "enc_exif",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "exif": true
+      }
+    },
+    {
+      "id": "enc_no_exif",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "exif": false
+      }
+    },
+    {
+      "id": "enc_restart",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "restart_interval": 4
+      }
+    },
+    {
+      "id": "enc_no_restart",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "restart_interval": 0
+      }
+    },
+    {
+      "id": "enc_dct_fast",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "dct_method": "fast"
+      }
+    },
+    {
+      "id": "enc_dct_slow",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "dct_method": "slow"
+      }
+    },
+    {
+      "id": "enc_optimize",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "optimize": true
+      }
+    },
+    {
+      "id": "enc_no_optimize",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "optimize": false
+      }
+    },
+    {
+      "id": "enc_quality_100",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 100
+      }
+    },
+    {
+      "id": "enc_quality_85",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 85
+      }
+    },
+    {
+      "id": "enc_quality_50",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 50
+      }
+    },
+    {
+      "id": "enc_quality_10",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "quality": 10
+      }
+    },
+    {
+      "id": "enc_subsample_444",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "subsampling": "444"
+      }
+    },
+    {
+      "id": "enc_subsample_420",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "subsampling": "420"
+      }
+    },
+    {
+      "id": "enc_progressive",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "progressive": true
+      }
+    },
+    {
+      "id": "enc_grayscale",
+      "source_asset": "baseline_444.jpg",
+      "source_format": "jpeg",
+      "params": {
+        "grayscale": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "effect_noise"
+  },
+  "cases": [
+    {
+      "id": "ImageModule_effect_noise_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule_effect_noise_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_CMYK_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule_effect_noise_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule_effect_noise_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule_effect_noise_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule_effect_noise_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule_effect_noise_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_noise_ImageModule_effect_noise_RGBA_suite1.png"
+      }
+    }
+  ]
+}

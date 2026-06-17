@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "EMBOSS"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_EMBOSS_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EMBOSS_ImageFilter_EMBOSS_L.png"
+      }
+    },
+    {
+      "id": "ImageFilter_EMBOSS_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EMBOSS_ImageFilter_EMBOSS_LA.png"
+      }
+    },
+    {
+      "id": "ImageFilter_EMBOSS_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EMBOSS_ImageFilter_EMBOSS_RGB.png"
+      }
+    },
+    {
+      "id": "ImageFilter_EMBOSS_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EMBOSS_ImageFilter_EMBOSS_RGBA.png"
+      }
+    }
+  ]
+}

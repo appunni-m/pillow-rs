@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "expand"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_expand_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.expand_ImageOps_expand_L.png"
+      }
+    },
+    {
+      "id": "ImageOps_expand_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.expand_ImageOps_expand_LA.png"
+      }
+    },
+    {
+      "id": "ImageOps_expand_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.expand_ImageOps_expand_RGB.png"
+      }
+    },
+    {
+      "id": "ImageOps_expand_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.expand_ImageOps_expand_RGBA.png"
+      }
+    }
+  ]
+}

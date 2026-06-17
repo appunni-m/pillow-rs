@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "load_default_imagefont"
+  },
+  "cases": [
+    {
+      "id": "ImageFont_load_default_imagefont_L",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.ImageFont object at 0x774af61cccb0>"
+      }
+    },
+    {
+      "id": "ImageFont_load_default_imagefont_RGB",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.ImageFont object at 0x774af612d820>"
+      }
+    },
+    {
+      "id": "ImageFont_load_default_imagefont_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.ImageFont object at 0x774af61cd0d0>"
+      }
+    }
+  ]
+}

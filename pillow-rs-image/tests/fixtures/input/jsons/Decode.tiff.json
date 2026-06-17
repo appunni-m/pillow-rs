@@ -6,44 +6,116 @@
   },
   "cases": [
     {
-      "id": "Decode_tiff_le_tiff",
-      "mode": "RGB",
-      "asset": "tiff/le.tiff"
+      "id": "byte_order_le",
+      "asset": "le.tiff",
+      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_tiff_uncompressed_tiff",
-      "mode": "RGB",
-      "asset": "tiff/uncompressed.tiff"
+      "id": "byte_order_be",
+      "asset": "be.tiff"
     },
     {
-      "id": "Decode_tiff_lzw_tiff",
-      "mode": "RGB",
-      "asset": "tiff/lzw.tiff"
+      "id": "compression_none",
+      "asset": "uncompressed.tiff",
+      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_tiff_deflate_tiff",
-      "mode": "RGB",
-      "asset": "tiff/deflate.tiff"
+      "id": "compression_lzw",
+      "asset": "lzw.tiff",
+      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_tiff_bilevel_tiff",
-      "mode": "1",
-      "asset": "tiff/bilevel.tiff"
+      "id": "compression_deflate",
+      "asset": "deflate.tiff",
+      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_tiff_gray_tiff",
-      "mode": "L",
-      "asset": "tiff/gray.tiff"
+      "id": "compression_packbits",
+      "asset": "packbits.tiff"
     },
     {
-      "id": "Decode_tiff_rgb_tiff",
-      "mode": "RGB",
-      "asset": "tiff/rgb.tiff"
+      "id": "bilevel",
+      "asset": "bilevel.tiff",
+      "ref_sha256": "3d92f194e3d8ff64db82b9d6d7c8888526665cbcbee3f4c5e3a6c097076c67c5",
+      "ref_bytes": 32,
+      "ref_mode": "1"
     },
     {
-      "id": "Decode_tiff_rgba_tiff",
-      "mode": "RGBA",
-      "asset": "tiff/rgba.tiff"
+      "id": "grayscale",
+      "asset": "gray.tiff",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L"
+    },
+    {
+      "id": "palette",
+      "asset": "palette.tiff"
+    },
+    {
+      "id": "rgb",
+      "asset": "rgb.tiff",
+      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
+    },
+    {
+      "id": "rgba",
+      "asset": "rgba.tiff",
+      "ref_sha256": "98f4b65a00baf17d30ebb2a9250399ab01972aaa17610fe55aebeda5f0e04fbe",
+      "ref_bytes": 1024,
+      "ref_mode": "RGBA"
+    },
+    {
+      "id": "cmyk",
+      "asset": "cmyk.tiff"
+    },
+    {
+      "id": "ycbcr",
+      "asset": "ycbcr.tiff"
+    },
+    {
+      "id": "depth_1",
+      "asset": "1bit.tiff"
+    },
+    {
+      "id": "depth_8",
+      "asset": "8bit.tiff"
+    },
+    {
+      "id": "depth_16",
+      "asset": "16bit.tiff"
+    },
+    {
+      "id": "depth_float",
+      "asset": "float32.tiff"
+    },
+    {
+      "id": "stripped",
+      "asset": "stripped.tiff"
+    },
+    {
+      "id": "tiled",
+      "asset": "tiled.tiff"
+    },
+    {
+      "id": "single_page",
+      "asset": "single.tiff"
+    },
+    {
+      "id": "multi_page",
+      "asset": "multipage.tiff"
+    },
+    {
+      "id": "error_bad_ifd",
+      "asset": "bad_ifd.tiff"
     }
   ]
 }

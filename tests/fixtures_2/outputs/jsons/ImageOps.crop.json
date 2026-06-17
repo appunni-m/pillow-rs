@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "crop"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_crop_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.crop_ImageOps_crop_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_crop_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.crop_ImageOps_crop_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_crop_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.crop_ImageOps_crop_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_crop_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.crop_ImageOps_crop_RGBA_suite1.png"
+      }
+    }
+  ]
+}

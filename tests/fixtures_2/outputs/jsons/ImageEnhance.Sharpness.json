@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageEnhance",
+    "target": "Sharpness"
+  },
+  "cases": [
+    {
+      "id": "ImageEnhance_Sharpness_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Sharpness_ImageEnhance_Sharpness_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Sharpness_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Sharpness_ImageEnhance_Sharpness_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Sharpness_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Sharpness_ImageEnhance_Sharpness_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Sharpness_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Sharpness_ImageEnhance_Sharpness_RGBA_suite1.png"
+      }
+    }
+  ]
+}

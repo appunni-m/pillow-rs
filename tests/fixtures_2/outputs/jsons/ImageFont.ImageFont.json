@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "ImageFont"
+  },
+  "cases": [
+    {
+      "id": "ImageFont_ImageFont_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.ImageFont object at 0x786741ccc740>"
+      }
+    },
+    {
+      "id": "ImageFont_ImageFont_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.ImageFont object at 0x786741cccc80>"
+      }
+    },
+    {
+      "id": "ImageFont_ImageFont_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.ImageFont object at 0x786741ccc740>"
+      }
+    }
+  ]
+}

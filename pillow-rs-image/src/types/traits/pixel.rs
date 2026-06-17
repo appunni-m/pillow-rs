@@ -1,4 +1,4 @@
-use super::primitive::{Enlargeable, Primitive};
+use super::primitive::Primitive;
 use crate::types::color::{Luma, LumaA, Rgb, Rgba};
 
 pub trait Pixel: Copy + Clone {

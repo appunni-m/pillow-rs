@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "load"
+  },
+  "cases": [
+    {
+      "id": "Image_load_1",
+      "assert": {
+        "method": "string",
+        "value": "<PixelAccess object at 0x774b0c1f79b0>"
+      }
+    },
+    {
+      "id": "Image_load_L",
+      "assert": {
+        "method": "string",
+        "value": "<PixelAccess object at 0x774af6157e90>"
+      }
+    },
+    {
+      "id": "Image_load_LA",
+      "assert": {
+        "method": "string",
+        "value": "<PixelAccess object at 0x774b0c1f79b0>"
+      }
+    },
+    {
+      "id": "Image_load_P",
+      "assert": {
+        "method": "string",
+        "value": "<PixelAccess object at 0x774af6157e70>"
+      }
+    },
+    {
+      "id": "Image_load_RGB",
+      "assert": {
+        "method": "string",
+        "value": "<PixelAccess object at 0x774b0c1f79b0>"
+      }
+    },
+    {
+      "id": "Image_load_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "<PixelAccess object at 0x774af6157e70>"
+      }
+    }
+  ]
+}

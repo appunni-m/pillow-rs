@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "autocontrast"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.autocontrast_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "OSError",
+        "message_contains": "not supported for mode LA"
+      }
+    },
+    {
+      "id": "ImageOps.autocontrast_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "OSError",
+        "message_contains": "not supported for mode RGBA"
+      }
+    },
+    {
+      "id": "ImageOps_autocontrast_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.autocontrast_ImageOps_autocontrast_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_autocontrast_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.autocontrast_ImageOps_autocontrast_RGB_suite1.png"
+      }
+    }
+  ]
+}

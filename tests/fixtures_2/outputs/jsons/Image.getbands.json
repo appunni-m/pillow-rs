@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getbands"
+  },
+  "cases": [
+    {
+      "id": "Image_getbands_1_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('1',)"
+      }
+    },
+    {
+      "id": "Image_getbands_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('L',)"
+      }
+    },
+    {
+      "id": "Image_getbands_LA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('L', 'A')"
+      }
+    },
+    {
+      "id": "Image_getbands_P_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('P',)"
+      }
+    },
+    {
+      "id": "Image_getbands_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('R', 'G', 'B')"
+      }
+    },
+    {
+      "id": "Image_getbands_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('R', 'G', 'B', 'A')"
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "paste"
+  },
+  "cases": [
+    {
+      "id": "Image_paste_1_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_paste_CMYK_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_paste_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_paste_LA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_paste_P_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_paste_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_paste_RGBA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

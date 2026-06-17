@@ -1,0 +1,87 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "open"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.open_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_CMYK_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_F_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_F_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_HSV_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_HSV_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_I_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_I_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.open_YCbCr_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_ImageModule.open_YCbCr_suite1.png"
+      }
+    },
+    {
+      "id": "rgb_10x10_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.open_rgb_10x10_suite1.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Encode",
+    "target": "webp"
+  },
+  "cases": [
+    {
+      "id": "enc_lossy_q100",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 100
+      }
+    },
+    {
+      "id": "enc_lossy_q80",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 80
+      }
+    },
+    {
+      "id": "enc_lossy_q50",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 50
+      }
+    },
+    {
+      "id": "enc_lossy_q10",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 10
+      }
+    },
+    {
+      "id": "enc_lossy_q1",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 1
+      }
+    },
+    {
+      "id": "enc_lossless",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": true
+      }
+    },
+    {
+      "id": "enc_lossy_alpha",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "alpha": true
+      }
+    },
+    {
+      "id": "enc_lossless_alpha",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": true,
+        "alpha": true
+      }
+    },
+    {
+      "id": "enc_no_alpha",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "alpha": false
+      }
+    },
+    {
+      "id": "enc_hint_photo",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "hint": "photo"
+      }
+    },
+    {
+      "id": "enc_hint_graph",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "hint": "graph"
+      }
+    },
+    {
+      "id": "enc_hint_picture",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "hint": "picture"
+      }
+    },
+    {
+      "id": "enc_method_0",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "method": 0
+      }
+    },
+    {
+      "id": "enc_method_6",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "method": 6
+      }
+    },
+    {
+      "id": "enc_exif",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "exif": true
+      }
+    },
+    {
+      "id": "enc_xmp",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "xmp": true
+      }
+    },
+    {
+      "id": "enc_icc",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "icc": true
+      }
+    },
+    {
+      "id": "enc_1x1",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "size": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "enc_lossy",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false
+      }
+    },
+    {
+      "id": "enc_lossless",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": true
+      }
+    },
+    {
+      "id": "enc_lossy_alpha",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "alpha": true
+      }
+    },
+    {
+      "id": "enc_lossless_alpha",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": true,
+        "alpha": true
+      }
+    },
+    {
+      "id": "enc_lossy_quality_100",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 100
+      }
+    },
+    {
+      "id": "enc_lossy_quality_10",
+      "source_asset": "lossless.webp",
+      "source_format": "webp",
+      "params": {
+        "lossless": false,
+        "quality": 10
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageEnhance",
+    "target": "Brightness"
+  },
+  "cases": [
+    {
+      "id": "ImageEnhance_Brightness_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Brightness_ImageEnhance_Brightness_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Brightness_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Brightness_ImageEnhance_Brightness_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Brightness_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Brightness_ImageEnhance_Brightness_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Brightness_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Brightness_ImageEnhance_Brightness_RGBA_suite1.png"
+      }
+    }
+  ]
+}

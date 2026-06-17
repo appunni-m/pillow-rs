@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "tobytes"
+  },
+  "cases": [
+    {
+      "id": "Image_tobytes_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.tobytes_Image_tobytes_1_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_tobytes_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.tobytes_Image_tobytes_L_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_tobytes_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.tobytes_Image_tobytes_LA_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_tobytes_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.tobytes_Image_tobytes_P_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_tobytes_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.tobytes_Image_tobytes_RGB_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_tobytes_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.tobytes_Image_tobytes_RGBA_suite1.bin"
+      }
+    }
+  ]
+}

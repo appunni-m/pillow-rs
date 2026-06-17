@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getexif"
+  },
+  "cases": [
+    {
+      "id": "RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": {}
+      }
+    },
+    {
+      "id": "L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": {}
+      }
+    }
+  ]
+}

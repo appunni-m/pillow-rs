@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "seek"
+  },
+  "cases": [
+    {
+      "id": "Image_seek_1_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_seek_CMYK_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_seek_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_seek_LA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_seek_P_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_seek_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_seek_RGBA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

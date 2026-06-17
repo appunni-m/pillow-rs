@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "frombytes"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.frombytes_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.frombytes_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_CMYK_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.frombytes_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.frombytes_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.frombytes_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.frombytes_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_ImageModule.frombytes_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "L_16x16_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombytes_L_16x16_suite1.png"
+      }
+    }
+  ]
+}

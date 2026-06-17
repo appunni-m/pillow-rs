@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "rounded_rectangle"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_rounded_rectangle_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_rounded_rectangle_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_rounded_rectangle_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_rounded_rectangle_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_rounded_rectangle_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_rounded_rectangle_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_rounded_rectangle_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_RGBA_suite1.png"
+      }
+    }
+  ]
+}

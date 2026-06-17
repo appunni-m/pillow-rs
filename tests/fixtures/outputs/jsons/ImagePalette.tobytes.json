@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImagePalette",
+    "target": "tobytes"
+  },
+  "cases": [
+    {
+      "id": "ImagePalette_tobytes_L",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.tobytes_ImagePalette_tobytes_L.bin"
+      }
+    },
+    {
+      "id": "ImagePalette_tobytes_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.tobytes_ImagePalette_tobytes_P.bin"
+      }
+    },
+    {
+      "id": "ImagePalette_tobytes_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.tobytes_ImagePalette_tobytes_RGB.bin"
+      }
+    }
+  ]
+}

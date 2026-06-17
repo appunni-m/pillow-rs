@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "eval"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.eval_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.eval_ImageModule.eval_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.eval_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageModule.eval_ImageModule.eval_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageModule.eval_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.eval_ImageModule.eval_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.eval_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.eval_ImageModule.eval_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.eval_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.eval_ImageModule.eval_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.eval_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.eval_ImageModule.eval_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "L_add10_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.eval_L_add10_suite1.png"
+      }
+    }
+  ]
+}

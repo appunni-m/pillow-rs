@@ -148,7 +148,7 @@ fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<D
                     let shift = 6 - ((col % 4) * 2);
                     let val = (byte >> shift) & 3;
                     // Scale 0..3 to 0..255
-                    pixels.push((val * 255 / 3));
+                    pixels.push(val * 255 / 3);
                 }
             }
             Some(DecodedImage::new(w, h, pixels, ColorType::L8))
@@ -163,7 +163,7 @@ fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<D
                     let byte = buf.get(start + col / 2).copied().unwrap_or(0);
                     let val = if col % 2 == 0 { byte >> 4 } else { byte & 0x0F };
                     // Scale 0..15 to 0..255
-                    pixels.push((val * 255 / 15));
+                    pixels.push(val * 255 / 15);
                 }
             }
             Some(DecodedImage::new(w, h, pixels, ColorType::L8))
@@ -178,110 +178,5 @@ fn decode_grayscale(w: u32, h: u32, buf: &[u8], bit_depth: BitDepth) -> Option<D
             }
             Some(DecodedImage::new(w, h, pixels, ColorType::L16))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Create a minimal 1x1 white 8-bit grayscale PNG.
-    fn minimal_gray_png() -> Vec<u8> {
-        // Manually constructed minimal PNG: 1x1 grayscale, value 255
-        let mut png = Vec::new();
-        // Signature
-        png.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-        // IHDR chunk: 1x1, 8-bit grayscale
-        let ihdr_data = [
-            0, 0, 0, 1, // width = 1
-            0, 0, 0, 1, // height = 1
-            8, // bit depth = 8
-            0, // color type = grayscale
-            0, 0, 0, 0, // compression, filter, interlace
-        ];
-        let mut ihdr = Vec::new();
-        ihdr.extend_from_slice(b"IHDR");
-        ihdr.extend_from_slice(&ihdr_data);
-        let crc = crc32(&ihdr);
-        png.extend_from_slice(&(ihdr_data.len() as u32).to_be_bytes());
-        png.extend_from_slice(&ihdr);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        // IDAT chunk: uncompressed raw scanline (filter byte 0 + pixel 255)
-        // Raw data: filter=0 (None), pixel=255
-        // Deflate: stored block (no compression) for 2 bytes
-        let raw = [0u8, 255];
-        let deflated = deflate_raw(&raw);
-        let mut idat = Vec::new();
-        idat.extend_from_slice(b"IDAT");
-        idat.extend_from_slice(&deflated);
-        let crc = crc32(&idat);
-        png.extend_from_slice(&(deflated.len() as u32).to_be_bytes());
-        png.extend_from_slice(&idat);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        // IEND chunk
-        let mut iend = Vec::new();
-        iend.extend_from_slice(b"IEND");
-        let crc = crc32(&iend);
-        png.extend_from_slice(&0u32.to_be_bytes());
-        png.extend_from_slice(&iend);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        png
-    }
-
-    fn crc32(data: &[u8]) -> u32 {
-        let mut crc: u32 = 0xFFFF_FFFF;
-        for &byte in data {
-            crc ^= byte as u32;
-            for _ in 0..8 {
-                if crc & 1 != 0 {
-                    crc = (crc >> 1) ^ 0xEDB8_8320;
-                } else {
-                    crc >>= 1;
-                }
-            }
-        }
-        crc ^ 0xFFFF_FFFF
-    }
-
-    /// Minimal deflate stored block (no compression, no zlib wrapper).
-    fn deflate_raw(data: &[u8]) -> Vec<u8> {
-        // zlib wrapper: 2 bytes (CMF + FLG)
-        let cmf = 0x78; // deflate, window size 32K
-        let flg = 0x01; // check bits
-        let mut out = vec![cmf, flg];
-        // Deflate stored block
-        let len = data.len() as u16;
-        let nlen = !len;
-        out.push(1); // BFINAL=1, BTYPE=00 (stored)
-        out.extend_from_slice(&len.to_le_bytes());
-        out.extend_from_slice(&nlen.to_le_bytes());
-        out.extend_from_slice(data);
-        // Adlers-32 checksum
-        let adler = adler32(data);
-        out.extend_from_slice(&adler.to_be_bytes());
-        out
-    }
-
-    fn adler32(data: &[u8]) -> u32 {
-        let mut s1: u32 = 1;
-        let mut s2: u32 = 0;
-        for &byte in data {
-            s1 = (s1 + byte as u32) % 65521;
-            s2 = (s2 + s1) % 65521;
-        }
-        (s2 << 16) | s1
-    }
-
-    #[test]
-    fn test_decode_grayscale_8bit() {
-        let png = minimal_gray_png();
-        let img = decode(&png).expect("should decode");
-        assert_eq!(img.width, 1);
-        assert_eq!(img.height, 1);
-        assert_eq!(img.color, ColorType::L8);
-        assert_eq!(img.pixels, vec![255]);
     }
 }

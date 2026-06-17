@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "toqimage"
+  },
+  "cases": [
+    {
+      "id": "rgb_10x10",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.toqimage_rgb_10x10.bin"
+      }
+    },
+    {
+      "id": "l_10x10",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.toqimage_l_10x10.bin"
+      }
+    }
+  ]
+}

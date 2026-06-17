@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "UnsharpMask"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_UnsharpMask_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.UnsharpMask_ImageFilter_UnsharpMask_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_UnsharpMask_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.UnsharpMask_ImageFilter_UnsharpMask_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_UnsharpMask_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.UnsharpMask_ImageFilter_UnsharpMask_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_UnsharpMask_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.UnsharpMask_ImageFilter_UnsharpMask_RGBA_suite1.png"
+      }
+    }
+  ]
+}

@@ -179,8 +179,8 @@ pub(super) fn parse_dqt(
     pos: &mut usize,
     quant_tables: &mut Vec<Option<[u16; 64]>>,
 ) -> Option<()> {
-    let length = read_u16(data, pos)?;
-    let end = *pos + (length as usize) - 2;
+    let length = read_u16(data, pos)? as usize;
+    let end = *pos + length - 2;
 
     while *pos < end {
         let info = read_u8(data, pos)?;
@@ -212,8 +212,8 @@ pub(super) fn parse_dht(
     dc_tables: &mut Vec<Option<HuffTable>>,
     ac_tables: &mut Vec<Option<HuffTable>>,
 ) -> Option<()> {
-    let length = read_u16(data, pos)?;
-    let end = *pos + (length as usize) - 2;
+    let length = read_u16(data, pos)? as usize;
+    let end = *pos + length - 2;
 
     while *pos < end {
         let info = read_u8(data, pos)?;
@@ -256,7 +256,7 @@ pub(super) fn parse_sos(
     pos: &mut usize,
     components: &[FrameComponent],
 ) -> Option<(Vec<ScanComponent>, usize, u8, u8, u8, u8)> {
-    let _length = read_u16(data, pos)?;
+    let length = read_u16(data, pos)?;
     let num_scan_comps = read_u8(data, pos)?;
     if num_scan_comps == 0 {
         return None;
@@ -377,9 +377,9 @@ pub(super) fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
                     }
                     saw_sos = true;
                     if let Some(eoi) = find_eoi(data, pos) {
-                        pos = eoi;
+                        let _pos = eoi;
                     } else {
-                        pos = data.len();
+                        let _pos = data.len();
                     }
                     break;
                 } else {

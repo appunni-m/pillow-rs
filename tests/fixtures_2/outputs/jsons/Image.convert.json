@@ -1,0 +1,87 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "convert"
+  },
+  "cases": [
+    {
+      "id": "Image_convert_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_convert_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_convert_F_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_F_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_convert_HSV_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_HSV_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_convert_I_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_I_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_convert_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_convert_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_convert_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_convert_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_convert_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_convert_YCbCr_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_YCbCr_suite1.bin"
+      }
+    }
+  ]
+}

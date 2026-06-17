@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "shape"
+  },
+  "cases": [
+    {
+      "id": "triangle_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.shape_triangle_L_suite1.png"
+      }
+    },
+    {
+      "id": "triangle_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.shape_triangle_RGB_suite1.png"
+      }
+    }
+  ]
+}

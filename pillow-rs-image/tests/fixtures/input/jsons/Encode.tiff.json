@@ -1,0 +1,252 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Encode",
+    "target": "tiff"
+  },
+  "cases": [
+    {
+      "id": "enc_compress_none",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "none"
+      }
+    },
+    {
+      "id": "enc_compress_lzw",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "lzw"
+      }
+    },
+    {
+      "id": "enc_compress_deflate",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "deflate"
+      }
+    },
+    {
+      "id": "enc_compress_packbits",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "packbits"
+      }
+    },
+    {
+      "id": "enc_byte_le",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "byte_order": "le"
+      }
+    },
+    {
+      "id": "enc_byte_be",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "byte_order": "be"
+      }
+    },
+    {
+      "id": "enc_bilevel",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "1bit"
+      }
+    },
+    {
+      "id": "enc_grayscale",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "gray"
+      }
+    },
+    {
+      "id": "enc_rgb",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "rgb"
+      }
+    },
+    {
+      "id": "enc_rgba",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "rgba"
+      }
+    },
+    {
+      "id": "enc_cmyk",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "cmyk"
+      }
+    },
+    {
+      "id": "enc_8bit",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "bit_depth": 8
+      }
+    },
+    {
+      "id": "enc_16bit",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "bit_depth": 16
+      }
+    },
+    {
+      "id": "enc_32bit",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "bit_depth": 32
+      }
+    },
+    {
+      "id": "enc_stripped",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "organization": "stripped"
+      }
+    },
+    {
+      "id": "enc_tiled",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "organization": "tiled"
+      }
+    },
+    {
+      "id": "enc_single_page",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "pages": 1
+      }
+    },
+    {
+      "id": "enc_multi_page",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "pages": 2
+      }
+    },
+    {
+      "id": "enc_predictor_none",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "predictor": "none"
+      }
+    },
+    {
+      "id": "enc_predictor_horiz",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "predictor": "horizontal"
+      }
+    },
+    {
+      "id": "enc_1x1",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "size": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "enc_uncompressed",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "none"
+      }
+    },
+    {
+      "id": "enc_lzw",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "lzw"
+      }
+    },
+    {
+      "id": "enc_deflate",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "compression": "deflate"
+      }
+    },
+    {
+      "id": "enc_le",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "byte_order": "le"
+      }
+    },
+    {
+      "id": "enc_be",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "byte_order": "be"
+      }
+    },
+    {
+      "id": "enc_rgb",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "rgb"
+      }
+    },
+    {
+      "id": "enc_rgba",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "rgba"
+      }
+    },
+    {
+      "id": "enc_grayscale",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "gray"
+      }
+    },
+    {
+      "id": "enc_bilevel",
+      "source_asset": "le.tiff",
+      "source_format": "tiff",
+      "params": {
+        "color": "1bit"
+      }
+    }
+  ]
+}

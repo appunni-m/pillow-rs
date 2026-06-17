@@ -1,0 +1,34 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageChops",
+    "target": "composite"
+  },
+  "cases": [
+    {
+      "id": "ImageChops.composite_P_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageChops.composite_RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "L_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    }
+  ]
+}

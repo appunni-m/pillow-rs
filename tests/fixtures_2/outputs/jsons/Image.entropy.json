@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "entropy"
+  },
+  "cases": [
+    {
+      "id": "Image_entropy_1_suite1",
+      "assert": {
+        "method": "exact",
+        "value": -0.0
+      }
+    },
+    {
+      "id": "Image_entropy_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": -0.0
+      }
+    },
+    {
+      "id": "Image_entropy_LA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "Image_entropy_P_suite1",
+      "assert": {
+        "method": "exact",
+        "value": -0.0
+      }
+    },
+    {
+      "id": "Image_entropy_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 1.584962500721156
+      }
+    },
+    {
+      "id": "Image_entropy_RGBA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 2.0
+      }
+    }
+  ]
+}

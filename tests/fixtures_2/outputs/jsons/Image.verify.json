@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "verify"
+  },
+  "cases": [
+    {
+      "id": "Image_verify_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_verify_LA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_verify_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_verify_RGBA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

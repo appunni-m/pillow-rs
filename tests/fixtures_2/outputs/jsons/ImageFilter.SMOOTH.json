@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "SMOOTH"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_SMOOTH_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SMOOTH_ImageFilter_SMOOTH_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SMOOTH_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SMOOTH_ImageFilter_SMOOTH_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SMOOTH_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SMOOTH_ImageFilter_SMOOTH_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SMOOTH_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SMOOTH_ImageFilter_SMOOTH_RGBA_suite1.png"
+      }
+    }
+  ]
+}

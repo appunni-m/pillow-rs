@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageChops",
+    "target": "logical_xor"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_logical_xor_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.logical_xor_ImageChops_logical_xor_1_suite1.png"
+      }
+    }
+  ]
+}

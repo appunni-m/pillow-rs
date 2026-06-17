@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getxmp"
+  },
+  "cases": [
+    {
+      "id": "Image_getxmp_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": {}
+      }
+    },
+    {
+      "id": "Image_getxmp_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": {}
+      }
+    }
+  ]
+}

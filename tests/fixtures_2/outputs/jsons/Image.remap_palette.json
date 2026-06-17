@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "remap_palette"
+  },
+  "cases": [
+    {
+      "id": "Image_remap_palette_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.remap_palette_Image_remap_palette_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_remap_palette_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.remap_palette_Image_remap_palette_P_suite1.png"
+      }
+    }
+  ]
+}

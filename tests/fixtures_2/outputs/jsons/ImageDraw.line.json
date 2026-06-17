@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "line"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_line_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.line_ImageDraw_line_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_line_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.line_ImageDraw_line_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_line_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.line_ImageDraw_line_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_line_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.line_ImageDraw_line_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_line_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.line_ImageDraw_line_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_line_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.line_ImageDraw_line_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_line_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.line_ImageDraw_line_RGBA_suite1.png"
+      }
+    }
+  ]
+}

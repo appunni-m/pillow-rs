@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "quantize"
+  },
+  "cases": [
+    {
+      "id": "Image_quantize_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.quantize_Image_quantize_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_quantize_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.quantize_Image_quantize_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_quantize_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.quantize_Image_quantize_RGBA_suite1.png"
+      }
+    }
+  ]
+}

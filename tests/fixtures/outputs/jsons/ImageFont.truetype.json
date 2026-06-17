@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "truetype"
+  },
+  "cases": [
+    {
+      "id": "ImageFont.truetype_RGB",
+      "assert": {
+        "method": "string",
+        "value": "('Liberation Serif', 'Regular')"
+      }
+    },
+    {
+      "id": "ImageFont.truetype_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "('Liberation Serif', 'Regular')"
+      }
+    },
+    {
+      "id": "liberation_serif_20",
+      "assert": {
+        "method": "string",
+        "value": "('Liberation Serif', 'Regular')"
+      }
+    }
+  ]
+}

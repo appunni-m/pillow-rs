@@ -1,0 +1,26 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "alpha_composite"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.alpha_composite_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    }
+  ]
+}

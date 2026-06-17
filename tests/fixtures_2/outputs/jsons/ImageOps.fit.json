@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "fit"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_fit_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.fit_ImageOps_fit_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_fit_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.fit_ImageOps_fit_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_fit_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.fit_ImageOps_fit_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_fit_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.fit_ImageOps_fit_RGBA_suite1.png"
+      }
+    }
+  ]
+}

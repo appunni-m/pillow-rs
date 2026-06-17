@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "frombuffer"
+  },
+  "cases": [
+    {
+      "id": "L_16x16_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.frombuffer_L_16x16_suite1.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "chord"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_chord_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.chord_ImageDraw_chord_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_chord_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.chord_ImageDraw_chord_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_chord_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.chord_ImageDraw_chord_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_chord_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.chord_ImageDraw_chord_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_chord_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.chord_ImageDraw_chord_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_chord_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.chord_ImageDraw_chord_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_chord_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.chord_ImageDraw_chord_RGBA_suite1.png"
+      }
+    }
+  ]
+}

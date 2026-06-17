@@ -1,0 +1,311 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Encode",
+    "target": "png"
+  },
+  "cases": [
+    {
+      "id": "enc_compress_0",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": 0
+      }
+    },
+    {
+      "id": "enc_compress_3",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": 3
+      }
+    },
+    {
+      "id": "enc_compress_6",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": 6
+      }
+    },
+    {
+      "id": "enc_compress_9",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": 9
+      }
+    },
+    {
+      "id": "enc_l8",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color_type": "L"
+      }
+    },
+    {
+      "id": "enc_la8",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color_type": "LA"
+      }
+    },
+    {
+      "id": "enc_rgb8",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color_type": "RGB"
+      }
+    },
+    {
+      "id": "enc_rgba8",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color_type": "RGBA"
+      }
+    },
+    {
+      "id": "enc_indexed",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color_type": "P"
+      }
+    },
+    {
+      "id": "enc_1bit",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color_type": "1"
+      }
+    },
+    {
+      "id": "enc_adam7",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "interlace": true
+      }
+    },
+    {
+      "id": "enc_no_interlace",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "interlace": false
+      }
+    },
+    {
+      "id": "enc_8bit",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "bit_depth": 8
+      }
+    },
+    {
+      "id": "enc_16bit",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "bit_depth": 16
+      }
+    },
+    {
+      "id": "enc_filter_none",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "filter": "none"
+      }
+    },
+    {
+      "id": "enc_filter_sub",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "filter": "sub"
+      }
+    },
+    {
+      "id": "enc_filter_up",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "filter": "up"
+      }
+    },
+    {
+      "id": "enc_filter_avg",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "filter": "average"
+      }
+    },
+    {
+      "id": "enc_filter_paeth",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "filter": "paeth"
+      }
+    },
+    {
+      "id": "enc_filter_adaptive",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "filter": "adaptive"
+      }
+    },
+    {
+      "id": "enc_chunk_text",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "text_chunks": true
+      }
+    },
+    {
+      "id": "enc_chunk_gamma",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "gamma": true
+      }
+    },
+    {
+      "id": "enc_chunk_srgb",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "srgb": true
+      }
+    },
+    {
+      "id": "enc_chunk_phys",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "physical": true
+      }
+    },
+    {
+      "id": "enc_chunk_time",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "time": true
+      }
+    },
+    {
+      "id": "enc_1x1",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "size": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "enc_odd_size",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "size": [
+          17,
+          17
+        ]
+      }
+    },
+    {
+      "id": "enc_compress_default",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": "default"
+      }
+    },
+    {
+      "id": "enc_compress_max",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": "max"
+      }
+    },
+    {
+      "id": "enc_compress_none",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "compression": "none"
+      }
+    },
+    {
+      "id": "enc_interlaced",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "interlaced": true
+      }
+    },
+    {
+      "id": "enc_rgb",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color": "rgb"
+      }
+    },
+    {
+      "id": "enc_rgba",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color": "rgba"
+      }
+    },
+    {
+      "id": "enc_grayscale",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color": "gray"
+      }
+    },
+    {
+      "id": "enc_grayscale_alpha",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color": "gray_alpha"
+      }
+    },
+    {
+      "id": "enc_indexed",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color": "indexed"
+      }
+    },
+    {
+      "id": "enc_1bit",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "color": "1bit"
+      }
+    }
+  ]
+}

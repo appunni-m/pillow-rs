@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "getfont"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_getfont_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x786741d68470>"
+      }
+    },
+    {
+      "id": "ImageDraw_getfont_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x786741d68aa0>"
+      }
+    }
+  ]
+}

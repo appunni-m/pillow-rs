@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImagePalette",
+    "target": "getcolor"
+  },
+  "cases": [
+    {
+      "id": "ImagePalette_getcolor_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "ImagePalette_getcolor_P_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "ImagePalette_getcolor_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    }
+  ]
+}

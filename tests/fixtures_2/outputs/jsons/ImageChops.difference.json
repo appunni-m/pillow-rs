@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageChops",
+    "target": "difference"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_difference_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.difference_ImageChops_difference_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageChops_difference_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.difference_ImageChops_difference_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageChops_difference_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.difference_ImageChops_difference_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageChops_difference_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.difference_ImageChops_difference_RGBA_suite1.png"
+      }
+    }
+  ]
+}

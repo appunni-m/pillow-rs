@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "getname"
+  },
+  "cases": [
+    {
+      "id": "default_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Aileron', 'Regular')"
+      }
+    },
+    {
+      "id": "getname_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Aileron', 'Regular')"
+      }
+    },
+    {
+      "id": "getname_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Aileron', 'Regular')"
+      }
+    },
+    {
+      "id": "getname_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Aileron', 'Regular')"
+      }
+    }
+  ]
+}

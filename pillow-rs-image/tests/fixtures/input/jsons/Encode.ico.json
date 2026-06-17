@@ -1,0 +1,185 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Encode",
+    "target": "ico"
+  },
+  "cases": [
+    {
+      "id": "enc_16x16",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          "(16",
+          "16)"
+        ]
+      }
+    },
+    {
+      "id": "enc_32x32",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          "(32",
+          "32)"
+        ]
+      }
+    },
+    {
+      "id": "enc_48x48",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          "(48",
+          "48)"
+        ]
+      }
+    },
+    {
+      "id": "enc_256x256",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          "(256",
+          "256)"
+        ]
+      }
+    },
+    {
+      "id": "enc_multi_2",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          "(16",
+          "16)",
+          "(32",
+          "32)"
+        ]
+      }
+    },
+    {
+      "id": "enc_multi_4",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          "(16",
+          "16)",
+          "(32",
+          "32)",
+          "(48",
+          "48)",
+          "(256",
+          "256)"
+        ]
+      }
+    },
+    {
+      "id": "enc_bmp_entry",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "entry_type": "bmp"
+      }
+    },
+    {
+      "id": "enc_png_entry",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "entry_type": "png"
+      }
+    },
+    {
+      "id": "enc_24bit",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "bit_depth": 24
+      }
+    },
+    {
+      "id": "enc_32bit",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "bit_depth": 32
+      }
+    },
+    {
+      "id": "enc_no_hotspot",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "hotspot": false
+      }
+    },
+    {
+      "id": "enc_hotspot",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "hotspot": [
+          8,
+          8
+        ]
+      }
+    },
+    {
+      "id": "enc_16x16",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          [
+            16,
+            16
+          ]
+        ]
+      }
+    },
+    {
+      "id": "enc_32x32",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          [
+            32,
+            32
+          ]
+        ]
+      }
+    },
+    {
+      "id": "enc_multi",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "sizes": [
+          [
+            16,
+            16
+          ],
+          [
+            32,
+            32
+          ]
+        ]
+      }
+    },
+    {
+      "id": "enc_png_entry",
+      "source_asset": "8bit.png",
+      "source_format": "png",
+      "params": {
+        "png_entry": true
+      }
+    }
+  ]
+}

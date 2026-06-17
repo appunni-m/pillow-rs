@@ -1,0 +1,55 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "point"
+  },
+  "cases": [
+    {
+      "id": "Image.point_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "wrong number of lut entries"
+      }
+    },
+    {
+      "id": "Image.point_RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "wrong number of lut entries"
+      }
+    },
+    {
+      "id": "Image.point_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "wrong number of lut entries"
+      }
+    },
+    {
+      "id": "Image_point_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.point_Image_point_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_point_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.point_Image_point_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_point_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.point_Image_point_P_suite1.png"
+      }
+    }
+  ]
+}

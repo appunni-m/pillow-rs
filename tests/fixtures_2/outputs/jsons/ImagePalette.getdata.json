@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImagePalette",
+    "target": "getdata"
+  },
+  "cases": [
+    {
+      "id": "ImagePalette_getdata_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('RGB', b'')"
+      }
+    },
+    {
+      "id": "ImagePalette_getdata_P_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('RGB', b'')"
+      }
+    },
+    {
+      "id": "ImagePalette_getdata_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('RGB', b'')"
+      }
+    }
+  ]
+}

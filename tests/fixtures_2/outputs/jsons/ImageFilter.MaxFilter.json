@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "MaxFilter"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_MaxFilter_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MaxFilter_ImageFilter_MaxFilter_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_MaxFilter_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MaxFilter_ImageFilter_MaxFilter_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_MaxFilter_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MaxFilter_ImageFilter_MaxFilter_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_MaxFilter_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MaxFilter_ImageFilter_MaxFilter_RGBA_suite1.png"
+      }
+    }
+  ]
+}

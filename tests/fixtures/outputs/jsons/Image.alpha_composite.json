@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "alpha_composite"
+  },
+  "cases": [
+    {
+      "id": "Image.alpha_composite_LA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "RGBA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

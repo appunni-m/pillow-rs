@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getprojection"
+  },
+  "cases": [
+    {
+      "id": "Image_getprojection_1_suite1",
+      "assert": {
+        "method": "string",
+        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+      }
+    },
+    {
+      "id": "Image_getprojection_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+      }
+    },
+    {
+      "id": "Image_getprojection_LA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+      }
+    },
+    {
+      "id": "Image_getprojection_P_suite1",
+      "assert": {
+        "method": "string",
+        "value": "([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])"
+      }
+    },
+    {
+      "id": "Image_getprojection_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+      }
+    },
+    {
+      "id": "Image_getprojection_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "([1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+      }
+    }
+  ]
+}

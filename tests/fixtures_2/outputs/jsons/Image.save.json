@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "save"
+  },
+  "cases": [
+    {
+      "id": "rgb_5x5_png_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.save_rgb_5x5_png_suite1.png"
+      }
+    },
+    {
+      "id": "l_5x5_png_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.save_l_5x5_png_suite1.png"
+      }
+    }
+  ]
+}

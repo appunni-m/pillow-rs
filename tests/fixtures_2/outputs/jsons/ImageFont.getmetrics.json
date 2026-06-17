@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "getmetrics"
+  },
+  "cases": [
+    {
+      "id": "default_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(10, 3)"
+      }
+    },
+    {
+      "id": "getmetrics_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(10, 3)"
+      }
+    },
+    {
+      "id": "getmetrics_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(10, 3)"
+      }
+    },
+    {
+      "id": "getmetrics_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(10, 3)"
+      }
+    }
+  ]
+}

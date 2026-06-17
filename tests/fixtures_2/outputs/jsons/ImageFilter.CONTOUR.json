@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "CONTOUR"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_CONTOUR_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.CONTOUR_ImageFilter_CONTOUR_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_CONTOUR_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.CONTOUR_ImageFilter_CONTOUR_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_CONTOUR_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.CONTOUR_ImageFilter_CONTOUR_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_CONTOUR_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.CONTOUR_ImageFilter_CONTOUR_RGBA_suite1.png"
+      }
+    }
+  ]
+}

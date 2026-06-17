@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getextrema"
+  },
+  "cases": [
+    {
+      "id": "Image_getextrema_1_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(1, 1)"
+      }
+    },
+    {
+      "id": "Image_getextrema_CMYK_suite1",
+      "assert": {
+        "method": "string",
+        "value": "((50, 50), (100, 100), (150, 150), (200, 200))"
+      }
+    },
+    {
+      "id": "Image_getextrema_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(128, 128)"
+      }
+    },
+    {
+      "id": "Image_getextrema_LA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "((128, 128), (0, 0))"
+      }
+    },
+    {
+      "id": "Image_getextrema_P_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0)"
+      }
+    },
+    {
+      "id": "Image_getextrema_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "((100, 100), (150, 150), (200, 200))"
+      }
+    },
+    {
+      "id": "Image_getextrema_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "((100, 100), (150, 150), (200, 200), (200, 200))"
+      }
+    }
+  ]
+}

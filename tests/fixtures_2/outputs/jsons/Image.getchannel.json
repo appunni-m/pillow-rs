@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getchannel"
+  },
+  "cases": [
+    {
+      "id": "Image_getchannel_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.getchannel_Image_getchannel_CMYK_suite1.png"
+      }
+    },
+    {
+      "id": "Image_getchannel_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.getchannel_Image_getchannel_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_getchannel_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.getchannel_Image_getchannel_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_getchannel_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.getchannel_Image_getchannel_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_getchannel_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.getchannel_Image_getchannel_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_getchannel_YCbCr_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.getchannel_Image_getchannel_YCbCr_suite1.png"
+      }
+    }
+  ]
+}

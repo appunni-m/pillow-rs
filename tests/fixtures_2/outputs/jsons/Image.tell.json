@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "tell"
+  },
+  "cases": [
+    {
+      "id": "Image_tell_1_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "Image_tell_CMYK_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "Image_tell_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "Image_tell_LA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "Image_tell_P_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "Image_tell_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    },
+    {
+      "id": "Image_tell_RGBA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 0
+      }
+    }
+  ]
+}

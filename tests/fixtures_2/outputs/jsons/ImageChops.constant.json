@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageChops",
+    "target": "constant"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_constant_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.constant_ImageChops_constant_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageChops_constant_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.constant_ImageChops_constant_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageChops_constant_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.constant_ImageChops_constant_RGB_suite1.png"
+      }
+    }
+  ]
+}

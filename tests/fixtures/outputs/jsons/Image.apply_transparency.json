@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "apply_transparency"
+  },
+  "cases": [
+    {
+      "id": "Image_apply_transparency_L",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_apply_transparency_LA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_apply_transparency_RGB",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_apply_transparency_RGBA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

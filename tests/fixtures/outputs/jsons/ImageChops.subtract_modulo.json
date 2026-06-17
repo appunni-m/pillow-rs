@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageChops",
+    "target": "subtract_modulo"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_subtract_modulo_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.subtract_modulo_ImageChops_subtract_modulo_L.png"
+      }
+    },
+    {
+      "id": "ImageChops_subtract_modulo_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.subtract_modulo_ImageChops_subtract_modulo_LA.png"
+      }
+    },
+    {
+      "id": "ImageChops_subtract_modulo_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.subtract_modulo_ImageChops_subtract_modulo_RGB.png"
+      }
+    },
+    {
+      "id": "ImageChops_subtract_modulo_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.subtract_modulo_ImageChops_subtract_modulo_RGBA.png"
+      }
+    }
+  ]
+}

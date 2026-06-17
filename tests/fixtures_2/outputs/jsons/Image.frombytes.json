@@ -1,0 +1,42 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "frombytes"
+  },
+  "cases": [
+    {
+      "id": "Image.frombytes_L_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "not enough image data"
+      }
+    },
+    {
+      "id": "Image.frombytes_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "not enough image data"
+      }
+    },
+    {
+      "id": "Image.frombytes_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "not enough image data"
+      }
+    },
+    {
+      "id": "raw_rgb_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "not enough image data"
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "composite"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.composite_1_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.composite_CMYK_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.composite_L_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.composite_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.composite_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.composite_ImageModule.composite_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageModule.composite_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    }
+  ]
+}

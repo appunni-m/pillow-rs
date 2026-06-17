@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "rotate"
+  },
+  "cases": [
+    {
+      "id": "Image_rotate_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.rotate_Image_rotate_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_rotate_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.rotate_Image_rotate_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_rotate_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.rotate_Image_rotate_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_rotate_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.rotate_Image_rotate_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_rotate_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.rotate_Image_rotate_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_rotate_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.rotate_Image_rotate_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_rotate_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.rotate_Image_rotate_RGBA_suite1.png"
+      }
+    }
+  ]
+}

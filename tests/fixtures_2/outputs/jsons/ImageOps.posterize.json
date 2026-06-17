@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "posterize"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.posterize_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "OSError",
+        "message_contains": "not supported for mode LA"
+      }
+    },
+    {
+      "id": "ImageOps.posterize_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "OSError",
+        "message_contains": "not supported for mode RGBA"
+      }
+    },
+    {
+      "id": "ImageOps_posterize_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.posterize_ImageOps_posterize_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_posterize_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.posterize_ImageOps_posterize_RGB_suite1.png"
+      }
+    }
+  ]
+}

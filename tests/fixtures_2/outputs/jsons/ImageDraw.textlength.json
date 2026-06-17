@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "textlength"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_textlength_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "ImageDraw_textlength_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "ImageDraw_textlength_RGBA_suite1",
+      "assert": {
+        "method": "exact",
+        "value": 25.0
+      }
+    }
+  ]
+}

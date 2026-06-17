@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "EDGE_ENHANCE_MORE"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EDGE_ENHANCE_MORE_ImageFilter_EDGE_ENHANCE_MORE_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EDGE_ENHANCE_MORE_ImageFilter_EDGE_ENHANCE_MORE_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EDGE_ENHANCE_MORE_ImageFilter_EDGE_ENHANCE_MORE_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_EDGE_ENHANCE_MORE_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.EDGE_ENHANCE_MORE_ImageFilter_EDGE_ENHANCE_MORE_RGBA_suite1.png"
+      }
+    }
+  ]
+}

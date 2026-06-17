@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "flip"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_flip_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.flip_ImageOps_flip_L.png"
+      }
+    },
+    {
+      "id": "ImageOps_flip_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.flip_ImageOps_flip_LA.png"
+      }
+    },
+    {
+      "id": "ImageOps_flip_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.flip_ImageOps_flip_RGB.png"
+      }
+    },
+    {
+      "id": "ImageOps_flip_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.flip_ImageOps_flip_RGBA.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "arc"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_arc_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.arc_ImageDraw_arc_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_arc_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.arc_ImageDraw_arc_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_arc_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.arc_ImageDraw_arc_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_arc_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.arc_ImageDraw_arc_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_arc_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.arc_ImageDraw_arc_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_arc_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.arc_ImageDraw_arc_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_arc_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.arc_ImageDraw_arc_RGBA_suite1.png"
+      }
+    }
+  ]
+}

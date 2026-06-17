@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "getbbox"
+  },
+  "cases": [
+    {
+      "id": "default_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(0, 2, 25, 10)"
+      }
+    },
+    {
+      "id": "getbbox_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(0, 2, 25, 10)"
+      }
+    },
+    {
+      "id": "getbbox_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(0, 2, 25, 10)"
+      }
+    },
+    {
+      "id": "getbbox_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(0, 2, 25, 10)"
+      }
+    }
+  ]
+}

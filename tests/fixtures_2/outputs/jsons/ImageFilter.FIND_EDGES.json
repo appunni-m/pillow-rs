@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "FIND_EDGES"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_FIND_EDGES_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.FIND_EDGES_ImageFilter_FIND_EDGES_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_FIND_EDGES_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.FIND_EDGES_ImageFilter_FIND_EDGES_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_FIND_EDGES_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.FIND_EDGES_ImageFilter_FIND_EDGES_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_FIND_EDGES_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.FIND_EDGES_ImageFilter_FIND_EDGES_RGBA_suite1.png"
+      }
+    }
+  ]
+}

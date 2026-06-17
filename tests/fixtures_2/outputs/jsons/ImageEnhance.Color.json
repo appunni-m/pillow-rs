@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageEnhance",
+    "target": "Color"
+  },
+  "cases": [
+    {
+      "id": "ImageEnhance_Color_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Color_ImageEnhance_Color_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Color_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Color_ImageEnhance_Color_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Color_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Color_ImageEnhance_Color_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageEnhance_Color_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageEnhance.Color_ImageEnhance_Color_RGBA_suite1.png"
+      }
+    }
+  ]
+}

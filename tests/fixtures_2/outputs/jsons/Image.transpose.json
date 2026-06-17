@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "transpose"
+  },
+  "cases": [
+    {
+      "id": "Image_transpose_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.transpose_Image_transpose_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_transpose_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.transpose_Image_transpose_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_transpose_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.transpose_Image_transpose_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_transpose_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.transpose_Image_transpose_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_transpose_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.transpose_Image_transpose_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_transpose_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.transpose_Image_transpose_RGBA_suite1.png"
+      }
+    }
+  ]
+}

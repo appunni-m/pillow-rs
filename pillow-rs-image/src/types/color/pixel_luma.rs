@@ -4,7 +4,7 @@ use super::blend::Blend;
 use super::from_color::FromColor;
 use super::invert::Invert;
 use super::types::{Luma, LumaA, Rgb, Rgba};
-use crate::types::traits::{Enlargeable, Pixel, Primitive};
+use crate::types::traits::{Pixel, Primitive};
 
 impl<T: Primitive> Pixel for Luma<T> {
     type Subpixel = T;

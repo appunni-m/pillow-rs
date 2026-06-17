@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "cover"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_cover_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.cover_ImageOps_cover_L.png"
+      }
+    },
+    {
+      "id": "ImageOps_cover_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.cover_ImageOps_cover_LA.png"
+      }
+    },
+    {
+      "id": "ImageOps_cover_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.cover_ImageOps_cover_RGB.png"
+      }
+    },
+    {
+      "id": "ImageOps_cover_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.cover_ImageOps_cover_RGBA.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "RankFilter"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_RankFilter_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.RankFilter_ImageFilter_RankFilter_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_RankFilter_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.RankFilter_ImageFilter_RankFilter_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_RankFilter_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.RankFilter_ImageFilter_RankFilter_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_RankFilter_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.RankFilter_ImageFilter_RankFilter_RGBA_suite1.png"
+      }
+    }
+  ]
+}

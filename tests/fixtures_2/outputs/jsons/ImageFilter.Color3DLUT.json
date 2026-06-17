@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "Color3DLUT"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_Color3DLUT_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.Color3DLUT_ImageFilter_Color3DLUT_RGB_suite1.png"
+      }
+    }
+  ]
+}

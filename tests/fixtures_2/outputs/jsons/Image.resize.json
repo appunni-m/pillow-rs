@@ -1,0 +1,80 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "resize"
+  },
+  "cases": [
+    {
+      "id": "Image_resize_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.resize_Image_resize_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_resize_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.resize_Image_resize_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_resize_HSV_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.resize_Image_resize_HSV_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_resize_I_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.resize_Image_resize_I_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_resize_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.resize_Image_resize_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_resize_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.resize_Image_resize_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_resize_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.resize_Image_resize_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_resize_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.resize_Image_resize_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_resize_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.resize_Image_resize_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_resize_YCbCr_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.resize_Image_resize_YCbCr_suite1.bin"
+      }
+    }
+  ]
+}

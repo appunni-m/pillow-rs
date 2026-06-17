@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "textbbox"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw.textbbox_RGB_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(5, 7, 30, 15)"
+      }
+    },
+    {
+      "id": "ImageDraw.textbbox_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(5, 7, 30, 15)"
+      }
+    },
+    {
+      "id": "L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "(5, 7, 30, 15)"
+      }
+    }
+  ]
+}

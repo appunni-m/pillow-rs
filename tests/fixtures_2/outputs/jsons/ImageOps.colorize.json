@@ -1,0 +1,25 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "colorize"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.colorize_RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "AssertionError",
+        "message_contains": ""
+      }
+    },
+    {
+      "id": "ImageOps_colorize_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.colorize_ImageOps_colorize_L_suite1.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "putdata"
+  },
+  "cases": [
+    {
+      "id": "Image_putdata_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putdata_Image_putdata_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_putdata_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.putdata_Image_putdata_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_putdata_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putdata_Image_putdata_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_putdata_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putdata_Image_putdata_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_putdata_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putdata_Image_putdata_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_putdata_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putdata_Image_putdata_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_putdata_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putdata_Image_putdata_RGBA_suite1.png"
+      }
+    }
+  ]
+}

@@ -6,89 +6,176 @@
   },
   "cases": [
     {
-      "id": "Decode_jpeg_baseline_444_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/baseline_444.jpg"
+      "id": "subsampling_444",
+      "asset": "baseline_444.jpg",
+      "ref_sha256": "cddc03e6707d5495567b129ba0eca7b1cf9503fa8621239f826fab6a2cfeddda",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_baseline_422_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/baseline_422.jpg"
+      "id": "subsampling_422",
+      "asset": "baseline_422.jpg",
+      "ref_sha256": "c2a5160b3ac6f226ac66d2ea7a5fdec5df133c49610c1d372c5cc7f0382eb4d6",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_baseline_420_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/baseline_420.jpg"
+      "id": "subsampling_420",
+      "asset": "baseline_420.jpg",
+      "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_baseline_411_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/baseline_411.jpg"
+      "id": "subsampling_411",
+      "asset": "baseline_411.jpg",
+      "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_baseline_gray_jpg",
-      "mode": "L",
-      "asset": "jpeg/baseline_gray.jpg"
+      "id": "subsampling_gray",
+      "asset": "baseline_gray.jpg",
+      "ref_sha256": "fd81696ebff9ce6428781dc41d3492cf67b7a00f20afa4207044212cfbdabc98",
+      "ref_bytes": 16384,
+      "ref_mode": "L"
     },
     {
-      "id": "Decode_jpeg_progressive_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/progressive.jpg"
+      "id": "color_ycbcr",
+      "asset": "baseline_ycbcr.jpg"
     },
     {
-      "id": "Decode_jpeg_q100_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/q100.jpg"
+      "id": "color_rgb",
+      "asset": "baseline_rgb_jpeg.jpg"
     },
     {
-      "id": "Decode_jpeg_q50_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/q50.jpg"
+      "id": "color_cmyk",
+      "asset": "baseline_cmyk.jpg"
     },
     {
-      "id": "Decode_jpeg_q10_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/q10.jpg"
+      "id": "huffman_default",
+      "asset": "baseline_default.jpg"
     },
     {
-      "id": "Decode_jpeg_q1_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/q1.jpg"
+      "id": "huffman_optimized",
+      "asset": "baseline_optimized.jpg"
     },
     {
-      "id": "Decode_jpeg_8x8_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/8x8.jpg"
+      "id": "huffman_progressive",
+      "asset": "progressive.jpg",
+      "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_17x17_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/17x17.jpg"
+      "id": "quality_100",
+      "asset": "q100.jpg",
+      "ref_sha256": "120032d46a6d1c86eb9a23155ae30836a37e6587d681e980ab5817c9aceeff73",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_33x33_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/33x33.jpg"
+      "id": "quality_50",
+      "asset": "q50.jpg",
+      "ref_sha256": "884634b00728ba4a3afb9e88f3805a7930ba0e495b429acbf1a8d2851baa583f",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_1x1_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/1x1.jpg"
+      "id": "quality_10",
+      "asset": "q10.jpg",
+      "ref_sha256": "98368f88c8281349f7434dcef60927e1d51d0dee05c524dd8cc7340604aa90f0",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_restart_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/restart.jpg"
+      "id": "quality_1",
+      "asset": "q1.jpg",
+      "ref_sha256": "d2cc5bf13d549fe040b688c2168d4947b5d0e8110cd7eadf38293e93d10c96c6",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_baseline_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/baseline.jpg"
+      "id": "size_minimal",
+      "asset": "8x8.jpg",
+      "ref_sha256": "7f733356482b5a2090a00500ef34843e63449c585023b37e58812cd3431e47c6",
+      "ref_bytes": 192,
+      "ref_mode": "RGB"
     },
     {
-      "id": "Decode_jpeg_progressive_spectral_jpg",
-      "mode": "RGB",
-      "asset": "jpeg/progressive_spectral.jpg"
+      "id": "size_odd",
+      "asset": "17x17.jpg",
+      "ref_sha256": "01c788256ea34397bf5164476d9436c46d4d71bcad67c4f359f5179c961b1bb2",
+      "ref_bytes": 867,
+      "ref_mode": "RGB"
+    },
+    {
+      "id": "size_large",
+      "asset": "large.jpg"
+    },
+    {
+      "id": "size_1x1",
+      "asset": "1x1.jpg",
+      "ref_sha256": "e9141d64beeaee8e8dbf6e033b89aa5977bf8ada4a7917a50932e69eac549c37",
+      "ref_bytes": 3,
+      "ref_mode": "RGB"
+    },
+    {
+      "id": "restart_none",
+      "asset": "baseline_default.jpg"
+    },
+    {
+      "id": "restart_interval",
+      "asset": "restart.jpg",
+      "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
+    },
+    {
+      "id": "exif_orientation",
+      "asset": "exif_orientation.jpg"
+    },
+    {
+      "id": "exif_thumbnail",
+      "asset": "exif_thumbnail.jpg"
+    },
+    {
+      "id": "no_exif",
+      "asset": "no_exif.jpg"
+    },
+    {
+      "id": "trailing_data",
+      "asset": "trailing_data.jpg"
+    },
+    {
+      "id": "multiple_eoi",
+      "asset": "multiple_eoi.jpg"
+    },
+    {
+      "id": "zero_length",
+      "asset": "empty.jpg"
+    },
+    {
+      "id": "truncated",
+      "asset": "truncated.jpg"
+    },
+    {
+      "id": "corrupt_header",
+      "asset": "corrupt.jpg"
+    },
+    {
+      "id": "baseline_standard",
+      "asset": "baseline.jpg",
+      "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
+    },
+    {
+      "id": "progressive_spectral",
+      "asset": "progressive_spectral.jpg",
+      "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+      "ref_bytes": 49152,
+      "ref_mode": "RGB"
     }
   ]
 }

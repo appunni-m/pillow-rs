@@ -6,24 +6,40 @@
   },
   "cases": [
     {
-      "id": "Decode_ico_single_ico",
-      "mode": "RGBA",
-      "asset": "ico/single.ico"
+      "id": "single_icon",
+      "asset": "single.ico",
+      "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+      "ref_bytes": 1024,
+      "ref_mode": "RGBA"
     },
     {
-      "id": "Decode_ico_multi_ico",
-      "mode": "RGBA",
-      "asset": "ico/multi.ico"
+      "id": "multi_res",
+      "asset": "multi.ico",
+      "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+      "ref_bytes": 1024,
+      "ref_mode": "RGBA"
     },
     {
-      "id": "Decode_ico_png_entry_ico",
-      "mode": "RGBA",
-      "asset": "ico/png_entry.ico"
+      "id": "png_entry",
+      "asset": "png_entry.ico",
+      "ref_sha256": "725602d207f5bfda0cb87fa30b8bda67ac4fc857c6c6f9408a229cc460db15ad",
+      "ref_bytes": 4096,
+      "ref_mode": "RGBA"
     },
     {
-      "id": "Decode_ico_16x16_ico",
-      "mode": "RGBA",
-      "asset": "ico/16x16.ico"
+      "id": "bmp_entry",
+      "asset": "bmp_entry.ico"
+    },
+    {
+      "id": "size_16x16",
+      "asset": "16x16.ico",
+      "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+      "ref_bytes": 1024,
+      "ref_mode": "RGBA"
+    },
+    {
+      "id": "size_256x256",
+      "asset": "256x256.ico"
     }
   ]
 }

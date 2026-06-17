@@ -1,0 +1,73 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "SHARPEN"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter.SHARPEN_HSV_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_HSV_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageFilter.SHARPEN_YCbCr_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_YCbCr_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_I_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_I_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_RGBA_suite1.png"
+      }
+    }
+  ]
+}

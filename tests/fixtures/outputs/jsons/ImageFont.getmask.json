@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "getmask"
+  },
+  "cases": [
+    {
+      "id": "default",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x774af61548b0>"
+      }
+    },
+    {
+      "id": "getmask_L",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x774af6154cb0>"
+      }
+    },
+    {
+      "id": "getmask_RGB",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x774af61547f0>"
+      }
+    },
+    {
+      "id": "getmask_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x774af61548b0>"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "getim"
+  },
+  "cases": [
+    {
+      "id": "Image_getim_L",
+      "assert": {
+        "method": "string",
+        "value": "<capsule object \"Pillow Imaging\" at 0x774af6164f90>"
+      }
+    },
+    {
+      "id": "Image_getim_RGB",
+      "assert": {
+        "method": "string",
+        "value": "<capsule object \"Pillow Imaging\" at 0x774af6165080>"
+      }
+    }
+  ]
+}

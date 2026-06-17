@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "pad"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_pad_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.pad_ImageOps_pad_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_pad_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.pad_ImageOps_pad_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_pad_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.pad_ImageOps_pad_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_pad_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.pad_ImageOps_pad_RGBA_suite1.png"
+      }
+    }
+  ]
+}

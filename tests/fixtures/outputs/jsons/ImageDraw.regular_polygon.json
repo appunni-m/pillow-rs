@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "regular_polygon"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_regular_polygon_1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_CMYK",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.regular_polygon_ImageDraw_regular_polygon_CMYK.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_L.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_LA.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.regular_polygon_ImageDraw_regular_polygon_P.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_RGB.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_RGBA.png"
+      }
+    }
+  ]
+}

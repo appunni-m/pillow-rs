@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "ModeFilter"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_ModeFilter_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.ModeFilter_ImageFilter_ModeFilter_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_ModeFilter_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.ModeFilter_ImageFilter_ModeFilter_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_ModeFilter_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.ModeFilter_ImageFilter_ModeFilter_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_ModeFilter_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.ModeFilter_ImageFilter_ModeFilter_RGBA_suite1.png"
+      }
+    }
+  ]
+}

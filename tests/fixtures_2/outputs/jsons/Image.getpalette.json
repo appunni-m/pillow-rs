@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "getpalette"
+  },
+  "cases": [
+    {
+      "id": "Image_getpalette_L_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_getpalette_P_suite1",
+      "assert": {
+        "method": "exact",
+        "value": []
+      }
+    },
+    {
+      "id": "Image_getpalette_RGB_suite1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

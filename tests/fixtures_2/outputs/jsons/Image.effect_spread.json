@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "effect_spread"
+  },
+  "cases": [
+    {
+      "id": "Image_effect_spread_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.effect_spread_Image_effect_spread_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_effect_spread_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.effect_spread_Image_effect_spread_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "Image_effect_spread_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.effect_spread_Image_effect_spread_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_effect_spread_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.effect_spread_Image_effect_spread_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_effect_spread_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.effect_spread_Image_effect_spread_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_effect_spread_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.effect_spread_Image_effect_spread_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_effect_spread_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.effect_spread_Image_effect_spread_RGBA_suite1.png"
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "set_variation_by_axes"
+  },
+  "cases": [
+    {
+      "id": "non_variable_font_RGB",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "non_variable_font_L",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "non_variable_font_RGBA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

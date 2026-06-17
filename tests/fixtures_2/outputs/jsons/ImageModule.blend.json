@@ -1,0 +1,50 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageModule",
+    "target": "blend"
+  },
+  "cases": [
+    {
+      "id": "ImageModule.blend_CMYK_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.blend_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.blend_RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "ImageModule.blend_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    },
+    {
+      "id": "L_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "images do not match"
+      }
+    }
+  ]
+}

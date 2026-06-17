@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "thumbnail"
+  },
+  "cases": [
+    {
+      "id": "Image_thumbnail_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.thumbnail_Image_thumbnail_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image_thumbnail_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.thumbnail_Image_thumbnail_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image_thumbnail_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.thumbnail_Image_thumbnail_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image_thumbnail_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.thumbnail_Image_thumbnail_P_suite1.png"
+      }
+    },
+    {
+      "id": "Image_thumbnail_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.thumbnail_Image_thumbnail_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "Image_thumbnail_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.thumbnail_Image_thumbnail_RGBA_suite1.png"
+      }
+    }
+  ]
+}

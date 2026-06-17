@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "multiline_text"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_multiline_text_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_multiline_text_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.multiline_text_ImageDraw_multiline_text_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_multiline_text_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_multiline_text_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_multiline_text_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_multiline_text_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_multiline_text_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_RGBA_suite1.png"
+      }
+    }
+  ]
+}

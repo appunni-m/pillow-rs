@@ -1,0 +1,59 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "regular_polygon"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw_regular_polygon_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageDraw.regular_polygon_ImageDraw_regular_polygon_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_LA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_P_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_P_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_RGB_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_regular_polygon_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.regular_polygon_ImageDraw_regular_polygon_RGBA_suite1.png"
+      }
+    }
+  ]
+}

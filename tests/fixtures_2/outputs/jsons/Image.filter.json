@@ -1,0 +1,74 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "filter"
+  },
+  "cases": [
+    {
+      "id": "Image.filter_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_Image.filter_1_suite1.png"
+      }
+    },
+    {
+      "id": "Image.filter_CMYK_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.filter_Image.filter_CMYK_suite1.bin"
+      }
+    },
+    {
+      "id": "Image.filter_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_Image.filter_L_suite1.png"
+      }
+    },
+    {
+      "id": "Image.filter_LA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_Image.filter_LA_suite1.png"
+      }
+    },
+    {
+      "id": "Image.filter_P_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "cannot filter palette images"
+      }
+    },
+    {
+      "id": "Image.filter_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_Image.filter_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "blur_rgb_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_blur_rgb_suite1.png"
+      }
+    },
+    {
+      "id": "contour_rgb_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_contour_rgb_suite1.png"
+      }
+    },
+    {
+      "id": "gaussian_blur_rgb_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.filter_gaussian_blur_rgb_suite1.png"
+      }
+    }
+  ]
+}

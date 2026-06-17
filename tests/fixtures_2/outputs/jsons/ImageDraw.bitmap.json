@@ -1,0 +1,63 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "bitmap"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw.bitmap_1_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.bitmap_ImageDraw.bitmap_1_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_CMYK_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_P_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_RGBA_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.bitmap_ImageDraw.bitmap_RGBA_suite1.png"
+      }
+    },
+    {
+      "id": "ImageDraw_bitmap_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.bitmap_ImageDraw_bitmap_L_suite1.png"
+      }
+    }
+  ]
+}

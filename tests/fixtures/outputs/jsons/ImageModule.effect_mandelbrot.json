@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageModule",
+    "target": "effect_mandelbrot"
+  },
+  "cases": [
+    {
+      "id": "default",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.effect_mandelbrot_default.png"
+      }
+    }
+  ]
+}

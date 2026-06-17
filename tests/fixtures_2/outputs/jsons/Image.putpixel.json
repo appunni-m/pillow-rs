@@ -1,0 +1,58 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Image",
+    "target": "putpixel"
+  },
+  "cases": [
+    {
+      "id": "Image_putpixel_1_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "IndexError",
+        "message_contains": "image index out of range"
+      }
+    },
+    {
+      "id": "Image_putpixel_L_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "IndexError",
+        "message_contains": "image index out of range"
+      }
+    },
+    {
+      "id": "Image_putpixel_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "IndexError",
+        "message_contains": "image index out of range"
+      }
+    },
+    {
+      "id": "Image_putpixel_P_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "IndexError",
+        "message_contains": "image index out of range"
+      }
+    },
+    {
+      "id": "Image_putpixel_RGB_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "IndexError",
+        "message_contains": "image index out of range"
+      }
+    },
+    {
+      "id": "Image_putpixel_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "IndexError",
+        "message_contains": "image index out of range"
+      }
+    }
+  ]
+}

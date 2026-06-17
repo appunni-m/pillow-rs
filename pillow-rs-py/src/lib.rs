@@ -1155,7 +1155,7 @@ impl PyDraw {
                 }
             })
             .collect();
-        let w = width.map(|w| if w > 0 { w } else { 1 }).unwrap_or(1);
+        let w = width.map_or(1, |w| if w > 0 { w } else { 1 });
         for i in 0..pts.len() - 1 {
             self.draw
                 .line(pts[i].0, pts[i].1, pts[i + 1].0, pts[i + 1].1, color, w)

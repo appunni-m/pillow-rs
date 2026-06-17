@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageFont",
+    "target": "load"
+  },
+  "cases": [
+    {
+      "id": "ImageFont.load_L_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Liberation Serif', 'Regular')"
+      }
+    },
+    {
+      "id": "ImageFont.load_RGBA_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Liberation Serif', 'Regular')"
+      }
+    },
+    {
+      "id": "dejavu_sans_16_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('DejaVu Sans', 'Book')"
+      }
+    },
+    {
+      "id": "liberation_serif_20_suite1",
+      "assert": {
+        "method": "string",
+        "value": "('Liberation Serif', 'Regular')"
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "ImageOps",
+    "target": "equalize"
+  },
+  "cases": [
+    {
+      "id": "ImageOps.equalize_LA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "OSError",
+        "message_contains": "not supported for mode LA"
+      }
+    },
+    {
+      "id": "ImageOps.equalize_RGBA_suite1",
+      "assert": {
+        "method": "error",
+        "exception": "OSError",
+        "message_contains": "not supported for mode RGBA"
+      }
+    },
+    {
+      "id": "ImageOps_equalize_L_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.equalize_ImageOps_equalize_L_suite1.png"
+      }
+    },
+    {
+      "id": "ImageOps_equalize_RGB_suite1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.equalize_ImageOps_equalize_RGB_suite1.png"
+      }
+    }
+  ]
+}
