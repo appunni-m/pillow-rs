@@ -19,3 +19,6 @@ wgpu = "24"
 pollster = "0.3"
 bytemuck = { version = "1", features = ["derive"] }
 
+
+[lints]
+workspace = true

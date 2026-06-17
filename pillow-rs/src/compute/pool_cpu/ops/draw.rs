@@ -735,7 +735,7 @@ pub fn op_draw_rounded_rect(
     radius: f64,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    ops::pil_resize::PRECISION_BITS: u32,
+    _precision_bits: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let r = radius.round() as i32;
@@ -911,7 +911,7 @@ pub fn op_draw_ellipse(
     y1: i32,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    ops::pil_resize::PRECISION_BITS: u32,
+    _precision_bits: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     Ok(draw_preserve_p_mode(img, _mode, |canvas| {
@@ -947,7 +947,7 @@ pub fn op_draw_polygon(
     points: &[(i32, i32)],
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    ops::pil_resize::PRECISION_BITS: u32,
+    _precision_bits: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
@@ -965,7 +965,7 @@ pub fn op_draw_arc(
     start: f64,
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
-    ops::pil_resize::PRECISION_BITS: u32,
+    _precision_bits: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let fc = fill.unwrap_or((0, 0, 0, 255));
@@ -1027,7 +1027,7 @@ pub fn op_draw_pieslice(
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
-    ops::pil_resize::PRECISION_BITS: u32,
+    _precision_bits: u32,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     Ok(draw_preserve_p_mode(img, _mode, |canvas| {
