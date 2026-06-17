@@ -1,0 +1,256 @@
+//! PNG decoder using the `png` crate.
+//!
+//! Decodes all standard PNG color types (grayscale, grayscale+alpha, RGB, RGBA,
+//! indexed/palette) with automatic bit-depth expansion for 1/2/4-bit images and
+//! 16-to-8-bit reduction. Adam7 interlacing is handled transparently by the
+//! underlying `png` crate.
+
+use crate::types::{ColorType, DecodedImage};
+use png::{BitDepth, ColorType as PngColorType};
+
+/// Decode a PNG image from raw bytes.
+///
+/// Returns `Some(DecodedImage)` on success, or `None` if the data is not a
+/// valid PNG or contains an unsupported configuration.
+pub fn decode(data: &[u8]) -> Option<DecodedImage> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(data));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).ok()?;
+
+    let w = info.width;
+    let h = info.height;
+
+    match info.color_type {
+        PngColorType::Grayscale => decode_grayscale(w, h, &buf, info.bit_depth),
+        PngColorType::GrayscaleAlpha => match info.bit_depth {
+            BitDepth::Eight => Some(DecodedImage::new(w, h, buf, ColorType::La8)),
+            BitDepth::Sixteen => {
+                // Reduce 16-bit (2 bytes/sample) to 8-bit by taking the high byte
+                let pixels: Vec<u8> = buf
+                    .chunks_exact(4)
+                    .flat_map(|c| vec![c[0], c[2]])
+                    .collect();
+                Some(DecodedImage::new(w, h, pixels, ColorType::La8))
+            }
+            _ => None,
+        },
+        PngColorType::Rgb => match info.bit_depth {
+            BitDepth::Eight => Some(DecodedImage::new(w, h, buf, ColorType::Rgb8)),
+            BitDepth::Sixteen => {
+                // Reduce 16-bit (2 bytes/channel) to 8-bit
+                let pixels: Vec<u8> = buf
+                    .chunks_exact(6)
+                    .flat_map(|c| vec![c[0], c[2], c[4]])
+                    .collect();
+                Some(DecodedImage::new(w, h, pixels, ColorType::Rgb8))
+            }
+            _ => None,
+        },
+        PngColorType::Rgba => match info.bit_depth {
+            BitDepth::Eight => Some(DecodedImage::new(w, h, buf, ColorType::Rgba8)),
+            BitDepth::Sixteen => {
+                // Reduce 16-bit (2 bytes/channel) to 8-bit
+                let pixels: Vec<u8> = buf
+                    .chunks_exact(8)
+                    .flat_map(|c| vec![c[0], c[2], c[4], c[6]])
+                    .collect();
+                Some(DecodedImage::new(w, h, pixels, ColorType::Rgba8))
+            }
+            _ => None,
+        },
+        PngColorType::Indexed => {
+            // Expand indexed/palette image to RGBA via the palette and optional
+            // transparency (tRNS) chunk.
+            let palette = reader.info().palette.as_ref()?;
+            let trns = reader.info().trns.as_deref().unwrap_or(&[]);
+            let num_pixels = (w as u64 * h as u64) as usize;
+            let mut rgba = Vec::with_capacity(num_pixels.saturating_mul(4));
+            for &idx in &buf {
+                let pi = idx as usize * 3;
+                let r = palette.get(pi).copied().unwrap_or(0);
+                let g = palette.get(pi + 1).copied().unwrap_or(0);
+                let b = palette.get(pi + 2).copied().unwrap_or(0);
+                let a = trns.get(idx as usize).copied().unwrap_or(255u8);
+                rgba.push(r);
+                rgba.push(g);
+                rgba.push(b);
+                rgba.push(a);
+            }
+            Some(DecodedImage::new(w, h, rgba, ColorType::Rgba8))
+        }
+    }
+}
+
+/// Decode a grayscale PNG, handling sub-8-bit packed pixel formats.
+fn decode_grayscale(
+    w: u32,
+    h: u32,
+    buf: &[u8],
+    bit_depth: BitDepth,
+) -> Option<DecodedImage> {
+    let num_pixels = (w as u64 * h as u64) as usize;
+    match bit_depth {
+        BitDepth::One => {
+            // 1-bit: each byte holds 8 pixels (MSB first per PNG spec)
+            let row_bytes = ((w + 7) / 8) as usize;
+            let mut pixels = Vec::with_capacity(num_pixels);
+            for row in 0..h as usize {
+                let start = row * row_bytes;
+                for col in 0..w as usize {
+                    let byte = buf.get(start + col / 8).copied().unwrap_or(0);
+                    let bit = 7 - (col % 8);
+                    pixels.push(if byte & (1 << bit) != 0 { 255 } else { 0 });
+                }
+            }
+            Some(DecodedImage::new(w, h, pixels, ColorType::L8))
+        }
+        BitDepth::Two => {
+            // 2-bit: each byte holds 4 pixels (2 bits each, MSB first)
+            let row_bytes = ((w * 2 + 7) / 8) as usize;
+            let mut pixels = Vec::with_capacity(num_pixels);
+            for row in 0..h as usize {
+                let start = row * row_bytes;
+                for col in 0..w as usize {
+                    let byte = buf.get(start + col / 4).copied().unwrap_or(0);
+                    let shift = 6 - ((col % 4) * 2);
+                    let val = (byte >> shift) & 3;
+                    // Scale 0..3 to 0..255
+                    pixels.push((val * 255 / 3) as u8);
+                }
+            }
+            Some(DecodedImage::new(w, h, pixels, ColorType::L8))
+        }
+        BitDepth::Four => {
+            // 4-bit: each byte holds 2 pixels (high nibble first, MSB-first)
+            let row_bytes = ((w * 4 + 7) / 8) as usize;
+            let mut pixels = Vec::with_capacity(num_pixels);
+            for row in 0..h as usize {
+                let start = row * row_bytes;
+                for col in 0..w as usize {
+                    let byte = buf.get(start + col / 2).copied().unwrap_or(0);
+                    let val = if col % 2 == 0 {
+                        byte >> 4
+                    } else {
+                        byte & 0x0F
+                    };
+                    // Scale 0..15 to 0..255
+                    pixels.push((val * 255 / 15) as u8);
+                }
+            }
+            Some(DecodedImage::new(w, h, pixels, ColorType::L8))
+        }
+        BitDepth::Eight => Some(DecodedImage::new(w, h, buf.to_vec(), ColorType::L8)),
+        BitDepth::Sixteen => {
+            // Reduce 16-bit (2 bytes/pixel, big-endian) to 8-bit by taking the
+            // high byte.
+            let pixels: Vec<u8> = buf.chunks_exact(2).map(|c| c[0]).collect();
+            Some(DecodedImage::new(w, h, pixels, ColorType::L8))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Create a minimal 1x1 white 8-bit grayscale PNG.
+    fn minimal_gray_png() -> Vec<u8> {
+        // Manually constructed minimal PNG: 1x1 grayscale, value 255
+        let mut png = Vec::new();
+        // Signature
+        png.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+        // IHDR chunk: 1x1, 8-bit grayscale
+        let ihdr_data = [
+            0, 0, 0, 1, // width = 1
+            0, 0, 0, 1, // height = 1
+            8,          // bit depth = 8
+            0,          // color type = grayscale
+            0, 0, 0, 0, // compression, filter, interlace
+        ];
+        let mut ihdr = Vec::new();
+        ihdr.extend_from_slice(b"IHDR");
+        ihdr.extend_from_slice(&ihdr_data);
+        let crc = crc32(&ihdr);
+        png.extend_from_slice(&(ihdr_data.len() as u32).to_be_bytes());
+        png.extend_from_slice(&ihdr);
+        png.extend_from_slice(&crc.to_be_bytes());
+
+        // IDAT chunk: uncompressed raw scanline (filter byte 0 + pixel 255)
+        // Raw data: filter=0 (None), pixel=255
+        // Deflate: stored block (no compression) for 2 bytes
+        let raw = [0u8, 255];
+        let deflated = deflate_raw(&raw);
+        let mut idat = Vec::new();
+        idat.extend_from_slice(b"IDAT");
+        idat.extend_from_slice(&deflated);
+        let crc = crc32(&idat);
+        png.extend_from_slice(&(deflated.len() as u32).to_be_bytes());
+        png.extend_from_slice(&idat);
+        png.extend_from_slice(&crc.to_be_bytes());
+
+        // IEND chunk
+        let mut iend = Vec::new();
+        iend.extend_from_slice(b"IEND");
+        let crc = crc32(&iend);
+        png.extend_from_slice(&0u32.to_be_bytes());
+        png.extend_from_slice(&iend);
+        png.extend_from_slice(&crc.to_be_bytes());
+
+        png
+    }
+
+    fn crc32(data: &[u8]) -> u32 {
+        let mut crc: u32 = 0xFFFF_FFFF;
+        for &byte in data {
+            crc ^= byte as u32;
+            for _ in 0..8 {
+                if crc & 1 != 0 {
+                    crc = (crc >> 1) ^ 0xEDB8_8320;
+                } else {
+                    crc >>= 1;
+                }
+            }
+        }
+        crc ^ 0xFFFF_FFFF
+    }
+
+    /// Minimal deflate stored block (no compression, no zlib wrapper).
+    fn deflate_raw(data: &[u8]) -> Vec<u8> {
+        // zlib wrapper: 2 bytes (CMF + FLG)
+        let cmf = 0x78; // deflate, window size 32K
+        let flg = 0x01; // check bits
+        let mut out = vec![cmf, flg];
+        // Deflate stored block
+        let len = data.len() as u16;
+        let nlen = !len;
+        out.push(1); // BFINAL=1, BTYPE=00 (stored)
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend_from_slice(&nlen.to_le_bytes());
+        out.extend_from_slice(data);
+        // Adlers-32 checksum
+        let adler = adler32(data);
+        out.extend_from_slice(&adler.to_be_bytes());
+        out
+    }
+
+    fn adler32(data: &[u8]) -> u32 {
+        let mut s1: u32 = 1;
+        let mut s2: u32 = 0;
+        for &byte in data {
+            s1 = (s1 + byte as u32) % 65521;
+            s2 = (s2 + s1) % 65521;
+        }
+        (s2 << 16) | s1
+    }
+
+    #[test]
+    fn test_decode_grayscale_8bit() {
+        let png = minimal_gray_png();
+        let img = decode(&png).expect("should decode");
+        assert_eq!(img.width, 1);
+        assert_eq!(img.height, 1);
+        assert_eq!(img.color, ColorType::L8);
+        assert_eq!(img.pixels, vec![255]);
+    }
+}

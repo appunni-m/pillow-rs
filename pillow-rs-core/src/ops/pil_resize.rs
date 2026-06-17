@@ -175,7 +175,11 @@ pub(crate) struct FilterCoeffsF64 {
 
 /// PIL's ROUND_UP: (int)((f) >= 0.0 ? (f) + 0.5 : (f) - 0.5)
 pub(crate) fn round_up(f: f64) -> f64 {
-    if f >= 0.0 { (f + 0.5).trunc() } else { (f - 0.5).trunc() }
+    if f >= 0.0 {
+        (f + 0.5).trunc()
+    } else {
+        (f - 0.5).trunc()
+    }
 }
 
 /// Precompute f64 (double-precision) coefficients matching PIL's 32-bit image resample.
@@ -197,12 +201,19 @@ pub(crate) fn precompute_coeffs_f64(
         let center = (ox as f64 + 0.5) * scale;
         let mut x0 = (center - src_support + 0.5).trunc() as i64;
         let mut x1 = (center + src_support + 0.5).trunc() as i64;
-        if x0 < 0 { x0 = 0; }
-        if x1 > in_size as i64 { x1 = in_size as i64; }
+        if x0 < 0 {
+            x0 = 0;
+        }
+        if x1 > in_size as i64 {
+            x1 = in_size as i64;
+        }
         let cnt = (x1 - x0) as usize;
         xmin.push(x0);
         count.push(cnt);
-        if cnt == 0 { weights.push(Vec::new()); continue; }
+        if cnt == 0 {
+            weights.push(Vec::new());
+            continue;
+        }
         let mut w: Vec<f64> = Vec::with_capacity(cnt);
         let mut wsum = 0.0;
         for ix in 0..cnt {
@@ -212,11 +223,17 @@ pub(crate) fn precompute_coeffs_f64(
             wsum += val;
         }
         if wsum > 0.0 {
-            for val in &mut w { *val /= wsum; }
+            for val in &mut w {
+                *val /= wsum;
+            }
         }
         weights.push(w);
     }
-    FilterCoeffsF64 { xmin, count, weights }
+    FilterCoeffsF64 {
+        xmin,
+        count,
+        weights,
+    }
 }
 
 pub(crate) fn precompute_coeffs(
@@ -254,7 +271,6 @@ fn _precompute_coeffs_impl(
     kernel: fn(f64) -> f64,
     support: f64,
 ) -> FilterCoeffs {
-
     let filterscale = scale.max(1.0);
     let ss = 1.0 / filterscale;
     let src_support = support * filterscale;
@@ -316,11 +332,7 @@ fn _precompute_coeffs_impl(
             .iter()
             .map(|&w| {
                 let scaled = w * PRECISION as f64;
-                let rounded = if w >= 0.0 {
-                    scaled + 0.5
-                } else {
-                    scaled - 0.5
-                };
+                let rounded = if w >= 0.0 { scaled + 0.5 } else { scaled - 0.5 };
                 rounded as i64
             })
             .collect();

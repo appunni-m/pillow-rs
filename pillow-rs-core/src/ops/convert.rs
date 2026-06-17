@@ -57,7 +57,11 @@ impl Image {
             return Ok(self.copy());
         }
         // P-mode same-mode: PIL defaults to RGB
-        let mode = if mode == src_mode && src_mode == "P" { "RGB" } else { mode };
+        let mode = if mode == src_mode && src_mode == "P" {
+            "RGB"
+        } else {
+            mode
+        };
 
         // Matrix-based conversion must be executed immediately since it modifies
         // pixel values directly and can't be represented as a simple mode convert.

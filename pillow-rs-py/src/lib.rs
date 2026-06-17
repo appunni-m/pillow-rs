@@ -2,7 +2,7 @@ use pillow_rs_core::error::PilError;
 use pillow_rs_core::image::Image as RsImage;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyType, PyTuple};
+use pyo3::types::{PyTuple, PyType};
 
 #[pyclass(name = "Image")]
 pub struct PyImage {
@@ -90,7 +90,10 @@ impl PyImage {
     /// Crop using PIL box format (left, top, right, bottom).
     /// Computes width and height internally.
     fn crop_box(&self, left: u32, top: u32, right: u32, bottom: u32) -> PyResult<PyImage> {
-        let rs = self.inner.crop_box(left, top, right, bottom).map_err(map_error)?;
+        let rs = self
+            .inner
+            .crop_box(left, top, right, bottom)
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -139,7 +142,7 @@ impl PyImage {
     ) -> PyResult<()> {
         use pillow_rs_core::ops::paste::PasteSource;
         // Thin binding: extract Python types, core handles all logic
-        let is_abbreviated = box_coords.map_or(false, |b| b.downcast::<PyImage>().is_ok());
+        let is_abbreviated = box_coords.is_some_and(|b| b.downcast::<PyImage>().is_ok());
         let effective_mask = if is_abbreviated { box_coords } else { mask };
 
         let src_image = im
@@ -474,32 +477,33 @@ impl PyImage {
     }
     /// Return getcolors formatted as PIL expects.
     fn getcolors_formatted(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
-        let raw = self.inner.getcolors(maxcolors.unwrap_or(256)).map_err(map_error)?;
+        let raw = self
+            .inner
+            .getcolors(maxcolors.unwrap_or(256))
+            .map_err(map_error)?;
         let mode = self.inner.mode().map_err(map_error)?;
-        Python::with_gil(|py| {
-            match raw {
-                None => Ok(None),
-                Some(results) => {
-                    let n_bands = match mode.as_str() {
-                        "L" | "1" | "P" | "I" | "F" => 1,
-                        "LA" => 2,
-                        "RGB" | "YCbCr" | "HSV" => 3,
-                        _ => 4,
-                    };
-                    let out = pyo3::types::PyList::empty(py);
-                    for (count, color) in results {
-                        let entry_list = [count.to_object(py)];
-                        let entry = pyo3::types::PyList::new(py, &entry_list)?;
-                        if n_bands == 1 {
-                            entry.append(color[0].to_object(py))?;
-                        } else {
-                            let clist: Vec<u8> = color.iter().take(n_bands).copied().collect();
-                            entry.append(clist.to_object(py))?;
-                        }
-                        out.append(entry)?;
+        Python::with_gil(|py| match raw {
+            None => Ok(None),
+            Some(results) => {
+                let n_bands = match mode.as_str() {
+                    "L" | "1" | "P" | "I" | "F" => 1,
+                    "LA" => 2,
+                    "RGB" | "YCbCr" | "HSV" => 3,
+                    _ => 4,
+                };
+                let out = pyo3::types::PyList::empty(py);
+                for (count, color) in results {
+                    let entry_list = [count.to_object(py)];
+                    let entry = pyo3::types::PyList::new(py, &entry_list)?;
+                    if n_bands == 1 {
+                        entry.append(color[0].to_object(py))?;
+                    } else {
+                        let clist: Vec<u8> = color.iter().take(n_bands).copied().collect();
+                        entry.append(clist.to_object(py))?;
                     }
-                    Ok(Some(out.to_object(py)))
+                    out.append(entry)?;
                 }
+                Ok(Some(out.to_object(py)))
             }
         })
     }
@@ -566,9 +570,11 @@ impl PyImage {
         let n_bands = self.inner.getbands().map_err(map_error)?.len();
         let expected = 256 * n_bands;
         if lut.len() != expected {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                format!("wrong number of lut entries: expected {} got {}", expected, lut.len())
-            ));
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "wrong number of lut entries: expected {} got {}",
+                expected,
+                lut.len()
+            )));
         }
         self.point(lut)
     }
@@ -780,16 +786,22 @@ impl PyImage {
         let mut flat: Vec<u8> = Vec::new();
         for item in data.iter()? {
             let obj = item?;
-            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() { flat.extend_from_slice(&[t.0, t.1, t.2, t.3]); }
-            else if let Ok(t) = obj.extract::<(u8, u8, u8)>() { flat.extend_from_slice(&[t.0, t.1, t.2]); }
-            else if let Ok(t) = obj.extract::<(u8, u8)>() { flat.extend_from_slice(&[t.0, t.1]); }
-            else if let Ok(v) = obj.extract::<u8>() {
+            if let Ok(t) = obj.extract::<(u8, u8, u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1, t.2, t.3]);
+            } else if let Ok(t) = obj.extract::<(u8, u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1, t.2]);
+            } else if let Ok(t) = obj.extract::<(u8, u8)>() {
+                flat.extend_from_slice(&[t.0, t.1]);
+            } else if let Ok(v) = obj.extract::<u8>() {
                 flat.push(v);
-                for _ in 1..n_bands { flat.push(0); }
-            }
-            else if let Ok(v) = obj.extract::<i64>() {
+                for _ in 1..n_bands {
+                    flat.push(0);
+                }
+            } else if let Ok(v) = obj.extract::<i64>() {
                 flat.push(v.clamp(0, 255) as u8);
-                for _ in 1..n_bands { flat.push(0); }
+                for _ in 1..n_bands {
+                    flat.push(0);
+                }
             }
         }
         self.inner.putdata(&flat).map_err(map_error)
@@ -815,24 +827,42 @@ impl PyImage {
     fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
         let mode = self.inner.mode().map_err(map_error)?;
         if let Ok(v) = value.extract::<u8>() {
-            return self.inner.putpixel_mode(xy.0, xy.1, v, &mode).map_err(map_error);
+            return self
+                .inner
+                .putpixel_mode(xy.0, xy.1, v, &mode)
+                .map_err(map_error);
         }
         if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
-            return self.inner.putpixel(xy.0, xy.1, r, g, b, 255).map_err(map_error);
+            return self
+                .inner
+                .putpixel(xy.0, xy.1, r, g, b, 255)
+                .map_err(map_error);
         }
         if let Ok((r, g, b, a)) = value.extract::<(u8, u8, u8, u8)>() {
-            return self.inner.putpixel(xy.0, xy.1, r, g, b, a).map_err(map_error);
+            return self
+                .inner
+                .putpixel(xy.0, xy.1, r, g, b, a)
+                .map_err(map_error);
         }
         if let Ok(list) = value.extract::<Vec<u8>>() {
             let (r, g, b, a) = match list.len() {
                 2 => (list[0], 0, 0, list[1]),
                 3 => (list[0], list[1], list[2], 255),
                 4 => (list[0], list[1], list[2], list[3]),
-                _ => return Err(pyo3::exceptions::PyValueError::new_err("invalid color length")),
+                _ => {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "invalid color length",
+                    ))
+                }
             };
-            return self.inner.putpixel(xy.0, xy.1, r, g, b, a).map_err(map_error);
+            return self
+                .inner
+                .putpixel(xy.0, xy.1, r, g, b, a)
+                .map_err(map_error);
         }
-        Err(pyo3::exceptions::PyTypeError::new_err("value must be int, tuple, or list"))
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "value must be int, tuple, or list",
+        ))
     }
 
     #[getter]
@@ -1115,7 +1145,13 @@ impl PyDraw {
         let color = self.color(fill)?;
         let pts: Vec<(i32, i32)> = xy
             .into_iter()
-            .map(|v| if v.len() >= 2 { (v[0], v[1]) } else { (v[0], v[0]) })
+            .map(|v| {
+                if v.len() >= 2 {
+                    (v[0], v[1])
+                } else {
+                    (v[0], v[0])
+                }
+            })
             .collect();
         let w = width.map(|w| if w > 0 { w } else { 1 }).unwrap_or(1);
         for i in 0..pts.len() - 1 {
@@ -1282,7 +1318,13 @@ impl PyDraw {
         };
         let pts: Vec<(i32, i32)> = xy
             .into_iter()
-            .map(|v| if v.len() >= 2 { (v[0], v[1]) } else { (v[0], v[0]) })
+            .map(|v| {
+                if v.len() >= 2 {
+                    (v[0], v[1])
+                } else {
+                    (v[0], v[0])
+                }
+            })
             .collect();
         self.draw
             .polygon(&pts, fill_color, out_color, width.unwrap_or(1))
@@ -1293,7 +1335,13 @@ impl PyDraw {
         let color = self.color(fill)?;
         let pts: Vec<(i32, i32)> = xy
             .into_iter()
-            .map(|v| if v.len() >= 2 { (v[0], v[1]) } else { (v[0], v[0]) })
+            .map(|v| {
+                if v.len() >= 2 {
+                    (v[0], v[1])
+                } else {
+                    (v[0], v[0])
+                }
+            })
             .collect();
         self.draw.point(&pts, color).map_err(map_error)
     }
@@ -1444,7 +1492,7 @@ impl PyDraw {
                 y += sp + 10.0;
                 continue;
             }
-            if let Some(ref pyfont) = font {
+            if let Some(pyfont) = font {
                 let borrowed = pyfont.borrow();
                 self.draw
                     .text(xy.0 as i32, y as i32, line, &borrowed.inner, color)
@@ -1478,14 +1526,14 @@ impl PyDraw {
 
     /// Compute text length in pixels. Loads default FreeType font if font is None.
     #[pyo3(signature = (text, font=None))]
-    fn textlength(
-        &mut self,
-        text: &str,
-        font: Option<&Bound<'_, PyFont>>,
-    ) -> PyResult<f64> {
+    fn textlength(&mut self, text: &str, font: Option<&Bound<'_, PyFont>>) -> PyResult<f64> {
         let w = match font {
             Some(f) => f.borrow().inner.text_bbox(text).0,
-            None => pillow_rs_core::font::Font::load_default(10.0).text_bbox(text).0,
+            None => {
+                pillow_rs_core::font::Font::load_default(10.0)
+                    .text_bbox(text)
+                    .0
+            }
         };
         Ok(w as f64)
     }
@@ -1777,7 +1825,8 @@ fn ops_pad(
     let resolved_color: Option<(u8, u8, u8, u8)> = match color {
         None => None,
         Some(c) => {
-            let result = if let Ok(i) = c.extract::<u8>() {
+            
+            if let Ok(i) = c.extract::<u8>() {
                 Some((i, i, i, 255))
             } else if let Ok((r, g, b)) = c.extract::<(u8, u8, u8)>() {
                 Some((r, g, b, 255))
@@ -1785,8 +1834,7 @@ fn ops_pad(
                 Some((r, g, b, a))
             } else {
                 None
-            };
-            result
+            }
         }
     };
 
@@ -2162,7 +2210,7 @@ fn palette_getcolor_append(
 ) -> PyResult<usize> {
     let mut pal = palette;
     pillow_rs_core::color::palette_getcolor_append(&mut pal, r, g, b, a, mode)
-        .map_err(|e| PyValueError::new_err(e))
+        .map_err(PyValueError::new_err)
 }
 
 /// Format palette as PIL-compatible text (header + 256-entry table).
@@ -2191,10 +2239,14 @@ fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
 /// Handles mode-specific logic: RGB mode rejects non-opaque RGBA,
 /// RGBA mode auto-fills missing alpha to 255.
 #[pyfunction]
-fn palette_getcolor_validate(palette: Vec<u8>, color: Vec<u8>, mode: &str) -> PyResult<(Vec<u8>, usize)> {
+fn palette_getcolor_validate(
+    palette: Vec<u8>,
+    color: Vec<u8>,
+    mode: &str,
+) -> PyResult<(Vec<u8>, usize)> {
     let mut pal = palette;
     let idx = pillow_rs_core::color::palette_getcolor_validate(&mut pal, &color, mode)
-        .map_err(|e| PyValueError::new_err(e))?;
+        .map_err(PyValueError::new_err)?;
     Ok((pal, idx))
 }
 
@@ -2202,7 +2254,7 @@ fn palette_getcolor_validate(palette: Vec<u8>, color: Vec<u8>, mode: &str) -> Py
 #[pyfunction]
 fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> {
     pillow_rs_core::color::palette_save_to_file(&palette, mode, fp)
-        .map_err(|e| pyo3::exceptions::PyOSError::new_err(e))
+        .map_err(pyo3::exceptions::PyOSError::new_err)
 }
 
 /// Compute default bitmap font bounding box (6x11 px per char).
@@ -2248,7 +2300,6 @@ fn stat_from_list(data: Vec<f64>) -> PyObject {
     })
 }
 
-
 // --- ImageFilter helper functions ---
 
 /// Validate and normalize 3D LUT size. Accepts int (converted to 3-tuple)
@@ -2263,10 +2314,8 @@ fn color3dlut_check_size(size: &Bound<'_, PyAny>) -> PyResult<(u32, u32, u32)> {
             let s2: f64 = size.get_item(2)?.extract()?;
             let s = [s0 as i32, s1 as i32, s2 as i32];
             for &si in &s {
-                if si < 2 || si > 65 {
-                    return Err(PyValueError::new_err(
-                        "Size should be in [2, 65] range.",
-                    ));
+                if !(2..=65).contains(&si) {
+                    return Err(PyValueError::new_err("Size should be in [2, 65] range."));
                 }
             }
             return Ok((s[0] as u32, s[1] as u32, s[2] as u32));
@@ -2278,15 +2327,11 @@ fn color3dlut_check_size(size: &Bound<'_, PyAny>) -> PyResult<(u32, u32, u32)> {
 
     // Single value (int or float)
     let s: f64 = size.extract().map_err(|_| {
-        PyValueError::new_err(
-            "Size should be either an integer or a tuple of three integers.",
-        )
+        PyValueError::new_err("Size should be either an integer or a tuple of three integers.")
     })?;
     let si = s as i32;
-    if si < 2 || si > 65 {
-        return Err(PyValueError::new_err(
-            "Size should be in [2, 65] range.",
-        ));
+    if !(2..=65).contains(&si) {
+        return Err(PyValueError::new_err("Size should be in [2, 65] range."));
     }
     Ok((si as u32, si as u32, si as u32))
 }

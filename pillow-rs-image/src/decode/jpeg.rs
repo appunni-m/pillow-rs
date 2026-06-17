@@ -5,7 +5,7 @@
 //!
 //! Reference: IJG libjpeg `jidctint.c` (Thomas G. Lane, 1991-1998)
 
-use super::{ColorType, DecodedImage};
+use crate::types::DecodedImage;
 
 // ── IDCT Constants (matching IJG jidctint.c) ──────────────────────────────
 
@@ -41,7 +41,13 @@ fn descale(x: i32, shift: i32) -> i32 {
 
 #[inline(always)]
 fn range_limit(x: i32) -> u8 {
-    if x < 0 { 0 } else if x > 255 { 255 } else { x as u8 }
+    if x < 0 {
+        0
+    } else if x > 255 {
+        255
+    } else {
+        x as u8
+    }
 }
 
 // ── IJG jpeg_idct_islow — in-place on 8×8 block ─────────────────────────
@@ -55,37 +61,48 @@ pub fn jpeg_idct_islow(block: &mut [i32; DCTSIZE2], workspace: &mut [i32; DCTSIZ
         let tmp2 = z1 + mpy(z3, -FIX_1_847759065);
         let tmp3 = z1 + mpy(z2, FIX_0_765366865);
 
-        let z2 = block[c + DCTSIZE * 0];
+        let z2 = block[c];
         let z3 = block[c + DCTSIZE * 4];
         let tmp0 = (z2 + z3) << CONST_BITS;
         let tmp1 = (z2 - z3) << CONST_BITS;
 
-        let tmp10 = tmp0 + tmp3; let tmp13 = tmp0 - tmp3;
-        let tmp11 = tmp1 + tmp2; let tmp12 = tmp1 - tmp2;
+        let tmp10 = tmp0 + tmp3;
+        let tmp13 = tmp0 - tmp3;
+        let tmp11 = tmp1 + tmp2;
+        let tmp12 = tmp1 - tmp2;
 
         // Odd part — Figure 8
         let t0 = &block[c + DCTSIZE * 7];
         let t1 = &block[c + DCTSIZE * 5];
         let t2 = &block[c + DCTSIZE * 3];
-        let t3 = &block[c + DCTSIZE * 1];
+        let t3 = &block[c + DCTSIZE];
         let (v0, v1, v2, v3) = (*t0, *t1, *t2, *t3);
 
-        let z1 = v0 + v3; let z2 = v1 + v2;
-        let z3 = v0 + v2; let z4 = v1 + v3;
+        let z1 = v0 + v3;
+        let z2 = v1 + v2;
+        let z3 = v0 + v2;
+        let z4 = v1 + v3;
         let z5 = mpy(z3 + z4, FIX_1_175875602);
 
-        let t0 = mpy(v0, FIX_0_298631336); let t1 = mpy(v1, FIX_2_053119869);
-        let t2 = mpy(v2, FIX_3_072711026); let t3 = mpy(v3, FIX_1_501321110);
-        let z1 = mpy(z1, -FIX_0_899976223); let z2 = mpy(z2, -FIX_2_562915447);
-        let z3 = mpy(z3, -FIX_1_961570560); let z4 = mpy(z4, -FIX_0_390180644);
-        let z3 = z3 + z5; let z4 = z4 + z5;
+        let t0 = mpy(v0, FIX_0_298631336);
+        let t1 = mpy(v1, FIX_2_053119869);
+        let t2 = mpy(v2, FIX_3_072711026);
+        let t3 = mpy(v3, FIX_1_501321110);
+        let z1 = mpy(z1, -FIX_0_899976223);
+        let z2 = mpy(z2, -FIX_2_562915447);
+        let z3 = mpy(z3, -FIX_1_961570560);
+        let z4 = mpy(z4, -FIX_0_390180644);
+        let z3 = z3 + z5;
+        let z4 = z4 + z5;
 
-        let o0 = t0 + z1 + z3; let o1 = t1 + z2 + z4;
-        let o2 = t2 + z2 + z3; let o3 = t3 + z1 + z4;
+        let o0 = t0 + z1 + z3;
+        let o1 = t1 + z2 + z4;
+        let o2 = t2 + z2 + z3;
+        let o3 = t3 + z1 + z4;
 
-        workspace[c + DCTSIZE * 0] = descale(tmp10 + o3, PASS1_BITS);
+        workspace[c] = descale(tmp10 + o3, PASS1_BITS);
         workspace[c + DCTSIZE * 7] = descale(tmp10 - o3, PASS1_BITS);
-        workspace[c + DCTSIZE * 1] = descale(tmp11 + o2, PASS1_BITS);
+        workspace[c + DCTSIZE] = descale(tmp11 + o2, PASS1_BITS);
         workspace[c + DCTSIZE * 6] = descale(tmp11 - o2, PASS1_BITS);
         workspace[c + DCTSIZE * 2] = descale(tmp12 + o1, PASS1_BITS);
         workspace[c + DCTSIZE * 5] = descale(tmp12 - o1, PASS1_BITS);
@@ -98,35 +115,50 @@ pub fn jpeg_idct_islow(block: &mut [i32; DCTSIZE2], workspace: &mut [i32; DCTSIZ
 
     for r in 0..DCTSIZE {
         let row = r * DCTSIZE;
-        let z2 = workspace[row + 2]; let z3 = workspace[row + 6];
+        let z2 = workspace[row + 2];
+        let z3 = workspace[row + 6];
         let z1 = mpy(z2 + z3, FIX_0_541196100);
         let tmp2 = z1 + mpy(z3, -FIX_1_847759065);
         let tmp3 = z1 + mpy(z2, FIX_0_765366865);
 
-        let z2 = workspace[row + 0]; let z3 = workspace[row + 4];
+        let z2 = workspace[row];
+        let z3 = workspace[row + 4];
         let tmp0 = (z2 + z3) << CONST_BITS;
         let tmp1 = (z2 - z3) << CONST_BITS;
 
-        let tmp10 = tmp0 + tmp3; let tmp13 = tmp0 - tmp3;
-        let tmp11 = tmp1 + tmp2; let tmp12 = tmp1 - tmp2;
+        let tmp10 = tmp0 + tmp3;
+        let tmp13 = tmp0 - tmp3;
+        let tmp11 = tmp1 + tmp2;
+        let tmp12 = tmp1 - tmp2;
 
-        let v0 = workspace[row + 7]; let v1 = workspace[row + 5];
-        let v2 = workspace[row + 3]; let v3 = workspace[row + 1];
+        let v0 = workspace[row + 7];
+        let v1 = workspace[row + 5];
+        let v2 = workspace[row + 3];
+        let v3 = workspace[row + 1];
 
-        let z1 = v0 + v3; let z2 = v1 + v2;
-        let z3 = v0 + v2; let z4 = v1 + v3;
+        let z1 = v0 + v3;
+        let z2 = v1 + v2;
+        let z3 = v0 + v2;
+        let z4 = v1 + v3;
         let z5 = mpy(z3 + z4, FIX_1_175875602);
 
-        let t0 = mpy(v0, FIX_0_298631336); let t1 = mpy(v1, FIX_2_053119869);
-        let t2 = mpy(v2, FIX_3_072711026); let t3 = mpy(v3, FIX_1_501321110);
-        let z1 = mpy(z1, -FIX_0_899976223); let z2 = mpy(z2, -FIX_2_562915447);
-        let z3 = mpy(z3, -FIX_1_961570560); let z4 = mpy(z4, -FIX_0_390180644);
-        let z3 = z3 + z5; let z4 = z4 + z5;
+        let t0 = mpy(v0, FIX_0_298631336);
+        let t1 = mpy(v1, FIX_2_053119869);
+        let t2 = mpy(v2, FIX_3_072711026);
+        let t3 = mpy(v3, FIX_1_501321110);
+        let z1 = mpy(z1, -FIX_0_899976223);
+        let z2 = mpy(z2, -FIX_2_562915447);
+        let z3 = mpy(z3, -FIX_1_961570560);
+        let z4 = mpy(z4, -FIX_0_390180644);
+        let z3 = z3 + z5;
+        let z4 = z4 + z5;
 
-        let o0 = t0 + z1 + z3; let o1 = t1 + z2 + z4;
-        let o2 = t2 + z2 + z3; let o3 = t3 + z1 + z4;
+        let o0 = t0 + z1 + z3;
+        let o1 = t1 + z2 + z4;
+        let o2 = t2 + z2 + z3;
+        let o3 = t3 + z1 + z4;
 
-        block[row + 0] = range_limit(descale(tmp10 + o3, FS)) as i32;
+        block[row] = range_limit(descale(tmp10 + o3, FS)) as i32;
         block[row + 7] = range_limit(descale(tmp10 - o3, FS)) as i32;
         block[row + 1] = range_limit(descale(tmp11 + o2, FS)) as i32;
         block[row + 6] = range_limit(descale(tmp11 - o2, FS)) as i32;
@@ -156,8 +188,8 @@ mod tests {
         let mut ws = [0i32; DCTSIZE2];
         jpeg_idct_islow(&mut block, &mut ws);
         let first = block[0];
-        for i in 1..DCTSIZE2 {
-            assert_eq!(block[i], first);
+        for item in block.iter().take(DCTSIZE2).skip(1) {
+            assert_eq!(*item, first);
         }
     }
 }

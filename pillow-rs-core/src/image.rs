@@ -609,7 +609,11 @@ impl Image {
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), PilError> {
         let new_self = Image::push_op(
             self,
-            PipelineOp::PutPixel { x, y, color: (r, g, b, a) },
+            PipelineOp::PutPixel {
+                x,
+                y,
+                color: (r, g, b, a),
+            },
         );
         *self = new_self;
         Ok(())

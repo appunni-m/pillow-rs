@@ -745,11 +745,11 @@ impl GpuInner {
         // Each dual-input op gets its second image materialized upfront; upload to buf_img2
         // happens right before dispatch (CPU→GPU, not a round trip).
         let second_images: Vec<Option<DynamicImage>> =
-            ops.iter().map(|op| extract_second_image(op)).collect();
+            ops.iter().map(extract_second_image).collect();
 
         // Pre-materialize third images for 3-input ops (Composite/Paste mask).
         let third_images: Vec<Option<DynamicImage>> =
-            ops.iter().map(|op| extract_third_image(op)).collect();
+            ops.iter().map(extract_third_image).collect();
 
         let mut current_is_a = true;
         let mut cur_w = w;
@@ -909,9 +909,9 @@ fn extract_lut(op: &PipelineOp) -> Option<[u32; 256]> {
         }
     } else if lut_bytes.len() >= 1024 {
         // Packed RGBA LUT (256 entries * 4 bytes each).
-        for i in 0..256 {
+        for (i, p) in packed.iter_mut().enumerate() {
             let base = i * 4;
-            packed[i] = (lut_bytes[base] as u32)
+            *p = (lut_bytes[base] as u32)
                 | ((lut_bytes[base + 1] as u32) << 8)
                 | ((lut_bytes[base + 2] as u32) << 16)
                 | ((lut_bytes[base + 3] as u32) << 24);

@@ -774,8 +774,22 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         PipelineOp::RadialGradient { .. } => vec![],
 
         // ── EffectMandelbrot: extent + quality ──
-        PipelineOp::EffectMandelbrot { w: _, h: _, x0, y0, x1, y1, quality } => {
-            vec![(*x0 as f32).to_bits(), (*y0 as f32).to_bits(), (*x1 as f32).to_bits(), (*y1 as f32).to_bits(), *quality]
+        PipelineOp::EffectMandelbrot {
+            w: _,
+            h: _,
+            x0,
+            y0,
+            x1,
+            y1,
+            quality,
+        } => {
+            vec![
+                (*x0 as f32).to_bits(),
+                (*y0 as f32).to_bits(),
+                (*x1 as f32).to_bits(),
+                (*y1 as f32).to_bits(),
+                *quality,
+            ]
         }
 
         // ── Everything else (no GPU support / no params) ──
@@ -2030,7 +2044,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     m.insert(
         "ExtractBand",
         gpu_entry!(
-            |img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
                 if let PipelineOp::ExtractBand { index } = op {
                     op_extract_band(img, *index)
                 } else {
@@ -2045,7 +2062,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     m.insert(
         "LinearGradient",
         gpu_entry!(
-            |_img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
+            |_img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
                 if let PipelineOp::LinearGradient { mode } = op {
                     op_linear_gradient(mode)
                 } else {
@@ -2060,7 +2080,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     m.insert(
         "RadialGradient",
         gpu_entry!(
-            |_img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
+            |_img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
                 if let PipelineOp::RadialGradient { mode } = op {
                     op_radial_gradient(mode)
                 } else {
@@ -2075,24 +2098,27 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     m.insert(
         "EffectMandelbrot",
         gpu_entry!(
-            |_img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
-            if let PipelineOp::EffectMandelbrot {
-                w,
-                h,
-                x0,
-                y0,
-                x1,
-                y1,
-                quality,
-            } = op
-            {
-                op_effect_mandelbrot(*w, *h, *x0, *y0, *x1, *y1, *quality)
-            } else {
-                Err(PilError::ValueError("expected EffectMandelbrot op".into()))
-            }
-        },
-        "effect_mandelbrot.wgsl"
-    ),
+            |_img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::EffectMandelbrot {
+                    w,
+                    h,
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    quality,
+                } = op
+                {
+                    op_effect_mandelbrot(*w, *h, *x0, *y0, *x1, *y1, *quality)
+                } else {
+                    Err(PilError::ValueError("expected EffectMandelbrot op".into()))
+                }
+            },
+            "effect_mandelbrot.wgsl"
+        ),
     );
 
     // ── ImageDraw ops (CPU-only for now) ──
@@ -2389,15 +2415,48 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     );
     simd_set(m.get_mut("Merge").unwrap(), adapters::simd_merge);
     // ── Additional SIMD wirings (GPU ops missing SIMD) ──
-    simd_set(m.get_mut("Autocontrast").unwrap(), adapters::simd_autocontrast);
-    simd_set(m.get_mut("BlendModule").unwrap(), adapters::simd_blend_module);
-    simd_set(m.get_mut("CompositeModule").unwrap(), adapters::simd_composite_module);
-    simd_set(m.get_mut("ColorSaturation").unwrap(), adapters::simd_color_saturation);
-    simd_set(m.get_mut("EffectNoise").unwrap(), adapters::simd_effect_noise);
-    simd_set(m.get_mut("EffectSpread").unwrap(), adapters::simd_effect_spread);
-    simd_set(m.get_mut("GaussianBlur").unwrap(), adapters::simd_gaussian_blur);
-    simd_set(m.get_mut("InvertChops").unwrap(), adapters::simd_invert_chops);
-    simd_set(m.get_mut("MedianFilter").unwrap(), adapters::simd_median_filter);
-    simd_set(m.get_mut("RemapPalette").unwrap(), adapters::simd_remap_palette);
-    simd_set(m.get_mut("SubtractModulo").unwrap(), adapters::simd_subtract_modulo);
+    simd_set(
+        m.get_mut("Autocontrast").unwrap(),
+        adapters::simd_autocontrast,
+    );
+    simd_set(
+        m.get_mut("BlendModule").unwrap(),
+        adapters::simd_blend_module,
+    );
+    simd_set(
+        m.get_mut("CompositeModule").unwrap(),
+        adapters::simd_composite_module,
+    );
+    simd_set(
+        m.get_mut("ColorSaturation").unwrap(),
+        adapters::simd_color_saturation,
+    );
+    simd_set(
+        m.get_mut("EffectNoise").unwrap(),
+        adapters::simd_effect_noise,
+    );
+    simd_set(
+        m.get_mut("EffectSpread").unwrap(),
+        adapters::simd_effect_spread,
+    );
+    simd_set(
+        m.get_mut("GaussianBlur").unwrap(),
+        adapters::simd_gaussian_blur,
+    );
+    simd_set(
+        m.get_mut("InvertChops").unwrap(),
+        adapters::simd_invert_chops,
+    );
+    simd_set(
+        m.get_mut("MedianFilter").unwrap(),
+        adapters::simd_median_filter,
+    );
+    simd_set(
+        m.get_mut("RemapPalette").unwrap(),
+        adapters::simd_remap_palette,
+    );
+    simd_set(
+        m.get_mut("SubtractModulo").unwrap(),
+        adapters::simd_subtract_modulo,
+    );
 }
