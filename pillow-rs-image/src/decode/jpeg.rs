@@ -1613,6 +1613,11 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
             let is_ac_first = !is_dc_scan && scan.ah == 0;
             let is_ac_refine = !is_dc_scan && scan.ah > 0;
 
+            // Per-component EOBRUN state: persists across ALL blocks in this scan
+            // segment (IJG decode_mcu_AC_refine saves/restores EOBRUN between MCU
+            // calls; we must NOT reset it per-MCU).
+            let mut ac_refine_eobrun: u32 = 0;
+
             for mcu_idx in 0..mcus_in_segment {
                 let absolute_mcu = mcu_offset + mcu_idx;
                 if absolute_mcu >= max_mcus {
@@ -1705,16 +1710,14 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                         let m1 = (-1i32) << scan.al;
                         let ss = scan.ss as usize;
                         let se = scan.se as usize;
-                        // EOBRUN state shared across blocks within this component segment.
-                        // Follows IJG savable_state.EOBRUN — persists across blocks
-                        // (IJG's decode_mcu_AC_refine has no inner block loop; it processes
-                        // one block per MCU, and EOBRUN persists across function calls).
-                        let mut eob_run: u32 = 0;
+                        // EOBRUN state shared across blocks AND MCUs within this
+                        // scan segment (IJG savable_state.EOBRUN).  Declared at the
+                        // scan/segment level — NOT per-MCU, NOT per-block.
+                        // (IJG's decode_mcu_AC_refine has no inner block loop; it
+                        // processes one block per MCU call and saves EOBRUN in
+                        // entropy->saved.EOBRUN across calls.)
                         let blocks_y = comp.v_samp as usize;
                         let blocks_x = comp.h_samp as usize;
-                        if mcu_x == 5 && mcu_y == 4 {
-                            eprintln!("AC_REFINE MCU=5,4 first blk: br.pos={} br.bits={}", br.pos, br.bits);
-                        }
                         for by in 0..blocks_y {
                             for bx in 0..blocks_x {
                                 let block_idx = (mcu_y * blocks_y + by)
@@ -1724,7 +1727,7 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                 let mut k = ss;
 
                                 // ── Normal decode (only when eobrun == 0) ──
-                                if eob_run == 0 {
+                                if ac_refine_eobrun == 0 {
                                     while k <= se && k < 64 {
                                         if coeffs[k] != 0 {
                                             // Refine existing non-zero coefficient (raw bit)
@@ -1741,10 +1744,14 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                             }
                                             k += 1;
                                         } else {
+                                            // Dump BR state before Huffman decode
+                                            eprintln!("AC_REFINE huff_attempt MCU={},{} blk={},{} k={} br.pos={} br.bits={} eob={}",
+                                                mcu_x, mcu_y, bx, by, k, br.pos, br.bits, ac_refine_eobrun);
                                             let sym = match ac_table.decode(&mut br) {
                                                 Some(s) => s,
                                                 None => {
-                                                    eprintln!("AC_REFINE FAIL huff MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                    eprintln!("AC_REFINE FAIL huff MCU={},{} blk={},{} k={} br.pos={} br.bits={}",
+                                                        mcu_x, mcu_y, bx, by, k, br.pos, br.bits);
                                                     return None;
                                                 }
                                             };
@@ -1803,7 +1810,7 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                                 }
                                             } else {
                                                 // EOBRUN: rest of band is zero (across blocks)
-                                                eob_run = 1u32 << run;
+                                                ac_refine_eobrun = 1u32 << run;
                                                 if run > 0 {
                                                     let extra = match br.read_bits(run as u32) {
                                                         Some(v) => v,
@@ -1812,7 +1819,7 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                                             return None;
                                                         }
                                                     };
-                                                    eob_run |= extra;
+                                                    ac_refine_eobrun |= extra;
                                                 }
                                                 break;  // → EOBRUN handler below
                                             }
@@ -1837,8 +1844,8 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                     }
                                     k += 1;
                                 }
-                                if eob_run > 0 {
-                                    eob_run -= 1;
+                                if ac_refine_eobrun > 0 {
+                                    ac_refine_eobrun -= 1;
                                 }
                             }
                         }
