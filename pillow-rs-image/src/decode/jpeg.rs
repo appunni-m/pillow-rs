@@ -9,7 +9,6 @@
 //! Reference: IJG libjpeg `jidctint.c` (Thomas G. Lane, 1991-1998)
 //!            ISO/IEC 10918-1 / ITU-T T.81 (JPEG Standard)
 
-use std::io::Write;
 use crate::types::{ColorType, DecodedImage};
 
 // ── IDCT Constants (matching IJG jidctint.c) ──────────────────────────────
@@ -1455,7 +1454,6 @@ fn fancy_upsample(
 /// Progressive JPEG reconstruction: accumulate coefficients across multiple
 /// scans, then run IDCT and assemble the output.
 fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
-    eprintln!("  PROGRESSIVE START: {} scans", info.scans.len());
     let mcu_width = (info.max_h_samp as u32) * 8;
     let mcu_height = (info.max_v_samp as u32) * 8;
     let num_mcus_x = ((info.width as u32) + mcu_width - 1) / mcu_width;
@@ -1524,8 +1522,6 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
     log::trace!("progressive: LOOP START scans={}", info.scans.len());
     // Process each scan in order
     for (scan_idx, scan) in info.scans.iter().enumerate() {
-        eprintln!("  SCAN {} START ({} comps ss={} se={} ah={} al={})",
-            scan_idx, scan.components.len(), scan.ss, scan.se, scan.ah, scan.al);
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
             log::debug!(
@@ -1571,9 +1567,6 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                 if absolute_mcu >= max_mcus {
                     break;
                 }
-                if scan_idx == 5 && absolute_mcu % 10 == 0 {
-                    eprintln!("  S[5] MCU {}/{}", absolute_mcu, max_mcus);
-                }
                 let mcu_y = absolute_mcu / num_mcus_x as usize;
                 let mcu_x = absolute_mcu % num_mcus_x as usize;
 
@@ -1612,7 +1605,6 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                         }
                     } else if is_ac_first {
                         if scan.ac_huff_tables.len() <= scan_comp.ac_tbl as usize || scan.ac_huff_tables[scan_comp.ac_tbl as usize].is_none() {
-                            eprintln!("  AC_TABLE MISSING scan={} ac_tbl={} len={}", scan_idx, scan_comp.ac_tbl, scan.ac_huff_tables.len());
                             return None;
                         }
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize]
@@ -1648,7 +1640,6 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                         }
                     } else if is_ac_refine {
                         if scan.ac_huff_tables.len() <= scan_comp.ac_tbl as usize || scan.ac_huff_tables[scan_comp.ac_tbl as usize].is_none() {
-                            eprintln!("  AC_REF TABLE MISSING scan={} ac_tbl={} len={}", scan_idx, scan_comp.ac_tbl, scan.ac_huff_tables.len());
                             return None;
                         }
                         // IJG decode_mcu_AC_refine: raw bits for existing, Huffman for new
@@ -1666,7 +1657,6 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                 let coeffs = &mut coeff_storage[comp_idx][block_idx];
                                 let mut k = ss;
                                 let mut eob_run: u32 = 0;
-
                                 // Non-EOBRUN path
                                 while k <= se && k < 64 && eob_run == 0 {
                                     let sym = ac_table.decode(&mut br)?;
@@ -1734,10 +1724,7 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                 }
             }
         }
-        eprintln!("  SCAN {} COMPLETE", scan_idx);
     }
-
-    eprintln!("  ALL SCANS COMPLETE");
     // After all scans: dequantize, IDCT, build component buffers
     let mut block_natural = [0i32; 64];
     let mut workspace = [0i32; 64];
