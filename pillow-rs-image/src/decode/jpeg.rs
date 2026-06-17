@@ -299,11 +299,10 @@ impl<'a> BitReader<'a> {
 
     /// Fill the bit buffer by reading bytes from the stream.
     /// Handles byte stuffing (0xFF 0x00 -> 0xFF data).
-    /// Returns false if no more data is available.
-    fn fill(&mut self) -> bool {
+    fn fill(&mut self) {
         while self.bits <= 24 {
             if self.pos >= self.end {
-                return false;
+                return;
             }
             let byte = self.data[self.pos];
             self.pos += 1;
@@ -311,7 +310,7 @@ impl<'a> BitReader<'a> {
             if byte == 0xFF {
                 // Check for byte stuffing
                 if self.pos >= self.end {
-                    return false;
+                    return;
                 }
                 let next = self.data[self.pos];
                 if next == 0x00 {
@@ -324,23 +323,22 @@ impl<'a> BitReader<'a> {
                     // Since we extracted segments without markers, this is unexpected.
                     // Don't consume the marker byte - put the 0xFF back.
                     self.pos -= 1;
-                    return false;
+                    return;
                 }
             } else {
                 self.buf = (self.buf << 8) | byte as u32;
                 self.bits += 8;
             }
         }
-        true
     }
 
     /// Read `n` bits from the stream (MSB first).
     fn read_bits(&mut self, n: u32) -> Option<u32> {
-        if n > self.bits && !self.fill() {
-            return None;
-        }
         if n > self.bits {
-            return None;
+            self.fill();
+            if n > self.bits {
+                return None;
+            }
         }
         let val = self.buf >> (self.bits - n);
         self.bits -= n;
@@ -1350,7 +1348,8 @@ mod tests {
         assert_eq!(table.values.len(), 1);
         assert_eq!(table.values[0], 0);
         assert_ne!(table.maxcode[1], -1);
-        assert_eq!(table.maxcode[2..=16], [-1; 15]); // no codes of other lengths
+        // maxcode[2..=15] should be -1, maxcode[16] is sentinel for corrupt data
+        assert_eq!(table.maxcode[2..=15], [-1; 14]); // no codes of lengths 2-15
 
         // Can't easily test decode without a bit reader on real data,
         // but at least table construction should work
