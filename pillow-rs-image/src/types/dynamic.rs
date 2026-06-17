@@ -311,12 +311,16 @@ impl DynamicImage {
         use ColorType::*;
         match self.color() {
             L8 => {
-                let img = self.as_luma8().unwrap();
+                let Some(img) = self.as_luma8() else {
+                    panic!("BUG: as_luma8 returned None for L8 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             La8 => {
-                let img = self.as_luma_alpha8().unwrap();
+                let Some(img) = self.as_luma_alpha8() else {
+                    panic!("BUG: as_luma_alpha8 returned None for La8 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }

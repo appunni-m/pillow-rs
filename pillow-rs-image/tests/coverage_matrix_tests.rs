@@ -12,18 +12,21 @@ use pillow_rs_image as img;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CoverageMatrix {
     formats: HashMap<String, FormatData>,
     summary: Summary,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct FormatData {
     decode: Vec<DecodeRow>,
     encode: Vec<EncodeRow>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct DecodeRow {
     id: String,
     #[serde(rename = "type")]
@@ -41,6 +44,7 @@ struct DecodeRow {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct EncodeRow {
     id: String,
     #[serde(rename = "type")]
@@ -62,6 +66,7 @@ struct EncodeRow {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Summary {
     total_rows: usize,
     decode_rows: usize,
