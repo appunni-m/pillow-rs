@@ -10,6 +10,7 @@ name = "pillow_rs"
 
 [dependencies]
 pillow-rs-image = { path = "../pillow-rs-image" }
+log = "0.4"
 png = "0.18"
 thiserror = "1"
 csscolorparser = "0.8"

@@ -1506,22 +1506,43 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
         zigzag_order[JPEG_NATURAL_ORDER[zi]] = zi;
     }
 
-    eprintln!("  allocated: tblocks={} cbuffers={}", coeff_storage.len(), comp_buffers.len());
+    log::debug!(
+        "progressive: allocated tblocks={} cbuffers={}",
+        coeff_storage.len(),
+        comp_buffers.len()
+    );
 
     // Print entropy_end for scan 0 and 6
-    if let Some(s0) = info.scans.get(0) { eprintln!("  scan[0] end={}", s0.entropy_end); }
-    if let Some(s6) = info.scans.get(6) { eprintln!("  scan[6] end={}", s6.entropy_end); }
+    if let Some(s0) = info.scans.get(0) {
+        log::trace!("progressive: scan[0] end={}", s0.entropy_end);
+    }
+    if let Some(s6) = info.scans.get(6) {
+        log::trace!("progressive: scan[6] end={}", s6.entropy_end);
+    }
 
-    eprintln!("  LOOP START");
+    log::trace!("progressive: LOOP START scans={}", info.scans.len());
     // Process each scan in order
     for (scan_idx, scan) in info.scans.iter().enumerate() {
-        eprintln!("  S[{}] attempting...", scan_idx);
+        log::trace!("progressive: S[{}] attempting...", scan_idx);
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
-            eprintln!("  S[{}] empty segments start={} end={}", scan_idx, scan.entropy_start, scan.entropy_end);
+            log::debug!(
+                "progressive: S[{}] empty segments start={} end={}",
+                scan_idx,
+                scan.entropy_start,
+                scan.entropy_end
+            );
             continue;
         }
-        eprintln!("  S[{}] ss={} se={} ah={} al={} segs={}", scan_idx, scan.ss, scan.se, scan.ah, scan.al, segs.segments.len());
+        log::trace!(
+            "progressive: S[{}] ss={} se={} ah={} al={} segs={}",
+            scan_idx,
+            scan.ss,
+            scan.se,
+            scan.ah,
+            scan.al,
+            segs.segments.len()
+        );
 
         let mut dc_predictors: Vec<i32> = vec![0; info.num_components as usize];
         let mut seg_idx = 0;
@@ -1548,6 +1569,9 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                 let absolute_mcu = mcu_offset + mcu_idx;
                 if absolute_mcu >= max_mcus {
                     break;
+                }
+                if scan_idx == 5 && absolute_mcu % 10 == 0 {
+                    eprintln!("  S[5] MCU {}/{}", absolute_mcu, max_mcus);
                 }
                 let mcu_y = absolute_mcu / num_mcus_x as usize;
                 let mcu_x = absolute_mcu % num_mcus_x as usize;
@@ -1618,8 +1642,10 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                             }
                         }
                     } else if is_ac_refine {
-                        let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize]
-                            .as_ref()?;
+                        let ac_table = match scan.ac_huff_tables.get(scan_comp.ac_tbl as usize) {
+                            Some(Some(t)) => t,
+                            _ => { eprintln!("AC table MISSING for scan {} comp {} tbl {}", scan_idx, comp_idx, scan_comp.ac_tbl); return None; }
+                        };
                         let al = scan.al;
                         let bit = 1i32 << al;
                         let ss = scan.ss as usize;
