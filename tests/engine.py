@@ -51,7 +51,7 @@ def get_call_style(module, target):
         if target == "deform":             return "deform"
         return "module_function"
     if module == "ImageChops":
-        if target in SINGLE_CHOPS:      return "module_function"
+        if target in SINGLE_CHOPS:      return "single_chops"
         if target == "composite":       return "module_function_triple"
         return "module_function_dual"
     if module == "ImageDraw":
@@ -170,10 +170,18 @@ def _draw_bitmap(backend, img, img2, target, params):
     fill = params.pop("fill", 200)
     return draw.bitmap(xy, bitmap, fill=fill, **params)
 
-def _call_mod(backend, target):
-    """Resolve target function from backend's module hierarchy."""
-    for mod_name in ["ImageOps", "ImageChops", "ImageColor", "ImagePalette",
-                     "ImageFont", "ImageSequence", "Image", "ImageDraw"]:
+def _call_mod(backend, target, prefer_chops=False):
+    """Resolve target function from backend's module hierarchy.
+
+    When prefer_chops=True, ImageChops is checked before ImageOps for operations
+    like 'invert' that exist in both but have different mode support.
+    """
+    search = ["ImageOps", "ImageChops", "ImageColor", "ImagePalette",
+              "ImageFont", "ImageSequence", "Image", "ImageDraw"]
+    if prefer_chops:
+        search = ["ImageChops", "ImageOps", "ImageColor", "ImagePalette",
+                  "ImageFont", "ImageSequence", "Image", "ImageDraw"]
+    for mod_name in search:
         mod = getattr(backend, mod_name, None)
         if mod and hasattr(mod, target):
             return getattr(mod, target)
@@ -416,6 +424,7 @@ CALL_STYLE = {
     "font_truetype":lambda b, img, img2, tgt, p: _font_truetype(b, img, tgt, p),
     "palette_method":lambda b, img, img2, tgt, p: _palette_method(b, img, tgt, p),
     "module_function":       lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, **p),
+    "single_chops":          lambda b, img, img2, tgt, p: _call_mod(b, tgt, prefer_chops=True)(img, **p),
     "module_function_dual":  lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, img2, **p),
     "module_function_triple":lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, img2, create_input(b, "L", p.pop("mask_img", None)), **p),
     "module_function_value": lambda b, img, img2, tgt, p: _call_mod(b, tgt)(**p),
