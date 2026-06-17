@@ -10,7 +10,7 @@
 
 use crate::draw::{bresenham_line, plot, scanline_polygon_fill};
 use crate::error::PilError;
-use image::{DynamicImage, GrayImage, Rgba, RgbaImage};
+use pillow_rs_image::{DynamicImage, GrayImage, Rgba, RgbaImage};
 
 /// Helper: draw on an image, preserving P-mode (Luma8) when possible.
 /// For P-mode (`mode == Some("P")` with Luma8 input), converts to RGBA
@@ -29,7 +29,7 @@ where
         // Convert back to Luma8 by extracting R channel (R=G=B for P-mode indices)
         let (w, h) = canvas.dimensions();
         DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
-            image::Luma([canvas.get_pixel(x, y)[0]])
+            pillow_rs_image::Luma([canvas.get_pixel(x, y)[0]])
         }))
     } else {
         DynamicImage::ImageRgba8(canvas)

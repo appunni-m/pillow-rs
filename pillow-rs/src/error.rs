@@ -21,7 +21,7 @@ pub enum PilError {
     TypeError(String),
 
     #[error("image processing error: {0}")]
-    ImageError(#[from] image::ImageError),
+    ImageError(#[from] pillow_rs_image::ImageError),
 
     #[error("{0}")]
     NotImplementedError(String),

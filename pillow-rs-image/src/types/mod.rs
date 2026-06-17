@@ -63,6 +63,32 @@ pub enum ImageFormat {
     Avif,
 }
 
+impl ImageFormat {
+    /// Attempt to detect the image format from a file path extension.
+    pub fn from_path<P: AsRef<std::path::Path>>(path: P) -> Result<ImageFormat, ImageError> {
+        let ext = path
+            .as_ref()
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_default();
+        match ext.as_str() {
+            "jpg" | "jpeg" => Ok(ImageFormat::Jpeg),
+            "png" => Ok(ImageFormat::Png),
+            "gif" => Ok(ImageFormat::Gif),
+            "bmp" => Ok(ImageFormat::Bmp),
+            "webp" => Ok(ImageFormat::WebP),
+            "tiff" | "tif" => Ok(ImageFormat::Tiff),
+            "ico" => Ok(ImageFormat::Ico),
+            "avif" => Ok(ImageFormat::Avif),
+            _ => Err(ImageError::Unsupported(format!(
+                "unknown extension: {}",
+                ext
+            ))),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // DecodedImage — raw decoded pixel buffer
 // ---------------------------------------------------------------------------

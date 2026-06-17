@@ -2,7 +2,7 @@ use crate::color;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
-use image::DynamicImage;
+use pillow_rs_image::DynamicImage;
 
 /// Parse a mode string into ColorMode.
 pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
@@ -97,7 +97,7 @@ impl Image {
                     // PIL: convert("1") uses truncated grayscale then threshold at 128
                     let gray = color::pil_grayscale_truncate(&converted);
                     let (w, h) = gray.dimensions();
-                    let mut out = image::GrayImage::new(w, h);
+                    let mut out = pillow_rs_image::GrayImage::new(w, h);
                     for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
                         op[0] = if gp[0] >= 128 { 255 } else { 0 };
                     }
@@ -130,7 +130,7 @@ impl Image {
                 crate::color::pil_grayscale_truncate(&img)
             };
             let (w, h) = gray.dimensions();
-            let mut out = image::GrayImage::new(w, h);
+            let mut out = pillow_rs_image::GrayImage::new(w, h);
             match dither_enum {
                 Some(DitherMethod::None) => {
                     // Threshold at 128 (PIL: pixel >= 128 -> 255, else 0)
@@ -193,7 +193,7 @@ impl Image {
             let rgb_raw = rgb.into_raw();
             let dither = !matches!(dither_enum, Some(DitherMethod::None));
             let (indices, palette_bytes) = web_palette_quantize(&rgb_raw, w, h, dither);
-            let mut out = image::GrayImage::new(w, h);
+            let mut out = pillow_rs_image::GrayImage::new(w, h);
             for (i, pixel) in out.pixels_mut().enumerate() {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);
             }
@@ -241,10 +241,10 @@ fn explicit_mode_for(mode: &str) -> Option<String> {
 }
 
 fn convert_with_matrix(
-    img: &image::DynamicImage,
+    img: &pillow_rs_image::DynamicImage,
     target_mode: &str,
     matrix: &[f64],
-) -> Result<image::DynamicImage, PilError> {
+) -> Result<pillow_rs_image::DynamicImage, PilError> {
     match (matrix.len(), target_mode) {
         (4, "RGB") => {
             let luma = img.to_luma8();
@@ -260,12 +260,9 @@ fn convert_with_matrix(
                     ]
                 })
                 .collect();
-            Ok(image::DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
-                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "matrix conversion failed",
-                    )))
+            Ok(pillow_rs_image::DynamicImage::ImageRgb8(
+                pillow_rs_image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
+                    PilError::ValueError("matrix conversion failed".into())
                 })?,
             ))
         }
@@ -288,12 +285,9 @@ fn convert_with_matrix(
                     ]
                 })
                 .collect();
-            Ok(image::DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
-                    PilError::ImageError(image::ImageError::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "matrix conversion failed",
-                    )))
+            Ok(pillow_rs_image::DynamicImage::ImageRgb8(
+                pillow_rs_image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
+                    PilError::ValueError("matrix conversion failed".into())
                 })?,
             ))
         }

@@ -287,8 +287,10 @@ fn test_encode_roundtrip() {
     let mut passed = 0u32;
     let mut failed = 0u32;
     // Only test formats that have encode support
+    // Lossy formats (jpeg) excluded — pixel-exact roundtrip is impossible.
+    // WebP uses lossless encoding so it roundtrips perfectly.
     let encodable: std::collections::HashSet<&str> =
-        ["png", "bmp", "gif", "tiff", "jpeg"].iter().copied().collect();
+        ["png", "bmp", "gif", "tiff", "webp"].iter().copied().collect();
 
     for entry in fs::read_dir(&input_jsons).unwrap().flatten() {
         let input_path = entry.path();

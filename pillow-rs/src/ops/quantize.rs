@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use image::DynamicImage;
+use pillow_rs_image::DynamicImage;
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -1674,7 +1674,7 @@ impl Image {
         let (w, h) = (img.width(), img.height());
 
         // PIL uses FASTOCTREE for RGBA mode (method=2 by default for RGBA).
-        let is_rgba = matches!(img.color(), image::ColorType::Rgba8)
+        let is_rgba = matches!(img.color(), pillow_rs_image::ColorType::Rgba8)
             || self.explicit_mode().map_or(false, |m| m == "RGBA");
 
         let (indices, palette_bytes) = if is_rgba {
@@ -1695,7 +1695,7 @@ impl Image {
             (idx, pal_bytes)
         };
 
-        let mut out = image::GrayImage::new(w, h);
+        let mut out = pillow_rs_image::GrayImage::new(w, h);
         for (i, pixel) in out.pixels_mut().enumerate() {
             pixel[0] = indices.get(i).copied().unwrap_or(0);
         }

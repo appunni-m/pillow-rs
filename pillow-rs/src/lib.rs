@@ -16,4 +16,4 @@ pub mod pipeline;
 pub use draw::Draw;
 pub use error::PilError;
 pub use font::Font;
-pub use image::Image;
+pub use crate::image::Image;

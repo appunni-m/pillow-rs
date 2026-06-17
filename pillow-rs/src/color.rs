@@ -1,4 +1,4 @@
-use image::{ColorType, DynamicImage, RgbImage};
+use pillow_rs_image::{ColorType, DynamicImage, RgbImage};
 
 /// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
 /// R: 0.299, G: 0.587, B: 0.114. PIL truncates (no rounding).
@@ -36,17 +36,17 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
 /// PIL-identical BT.601 grayscale: Y = round(0.299*R + 0.587*G + 0.114*B)
 /// Uses precomputed lookup tables — no per-pixel multiplication or division.
 /// Tight single loop, no rayon overhead, no bounds checks.
-pub fn pil_grayscale(img: &DynamicImage) -> image::GrayImage {
+pub fn pil_grayscale(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     pil_grayscale_inner(img, true)
 }
 
 /// Non-rounded BT.601 grayscale for mode "1" conversion.
 /// PIL convert("1") uses truncation (no +32768), while convert("L") uses rounding.
-pub fn pil_grayscale_truncate(img: &DynamicImage) -> image::GrayImage {
+pub fn pil_grayscale_truncate(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     pil_grayscale_inner(img, false)
 }
 
-fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> image::GrayImage {
+fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> pillow_rs_image::GrayImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     let n = (w as usize) * (h as usize);
@@ -67,12 +67,12 @@ fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> image::GrayImage {
         i += 3;
     }
 
-    image::GrayImage::from_raw(w, h, gray).expect("pil_grayscale buffer mismatch")
+    pillow_rs_image::GrayImage::from_raw(w, h, gray).expect("pil_grayscale buffer mismatch")
 }
 
 /// PIL-compatible CMYK→grayscale using MULDIV255 formula.
 /// CMYK stored as RGBA (C→R, M→G, Y→B, K→A).
-pub fn cmyk_to_grayscale(img: &DynamicImage) -> image::GrayImage {
+pub fn cmyk_to_grayscale(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let n = (w * h) as usize;
@@ -88,7 +88,7 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> image::GrayImage {
         let b = (nk as i32 - muldiv255(y_, nk) as i32).clamp(0, 255) as u8;
         gray[i] = rgb_to_luma_u8(r, g, b);
     }
-    image::GrayImage::from_raw(w, h, gray).expect("cmyk_to_grayscale buffer mismatch")
+    pillow_rs_image::GrayImage::from_raw(w, h, gray).expect("cmyk_to_grayscale buffer mismatch")
 }
 
 /// Resolve a color value for a given image mode. The binding layer extracts
@@ -240,10 +240,10 @@ pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
 }
 
 /// Convert an RGB image to LA using PIL's BT.601 formula + opaque alpha.
-pub fn pil_grayscale_alpha(img: &DynamicImage) -> image::GrayAlphaImage {
+pub fn pil_grayscale_alpha(img: &DynamicImage) -> pillow_rs_image::GrayAlphaImage {
     let gray = pil_grayscale(img);
     let (w, h) = gray.dimensions();
-    let mut ga = image::GrayAlphaImage::new(w, h);
+    let mut ga = pillow_rs_image::GrayAlphaImage::new(w, h);
     for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
         gap[0] = gp[0];
         gap[1] = 255;
@@ -277,7 +277,7 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
         let r = (nk as i32 - muldiv255(c, nk) as i32).clamp(0, 255) as u8;
         let g = (nk as i32 - muldiv255(m, nk) as i32).clamp(0, 255) as u8;
         let b = (nk as i32 - muldiv255(y, nk) as i32).clamp(0, 255) as u8;
-        *op = image::Rgb([r, g, b]);
+        *op = pillow_rs_image::Rgb([r, g, b]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -306,7 +306,7 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 
         if s_in == 0.0 {
             let g = v.round().clamp(0.0, 255.0) as u8;
-            *op = image::Rgb([g, g, g]);
+            *op = pillow_rs_image::Rgb([g, g, g]);
         } else {
             let fs = s_in / 255.0; // normalized saturation
             let h = h_in * 6.0 / 255.0; // 0-6 sector mapping
@@ -329,7 +329,7 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
                 4 => (ut, up, uv),
                 _ => (uv, up, uq),
             };
-            *op = image::Rgb([r, g, b]);
+            *op = pillow_rs_image::Rgb([r, g, b]);
         }
     }
     DynamicImage::ImageRgb8(out)
@@ -337,10 +337,10 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 
 /// I (int32) → L: scale from I range to 0-255 using PIL's formula.
 /// PIL: L = (I + 32768) / 256
-pub fn i32_to_l(img: &DynamicImage) -> image::GrayImage {
+pub fn i32_to_l(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let mut gray = image::GrayImage::new(w, h);
+    let mut gray = pillow_rs_image::GrayImage::new(w, h);
     for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
         let i = i32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
         let l = ((i as i64 + 32768) / 256).clamp(0, 255) as u8;
@@ -350,10 +350,10 @@ pub fn i32_to_l(img: &DynamicImage) -> image::GrayImage {
 }
 
 /// F (float32) → L: clamp to 0-255 range.
-pub fn f32_to_l(img: &DynamicImage) -> image::GrayImage {
+pub fn f32_to_l(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let mut gray = image::GrayImage::new(w, h);
+    let mut gray = pillow_rs_image::GrayImage::new(w, h);
     for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
         let f = f32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
         let l = (f.clamp(0.0, 255.0)) as u8;
@@ -372,7 +372,7 @@ pub fn f32_to_l(img: &DynamicImage) -> image::GrayImage {
 pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = image::RgbImage::new(w, h);
+    let mut out = pillow_rs_image::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
         let r = ip[0];
         let g = ip[1];
@@ -414,7 +414,7 @@ pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
 
             (uh, us)
         };
-        *op = image::Rgb([uh, us, v]);
+        *op = pillow_rs_image::Rgb([uh, us, v]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -453,7 +453,7 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
 
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = image::RgbImage::new(w, h);
+    let mut out = pillow_rs_image::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
         let r = ip[0] as usize;
         let g = ip[1] as usize;
@@ -463,7 +463,7 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
         let cb = (((cb_r[r] + cb_g[g] + cb_b[b]) >> 6) + 128) as u8;
         let cr = (((cb_b[r] + cr_g[g] + cr_b[b]) >> 6) + 128) as u8; // Cr_R = Cb_B
 
-        *op = image::Rgb([y, cb, cr]);
+        *op = pillow_rs_image::Rgb([y, cb, cr]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -572,7 +572,7 @@ pub fn ycbcr_to_rgb(img: &DynamicImage) -> DynamicImage {
         let g = y_ + ((G_CB[cb as usize] + G_CR[cr as usize]) >> 6);
         let b = y_ + (B_CB[cb as usize] >> 6);
 
-        *op = image::Rgb([
+        *op = pillow_rs_image::Rgb([
             r.clamp(0, 255) as u8,
             g.clamp(0, 255) as u8,
             b.clamp(0, 255) as u8,
@@ -592,7 +592,7 @@ pub fn i_to_rgb(img: &DynamicImage) -> DynamicImage {
         // I mode packs int32 as RGBA bytes (little-endian)
         let val = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
         let clamped = val.clamp(0, 255) as u8;
-        *op = image::Rgb([clamped, clamped, clamped]);
+        *op = pillow_rs_image::Rgb([clamped, clamped, clamped]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -608,7 +608,7 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
         let val = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
         // PIL: F→X casts float to int via truncation
         let clamped = val.clamp(0.0, 255.0) as u8;
-        *op = image::Rgb([clamped, clamped, clamped]);
+        *op = pillow_rs_image::Rgb([clamped, clamped, clamped]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -622,7 +622,7 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     let luma = img.to_luma8();
     let (w, h) = luma.dimensions();
-    let mut out = image::RgbImage::new(w, h);
+    let mut out = pillow_rs_image::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
         let idx = ip[0] as usize;
         if let Some(pal) = palette {
