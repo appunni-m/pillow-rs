@@ -30,23 +30,28 @@ impl<'a> BitReader<'a> {
             self.pos += 1;
 
             if byte == 0xFF {
-                // Check for byte stuffing
-                if self.pos >= self.end {
-                    return;
-                }
-                let next = self.data[self.pos];
-                if next == 0x00 {
-                    // Stuffed 0xFF: 0xFF 0x00 represents data byte 0xFF
+                // Handle byte stuffing, padding FFs, RST, and markers.
+                // Matches IJG jpeg_fill_bit_buffer: consume ALL consecutive
+                // 0xFF bytes, then check the following byte.
+                loop {
+                    if self.pos >= self.end { return; }
+                    let next = self.data[self.pos];
                     self.pos += 1;
-                    self.buf = (self.buf << 8) | 0xFFu32;
-                    self.bits += 8;
-                } else if (0xD0..=0xD7).contains(&next) {
-                    // RST marker — skip both marker bytes, continue filling
-                    self.pos += 1;
-                } else {
-                    // Other marker byte encountered — put back the 0xFF
-                    self.pos -= 1;
-                    return;
+                    if next == 0x00 {
+                        // 0xFF 0x00 → stuffed data byte 0xFF
+                        self.buf = (self.buf << 8) | 0xFFu32;
+                        self.bits += 8;
+                        break;
+                    } else if (0xD0..=0xD7).contains(&next) {
+                        // RSTn marker: skip, continue filling
+                        break;
+                    } else if next == 0xFF {
+                        // Padding 0xFF: loop again (IJG do-while)
+                        continue;
+                    } else {
+                        // Marker byte — stop filling (IJG saves marker, returns)
+                        return;
+                    }
                 }
             } else {
                 self.buf = (self.buf << 8) | byte as u32;
