@@ -804,7 +804,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pillow-rs-decode"
+name = "pillow-rs-image"
 version = "0.1.0"
 
 [[package]]
