@@ -1,0 +1,18 @@
+# rustfmt.toml — pillow-rs workspace formatting configuration
+# Only stable-rustfmt options; nightly options noted in comments for future use.
+
+# ── Import Management ──
+reorder_imports = true
+# NOTE: imports_granularity = "Crate" requires nightly
+
+# ── Line Width ──
+max_width = 100
+
+# ── Whitespace & Style ──
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+edition = "2021"
+
+# ── Structure ──
+use_small_heuristics = "Default"
