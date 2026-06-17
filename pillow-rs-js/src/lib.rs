@@ -1,4 +1,8 @@
 //! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs-core.
+use pillow_rs_core::bitmap_font;
+use pillow_rs_core::color;
+use pillow_rs_core::draw;
+use pillow_rs_core::image;
 use pillow_rs_core::image::Image as RsImage;
 use pillow_rs_core::ops::{chops, imageops, module_fns};
 use wasm_bindgen::prelude::*;
@@ -1283,4 +1287,326 @@ pub fn backend_enabled(name: &str) -> bool {
     pillow_rs_core::compute::Backend::parse(name)
         .map(|b| pillow_rs_core::compute::backend_enabled(b))
         .unwrap_or(false)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImageChops — per-pixel channel operations (thin wrappers)
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "addModulo")]
+pub fn add_modulo(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::add_modulo(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "constant")]
+pub fn constant(img: &Image, value: u8) -> Result<Image, JsValue> {
+    chops::constant(&img.inner, value).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "darker")]
+pub fn darker(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::darker(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "hardLight")]
+pub fn hard_light(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::hard_light(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "lighter")]
+pub fn lighter(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::lighter(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "logicalAnd")]
+pub fn logical_and(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::logical_and(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "logicalOr")]
+pub fn logical_or(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::logical_or(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "logicalXor")]
+pub fn logical_xor(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::logical_xor(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "multiply")]
+pub fn multiply(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::multiply(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "offset")]
+pub fn offset(img: &Image, xoffset: i32, yoffset: i32) -> Result<Image, JsValue> {
+    chops::offset(&img.inner, xoffset, yoffset).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "overlay")]
+pub fn overlay(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::overlay(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "screenFn")]
+pub fn screen(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::screen(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "softLight")]
+pub fn soft_light(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::soft_light(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "subtractModulo")]
+pub fn subtract_modulo(a: &Image, b: &Image) -> Result<Image, JsValue> {
+    chops::subtract_modulo(&a.inner, &b.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImageOps — high-level image operations
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "autocontrastFn")]
+pub fn autocontrast(img: &Image, cutoff: f64) -> Result<Image, JsValue> {
+    imageops::autocontrast(&img.inner, cutoff).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "equalizeFn")]
+pub fn equalize(img: &Image) -> Result<Image, JsValue> {
+    imageops::equalize(&img.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "flipFn")]
+pub fn flip(img: &Image) -> Result<Image, JsValue> {
+    imageops::flip(&img.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "mirrorFn")]
+pub fn mirror(img: &Image) -> Result<Image, JsValue> {
+    imageops::mirror(&img.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "posterizeFn")]
+pub fn posterize(img: &Image, bits: u8) -> Result<Image, JsValue> {
+    imageops::posterize(&img.inner, bits).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "solarizeFn")]
+pub fn solarize(img: &Image, threshold: u8) -> Result<Image, JsValue> {
+    imageops::solarize(&img.inner, threshold).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "grayscaleFn")]
+pub fn grayscale(img: &Image) -> Result<Image, JsValue> {
+    imageops::grayscale(&img.inner).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "expand")]
+pub fn expand(img: &Image, border: u32, fill_r: u8, fill_g: u8, fill_b: u8, fill_a: u8) -> Result<Image, JsValue> {
+    imageops::expand(&img.inner, border, (fill_r, fill_g, fill_b, fill_a)).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "containFn")]
+pub fn contain(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
+    imageops::contain(&img.inner, w, h, None).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "coverFn")]
+pub fn cover(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
+    imageops::cover(&img.inner, w, h, None).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "fitFn")]
+pub fn fit(img: &Image, w: u32, h: u32) -> Result<Image, JsValue> {
+    imageops::fit(&img.inner, w, h, None, 0.0, (0.5, 0.5)).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "padFn")]
+pub fn pad(img: &Image, w: u32, h: u32, color: Vec<u8>) -> Result<Image, JsValue> {
+    let c = match color.len() {
+        3 => Some((color[0], color[1], color[2], 255)),
+        4 => Some((color[0], color[1], color[2], color[3])),
+        _ => None,
+    };
+    imageops::pad(&img.inner, w, h, None, c, (0.5, 0.5)).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "cropFn")]
+pub fn crop_border(img: &Image, border: u32) -> Result<Image, JsValue> {
+    imageops::crop(&img.inner, border).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "scaleFn")]
+pub fn scale(img: &Image, factor: f64) -> Result<Image, JsValue> {
+    imageops::scale(&img.inner, factor, None).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "exifOrientation")]
+pub fn exif_orientation(raw: Vec<u8>) -> Option<u32> {
+    imageops::exif_get_orientation(&raw)
+}
+
+#[wasm_bindgen(js_name = "exifRemoveOrientation")]
+pub fn exif_remove_orientation(raw: Vec<u8>) -> Vec<u8> {
+    imageops::exif_remove_orientation(&raw)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImageModule — module-level operations
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "effectMandelbrot")]
+pub fn effect_mandelbrot(w: u32, h: u32, x0: f64, y0: f64, x1: f64, y1: f64, quality: u32) -> Result<Image, JsValue> {
+    module_fns::effect_mandelbrot((w, h), (x0, y0, x1, y1), quality.try_into().unwrap()).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "effectNoiseFn")]
+pub fn effect_noise(width: u32, height: u32, sigma: f64) -> Result<Image, JsValue> {
+    let blank = RsImage::new(width, height, "L", (0, 0, 0, 255)).map_err(err)?;
+    module_fns::effect_noise(&blank, sigma).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "effectSpreadFn")]
+pub fn effect_spread(img: &Image, distance: u32) -> Result<Image, JsValue> {
+    module_fns::effect_spread(&img.inner, distance).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "evalFn")]
+pub fn eval_fn(img: &Image, lut: Vec<u8>, n_bands: usize) -> Result<Image, JsValue> {
+    module_fns::eval_replicated(&img.inner, &lut, n_bands).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "linearGradientFn")]
+pub fn linear_gradient(mode: &str) -> Result<Image, JsValue> {
+    module_fns::linear_gradient(mode).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "radialGradientFn")]
+pub fn radial_gradient(mode: &str) -> Result<Image, JsValue> {
+    module_fns::radial_gradient(mode).map(|i| Image { inner: i }).map_err(err)
+}
+
+#[wasm_bindgen(js_name = "mergeFn")]
+pub fn merge_fn(mode: &str, bands: Vec<Image>) -> Result<Image, JsValue> {
+    let inner_bands: Vec<pillow_rs_core::image::Image> = bands.iter().map(|b| b.inner.clone()).collect();
+    module_fns::merge(mode, &inner_bands).map(|i| Image { inner: i }).map_err(err)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImageColor — color resolution
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "getColor")]
+pub fn getcolor(color: &str, mode: &str) -> Result<JsValue, JsValue> {
+    let (r, g, b, a) = color::parse_color_str(color).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let (r, g, b, a) = color::getcolor(r, g, b, mode).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let arr = js_sys::Array::new();
+    arr.push(&JsValue::from(r));
+    if mode == "LA" || mode == "RGBA" { arr.push(&JsValue::from(a)); }
+    if mode != "L" && mode != "1" && mode != "LA" {
+        arr.push(&JsValue::from(g));
+        arr.push(&JsValue::from(b));
+        if mode == "RGBA" { arr.push(&JsValue::from(a)); }
+    }
+    Ok(arr.into())
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImageFont — font operations
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "fontDefaultBbox")]
+pub fn font_default_bbox(text: &str) -> Vec<i32> {
+    let bbox = bitmap_font::font_default_bbox(text);
+    vec![bbox.0, bbox.1, bbox.2, bbox.3]
+}
+
+#[wasm_bindgen(js_name = "fontDefaultLength")]
+pub fn font_default_length(text: &str) -> u32 {
+    bitmap_font::font_default_length(text)
+}
+
+#[wasm_bindgen(js_name = "fontDefaultMaskSize")]
+pub fn font_default_mask_size(text: &str) -> Vec<u32> {
+    let (w, h) = bitmap_font::font_default_mask_size(text);
+    vec![w, h]
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImagePalette — palette operations
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "paletteGetColor")]
+pub fn palette_getcolor(palette: Vec<u8>, r: u8, g: u8, b: u8) -> Option<usize> {
+    color::palette_getcolor(&palette, r, g, b)
+}
+
+#[wasm_bindgen(js_name = "paletteGetColorAppend")]
+pub fn palette_getcolor_append(palette: Vec<u8>, r: u8, g: u8, b: u8, a: u8, mode: &str) -> Result<usize, JsValue> {
+    let mut pal = palette;
+    color::palette_getcolor_append(&mut pal, r, g, b, a, mode)
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+#[wasm_bindgen(js_name = "paletteGetColorValidate")]
+pub fn palette_getcolor_validate(palette: Vec<u8>, color: Vec<u8>, mode: &str) -> Result<usize, JsValue> {
+    color::palette_getcolor_validate(&mut palette.clone(), &color, mode)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen(js_name = "paletteToText")]
+pub fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
+    color::palette_to_text(&palette, mode)
+}
+
+#[wasm_bindgen(js_name = "paletteSaveToFile")]
+pub fn palette_save_to_file(palette: Vec<u8>, mode: &str, path: &str) -> Result<(), JsValue> {
+    color::palette_save_to_file(&palette, mode, path)
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ImageStat — statistics
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "statFromList")]
+pub fn stat_from_list(data: Vec<f64>) -> JsValue {
+    let (count, sum, mean, min, max) = image::stat_from_list(&data);
+    let obj = js_sys::Object::new();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("count"), &JsValue::from_f64(count)).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("sum"), &JsValue::from_f64(sum)).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("mean"), &JsValue::from_f64(mean)).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("min"), &JsValue::from_f64(min)).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("max"), &JsValue::from_f64(max)).unwrap();
+    obj.into()
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Draw helpers
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "outlineCurve")]
+pub fn outline_curve(points: Vec<f64>, steps: i32) -> Vec<i32> {
+    let pts = draw::outline_curve_points(&points, steps.try_into().unwrap());
+    let mut flat = Vec::with_capacity(pts.len() * 2);
+    for (x, y) in pts { flat.push(x); flat.push(y); }
+    flat
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Color helpers
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[wasm_bindgen(js_name = "resolveNewColor")]
+pub fn resolve_new_color(mode: &str, hex: Option<String>, single: Option<u8>, rgb: Option<Vec<u8>>, rgba: Option<Vec<u8>>, la: Option<Vec<u8>>) -> Result<JsValue, JsValue> {
+    let hex = hex.as_deref();
+    let rgb = rgb.map(|v| if v.len() == 3 { (v[0], v[1], v[2]) } else { (0, 0, 0) });
+    let rgba = rgba.map(|v| if v.len() == 4 { (v[0], v[1], v[2], v[3]) } else { (0, 0, 0, 0) });
+    let la = la.map(|v| if v.len() == 2 { (v[0], v[1]) } else { (0, 0) });
+    let c = color::resolve_new_color(mode, hex, single, rgb, rgba, la).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let arr = js_sys::Array::new();
+    arr.push(&JsValue::from(c.0)); arr.push(&JsValue::from(c.1));
+    arr.push(&JsValue::from(c.2)); arr.push(&JsValue::from(c.3));
+    Ok(arr.into())
 }
