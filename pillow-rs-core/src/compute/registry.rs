@@ -2356,4 +2356,16 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         adapters::simd_alpha_composite,
     );
     simd_set(m.get_mut("Merge").unwrap(), adapters::simd_merge);
+    // ── Additional SIMD wirings (GPU ops missing SIMD) ──
+    simd_set(m.get_mut("Autocontrast").unwrap(), adapters::simd_autocontrast);
+    simd_set(m.get_mut("BlendModule").unwrap(), adapters::simd_blend_module);
+    simd_set(m.get_mut("CompositeModule").unwrap(), adapters::simd_composite_module);
+    simd_set(m.get_mut("ColorSaturation").unwrap(), adapters::simd_color_saturation);
+    simd_set(m.get_mut("EffectNoise").unwrap(), adapters::simd_effect_noise);
+    simd_set(m.get_mut("EffectSpread").unwrap(), adapters::simd_effect_spread);
+    simd_set(m.get_mut("GaussianBlur").unwrap(), adapters::simd_gaussian_blur);
+    simd_set(m.get_mut("InvertChops").unwrap(), adapters::simd_invert_chops);
+    simd_set(m.get_mut("MedianFilter").unwrap(), adapters::simd_median_filter);
+    simd_set(m.get_mut("RemapPalette").unwrap(), adapters::simd_remap_palette);
+    simd_set(m.get_mut("SubtractModulo").unwrap(), adapters::simd_subtract_modulo);
 }
