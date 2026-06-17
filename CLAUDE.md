@@ -35,7 +35,7 @@ Binding files in `pillow-rs-py/python/pillow_rs/` MUST be thin wrappers:
 - Run `cargo clippy --all-targets --all-features -- -D warnings` before commit
 - Use `thiserror` for error types, never `unwrap()` or `expect()` outside tests
 - Prefer `&str` over `String`, `&[T]` over `Vec<T>` in function parameters
-- Use `rayon` for parallel processing on native targets; `#[cfg(not(target_arch = "wasm32"))]` guard
+- Prefer single-pass tight loops; GPU dispatch via wgpu when compute-intensive
 
 ### Naming Rules
 - **Public API names match Pillow exactly** — `Image.open()`, `Image.resize()`, etc.

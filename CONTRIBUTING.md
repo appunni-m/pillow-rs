@@ -8,9 +8,14 @@ Thank you for helping improve pillow-rs! This guide covers everything you need t
 
 ### Production (what end users install)
 
-`pip install pillow-rs` installs exactly one package. That's it. **Zero required Python dependencies.**
+`pip install pillow-rs` installs exactly one package. **Zero Python dependencies.**
 
-- `Image.fromarray()` works with numpy arrays, bytes, or lists via duck-typing — no `import numpy` needed
+```bash
+pip install pillow-rs   # installs pillow-rs and nothing else
+```
+
+- `pyproject.toml` has no `[project.dependencies]` section — pip installs nothing alongside it
+- `Image.fromarray()` detects numpy arrays via duck-typing (`hasattr(obj, 'tobytes')`) — no `import numpy` needed
 - All image processing happens in compiled Rust — no Python library overhead at runtime
 
 ### Development & Testing
@@ -38,30 +43,33 @@ pip install pillow numpy pyyaml pytest pytest-timeout pytest-json-report pytest-
 | Crate | Scope | Purpose |
 |-------|-------|---------|
 | `criterion` | dev-dependency | Native CPU benchmarks (`cargo bench`). Never in production builds. |
-| `rayon` | production (native only) | Multicore parallelism. Skipped on `wasm32` targets automatically. |
 | `wgpu`, `pollster` | production | GPU compute (shaders exist, dispatch stubs not yet wired). |
 
 ### System
 
 | Package | Why |
 |---------|-----|
-| `fonts-dejavu-core` (Linux) | Font rendering tests & `ImageFont` parity |
-| Node.js 20+ | WASM benchmarks (`scripts/bench/bench_wasm_cpu.mjs`) |
+| Node.js 20+ | WASM benchmarks only (`scripts/bench/bench_wasm_cpu.mjs`) |
+| `fonts-dejavu-core` (Linux) | Benchmark scripts only — the TrueType font bench uses DejaVuSans.ttf |
+
+The core has **zero system dependencies**. It uses `fontdue` (pure-Rust TrueType rasterizer) and a built-in bitmap font for `ImageFont.load_default()`. No system fonts required at build time, test time, or production runtime.
 
 ---
 
 ## Build
 
 ```bash
-# Python (editable install for development)
+# Python — compiles pillow-rs-core + pillow-rs-py (single command)
 maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
 
-# Core tests
-cargo test -p pillow-rs-core
-
-# WASM
+# WASM — compiles pillow-rs-core + pillow-rs-js (single command)
 cd pillow-rs-js && wasm-pack build --target web
+
+# Core tests — compiles and tests pillow-rs-core only
+cargo test -p pillow-rs-core
 ```
+
+`maturin develop` and `wasm-pack build` both compile the entire dependency tree — core gets built automatically. No separate `cargo build` step needed.
 
 The workspace release profile is configured for production:
 - `lto = true` — link-time optimization
@@ -321,7 +329,6 @@ Pre-commit checklist:
 - [ ] `#[derive(Debug)]` on all public types
 - [ ] `///` doc comments with `# Examples` on all `pub` functions
 - [ ] Import order: `std` → external crates → `crate` → `super` → `self`
-- [ ] `#[cfg(not(target_arch = "wasm32"))]` guard for rayon
 - [ ] No redundant `.clone()` — prefer borrowing
 
 ### Naming

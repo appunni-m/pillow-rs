@@ -1061,7 +1061,7 @@ impl ImageChops {
     }
     #[wasm_bindgen(js_name = "composite")]
     pub fn comp(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
-        module_fns::composite(&a.inner, &b.inner, &m.inner)
+        module_fns::composite(&a.inner, &b.inner, &m.inner, None)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -1237,7 +1237,7 @@ pub fn blend(a: &Image, b: &Image, alpha: f64) -> Result<Image, JsValue> {
 }
 #[wasm_bindgen(js_name = "composite")]
 pub fn composite(a: &Image, b: &Image, m: &Image) -> Result<Image, JsValue> {
-    module_fns::composite(&a.inner, &b.inner, &m.inner)
+    module_fns::composite(&a.inner, &b.inner, &m.inner, None)
         .map(|i| Image { inner: i })
         .map_err(err)
 }

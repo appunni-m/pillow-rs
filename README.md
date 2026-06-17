@@ -86,9 +86,17 @@ const enhanced = enhancer.enhance(1.5);
 pip install pillow-rs
 ```
 
-Requires Python **3.8+**. Pre-built wheels available for Linux, macOS, and Windows on x86_64 and arm64.
+Requires Python **3.8+**. Pre-built wheels for Linux, macOS, and Windows.
 
-**Zero required dependencies.** `Image.fromarray()` works with numpy arrays (and any object with `.tobytes()` or `.__array_interface__`) via duck-typing — no numpy install needed.
+**That's it — zero Python dependencies.** `pip install pillow-rs` installs one package and nothing else. `Image.fromarray()` works with numpy arrays via duck-typing (`hasattr(obj, 'tobytes')`) — no numpy import needed.
+
+Verify for yourself:
+
+```bash
+pip install pillow-rs
+python -c "from RSPIL import Image; print(Image.new('RGB', (100, 100)))"
+# No numpy, no pillow, no anything else required.
+```
 
 ### JavaScript / WASM
 
@@ -102,22 +110,20 @@ Works in **Node.js 20+** and all modern browsers with WebAssembly support.
 
 > **Browser usage:** The WASM binary loads asynchronously. Always `await Image.open()` or use `Image.load()`.
 
-### From Source (development)
+### From Source
 
 ```bash
-# Clone
 git clone https://github.com/pillow-rs/pillow-rs
 cd pillow-rs
 
-# Install system deps (Ubuntu/Debian)
-sudo apt-get install -y fonts-dejavu-core
-
-# Python
+# Python — builds core + bindings (single command)
 cd pillow-rs-py && maturin develop --release
 
-# JavaScript / WASM
+# JavaScript / WASM — builds core + bindings (single command)
 cd pillow-rs-js && wasm-pack build --target web
 ```
+
+`maturin develop` compiles both `pillow-rs-core` and `pillow-rs-py` — no separate build step needed.
 
 ---
 
@@ -127,7 +133,7 @@ cd pillow-rs-js && wasm-pack build --target web
 - **10 color modes** — `1`, `L`, `LA`, `P`, `RGB`, `RGBA`, `CMYK`, `YCbCr`, `HSV`, `I`, `F`
 - **7 image formats** — PNG, JPEG, GIF, BMP, TIFF, WEBP, ICO
 - **Per-mode native pixel drawing** — draws directly in the image's native color format, never lossy RGBA round-trips
-- **Multicore acceleration** — pixel-parallel operations use [rayon](https://crates.io/crates/rayon) on native targets
+- **GPU-ready architecture** — 42 functions have WGSL compute shaders ready (dispatch stubs await wiring)
 - **Lazy decoding** — `LazyImage` defers decode until first pixel access, enabling zero-copy format inspection
 - **Single source of truth** — all three targets (Python, Node.js, browser) share the same Rust core
 - **Zero PyO3 overhead in hot paths** — all image logic lives in pure Rust; bindings are ~200 lines of delegation
@@ -167,8 +173,7 @@ pillow-rs is **on average 2.2× faster** than Pillow on native CPU across 166 be
 | Functions with valid CPU speedup | 81 |
 | Average CPU speedup vs Pillow | **2.20×** |
 | Best native speedup | **21.66×** (`Image.putalpha`) |
-| Pipeline (20 ops, single-threaded) | 189ms |
-| Rayon multicore improvement | up to **49% faster** on filter ops |
+| Pipeline (20 ops) | 189ms |
 
 ### Selected operations
 
@@ -185,17 +190,6 @@ pillow-rs is **on average 2.2× faster** than Pillow on native CPU across 166 be
 | `Image.split` | 0.32× | 1.14× | **9.45×** |
 
 > **⚠️** = outlier flagged — measurement variance exceeds threshold. See **[BENCHMARKS.md](BENCHMARKS.md)** for the full 166-function report across all 6 targets (native CPU, native GPU, WASM CPU, WASM GPU, Browser CPU, Browser GPU).
-
-### Rayon multicore acceleration
-
-Pixel-parallel operations use [rayon](https://crates.io/crates/rayon) on native targets. WASM falls back to sequential.
-
-| Operation | Before | After | Improvement |
-|-----------|--------|-------|-------------|
-| Filter (3×3 convolution) | 153ms | 77ms | **49%** |
-| Chops (channel ops) | 128ms | 94ms | **27%** |
-| Enhance (color) | 79ms | 73ms | **8%** |
-| Pipeline (MT, 20 ops) | 220ms | 154ms | **30%** |
 
 ### GPU path (experimental)
 
@@ -235,10 +229,10 @@ pillow-rs-js/       wasm-bindgen — thin wrapper, ~200 lines
 │   │   ├── image.rs           Image struct, pixel access, mode handling
 │   │   ├── lazy.rs            LazyImage (deferred decode)
 │   │   ├── ops/               Operation modules
-│   │   │   ├── filter.rs      Convolution filters (rayon)
-│   │   │   ├── chops.rs       Channel operations (rayon)
-│   │   │   ├── imageops.rs    PIL.ImageOps (rayon)
-│   │   │   ├── enhance.rs     ImageEnhance (rayon)
+│   │   │   ├── filter.rs      Convolution filters
+│   │   │   ├── chops.rs       Channel operations
+│   │   │   ├── imageops.rs    PIL.ImageOps
+│   │   │   ├── enhance.rs     ImageEnhance
 │   │   │   ├── resize.rs      Resize, thumbnail, reduce
 │   │   │   ├── crop.rs        Crop, copy, paste
 │   │   │   ├── convert.rs     Mode/format conversion
