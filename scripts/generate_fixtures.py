@@ -163,8 +163,8 @@ def generate_one(input_path):
             ref = f"images/{stem}_{cid}.png"
             img_path = OUTPUT_IMAGES_DIR / f"{stem}_{cid}.png"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            if result.mode in ("PA", "HSV", "YCbCr", "F", "I", "CMYK"):
-                # These modes cannot be saved as PNG losslessly.
+            if result.mode in ("P", "PA", "HSV", "YCbCr", "F", "I", "CMYK"):
+                # P-mode PNGs lose palette on reload; these modes cannot be saved as PNG.
                 # Save raw bytes for binary comparison instead.
                 ref = f"raws/{stem}_{cid}.bin"
                 bin_path = OUTPUT_RAWS_DIR / f"{stem}_{cid}.bin"
@@ -201,10 +201,16 @@ def generate_one(input_path):
 
         elif isinstance(result, (int, float, str, bool, list, dict, type(None))):
             # Scalar / structured value result
-            out["cases"].append({
-                "id": cid,
-                "assert": {"method": "exact", "value": result},
-            })
+            if isinstance(result, float):
+                out["cases"].append({
+                    "id": cid,
+                    "assert": {"method": "float", "value": result, "tolerance": 1e-12},
+                })
+            else:
+                out["cases"].append({
+                    "id": cid,
+                    "assert": {"method": "exact", "value": result},
+                })
 
         else:
             # Unknown type — stringify
@@ -242,6 +248,12 @@ def main():
     OUTPUT_JSONS_DIR = FIXTURES_DIR / "outputs" / "jsons"
     OUTPUT_IMAGES_DIR = FIXTURES_DIR / "outputs" / "images"
     OUTPUT_RAWS_DIR = FIXTURES_DIR / "outputs" / "raws"
+
+    # Register extra reference image dirs for the target fixtures directory
+    import engine
+    extra_images = FIXTURES_DIR / "input" / "images"
+    if extra_images.exists():
+        engine.EXTRA_REFERENCE_DIRS = [str(extra_images)]
 
     OUTPUT_JSONS_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)

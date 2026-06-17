@@ -94,6 +94,18 @@ def get_call_style(module, target):
 # ── Input creation ──────────────────────────────────────────────
 
 REFERENCE_IMAGE = Path(__file__).parent / "test_reference.png"
+# Additional directories to search for named reference images.
+# Populated at test time by test_parity.py for fixtures_2 support.
+EXTRA_REFERENCE_DIRS = []
+
+def _find_reference_image(name):
+    """Resolve a named reference image, checking extra dirs first."""
+    for d in EXTRA_REFERENCE_DIRS:
+        candidate = Path(d) / f"{name}.png"
+        if candidate.exists():
+            return candidate
+    return REFERENCE_IMAGE
+
 def _pilify(v):
     """Recursively convert lists to tuples for PIL API compatibility.
     RSPIL PyO3 bindings handle this automatically; PIL does not.
@@ -125,7 +137,8 @@ def create_input(backend, mode, spec):
     size = tuple(spec["size"])
 
     if source == "reference_rgb":
-        ref = backend.Image.open(str(REFERENCE_IMAGE))
+        ref_path = _find_reference_image(spec.get("reference", ""))
+        ref = backend.Image.open(str(ref_path))
         if ref.size != size:
             ref = ref.resize(size, backend.Image.LANCZOS)
         return ref.convert(mode)

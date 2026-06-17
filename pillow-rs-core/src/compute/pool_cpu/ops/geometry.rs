@@ -290,16 +290,17 @@ fn resize_i(
 
     let n = (dst_w * dst_h) as usize;
 
-    // NEAREST: PIL uses ImagingTransform (AFFINE, single-pixel sampling)
+    // NEAREST: PIL uses ImagingTransform (AFFINE) with formula:
+    //   sx = (int)((dx + 1.0) * sw/dw - 0.5)
+    //   sy = (int)((dy + 1.0) * sh/dh - 0.5)
     if matches!(filter, ResampleFilter::Nearest) {
         let mut out_ints: Vec<i32> = Vec::with_capacity(n);
-        let eps: f64 = -1e-14;
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let sx = ((dx as f64 + 0.5) * sw_f / dw_f + eps) as i64;
-                let sy = ((dy as f64 + 0.5) * sh_f / dh_f + eps) as i64;
-                let sx = clamp_idx(sx, sw);
-                let sy = clamp_idx(sy, sh);
+                let sx = ((dx as f64 + 1.0) * sw_f / dw_f - 0.5).floor() as i64;
+                let sy = ((dy as f64 + 1.0) * sh_f / dh_f - 0.5).floor() as i64;
+                let sx = sx.clamp(0, sw as i64 - 1) as u32;
+                let sy = sy.clamp(0, sh as i64 - 1) as u32;
                 let idx = (sy * sw + sx) as usize;
                 out_ints.push(src_ints[idx]);
             }

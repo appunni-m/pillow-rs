@@ -28,6 +28,11 @@ FIXTURES_DIRS = {
     "fixtures_2": Path(__file__).parent / "fixtures_2",
 }
 
+# Register extra reference image dirs for fixtures_2 support
+_engine.EXTRA_REFERENCE_DIRS = [
+    str(Path(__file__).parent / "fixtures_2" / "input" / "images"),
+]
+
 
 def _discover():
     """Yield one parametrized test per fixture case from all fixture directories.
