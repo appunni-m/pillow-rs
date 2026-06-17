@@ -144,7 +144,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                     let run = (sym >> 4) as usize;
                                     let size = (sym & 0x0F) as u8;
                                     if size == 0 && run == 15 {
-                                        k += 16; continue; // ZRL
+                                        k += 16; continue;
                                     }
                                     if size == 0 {
                                         // EOB: EOBRUN = (1<<run) | extra, consume one for this block
@@ -189,7 +189,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                             // Refine existing non-zero
                                             let bit = br.read_bits(1)?;
                                             if bit != 0 {
-                                                coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
                                             }
                                             k += 1;
                                         } else {
@@ -197,15 +197,16 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                             let run = (sym >> 4) as usize;
                                             let size = (sym & 0x0F) as u8;
                                             if size == 0 && run == 15 {
-                                                // ZRL: skip 16 positions, refine non-zeros on the way
-                                                let end = (k + 16).min(se + 1).min(64);
-                                                while k < end {
+                                                // ZRL: advance until 16 zero coefficients (IJG --r pattern)
+                                                let mut r: i32 = 15;
+                                                loop {
+                                                    if k > se || k >= 64 { break; }
                                                     if coeffs[k] != 0 {
                                                         let bit = br.read_bits(1)?;
                                                         if bit != 0 {
-                                                            coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                            if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
                                                         }
-                                                    }
+                                                    } else { r -= 1; if r < 0 { k += 1; break; } }
                                                     k += 1;
                                                 }
                                             } else if size == 0 {
@@ -219,17 +220,17 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                                 // New non-zero: skip `run` zeros (refining non-zeros), place ±p1
                                                 let bit = br.read_bits(1)?;
                                                 let val = if bit != 0 { p1 } else { m1 };
-                                                let mut r = run;
+                                                let mut r: i32 = run as i32;
                                                 loop {
                                                     if k > se || k >= 64 { break; }
                                                     if coeffs[k] != 0 {
                                                         let bit = br.read_bits(1)?;
                                                         if bit != 0 {
-                                                            coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                            if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
                                                         }
                                                     } else {
-                                                        if r == 0 { break; }
                                                         r -= 1;
+                                                        if r < 0 { break; }
                                                     }
                                                     k += 1;
                                                 }
@@ -248,7 +249,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                         if coeffs[k] != 0 {
                                             let bit = br.read_bits(1)?;
                                             if bit != 0 {
-                                                coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
                                             }
                                         }
                                         k += 1;
