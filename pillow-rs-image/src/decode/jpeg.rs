@@ -1389,12 +1389,16 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
             h_ratio as usize, v_ratio as usize, w, h,
         );
 
+        // Up-sampled chroma row stride = original chroma width * h_ratio
+        let cb_stride = comp_buf_width[1] * h_ratio as usize;
+        let cr_stride = comp_buf_width[2] * h_ratio as usize;
+
         let mut pixels = Vec::with_capacity(w * h * 3);
         for y in 0..h {
             for x in 0..w {
                 let y_val = y_buf[y * y_w + x];
-                let cb_val = cb_upsampled[y * w + x];
-                let cr_val = cr_upsampled[y * w + x];
+                let cb_val = cb_upsampled[y * cb_stride + x];
+                let cr_val = cr_upsampled[y * cr_stride + x];
 
                 let (r, g, b) = converter.ycc_to_rgb(y_val, cb_val, cr_val);
                 pixels.push(r);
@@ -1450,6 +1454,20 @@ fn fancy_upsample(
 /// Progressive JPEG reconstruction: accumulate coefficients across multiple
 /// scans, then run IDCT and assemble the output.
 fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
+    eprintln!("PROGRESSIVE RECONSTRUCT: {} scans, {}x{}, {} comps",
+        info.scans.len(), info.width, info.height, info.num_components);
+
+    // Print first scan info
+    if let Some(s) = info.scans.first() {
+        eprintln!("  First scan: ss={}, se={}, ah={}, al={}, {} comps, entropy=[{},{})",
+            s.ss, s.se, s.ah, s.al, s.components.len(), s.entropy_start, s.entropy_end);
+        for c in &s.components {
+            let has_dc = s.dc_huff_tables.get(c.dc_tbl as usize).and_then(|t| t.as_ref()).is_some();
+            let has_ac = s.ac_huff_tables.get(c.ac_tbl as usize).and_then(|t| t.as_ref()).is_some();
+            eprintln!("    comp_idx={}: dc_tbl={}({}) ac_tbl={}({})",
+                c.comp_index, c.dc_tbl, if has_dc {"OK"} else {"MISSING"}, c.ac_tbl, if has_ac {"OK"} else {"MISSING"});
+        }
+    }
     let mcu_width = (info.max_h_samp as u32) * 8;
     let mcu_height = (info.max_v_samp as u32) * 8;
     let num_mcus_x = ((info.width as u32) + mcu_width - 1) / mcu_width;
@@ -1725,9 +1743,11 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
             h_ratio as usize, v_ratio as usize, w, h,
         );
         let mut pixels = Vec::with_capacity(w * h * 3);
+        let cb_stride = comp_buf_width[1] * h_ratio as usize;
+        let cr_stride = comp_buf_width[2] * h_ratio as usize;
         for y in 0..h {
             for x in 0..w {
-                let (r, g, b) = converter.ycc_to_rgb(y_buf[y * y_w + x], cb_up[y * w + x], cr_up[y * w + x]);
+                let (r, g, b) = converter.ycc_to_rgb(y_buf[y * y_w + x], cb_up[y * cb_stride + x], cr_up[y * cr_stride + x]);
                 pixels.push(r); pixels.push(g); pixels.push(b);
             }
         }
