@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use pillow_rs_image as img;
+use sha2::{Sha256, Digest};
 
 #[derive(Debug, Deserialize)]
 struct CoverageMatrix {
@@ -106,17 +107,19 @@ fn test_decode_matrix() {
             };
 
             let actual = decoded.as_bytes();
-            // Compare with pre-computed PIL reference hash
+            // Compare pixel bytes against PIL reference (pre-computed SHA-256 in matrix)
             if let Some(ref ref_hash) = row.ref_sha256 {
-                let actual_hash = format!("{:x}", md5::compute(actual)); // Simple fast hash
-                // For now, compare byte lengths. Full SHA-256 comparison available.
-                if let Some(ref_bytes) = row.ref_bytes {
-                    if actual.len() == ref_bytes {
-                        eprintln!("  OK   [{}] {} bytes (mode={})", row.id, actual.len(), 
-                            row.ref_mode.as_deref().unwrap_or("?"));
-                        passed += 1;
-                    } else {
+                let actual_hash = Sha256::digest(actual).iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                if actual_hash == *ref_hash {
+                    eprintln!("  OK   [{}] {} bytes (mode={})", row.id, actual.len(),
+                        row.ref_mode.as_deref().unwrap_or("?"));
+                    passed += 1;
+                } else if let Some(ref_bytes) = row.ref_bytes {
+                    if actual.len() != ref_bytes {
                         eprintln!("  FAIL [{}]: {} bytes, expected {} bytes", row.id, actual.len(), ref_bytes);
+                        failed += 1;
+                    } else {
+                        eprintln!("  FAIL [{}]: same size ({}B) but different pixels", row.id, actual.len());
                         failed += 1;
                     }
                 }
@@ -146,7 +149,7 @@ fn test_encode_matrix() {
     let passed = 0u32;
     let mut skipped = 0u32;
 
-    for (fmt_name, fmt_data) in &matrix.formats {
+    for (_fmt_name, fmt_data) in &matrix.formats {
         for row in &fmt_data.encode {
             if row.status == "not_wired" { skipped += 1; continue; }
             total += 1;
