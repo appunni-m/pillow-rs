@@ -1,10 +1,9 @@
 use crate::types::{ColorType, DecodedImage};
 
 use super::bit_reader::BitReader;
-use super::decode::{extract_entropy_segments, EntropySegments};
-use super::huffman::HuffTable;
+use super::decode::extract_entropy_segments;
 use super::idct::{self, extend, jpeg_idct_islow, YccColorConverter};
-use super::parser::{FrameComponent, JpegInfo, ScanComponent, ScanInfo};
+use super::parser::JpegInfo;
 use super::upsample::{crop_component, fancy_upsample};
 
 pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
@@ -48,7 +47,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         .collect();
 
     // Process each scan in order
-    for (scan_idx, scan) in info.scans.iter().enumerate() {
+    for (_scan_idx, scan) in info.scans.iter().enumerate() {
         // Extract entropy segments (split at RST markers within the scan data)
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {

@@ -16,7 +16,5 @@ coverage/report.json
 .python-version
 venv/
 .venv/
-tests/fixtures/outputs/
 libnull.rlib
-tests/fixtures_2/outputs/
 pybak/

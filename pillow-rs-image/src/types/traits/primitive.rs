@@ -1,5 +1,3 @@
-use std::ops::{Add, BitAnd, BitOr, Mul, Shl, Shr, Sub};
-
 /// The type of each channel in a pixel. For example, this can be `u8`, `u16`, `f32`.
 pub trait Primitive: Copy + Clone + PartialOrd + Sized + Default {
     /// The maximum value for this type of primitive within the context of color.

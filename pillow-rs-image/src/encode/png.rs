@@ -41,7 +41,7 @@ pub fn encode(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>> {
         encoder.set_depth(BitDepth::Eight);
         encoder.set_compression(png::Compression::Fast);
         // Apply compression level from options (0=none, 9=max)
-        if let Some(level) = opts.compression {
+        if let Some(_level) = opts.compression {
             encoder.set_compression(png::Compression::Fast);
             // png crate uses Compression::Fast/Best/Default; use level via set_compression
         }

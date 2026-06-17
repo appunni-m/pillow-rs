@@ -1,5 +1,3 @@
-use crate::types::{ColorType, DecodedImage};
-
 // ── IDCT Constants (matching IJG jidctint.c) ──────────────────────────────
 
 pub(super) const CONST_BITS: i32 = 13;

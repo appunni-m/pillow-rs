@@ -1,7 +1,5 @@
 use super::pixel::Pixel;
-use super::primitive::{EncodableLayout, Primitive};
 use crate::types::buffer::ImageBuffer;
-use crate::types::color::{Luma, LumaA, Rgb, Rgba};
 pub trait GenericImageView {
     /// The type of pixel.
     type Pixel: Pixel;

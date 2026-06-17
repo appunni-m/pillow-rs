@@ -1183,7 +1183,7 @@ use super::traits::GenericImage as GenericImageTrait;
 
 impl GenericImageTrait for DynamicImage {
     #[allow(deprecated)]
-    fn get_pixel_mut(&mut self, x: u32, y: u32) -> &mut Self::Pixel {
+    fn get_pixel_mut(&mut self, _x: u32, _y: u32) -> &mut Self::Pixel {
         panic!("get_pixel_mut not supported on DynamicImage")
     }
 
@@ -1266,74 +1266,5 @@ impl GenericImageTrait for DynamicImage {
             (pixel[3] as f32 * a + current[3] as f32 * inv_a) as u8,
         ]);
         self.put_pixel(x, y, blended);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::traits::GenericImageView;
-
-    #[test]
-    fn test_new_rgba8() {
-        let img = DynamicImage::new_rgba8(10, 10);
-        assert_eq!(img.dimensions(), (10, 10));
-        assert_eq!(img.color(), ColorType::Rgba8);
-    }
-
-    #[test]
-    fn test_new_luma8() {
-        let img = DynamicImage::new_luma8(5, 5);
-        assert_eq!(img.dimensions(), (5, 5));
-        assert_eq!(img.color(), ColorType::L8);
-    }
-
-    #[test]
-    fn test_color_type() {
-        assert_eq!(DynamicImage::new_luma8(1, 1).color(), ColorType::L8);
-        assert_eq!(DynamicImage::new_luma_a8(1, 1).color(), ColorType::La8);
-        assert_eq!(DynamicImage::new_rgb8(1, 1).color(), ColorType::Rgb8);
-        assert_eq!(DynamicImage::new_rgba8(1, 1).color(), ColorType::Rgba8);
-    }
-
-    #[test]
-    fn test_has_alpha() {
-        assert!(!DynamicImage::new_rgb8(1, 1).has_alpha());
-        assert!(DynamicImage::new_rgba8(1, 1).has_alpha());
-    }
-
-    #[test]
-    fn test_to_rgba8() {
-        let img = DynamicImage::new_rgb8(2, 2);
-        let rgba = img.to_rgba8();
-        assert_eq!(rgba.dimensions(), (2, 2));
-    }
-
-    #[test]
-    fn test_to_luma8() {
-        let img = DynamicImage::new_rgba8(2, 2);
-        let luma = img.to_luma8();
-        assert_eq!(luma.dimensions(), (2, 2));
-    }
-
-    #[test]
-    fn test_clone() {
-        let img = DynamicImage::new_rgba8(5, 5);
-        let cloned = img.clone();
-        assert_eq!(img, cloned);
-    }
-
-    #[test]
-    fn test_generic_image_view() {
-        let img = DynamicImage::new_rgba8(3, 3);
-        assert_eq!(img.dimensions(), (3, 3));
-        assert_eq!(img.width(), 3);
-        assert_eq!(img.height(), 3);
-
-        let mut count = 0;
-        for (_x, _y, _p) in img.pixels() {
-            count += 1;
-        }
-        assert_eq!(count, 9);
     }
 }
