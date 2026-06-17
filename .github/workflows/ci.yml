@@ -30,16 +30,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install maturin pyyaml pytest pytest-json-report
-      - working-directory: pillow-rs-py
-        run: maturin develop
-      - run: pip install -e "pillow-rs-py/[dev]"
-      - run: python -m pytest tests/ -v --json-report --json-report-file=report.json
-      - run: python scripts/compute_coverage.py manifest.yaml report.json
+      - run: pip install maturin pillow pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark numpy
+      - run: maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
+      - run: python -m pytest tests/ -q --tb=short --timeout=300 --json-report --json-report-file=/tmp/report.json
+      - run: python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-report-py${{ matrix.python-version }}
-          path: coverage/report.json
+          path: /tmp/report.json
 
   wasm-build:
     needs: core-tests
@@ -49,7 +47,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - run: cargo install wasm-pack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - working-directory: pillow-rs-js
         run: wasm-pack build --target web --dev
 
@@ -62,12 +62,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install maturin pytest pytest-benchmark
-      - working-directory: pillow-rs-py
-        run: maturin develop --release
-      - run: pip install -e "pillow-rs-py/[dev]"
-      - run: python -m pytest tests/benchmarks/ -m benchmark --benchmark-only --benchmark-json=bench-rs.json
+      - run: pip install maturin pillow pyyaml
+      - run: maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
+      - run: bash scripts/bench/bench_all.sh full
       - uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
-          path: bench-rs.json
+          name: benchmarks
+          path: BENCHMARKS.md
