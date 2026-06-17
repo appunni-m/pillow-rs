@@ -22,8 +22,25 @@ fn test_decode_fixtures() {
     let output_jsons = fixtures_dir.join("outputs").join("jsons");
     let assets_dir = manifest_dir.join("test-assets").join("input");
 
+    // Auto-generate references from PIL (libjpeg/libpng) if outputs don't exist yet
+    if !output_jsons.is_dir() || fs::read_dir(&output_jsons).unwrap().next().is_none() {
+        let script = manifest_dir.join("scripts").join("generate_decode_refs.py");
+        if script.exists() {
+            eprintln!("Generating reference fixtures via PIL (libjpeg/libpng)...");
+            let status = std::process::Command::new("python3")
+                .arg(&script)
+                .current_dir(manifest_dir)
+                .status();
+            match status {
+                Ok(s) if s.success() => eprintln!("References generated."),
+                Ok(s) => eprintln!("WARNING: reference generator failed (exit {})", s),
+                Err(e) => eprintln!("WARNING: cannot run reference generator: {} (PIL not installed?)", e),
+            }
+        }
+    }
+
     if !input_jsons.is_dir() || !output_jsons.is_dir() {
-        eprintln!("SKIP: no fixtures found. Run: python scripts/generate_decode_refs.py");
+        eprintln!("SKIP: no fixtures found. Add test assets to test-assets/input/");
         return;
     }
 
