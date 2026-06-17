@@ -409,6 +409,16 @@ Contributions are welcome — whether it's fixing PIL parity, adding GPU dispatc
 
 ---
 
+## Acknowledgments
+
+pillow-rs stands on the shoulders of two remarkable projects:
+
+**Pillow** — the friendly PIL fork. Thanks to [Jeffrey 'Alex' Clark](https://github.com/python-pillow/Pillow/graphs/contributors), [Fredrik Lundh](https://github.com/effbot) (PIL creator), [Secret Labs AB](https://www.pythonware.com/), and the [380+ Pillow contributors](https://github.com/python-pillow/Pillow/graphs/contributors) for building and maintaining the de facto Python image processing library. Pillow's comprehensive API design, meticulous mode semantics, and 12+ years of battle-tested behavior are the foundation pillow-rs targets.
+
+**Puhu** — the pioneering Rust-based Pillow subset by [Bilal Tonga](https://github.com/bgunebakan/puhu). Puhu proved that Pillow's algorithms could be faithfully reimplemented in Rust with PyO3 bindings, achieving pixel-identical output. It served as the algorithmic reference for lazy decoding, raw-byte memcpy crop, palette-safe operation detection, and many Pillow compatibility quirks encoded in pillow-rs today.
+
+---
+
 ## Documentation
 
 | Resource | Description |
