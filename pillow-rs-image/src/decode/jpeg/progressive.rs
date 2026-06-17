@@ -47,7 +47,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         .collect();
 
     // Process each scan in order
-    for (_scan_idx, scan) in info.scans.iter().enumerate() {
+    for (scan_idx, scan) in info.scans.iter().enumerate() {
         // Extract entropy segments (split at RST markers within the scan data)
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
@@ -55,6 +55,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         }
 
         let is_dc_scan = scan.ss == 0 && scan.se == 0;
+        eprintln!("SCAN[{}]: ss={} se={} ah={} al={} ncomps={}", scan_idx, scan.ss, scan.se, scan.ah, scan.al, scan.components.len());
         let is_dc_first = is_dc_scan && scan.ah == 0;
         let is_dc_refine = is_dc_scan && scan.ah > 0;
         let is_ac_first = !is_dc_scan && scan.ah == 0;
@@ -277,6 +278,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         }
     }
 
+    eprintln!("FINAL_PASS");
     // ── Final pass: dequantize, IDCT, build component buffers ──
     let mut block_natural = [0i32; 64];
     let mut workspace = [0i32; 64];
