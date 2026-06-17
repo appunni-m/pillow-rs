@@ -59,7 +59,12 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
 /// Composite image1 over image2 using mask.
 /// PIL: `Image.composite(image1, image2, mask)`
 /// `mode` is an optional mode override (e.g. "P" when composite is called on P-mode images).
-pub fn composite(image1: &Image, image2: &Image, mask: &Image, mode: Option<&str>) -> Result<Image, PilError> {
+pub fn composite(
+    image1: &Image,
+    image2: &Image,
+    mask: &Image,
+    mode: Option<&str>,
+) -> Result<Image, PilError> {
     let mut result = Image::push_op(
         image1,
         PipelineOp::CompositeModule {

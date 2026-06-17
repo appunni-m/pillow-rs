@@ -9,7 +9,9 @@ use std::f64;
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::pil_resize::{pil_resize, precompute_coeffs, precompute_coeffs_f64, precompute_coeffs_float, round_up, FilterCoeffs};
+use crate::ops::pil_resize::{
+    pil_resize, precompute_coeffs_f64, round_up,
+};
 use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 // ── Resample filter conversion ──
@@ -306,8 +308,9 @@ fn resize_i(
             }
         }
         let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
-            .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
+        let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
+            PilError::ValueError("resize_i: failed to create output buffer".into())
+        })?;
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
@@ -325,7 +328,9 @@ fn resize_i(
         for dx in 0..dst_w {
             let x0 = h_coeffs_f64.xmin[dx as usize];
             let cnt = h_coeffs_f64.count[dx as usize];
-            if cnt == 0 { continue; }
+            if cnt == 0 {
+                continue;
+            }
             let mut acc: f64 = 0.0;
             for (cix, &w) in h_coeffs_f64.weights[dx as usize].iter().enumerate() {
                 let sx = (x0 + cix as i64) as usize;
@@ -342,7 +347,9 @@ fn resize_i(
         let y0 = v_coeffs_f64.xmin[dy as usize];
         let cnt = v_coeffs_f64.count[dy as usize];
         if cnt == 0 {
-            for _ in 0..dst_w { out_ints.push(0i32); }
+            for _ in 0..dst_w {
+                out_ints.push(0i32);
+            }
             continue;
         }
         for dx in 0..dst_w {
@@ -745,7 +752,9 @@ pub fn execute_thumbnail(
                                 sum += raw[idx] as u64;
                             }
                         }
-                        let block_pixels = (factor.min(cur_h - y * factor) * factor.min(cur_w - x * factor)) as u64;
+                        let block_pixels = (factor.min(cur_h - y * factor)
+                            * factor.min(cur_w - x * factor))
+                            as u64;
                         let val = ((sum + block_pixels / 2) / block_pixels) as u8;
                         out[(y * rw + x) as usize * channels + c] = val;
                     }

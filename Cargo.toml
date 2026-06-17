@@ -19,6 +19,10 @@ needless_collect = "deny"
 unwrap_used = "deny"
 expect_used = "deny"
 
+[workspace.lints.rust]
+# TODO: Migrate to IntoPyObject API (PyO3 v0.23+)
+deprecated = "allow"
+
 [workspace.profile.release]
 lto = true
 codegen-units = 1

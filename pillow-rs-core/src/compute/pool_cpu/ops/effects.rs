@@ -848,7 +848,7 @@ pub fn op_put_pixel(
             Ok(DynamicImage::ImageRgba8(rgba))
         }
         _ => Err(PilError::NotImplementedError(
-            "putpixel not supported for this image type".into()
+            "putpixel not supported for this image type".into(),
         )),
     }
 }

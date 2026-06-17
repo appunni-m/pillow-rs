@@ -39,9 +39,9 @@ pub fn grayscale(pixels: &mut [u32], mode: u32) {
     let has_a = mode == 1 || mode == 3;
 
     for p in pixels.iter_mut() {
-        let r = (*p & 0x0000_00FF) as u32;
-        let g = ((*p >> 8) & 0xFF) as u32;
-        let b = ((*p >> 16) & 0xFF) as u32;
+        let r = *p & 0x0000_00FF;
+        let g = (*p >> 8) & 0xFF;
+        let b = (*p >> 16) & 0xFF;
         let a = *p & 0xFF00_0000;
 
         // BT.601: (299*R + 587*G + 114*B + 500) / 1000
@@ -117,9 +117,9 @@ pub fn brightness(pixels: &mut [u32], mode: u32, factor_fp: u32) {
         let b = (*p >> 16) & 0xFF;
         let a = *p & 0xFF00_0000;
 
-        let out_r = ((r * factor_fp / 1000).min(255)) as u32;
-        let out_g_raw = ((g * factor_fp / 1000).min(255)) as u32;
-        let out_b_raw = ((b * factor_fp / 1000).min(255)) as u32;
+        let out_r = (r * factor_fp / 1000).min(255);
+        let out_g_raw = (g * factor_fp / 1000).min(255);
+        let out_b_raw = (b * factor_fp / 1000).min(255);
 
         let out_g = if has_gb { out_g_raw } else { g };
         let out_b = if has_gb { out_b_raw } else { b };
@@ -2060,7 +2060,7 @@ fn crop_rect(
 #[inline]
 pub fn quantize(pixels: &mut [u32], w: u32, h: u32, mode: u32, num_colors: u32) {
     let _ = (w, h);
-    if num_colors < 2 || num_colors >= 256 {
+    if !(2..256).contains(&num_colors) {
         return;
     }
     let has_gb = mode >= 2;
@@ -2347,8 +2347,8 @@ mod tests {
         let (out, w, h) = resize(&pixels, 1, 1, 2, 2, 3, 0);
         assert_eq!(w, 2);
         assert_eq!(h, 2);
-        for i in 0..4 {
-            assert_eq!(out[i], pixels[0], "pixel {i} should match source");
+        for (i, px) in out.iter().enumerate() {
+            assert_eq!(*px, pixels[0], "pixel {i} should match source");
         }
     }
 
@@ -2414,7 +2414,7 @@ mod tests {
         // Verify G/B are set to R in L/LA modes even if source has G/B data
         // Luma mode: only R channel is meaningful; G/B should be set to R
         let pixels = vec![p(42, 99, 199, 0)]; // G=99, B=199 should be ignored
-        let (out, w, h) = resize(&pixels, 1, 1, 1, 1, 0, 0);
+        let (out, _w, _h) = resize(&pixels, 1, 1, 1, 1, 0, 0);
         assert_eq!(g_of(out[0]), 42, "G should mirror R in L mode");
         assert_eq!(b_of(out[0]), 42, "B should mirror R in L mode");
     }
@@ -2422,6 +2422,7 @@ mod tests {
     // ── Bilinear interpolation tests ──
 
     #[test]
+    #[expect(clippy::bad_bit_mask, reason = "Verify extracted byte components are in valid u8 range")]
     fn test_resize_bilinear_same_size_rgba() {
         // Bilinear with same dimensions: at pixel center (dx+0.5)*src/dst = dx+0.5,
         // so each dst pixel center is halfway between two src pixels -> not identity.

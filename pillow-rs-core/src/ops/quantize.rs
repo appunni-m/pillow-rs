@@ -1061,7 +1061,12 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
 
     let mut fine_cube = ColorCube::new(fine_bits[0], fine_bits[1], fine_bits[2], fine_bits[3]);
     // Coarse cube for counting
-    let coarse_cube_src = ColorCube::new(coarse_bits[0], coarse_bits[1], coarse_bits[2], coarse_bits[3]);
+    let coarse_cube_src = ColorCube::new(
+        coarse_bits[0],
+        coarse_bits[1],
+        coarse_bits[2],
+        coarse_bits[3],
+    );
 
     let n = (w * h) as usize;
 
@@ -1102,7 +1107,12 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
             // Re-subtract with fewer fine entries
             let fine_sub = &sorted_fine[..fine_entries];
             // Re-create coarse cube
-            let mut coarse2 = ColorCube::new(coarse_bits[0], coarse_bits[1], coarse_bits[2], coarse_bits[3]);
+            let mut coarse2 = ColorCube::new(
+                coarse_bits[0],
+                coarse_bits[1],
+                coarse_bits[2],
+                coarse_bits[3],
+            );
             copy_fine_to_coarse(&fine_cube, &mut coarse2);
             subtract_buckets_from_cube(fine_sub, &mut coarse2);
             coarse_used = coarse2.count_used() as usize;
@@ -1126,7 +1136,11 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
             }
             // Pad remaining
             for ci in n_fine_actual..n_colors {
-                let src = if n_fine_actual > 0 { n_fine_actual - 1 } else { 0 };
+                let src = if n_fine_actual > 0 {
+                    n_fine_actual - 1
+                } else {
+                    0
+                };
                 let src_pal = [
                     palette_rgba[src * 4],
                     palette_rgba[src * 4 + 1],
@@ -1170,7 +1184,12 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
 
         // Combined palette: coarse entries first, then fine entries
         let mut combined_palette: Vec<[u8; 4]> = Vec::with_capacity(n_colors);
-        let mut lookup = LookupCube::new(coarse_bits[0], coarse_bits[1], coarse_bits[2], coarse_bits[3]);
+        let mut lookup = LookupCube::new(
+            coarse_bits[0],
+            coarse_bits[1],
+            coarse_bits[2],
+            coarse_bits[3],
+        );
 
         // Insert coarse palette entries into lookup cube
         for (pi, bucket) in coarse_palette.iter().enumerate().take(n_coarse_final) {
@@ -1261,14 +1280,16 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
         let mut out_indices = Vec::with_capacity(n);
         for i in 0..n {
             let base = i * 4;
-            let idx = lookup.lookup(pixels[base], pixels[base + 1], pixels[base + 2], pixels[base + 3]);
+            let idx = lookup.lookup(
+                pixels[base],
+                pixels[base + 1],
+                pixels[base + 2],
+                pixels[base + 3],
+            );
             out_indices.push(idx);
         }
 
-        let palette_bytes: Vec<u8> = combined_palette
-            .iter()
-            .flat_map(|c| c.to_vec())
-            .collect();
+        let palette_bytes: Vec<u8> = combined_palette.iter().flat_map(|c| c.to_vec()).collect();
 
         return (out_indices, palette_bytes);
     }
@@ -1332,14 +1353,16 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
     let mut out_indices = Vec::with_capacity(n);
     for i in 0..n {
         let base = i * 4;
-        let idx = lookup.lookup(pixels[base], pixels[base + 1], pixels[base + 2], pixels[base + 3]);
+        let idx = lookup.lookup(
+            pixels[base],
+            pixels[base + 1],
+            pixels[base + 2],
+            pixels[base + 3],
+        );
         out_indices.push(idx);
     }
 
-    let palette_bytes: Vec<u8> = combined_palette
-        .iter()
-        .flat_map(|c| c.to_vec())
-        .collect();
+    let palette_bytes: Vec<u8> = combined_palette.iter().flat_map(|c| c.to_vec()).collect();
 
     (out_indices, palette_bytes)
 }
