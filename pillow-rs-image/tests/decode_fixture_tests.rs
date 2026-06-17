@@ -143,3 +143,69 @@ fn test_format_detection() {
     assert_eq!(img::detect_format(b""), None);
     assert_eq!(img::detect_format(b"\x00"), None);
 }
+
+// ── Manifest coverage validation ─────────────────────────────────────────
+
+#[test]
+fn test_manifest_coverage() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest_path = manifest_dir.join("manifest.yaml");
+    let assets_dir = manifest_dir.join("test-assets").join("input");
+
+    if !manifest_path.exists() {
+        eprintln!("SKIP: manifest.yaml not found");
+        return;
+    }
+
+    let manifest: serde_json::Value = serde_yaml::from_str(
+        &fs::read_to_string(&manifest_path).unwrap()
+    ).unwrap();
+
+    let mut missing_assets = Vec::new();
+    let mut total_cases = 0u32;
+    let mut covered_cases = 0u32;
+
+    for (fmt_name, fmt_data) in manifest["formats"].as_object().unwrap() {
+        let format_dir = assets_dir.join(fmt_name);
+        for case in fmt_data["edge_cases"].as_array().unwrap() {
+            let cid = case["id"].as_str().unwrap();
+            let expect_error = case.get("expect_error").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            if let Some(assets) = case.get("test_assets") {
+                for asset in assets.as_array().unwrap() {
+                    let asset_name = asset.as_str().unwrap();
+                    total_cases += 1;
+                    let asset_path = format_dir.join(asset_name);
+                    if asset_path.exists() {
+                        covered_cases += 1;
+                    } else {
+                        missing_assets.push(format!("  {fmt_name}/{asset_name} ({cid})"));
+                    }
+                }
+            } else if !expect_error {
+                // Edge case with no test_assets and not error-only — gap
+                missing_assets.push(format!("  {fmt_name}: {cid} (no test_assets, not error-only)"));
+            }
+        }
+    }
+
+    eprintln!("\nmanifest coverage: {covered_cases}/{total_cases} test assets present");
+
+    if !missing_assets.is_empty() {
+        eprintln!("Missing {} test assets:", missing_assets.len());
+        for m in &missing_assets[..missing_assets.len().min(20)] {
+            eprintln!("{m}");
+        }
+        if missing_assets.len() > 20 {
+            eprintln!("  ... and {} more", missing_assets.len() - 20);
+        }
+    }
+
+    if total_cases == 0 {
+        eprintln!("WARNING: no test cases defined in manifest.yaml");
+    }
+
+    // Don't fail on missing assets — just report the gap.
+    // This matches test_coverage_complete behavior: informational, not blocking.
+    assert!(total_cases > 0, "manifest.yaml must define at least one test case");
+}
