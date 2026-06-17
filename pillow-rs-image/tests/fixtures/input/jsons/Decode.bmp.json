@@ -26,6 +26,11 @@
       "asset": "bmp/32bit.bmp"
     },
     {
+      "id": "Decode_bmp_rle8_bmp",
+      "mode": "RGB",
+      "asset": "bmp/rle8.bmp"
+    },
+    {
       "id": "Decode_bmp_1x1_bmp",
       "mode": "RGB",
       "asset": "bmp/1x1.bmp"

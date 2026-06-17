@@ -20,7 +20,7 @@ fn test_decode_fixtures() {
     let fixtures_dir = manifest_dir.join("tests").join("fixtures");
     let input_jsons = fixtures_dir.join("input").join("jsons");
     let output_jsons = fixtures_dir.join("outputs").join("jsons");
-    let assets_dir = manifest_dir.join("test-assets").join("input");
+    let assets_dir = manifest_dir.join("tests").join("fixtures").join("input").join("images");
 
     // Auto-generate references from PIL (libjpeg/libpng) if outputs don't exist yet
     if !output_jsons.is_dir() || fs::read_dir(&output_jsons).unwrap().next().is_none() {
@@ -43,7 +43,7 @@ fn test_decode_fixtures() {
     }
 
     if !input_jsons.is_dir() || !output_jsons.is_dir() {
-        eprintln!("SKIP: no fixtures found. Add test assets to test-assets/input/");
+        eprintln!("SKIP: no fixtures found. Add test assets to tests/fixtures/input/images/");
         return;
     }
 
@@ -200,7 +200,7 @@ fn test_format_detection() {
 fn test_manifest_coverage() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest_path = manifest_dir.join("manifest.yaml");
-    let assets_dir = manifest_dir.join("test-assets").join("input");
+    let assets_dir = manifest_dir.join("tests").join("fixtures").join("input").join("images");
 
     if !manifest_path.exists() {
         eprintln!("SKIP: manifest.yaml not found");
@@ -218,6 +218,8 @@ fn test_manifest_coverage() {
         let format_dir = assets_dir.join(fmt_name);
         for case in fmt_data["edge_cases"].as_array().unwrap() {
             let cid = case["id"].as_str().unwrap();
+            // Skip planned (not yet implemented) edge cases
+            if case.get("status").and_then(|v| v.as_str()) == Some("planned") { continue; }
             let expect_error = case
                 .get("expect_error")
                 .and_then(|v| v.as_bool())

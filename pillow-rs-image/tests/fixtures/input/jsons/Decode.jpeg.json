@@ -21,6 +21,11 @@
       "asset": "jpeg/baseline_420.jpg"
     },
     {
+      "id": "Decode_jpeg_baseline_411_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/baseline_411.jpg"
+    },
+    {
       "id": "Decode_jpeg_baseline_gray_jpg",
       "mode": "L",
       "asset": "jpeg/baseline_gray.jpg"
@@ -51,6 +56,26 @@
       "asset": "jpeg/q1.jpg"
     },
     {
+      "id": "Decode_jpeg_8x8_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/8x8.jpg"
+    },
+    {
+      "id": "Decode_jpeg_17x17_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/17x17.jpg"
+    },
+    {
+      "id": "Decode_jpeg_33x33_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/33x33.jpg"
+    },
+    {
+      "id": "Decode_jpeg_1x1_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/1x1.jpg"
+    },
+    {
       "id": "Decode_jpeg_restart_jpg",
       "mode": "RGB",
       "asset": "jpeg/restart.jpg"
@@ -59,6 +84,11 @@
       "id": "Decode_jpeg_baseline_jpg",
       "mode": "RGB",
       "asset": "jpeg/baseline.jpg"
+    },
+    {
+      "id": "Decode_jpeg_progressive_spectral_jpg",
+      "mode": "RGB",
+      "asset": "jpeg/progressive_spectral.jpg"
     }
   ]
 }

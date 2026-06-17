@@ -7,12 +7,12 @@
   "cases": [
     {
       "id": "Decode_ico_single_ico",
-      "mode": "RGB",
+      "mode": "RGBA",
       "asset": "ico/single.ico"
     },
     {
       "id": "Decode_ico_multi_ico",
-      "mode": "RGB",
+      "mode": "RGBA",
       "asset": "ico/multi.ico"
     },
     {
@@ -22,7 +22,7 @@
     },
     {
       "id": "Decode_ico_16x16_ico",
-      "mode": "RGB",
+      "mode": "RGBA",
       "asset": "ico/16x16.ico"
     }
   ]

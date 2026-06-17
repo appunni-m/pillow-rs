@@ -21,7 +21,7 @@ MANIFEST = ROOT / "manifest.yaml"
 INPUT_JSONS = ROOT / "tests" / "fixtures" / "input" / "jsons"
 OUTPUT_JSONS = ROOT / "tests" / "fixtures" / "outputs" / "jsons"
 OUTPUT_RAWS = ROOT / "tests" / "fixtures" / "outputs" / "raws"
-ASSETS_DIR = ROOT / "test-assets" / "input"
+ASSETS_DIR = ROOT / "tests" / "fixtures" / "input" / "images"
 
 
 def generate(target_format=None):

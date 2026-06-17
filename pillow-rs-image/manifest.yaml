@@ -28,7 +28,6 @@ formats:
       description: 4:1:1 chroma subsampling
       test_assets:
       - baseline_411.jpg
-      status: planned
     - id: subsampling_gray
       description: Grayscale (no chroma components)
       test_assets:
@@ -37,27 +36,22 @@ formats:
       description: YCbCr color space (standard)
       test_assets:
       - baseline_ycbcr.jpg
-      status: planned
     - id: color_rgb
       description: RGB color space (rare, Adobe)
       test_assets:
       - baseline_rgb_jpeg.jpg
-      status: planned
     - id: color_cmyk
       description: CMYK color space (Adobe)
       test_assets:
       - baseline_cmyk.jpg
-      status: planned
     - id: huffman_default
       description: Default Huffman tables
       test_assets:
       - baseline_default.jpg
-      status: planned
     - id: huffman_optimized
       description: Optimized/custom Huffman tables
       test_assets:
       - baseline_optimized.jpg
-      status: planned
     - id: huffman_progressive
       description: Progressive JPEG (multiple scans)
       test_assets:
@@ -82,28 +76,23 @@ formats:
       description: Smallest valid JPEG (8x8 minimum)
       test_assets:
       - 8x8.jpg
-      status: planned
     - id: size_odd
       description: Odd dimensions requiring edge MCU handling
       test_assets:
       - 17x17.jpg
       - 33x33.jpg
-      status: planned
     - id: size_large
       description: Large image (4096x4096)
       test_assets:
       - large.jpg
-      status: planned
     - id: size_1x1
       description: Single pixel
       test_assets:
       - 1x1.jpg
-      status: planned
     - id: restart_none
       description: No restart markers
       test_assets:
       - baseline_default.jpg
-      status: planned
     - id: restart_interval
       description: Restart markers every N MCUs
       test_assets:
@@ -112,27 +101,22 @@ formats:
       description: JPEG with EXIF orientation tag
       test_assets:
       - exif_orientation.jpg
-      status: planned
     - id: exif_thumbnail
       description: JPEG with embedded thumbnail
       test_assets:
       - exif_thumbnail.jpg
-      status: planned
     - id: no_exif
       description: JPEG without EXIF
       test_assets:
       - no_exif.jpg
-      status: planned
     - id: trailing_data
       description: JPEG with extra data after EOI marker
       test_assets:
       - trailing_data.jpg
-      status: planned
     - id: multiple_eoi
       description: Multiple EOI markers
       test_assets:
       - multiple_eoi.jpg
-      status: planned
     - id: zero_length
       description: Empty file (error expected)
       test_assets:
@@ -156,7 +140,6 @@ formats:
       description: Progressive with spectral selection
       test_assets:
       - progressive_spectral.jpg
-      status: planned
   png:
     name: PNG
     extensions:
@@ -198,7 +181,6 @@ formats:
       description: Indexed with tRNS transparency
       test_assets:
       - indexed_alpha.png
-      status: planned
     - id: depth_1
       description: 1-bit grayscale
       test_assets:
@@ -207,12 +189,10 @@ formats:
       description: 2-bit grayscale
       test_assets:
       - 2bit.png
-      status: planned
     - id: depth_4
       description: 4-bit grayscale
       test_assets:
       - 4bit.png
-      status: planned
     - id: depth_8
       description: 8-bit per channel (standard)
       test_assets:
@@ -221,7 +201,6 @@ formats:
       description: 16-bit per channel
       test_assets:
       - 16bit.png
-      status: planned
     - id: no_interlace
       description: No interlacing (Adam7 off)
       test_assets:
@@ -238,27 +217,22 @@ formats:
       description: Sub filter
       test_assets:
       - filter_sub.png
-      status: planned
     - id: filter_up
       description: Up filter
       test_assets:
       - filter_up.png
-      status: planned
     - id: filter_average
       description: Average filter
       test_assets:
       - filter_average.png
-      status: planned
     - id: filter_paeth
       description: Paeth filter
       test_assets:
       - filter_paeth.png
-      status: planned
     - id: filter_mixed
       description: Adaptive per-scanline filtering
       test_assets:
       - filter_mixed.png
-      status: planned
     - id: compress_default
       description: Default zlib compression (level 6)
       test_assets:
@@ -267,7 +241,6 @@ formats:
       description: No compression (store only)
       test_assets:
       - compress_none.png
-      status: planned
     - id: compress_max
       description: Maximum compression (level 9)
       test_assets:
@@ -276,7 +249,6 @@ formats:
       description: PNG with gAMA chunk (gamma)
       test_assets:
       - gama.png
-      status: planned
     - id: chunk_srgb
       description: PNG with sRGB chunk
       test_assets:
@@ -285,7 +257,6 @@ formats:
       description: PNG with iCCP color profile
       test_assets:
       - iccp.png
-      status: planned
     - id: chunk_text
       description: PNG with tEXt/zTXt/iTXt metadata
       test_assets:
@@ -294,17 +265,14 @@ formats:
       description: PNG with tIME chunk
       test_assets:
       - time_chunk.png
-      status: planned
     - id: chunk_background
       description: PNG with bKGD chunk
       test_assets:
       - bkgd.png
-      status: planned
     - id: chunk_phys
       description: PNG with pHYs chunk (physical dimensions)
       test_assets:
       - phys.png
-      status: planned
     - id: size_1x1
       description: Single pixel
       test_assets:
@@ -313,12 +281,10 @@ formats:
       description: Small image (16x16)
       test_assets:
       - 16x16.png
-      status: planned
     - id: size_large
       description: Large image (4096x4096)
       test_assets:
       - large.png
-      status: planned
     - id: size_odd
       description: Non-power-of-2 dimensions
       test_assets:
@@ -333,7 +299,6 @@ formats:
       test_assets:
       - bad_crc.png
       expect_error: true
-      status: planned
     - id: error_wrong_magic
       description: File with wrong PNG signature
       test_assets:
@@ -343,13 +308,11 @@ formats:
       description: APNG with single frame (backward compatible)
       test_assets:
       - apng_static.png
-      status: planned
     - id: apng_animated
       description: APNG with multiple frames
       test_assets:
       - apng_animated.png
       notes: Decode first frame only (matching base PNG behavior)
-      status: planned
   gif:
     name: GIF
     extensions:
@@ -382,17 +345,14 @@ formats:
       description: Global color table only
       test_assets:
       - global_ct.gif
-      status: planned
     - id: color_table_local
       description: Local per-frame color table
       test_assets:
       - local_ct.gif
-      status: planned
     - id: extension_gce
       description: Graphic Control Extension (delay, disposal)
       test_assets:
       - gce.gif
-      status: planned
     - id: size_1x1
       description: Single pixel GIF
       test_assets:
@@ -421,7 +381,6 @@ formats:
       description: 4-bit indexed BMP
       test_assets:
       - 4bit.bmp
-      status: planned
     - id: depth_8
       description: 8-bit indexed BMP
       test_assets:
@@ -430,7 +389,6 @@ formats:
       description: 16-bit (RGB555)
       test_assets:
       - 16bit.bmp
-      status: planned
     - id: depth_24
       description: 24-bit RGB (most common)
       test_assets:
@@ -443,47 +401,38 @@ formats:
       description: BI_RGB (no compression)
       test_assets:
       - uncompressed.bmp
-      status: planned
     - id: compression_rle8
       description: BI_RLE8 (8-bit RLE)
       test_assets:
       - rle8.bmp
-      status: planned
     - id: compression_rle4
       description: BI_RLE4 (4-bit RLE)
       test_assets:
       - rle4.bmp
-      status: planned
     - id: compression_bitfields
       description: BI_BITFIELDS (16/32 bit with masks)
       test_assets:
       - bitfields.bmp
-      status: planned
     - id: top_down
       description: Top-down scanline order (negative height)
       test_assets:
       - top_down.bmp
-      status: planned
     - id: bottom_up
       description: Bottom-up scanline order (standard)
       test_assets:
       - bottom_up.bmp
-      status: planned
     - id: os2_v1
       description: OS/2 BMP v1 header
       test_assets:
       - os2v1.bmp
-      status: planned
     - id: v4_header
       description: BITMAPV4HEADER (color space info)
       test_assets:
       - v4header.bmp
-      status: planned
     - id: v5_header
       description: BITMAPV5HEADER (ICC profile)
       test_assets:
       - v5header.bmp
-      status: planned
     - id: size_1x1
       description: Single pixel
       test_assets:
@@ -522,7 +471,6 @@ formats:
       description: Extended WebP (VP8X container)
       test_assets:
       - extended.webp
-      status: planned
     - id: no_alpha
       description: WebP without alpha
       test_assets:
@@ -535,12 +483,10 @@ formats:
       description: Lossless WebP with alpha
       test_assets:
       - alpha_lossless.webp
-      status: planned
     - id: animated
       description: Animated WebP (decode first frame)
       test_assets:
       - animated.webp
-      status: planned
     - id: size_small
       description: Small image (16x16)
       test_assets:
@@ -549,22 +495,18 @@ formats:
       description: Odd dimensions
       test_assets:
       - odd.webp
-      status: planned
     - id: icc_profile
       description: WebP with embedded ICC profile
       test_assets:
       - icc.webp
-      status: planned
     - id: xmp_metadata
       description: WebP with XMP metadata
       test_assets:
       - xmp.webp
-      status: planned
     - id: exif_metadata
       description: WebP with EXIF metadata
       test_assets:
       - exif.webp
-      status: planned
     - id: error_truncated
       description: Truncated RIFF chunk
       test_assets:
@@ -597,7 +539,6 @@ formats:
       description: Big-endian TIFF (MM)
       test_assets:
       - be.tiff
-      status: planned
     - id: compression_none
       description: No compression
       test_assets:
@@ -614,7 +555,6 @@ formats:
       description: PackBits compression
       test_assets:
       - packbits.tiff
-      status: planned
     - id: bilevel
       description: Black and white (PHOTOMETRIC_MINISWHITE/BLACK)
       test_assets:
@@ -627,7 +567,6 @@ formats:
       description: Palette/indexed color
       test_assets:
       - palette.tiff
-      status: planned
     - id: rgb
       description: RGB
       test_assets:
@@ -640,52 +579,42 @@ formats:
       description: CMYK
       test_assets:
       - cmyk.tiff
-      status: planned
     - id: ycbcr
       description: YCbCr
       test_assets:
       - ycbcr.tiff
-      status: planned
     - id: depth_1
       description: 1-bit
       test_assets:
       - 1bit.tiff
-      status: planned
     - id: depth_8
       description: 8-bit per channel
       test_assets:
       - 8bit.tiff
-      status: planned
     - id: depth_16
       description: 16-bit per channel
       test_assets:
       - 16bit.tiff
-      status: planned
     - id: depth_float
       description: 32-bit float (F-mode)
       test_assets:
       - float32.tiff
-      status: planned
     - id: stripped
       description: Striped organization
       test_assets:
       - stripped.tiff
-      status: planned
     - id: tiled
       description: Tiled organization
       test_assets:
       - tiled.tiff
-      status: planned
     - id: single_page
       description: Single IFD TIFF
       test_assets:
       - single.tiff
-      status: planned
     - id: multi_page
       description: Multi-page TIFF (decode first page)
       test_assets:
       - multipage.tiff
-      status: planned
     - id: error_bad_ifd
       description: Corrupt IFD entry
       test_assets:
@@ -720,7 +649,6 @@ formats:
       description: ICO with embedded BMP data (classic)
       test_assets:
       - bmp_entry.ico
-      status: planned
     - id: size_16x16
       description: 16x16 icon (most common)
       test_assets:
@@ -729,7 +657,6 @@ formats:
       description: 256x256 icon (modern)
       test_assets:
       - 256x256.ico
-      status: planned
   avif:
     name: AVIF
     extensions:
@@ -756,32 +683,26 @@ formats:
       description: Baseline AVIF (8-bit, 4:2:0)
       test_assets:
       - baseline.avif
-      status: planned
     - id: high_bitdepth
       description: 10-bit AVIF
       test_assets:
       - 10bit.avif
-      status: planned
     - id: with_alpha
       description: AVIF with alpha channel
       test_assets:
       - alpha.avif
-      status: planned
     - id: hdr
       description: HDR AVIF (PQ/HLG transfer)
       test_assets:
       - hdr.avif
-      status: planned
     - id: grid
       description: Grid AVIF (tiled image)
       test_assets:
       - grid.avif
-      status: planned
     - id: animated
       description: Animated AVIF (decode first frame)
       test_assets:
       - animated.avif
-      status: planned
 cross_format:
   detect:
   - id: jpeg_as_jpeg

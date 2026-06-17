@@ -22,12 +22,12 @@
     },
     {
       "id": "Decode_webp_with_alpha_webp",
-      "mode": "RGB",
+      "mode": "RGBA",
       "asset": "webp/with_alpha.webp"
     },
     {
       "id": "Decode_webp_16x16_webp",
-      "mode": "RGB",
+      "mode": "RGBA",
       "asset": "webp/16x16.webp"
     }
   ]

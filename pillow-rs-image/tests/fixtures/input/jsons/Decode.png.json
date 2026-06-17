@@ -31,14 +31,34 @@
       "asset": "png/indexed.png"
     },
     {
+      "id": "Decode_png_indexed_alpha_png",
+      "mode": "P",
+      "asset": "png/indexed_alpha.png"
+    },
+    {
       "id": "Decode_png_1bit_png",
       "mode": "1",
       "asset": "png/1bit.png"
     },
     {
+      "id": "Decode_png_2bit_png",
+      "mode": "P",
+      "asset": "png/2bit.png"
+    },
+    {
+      "id": "Decode_png_4bit_png",
+      "mode": "P",
+      "asset": "png/4bit.png"
+    },
+    {
       "id": "Decode_png_8bit_png",
       "mode": "L",
       "asset": "png/8bit.png"
+    },
+    {
+      "id": "Decode_png_16bit_png",
+      "mode": "I;16",
+      "asset": "png/16bit.png"
     },
     {
       "id": "Decode_png_no_interlace_png",
@@ -56,14 +76,49 @@
       "asset": "png/filter_none.png"
     },
     {
+      "id": "Decode_png_filter_sub_png",
+      "mode": "RGB",
+      "asset": "png/filter_sub.png"
+    },
+    {
+      "id": "Decode_png_filter_up_png",
+      "mode": "RGB",
+      "asset": "png/filter_up.png"
+    },
+    {
+      "id": "Decode_png_filter_average_png",
+      "mode": "RGB",
+      "asset": "png/filter_average.png"
+    },
+    {
+      "id": "Decode_png_filter_paeth_png",
+      "mode": "RGB",
+      "asset": "png/filter_paeth.png"
+    },
+    {
+      "id": "Decode_png_filter_mixed_png",
+      "mode": "RGB",
+      "asset": "png/filter_mixed.png"
+    },
+    {
       "id": "Decode_png_compress_default_png",
       "mode": "RGB",
       "asset": "png/compress_default.png"
     },
     {
+      "id": "Decode_png_compress_none_png",
+      "mode": "RGB",
+      "asset": "png/compress_none.png"
+    },
+    {
       "id": "Decode_png_compress_max_png",
       "mode": "RGB",
       "asset": "png/compress_max.png"
+    },
+    {
+      "id": "Decode_png_gama_png",
+      "mode": "RGB",
+      "asset": "png/gama.png"
     },
     {
       "id": "Decode_png_srgb_png",
