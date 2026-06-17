@@ -1027,11 +1027,19 @@ fn fancy_upsample_to_luma_size(
                 // Even output column — aligned with chroma sample
                 horiz[dst_row + x] = src[src_row + sx];
             } else {
-                // Odd output column — between chroma samples, interpolate
+                // Odd output column — between chroma samples, interpolate.
+                // Match libjpeg's behaviour: inptr0[1] reads one element past the
+                // current row boundary, which in memory is the first element of
+                // the next row (or one past the buffer for the last row).
                 let left = src[src_row + sx] as u32;
                 let right = if sx + 1 < src_w {
+                    // Same row, next column
                     src[src_row + sx + 1] as u32
+                } else if y + 1 < src_h {
+                    // Last column of non-last row: read first element of next row
+                    src[(y + 1) * src_w] as u32
                 } else {
+                    // Last column of last row: replicate (past end of buffer)
                     left
                 };
                 let val = (left * 3 + right + 2) >> 2;
