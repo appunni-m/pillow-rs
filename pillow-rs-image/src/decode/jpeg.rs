@@ -1093,7 +1093,12 @@ fn h2v1_fancy_upsample(src: &[u8], src_w: usize, src_h: usize) -> Vec<u8> {
         // First column special case
         let mut invalue = src[in_row] as i32;
         out[out_row] = invalue as u8;
-        out[out_row + 1] = ((invalue * 3 + src[in_row + 1] as i32 + 2) >> 2) as u8;
+        if src_w > 1 {
+            out[out_row + 1] = ((invalue * 3 + src[in_row + 1] as i32 + 2) >> 2) as u8;
+        } else {
+            // Single column: duplicate
+            out[out_row + 1] = invalue as u8;
+        }
 
         // Middle columns
         for col in 1..src_w - 1 {
@@ -1158,7 +1163,12 @@ fn h2v2_fancy_upsample(src: &[u8], src_w: usize, src_h: usize) -> Vec<u8> {
 
             // Special case for first column
             let mut thiscolsum = inptr0[0] as i32 * 3 + inptr1[0] as i32;
-            let mut nextcolsum = inptr0[1] as i32 * 3 + inptr1[1] as i32;
+            let mut nextcolsum = if src_w > 1 {
+                inptr0[1] as i32 * 3 + inptr1[1] as i32
+            } else {
+                // Single column: next = current (duplicate)
+                thiscolsum
+            };
             out[out_row] = ((thiscolsum * 4 + 8) >> 4) as u8;
             out[out_row + 1] = ((thiscolsum * 3 + nextcolsum + 7) >> 4) as u8;
             let mut lastcolsum = thiscolsum;
@@ -1378,20 +1388,40 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
         // Upsampling ratios (chroma relative to luma)
         let h_ratio = info.max_h_samp / info.components[1].h_samp;
         let v_ratio = info.max_v_samp / info.components[1].v_samp;
+        let h_ratio_us = h_ratio as usize;
+        let v_ratio_us = v_ratio as usize;
 
-        // Upsample chroma using libjpeg-exact triangle filter
-        let cb_upsampled = fancy_upsample(
+        // Chroma source dimensions (image-derived, NOT MCU-padded).
+        // The component buffer is padded to the next MCU boundary (e.g. 16×16
+        // for 4:2:0 luma, 8×8 for chroma) but only ceil(w/h_ratio) × ceil(h/v_ratio)
+        // source pixels are valid.  Passing MCU-padded width to the upsampler
+        // blends garbage padding values into the edge pixels (triangle filter
+        // reads neighbour pixels).  (IJG jdsample.c uses compptr->downsampled_width
+        // which is the image-derived width, not the buffer stride.)
+        let chroma_src_w = (w + h_ratio_us - 1) / h_ratio_us;
+        let chroma_src_h = (h + v_ratio_us - 1) / v_ratio_us;
+
+        // Crop chroma buffers to valid image area, then upsample.
+        let cb_cropped = crop_component(
             &comp_buffers[1], comp_buf_width[1], comp_buf_height[1],
-            h_ratio as usize, v_ratio as usize, w, h,
+            chroma_src_w, chroma_src_h,
+        );
+        let cr_cropped = crop_component(
+            &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
+            chroma_src_w, chroma_src_h,
+        );
+        let cb_upsampled = fancy_upsample(
+            &cb_cropped, chroma_src_w, chroma_src_h,
+            h_ratio_us, v_ratio_us, w, h,
         );
         let cr_upsampled = fancy_upsample(
-            &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
-            h_ratio as usize, v_ratio as usize, w, h,
+            &cr_cropped, chroma_src_w, chroma_src_h,
+            h_ratio_us, v_ratio_us, w, h,
         );
 
-        // Up-sampled chroma row stride = original chroma width * h_ratio
-        let cb_stride = comp_buf_width[1] * h_ratio as usize;
-        let cr_stride = comp_buf_width[2] * h_ratio as usize;
+        // Up-sampled chroma row stride
+        let cb_stride = chroma_src_w * h_ratio_us;
+        let cr_stride = chroma_src_w * h_ratio_us;
 
         let mut pixels = Vec::with_capacity(w * h * 3);
         for y in 0..h {
@@ -1416,6 +1446,22 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
     } else {
         None
     }
+}
+
+/// Crop chroma component buffer to valid image-derived dimensions.
+///
+/// The component buffer is padded to MCU-aligned boundaries (e.g., 16x16 for luma
+/// in 4:2:0). Chroma data beyond the actual image area must NOT be fed into the
+/// upsampler, or the triangle filter blends garbage padding values at image edges.
+///
+/// Returns a contiguous buffer of `crop_w × crop_h` pixels.
+fn crop_component(buf: &[u8], buf_w: usize, _buf_h: usize, crop_w: usize, crop_h: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(crop_w * crop_h);
+    for y in 0..crop_h {
+        let src_off = y * buf_w;
+        out.extend_from_slice(&buf[src_off..src_off + crop_w]);
+    }
+    out
 }
 
 /// Dispatch to libjpeg-exact chroma upsampling based on ratios.
@@ -1454,6 +1500,10 @@ fn fancy_upsample(
 /// Progressive JPEG reconstruction: accumulate coefficients across multiple
 /// scans, then run IDCT and assemble the output.
 fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
+    eprintln!("progressive: ENTER {}x{} {} comps quant={} dc={} ac={} scans={}",
+        info.width, info.height, info.num_components,
+        info.quant_tables.len(), info.dc_huff_tables.len(), info.ac_huff_tables.len(),
+        info.scans.len());
     let mcu_width = (info.max_h_samp as u32) * 8;
     let mcu_height = (info.max_v_samp as u32) * 8;
     let num_mcus_x = ((info.width as u32) + mcu_width - 1) / mcu_width;
@@ -1519,27 +1569,28 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
         log::trace!("progressive: scan[6] end={}", s6.entropy_end);
     }
 
-    log::trace!("progressive: LOOP START scans={}", info.scans.len());
+    eprintln!("progressive: LOOP START {} scans", info.scans.len());
     // Process each scan in order
     for (scan_idx, scan) in info.scans.iter().enumerate() {
+        eprintln!("progressive: SCAN {} ss={} se={} ah={} al={} ncomp={} entropy={}-{}",
+            scan_idx, scan.ss, scan.se, scan.ah, scan.al, scan.components.len(),
+            scan.entropy_start, scan.entropy_end);
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
-            log::debug!(
-                "progressive: S[{}] empty segments start={} end={}",
-                scan_idx,
-                scan.entropy_start,
-                scan.entropy_end
-            );
+            log::debug!("progressive: S[{}] empty segments", scan_idx);
             continue;
         }
+
+        let is_dc_scan = scan.ss == 0 && scan.se == 0;
+        let is_dc_first = is_dc_scan && scan.ah == 0;
+        let is_dc_refine = is_dc_scan && scan.ah > 0;
+        let is_ac_first = !is_dc_scan && scan.ah == 0;
+        let is_ac_refine = !is_dc_scan && scan.ah > 0;
+
         log::trace!(
-            "progressive: S[{}] ss={} se={} ah={} al={} segs={}",
-            scan_idx,
-            scan.ss,
-            scan.se,
-            scan.ah,
-            scan.al,
-            segs.segments.len()
+            "progressive: S[{}] ss={} se={} ah={} al={} dc_first={} dc_refine={} ac_first={} ac_refine={} segs={}",
+            scan_idx, scan.ss, scan.se, scan.ah, scan.al,
+            is_dc_first, is_dc_refine, is_ac_first, is_ac_refine, segs.segments.len()
         );
 
         let mut dc_predictors: Vec<i32> = vec![0; info.num_components as usize];
@@ -1639,78 +1690,151 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                             }
                         }
                     } else if is_ac_refine {
-                        if scan.ac_huff_tables.len() <= scan_comp.ac_tbl as usize || scan.ac_huff_tables[scan_comp.ac_tbl as usize].is_none() {
+                        if scan.ac_huff_tables.len() <= scan_comp.ac_tbl as usize
+                            || scan.ac_huff_tables[scan_comp.ac_tbl as usize].is_none()
+                        {
+                            log::error!("progressive: AC_refine scan {} missing AC table {}",
+                                scan_idx, scan_comp.ac_tbl);
                             return None;
                         }
-                        // IJG decode_mcu_AC_refine: raw bits for existing, Huffman for new
+                        // IJG decode_mcu_AC_refine: EOBRUN persists across blocks.
+                        // Reference: libjpeg-turbo jdphuff.c decode_mcu_AC_refine
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize]
                             .as_ref()?;
                         let p1 = 1i32 << scan.al;
                         let m1 = (-1i32) << scan.al;
                         let ss = scan.ss as usize;
                         let se = scan.se as usize;
-                        for by in 0..comp.v_samp as usize {
-                            for bx in 0..comp.h_samp as usize {
-                                let block_idx = (mcu_y * comp.v_samp as usize + by)
+                        // EOBRUN state shared across blocks within this component segment.
+                        // Follows IJG savable_state.EOBRUN — persists across blocks
+                        // (IJG's decode_mcu_AC_refine has no inner block loop; it processes
+                        // one block per MCU, and EOBRUN persists across function calls).
+                        let mut eob_run: u32 = 0;
+                        let blocks_y = comp.v_samp as usize;
+                        let blocks_x = comp.h_samp as usize;
+                        for by in 0..blocks_y {
+                            for bx in 0..blocks_x {
+                                let block_idx = (mcu_y * blocks_y + by)
                                     * (comp_buf_width[comp_idx] / 8)
-                                    + (mcu_x * comp.h_samp as usize + bx);
+                                    + (mcu_x * blocks_x + bx);
                                 let coeffs = &mut coeff_storage[comp_idx][block_idx];
                                 let mut k = ss;
-                                let mut eob_run: u32 = 0;
-                                // Non-EOBRUN path
-                                while k <= se && k < 64 && eob_run == 0 {
-                                    let sym = ac_table.decode(&mut br)?;
-                                    let run = (sym >> 4) as usize;
-                                    let s_val = (sym & 0x0F) as u8;
-                                    if s_val != 0 {
-                                        let mut r = run;
-                                        loop {
-                                            if k > se || k >= 64 { break; }
-                                            if coeffs[k] != 0 {
-                                                if br.read_bits(1)? != 0 {
-                                                    if coeffs[k] >= 0 { coeffs[k] += p1; }
-                                                    else { coeffs[k] += m1; }
+
+                                // ── Normal decode (only when eobrun == 0) ──
+                                if eob_run == 0 {
+                                    while k <= se && k < 64 {
+                                        if coeffs[k] != 0 {
+                                            // Refine existing non-zero coefficient (raw bit)
+                                            let bit = match br.read_bits(1) {
+                                                Some(v) => v,
+                                                None => {
+                                                    eprintln!("AC_REFINE FAIL ref_bit MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                    return None;
                                                 }
-                                                k += 1;
-                                            } else {
-                                                if r == 0 { break; }
-                                                r -= 1; k += 1;
-                                            }
-                                        }
-                                        if k > se || k >= 64 { break; }
-                                        if br.read_bits(1)? != 0 { coeffs[k] = p1; }
-                                        else { coeffs[k] = m1; }
-                                        k += 1;
-                                    } else if run != 15 {
-                                        eob_run = 1u32 << run;
-                                        if run > 0 {
-                                            eob_run |= br.read_bits(run as u32)?;
-                                        }
-                                        break;
-                                    } else {
-                                        let end = (k + 16).min(se + 1).min(64);
-                                        while k < end {
-                                            if coeffs[k] != 0 {
-                                                if br.read_bits(1)? != 0 {
-                                                    if coeffs[k] >= 0 { coeffs[k] += p1; }
-                                                    else { coeffs[k] += m1; }
-                                                }
+                                            };
+                                            if bit != 0 {
+                                                if coeffs[k] >= 0 { coeffs[k] += p1; }
+                                                else { coeffs[k] += m1; }
                                             }
                                             k += 1;
+                                        } else {
+                                            let sym = match ac_table.decode(&mut br) {
+                                                Some(s) => s,
+                                                None => {
+                                                    eprintln!("AC_REFINE FAIL huff MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                    return None;
+                                                }
+                                            };
+                                            let run = (sym >> 4) as usize;
+                                            let s_val = (sym & 0x0F) as u8;
+                                            if s_val != 0 {
+                                                let bit = match br.read_bits(1) {
+                                                    Some(v) => v,
+                                                    None => {
+                                                        eprintln!("AC_REFINE FAIL sign_bit MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                        return None;
+                                                    }
+                                                };
+                                                let val = if bit != 0 { p1 } else { m1 };
+                                                let mut r = run;
+                                                loop {
+                                                    if k > se || k >= 64 { break; }
+                                                    if coeffs[k] != 0 {
+                                                        let bit = match br.read_bits(1) {
+                                                            Some(v) => v,
+                                                            None => {
+                                                                eprintln!("AC_REFINE FAIL skip_ref MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                                return None;
+                                                            }
+                                                        };
+                                                        if bit != 0 {
+                                                            if coeffs[k] >= 0 { coeffs[k] += p1; }
+                                                            else { coeffs[k] += m1; }
+                                                        }
+                                                    } else {
+                                                        if r == 0 { break; }
+                                                        r -= 1;
+                                                    }
+                                                    k += 1;
+                                                }
+                                                if k > se || k >= 64 { break; }
+                                                coeffs[k] = val;
+                                                k += 1;
+                                            } else if run == 15 {
+                                                let end = (k + 16).min(se + 1).min(64);
+                                                while k < end {
+                                                    if coeffs[k] != 0 {
+                                                        let bit = match br.read_bits(1) {
+                                                            Some(v) => v,
+                                                            None => {
+                                                                eprintln!("AC_REFINE FAIL zrl_ref MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                                return None;
+                                                            }
+                                                        };
+                                                        if bit != 0 {
+                                                            if coeffs[k] >= 0 { coeffs[k] += p1; }
+                                                            else { coeffs[k] += m1; }
+                                                        }
+                                                    }
+                                                    k += 1;
+                                                }
+                                            } else {
+                                                // EOBRUN: rest of band is zero (across blocks)
+                                                eob_run = 1u32 << run;
+                                                if run > 0 {
+                                                    let extra = match br.read_bits(run as u32) {
+                                                        Some(v) => v,
+                                                        None => {
+                                                            eprintln!("AC_REFINE FAIL eobrun_extra MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                            return None;
+                                                        }
+                                                    };
+                                                    eob_run |= extra;
+                                                }
+                                                break;  // → EOBRUN handler below
+                                            }
                                         }
                                     }
                                 }
 
-                                while eob_run > 0 {
-                                    while k <= se && k < 64 {
-                                        if coeffs[k] != 0 {
-                                            if br.read_bits(1)? != 0 {
-                                                if coeffs[k] >= 0 { coeffs[k] += p1; }
-                                                else { coeffs[k] += m1; }
+                                // ── EOBRUN handler ──
+                                while k <= se && k < 64 {
+                                    if coeffs[k] != 0 {
+                                        let bit = match br.read_bits(1) {
+                                            Some(v) => v,
+                                            None => {
+                                                eprintln!("AC_REFINE FAIL eobrun_ref MCU={},{} blk={},{} k={}", mcu_x, mcu_y, bx, by, k);
+                                                return None;
                                             }
+                                        };
+                                        if bit != 0 {
+                                            if coeffs[k] >= 0 { coeffs[k] += p1; }
+                                            else { coeffs[k] += m1; }
                                         }
-                                        k += 1;
                                     }
+                                    k += 1;
+                                }
+                                if eob_run > 0 {
                                     eob_run -= 1;
                                 }
                             }
@@ -1777,17 +1901,29 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
         let y_w = comp_buf_width[0];
         let h_ratio = info.max_h_samp / info.components[1].h_samp;
         let v_ratio = info.max_v_samp / info.components[1].v_samp;
-        let cb_up = fancy_upsample(
+        let h_ratio_us = h_ratio as usize;
+        let v_ratio_us = v_ratio as usize;
+        let chroma_src_w = (w + h_ratio_us - 1) / h_ratio_us;
+        let chroma_src_h = (h + v_ratio_us - 1) / v_ratio_us;
+        let cb_cropped = crop_component(
             &comp_buffers[1], comp_buf_width[1], comp_buf_height[1],
-            h_ratio as usize, v_ratio as usize, w, h,
+            chroma_src_w, chroma_src_h,
+        );
+        let cr_cropped = crop_component(
+            &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
+            chroma_src_w, chroma_src_h,
+        );
+        let cb_up = fancy_upsample(
+            &cb_cropped, chroma_src_w, chroma_src_h,
+            h_ratio_us, v_ratio_us, w, h,
         );
         let cr_up = fancy_upsample(
-            &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
-            h_ratio as usize, v_ratio as usize, w, h,
+            &cr_cropped, chroma_src_w, chroma_src_h,
+            h_ratio_us, v_ratio_us, w, h,
         );
         let mut pixels = Vec::with_capacity(w * h * 3);
-        let cb_stride = comp_buf_width[1] * h_ratio as usize;
-        let cr_stride = comp_buf_width[2] * h_ratio as usize;
+        let cb_stride = chroma_src_w * h_ratio_us;
+        let cr_stride = chroma_src_w * h_ratio_us;
         for y in 0..h {
             for x in 0..w {
                 let (r, g, b) = converter.ycc_to_rgb(y_buf[y * y_w + x], cb_up[y * cb_stride + x], cr_up[y * cr_stride + x]);
@@ -1828,7 +1964,12 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
 
     // Reconstruct the image
     if info.progressive {
-        progressive_reconstruct(&info, data)
+        eprintln!("progressive: calling progressive_reconstruct ({} scans)", info.scans.len());
+        let result = progressive_reconstruct(&info, data);
+        if result.is_none() {
+            eprintln!("progressive: progressive_reconstruct returned None");
+        }
+        result
     } else {
         // Baseline: validate Huffman tables before decode
         for scan_comp in &info.scan_components {
