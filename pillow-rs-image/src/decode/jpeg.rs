@@ -423,6 +423,8 @@ impl HuffTable {
         while code > self.maxcode[l as usize] {
             l += 1;
             if l > 16 {
+                eprintln!("HUF_DECODE: no code after 16 bits, code={} maxcode[16]={}",
+                    code, self.maxcode[16]);
                 return None;
             }
             let bit = br.read_bits(1)?;
@@ -432,6 +434,10 @@ impl HuffTable {
         // Look up the symbol
         let idx = code + self.valoffset[l as usize];
         if idx < 0 || idx >= self.values.len() as i32 {
+            // Debug: log the failure details
+            eprintln!("HUF_DECODE: l={} code={} idx={} valoff={} nvals={} max[{}]={}",
+                l, code, idx, self.valoffset[l as usize], self.values.len(),
+                l, self.maxcode[l as usize]);
             return None;
         }
         Some(self.values[idx as usize])
@@ -897,6 +903,12 @@ fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
                     dc_huff_tables: dc_huff_tables.clone(),
                     ac_huff_tables: ac_huff_tables.clone(),
                 };
+                if progressive {
+                    eprintln!("PARSE: scan {} ss={} se={} ah={} al={} ncomp={} ac_tbl[0]={} n_ac_huff={}",
+                        scans.len(), ss, se, ah, al, comps.len(),
+                        comps.get(0).map(|c| c.ac_tbl).unwrap_or(99),
+                        ac_huff_tables.len());
+                }
                 scans.push(scan_info);
 
                 if !progressive {
@@ -1675,6 +1687,11 @@ fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage>
                                     + (mcu_x * comp.h_samp as usize + bx);
                                 let mut k = ss;
                                 while k <= se && k < 64 {
+                                    // TRACE: log every 16th block for scan 4
+                                    if scan_idx == 4 && block_idx % 16 == 0 && ss == 6 {
+                                        eprintln!("AC_FIRST S[{}] MCU={},{} blk={},{} k={}",
+                                            scan_idx, mcu_x, mcu_y, bx, by, k);
+                                    }
                                     let sym = ac_table.decode(&mut br)?;
                                     if sym == 0x00 { break; } // EOB
                                     let run = (sym >> 4) as usize;
