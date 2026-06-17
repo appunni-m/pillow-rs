@@ -178,8 +178,6 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
-        # PIL: convert() without mode arg is a copy in the same mode.
-        # Same-mode check is handled in Rust's convert().
         if mode is None:
             mode = self.mode
         matrix_list = list(matrix) if matrix is not None else None
