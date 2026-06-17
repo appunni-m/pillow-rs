@@ -293,6 +293,14 @@ def main():
     if skipped > 0:
         print(f"Skipped {skipped} fixtures from other suites")
 
+    # Make output files read-only after generation (fixtures are immutable)
+    for d in [OUTPUT_JSONS_DIR, OUTPUT_IMAGES_DIR, OUTPUT_RAWS_DIR]:
+        if d.exists():
+            for f in d.rglob("*"):
+                if f.is_file():
+                    f.chmod(0o444)
+    print("Output fixtures locked (read-only)")
+
 
 if __name__ == "__main__":
     main()

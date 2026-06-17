@@ -50,10 +50,14 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
-        // PIL: converting to the same mode is a no-op (returns a copy).
-        if mode == self.mode()? {
+        // PIL: convert() without mode arg keeps same mode for most types,
+        // but converts P→RGB (palette images default to RGB when no mode given).
+        let src_mode = self.mode()?;
+        if mode == src_mode && src_mode != "P" {
             return Ok(self.copy());
         }
+        // P-mode same-mode: PIL defaults to RGB
+        let mode = if mode == src_mode && src_mode == "P" { "RGB" } else { mode };
 
         // Matrix-based conversion must be executed immediately since it modifies
         // pixel values directly and can't be represented as a simple mode convert.
