@@ -57,6 +57,8 @@ struct EncodeRow {
     ref_sha256: Option<String>,
     #[serde(default)]
     ref_bytes: Option<usize>,
+    #[serde(default)]
+    ref_mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

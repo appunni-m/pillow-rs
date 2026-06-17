@@ -133,7 +133,7 @@ pub(super) fn parse_sof0(
     data: &[u8],
     pos: &mut usize,
 ) -> Option<(u16, u16, Vec<FrameComponent>, u8, u8)> {
-    let length = read_u16(data, pos)?;
+    let _length = read_u16(data, pos)?;
     let precision = read_u8(data, pos)?;
     if precision != 8 {
         return None;
@@ -256,7 +256,7 @@ pub(super) fn parse_sos(
     pos: &mut usize,
     components: &[FrameComponent],
 ) -> Option<(Vec<ScanComponent>, usize, u8, u8, u8, u8)> {
-    let length = read_u16(data, pos)?;
+    let _len = read_u16(data, pos)?;
     let num_scan_comps = read_u8(data, pos)?;
     if num_scan_comps == 0 {
         return None;
