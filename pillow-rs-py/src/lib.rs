@@ -979,6 +979,8 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
 
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    pyo3_log::init();
+
     m.add_class::<PyImage>()?;
     m.add_class::<PyDraw>()?;
     m.add_class::<PyFont>()?;

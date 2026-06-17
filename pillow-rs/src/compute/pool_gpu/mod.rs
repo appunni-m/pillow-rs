@@ -1024,7 +1024,7 @@ impl BackendImpl for GpuPool {
         let (w, h) = rgba.dimensions();
         let mcode = mode_code(img);
         let op_keys: Vec<&str> = ops.iter().map(|op| registry::variant_key(op)).collect();
-        eprintln!(
+        log::debug!(
             "[GPU] {} op(s) {}x{} mode={}: {:?}",
             ops.len(),
             w,

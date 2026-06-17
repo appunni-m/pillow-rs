@@ -279,6 +279,63 @@ The pipeline currently records **60+ operation types** spanning geometry, color,
 
 ---
 
+## Logging
+
+pillow-rs uses the Rust [`log`](https://crates.io/crates/log) crate facade for structured observability. The core library emits log events at standard levels; each target bridges those events to its native logging system.
+
+### Architecture
+
+```
+pillow-rs (core) → log::error!/warn!/info!/debug!/trace!
+    ├── Python   → pyo3-log → Python logging.getLogger("pillow_rs")
+    └── WASM     → console_log → browser console.error/warn/log/debug
+```
+
+The core library **never** initializes a logger — that's the host application's job. Each binding initializes the appropriate backend on first use.
+
+### Log Level Convention
+
+| Level | When to use | Example |
+|-------|-------------|---------|
+| `error!` | Failures, corrupt data | `"JPEG decode failed: invalid Huffman table"` |
+| `warn!` | Recoverable issues, fallbacks | `"Unknown EXIF tag 0x927c, skipping"` |
+| `info!` | High-level operations | `"Opening image: 800×600 RGB"` |
+| `debug!` | Algorithm steps, backend selection | `"[GPU] 3 op(s) 800×600 mode=3"` |
+| `trace!` | Internal details, per-scan progress | `"progressive: S[3] ss=0 se=63"` |
+
+### Controlling Log Output
+
+**Python** — use the standard `logging` module:
+
+```python
+import logging
+logging.getLogger("pillow_rs").setLevel(logging.DEBUG)   # Show everything
+logging.getLogger("pillow_rs").setLevel(logging.WARNING)  # Only warnings + errors
+```
+
+**JavaScript / WASM** — use the built-in `setLogLevel` function:
+
+```javascript
+import { setLogLevel } from "@pillow-rs/wasm";
+setLogLevel(4);  // 0=off, 1=error, 2=warn, 3=info, 4=debug, 5=trace
+```
+
+**Rust (direct consumers)** — use any `log`-compatible backend:
+
+```rust
+env_logger::Builder::from_env("RUST_LOG=pillow_rs=debug").init();
+```
+
+### Compile-Time Optimization
+
+For release builds that strip lower-priority log levels entirely (zero runtime cost):
+
+```toml
+# Cargo.toml — in the consuming application, not the library
+log = { version = "0.4", features = ["release_max_level_info"] }
+```
+
+---
 ## Manifest-Driven Development
 
 `manifest.yaml` is the **single source of truth** for the entire project. It defines every function, its signature, supported color modes, parameter variants, and edge cases — all in one machine-readable file.
