@@ -1,0 +1,27 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Decode",
+    "target": "avif"
+  },
+  "cases": [
+    {
+      "id": "baseline"
+    },
+    {
+      "id": "high_bitdepth"
+    },
+    {
+      "id": "with_alpha"
+    },
+    {
+      "id": "hdr"
+    },
+    {
+      "id": "grid"
+    },
+    {
+      "id": "animated"
+    }
+  ]
+}

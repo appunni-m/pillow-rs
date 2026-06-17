@@ -1,0 +1,105 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "Encode",
+    "target": "ico"
+  },
+  "cases": [
+    {
+      "id": "enc_16x16",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_32x32",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_48x48",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_256x256",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_multi_2",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_multi_4",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_bmp_entry",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_png_entry",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_24bit",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_32bit",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_no_hotspot",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_hotspot",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_16x16",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_32x32",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_multi",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    },
+    {
+      "id": "enc_png_entry",
+      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_bytes": 16384,
+      "ref_mode": "L8"
+    }
+  ]
+}
