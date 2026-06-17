@@ -4,28 +4,13 @@
 //! operations (Resize, Crop, Rotate, Transpose, Thumbnail, Reduce) that operate
 //! on DynamicImage and return new DynamicImage instances.
 
-use image::{DynamicImage, GenericImageView};
+use pillow_rs_image::{DynamicImage, GenericImageView};
 use std::f64;
 
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::{pil_resize, precompute_coeffs_f64, round_up};
 use crate::pipeline::{ResampleFilter, TransposeMethod};
-
-// ── Resample filter conversion ──
-
-#[allow(dead_code)]
-/// Convert ResampleFilter to image crate's FilterType.
-fn to_image_filter(f: &ResampleFilter) -> image::imageops::FilterType {
-    match f {
-        ResampleFilter::Nearest => image::imageops::FilterType::Nearest,
-        ResampleFilter::Bilinear => image::imageops::FilterType::Triangle,
-        ResampleFilter::Bicubic => image::imageops::FilterType::CatmullRom,
-        ResampleFilter::Lanczos => image::imageops::FilterType::Lanczos3,
-        ResampleFilter::Box => image::imageops::FilterType::Gaussian,
-        ResampleFilter::Hamming => image::imageops::FilterType::Lanczos3,
-    }
-}
 
 // ── PIL-compatible filter kernels (f64 precision) ──
 
@@ -120,19 +105,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(w, h, data)
+            pillow_rs_image::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, data)
+            pillow_rs_image::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(w, h, data)
+            pillow_rs_image::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, data)
+            pillow_rs_image::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(
@@ -249,7 +234,7 @@ fn resize_f(
 
     // Re-pack each f32 as 4 RGBA8 bytes (little-endian).
     let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
-    let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_f: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
@@ -306,7 +291,7 @@ fn resize_i(
             }
         }
         let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
+        let out = pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
             PilError::ValueError("resize_i: failed to create output buffer".into())
         })?;
         return Ok(DynamicImage::ImageRgba8(out));
@@ -362,7 +347,7 @@ fn resize_i(
 
     // Re-pack each i32 as 4 RGBA8 bytes (little-endian).
     let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-    let out = image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
@@ -472,18 +457,18 @@ fn rotate_arbitrary_generic(
 
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(dw, dh, out)
+            pillow_rs_image::GrayImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(dw, dh, out)
+            pillow_rs_image::GrayAlphaImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         3 => DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(dw, dh, out).expect("rotate_arbitrary: buffer size mismatch"),
+            pillow_rs_image::RgbImage::from_raw(dw, dh, out).expect("rotate_arbitrary: buffer size mismatch"),
         ),
         4 => DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(dw, dh, out)
+            pillow_rs_image::RgbaImage::from_raw(dw, dh, out)
                 .expect("rotate_arbitrary: buffer size mismatch"),
         ),
         _ => unreachable!(),
@@ -569,19 +554,19 @@ fn transform_affine_generic(
 
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(dst_w, dst_h, out)
+            pillow_rs_image::GrayImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(dst_w, dst_h, out)
+            pillow_rs_image::GrayAlphaImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         3 => DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(dst_w, dst_h, out)
+            pillow_rs_image::RgbImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         4 => DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(dst_w, dst_h, out)
+            pillow_rs_image::RgbaImage::from_raw(dst_w, dst_h, out)
                 .expect("transform_affine: buffer size mismatch"),
         ),
         _ => unreachable!(),
@@ -617,7 +602,7 @@ pub fn execute_resize(
         // After resize, threshold back to binary {0, 255}: pixel >= 128 => 255 else 0
         let gray = result.to_luma8();
         let (rw, rh) = gray.dimensions();
-        let mut out = image::GrayImage::new(rw, rh);
+        let mut out = pillow_rs_image::GrayImage::new(rw, rh);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             op[0] = if ip[0] >= 128 { 255 } else { 0 };
         }
@@ -725,7 +710,7 @@ pub fn execute_thumbnail(
     // This matches PIL's ImagingReduce then ImagingResample two-step.
     // Skip reducing_gap for modes with alpha (LA, RGBA) to avoid premultiply issues.
     let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest)
-        && !matches!(img.color(), image::ColorType::La8 | image::ColorType::Rgba8);
+        && !matches!(img.color(), pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::Rgba8);
     let mut work_img = img.clone();
     if needs_reduce {
         let scale_x = cur_w as f64 / new_w as f64;
@@ -773,20 +758,20 @@ pub fn execute_thumbnail(
 fn raw_to_dynimage(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::GrayImage::new(w, h)),
+            pillow_rs_image::GrayImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::GrayImage::new(w, h)),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::GrayAlphaImage::new(w, h)),
+            pillow_rs_image::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::GrayAlphaImage::new(w, h)),
         ),
         3 => DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::RgbImage::new(w, h)),
+            pillow_rs_image::RgbImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::RgbImage::new(w, h)),
         ),
         _ => DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::RgbaImage::new(w, h)),
+            pillow_rs_image::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::RgbaImage::new(w, h)),
         ),
     }
 }

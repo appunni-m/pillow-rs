@@ -6,8 +6,8 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::quantize::median_cut_quantize_rgb;
 use crate::pipeline::{ColorMode, DitherMethod};
-use image::DynamicImage;
-use image::GenericImageView;
+use pillow_rs_image::DynamicImage;
+use pillow_rs_image::GenericImageView;
 
 /// Convert image to a specified color mode.
 /// Matches PIL's Image.convert() behavior exactly.
@@ -25,7 +25,7 @@ pub fn op_convert(
         ColorMode::LA => {
             let gray = pil_grayscale(img);
             let (w, h) = gray.dimensions();
-            let mut ga = image::GrayAlphaImage::new(w, h);
+            let mut ga = pillow_rs_image::GrayAlphaImage::new(w, h);
             for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
                 gap[0] = gp[0];
                 gap[1] = 255;
@@ -39,7 +39,7 @@ pub fn op_convert(
                 if let Some(pal) = palette {
                     let gray = img.to_luma8();
                     let (w, h) = gray.dimensions();
-                    let mut out = image::RgbImage::new(w, h);
+                    let mut out = pillow_rs_image::RgbImage::new(w, h);
                     for (opx, ip) in out.pixels_mut().zip(gray.pixels()) {
                         let idx = ip[0] as usize * 3;
                         opx[0] = pal.get(idx).copied().unwrap_or(0);
@@ -62,7 +62,7 @@ pub fn op_convert(
                 pil_grayscale_truncate(img)
             };
             let (w, h) = gray.dimensions();
-            let mut out = image::GrayImage::new(w, h);
+            let mut out = pillow_rs_image::GrayImage::new(w, h);
             match dither {
                 Some(DitherMethod::None) => {
                     // Threshold at 128 (no dither)
@@ -114,7 +114,7 @@ pub fn op_convert(
             let n = (w * h) as usize;
             let rgb_raw = rgb.into_raw();
             let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, 256);
-            let mut out = image::GrayImage::new(w, h);
+            let mut out = pillow_rs_image::GrayImage::new(w, h);
             for (i, pixel) in out.pixels_mut().enumerate().take(n) {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);
             }
@@ -125,7 +125,7 @@ pub fn op_convert(
             // Use the luma formula directly (no intermediate u8 truncation).
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
-            let mut out = image::RgbaImage::new(w, h);
+            let mut out = pillow_rs_image::RgbaImage::new(w, h);
             for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
                 let r = px[0] as i32;
                 let g = px[1] as i32;
@@ -133,7 +133,7 @@ pub fn op_convert(
                 // PIL's rounded luma: (19595*R + 38470*G + 7471*B + 32768) >> 16
                 let val = (19595i32 * r + 38470i32 * g + 7471i32 * b + 32768) >> 16;
                 let le = val.to_le_bytes();
-                *op = image::Rgba([le[0], le[1], le[2], le[3]]);
+                *op = pillow_rs_image::Rgba([le[0], le[1], le[2], le[3]]);
             }
             Ok(DynamicImage::ImageRgba8(out))
         }
@@ -144,12 +144,12 @@ pub fn op_convert(
             // then divides by 1000.0F as float, matching PIL pixel-for-pixel.
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
-            let mut out = image::RgbaImage::new(w, h);
+            let mut out = pillow_rs_image::RgbaImage::new(w, h);
             for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
                 let sum = px[0] as i32 * 299 + px[1] as i32 * 587 + px[2] as i32 * 114;
                 let val = sum as f32 / 1000.0_f32;
                 let le = val.to_le_bytes();
-                *op = image::Rgba([le[0], le[1], le[2], le[3]]);
+                *op = pillow_rs_image::Rgba([le[0], le[1], le[2], le[3]]);
             }
             Ok(DynamicImage::ImageRgba8(out))
         }
@@ -160,9 +160,9 @@ pub fn op_convert(
             // RGB values and stores the result as RGBA where K is always 0.
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
-            let mut out = image::RgbaImage::new(w, h);
+            let mut out = pillow_rs_image::RgbaImage::new(w, h);
             for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-                *op = image::Rgba([
+                *op = pillow_rs_image::Rgba([
                     255u8.wrapping_sub(ip[0]),
                     255u8.wrapping_sub(ip[1]),
                     255u8.wrapping_sub(ip[2]),
@@ -210,7 +210,7 @@ pub fn op_quantize(
     }
     // Use median-cut quantization instead of NeuQuant.
     let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, colors);
-    let mut out = image::GrayImage::new(w, h);
+    let mut out = pillow_rs_image::GrayImage::new(w, h);
     for (i, pixel) in out.pixels_mut().enumerate().take(n) {
         pixel[0] = indices.get(i).copied().unwrap_or(0);
     }
@@ -237,17 +237,17 @@ pub fn op_remap_palette(
     if explicit_mode == Some("P") {
         let gray = img.to_luma8();
         let (w, h) = gray.dimensions();
-        let mut out = image::GrayImage::new(w, h);
+        let mut out = pillow_rs_image::GrayImage::new(w, h);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             op[0] = inverse[ip[0] as usize];
         }
         return Ok(DynamicImage::ImageLuma8(out));
     }
     // L-mode: operate on each luma value, returning P-mode output
-    if img.color() == image::ColorType::L8 {
+    if img.color() == pillow_rs_image::ColorType::L8 {
         let gray = img.to_luma8();
         let (w, h) = gray.dimensions();
-        let mut out = image::GrayImage::new(w, h);
+        let mut out = pillow_rs_image::GrayImage::new(w, h);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             op[0] = inverse[ip[0] as usize];
         }
@@ -256,7 +256,7 @@ pub fn op_remap_palette(
     // Non-P, non-L: operate on each RGB channel.
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = image::RgbImage::new(w, h);
+    let mut out = pillow_rs_image::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
         op[0] = inverse[ip[0] as usize];
         op[1] = inverse[ip[1] as usize];
@@ -269,7 +269,7 @@ pub fn op_remap_palette(
 /// index: 0=R, 1=G, 2=B, 3=A (for RGBA), 0=only band for L/LA
 pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mut gray = image::GrayImage::new(w, h);
+    let mut gray = pillow_rs_image::GrayImage::new(w, h);
     let idx = index as usize;
     // Extract band from native format to avoid RGBA round-trip losing channels.
     // LA mode stored as La8: [L, A] at bytes 0, 1 per pixel.

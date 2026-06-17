@@ -274,6 +274,7 @@ const M_SOI: u16 = 0xFFD8;
 const M_EOI: u16 = 0xFFD9;
 const M_SOS: u16 = 0xFFDA;
 const M_SOF0: u16 = 0xFFC0;
+const M_SOF2: u16 = 0xFFC2;
 const M_DHT: u16 = 0xFFC4;
 const M_DQT: u16 = 0xFFDB;
 const M_DRI: u16 = 0xFFDD;
@@ -359,6 +360,7 @@ impl<'a> BitReader<'a> {
 // ── Huffman Table ─────────────────────────────────────────────────────────
 
 /// Derived Huffman decode table using the IJG maxcode/valoffset algorithm.
+#[derive(Debug, Clone)]
 struct HuffTable {
     /// Symbol values (from DHT marker).
     values: Vec<u8>,
@@ -462,6 +464,28 @@ struct ScanComponent {
     ac_tbl: u8,
 }
 
+/// Info for one scan (SOS marker).
+#[derive(Debug, Clone)]
+struct ScanInfo {
+    components: Vec<ScanComponent>,
+    /// Position of entropy-coded data start (after SOS params).
+    entropy_start: usize,
+    /// Position of the next marker after this scan's entropy data.
+    entropy_end: usize,
+    /// Spectral selection start (0 for DC, >0 for AC bands).
+    ss: u8,
+    /// Spectral selection end.
+    se: u8,
+    /// Successive approximation bit position high (previously refined).
+    ah: u8,
+    /// Successive approximation bit position low (currently refining).
+    al: u8,
+    /// Snapshot of DC Huffman tables at the time of this scan.
+    dc_huff_tables: Vec<Option<HuffTable>>,
+    /// Snapshot of AC Huffman tables at the time of this scan.
+    ac_huff_tables: Vec<Option<HuffTable>>,
+}
+
 /// Parsed JPEG info from markers.
 struct JpegInfo {
     width: u16,
@@ -471,9 +495,10 @@ struct JpegInfo {
     quant_tables: Vec<Option<[u16; 64]>>,
     dc_huff_tables: Vec<Option<HuffTable>>,
     ac_huff_tables: Vec<Option<HuffTable>>,
+    /// For baseline: scan_components from single SOS. For progressive: first scan.
     scan_components: Vec<ScanComponent>,
     restart_interval: u16,
-    /// Position in data where entropy-coded data starts (after SOS params).
+    /// For baseline: start of entropy data. For progressive: populated in scans.
     entropy_start: usize,
     /// Position of EOI marker.
     eoi_pos: usize,
@@ -481,6 +506,10 @@ struct JpegInfo {
     max_h_samp: u8,
     /// Maximum vertical sampling factor.
     max_v_samp: u8,
+    /// true if SOF2 (progressive JPEG).
+    progressive: bool,
+    /// All scans (for progressive JPEG).
+    scans: Vec<ScanInfo>,
 }
 
 // ── JPEG Parser ───────────────────────────────────────────────────────────
@@ -733,17 +762,17 @@ fn parse_dht(
     Some(())
 }
 
-/// Parse SOS (Start of Scan).
+/// Parse SOS (Start of Scan) — baseline or progressive.
 fn parse_sos(
     data: &[u8],
     pos: &mut usize,
     components: &[FrameComponent],
-) -> Option<(Vec<ScanComponent>, usize)> {
+) -> Option<(Vec<ScanComponent>, usize, u8, u8, u8, u8)> {
     let _length = read_u16(data, pos)?;
     let num_scan_comps = read_u8(data, pos)?;
 
-    if num_scan_comps == 0 || num_scan_comps != components.len() as u8 {
-        return None; // Scan component count must match frame component count
+    if num_scan_comps == 0 {
+        return None;
     }
 
     let mut scan_comps = Vec::with_capacity(num_scan_comps as usize);
@@ -768,15 +797,17 @@ fn parse_sos(
         });
     }
 
-    // Skip spectral selection and successive approximation (3 bytes for baseline)
-    let _ss = read_u8(data, pos)?; // Should be 0
-    let _se = read_u8(data, pos)?; // Should be 63
-    let _ah_al = read_u8(data, pos)?; // Should be 0
+    // Spectral selection and successive approximation
+    let ss = read_u8(data, pos)?;
+    let se = read_u8(data, pos)?;
+    let ah_al = read_u8(data, pos)?;
+    let ah = ah_al >> 4;
+    let al = ah_al & 0x0F;
 
     // The entropy-coded data starts here
     let entropy_start = *pos;
 
-    Some((scan_comps, entropy_start))
+    Some((scan_comps, entropy_start, ss, se, ah, al))
 }
 
 /// Parse DRI (Define Restart Interval).
@@ -787,6 +818,7 @@ fn parse_dri(data: &[u8], pos: &mut usize) -> Option<u16> {
 }
 
 /// Parse a JPEG file and return the decoded info structure.
+/// Handles both baseline (SOF0) and progressive (SOF2) JPEG.
 #[allow(unused_assignments)]
 fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
     let mut pos = 0usize;
@@ -811,16 +843,19 @@ fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
     let mut entropy_start: Option<usize> = None;
     let mut saw_sof = false;
     let mut saw_sos = false;
-    let mut eoi_pos = 0;
+    let mut progressive = false;
+    let mut scans: Vec<ScanInfo> = Vec::new();
 
+    // Parse all markers
     loop {
         let marker = find_next_marker(data, &mut pos)?;
 
         match marker {
-            M_SOF0 => {
+            M_SOF0 | M_SOF2 => {
                 if saw_sof {
-                    return None; // Only one SOF allowed for baseline
+                    return None; // Only one SOF allowed
                 }
+                progressive = marker == M_SOF2;
                 let result = parse_sof0(data, &mut pos)?;
                 width = result.0;
                 height = result.1;
@@ -841,24 +876,59 @@ fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
                     return None; // SOS before SOF
                 }
                 let result = parse_sos(data, &mut pos, &components)?;
-                scan_components = result.0;
-                entropy_start = Some(result.1);
-                saw_sos = true;
-                // After SOS, we're in entropy-coded data
-                // Find EOI marker
-                if let Some(eoi) = find_eoi(data, pos) {
-                    eoi_pos = eoi;
+                let comps = result.0;
+                let scan_start = result.1;
+                let ss = result.2;
+                let se = result.3;
+                let ah = result.4;
+                let al = result.5;
+
+                // Find the end of this scan's entropy data (next marker)
+                let scan_end = find_entropy_end(data, pos);
+
+                let scan_info = ScanInfo {
+                    components: comps.clone(),
+                    entropy_start: scan_start,
+                    entropy_end: scan_end,
+                    ss,
+                    se,
+                    ah,
+                    al,
+                    dc_huff_tables: dc_huff_tables.clone(),
+                    ac_huff_tables: ac_huff_tables.clone(),
+                };
+                scans.push(scan_info);
+
+                if !progressive {
+                    // Baseline: single scan
+                    if scan_components.is_empty() {
+                        scan_components = comps;
+                        entropy_start = Some(scan_start);
+                    }
+                    saw_sos = true;
+                    // Find EOI marker for baseline compat
+                    if let Some(eoi) = find_eoi(data, pos) {
+                        pos = eoi;
+                    } else {
+                        pos = data.len();
+                    }
+                    break; // Baseline exits after first SOS
                 } else {
-                    eoi_pos = data.len();
+                    // Progressive: continue scanning
+                    saw_sos = true;
+                    if scan_components.is_empty() {
+                        scan_components = comps;
+                        entropy_start = Some(scan_start);
+                    }
+                    // Advance past the scan data to find next marker
+                    pos = scan_end;
                 }
-                break;
             }
             M_DRI => {
                 restart_interval = parse_dri(data, &mut pos)?;
             }
             M_EOI => {
-                // Unexpected EOI before SOS
-                return None;
+                break; // End of image
             }
             // RST markers (no length)
             0xFFD0..=0xFFD7 => {
@@ -880,7 +950,8 @@ fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
         return None;
     }
 
-    let entropy_start = entropy_start?;
+    // Find EOI marker position
+    let eoi_pos = find_eoi(data, 0).unwrap_or(data.len());
 
     Some(JpegInfo {
         width,
@@ -892,11 +963,32 @@ fn parse_jpeg(data: &[u8]) -> Option<JpegInfo> {
         ac_huff_tables,
         scan_components,
         restart_interval,
-        entropy_start,
+        entropy_start: entropy_start?,
         eoi_pos,
         max_h_samp,
         max_v_samp,
+        progressive,
+        scans,
     })
+}
+
+/// Find the end of an entropy-coded segment by scanning for the next marker.
+fn find_entropy_end(data: &[u8], mut pos: usize) -> usize {
+    while pos + 1 < data.len() {
+        if data[pos] == 0xFF {
+            let next = data[pos + 1];
+            if next == 0x00 {
+                pos += 2; // stuffed byte
+            } else if next >= 0xD0 && next <= 0xD7 {
+                pos += 2; // RST marker, skip
+            } else {
+                return pos; // Other marker found
+            }
+        } else {
+            pos += 1;
+        }
+    }
+    data.len()
 }
 
 /// Find the EOI marker (0xFFD9) starting from a given position.
@@ -986,90 +1078,120 @@ fn decode_block(
     true
 }
 
-/// IJG-style fancy chroma upsampling — 3/4+1/4 triangle filter matching jdsample.c.
+/// 2x1 fancy upsampling — exact match of IJG libjpeg h2v1_fancy_upsample.
 ///
-/// For each 2×2 (or 2×1) chroma block, produces (h_ratio × v_ratio) luma-sized pixels
-/// using a triangle interpolation kernel:
-/// - Even output pixels (aligned with chroma grid): copy chroma sample directly.
-/// - Odd output pixels (between chroma samples): `(3×left + 1×right + 2) >> 2`.
-///
-/// Edge handling: at right/bottom buffer edges, the last valid chroma sample is
-/// used as the "next" sample, matching libjpeg's edge behaviour.
-fn fancy_upsample_to_luma_size(
-    src: &[u8],
-    src_w: usize,
-    src_h: usize,
-    h_ratio: usize,
-    v_ratio: usize,
-    dst_w: usize,
-    dst_h: usize,
-) -> Vec<u8> {
-    if h_ratio == 1 && v_ratio == 1 {
-        // No upsampling needed: copy directly (buffer may be larger than dst area)
-        let mut out = Vec::with_capacity(dst_w * dst_h);
-        for y in 0..dst_h {
-            let row = y * src_w;
-            for x in 0..dst_w {
-                out.push(src[row + x]);
-            }
-        }
-        return out;
-    }
-
-    // Step 1: horizontal upsampling — intermediate buffer (dst_w × src_h)
-    let mut horiz = vec![0u8; dst_w * src_h];
+/// Produces 2 output columns per 1 input column (2x horizontal).
+/// Uses a 3/4 + 1/4 triangle filter with alternating rounding bias (+1/+2)
+/// to avoid DC bias, exactly matching IJG jdsample.c.
+fn h2v1_fancy_upsample(src: &[u8], src_w: usize, src_h: usize) -> Vec<u8> {
+    let dst_w = src_w * 2;
+    let mut out = vec![0u8; dst_w * src_h];
     for y in 0..src_h {
-        let src_row = y * src_w;
-        let dst_row = y * dst_w;
-        for x in 0..dst_w {
-            let sx = x / h_ratio;
-            if (x % h_ratio) == 0 {
-                // Even output column — aligned with chroma sample
-                horiz[dst_row + x] = src[src_row + sx];
-            } else {
-                // Odd output column — between chroma samples, interpolate.
-                // Match libjpeg's behaviour: inptr0[1] reads one element past the
-                // current row boundary, which in memory is the first element of
-                // the next row (or one past the buffer for the last row).
-                let left = src[src_row + sx] as u32;
-                let right = if sx + 1 < src_w {
-                    // Same row, next column
-                    src[src_row + sx + 1] as u32
-                } else if y + 1 < src_h {
-                    // Last column of non-last row: read first element of next row
-                    src[(y + 1) * src_w] as u32
-                } else {
-                    // Last column of last row: replicate (past end of buffer)
-                    left
-                };
-                let val = (left * 3 + right + 2) >> 2;
-                horiz[dst_row + x] = val.min(255) as u8;
-            }
+        let in_row = y * src_w;
+        let out_row = y * dst_w;
+
+        // First column special case
+        let mut invalue = src[in_row] as i32;
+        out[out_row] = invalue as u8;
+        out[out_row + 1] = ((invalue * 3 + src[in_row + 1] as i32 + 2) >> 2) as u8;
+
+        // Middle columns
+        for col in 1..src_w - 1 {
+            invalue = src[in_row + col] as i32 * 3;
+            out[out_row + col * 2] =
+                ((invalue + src[in_row + col - 1] as i32 + 1) >> 2) as u8;
+            out[out_row + col * 2 + 1] =
+                ((invalue + src[in_row + col + 1] as i32 + 2) >> 2) as u8;
+        }
+
+        // Last column special case
+        if src_w > 1 {
+            invalue = src[in_row + src_w - 1] as i32;
+            out[out_row + (src_w - 1) * 2] =
+                ((invalue * 3 + src[in_row + src_w - 2] as i32 + 1) >> 2) as u8;
+            out[out_row + (src_w - 1) * 2 + 1] = invalue as u8;
         }
     }
+    out
+}
 
-    // Step 2: vertical upsampling — final output (dst_w × dst_h)
-    let mut out = vec![128u8; dst_w * dst_h];
-    for y in 0..dst_h {
-        let sy = y / v_ratio;
-        let dst_row = y * dst_w;
-        if (y % v_ratio) == 0 {
-            let src_row = sy * dst_w;
-            for x in 0..dst_w {
-                out[dst_row + x] = horiz[src_row + x];
+/// 2x2 fancy upsampling — exact match of IJG libjpeg h2v2_fancy_upsample.
+///
+/// Produces 2 output columns per 1 input column AND 2 output rows per 1 input row.
+/// Uses a separable triangle filter: vertical (3/4+1/4) then horizontal (3/4+1/4),
+/// with alternating rounding bias (+7/+8 for >>4), exactly matching IJG jdsample.c.
+fn h2v2_fancy_upsample(src: &[u8], src_w: usize, src_h: usize) -> Vec<u8> {
+    let dst_w = src_w * 2;
+    let dst_h = src_h * 2;
+
+    // Per-row "column sum" = 3 * nearest_row + 1 * next_nearest_row (vertical interp)
+    // Then horizontal: blend lastcolsum, thiscolsum, nextcolsum with >>4
+    let mut out = vec![0u8; dst_w * dst_h];
+    let mut inrow = 0usize;
+    let mut outrow = 0usize;
+
+    while outrow < dst_h {
+        for v in 0..2 {
+            if outrow >= dst_h {
+                break;
             }
-        } else {
-            let top_row = sy * dst_w;
-            let bottom_row = if sy + 1 < src_h {
-                (sy + 1) * dst_w
+
+            // inptr0 = nearest row, inptr1 = next nearest row (above for v=0, below for v=1)
+            let inptr0 = &src[inrow * src_w..];
+            let inptr1 = if v == 0 {
+                // Next nearest is row above; clamp to current row at top edge
+                if inrow > 0 {
+                    &src[(inrow - 1) * src_w..]
+                } else {
+                    &src[inrow * src_w..]
+                }
             } else {
-                top_row
+                // Next nearest is row below; clamp to current row at bottom edge
+                if inrow + 1 < src_h {
+                    &src[(inrow + 1) * src_w..]
+                } else {
+                    &src[inrow * src_w..]
+                }
             };
-            for x in 0..dst_w {
-                let v = (horiz[top_row + x] as u32 * 3 + horiz[bottom_row + x] as u32 + 2) >> 2;
-                out[dst_row + x] = v.min(255) as u8;
+
+            let out_row = outrow * dst_w;
+
+            // Special case for first column
+            let mut thiscolsum = inptr0[0] as i32 * 3 + inptr1[0] as i32;
+            let mut nextcolsum = inptr0[1] as i32 * 3 + inptr1[1] as i32;
+            out[out_row] = ((thiscolsum * 4 + 8) >> 4) as u8;
+            out[out_row + 1] = ((thiscolsum * 3 + nextcolsum + 7) >> 4) as u8;
+            let mut lastcolsum = thiscolsum;
+            thiscolsum = nextcolsum;
+
+            // Middle columns
+            for col in 1..src_w - 1 {
+                nextcolsum = inptr0[col + 1] as i32 * 3 + inptr1[col + 1] as i32;
+                out[out_row + col * 2] =
+                    ((thiscolsum * 3 + lastcolsum + 8) >> 4) as u8;
+                out[out_row + col * 2 + 1] =
+                    ((thiscolsum * 3 + nextcolsum + 7) >> 4) as u8;
+                lastcolsum = thiscolsum;
+                thiscolsum = nextcolsum;
             }
+
+            // Special case for last column
+            if src_w > 1 {
+                out[out_row + (src_w - 1) * 2] =
+                    ((thiscolsum * 3 + lastcolsum + 8) >> 4) as u8;
+                out[out_row + (src_w - 1) * 2 + 1] =
+                    ((thiscolsum * 4 + 7) >> 4) as u8;
+            } else {
+                // Single column: just write the single column
+                out[out_row] = ((thiscolsum * 4 + 8) >> 4) as u8;
+                if dst_w > 1 {
+                    out[out_row + 1] = ((thiscolsum * 4 + 7) >> 4) as u8;
+                }
+            }
+
+            outrow += 1;
         }
+        inrow += 1;
     }
 
     out
@@ -1257,13 +1379,12 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
         let h_ratio = info.max_h_samp / info.components[1].h_samp;
         let v_ratio = info.max_v_samp / info.components[1].v_samp;
 
-        // Pre-upsample chroma buffers using libjpeg-style fancy interpolation
-        // (3/4 + 1/4 triangle filter, matching IJG jdsample.c)
-        let cb_upsampled = fancy_upsample_to_luma_size(
+        // Upsample chroma using libjpeg-exact triangle filter
+        let cb_upsampled = fancy_upsample(
             &comp_buffers[1], comp_buf_width[1], comp_buf_height[1],
             h_ratio as usize, v_ratio as usize, w, h,
         );
-        let cr_upsampled = fancy_upsample_to_luma_size(
+        let cr_upsampled = fancy_upsample(
             &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
             h_ratio as usize, v_ratio as usize, w, h,
         );
@@ -1288,6 +1409,329 @@ fn reconstruct_image(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
             pixels,
             ColorType::Rgb8,
         ))
+    } else {
+        None
+    }
+}
+
+/// Dispatch to libjpeg-exact chroma upsampling based on ratios.
+fn fancy_upsample(
+    src: &[u8], src_w: usize, src_h: usize,
+    h_ratio: usize, v_ratio: usize, dst_w: usize, dst_h: usize,
+) -> Vec<u8> {
+    match (h_ratio, v_ratio) {
+        (1, 1) => {
+            let mut out = Vec::with_capacity(dst_w * dst_h);
+            for y in 0..dst_h {
+                let row = y * src_w;
+                for x in 0..dst_w {
+                    out.push(src[row + x]);
+                }
+            }
+            out
+        }
+        (2, 1) => h2v1_fancy_upsample(src, src_w, src_h),
+        (2, 2) => h2v2_fancy_upsample(src, src_w, src_h),
+        _ => {
+            // Fallback: nearest-neighbor
+            let mut out = vec![0u8; dst_w * dst_h];
+            for y in 0..dst_h {
+                let sy = y / v_ratio;
+                for x in 0..dst_w {
+                    let sx = x / h_ratio;
+                    out[y * dst_w + x] = src[sy * src_w + sx];
+                }
+            }
+            out
+        }
+    }
+}
+
+/// Progressive JPEG reconstruction: accumulate coefficients across multiple
+/// scans, then run IDCT and assemble the output.
+fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
+    let mcu_width = (info.max_h_samp as u32) * 8;
+    let mcu_height = (info.max_v_samp as u32) * 8;
+    let num_mcus_x = ((info.width as u32) + mcu_width - 1) / mcu_width;
+    let num_mcus_y = ((info.height as u32) + mcu_height - 1) / mcu_height;
+
+    let comp_buf_width: Vec<usize> = info
+        .components
+        .iter()
+        .map(|c| num_mcus_x as usize * c.h_samp as usize * 8)
+        .collect();
+    let comp_buf_height: Vec<usize> = info
+        .components
+        .iter()
+        .map(|c| num_mcus_y as usize * c.v_samp as usize * 8)
+        .collect();
+
+    let comp_num_blocks: Vec<usize> = info
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, _)| {
+            let blocks_x = comp_buf_width[i] / 8;
+            let blocks_y = comp_buf_height[i] / 8;
+            blocks_x * blocks_y
+        })
+        .collect();
+
+    // Allocate coefficient storage: [component][block_index][64 coefficients]
+    let mut coeff_storage: Vec<Vec<[i32; 64]>> = info
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, _)| vec![[0i32; 64]; comp_num_blocks[i]])
+        .collect();
+
+    // Allocate component buffers
+    let mut comp_buffers: Vec<Vec<u8>> = info
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, _)| vec![128u8; comp_buf_width[i] * comp_buf_height[i]])
+        .collect();
+
+    // Zigzag order table: natural_order[zigzag_index] = natural_index.
+    // To get zigzag from natural: JPEG_NATURAL_ORDER maps zigzag->natural.
+    // Build inverse: zigzag_order[natural_index] = zigzag_index.
+    let mut zigzag_order = [0usize; 64];
+    for zi in 0..64 {
+        zigzag_order[JPEG_NATURAL_ORDER[zi]] = zi;
+    }
+
+    // Process each scan in order
+    for scan in &info.scans {
+        let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
+        if segs.segments.is_empty() {
+            continue;
+        }
+
+        let mut dc_predictors: Vec<i32> = vec![0; info.num_components as usize];
+        let mut seg_idx = 0;
+        let mut segment_iter = segs.segments.iter().peekable();
+
+        let mcus_in_segment = if info.restart_interval > 0 {
+            info.restart_interval as usize
+        } else {
+            num_mcus_x as usize * num_mcus_y as usize
+        };
+        let max_mcus = num_mcus_x as usize * num_mcus_y as usize;
+
+        while let Some(&(seg_start, seg_end)) = segment_iter.next() {
+            let mut br = BitReader::new(data, seg_start, seg_end);
+            let mcu_offset = seg_idx * mcus_in_segment;
+
+            let is_dc_scan = scan.ss == 0 && scan.se == 0;
+            let is_dc_first = is_dc_scan && scan.ah == 0;
+            let is_dc_refine = is_dc_scan && scan.ah > 0;
+            let is_ac_first = !is_dc_scan && scan.ah == 0;
+            let is_ac_refine = !is_dc_scan && scan.ah > 0;
+
+            for mcu_idx in 0..mcus_in_segment {
+                let absolute_mcu = mcu_offset + mcu_idx;
+                if absolute_mcu >= max_mcus {
+                    break;
+                }
+                let mcu_y = absolute_mcu / num_mcus_x as usize;
+                let mcu_x = absolute_mcu % num_mcus_x as usize;
+
+                for scan_comp in &scan.components {
+                    let comp_idx = scan_comp.comp_index;
+                    let comp = &info.components[comp_idx];
+
+                    if is_dc_first {
+                        let dc_table = scan.dc_huff_tables[scan_comp.dc_tbl as usize]
+                            .as_ref()?;
+                        for by in 0..comp.v_samp as usize {
+                            for bx in 0..comp.h_samp as usize {
+                                let block_idx = (mcu_y * comp.v_samp as usize + by)
+                                    * (comp_buf_width[comp_idx] / 8)
+                                    + (mcu_x * comp.h_samp as usize + bx);
+                                let dc_cat = dc_table.decode(&mut br)?;
+                                if dc_cat > 0 {
+                                    let bits = br.read_bits(dc_cat as u32)?;
+                                    dc_predictors[comp_idx] += extend(bits, dc_cat);
+                                }
+                                coeff_storage[comp_idx][block_idx][0] = dc_predictors[comp_idx];
+                            }
+                        }
+                    } else if is_dc_refine {
+                        let dc_table = scan.dc_huff_tables[scan_comp.dc_tbl as usize]
+                            .as_ref()?;
+                        let bit = 1i32 << scan.al;
+                        for by in 0..comp.v_samp as usize {
+                            for bx in 0..comp.h_samp as usize {
+                                let block_idx = (mcu_y * comp.v_samp as usize + by)
+                                    * (comp_buf_width[comp_idx] / 8)
+                                    + (mcu_x * comp.h_samp as usize + bx);
+                                let sym = dc_table.decode(&mut br)?;
+                                if sym != 0 {
+                                    let c = &mut coeff_storage[comp_idx][block_idx][0];
+                                    if *c >= 0 { *c += bit; } else { *c -= bit; }
+                                }
+                            }
+                        }
+                    } else if is_ac_first {
+                        let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize]
+                            .as_ref()?;
+                        let al = scan.al;
+                        let ss = scan.ss as usize;
+                        let se = scan.se as usize;
+                        for by in 0..comp.v_samp as usize {
+                            for bx in 0..comp.h_samp as usize {
+                                let block_idx = (mcu_y * comp.v_samp as usize + by)
+                                    * (comp_buf_width[comp_idx] / 8)
+                                    + (mcu_x * comp.h_samp as usize + bx);
+                                let mut k = ss;
+                                while k <= se && k < 64 {
+                                    let sym = ac_table.decode(&mut br)?;
+                                    if sym == 0x00 { break; } // EOB
+                                    let run = (sym >> 4) as usize;
+                                    let size = (sym & 0x0F) as u8;
+                                    if size == 0 && run == 15 {
+                                        k += 16; // ZRL
+                                        continue;
+                                    }
+                                    if size > 0 {
+                                        k += run;
+                                        if k > se || k >= 64 { break; }
+                                        let bits = br.read_bits(size as u32)?;
+                                        let val = extend(bits, size);
+                                        coeff_storage[comp_idx][block_idx][k] = val << al;
+                                        k += 1;
+                                    }
+                                }
+                            }
+                        }
+                    } else if is_ac_refine {
+                        let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize]
+                            .as_ref()?;
+                        let al = scan.al;
+                        let bit = 1i32 << al;
+                        let ss = scan.ss as usize;
+                        let se = scan.se as usize;
+                        for by in 0..comp.v_samp as usize {
+                            for bx in 0..comp.h_samp as usize {
+                                let block_idx = (mcu_y * comp.v_samp as usize + by)
+                                    * (comp_buf_width[comp_idx] / 8)
+                                    + (mcu_x * comp.h_samp as usize + bx);
+                                let coeffs = &mut coeff_storage[comp_idx][block_idx];
+                                let mut k = ss;
+                                // Simple approach: iterate positions, refine existing
+                                // non-zero coeffs and look for new ones
+                                while k <= se && k < 64 {
+                                    if coeffs[k] != 0 {
+                                        // Refine existing
+                                        let sym = ac_table.decode(&mut br)?;
+                                        if sym != 0 {
+                                            if coeffs[k] > 0 { coeffs[k] += bit; }
+                                            else { coeffs[k] -= bit; }
+                                        }
+                                        k += 1;
+                                    } else {
+                                        // Look for new coeff or skip zeros (EOB/ZRL)
+                                        let sym = ac_table.decode(&mut br)?;
+                                        if sym == 0x00 { break; } // EOB
+                                        let run = (sym >> 4) as usize;
+                                        let size = (sym & 0x0F) as u8;
+                                        if size == 0 && run == 15 {
+                                            k += 16; // ZRL
+                                            continue;
+                                        }
+                                        if size > 0 {
+                                            k += run;
+                                            if k > se || k >= 64 { break; }
+                                            let bits = br.read_bits(size as u32)?;
+                                            let val = extend(bits, size);
+                                            coeffs[k] = val << al;
+                                            k += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // RST handling
+                if mcu_idx + 1 >= mcus_in_segment && segment_iter.peek().is_some() {
+                    for pred in dc_predictors.iter_mut() { *pred = 0; }
+                    seg_idx += 1;
+                }
+            }
+        }
+    }
+
+    // After all scans: dequantize, IDCT, build component buffers
+    let mut block_natural = [0i32; 64];
+    let mut workspace = [0i32; 64];
+
+    for comp_idx in 0..info.num_components as usize {
+        let comp = &info.components[comp_idx];
+        let buf_w = comp_buf_width[comp_idx];
+        let blocks_x = buf_w / 8;
+        let total_blocks = comp_num_blocks[comp_idx];
+        let quant_table = info.quant_tables[comp.quant_tbl as usize].as_ref()?;
+
+        for block_idx in 0..total_blocks {
+            let coeffs = &coeff_storage[comp_idx][block_idx];
+            for i in 0..64 {
+                block_natural[JPEG_NATURAL_ORDER[i]] = coeffs[i] * quant_table[i] as i32;
+            }
+            jpeg_idct_islow(&mut block_natural, &mut workspace);
+
+            let block_y = (block_idx / blocks_x) * 8;
+            let block_x = (block_idx % blocks_x) * 8;
+            for row in 0..8 {
+                for col in 0..8 {
+                    let px = block_natural[row * 8 + col].clamp(0, 255) as u8;
+                    let bi = (block_y + row) * buf_w + (block_x + col);
+                    if bi < comp_buffers[comp_idx].len() {
+                        comp_buffers[comp_idx][bi] = px;
+                    }
+                }
+            }
+        }
+    }
+
+    // Assemble output (same as baseline)
+    let w = info.width as usize;
+    let h = info.height as usize;
+    let converter = YccColorConverter::new();
+
+    if info.num_components == 1 {
+        let y_buf = &comp_buffers[0];
+        let y_w = comp_buf_width[0];
+        let mut pixels = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                pixels.push(y_buf[y * y_w + x]);
+            }
+        }
+        Some(DecodedImage::new(info.width as u32, info.height as u32, pixels, ColorType::L8))
+    } else if info.num_components == 3 {
+        let y_buf = &comp_buffers[0];
+        let y_w = comp_buf_width[0];
+        let h_ratio = info.max_h_samp / info.components[1].h_samp;
+        let v_ratio = info.max_v_samp / info.components[1].v_samp;
+        let cb_up = fancy_upsample(
+            &comp_buffers[1], comp_buf_width[1], comp_buf_height[1],
+            h_ratio as usize, v_ratio as usize, w, h,
+        );
+        let cr_up = fancy_upsample(
+            &comp_buffers[2], comp_buf_width[2], comp_buf_height[2],
+            h_ratio as usize, v_ratio as usize, w, h,
+        );
+        let mut pixels = Vec::with_capacity(w * h * 3);
+        for y in 0..h {
+            for x in 0..w {
+                let (r, g, b) = converter.ycc_to_rgb(y_buf[y * y_w + x], cb_up[y * w + x], cr_up[y * w + x]);
+                pixels.push(r); pixels.push(g); pixels.push(b);
+            }
+        }
+        Some(DecodedImage::new(info.width as u32, info.height as u32, pixels, ColorType::Rgb8))
     } else {
         None
     }
@@ -1334,7 +1778,11 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     }
 
     // Reconstruct the image
-    reconstruct_image(&info, data)
+    if info.progressive {
+        progressive_reconstruct(&info, data)
+    } else {
+        reconstruct_image(&info, data)
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────

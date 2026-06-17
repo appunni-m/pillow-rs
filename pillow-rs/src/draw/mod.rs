@@ -2,7 +2,7 @@
 //! Implements line, rectangle, ellipse, polygon, point, text.
 //! Uses Bresenham-style algorithms for pixel-perfect rendering.
 
-use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use pillow_rs_image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -276,7 +276,7 @@ impl Draw {
                             let g = pil_blend(existing[1], color.1, m);
                             let b = pil_blend(existing[2], color.2, m);
                             let a = pil_blend(existing[3], color.3, m);
-                            canvas.put_pixel(dx as u32, dy as u32, image::Rgba([r, g, b, a]));
+                            canvas.put_pixel(dx as u32, dy as u32, pillow_rs_image::Rgba([r, g, b, a]));
                         }
                     }
                 }
@@ -303,12 +303,12 @@ impl Draw {
                             } else {
                                 pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
                             };
-                            luma.put_pixel(dx as u32, dy as u32, image::Luma([v]));
+                            luma.put_pixel(dx as u32, dy as u32, pillow_rs_image::Luma([v]));
                         }
                     }
                 }
                 self.image =
-                    Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("1".to_string()));
+                    Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), Some("1".to_string()));
                 Ok(())
             }
             "L" => {
@@ -330,11 +330,11 @@ impl Draw {
                             } else {
                                 pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
                             };
-                            luma.put_pixel(dx as u32, dy as u32, image::Luma([v]));
+                            luma.put_pixel(dx as u32, dy as u32, pillow_rs_image::Luma([v]));
                         }
                     }
                 }
-                self.image = Image::Loaded(image::DynamicImage::ImageLuma8(luma), None);
+                self.image = Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), None);
                 Ok(())
             }
             "LA" => {
@@ -363,12 +363,12 @@ impl Draw {
                             } else {
                                 pil_blend(existing[1], ink_a, m)
                             };
-                            la.put_pixel(dx as u32, dy as u32, image::LumaA([l, a]));
+                            la.put_pixel(dx as u32, dy as u32, pillow_rs_image::LumaA([l, a]));
                         }
                     }
                 }
                 self.image =
-                    Image::Loaded(image::DynamicImage::ImageLumaA8(la), Some("LA".to_string()));
+                    Image::Loaded(pillow_rs_image::DynamicImage::ImageLumaA8(la), Some("LA".to_string()));
                 Ok(())
             }
             "CMYK" => {
@@ -406,12 +406,12 @@ impl Draw {
                             } else {
                                 pil_blend(existing[3], ink[3], m)
                             };
-                            rgba.put_pixel(dx as u32, dy as u32, image::Rgba([c, m_ch, y_ch, k]));
+                            rgba.put_pixel(dx as u32, dy as u32, pillow_rs_image::Rgba([c, m_ch, y_ch, k]));
                         }
                     }
                 }
                 self.image = Image::Loaded(
-                    image::DynamicImage::ImageRgba8(rgba),
+                    pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some("CMYK".to_string()),
                 );
                 Ok(())
@@ -421,7 +421,7 @@ impl Draw {
                     let img = self.image.materialize()?;
                     let luma = img.to_luma8();
                     let (img_w, img_h) = luma.dimensions();
-                    let mut indices = image::GrayImage::new(img_w, img_h);
+                    let mut indices = pillow_rs_image::GrayImage::new(img_w, img_h);
                     for (op, ip) in indices.pixels_mut().zip(luma.pixels()) {
                         op[0] = ip[0];
                     }
@@ -440,7 +440,7 @@ impl Draw {
                                 } else {
                                     pil_blend(indices.get_pixel(dx as u32, dy as u32)[0], ink, m)
                                 };
-                                indices.put_pixel(dx as u32, dy as u32, image::Luma([v]));
+                                indices.put_pixel(dx as u32, dy as u32, pillow_rs_image::Luma([v]));
                             }
                         }
                     }
@@ -464,12 +464,12 @@ impl Draw {
                                 } else {
                                     pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
                                 };
-                                luma.put_pixel(dx as u32, dy as u32, image::Luma([v]));
+                                luma.put_pixel(dx as u32, dy as u32, pillow_rs_image::Luma([v]));
                             }
                         }
                     }
                     self.image =
-                        Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("P".to_string()));
+                        Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), Some("P".to_string()));
                 }
                 Ok(())
             }
@@ -510,12 +510,12 @@ impl Draw {
                             } else {
                                 pil_blend(existing[3], ink[3], m)
                             };
-                            rgba.put_pixel(dx as u32, dy as u32, image::Rgba([b0, b1, b2, b3]));
+                            rgba.put_pixel(dx as u32, dy as u32, pillow_rs_image::Rgba([b0, b1, b2, b3]));
                         }
                     }
                 }
                 self.image = Image::Loaded(
-                    image::DynamicImage::ImageRgba8(rgba),
+                    pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some(mode.to_string()),
                 );
                 Ok(())
@@ -555,7 +555,7 @@ impl Draw {
                             } else {
                                 pil_blend(existing[3], color.3, m)
                             };
-                            canvas.put_pixel(dx as u32, dy as u32, image::Rgba([r, g, b, a]));
+                            canvas.put_pixel(dx as u32, dy as u32, pillow_rs_image::Rgba([r, g, b, a]));
                         }
                     }
                 }
@@ -582,7 +582,7 @@ impl Draw {
                                 // No dither: just threshold at 128 (matching PIL's fill behavior)
                                 let gray = crate::color::pil_grayscale_truncate(&img_loaded);
                                 let (w, h) = gray.dimensions();
-                                let mut out = image::GrayImage::new(w, h);
+                                let mut out = pillow_rs_image::GrayImage::new(w, h);
                                 for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
                                     op[0] = if gp[0] >= 128 { 255 } else { 0 };
                                 }
@@ -594,7 +594,7 @@ impl Draw {
                                 // draw pipeline, preserving the RGBA alpha channel)
                                 let gray = crate::color::pil_grayscale(&img_loaded);
                                 let (w, h) = gray.dimensions();
-                                let mut ga = image::GrayAlphaImage::new(w, h);
+                                let mut ga = pillow_rs_image::GrayAlphaImage::new(w, h);
                                 let rgba = img_loaded.to_rgba8();
                                 for ((gap, gp), rp) in
                                     ga.pixels_mut().zip(gray.pixels()).zip(rgba.pixels())
@@ -610,7 +610,7 @@ impl Draw {
                                 if let Some(pal) = self.image.palette() {
                                     let (w, h) = img_loaded.dimensions();
                                     let rgba = img_loaded.to_rgba8();
-                                    let mut indices = image::GrayImage::new(w, h);
+                                    let mut indices = pillow_rs_image::GrayImage::new(w, h);
                                     for (op, rp) in indices.pixels_mut().zip(rgba.pixels()) {
                                         let idx = pal
                                             .chunks_exact(3)
@@ -958,12 +958,12 @@ impl Draw {
                         if off + 3 < pixels.len() && pixels[off + 3] > 0 {
                             let dx = (x as u32 + px).min(img_w - 1);
                             let dy = (y as u32 + py).min(img_h - 1);
-                            luma.put_pixel(dx, dy, image::Luma([ink]));
+                            luma.put_pixel(dx, dy, pillow_rs_image::Luma([ink]));
                         }
                     }
                 }
                 self.image =
-                    Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("1".to_string()));
+                    Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), Some("1".to_string()));
                 Ok(())
             }
             "L" => {
@@ -985,10 +985,10 @@ impl Draw {
                         let dy = (y as u32 + py).min(img_h - 1);
                         let bg = luma.get_pixel(dx, dy)[0];
                         let result = pil_blend(ink, bg, cov);
-                        luma.put_pixel(dx, dy, image::Luma([result]));
+                        luma.put_pixel(dx, dy, pillow_rs_image::Luma([result]));
                     }
                 }
-                self.image = Image::Loaded(image::DynamicImage::ImageLuma8(luma), None);
+                self.image = Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), None);
                 Ok(())
             }
             "LA" => {
@@ -1013,11 +1013,11 @@ impl Draw {
                         let bg = la.get_pixel(dx, dy);
                         let new_l = pil_blend(ink_l, bg[0], cov);
                         let new_a = pil_blend(ink_a, bg[1], cov);
-                        la.put_pixel(dx, dy, image::LumaA([new_l, new_a]));
+                        la.put_pixel(dx, dy, pillow_rs_image::LumaA([new_l, new_a]));
                     }
                 }
                 self.image =
-                    Image::Loaded(image::DynamicImage::ImageLumaA8(la), Some("LA".to_string()));
+                    Image::Loaded(pillow_rs_image::DynamicImage::ImageLumaA8(la), Some("LA".to_string()));
                 Ok(())
             }
             "CMYK" => {
@@ -1058,7 +1058,7 @@ impl Draw {
                     }
                 }
                 self.image = Image::Loaded(
-                    image::DynamicImage::ImageRgba8(rgba),
+                    pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some("CMYK".to_string()),
                 );
                 Ok(())
@@ -1068,7 +1068,7 @@ impl Draw {
                 if let Some(palette) = self.image.palette() {
                     let img_loaded = img.to_luma8();
                     let (w_i, h_i) = img_loaded.dimensions();
-                    let mut indices = image::GrayImage::new(w_i, h_i);
+                    let mut indices = pillow_rs_image::GrayImage::new(w_i, h_i);
                     for (op, ip) in indices.pixels_mut().zip(img_loaded.pixels()) {
                         op[0] = ip[0];
                     }
@@ -1079,7 +1079,7 @@ impl Draw {
                             if off + 3 < pixels.len() && pixels[off + 3] > 0 {
                                 let dx = (x as u32 + px).min(img_w - 1);
                                 let dy = (y as u32 + py).min(img_h - 1);
-                                indices.put_pixel(dx, dy, image::Luma([ink]));
+                                indices.put_pixel(dx, dy, pillow_rs_image::Luma([ink]));
                             }
                         }
                     }
@@ -1094,12 +1094,12 @@ impl Draw {
                             if off + 3 < pixels.len() && pixels[off + 3] > 0 {
                                 let dx = (x as u32 + px).min(img_w - 1);
                                 let dy = (y as u32 + py).min(img_h - 1);
-                                luma.put_pixel(dx, dy, image::Luma([ink]));
+                                luma.put_pixel(dx, dy, pillow_rs_image::Luma([ink]));
                             }
                         }
                     }
                     self.image =
-                        Image::Loaded(image::DynamicImage::ImageLuma8(luma), Some("P".to_string()));
+                        Image::Loaded(pillow_rs_image::DynamicImage::ImageLuma8(luma), Some("P".to_string()));
                 }
                 Ok(())
             }
@@ -1119,7 +1119,7 @@ impl Draw {
                     }
                 }
                 self.image = Image::Loaded(
-                    image::DynamicImage::ImageRgba8(rgba),
+                    pillow_rs_image::DynamicImage::ImageRgba8(rgba),
                     Some(mode.to_string()),
                 );
                 Ok(())

@@ -3,7 +3,7 @@
 use crate::color::pil_grayscale;
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use image::DynamicImage;
+use pillow_rs_image::DynamicImage;
 
 pub fn op_enhance_brightness(
     img: &DynamicImage,
@@ -118,7 +118,7 @@ pub fn op_enhance_color_saturation(
                 out.put_pixel(
                     x,
                     y,
-                    image::Rgba([
+                    pillow_rs_image::Rgba([
                         (p[0] as f64 * f).clamp(0.0, 255.0) as u8,
                         (p[1] as f64 * f).clamp(0.0, 255.0) as u8,
                         (p[2] as f64 * f).clamp(0.0, 255.0) as u8,
@@ -186,11 +186,11 @@ pub fn op_enhance_sharpness(
         result[i] = (blurred[i] as f64 * (1.0 - f) + result[i] as f64 * f).clamp(0.0, 255.0) as u8;
     }
     if mode == Some("CMYK") {
-        let img_result = image::RgbaImage::from_raw(w as u32, h as u32, result)
+        let img_result = pillow_rs_image::RgbaImage::from_raw(w as u32, h as u32, result)
             .ok_or_else(|| PilError::ValueError("enhance_sharpness: buffer error".into()))?;
         Ok(DynamicImage::ImageRgba8(img_result))
     } else {
-        let img_result = image::RgbImage::from_raw(w as u32, h as u32, result)
+        let img_result = pillow_rs_image::RgbImage::from_raw(w as u32, h as u32, result)
             .ok_or_else(|| PilError::ValueError("enhance_sharpness: buffer error".into()))?;
         Ok(preserve_mode(img, DynamicImage::ImageRgb8(img_result)))
     }

@@ -16,9 +16,9 @@ impl Image {
         // Determine band count from the image
         let img = self.materialize()?;
         let n_bands = match img.color() {
-            image::ColorType::L8 | image::ColorType::L16 => 1,
-            image::ColorType::La8 | image::ColorType::La16 => 2,
-            image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
+            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
+            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
             _ => 4, // Rgba8, Rgba16, or fallback
         };
 

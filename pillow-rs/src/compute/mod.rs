@@ -21,7 +21,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use image::DynamicImage;
+use pillow_rs_image::DynamicImage;
 use std::collections::HashSet;
 use std::sync::Mutex;
 

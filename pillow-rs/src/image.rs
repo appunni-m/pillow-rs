@@ -1,4 +1,4 @@
-use image::{DynamicImage, GenericImageView, ImageFormat};
+use pillow_rs_image::{DynamicImage, GenericImageView, ImageFormat};
 use std::io::{BufReader, Read, Seek};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -38,7 +38,7 @@ pub fn default_palette() -> Vec<u8> {
 /// `palette` holds 768 bytes: 256 RGB triples mapping each index to a color.
 #[derive(Debug, Clone)]
 pub struct PalettedData {
-    pub indices: image::GrayImage,
+    pub indices: pillow_rs_image::GrayImage,
     pub palette: Vec<u8>,
 }
 
@@ -152,31 +152,31 @@ impl Image {
         color: (u8, u8, u8, u8),
     ) -> Result<Self, PilError> {
         let img = match mode {
-            "RGB" => DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            "RGB" => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::from_pixel(
                 width,
                 height,
-                image::Rgb([color.0, color.1, color.2]),
+                pillow_rs_image::Rgb([color.0, color.1, color.2]),
             )),
-            "RGBA" => DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            "RGBA" => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_pixel(
                 width,
                 height,
-                image::Rgba([color.0, color.1, color.2, color.3]),
+                pillow_rs_image::Rgba([color.0, color.1, color.2, color.3]),
             )),
-            "L" => DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
+            "L" => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::from_pixel(
                 width,
                 height,
-                image::Luma([color.0]),
+                pillow_rs_image::Luma([color.0]),
             )),
-            "LA" => DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_pixel(
+            "LA" => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::from_pixel(
                 width,
                 height,
-                image::LumaA([color.0, color.3]),
+                pillow_rs_image::LumaA([color.0, color.3]),
             )),
-            "1" => DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
+            "1" => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::from_pixel(
                 width,
                 height,
                 // PIL: any non-zero value in mode "1" is white (255)
-                image::Luma([if color.0 > 0 { 255 } else { 0 }]),
+                pillow_rs_image::Luma([if color.0 > 0 { 255 } else { 0 }]),
             )),
             // P-mode: PIL creates a palette where index 0 maps to the given color,
             // with all other entries zero (not the web palette).
@@ -186,26 +186,26 @@ impl Image {
                 pal[1] = color.1;
                 pal[2] = color.2;
                 return Ok(Image::Paletted(PalettedData {
-                    indices: image::GrayImage::from_pixel(width, height, image::Luma([0u8])),
+                    indices: pillow_rs_image::GrayImage::from_pixel(width, height, pillow_rs_image::Luma([0u8])),
                     palette: pal,
                 }));
             }
-            "CMYK" => DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            "CMYK" => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_pixel(
                 width,
                 height,
-                image::Rgba([color.0, color.1, color.2, color.3]),
+                pillow_rs_image::Rgba([color.0, color.1, color.2, color.3]),
             )),
-            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::from_pixel(
                 width,
                 height,
-                image::Rgb([color.0, color.1, color.2]),
+                pillow_rs_image::Rgb([color.0, color.1, color.2]),
             )),
             // I and F modes store 4 bytes per pixel (int32/float32 LE)
-            "I" | "F" => DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            "I" | "F" => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_pixel(
                 width,
                 height,
                 // For I mode: store 4-byte int32 LE (color.0 as low byte, others 0)
-                image::Rgba([color.0, 0, 0, 0]),
+                pillow_rs_image::Rgba([color.0, 0, 0, 0]),
             )),
             _ => return Err(PilError::ValueError(format!("Unsupported mode: {}", mode))),
         };
@@ -246,34 +246,34 @@ impl Image {
         }
         let img = match mode {
             "L" => DynamicImage::ImageLuma8(
-                image::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                pillow_rs_image::GrayImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "RGB" => DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                pillow_rs_image::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "RGBA" => DynamicImage::ImageRgba8(
-                image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                pillow_rs_image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "LA" => DynamicImage::ImageLumaA8(
-                image::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
+                pillow_rs_image::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "P" => {
                 return Ok(Image::Paletted(PalettedData {
-                    indices: image::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                    indices: pillow_rs_image::GrayImage::from_raw(w, h, data[..expected].to_vec())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                     palette: default_palette(),
                 }));
             }
             "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
-                image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                pillow_rs_image::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "HSV" | "YCbCr" => DynamicImage::ImageRgb8(
-                image::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                pillow_rs_image::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "1" => {
@@ -293,7 +293,7 @@ impl Image {
                     }
                 }
                 DynamicImage::ImageLuma8(
-                    image::GrayImage::from_raw(w, h, pixels)
+                    pillow_rs_image::GrayImage::from_raw(w, h, pixels)
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                 )
             }
@@ -304,7 +304,7 @@ impl Image {
                 let copy_len = data.len().min(expected);
                 pixels[..copy_len].copy_from_slice(&data[..copy_len]);
                 DynamicImage::ImageRgba8(
-                    image::RgbaImage::from_raw(w, h, pixels).ok_or_else(|| {
+                    pillow_rs_image::RgbaImage::from_raw(w, h, pixels).ok_or_else(|| {
                         PilError::ValueError("frombytes: RGBA buffer error".into())
                     })?,
                 )
@@ -338,14 +338,7 @@ impl Image {
     }
 
     pub fn open_bytes(data: Vec<u8>) -> Result<Self, PilError> {
-        let format = {
-            let cursor = std::io::Cursor::new(&data);
-            image::ImageReader::new(cursor)
-                .with_guessed_format()
-                .ok()
-                .and_then(|r| r.format())
-                .or_else(|| detect_format_from_magic(&data))
-        };
+        let format = detect_format_from_magic(&data);
         // If this is a PNG file, check if it uses a palette (Indexed color type)
         if format == Some(ImageFormat::Png) {
             let mut cursor = std::io::Cursor::new(&data);
@@ -430,15 +423,20 @@ impl Image {
             Image::Loaded(img, _) => Ok(img.clone()),
             Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
             Image::Path { path, .. } => {
-                let img = image::open(path).map_err(PilError::ImageError)?;
-                Ok(img)
+                let file_data =
+                    std::fs::read(path).map_err(|e| PilError::Io(e))?;
+                let decoded = pillow_rs_image::decode(&file_data).ok_or_else(|| {
+                    PilError::UnidentifiedImageError(path.display().to_string())
+                })?;
+                DynamicImage::from_decoded(&decoded)
+                    .ok_or_else(|| PilError::ValueError("decode buffer error".into()))
             }
             Image::Bytes { data, .. } => {
-                let cursor = std::io::Cursor::new(data.as_ref());
-                let reader = image::ImageReader::new(cursor)
-                    .with_guessed_format()
-                    .map_err(PilError::Io)?;
-                reader.decode().map_err(PilError::ImageError)
+                let decoded = pillow_rs_image::decode(data).ok_or_else(|| {
+                    PilError::UnidentifiedImageError("unknown format".into())
+                })?;
+                DynamicImage::from_decoded(&decoded)
+                    .ok_or_else(|| PilError::ValueError("decode buffer error".into()))
             }
             Image::Pipeline {
                 source,
@@ -473,13 +471,13 @@ impl Image {
                         if let Some(palette) = palette {
                             let (w, h) = (img.width(), img.height());
                             let indices = img.to_luma8();
-                            let rgb = image::RgbImage::from_fn(w, h, |x, y| {
+                            let rgb = pillow_rs_image::RgbImage::from_fn(w, h, |x, y| {
                                 let idx = indices.get_pixel(x, y)[0] as usize;
                                 let p = idx * 3;
                                 let r = palette.get(p).copied().unwrap_or(0);
                                 let g = palette.get(p + 1).copied().unwrap_or(0);
                                 let b = palette.get(p + 2).copied().unwrap_or(0);
-                                image::Rgb([r, g, b])
+                                pillow_rs_image::Rgb([r, g, b])
                             });
                             img = DynamicImage::ImageRgb8(rgb);
                         }
@@ -880,8 +878,10 @@ impl Image {
             ImageFormat::from_path(path)
                 .map_err(|_| PilError::UnknownFormat("Cannot determine format from path".into()))?
         };
-        img.save_with_format(path, save_format)
-            .map_err(PilError::ImageError)
+        let encoded = pillow_rs_image::encode(&img.into_decoded(), save_format)
+            .ok_or_else(|| PilError::UnknownFormat("encoding failed".into()))?;
+        std::fs::write(path, encoded).map_err(PilError::Io)?;
+        Ok(())
     }
 
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
@@ -904,7 +904,7 @@ impl Image {
         }
 
         // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
-        if mode == "1" && img.color() == image::ColorType::L8 {
+        if mode == "1" && img.color() == pillow_rs_image::ColorType::L8 {
             let gray = img.to_luma8();
             let (w, h) = gray.dimensions();
             let row_bytes = w.div_ceil(8) as usize;
@@ -992,13 +992,13 @@ impl Image {
 
         if let Some((indices, palette)) = pal_data {
             let (w, h) = indices.dimensions();
-            let rgba = image::RgbaImage::from_fn(w, h, |x, y| {
+            let rgba = pillow_rs_image::RgbaImage::from_fn(w, h, |x, y| {
                 let idx = indices.get_pixel(x, y)[0] as usize;
                 let base = idx * 3;
                 let r = palette.get(base).copied().unwrap_or(0);
                 let g = palette.get(base + 1).copied().unwrap_or(0);
                 let b = palette.get(base + 2).copied().unwrap_or(0);
-                image::Rgba([r, g, b, 255])
+                pillow_rs_image::Rgba([r, g, b, 255])
             });
             *self = Image::Loaded(DynamicImage::ImageRgba8(rgba), None);
         }
@@ -1045,17 +1045,15 @@ impl Image {
     pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
         match self.paletted_to_rgb() {
             Some(img) => {
-                let mut buf = std::io::Cursor::new(Vec::new());
-                img.write_to(&mut buf, image::ImageFormat::Png)
-                    .map_err(PilError::ImageError)?;
-                Ok(buf.into_inner())
+                let encoded = pillow_rs_image::encode(&img.into_decoded(), ImageFormat::Png)
+                    .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
+                Ok(encoded)
             }
             None => {
                 let img = self.materialize()?;
-                let mut buf = std::io::Cursor::new(Vec::new());
-                img.write_to(&mut buf, image::ImageFormat::Png)
-                    .map_err(PilError::ImageError)?;
-                Ok(buf.into_inner())
+                let encoded = pillow_rs_image::encode(&img.into_decoded(), ImageFormat::Png)
+                    .ok_or_else(|| PilError::UnknownFormat("PNG encode failed".into()))?;
+                Ok(encoded)
             }
         }
     }
@@ -1074,13 +1072,13 @@ impl Image {
             if let Some(palette) = self.palette() {
                 let (w, h) = img.dimensions();
                 let indices = img.to_luma8();
-                let rgb = image::RgbImage::from_fn(w, h, |x, y| {
+                let rgb = pillow_rs_image::RgbImage::from_fn(w, h, |x, y| {
                     let idx = indices.get_pixel(x, y)[0] as usize;
                     let p = idx * 3;
                     let r = palette.get(p).copied().unwrap_or(0);
                     let g = palette.get(p + 1).copied().unwrap_or(0);
                     let b = palette.get(p + 2).copied().unwrap_or(0);
-                    image::Rgb([r, g, b])
+                    pillow_rs_image::Rgb([r, g, b])
                 });
                 return Ok(DynamicImage::ImageRgb8(rgb));
             }
@@ -1092,13 +1090,13 @@ impl Image {
     pub(crate) fn paletted_to_rgb(&self) -> Option<DynamicImage> {
         if let Image::Paletted(data) = self {
             let rgb =
-                image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
+                pillow_rs_image::RgbImage::from_fn(data.indices.width(), data.indices.height(), |x, y| {
                     let idx = data.indices.get_pixel(x, y)[0] as usize;
                     let p = idx * 3;
                     let r = data.palette.get(p).copied().unwrap_or(0);
                     let g = data.palette.get(p + 1).copied().unwrap_or(0);
                     let b = data.palette.get(p + 2).copied().unwrap_or(0);
-                    image::Rgb([r, g, b])
+                    pillow_rs_image::Rgb([r, g, b])
                 });
             Some(DynamicImage::ImageRgb8(rgb))
         } else {
@@ -1182,11 +1180,11 @@ impl Image {
             return Ok(rgba.pixels().map(|p| p[b]).collect());
         }
         match img.color() {
-            image::ColorType::L8 | image::ColorType::L16 => {
+            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
                 let gray = img.to_luma8();
                 Ok(gray.into_raw())
             }
-            image::ColorType::La8 | image::ColorType::La16 => {
+            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => {
                 let ga = img.to_luma_alpha8();
                 let mut out = Vec::with_capacity((ga.width() * ga.height() * 2) as usize);
                 for p in ga.pixels() {
@@ -1195,7 +1193,7 @@ impl Image {
                 }
                 Ok(out)
             }
-            image::ColorType::Rgb8 | image::ColorType::Rgb16 | image::ColorType::Rgb32F => {
+            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 | pillow_rs_image::ColorType::Rgb32F => {
                 let rgb = img.to_rgb8();
                 Ok(rgb.into_raw())
             }
@@ -1263,9 +1261,9 @@ impl Image {
         // For multi-channel modes, use pixel-level counting
         let img = self.materialize()?;
         let n_bands = match img.color() {
-            image::ColorType::L8 | image::ColorType::L16 => 1,
-            image::ColorType::La8 | image::ColorType::La16 => 2,
-            image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
+            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
+            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
             _ => 4,
         };
         let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
@@ -1318,7 +1316,7 @@ impl Image {
         // Compute 256-bin histogram
         let mut hist = [0u32; 256];
         match img.color() {
-            image::ColorType::L8 | image::ColorType::L16 => {
+            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for p in luma.pixels() {
                     hist[p[0] as usize] += 1;
@@ -1348,22 +1346,22 @@ impl Image {
     pub fn entropy(&self) -> Result<f64, PilError> {
         let img = self.materialize()?;
         let n_bands = match img.color() {
-            image::ColorType::L8 | image::ColorType::L16 => 1,
-            image::ColorType::La8 | image::ColorType::La16 => 2,
-            image::ColorType::Rgb8 | image::ColorType::Rgb16 => 3,
+            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
+            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => 2,
+            pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => 3,
             _ => 4,
         };
         let mut hists = vec![[0u32; 256]; n_bands];
         // Use mode-aware pixel reading (to_rgba8 remaps LA channels incorrectly for histogram)
         match img.color() {
-            image::ColorType::La8 | image::ColorType::La16 => {
+            pillow_rs_image::ColorType::La8 | pillow_rs_image::ColorType::La16 => {
                 let la = img.to_luma_alpha8();
                 for px in la.pixels() {
                     hists[0][px[0] as usize] += 1;
                     hists[1][px[1] as usize] += 1;
                 }
             }
-            image::ColorType::L8 | image::ColorType::L16 => {
+            pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for px in luma.pixels() {
                     hists[0][px[0] as usize] += 1;
@@ -1526,7 +1524,7 @@ fn decode_paletted_png_reader<R: Read + Seek>(r: &mut R) -> Result<PalettedData,
     // For indexed PNGs, output buffer contains palette indices (w*h bytes).
     let max_size = (w as usize) * (h as usize);
     let indices = if buf.len() >= max_size {
-        image::GrayImage::from_raw(w, h, buf[..max_size].to_vec())
+        pillow_rs_image::GrayImage::from_raw(w, h, buf[..max_size].to_vec())
             .ok_or_else(|| PilError::ValueError("paletted PNG decode: buffer error".into()))?
     } else {
         return Err(PilError::ValueError(
@@ -1622,28 +1620,28 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
         return result;
     }
     match orig_color {
-        image::ColorType::L8 => {
+        pillow_rs_image::ColorType::L8 => {
             // Extract R channel directly — GPU mode-aware shaders only update R for L mode.
             // G and B may be stale; to_luma8() weights all three channels and would be wrong.
             let rgba = result.to_rgba8();
             let (w, h) = rgba.dimensions();
             let luma: Vec<u8> = rgba.pixels().map(|px| px[0]).collect();
             DynamicImage::ImageLuma8(
-                image::GrayImage::from_raw(w, h, luma).unwrap_or_else(|| result.to_luma8()),
+                pillow_rs_image::GrayImage::from_raw(w, h, luma).unwrap_or_else(|| result.to_luma8()),
             )
         }
-        image::ColorType::La8 => {
+        pillow_rs_image::ColorType::La8 => {
             // Extract R (luma) and A (alpha) directly.
             let rgba = result.to_rgba8();
             let (w, h) = rgba.dimensions();
             let la: Vec<u8> = rgba.pixels().flat_map(|px| [px[0], px[3]]).collect();
             DynamicImage::ImageLumaA8(
-                image::GrayAlphaImage::from_raw(w, h, la)
+                pillow_rs_image::GrayAlphaImage::from_raw(w, h, la)
                     .unwrap_or_else(|| result.to_luma_alpha8()),
             )
         }
-        image::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
-        image::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
+        pillow_rs_image::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
+        pillow_rs_image::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
         _ => result,
     }
 }
@@ -1656,19 +1654,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(w, h, data)
+            pillow_rs_image::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, data)
+            pillow_rs_image::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(w, h, data)
+            pillow_rs_image::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, data)
+            pillow_rs_image::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(

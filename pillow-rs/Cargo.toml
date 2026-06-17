@@ -9,7 +9,7 @@ description = "Pure Rust image processing — Pillow reimplementation"
 name = "pillow_rs"
 
 [dependencies]
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "tiff", "webp", "ico"] }
+pillow-rs-image = { path = "../pillow-rs-image" }
 png = "0.18"
 thiserror = "1"
 csscolorparser = "0.8"

@@ -1,7 +1,7 @@
 //! Image format parsing and detection.
-//! Maps between Pillow format strings and image::ImageFormat.
+//! Maps between Pillow format strings and pillow_rs_image::ImageFormat.
 
-use image::ImageFormat;
+use pillow_rs_image::ImageFormat;
 
 use crate::error::PilError;
 

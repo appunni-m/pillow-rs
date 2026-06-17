@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::image::{preserve_mode, Image};
-use image::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use pillow_rs_image::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use std::sync::Arc;
 
 // ── Blend mode lookup tables (generated from PIL C implementation) ──
@@ -312,7 +312,7 @@ pub fn op_chops_blend(
             out.put_pixel(
                 x,
                 y,
-                image::Rgb([
+                pillow_rs_image::Rgb([
                     (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
                     (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
                     (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
@@ -346,7 +346,7 @@ pub fn op_chops_composite(
             out.put_pixel(
                 x,
                 y,
-                image::Rgb([
+                pillow_rs_image::Rgb([
                     ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
                     ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
                     ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
@@ -377,16 +377,16 @@ pub fn op_chops_invert(img: &DynamicImage) -> DynamicImage {
     }
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
+            pillow_rs_image::GrayImage::from_raw(w, h, out).expect("invert L buffer"),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
+            pillow_rs_image::GrayAlphaImage::from_raw(w, h, out).expect("invert LA buffer"),
         ),
         3 => DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
+            pillow_rs_image::RgbImage::from_raw(w, h, out).expect("invert RGB buffer"),
         ),
         _ => DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
+            pillow_rs_image::RgbaImage::from_raw(w, h, out).expect("invert RGBA buffer"),
         ),
     }
 }

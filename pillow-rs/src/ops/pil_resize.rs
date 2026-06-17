@@ -10,7 +10,7 @@
 //! intermediate rounding to match the two-pass quantization behavior.
 
 use crate::pipeline::ResampleFilter;
-use image::DynamicImage;
+use pillow_rs_image::DynamicImage;
 
 // ── Filter kernels ──
 
@@ -479,10 +479,10 @@ pub(crate) fn pil_preserve_mode(original: &DynamicImage, result: DynamicImage) -
         return result;
     }
     match orig_color {
-        image::ColorType::L8 => DynamicImage::ImageLuma8(result.to_luma8()),
-        image::ColorType::La8 => DynamicImage::ImageLumaA8(result.to_luma_alpha8()),
-        image::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
-        image::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
+        pillow_rs_image::ColorType::L8 => DynamicImage::ImageLuma8(result.to_luma8()),
+        pillow_rs_image::ColorType::La8 => DynamicImage::ImageLumaA8(result.to_luma_alpha8()),
+        pillow_rs_image::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
+        pillow_rs_image::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
         _ => result,
     }
 }
@@ -523,7 +523,7 @@ pub fn pil_resize(
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !is_cmyk
         && !is_fi
-        && matches!(img.color(), image::ColorType::Rgba8 | image::ColorType::La8);
+        && matches!(img.color(), pillow_rs_image::ColorType::Rgba8 | pillow_rs_image::ColorType::La8);
     let work = if needs_alpha {
         premultiply_alpha(img)
     } else {
@@ -536,9 +536,9 @@ pub fn pil_resize(
 
     // Determine channel count
     let channels = match work.color() {
-        image::ColorType::L8 => 1usize,
-        image::ColorType::La8 => 2usize,
-        image::ColorType::Rgb8 => 3usize,
+        pillow_rs_image::ColorType::L8 => 1usize,
+        pillow_rs_image::ColorType::La8 => 2usize,
+        pillow_rs_image::ColorType::Rgb8 => 3usize,
         _ => 4usize,
     };
 
@@ -634,20 +634,20 @@ pub fn pil_resize(
 fn raw_to_dynamic(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image::GrayImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::GrayImage::new(w, h)),
+            pillow_rs_image::GrayImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::GrayImage::new(w, h)),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::GrayAlphaImage::new(w, h)),
+            pillow_rs_image::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::GrayAlphaImage::new(w, h)),
         ),
         3 => DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::RgbImage::new(w, h)),
+            pillow_rs_image::RgbImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::RgbImage::new(w, h)),
         ),
         _ => DynamicImage::ImageRgba8(
-            image::RgbaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image::RgbaImage::new(w, h)),
+            pillow_rs_image::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| pillow_rs_image::RgbaImage::new(w, h)),
         ),
     }
 }
