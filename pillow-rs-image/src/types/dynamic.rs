@@ -731,9 +731,7 @@ impl DynamicImage {
             }
             DynamicImage::ImageRgb8(p) => {
                 let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(w - 1 - x, y)
-                }))
+                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| *p.get_pixel(w - 1 - x, y)))
             }
             DynamicImage::ImageRgba8(p) => {
                 let (w, h) = p.dimensions();
@@ -769,9 +767,7 @@ impl DynamicImage {
             }
             DynamicImage::ImageRgb8(p) => {
                 let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(x, h - 1 - y)
-                }))
+                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| *p.get_pixel(x, h - 1 - y)))
             }
             DynamicImage::ImageRgba8(p) => {
                 let (w, h) = p.dimensions();
@@ -807,9 +803,7 @@ impl DynamicImage {
             }
             DynamicImage::ImageRgb8(p) => {
                 let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(y, h - 1 - x)
-                }))
+                DynamicImage::ImageRgb8(RgbImage::from_fn(h, w, |x, y| *p.get_pixel(y, h - 1 - x)))
             }
             DynamicImage::ImageRgba8(p) => {
                 let (w, h) = p.dimensions();
@@ -883,9 +877,7 @@ impl DynamicImage {
             }
             DynamicImage::ImageRgb8(p) => {
                 let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(w - 1 - y, x)
-                }))
+                DynamicImage::ImageRgb8(RgbImage::from_fn(h, w, |x, y| *p.get_pixel(w - 1 - y, x)))
             }
             DynamicImage::ImageRgba8(p) => {
                 let (w, h) = p.dimensions();
@@ -1029,17 +1021,17 @@ impl DynamicImage {
             L8 => {
                 DynamicImage::ImageLuma8(GrayImage::from_raw(d.width, d.height, d.pixels.clone())?)
             }
-            La8 => DynamicImage::ImageLumaA8(
-                GrayAlphaImage::from_raw(d.width, d.height, d.pixels.clone())?,
-            ),
-            Rgb8 => {
-                DynamicImage::ImageRgb8(RgbImage::from_raw(d.width, d.height, d.pixels.clone())?)
-            }
-            Rgba8 => DynamicImage::ImageRgba8(RgbaImage::from_raw(
+            La8 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
                 d.width,
                 d.height,
                 d.pixels.clone(),
             )?),
+            Rgb8 => {
+                DynamicImage::ImageRgb8(RgbImage::from_raw(d.width, d.height, d.pixels.clone())?)
+            }
+            Rgba8 => {
+                DynamicImage::ImageRgba8(RgbaImage::from_raw(d.width, d.height, d.pixels.clone())?)
+            }
             L16 => {
                 let u16_data: Vec<u16> = d
                     .pixels

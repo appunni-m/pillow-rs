@@ -13,7 +13,7 @@ pub mod image;
 pub mod ops;
 pub mod pipeline;
 
+pub use crate::image::Image;
 pub use draw::Draw;
 pub use error::PilError;
 pub use font::Font;
-pub use crate::image::Image;

@@ -20,7 +20,11 @@ fn test_decode_fixtures() {
     let fixtures_dir = manifest_dir.join("tests").join("fixtures");
     let input_jsons = fixtures_dir.join("input").join("jsons");
     let output_jsons = fixtures_dir.join("outputs").join("jsons");
-    let assets_dir = manifest_dir.join("tests").join("fixtures").join("input").join("images");
+    let assets_dir = manifest_dir
+        .join("tests")
+        .join("fixtures")
+        .join("input")
+        .join("images");
 
     // Auto-generate references from PIL (libjpeg/libpng) if outputs don't exist yet
     if !output_jsons.is_dir() || fs::read_dir(&output_jsons).unwrap().next().is_none() {
@@ -34,10 +38,12 @@ fn test_decode_fixtures() {
             match status {
                 Ok(s) if s.success() => eprintln!("References generated."),
                 Ok(s) => eprintln!("WARNING: reference generator failed (exit {})", s),
-                Err(e) => eprintln!(
-                    "WARNING: cannot run reference generator: {} (PIL not installed?)",
-                    e
-                ),
+                Err(e) => {
+                    eprintln!(
+                        "WARNING: cannot run reference generator: {} (PIL not installed?)",
+                        e
+                    )
+                }
             }
         }
     }
@@ -91,7 +97,7 @@ fn test_decode_fixtures() {
                 None => {
                     if out_cases
                         .get(cid)
-                        .map_or(false, |c| c["assert"]["method"].as_str() == Some("error"))
+                        .is_some_and(|c| c["assert"]["method"].as_str() == Some("error"))
                     {
                         eprintln!("  OK   [{cid}] (expected error)");
                         passed += 1;
@@ -200,7 +206,11 @@ fn test_format_detection() {
 fn test_manifest_coverage() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest_path = manifest_dir.join("manifest.yaml");
-    let assets_dir = manifest_dir.join("tests").join("fixtures").join("input").join("images");
+    let assets_dir = manifest_dir
+        .join("tests")
+        .join("fixtures")
+        .join("input")
+        .join("images");
 
     if !manifest_path.exists() {
         eprintln!("SKIP: manifest.yaml not found");
@@ -219,7 +229,9 @@ fn test_manifest_coverage() {
         for case in fmt_data["edge_cases"].as_array().unwrap() {
             let cid = case["id"].as_str().unwrap();
             // Skip planned (not yet implemented) edge cases
-            if case.get("status").and_then(|v| v.as_str()) == Some("planned") { continue; }
+            if case.get("status").and_then(|v| v.as_str()) == Some("planned") {
+                continue;
+            }
             let expect_error = case
                 .get("expect_error")
                 .and_then(|v| v.as_bool())
@@ -289,15 +301,22 @@ fn test_encode_roundtrip() {
     // Only test formats that have encode support
     // Lossy formats (jpeg) excluded — pixel-exact roundtrip is impossible.
     // WebP uses lossless encoding so it roundtrips perfectly.
-    let encodable: std::collections::HashSet<&str> =
-        ["png", "bmp", "gif", "tiff", "webp"].iter().copied().collect();
+    let encodable: std::collections::HashSet<&str> = ["png", "bmp", "gif", "tiff", "webp"]
+        .iter()
+        .copied()
+        .collect();
 
     for entry in fs::read_dir(&input_jsons).unwrap().flatten() {
         let input_path = entry.path();
         let fname = input_path.file_name().unwrap().to_str().unwrap();
         // Get format name from fixture: "Decode.jpeg.json" → "jpeg"
-        let fmt = fname.strip_prefix("Decode.").and_then(|s| s.strip_suffix(".json")).unwrap_or("");
-        if !encodable.contains(fmt) { continue; }
+        let fmt = fname
+            .strip_prefix("Decode.")
+            .and_then(|s| s.strip_suffix(".json"))
+            .unwrap_or("");
+        if !encodable.contains(fmt) {
+            continue;
+        }
 
         let inp: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(&input_path).unwrap()).unwrap();
@@ -306,37 +325,66 @@ fn test_encode_roundtrip() {
             let cid = case["id"].as_str().unwrap();
             let asset_rel = case["asset"].as_str().unwrap();
             let asset_path = images_dir.join(asset_rel);
-            if !asset_path.exists() { continue; }
+            if !asset_path.exists() {
+                continue;
+            }
             total += 1;
 
-            let asset_data = match fs::read(&asset_path) { Ok(d) => d, Err(_) => { failed += 1; continue; } };
+            let asset_data = match fs::read(&asset_path) {
+                Ok(d) => d,
+                Err(_) => {
+                    failed += 1;
+                    continue;
+                }
+            };
             let decoded = match img::decode(&asset_data) {
                 Some(d) => d,
-                None => { eprintln!("  SKIP [{cid}]: decode failed for roundtrip"); continue; }
+                None => {
+                    eprintln!("  SKIP [{cid}]: decode failed for roundtrip");
+                    continue;
+                }
             };
 
             // Encode → Decode → Compare
             let fmt_enum = match fmt {
-                "jpeg" => img::ImageFormat::Jpeg, "png" => img::ImageFormat::Png,
-                "gif" => img::ImageFormat::Gif, "bmp" => img::ImageFormat::Bmp,
-                "tiff" => img::ImageFormat::Tiff, "webp" => img::ImageFormat::WebP,
-                _ => { eprintln!("  SKIP [{cid}]: no encoder"); continue; }
+                "jpeg" => img::ImageFormat::Jpeg,
+                "png" => img::ImageFormat::Png,
+                "gif" => img::ImageFormat::Gif,
+                "bmp" => img::ImageFormat::Bmp,
+                "tiff" => img::ImageFormat::Tiff,
+                "webp" => img::ImageFormat::WebP,
+                _ => {
+                    eprintln!("  SKIP [{cid}]: no encoder");
+                    continue;
+                }
             };
             use img::encode_options::EncodeOptions;
             let encoded = match img::encode(&decoded, fmt_enum, &EncodeOptions::default()) {
                 Some(e) => e,
-                None => { eprintln!("  SKIP [{cid}]: encode not implemented"); continue; }
+                None => {
+                    eprintln!("  SKIP [{cid}]: encode not implemented");
+                    continue;
+                }
             };
             let redecoded = match img::decode(&encoded) {
                 Some(d) => d,
-                None => { eprintln!("  FAIL [{cid}]: re-decode after encode failed"); failed += 1; continue; }
+                None => {
+                    eprintln!("  FAIL [{cid}]: re-decode after encode failed");
+                    failed += 1;
+                    continue;
+                }
             };
 
             if decoded.as_bytes() == redecoded.as_bytes() {
                 eprintln!("  OK   [{cid}] roundtrip {}B", decoded.as_bytes().len());
                 passed += 1;
             } else {
-                let diffs = decoded.as_bytes().iter().zip(redecoded.as_bytes().iter()).filter(|(a,b)| a!=b).count();
+                let diffs = decoded
+                    .as_bytes()
+                    .iter()
+                    .zip(redecoded.as_bytes().iter())
+                    .filter(|(a, b)| a != b)
+                    .count();
                 eprintln!("  FAIL [{cid}]: roundtrip {diffs} bytes differ");
                 failed += 1;
             }
@@ -344,6 +392,10 @@ fn test_encode_roundtrip() {
     }
 
     eprintln!("\nencode roundtrip: {passed}/{total} passed, {failed} failed");
-    if total == 0 { eprintln!("No encodable fixtures found."); }
-    if failed > 0 { panic!("{failed} roundtrip test(s) failed"); }
+    if total == 0 {
+        eprintln!("No encodable fixtures found.");
+    }
+    if failed > 0 {
+        panic!("{failed} roundtrip test(s) failed");
+    }
 }

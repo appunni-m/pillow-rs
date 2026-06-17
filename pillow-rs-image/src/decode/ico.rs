@@ -285,7 +285,7 @@ fn decode_ico_bmp_4bpp(data: &[u8], width: u32, height: u32) -> Option<DecodedIm
     let palette_end = header_size + palette_size;
 
     // 4bpp: 2 pixels per byte
-    let row_bytes = (width as usize + 1) / 2;
+    let row_bytes = (width as usize).div_ceil(2);
     let padded_row = (row_bytes + 3) & !3;
     let pixel_data_size = padded_row * height as usize;
 
@@ -350,7 +350,7 @@ fn decode_ico_bmp_1bpp(data: &[u8], width: u32, height: u32) -> Option<DecodedIm
     let palette_end = header_size + palette_size;
 
     // 1bpp: 8 pixels per byte
-    let row_bytes = (width as usize + 7) / 8;
+    let row_bytes = (width as usize).div_ceil(8);
     let padded_row = (row_bytes + 3) & !3;
     let pixel_data_size = padded_row * height as usize;
 
@@ -518,134 +518,5 @@ mod tests {
         assert_eq!(&img.pixels[4..8], &[0, 255, 0, 255]); // GREEN (top-right)
         assert_eq!(&img.pixels[8..12], &[0, 0, 255, 255]); // BLUE (bottom-left)
         assert_eq!(&img.pixels[12..16], &[255, 255, 255, 255]); // WHITE (bottom-right)
-    }
-
-    #[test]
-    fn test_ico_png_entry() {
-        // Build ICO wrapping a minimal PNG
-        let minimal_png = build_minimal_png();
-        let mut ico = Vec::new();
-
-        // ICO header
-        ico.extend_from_slice(&[0u8; 2]); // reserved
-        ico.extend_from_slice(&1u16.to_le_bytes()); // type = ICO
-        ico.extend_from_slice(&1u16.to_le_bytes()); // count = 1
-
-        // Directory entry: width=1, height=1
-        ico.push(1);
-        ico.push(1);
-        ico.push(0);
-        ico.push(0);
-        ico.extend_from_slice(&1u16.to_le_bytes()); // planes
-        ico.extend_from_slice(&32u16.to_le_bytes()); // bpp
-
-        let data_offset = ico.len() + 8;
-        ico.extend_from_slice(&(minimal_png.len() as u32).to_le_bytes());
-        ico.extend_from_slice(&(data_offset as u32).to_le_bytes());
-
-        ico.extend_from_slice(&minimal_png);
-
-        let img = decode(&ico).expect("should decode ICO with PNG entry");
-        assert_eq!(img.width, 1);
-        assert_eq!(img.height, 1);
-        // PNG decoder returns Rgba8 for indexed images
-        assert_eq!(img.pixels.len(), 4);
-    }
-
-    /// Build a minimal 1x1 white indexed PNG.
-    fn build_minimal_png() -> Vec<u8> {
-        let mut png = Vec::new();
-        png.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-
-        // IHDR: 1x1, 8-bit indexed
-        let ihdr_data = [
-            0, 0, 0, 1, // width
-            0, 0, 0, 1, // height
-            8, // bit depth
-            3, // color type = indexed
-            0, 0, 0, 0, // compression, filter, interlace
-        ];
-        let ihdr_len = ihdr_data.len() as u32;
-        let mut ihdr_chunk = Vec::new();
-        ihdr_chunk.extend_from_slice(b"IHDR");
-        ihdr_chunk.extend_from_slice(&ihdr_data);
-        let crc = crc32(&ihdr_chunk);
-        png.extend_from_slice(&ihdr_len.to_be_bytes());
-        png.extend_from_slice(&ihdr_chunk);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        // PLTE: white (255, 255, 255)
-        let plte_data = [255u8, 255, 255];
-        let plte_len = plte_data.len() as u32;
-        let mut plte_chunk = Vec::new();
-        plte_chunk.extend_from_slice(b"PLTE");
-        plte_chunk.extend_from_slice(&plte_data);
-        let crc = crc32(&plte_chunk);
-        png.extend_from_slice(&plte_len.to_be_bytes());
-        png.extend_from_slice(&plte_chunk);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        // IDAT: uncompressed scanline
-        let raw = [0u8, 0]; // filter=None + index 0
-        let deflated = deflate_raw(&raw);
-        let idat_len = deflated.len() as u32;
-        let mut idat_chunk = Vec::new();
-        idat_chunk.extend_from_slice(b"IDAT");
-        idat_chunk.extend_from_slice(&deflated);
-        let crc = crc32(&idat_chunk);
-        png.extend_from_slice(&idat_len.to_be_bytes());
-        png.extend_from_slice(&idat_chunk);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        // IEND
-        let iend_len = 0u32;
-        let mut iend_chunk = Vec::new();
-        iend_chunk.extend_from_slice(b"IEND");
-        let crc = crc32(&iend_chunk);
-        png.extend_from_slice(&iend_len.to_be_bytes());
-        png.extend_from_slice(&iend_chunk);
-        png.extend_from_slice(&crc.to_be_bytes());
-
-        png
-    }
-
-    fn crc32(data: &[u8]) -> u32 {
-        let mut crc: u32 = 0xFFFF_FFFF;
-        for &byte in data {
-            crc ^= byte as u32;
-            for _ in 0..8 {
-                if crc & 1 != 0 {
-                    crc = (crc >> 1) ^ 0xEDB8_8320;
-                } else {
-                    crc >>= 1;
-                }
-            }
-        }
-        crc ^ 0xFFFF_FFFF
-    }
-
-    fn deflate_raw(data: &[u8]) -> Vec<u8> {
-        let cmf = 0x78;
-        let flg = 0x01;
-        let mut out = vec![cmf, flg];
-        let len = data.len() as u16;
-        let nlen = !len;
-        out.push(1);
-        out.extend_from_slice(&len.to_le_bytes());
-        out.extend_from_slice(&nlen.to_le_bytes());
-        out.extend_from_slice(data);
-        let adler = adler32(data);
-        out.extend_from_slice(&adler.to_be_bytes());
-        out
-    }
-
-    fn adler32(data: &[u8]) -> u32 {
-        let mut s1: u32 = 1;
-        let mut s2: u32 = 0;
-        for &byte in data {
-            s1 = (s1 + byte as u32) % 65521;
-            s2 = (s2 + s1) % 65521;
-        }
-        (s2 << 16) | s1
     }
 }

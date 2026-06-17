@@ -35,7 +35,7 @@ fn read_i32_le<R: Read>(r: &mut R) -> Option<i32> {
 
 /// Row size in bytes (padded to 4‑byte boundary).
 fn row_size(bits_per_pixel: u16, width: u32) -> usize {
-    (((bits_per_pixel as u64) * (width as u64) + 31) / 32 * 4) as usize
+    (((bits_per_pixel as u64) * (width as u64)).div_ceil(32) * 4) as usize
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ fn decode_rle4(data: &[u8], width: usize, height: usize) -> Option<Vec<u8>> {
                 _ => {
                     // Absolute mode: `value` nibbles follow
                     let nibble_count = value as usize;
-                    let byte_count = (nibble_count + 1) / 2;
+                    let byte_count = nibble_count.div_ceil(2);
                     if i + byte_count > data.len() {
                         return None;
                     }
@@ -365,10 +365,14 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
         match bit_depth {
             1 => {
                 // 1 bpp — packed bits, skip stride padding (PIL mode '1' parity)
-                let packed_per_row = (width_usize + 7) / 8;
+                let packed_per_row = width_usize.div_ceil(8);
                 let mut out = Vec::with_capacity(packed_per_row * height_usize);
                 for row in 0..height_usize {
-                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let src_row = if top_down {
+                        row
+                    } else {
+                        height_usize - 1 - row
+                    };
                     let offset = src_row * stride;
                     out.extend_from_slice(&raw[offset..offset + packed_per_row]);
                 }
@@ -378,11 +382,19 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                 // 4 bpp — expand nibbles to full-byte indices
                 let mut out = Vec::with_capacity(width_usize * height_usize);
                 for row in 0..height_usize {
-                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let src_row = if top_down {
+                        row
+                    } else {
+                        height_usize - 1 - row
+                    };
                     let offset = src_row * stride;
                     for col in 0..width_usize {
                         let byte = raw[offset + col / 2];
-                        let idx = if col % 2 == 0 { (byte >> 4) & 0x0F } else { byte & 0x0F };
+                        let idx = if col % 2 == 0 {
+                            (byte >> 4) & 0x0F
+                        } else {
+                            byte & 0x0F
+                        };
                         out.push(idx);
                     }
                 }
@@ -392,7 +404,11 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                 // 8 bpp — raw palette indices, skip stride padding (PIL mode 'P' parity)
                 let mut out = Vec::with_capacity(width_usize * height_usize);
                 for row in 0..height_usize {
-                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let src_row = if top_down {
+                        row
+                    } else {
+                        height_usize - 1 - row
+                    };
                     let offset = src_row * stride;
                     out.extend_from_slice(&raw[offset..offset + width_usize]);
                 }
@@ -402,7 +418,11 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                 // 16 bpp — RGB555 or BI_BITFIELDS
                 let mut out = Vec::with_capacity(width_usize * height_usize * 3);
                 for row in 0..height_usize {
-                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let src_row = if top_down {
+                        row
+                    } else {
+                        height_usize - 1 - row
+                    };
                     let offset = src_row * stride;
                     for col in 0..width_usize {
                         let lo = raw[offset + col * 2] as u32;
@@ -420,7 +440,11 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                 // 24 bpp — BGR order
                 let mut out = Vec::with_capacity(width_usize * height_usize * 3);
                 for row in 0..height_usize {
-                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let src_row = if top_down {
+                        row
+                    } else {
+                        height_usize - 1 - row
+                    };
                     let offset = src_row * stride;
                     for col in 0..width_usize {
                         let b = raw[offset + col * 3];
@@ -435,7 +459,11 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
                 // 32 bpp — BGRA → RGB (strip alpha, PIL parity)
                 let mut out = Vec::with_capacity(width_usize * height_usize * 3);
                 for row in 0..height_usize {
-                    let src_row = if top_down { row } else { height_usize - 1 - row };
+                    let src_row = if top_down {
+                        row
+                    } else {
+                        height_usize - 1 - row
+                    };
                     let offset = src_row * stride;
                     for col in 0..width_usize {
                         let b = raw[offset + col * 4];

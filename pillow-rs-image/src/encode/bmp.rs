@@ -3,11 +3,11 @@
 //! Writes BITMAPFILEHEADER + BITMAPINFOHEADER + optional palette + pixel data.
 //! Supports L8 (8-bit indexed with grayscale palette), Rgb8 (24-bit BGR),
 //! and Rgba8 (32-bit BGRA). Rows are written bottom-up with 4-byte padding.
-use crate::types::{ColorType, DecodedImage};
 use crate::encode_options::EncodeOptions;
+use crate::types::{ColorType, DecodedImage};
 /// Row size in bytes (padded to 4-byte boundary), matching the decoder formula.
 fn row_size(bits_per_pixel: u16, width: u32) -> usize {
-    (((bits_per_pixel as u64) * (width as u64) + 31) / 32 * 4) as usize
+    (((bits_per_pixel as u64) * (width as u64)).div_ceil(32) * 4) as usize
 }
 /// Encode a `DecodedImage` as BMP bytes.
 ///
@@ -26,12 +26,14 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     // Validate pixel buffer size matches the expected w×h×channels layout.
     // The BMP decoder can return packed bits for 1-bit images as L8, which
     // would have a different buffer size. We reject those here.
-    let expected_len = w as usize * h as usize * match img.color {
-        ColorType::L8 => 1,
-        ColorType::Rgb8 => 3,
-        ColorType::Rgba8 => 4,
-        _ => 0,
-    };
+    let expected_len = w as usize
+        * h as usize
+        * match img.color {
+            ColorType::L8 => 1,
+            ColorType::Rgb8 => 3,
+            ColorType::Rgba8 => 4,
+            _ => 0,
+        };
     if img.pixels.len() != expected_len {
         return None;
     }
@@ -58,7 +60,7 @@ fn encode_l8(w: u32, h: u32, pixels: &[u8]) -> Option<Vec<u8>> {
     data.extend_from_slice(&(file_size as u32).to_le_bytes()); // bfSize
     data.extend_from_slice(&[0u8; 4]); // bfReserved1 + bfReserved2
     data.extend_from_slice(&pixel_data_offset.to_le_bytes()); // bfOffBits
-    // --- BITMAPINFOHEADER (40 bytes) ---
+                                                              // --- BITMAPINFOHEADER (40 bytes) ---
     data.extend_from_slice(&40u32.to_le_bytes()); // biSize
     data.extend_from_slice(&(w as i32).to_le_bytes()); // biWidth
     data.extend_from_slice(&(h as i32).to_le_bytes()); // biHeight (bottom-up)
@@ -70,13 +72,13 @@ fn encode_l8(w: u32, h: u32, pixels: &[u8]) -> Option<Vec<u8>> {
     data.extend_from_slice(&0i32.to_le_bytes()); // biYPelsPerMeter
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed (0 = max for bpp)
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
-    // --- Palette (256 entries, 4 bytes each: B, G, R, reserved) ---
+                                                 // --- Palette (256 entries, 4 bytes each: B, G, R, reserved) ---
     for i in 0u16..256 {
         let val = i as u8;
         data.push(val); // B
         data.push(val); // G
         data.push(val); // R
-        data.push(0);   // reserved
+        data.push(0); // reserved
     }
     // --- Pixel data (bottom-up) ---
     for y in (0..h as usize).rev() {
@@ -125,7 +127,7 @@ fn encode_rgb24(w: u32, h: u32, pixels: &[u8]) -> Option<Vec<u8>> {
             // Swap R and B for BGR order
             data.push(pixels[offset + 2]); // B
             data.push(pixels[offset + 1]); // G
-            data.push(pixels[offset + 0]); // R
+            data.push(pixels[offset]); // R
         }
         // Pad row to 4-byte boundary
         for _ in 0..padding {
@@ -170,7 +172,7 @@ fn encode_rgb32(w: u32, h: u32, pixels: &[u8]) -> Option<Vec<u8>> {
             // RGBA → BGRA
             data.push(pixels[offset + 2]); // B
             data.push(pixels[offset + 1]); // G
-            data.push(pixels[offset + 0]); // R
+            data.push(pixels[offset]); // R
             data.push(pixels[offset + 3]); // A
         }
         // Pad row to 4-byte boundary (should be 0 for 32-bit, but just in case)
@@ -273,17 +275,22 @@ mod tests {
         // Palette: grayscale (B=G=R=i, reserved=0)
         for i in 0u16..256 {
             let v = i as u8;
-            data.push(v); data.push(v); data.push(v); data.push(0);
+            data.push(v);
+            data.push(v);
+            data.push(v);
+            data.push(0);
         }
         // Pixel data (bottom-up): top-left=0, top-right=128, bottom-left=200, bottom-right=255
         // Row 1 (bottom in file, top of image): indices 0, 128
         data.push(0);
         data.push(128);
-        data.push(0); data.push(0); // padding (4-2=2)
-        // Row 0 (top in file, bottom of image): indices 200, 255
+        data.push(0);
+        data.push(0); // padding (4-2=2)
+                      // Row 0 (top in file, bottom of image): indices 200, 255
         data.push(200);
         data.push(255);
-        data.push(0); data.push(0); // padding
+        data.push(0);
+        data.push(0); // padding
         data
     }
     fn build_rgb_bmp_24bit() -> Vec<u8> {
@@ -310,13 +317,23 @@ mod tests {
         data.extend_from_slice(&0u32.to_le_bytes());
         // Pixel data (bottom-up, BGR)
         // Bottom row (y=0 in file): B=0,G=0,R=255 (red), B=0,G=255,R=0 (green)
-        data.push(0); data.push(0); data.push(255); // red (BGR)
-        data.push(0); data.push(255); data.push(0); // green (BGR)
-        data.push(0); data.push(0); // padding (8-6=2)
-        // Top row (y=1 in file): B=255,G=0,R=0 (blue), B=128,G=128,R=128 (gray)
-        data.push(255); data.push(0); data.push(0); // blue (BGR)
-        data.push(128); data.push(128); data.push(128); // gray (BGR)
-        data.push(0); data.push(0); // padding
+        data.push(0);
+        data.push(0);
+        data.push(255); // red (BGR)
+        data.push(0);
+        data.push(255);
+        data.push(0); // green (BGR)
+        data.push(0);
+        data.push(0); // padding (8-6=2)
+                      // Top row (y=1 in file): B=255,G=0,R=0 (blue), B=128,G=128,R=128 (gray)
+        data.push(255);
+        data.push(0);
+        data.push(0); // blue (BGR)
+        data.push(128);
+        data.push(128);
+        data.push(128); // gray (BGR)
+        data.push(0);
+        data.push(0); // padding
         data
     }
 }

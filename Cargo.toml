@@ -12,16 +12,38 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT-CMU"
 
+[workspace.lints.rust]
+# ── Correctness (lint groups with priority -1 so members can override) ──
+future-incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+unused = { level = "deny", priority = -1 }
+unsafe_code = "warn"
+
+# ── Temporary allowances (targeted migrations planned) ──
+# TODO(#ci): Migrate pillow-rs-py to IntoPyObject API (PyO3 v0.23+)
+deprecated = "allow"
+
+# ── Documentation ──
+# missing_docs = "warn"  # enable once all public APIs are documented
+
 [workspace.lints.clippy]
+# ── Performance ──
 redundant_clone = "deny"
 large_enum_variant = "deny"
 needless_collect = "deny"
+clone_on_copy = "deny"
+unnecessary_to_owned = "deny"
+
+# ── Correctness / Safety ──
 unwrap_used = "deny"
 expect_used = "deny"
+todo = "deny"
 
-[workspace.lints.rust]
-# TODO: Migrate to IntoPyObject API (PyO3 v0.23+)
-deprecated = "allow"
+# ── Style / Idiom ──
+needless_borrow = "deny"
+map_unwrap_or = "deny"
+needless_range_loop = "deny"
+unnecessary_cast = "deny"
 
 [workspace.profile.release]
 lto = true

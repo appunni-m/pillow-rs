@@ -2563,7 +2563,8 @@ mod tests {
     fn test_resize_nearest_alpha_forced_rgb() {
         // RGB mode (mode=2): alpha forced to 255 even if source has non-255 alpha
         let pixels = vec![p(255, 0, 0, 100)];
-        let (out, w, h) = resize(&pixels, 1, 1, 1, 1, 2, 0);
+        let (out, ops::pil_resize::PRECISION_BITS, ops::pil_resize::PRECISION_BITS) =
+            resize(&pixels, 1, 1, 1, 1, 2, 0);
         assert_eq!(a_of(out[0]), 255, "RGB mode forces alpha to 255");
     }
 
@@ -2571,7 +2572,8 @@ mod tests {
     fn test_resize_nearest_alpha_preserved_la() {
         // LA mode (mode=1): alpha preserved
         let pixels = vec![p(100, 0, 0, 100)];
-        let (out, w, h) = resize(&pixels, 1, 1, 1, 1, 1, 0);
+        let (out, ops::pil_resize::PRECISION_BITS, ops::pil_resize::PRECISION_BITS) =
+            resize(&pixels, 1, 1, 1, 1, 1, 0);
         assert_eq!(a_of(out[0]), 100, "LA mode preserves alpha");
     }
 
@@ -3295,8 +3297,8 @@ pub fn paste(
     // Compute paste region clamped to destination bounds.
     // x_start/y_start = first source pixel visible in dest (0 if paste_x >= 0).
     // x_end/y_end     = last source pixel visible in dest (src_w if paste fits).
-    let x_start = 0u32.max((-paste_x) as u32);
-    let y_start = 0u32.max((-paste_y) as u32);
+    let x_start = (-paste_x) as u32;
+    let y_start = (-paste_y) as u32;
     let x_end = src_w.min(w.saturating_sub(paste_x.max(0) as u32));
     let y_end = src_h.min(h.saturating_sub(paste_y.max(0) as u32));
 
@@ -3338,7 +3340,7 @@ pub fn paste(
                     pixels[dst_idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
                 } else {
                     // Partial mask: (src * mask + dst * (255 - mask) + 127) / 255
-                    let mv_u32 = mv as u32;
+                    let mv_u32 = mv;
                     let inv_mv = 255u32 - mv_u32;
 
                     let sr = sp & 0xFF;
@@ -4094,7 +4096,7 @@ pub fn convert(
             // ── RGB(2) -> other modes ──
             (2, 0) | (2, 1) => {
                 // RGB->L or RGB->LA: BT.601 luma
-                let luma = ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255) as u32;
+                let luma = ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255);
                 out.push(luma | (luma << 8) | (luma << 16) | (0xFF << 24));
             }
             (2, 3) => {
@@ -4105,7 +4107,7 @@ pub fn convert(
             // ── RGBA(3) -> other modes ──
             (3, 0) | (3, 1) => {
                 // RGBA->L or RGBA->LA: BT.601 luma
-                let luma = ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255) as u32;
+                let luma = ((299 * r_src + 587 * g_src + 114 * b_src + 500) / 1000).min(255);
                 let out_a = if target_mode == 1 { a_src } else { 0xFF };
                 out.push(luma | (luma << 8) | (luma << 16) | (out_a << 24));
             }

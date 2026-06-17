@@ -18,12 +18,7 @@ use crate::types::{ColorType, DecodedImage};
 
 extern "C" {
     /// Get WebP image width and height (returns 0 on failure).
-    fn WebPGetInfo(
-        data: *const u8,
-        data_size: usize,
-        width: *mut i32,
-        height: *mut i32,
-    ) -> i32;
+    fn WebPGetInfo(data: *const u8, data_size: usize, width: *mut i32, height: *mut i32) -> i32;
 
     /// Decode WebP image to RGBA (4 bytes/pixel). Returns a malloc'd buffer
     /// that must be freed with WebPFree(). Returns NULL on failure.
@@ -82,7 +77,10 @@ pub fn decode(data: &[u8]) -> Option<DecodedImage> {
         Some(DecodedImage::new(width, height, buf, ColorType::Rgba8))
     } else {
         // Strip alpha channel to produce 3-byte RGB
-        let rgb: Vec<u8> = buf.chunks_exact(4).flat_map(|c| vec![c[0], c[1], c[2]]).collect();
+        let rgb: Vec<u8> = buf
+            .chunks_exact(4)
+            .flat_map(|c| vec![c[0], c[1], c[2]])
+            .collect();
         Some(DecodedImage::new(width, height, rgb, ColorType::Rgb8))
     }
 }

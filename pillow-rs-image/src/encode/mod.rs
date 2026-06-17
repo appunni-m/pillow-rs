@@ -13,7 +13,11 @@ pub mod tiff;
 pub mod webp;
 
 /// Dispatch encoding to the appropriate format-specific encoder.
-pub fn encode_format(img: &DecodedImage, format: ImageFormat, opts: &EncodeOptions) -> Option<Vec<u8>> {
+pub fn encode_format(
+    img: &DecodedImage,
+    format: ImageFormat,
+    opts: &EncodeOptions,
+) -> Option<Vec<u8>> {
     match format {
         ImageFormat::Jpeg => jpeg::encode(img, opts),
         ImageFormat::Png => png::encode(img, opts),

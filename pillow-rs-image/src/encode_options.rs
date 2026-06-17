@@ -24,5 +24,7 @@ pub struct EncodeOptions {
 }
 
 impl EncodeOptions {
-    pub fn none() -> Self { Self::default() }
+    pub fn none() -> Self {
+        Self::default()
+    }
 }

@@ -63,4 +63,3 @@ pub fn encode_default(img: &DecodedImage, format: ImageFormat) -> Option<Vec<u8>
 pub mod encode_options;
 
 use crate::encode_options::EncodeOptions;
-use crate::types::*;

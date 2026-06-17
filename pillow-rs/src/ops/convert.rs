@@ -261,9 +261,8 @@ fn convert_with_matrix(
                 })
                 .collect();
             Ok(pillow_rs_image::DynamicImage::ImageRgb8(
-                pillow_rs_image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
-                    PilError::ValueError("matrix conversion failed".into())
-                })?,
+                pillow_rs_image::RgbImage::from_raw(w, h, pixels)
+                    .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
             ))
         }
         (12, "RGB") => {
@@ -286,9 +285,8 @@ fn convert_with_matrix(
                 })
                 .collect();
             Ok(pillow_rs_image::DynamicImage::ImageRgb8(
-                pillow_rs_image::RgbImage::from_raw(w, h, pixels).ok_or_else(|| {
-                    PilError::ValueError("matrix conversion failed".into())
-                })?,
+                pillow_rs_image::RgbImage::from_raw(w, h, pixels)
+                    .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
             ))
         }
         (n, _) => Err(PilError::ValueError(format!(

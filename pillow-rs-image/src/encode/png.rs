@@ -2,8 +2,8 @@
 //!
 //! Encodes all standard color types (Luma8, LumaA8, Rgb8, Rgba8) at 8-bit
 //! depth. The output is fully compatible with libpng and PIL.
-use crate::types::{ColorType, DecodedImage};
 use crate::encode_options::EncodeOptions;
+use crate::types::{ColorType, DecodedImage};
 use png::{BitDepth, ColorType as PngColorType};
 /// Encode a `DecodedImage` as PNG bytes.
 ///
@@ -152,7 +152,7 @@ mod tests {
         for &byte in data {
             crc ^= byte as u32;
             for _ in 0..8 {
-                if crc &1 != 0 {
+                if crc & 1 != 0 {
                     crc = (crc >> 1) ^ 0xEDB8_8320;
                 } else {
                     crc >>= 1;

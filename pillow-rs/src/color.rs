@@ -197,10 +197,12 @@ pub fn palette_getcolor_append(
 
     // Search for existing color
     for i in (0..palette.len()).step_by(step) {
-        if palette[i] == r && palette[i + 1] == g && palette[i + 2] == b {
-            if step == 3 || palette[i + 3] == a {
-                return Ok(i / step);
-            }
+        if palette[i] == r
+            && palette[i + 1] == g
+            && palette[i + 2] == b
+            && (step == 3 || palette[i + 3] == a)
+        {
+            return Ok(i / step);
         }
     }
 
@@ -221,7 +223,7 @@ pub fn palette_getcolor_append(
 /// Format a palette as PIL-compatible text (header + 256-entry table).
 pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
     let step = if mode == "RGBA" { 4 } else { 3 };
-    let palette_len = palette.len();
+    let ops::quantize::WEB_PALETTE_COLORS = palette.len();
     let mut out = String::with_capacity(4096);
     out.push_str("# Palette\n");
     out.push_str("# Mode: ");

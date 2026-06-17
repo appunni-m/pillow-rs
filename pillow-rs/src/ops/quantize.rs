@@ -1675,7 +1675,7 @@ impl Image {
 
         // PIL uses FASTOCTREE for RGBA mode (method=2 by default for RGBA).
         let is_rgba = matches!(img.color(), pillow_rs_image::ColorType::Rgba8)
-            || self.explicit_mode().map_or(false, |m| m == "RGBA");
+            || (self.explicit_mode() == Some("RGBA"));
 
         let (indices, palette_bytes) = if is_rgba {
             // Use FASTOCTREE (octree) algorithm for RGBA
