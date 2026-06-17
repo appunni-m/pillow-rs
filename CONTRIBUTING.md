@@ -346,23 +346,86 @@ Output regenerates `BENCHMARKS.md`. The benchmark spec is auto-generated from `m
 
 ## Code Quality & Linting
 
-### Rust
+pillow-rs uses a curated, multi-layered linting setup that catches bugs, enforces idiomatic Rust, and keeps the codebase consistent — without burying contributors in noise.
+
+### How it works
+
+Instead of the blunt `-D warnings` (which turns every deprecation notice into a hard error), we use **workspace-level lint configuration** in `Cargo.toml`. Each lint is assigned a deliberate level:
+
+| Level | Meaning | CI fails? |
+|-------|---------|-----------|
+| `deny` | Hard rule — always an error | **Yes** |
+| `warn` | Shows in `cargo clippy` output, but doesn't block builds | No |
+| `allow` | Silenced intentionally (with a `TODO` tracking migration) | No |
+
+This means adding a new dependency with a deprecation doesn't break CI. Adding an `unwrap()` in production code **does**.
+
+### What gets enforced
+
+The full configuration lives in `[workspace.lints]` at the workspace root. Here's what each category covers:
+
+#### Rust compiler lints (`[workspace.lints.rust]`)
+
+| Lint | Level | Why |
+|------|-------|-----|
+| `future-incompatible` | deny | Catch breakage before the next Rust edition |
+| `nonstandard_style` | deny | Snake case, CamelCase — consistent naming everywhere |
+| `unused` | deny | Dead imports, dead variables — zero dead code |
+| `unsafe_code` | warn | Visible but not forbidden — needs `// SAFETY:` comment |
+| `deprecated` | allow | PyO3 `to_object` → `IntoPyObject` migration tracked in TODO |
+
+#### Clippy lints (`[workspace.lints.clippy]`)
+
+**Performance (all `deny`):**
+`redundant_clone`, `large_enum_variant`, `needless_collect`, `clone_on_copy`, `unnecessary_to_owned`
+
+**Safety (all `deny`):**
+`unwrap_used`, `expect_used`, `todo`
+
+**Style & Idiom (all `deny`):**
+`needless_borrow`, `map_unwrap_or`, `needless_range_loop`, `unnecessary_cast`
+
+These were chosen intentionally — not "all clippy lints," but the subset that has caught real bugs in this codebase. No lint is added without a demonstrated reason.
+
+### Running lint checks
 
 ```bash
-# Format
+# Format (auto-fixes)
 cargo fmt
 
-# Lint (CI gate — must pass with zero warnings)
-cargo clippy --all-targets --all-features -- -D warnings
+# Format check (CI gate)
+cargo fmt --check
 
-# Check a specific crate
-cargo clippy -p pillow-rs --all-targets -- -D warnings
+# Lint — workspace config handles levels; -A deprecated silences PyO3 migration noise
+cargo clippy --all-targets --all-features -- -A deprecated
+
+# Lint a single crate
+cargo clippy -p pillow-rs --all-targets -- -A deprecated
+
+# Full lint script (fmt → clippy → tests → coverage)
+bash scripts/lint.sh
 ```
+
+**Why `-A deprecated`?** PyO3 v0.23+ deprecated `ToPyObject::to_object` in favor of `IntoPyObject`. The migration touches 80+ call sites in `pillow-rs-py`. Until that migration is done, `-A deprecated` keeps the deprecation warnings from masking real issues. A `TODO(#ci)` in the workspace config tracks this.
+
+### rustfmt configuration
+
+`rustfmt.toml` at the workspace root sets:
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `reorder_imports` | `true` | Consistent import ordering without nightly |
+| `max_width` | `100` | Fits side-by-side diffs on most screens |
+| `edition` | `2021` | Matches workspace edition |
+| `tab_spaces` | `4` | Standard Rust indent |
+
+Nightly-only options (`imports_granularity = "Crate"`, `group_imports = "StdExternalCrate"`) are noted in comments — enable once stable.
 
 ### Pre-commit checklist
 
-- [ ] `cargo fmt` passes (no diff)
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings` passes
+- [ ] `cargo fmt --check` passes (no diff)
+- [ ] `cargo clippy --all-targets --all-features -- -A deprecated` passes
+- [ ] `cargo test -p pillow-rs` passes
 - [ ] No `unwrap()` or `expect()` outside `#[cfg(test)]`
 - [ ] `thiserror` for error types, never bare `anyhow` in core
 - [ ] `&str` over `String`, `&[T]` over `Vec<T>` in function parameters
@@ -373,11 +436,40 @@ cargo clippy -p pillow-rs --all-targets -- -D warnings
 - [ ] Drawing code dispatches per-mode, no `to_rgba8()` conversions
 - [ ] Python bindings contain no loops, no arithmetic, no math imports
 
-### Full lint script
+### Adding or adjusting a lint
 
-```bash
-bash scripts/lint.sh   # runs fmt → clippy → tests → coverage
+1. Add the lint to `[workspace.lints.rust]` or `[workspace.lints.clippy]` in `Cargo.toml`
+2. Set the level: `deny` for hard rules, `warn` for advisories
+3. If a lint group is at `deny` and you need a specific member at a different level, give the group `priority = -1` so the member can override
+4. Run `cargo clippy --all-targets --all-features -- -A deprecated` to see the effect
+5. Fix or `#[expect(clippy::lint_name, reason = "...")]` with a documented reason — never bare `#[allow]`
+6. Document the rationale in this section
+
+### Suppressing a lint (when you must)
+
+Use `#[expect]`, NOT `#[allow]`. `expect` fires a warning if the lint stops triggering — preventing stale suppressions:
+
+```rust
+// ✅ Correct — documents why, self-cleaning
+#[expect(clippy::bad_bit_mask, reason = "Verify extracted byte components are in valid u8 range")]
+fn test_bit_extraction() { ... }
+
+// ❌ Wrong — silent, rots forever
+#[allow(clippy::bad_bit_mask)]
+fn test_bit_extraction() { ... }
 ```
+
+This follows the rust-development skill principle: **fix warnings, don't silence them**. Suppression is a last resort, not a first response.
+
+### Editor integration
+
+Most editors pick up `rustfmt.toml` and workspace lint configs automatically:
+
+- **VS Code** with `rust-analyzer`: format-on-save uses `rustfmt.toml`; clippy warnings appear inline
+- **JetBrains Rust** / **IntelliJ**: detects `Cargo.toml` workspace lints; Ctrl+Alt+L formats
+- **vim/neovim** with `rust-analyzer` LSP: `:RustFmt` and inline diagnostics
+
+No IDE-specific config files needed — everything lives in the workspace root.
 
 ### Naming conventions
 

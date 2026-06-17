@@ -13,3 +13,6 @@ crate-type = ["cdylib"]
 pillow-rs = { path = "../pillow-rs" }
 pyo3 = { version = "0.24", features = ["extension-module", "abi3", "abi3-py38"] }
 pyo3-log = "0.12"
+
+[lints]
+workspace = true

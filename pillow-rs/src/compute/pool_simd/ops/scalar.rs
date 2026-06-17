@@ -2563,8 +2563,7 @@ mod tests {
     fn test_resize_nearest_alpha_forced_rgb() {
         // RGB mode (mode=2): alpha forced to 255 even if source has non-255 alpha
         let pixels = vec![p(255, 0, 0, 100)];
-        let (out, ops::pil_resize::PRECISION_BITS, ops::pil_resize::PRECISION_BITS) =
-            resize(&pixels, 1, 1, 1, 1, 2, 0);
+        let (out, _w, _h) = resize(&pixels, 1, 1, 1, 1, 2, 0);
         assert_eq!(a_of(out[0]), 255, "RGB mode forces alpha to 255");
     }
 
@@ -2572,8 +2571,7 @@ mod tests {
     fn test_resize_nearest_alpha_preserved_la() {
         // LA mode (mode=1): alpha preserved
         let pixels = vec![p(100, 0, 0, 100)];
-        let (out, ops::pil_resize::PRECISION_BITS, ops::pil_resize::PRECISION_BITS) =
-            resize(&pixels, 1, 1, 1, 1, 1, 0);
+        let (out, _w, _h) = resize(&pixels, 1, 1, 1, 1, 1, 0);
         assert_eq!(a_of(out[0]), 100, "LA mode preserves alpha");
     }
 

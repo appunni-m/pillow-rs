@@ -270,8 +270,8 @@ fn resize_i(
     let dh_f = dst_h as f64;
 
     // PIL-compatible scale factor for kernel widening during downscaling
-    let compute::pool_cpu::ops::effects::TABLE_SCALE = (sw_f / dw_f).max(1.0);
-    let compute::pool_cpu::ops::effects::TABLE_SCALE = (sh_f / dh_f).max(1.0);
+    let sx_scale = (sw_f / dw_f).max(1.0);
+    let sy_scale = (sh_f / dh_f).max(1.0);
 
     let n = (dst_w * dst_h) as usize;
 

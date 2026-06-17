@@ -49,6 +49,14 @@ struct EncodeRow {
     params: HashMap<String, serde_json::Value>,
     description: Option<String>,
     status: String,
+    #[serde(default)]
+    source_format: Option<String>,
+    #[serde(default)]
+    source_asset: Option<String>,
+    #[serde(default)]
+    ref_sha256: Option<String>,
+    #[serde(default)]
+    ref_bytes: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -210,25 +218,45 @@ fn test_encode_matrix() {
             continue;
         }
 
-        // Find a decode row to use as source image for encode
-        let source_row = fmt_data
-            .decode
-            .iter()
-            .find(|r| r.status == "active" && r.asset.is_some());
-        if source_row.is_none() {
-            skipped += fmt_data.encode.len() as u32;
-            continue;
-        }
-        let src = source_row.unwrap();
-        let asset_path = assets_dir.join(fmt_name).join(src.asset.as_ref().unwrap());
-        if !asset_path.exists() {
-            skipped += fmt_data.encode.len() as u32;
-            continue;
-        }
-        let asset_data = fs::read(&asset_path).unwrap();
-
         for row in &fmt_data.encode {
             total += 1;
+
+            // Determine source: use row's source_asset if present, otherwise fall back
+            // to the first active decode row for this format.
+            let asset_data = if let (Some(ref src_fmt), Some(ref src_asset)) =
+                (&row.source_format, &row.source_asset)
+            {
+                let path = assets_dir.join(src_fmt).join(src_asset);
+                if path.exists() {
+                    fs::read(&path).unwrap()
+                } else {
+                    eprintln!("  FAIL [{}]: source asset not found: {:?}", row.id, path);
+                    failed += 1;
+                    continue;
+                }
+            } else {
+                // Fallback: find a decode row in this format
+                let source_row = fmt_data
+                    .decode
+                    .iter()
+                    .find(|r| r.status == "active" && r.asset.is_some());
+                match source_row {
+                    Some(src) => {
+                        let path = assets_dir.join(fmt_name).join(src.asset.as_ref().unwrap());
+                        if path.exists() {
+                            fs::read(&path).unwrap()
+                        } else {
+                            skipped += 1;
+                            continue;
+                        }
+                    }
+                    None => {
+                        skipped += 1;
+                        continue;
+                    }
+                }
+            };
+
             let decoded = match img::decode(&asset_data) {
                 Some(d) => d,
                 None => {
@@ -283,21 +311,53 @@ fn test_encode_matrix() {
                 }
             };
 
-            // Re-decode and verify basic correctness
+            // Roundtrip: re-decode and compare pixel SHA-256 against PIL reference.
+            // This matches the decode test pattern — pixel-perfect verification.
             match img::decode(&encoded) {
                 Some(redecoded) => {
-                    if redecoded.width > 0 && redecoded.height > 0 {
-                        eprintln!(
-                            "  OK   [{}] encoded {}B, re-decoded {}x{}",
-                            row.id,
-                            encoded.len(),
-                            redecoded.width,
-                            redecoded.height
-                        );
-                        passed += 1;
+                    if let Some(ref ref_hash) = row.ref_sha256 {
+                        let actual_pixels = redecoded.as_bytes();
+                        let actual_hash = Sha256::digest(actual_pixels)
+                            .iter()
+                            .map(|b| format!("{:02x}", b))
+                            .collect::<String>();
+                        if actual_hash == *ref_hash {
+                            eprintln!(
+                                "  OK   [{}] {}B, re-decoded {}x{} (mode={})",
+                                row.id,
+                                encoded.len(),
+                                redecoded.width,
+                                redecoded.height,
+                                row.ref_mode.as_deref().unwrap_or("?")
+                            );
+                            passed += 1;
+                        } else if let Some(ref_bytes) = row.ref_bytes {
+                            if actual_pixels.len() != ref_bytes {
+                                eprintln!(
+                                    "  FAIL [{}]: {} pix bytes, expected {}",
+                                    row.id,
+                                    actual_pixels.len(),
+                                    ref_bytes
+                                );
+                                failed += 1;
+                            } else {
+                                eprintln!(
+                                    "  FAIL [{}]: same pix count ({}B) but different pixels",
+                                    row.id,
+                                    actual_pixels.len()
+                                );
+                                failed += 1;
+                            }
+                        }
                     } else {
-                        eprintln!("  FAIL [{}]: zero dimensions after roundtrip", row.id);
-                        failed += 1;
+                        // No ref — fallback: just check non-zero dimensions
+                        if redecoded.width > 0 && redecoded.height > 0 {
+                            eprintln!("  OK   [{}] encoded {}B (no ref)", row.id, encoded.len());
+                            passed += 1;
+                        } else {
+                            eprintln!("  FAIL [{}]: zero dimensions after roundtrip", row.id);
+                            failed += 1;
+                        }
                     }
                 }
                 None => {

@@ -1,3 +1,6 @@
+// build.rs scripts: CARGO_* env vars are always set by Cargo — unwrap is safe and idiomatic here.
+#![expect(clippy::unwrap_used, reason = "CARGO_MANIFEST_DIR is always set by Cargo")]
+
 fn main() {
     // Only link to libwebp on non-WASM targets
     let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();

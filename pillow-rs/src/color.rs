@@ -223,7 +223,7 @@ pub fn palette_getcolor_append(
 /// Format a palette as PIL-compatible text (header + 256-entry table).
 pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
     let step = if mode == "RGBA" { 4 } else { 3 };
-    let ops::quantize::WEB_PALETTE_COLORS = palette.len();
+    let _palette_len = palette.len();
     let mut out = String::with_capacity(4096);
     out.push_str("# Palette\n");
     out.push_str("# Mode: ");

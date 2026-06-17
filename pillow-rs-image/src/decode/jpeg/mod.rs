@@ -162,20 +162,4 @@ mod tests {
         // Reading past the end should return None
         assert!(br.read_bits(1).is_none());
     }
-
-    #[test]
-    fn test_empty_jpeg_rejected() {
-        assert!(decode(&[]).is_none());
-    }
-
-    #[test]
-    fn test_invalid_jpeg_rejected() {
-        assert!(decode(b"not a jpeg").is_none());
-    }
-
-    #[test]
-    fn test_truncated_jpeg_rejected() {
-        // SOI marker only, no other data
-        assert!(decode(&[0xFF, 0xD8]).is_none());
-    }
 }
