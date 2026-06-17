@@ -1,0 +1,3955 @@
+{
+  "formats": {
+    "jpeg": {
+      "decode": [
+        {
+          "id": "subsampling_444",
+          "type": "decode",
+          "description": "4:4:4 chroma subsampling (no subsampling)",
+          "format": "jpeg",
+          "category": "subsampling",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_444.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/baseline_444.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "cddc03e6707d5495567b129ba0eca7b1cf9503fa8621239f826fab6a2cfeddda",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "subsampling_422",
+          "type": "decode",
+          "description": "4:2:2 horizontal chroma subsampling",
+          "format": "jpeg",
+          "category": "subsampling",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_422.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/baseline_422.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "c2a5160b3ac6f226ac66d2ea7a5fdec5df133c49610c1d372c5cc7f0382eb4d6",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "subsampling_420",
+          "type": "decode",
+          "description": "4:2:0 chroma subsampling (most common)",
+          "format": "jpeg",
+          "category": "subsampling",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_420.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/baseline_420.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "subsampling_411",
+          "type": "decode",
+          "description": "4:1:1 chroma subsampling",
+          "format": "jpeg",
+          "category": "subsampling",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_411.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/baseline_411.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "subsampling_gray",
+          "type": "decode",
+          "description": "Grayscale (no chroma components)",
+          "format": "jpeg",
+          "category": "subsampling",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_gray.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/baseline_gray.jpg",
+          "ref_mode": "L",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "fd81696ebff9ce6428781dc41d3492cf67b7a00f20afa4207044212cfbdabc98",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "color_ycbcr",
+          "type": "decode",
+          "description": "YCbCr color space (standard)",
+          "format": "jpeg",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_ycbcr.jpg"
+        },
+        {
+          "id": "color_rgb",
+          "type": "decode",
+          "description": "RGB color space (rare, Adobe)",
+          "format": "jpeg",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_rgb_jpeg.jpg"
+        },
+        {
+          "id": "color_cmyk",
+          "type": "decode",
+          "description": "CMYK color space (Adobe)",
+          "format": "jpeg",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_cmyk.jpg"
+        },
+        {
+          "id": "huffman_default",
+          "type": "decode",
+          "description": "Default Huffman tables",
+          "format": "jpeg",
+          "category": "huffman",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_default.jpg"
+        },
+        {
+          "id": "huffman_optimized",
+          "type": "decode",
+          "description": "Optimized/custom Huffman tables",
+          "format": "jpeg",
+          "category": "huffman",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_optimized.jpg"
+        },
+        {
+          "id": "huffman_progressive",
+          "type": "decode",
+          "description": "Progressive JPEG (multiple scans)",
+          "format": "jpeg",
+          "category": "huffman",
+          "status": "active",
+          "expect_error": false,
+          "asset": "progressive.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/progressive.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "quality_100",
+          "type": "decode",
+          "description": "Quality 100 (minimal compression)",
+          "format": "jpeg",
+          "category": "quality",
+          "status": "active",
+          "expect_error": false,
+          "asset": "q100.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/q100.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "120032d46a6d1c86eb9a23155ae30836a37e6587d681e980ab5817c9aceeff73",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "quality_50",
+          "type": "decode",
+          "description": "Quality 50 (medium compression)",
+          "format": "jpeg",
+          "category": "quality",
+          "status": "active",
+          "expect_error": false,
+          "asset": "q50.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/q50.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "884634b00728ba4a3afb9e88f3805a7930ba0e495b429acbf1a8d2851baa583f",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "quality_10",
+          "type": "decode",
+          "description": "Quality 10 (heavy compression, artifacts)",
+          "format": "jpeg",
+          "category": "quality",
+          "status": "active",
+          "expect_error": false,
+          "asset": "q10.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/q10.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "98368f88c8281349f7434dcef60927e1d51d0dee05c524dd8cc7340604aa90f0",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "quality_1",
+          "type": "decode",
+          "description": "Quality 1 (maximum compression)",
+          "format": "jpeg",
+          "category": "quality",
+          "status": "active",
+          "expect_error": false,
+          "asset": "q1.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/q1.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "d2cc5bf13d549fe040b688c2168d4947b5d0e8110cd7eadf38293e93d10c96c6",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "size_minimal",
+          "type": "decode",
+          "description": "Smallest valid JPEG (8x8 minimum)",
+          "format": "jpeg",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "8x8.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/8x8.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            8,
+            8
+          ],
+          "ref_sha256": "7f733356482b5a2090a00500ef34843e63449c585023b37e58812cd3431e47c6",
+          "ref_bytes": 192
+        },
+        {
+          "id": "size_odd",
+          "type": "decode",
+          "description": "Odd dimensions requiring edge MCU handling",
+          "format": "jpeg",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "17x17.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/17x17.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            17,
+            17
+          ],
+          "ref_sha256": "01c788256ea34397bf5164476d9436c46d4d71bcad67c4f359f5179c961b1bb2",
+          "ref_bytes": 867
+        },
+        {
+          "id": "size_large",
+          "type": "decode",
+          "description": "Large image (4096x4096)",
+          "format": "jpeg",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "large.jpg"
+        },
+        {
+          "id": "size_1x1",
+          "type": "decode",
+          "description": "Single pixel",
+          "format": "jpeg",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1x1.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/1x1.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            1,
+            1
+          ],
+          "ref_sha256": "e9141d64beeaee8e8dbf6e033b89aa5977bf8ada4a7917a50932e69eac549c37",
+          "ref_bytes": 3
+        },
+        {
+          "id": "restart_none",
+          "type": "decode",
+          "description": "No restart markers",
+          "format": "jpeg",
+          "category": "restart",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline_default.jpg"
+        },
+        {
+          "id": "restart_interval",
+          "type": "decode",
+          "description": "Restart markers every N MCUs",
+          "format": "jpeg",
+          "category": "restart",
+          "status": "active",
+          "expect_error": false,
+          "asset": "restart.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/restart.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "exif_orientation",
+          "type": "decode",
+          "description": "JPEG with EXIF orientation tag",
+          "format": "jpeg",
+          "category": "exif",
+          "status": "active",
+          "expect_error": false,
+          "asset": "exif_orientation.jpg"
+        },
+        {
+          "id": "exif_thumbnail",
+          "type": "decode",
+          "description": "JPEG with embedded thumbnail",
+          "format": "jpeg",
+          "category": "exif",
+          "status": "active",
+          "expect_error": false,
+          "asset": "exif_thumbnail.jpg"
+        },
+        {
+          "id": "no_exif",
+          "type": "decode",
+          "description": "JPEG without EXIF",
+          "format": "jpeg",
+          "category": "no",
+          "status": "active",
+          "expect_error": false,
+          "asset": "no_exif.jpg"
+        },
+        {
+          "id": "trailing_data",
+          "type": "decode",
+          "description": "JPEG with extra data after EOI marker",
+          "format": "jpeg",
+          "category": "trailing",
+          "status": "active",
+          "expect_error": false,
+          "asset": "trailing_data.jpg"
+        },
+        {
+          "id": "multiple_eoi",
+          "type": "decode",
+          "description": "Multiple EOI markers",
+          "format": "jpeg",
+          "category": "multiple",
+          "status": "active",
+          "expect_error": false,
+          "asset": "multiple_eoi.jpg"
+        },
+        {
+          "id": "zero_length",
+          "type": "decode",
+          "description": "Empty file (error expected)",
+          "format": "jpeg",
+          "category": "zero",
+          "status": "active",
+          "expect_error": true,
+          "asset": "empty.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/empty.jpg",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        },
+        {
+          "id": "truncated",
+          "type": "decode",
+          "description": "Truncated JPEG (incomplete)",
+          "format": "jpeg",
+          "category": "truncated",
+          "status": "active",
+          "expect_error": true,
+          "asset": "truncated.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/truncated.jpg",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        },
+        {
+          "id": "corrupt_header",
+          "type": "decode",
+          "description": "Corrupt JPEG header",
+          "format": "jpeg",
+          "category": "corrupt",
+          "status": "active",
+          "expect_error": true,
+          "asset": "corrupt.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/corrupt.jpg",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        },
+        {
+          "id": "baseline_standard",
+          "type": "decode",
+          "description": "Baseline DCT sequential",
+          "format": "jpeg",
+          "category": "baseline",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/baseline.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "progressive_spectral",
+          "type": "decode",
+          "description": "Progressive with spectral selection",
+          "format": "jpeg",
+          "category": "progressive",
+          "status": "active",
+          "expect_error": false,
+          "asset": "progressive_spectral.jpg",
+          "asset_path": "tests/fixtures/input/images/jpeg/progressive_spectral.jpg",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
+          "ref_bytes": 49152
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_q100",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 100
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_q85",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 85
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_q75",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 75
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_q50",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 50
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_q25",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 25
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_q10",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 10
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_q1",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 1
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_sub_444",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "subsampling": "444"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_sub_422",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "subsampling": "422"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_sub_420",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "subsampling": "420"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_progressive",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "progressive": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_baseline",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "progressive": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_grayscale",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "grayscale": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgb",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "grayscale": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1x1",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "size": [
+              1,
+              1
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_8x8",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "size": [
+              8,
+              8
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_odd_size",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "size": [
+              17,
+              17
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_exif",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "exif": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_no_exif",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "exif": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_restart",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "restart_interval": 4
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_no_restart",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "restart_interval": 0
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_dct_fast",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "dct_method": "fast"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_dct_slow",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "dct_method": "slow"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_optimize",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "optimize": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_no_optimize",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "optimize": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_quality_100",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 100
+          },
+          "description": "Quality 100 (max)",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_quality_85",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 85
+          },
+          "description": "Quality 85 (default)",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_quality_50",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 50
+          },
+          "description": "Quality 50",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_quality_10",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "quality": 10
+          },
+          "description": "Quality 10 (min)",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_subsample_444",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "subsampling": "444"
+          },
+          "description": "4:4:4 chroma",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_subsample_420",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "subsampling": "420"
+          },
+          "description": "4:2:0 chroma",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_progressive",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "progressive": true
+          },
+          "description": "Progressive JPEG",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_grayscale",
+          "type": "encode",
+          "format": "jpeg",
+          "params": {
+            "grayscale": true
+          },
+          "description": "Grayscale JPEG",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "png": {
+      "decode": [
+        {
+          "id": "color_gray",
+          "type": "decode",
+          "description": "Grayscale (color type 0)",
+          "format": "png",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "gray.png",
+          "asset_path": "tests/fixtures/input/images/png/gray.png",
+          "ref_mode": "L",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "color_gray_alpha",
+          "type": "decode",
+          "description": "Grayscale + alpha (color type 4)",
+          "format": "png",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "gray_alpha.png",
+          "asset_path": "tests/fixtures/input/images/png/gray_alpha.png",
+          "ref_mode": "LA",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b6dcbaf7b5a0b3225e7586f65b10fddca0a8f56c1aa22ba684411c0682c09f4b",
+          "ref_bytes": 32768
+        },
+        {
+          "id": "color_rgb",
+          "type": "decode",
+          "description": "RGB (color type 2)",
+          "format": "png",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "rgb.png",
+          "asset_path": "tests/fixtures/input/images/png/rgb.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "color_rgba",
+          "type": "decode",
+          "description": "RGBA (color type 6)",
+          "format": "png",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "rgba.png",
+          "asset_path": "tests/fixtures/input/images/png/rgba.png",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536
+        },
+        {
+          "id": "color_indexed",
+          "type": "decode",
+          "description": "Indexed/Palette (color type 3)",
+          "format": "png",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "indexed.png",
+          "asset_path": "tests/fixtures/input/images/png/indexed.png",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "color_indexed_alpha",
+          "type": "decode",
+          "description": "Indexed with tRNS transparency",
+          "format": "png",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "indexed_alpha.png",
+          "asset_path": "tests/fixtures/input/images/png/indexed_alpha.png",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "depth_1",
+          "type": "decode",
+          "description": "1-bit grayscale",
+          "format": "png",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1bit.png",
+          "asset_path": "tests/fixtures/input/images/png/1bit.png",
+          "ref_mode": "1",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b73f7cbd2e75fb2128203993c9e95855f2f62a6e54de9ec2078da285dfb28b30",
+          "ref_bytes": 2048
+        },
+        {
+          "id": "depth_2",
+          "type": "decode",
+          "description": "2-bit grayscale",
+          "format": "png",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "2bit.png",
+          "asset_path": "tests/fixtures/input/images/png/2bit.png",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "2863dcbb27cf09a29a2024b1711bd87091edf82707afd785e5d8f68a40e656fd",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "depth_4",
+          "type": "decode",
+          "description": "4-bit grayscale",
+          "format": "png",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "4bit.png",
+          "asset_path": "tests/fixtures/input/images/png/4bit.png",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "2fc3bb12799a0cd683c22bc041e1bc0f371eda4f025b5f58310d7769e4aaf1b5",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "depth_8",
+          "type": "decode",
+          "description": "8-bit per channel (standard)",
+          "format": "png",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "8bit.png",
+          "asset_path": "tests/fixtures/input/images/png/8bit.png",
+          "ref_mode": "L",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "depth_16",
+          "type": "decode",
+          "description": "16-bit per channel",
+          "format": "png",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "16bit.png",
+          "asset_path": "tests/fixtures/input/images/png/16bit.png",
+          "ref_mode": "I;16",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "468493084ad08ed060c794c5055ddd0ee667fb059a096d2a2f1647f3f6347b6e",
+          "ref_bytes": 32768
+        },
+        {
+          "id": "no_interlace",
+          "type": "decode",
+          "description": "No interlacing (Adam7 off)",
+          "format": "png",
+          "category": "no",
+          "status": "active",
+          "expect_error": false,
+          "asset": "no_interlace.png",
+          "asset_path": "tests/fixtures/input/images/png/no_interlace.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "interlace_adam7",
+          "type": "decode",
+          "description": "Adam7 interlacing",
+          "format": "png",
+          "category": "interlace",
+          "status": "active",
+          "expect_error": false,
+          "asset": "adam7.png",
+          "asset_path": "tests/fixtures/input/images/png/adam7.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "filter_none",
+          "type": "decode",
+          "description": "No filter",
+          "format": "png",
+          "category": "filter",
+          "status": "active",
+          "expect_error": false,
+          "asset": "filter_none.png",
+          "asset_path": "tests/fixtures/input/images/png/filter_none.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "filter_sub",
+          "type": "decode",
+          "description": "Sub filter",
+          "format": "png",
+          "category": "filter",
+          "status": "active",
+          "expect_error": false,
+          "asset": "filter_sub.png",
+          "asset_path": "tests/fixtures/input/images/png/filter_sub.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "filter_up",
+          "type": "decode",
+          "description": "Up filter",
+          "format": "png",
+          "category": "filter",
+          "status": "active",
+          "expect_error": false,
+          "asset": "filter_up.png",
+          "asset_path": "tests/fixtures/input/images/png/filter_up.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "filter_average",
+          "type": "decode",
+          "description": "Average filter",
+          "format": "png",
+          "category": "filter",
+          "status": "active",
+          "expect_error": false,
+          "asset": "filter_average.png",
+          "asset_path": "tests/fixtures/input/images/png/filter_average.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "filter_paeth",
+          "type": "decode",
+          "description": "Paeth filter",
+          "format": "png",
+          "category": "filter",
+          "status": "active",
+          "expect_error": false,
+          "asset": "filter_paeth.png",
+          "asset_path": "tests/fixtures/input/images/png/filter_paeth.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "filter_mixed",
+          "type": "decode",
+          "description": "Adaptive per-scanline filtering",
+          "format": "png",
+          "category": "filter",
+          "status": "active",
+          "expect_error": false,
+          "asset": "filter_mixed.png",
+          "asset_path": "tests/fixtures/input/images/png/filter_mixed.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compress_default",
+          "type": "decode",
+          "description": "Default zlib compression (level 6)",
+          "format": "png",
+          "category": "compress",
+          "status": "active",
+          "expect_error": false,
+          "asset": "compress_default.png",
+          "asset_path": "tests/fixtures/input/images/png/compress_default.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compress_none",
+          "type": "decode",
+          "description": "No compression (store only)",
+          "format": "png",
+          "category": "compress",
+          "status": "active",
+          "expect_error": false,
+          "asset": "compress_none.png",
+          "asset_path": "tests/fixtures/input/images/png/compress_none.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compress_max",
+          "type": "decode",
+          "description": "Maximum compression (level 9)",
+          "format": "png",
+          "category": "compress",
+          "status": "active",
+          "expect_error": false,
+          "asset": "compress_max.png",
+          "asset_path": "tests/fixtures/input/images/png/compress_max.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "chunk_gama",
+          "type": "decode",
+          "description": "PNG with gAMA chunk (gamma)",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "gama.png",
+          "asset_path": "tests/fixtures/input/images/png/gama.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "chunk_srgb",
+          "type": "decode",
+          "description": "PNG with sRGB chunk",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "srgb.png",
+          "asset_path": "tests/fixtures/input/images/png/srgb.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "chunk_iccp",
+          "type": "decode",
+          "description": "PNG with iCCP color profile",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "iccp.png"
+        },
+        {
+          "id": "chunk_text",
+          "type": "decode",
+          "description": "PNG with tEXt/zTXt/iTXt metadata",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "text_chunks.png",
+          "asset_path": "tests/fixtures/input/images/png/text_chunks.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "chunk_time",
+          "type": "decode",
+          "description": "PNG with tIME chunk",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "time_chunk.png"
+        },
+        {
+          "id": "chunk_background",
+          "type": "decode",
+          "description": "PNG with bKGD chunk",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "bkgd.png"
+        },
+        {
+          "id": "chunk_phys",
+          "type": "decode",
+          "description": "PNG with pHYs chunk (physical dimensions)",
+          "format": "png",
+          "category": "chunk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "phys.png"
+        },
+        {
+          "id": "size_1x1",
+          "type": "decode",
+          "description": "Single pixel",
+          "format": "png",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1x1.png",
+          "asset_path": "tests/fixtures/input/images/png/1x1.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            1,
+            1
+          ],
+          "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
+          "ref_bytes": 3
+        },
+        {
+          "id": "size_small",
+          "type": "decode",
+          "description": "Small image (16x16)",
+          "format": "png",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "16x16.png"
+        },
+        {
+          "id": "size_large",
+          "type": "decode",
+          "description": "Large image (4096x4096)",
+          "format": "png",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "large.png"
+        },
+        {
+          "id": "size_odd",
+          "type": "decode",
+          "description": "Non-power-of-2 dimensions",
+          "format": "png",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "odd_size.png",
+          "asset_path": "tests/fixtures/input/images/png/odd_size.png",
+          "ref_mode": "RGB",
+          "ref_size": [
+            17,
+            17
+          ],
+          "ref_sha256": "ffd87a1ba3408876b7f22fb205642480b6c8e5487f8f370e801bc58033ee30d3",
+          "ref_bytes": 867
+        },
+        {
+          "id": "error_truncated",
+          "type": "decode",
+          "description": "Truncated PNG file",
+          "format": "png",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "truncated.png",
+          "asset_path": "tests/fixtures/input/images/png/truncated.png",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        },
+        {
+          "id": "error_corrupt_crc",
+          "type": "decode",
+          "description": "Corrupt chunk CRC",
+          "format": "png",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "bad_crc.png"
+        },
+        {
+          "id": "error_wrong_magic",
+          "type": "decode",
+          "description": "File with wrong PNG signature",
+          "format": "png",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "not_a_png.png",
+          "asset_path": "tests/fixtures/input/images/png/not_a_png.png",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        },
+        {
+          "id": "apng_static",
+          "type": "decode",
+          "description": "APNG with single frame (backward compatible)",
+          "format": "png",
+          "category": "apng",
+          "status": "active",
+          "expect_error": false,
+          "asset": "apng_static.png"
+        },
+        {
+          "id": "apng_animated",
+          "type": "decode",
+          "description": "APNG with multiple frames",
+          "format": "png",
+          "category": "apng",
+          "status": "active",
+          "expect_error": false,
+          "asset": "apng_animated.png"
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_compress_0",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": 0
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_3",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": 3
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_6",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": 6
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_9",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": 9
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_l8",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color_type": "L"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_la8",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color_type": "LA"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgb8",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color_type": "RGB"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgba8",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color_type": "RGBA"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_indexed",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color_type": "P"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1bit",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color_type": "1"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_adam7",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "interlace": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_no_interlace",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "interlace": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_8bit",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "bit_depth": 8
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_16bit",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "bit_depth": 16
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_filter_none",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "filter": "none"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_filter_sub",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "filter": "sub"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_filter_up",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "filter": "up"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_filter_avg",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "filter": "average"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_filter_paeth",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "filter": "paeth"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_filter_adaptive",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "filter": "adaptive"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_chunk_text",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "text_chunks": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_chunk_gamma",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "gamma": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_chunk_srgb",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "srgb": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_chunk_phys",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "physical": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_chunk_time",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "time": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1x1",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "size": [
+              1,
+              1
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_odd_size",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "size": [
+              17,
+              17
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_default",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": "default"
+          },
+          "description": "Default compression",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_max",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": "max"
+          },
+          "description": "Max compression (9)",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_none",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "compression": "none"
+          },
+          "description": "No compression",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_interlaced",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "interlaced": true
+          },
+          "description": "Adam7 interlaced",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgb",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color": "rgb"
+          },
+          "description": "RGB output",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgba",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color": "rgba"
+          },
+          "description": "RGBA output",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_grayscale",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color": "gray"
+          },
+          "description": "Grayscale output",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_grayscale_alpha",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color": "gray_alpha"
+          },
+          "description": "Grayscale+alpha output",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_indexed",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color": "indexed"
+          },
+          "description": "Palette output",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1bit",
+          "type": "encode",
+          "format": "png",
+          "params": {
+            "color": "1bit"
+          },
+          "description": "1-bit bilevel",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "gif": {
+      "decode": [
+        {
+          "id": "static_gif",
+          "type": "decode",
+          "description": "Single frame GIF",
+          "format": "gif",
+          "category": "static",
+          "status": "active",
+          "expect_error": false,
+          "asset": "static.gif",
+          "asset_path": "tests/fixtures/input/images/gif/static.gif",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "animated_gif",
+          "type": "decode",
+          "description": "Animated GIF (decode first frame)",
+          "format": "gif",
+          "category": "animated",
+          "status": "active",
+          "expect_error": false,
+          "asset": "animated.gif",
+          "asset_path": "tests/fixtures/input/images/gif/animated.gif",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "transparent",
+          "type": "decode",
+          "description": "GIF with transparency index",
+          "format": "gif",
+          "category": "transparent",
+          "status": "active",
+          "expect_error": false,
+          "asset": "transparent.gif",
+          "asset_path": "tests/fixtures/input/images/gif/transparent.gif",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "interlaced",
+          "type": "decode",
+          "description": "Interlaced GIF",
+          "format": "gif",
+          "category": "interlaced",
+          "status": "active",
+          "expect_error": false,
+          "asset": "interlaced.gif",
+          "asset_path": "tests/fixtures/input/images/gif/interlaced.gif",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "color_table_global",
+          "type": "decode",
+          "description": "Global color table only",
+          "format": "gif",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "global_ct.gif"
+        },
+        {
+          "id": "color_table_local",
+          "type": "decode",
+          "description": "Local per-frame color table",
+          "format": "gif",
+          "category": "color",
+          "status": "active",
+          "expect_error": false,
+          "asset": "local_ct.gif"
+        },
+        {
+          "id": "extension_gce",
+          "type": "decode",
+          "description": "Graphic Control Extension (delay, disposal)",
+          "format": "gif",
+          "category": "extension",
+          "status": "active",
+          "expect_error": false,
+          "asset": "gce.gif",
+          "asset_path": "tests/fixtures/input/images/gif/gce.gif",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "size_1x1",
+          "type": "decode",
+          "description": "Single pixel GIF",
+          "format": "gif",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1x1.gif",
+          "asset_path": "tests/fixtures/input/images/gif/1x1.gif",
+          "ref_mode": "P",
+          "ref_size": [
+            1,
+            1
+          ],
+          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+          "ref_bytes": 1
+        },
+        {
+          "id": "error_empty",
+          "type": "decode",
+          "description": "Empty file",
+          "format": "gif",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "empty.gif",
+          "asset_path": "tests/fixtures/input/images/gif/empty.gif",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_static",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "animated": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_animated",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "animated": true,
+            "frames": 2
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_animated_loop",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "animated": true,
+            "frames": 3,
+            "loop": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_opaque",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "transparency": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_transparent",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "transparency": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_interlaced",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "interlace": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_non_interlaced",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "interlace": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_dispose_none",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "disposal": "none"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_dispose_background",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "disposal": "background"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_dispose_previous",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "disposal": "previous"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_global_ct",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "color_table": "global"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_local_ct",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "color_table": "local"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1x1",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "size": [
+              1,
+              1
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_static",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "animated": false
+          },
+          "description": "Static GIF",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_transparent",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "transparency": true
+          },
+          "description": "Transparent GIF",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_interlaced",
+          "type": "encode",
+          "format": "gif",
+          "params": {
+            "interlaced": true
+          },
+          "description": "Interlaced GIF",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "bmp": {
+      "decode": [
+        {
+          "id": "depth_1",
+          "type": "decode",
+          "description": "1-bit monochrome BMP",
+          "format": "bmp",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1bit.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/1bit.bmp",
+          "ref_mode": "1",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b73f7cbd2e75fb2128203993c9e95855f2f62a6e54de9ec2078da285dfb28b30",
+          "ref_bytes": 2048
+        },
+        {
+          "id": "depth_4",
+          "type": "decode",
+          "description": "4-bit indexed BMP",
+          "format": "bmp",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "4bit.bmp"
+        },
+        {
+          "id": "depth_8",
+          "type": "decode",
+          "description": "8-bit indexed BMP",
+          "format": "bmp",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "8bit.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/8bit.bmp",
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "depth_16",
+          "type": "decode",
+          "description": "16-bit (RGB555)",
+          "format": "bmp",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "16bit.bmp"
+        },
+        {
+          "id": "depth_24",
+          "type": "decode",
+          "description": "24-bit RGB (most common)",
+          "format": "bmp",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "24bit.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/24bit.bmp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "depth_32",
+          "type": "decode",
+          "description": "32-bit RGBA",
+          "format": "bmp",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "32bit.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/32bit.bmp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compression_none",
+          "type": "decode",
+          "description": "BI_RGB (no compression)",
+          "format": "bmp",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "uncompressed.bmp"
+        },
+        {
+          "id": "compression_rle8",
+          "type": "decode",
+          "description": "BI_RLE8 (8-bit RLE)",
+          "format": "bmp",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "rle8.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/rle8.bmp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compression_rle4",
+          "type": "decode",
+          "description": "BI_RLE4 (4-bit RLE)",
+          "format": "bmp",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "rle4.bmp"
+        },
+        {
+          "id": "compression_bitfields",
+          "type": "decode",
+          "description": "BI_BITFIELDS (16/32 bit with masks)",
+          "format": "bmp",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "bitfields.bmp"
+        },
+        {
+          "id": "top_down",
+          "type": "decode",
+          "description": "Top-down scanline order (negative height)",
+          "format": "bmp",
+          "category": "top",
+          "status": "active",
+          "expect_error": false,
+          "asset": "top_down.bmp"
+        },
+        {
+          "id": "bottom_up",
+          "type": "decode",
+          "description": "Bottom-up scanline order (standard)",
+          "format": "bmp",
+          "category": "bottom",
+          "status": "active",
+          "expect_error": false,
+          "asset": "bottom_up.bmp"
+        },
+        {
+          "id": "os2_v1",
+          "type": "decode",
+          "description": "OS/2 BMP v1 header",
+          "format": "bmp",
+          "category": "os2",
+          "status": "active",
+          "expect_error": false,
+          "asset": "os2v1.bmp"
+        },
+        {
+          "id": "v4_header",
+          "type": "decode",
+          "description": "BITMAPV4HEADER (color space info)",
+          "format": "bmp",
+          "category": "v4",
+          "status": "active",
+          "expect_error": false,
+          "asset": "v4header.bmp"
+        },
+        {
+          "id": "v5_header",
+          "type": "decode",
+          "description": "BITMAPV5HEADER (ICC profile)",
+          "format": "bmp",
+          "category": "v5",
+          "status": "active",
+          "expect_error": false,
+          "asset": "v5header.bmp"
+        },
+        {
+          "id": "size_1x1",
+          "type": "decode",
+          "description": "Single pixel",
+          "format": "bmp",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1x1.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/1x1.bmp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            1,
+            1
+          ],
+          "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
+          "ref_bytes": 3
+        },
+        {
+          "id": "size_odd",
+          "type": "decode",
+          "description": "Odd width (row padding required)",
+          "format": "bmp",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "odd_width.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/odd_width.bmp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            17,
+            17
+          ],
+          "ref_sha256": "a5a079480cee6b3b538113144e01f7c268a18f6989396239f5ad6f97075cadd9",
+          "ref_bytes": 867
+        },
+        {
+          "id": "error_not_bmp",
+          "type": "decode",
+          "description": "File without BM magic",
+          "format": "bmp",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "not_bmp.bmp",
+          "asset_path": "tests/fixtures/input/images/bmp/not_bmp.bmp",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_1bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 1
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_4bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 4
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_8bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 8
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_16bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 16
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_24bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 24
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_32bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 32
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bi_rgb",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "compression": "BI_RGB"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bi_rle8",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "compression": "BI_RLE8"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bi_rle4",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "compression": "BI_RLE4"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bi_bitfields",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "compression": "BI_BITFIELDS"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_top_down",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "top_down": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bottom_up",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "top_down": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_v3_header",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "header": "V3"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_v4_header",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "header": "V4"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_v5_header",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "header": "V5"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1x1",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "size": [
+              1,
+              1
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_odd_width",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "size": [
+              17,
+              16
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_24bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 24
+          },
+          "description": "24-bit BMP",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_32bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 32
+          },
+          "description": "32-bit BMP with alpha",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_8bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 8
+          },
+          "description": "8-bit indexed BMP",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1bit",
+          "type": "encode",
+          "format": "bmp",
+          "params": {
+            "bit_depth": 1
+          },
+          "description": "1-bit bilevel",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "webp": {
+      "decode": [
+        {
+          "id": "lossy_vp8",
+          "type": "decode",
+          "description": "Lossy WebP (VP8 codec)",
+          "format": "webp",
+          "category": "lossy",
+          "status": "active",
+          "expect_error": false,
+          "asset": "lossy.webp",
+          "asset_path": "tests/fixtures/input/images/webp/lossy.webp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "lossless_vp8l",
+          "type": "decode",
+          "description": "Lossless WebP (VP8L codec)",
+          "format": "webp",
+          "category": "lossless",
+          "status": "active",
+          "expect_error": false,
+          "asset": "lossless.webp",
+          "asset_path": "tests/fixtures/input/images/webp/lossless.webp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "extended",
+          "type": "decode",
+          "description": "Extended WebP (VP8X container)",
+          "format": "webp",
+          "category": "extended",
+          "status": "active",
+          "expect_error": false,
+          "asset": "extended.webp"
+        },
+        {
+          "id": "no_alpha",
+          "type": "decode",
+          "description": "WebP without alpha",
+          "format": "webp",
+          "category": "no",
+          "status": "active",
+          "expect_error": false,
+          "asset": "no_alpha.webp",
+          "asset_path": "tests/fixtures/input/images/webp/no_alpha.webp",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "with_alpha",
+          "type": "decode",
+          "description": "WebP with alpha channel",
+          "format": "webp",
+          "category": "with",
+          "status": "active",
+          "expect_error": false,
+          "asset": "with_alpha.webp",
+          "asset_path": "tests/fixtures/input/images/webp/with_alpha.webp",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "e3ee2530af855f0499fcac0ef6d3a5daeb478fa49bbfbe3a02b93a41f48108da",
+          "ref_bytes": 65536
+        },
+        {
+          "id": "alpha_lossless",
+          "type": "decode",
+          "description": "Lossless WebP with alpha",
+          "format": "webp",
+          "category": "alpha",
+          "status": "active",
+          "expect_error": false,
+          "asset": "alpha_lossless.webp"
+        },
+        {
+          "id": "animated",
+          "type": "decode",
+          "description": "Animated WebP (decode first frame)",
+          "format": "webp",
+          "category": "animated",
+          "status": "active",
+          "expect_error": false,
+          "asset": "animated.webp"
+        },
+        {
+          "id": "size_small",
+          "type": "decode",
+          "description": "Small image (16x16)",
+          "format": "webp",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "16x16.webp",
+          "asset_path": "tests/fixtures/input/images/webp/16x16.webp",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            16,
+            16
+          ],
+          "ref_sha256": "3b82045c0d52cec1f0b719075b518d95b88610e1ab94baba7534fb489796edce",
+          "ref_bytes": 1024
+        },
+        {
+          "id": "size_odd",
+          "type": "decode",
+          "description": "Odd dimensions",
+          "format": "webp",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "odd.webp"
+        },
+        {
+          "id": "icc_profile",
+          "type": "decode",
+          "description": "WebP with embedded ICC profile",
+          "format": "webp",
+          "category": "icc",
+          "status": "active",
+          "expect_error": false,
+          "asset": "icc.webp"
+        },
+        {
+          "id": "xmp_metadata",
+          "type": "decode",
+          "description": "WebP with XMP metadata",
+          "format": "webp",
+          "category": "xmp",
+          "status": "active",
+          "expect_error": false,
+          "asset": "xmp.webp"
+        },
+        {
+          "id": "exif_metadata",
+          "type": "decode",
+          "description": "WebP with EXIF metadata",
+          "format": "webp",
+          "category": "exif",
+          "status": "active",
+          "expect_error": false,
+          "asset": "exif.webp"
+        },
+        {
+          "id": "error_truncated",
+          "type": "decode",
+          "description": "Truncated RIFF chunk",
+          "format": "webp",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "truncated.webp",
+          "asset_path": "tests/fixtures/input/images/webp/truncated.webp",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_lossy_q100",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 100
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_q80",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 80
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_q50",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 50
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_q10",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 10
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_q1",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 1
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossless",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_alpha",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "alpha": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossless_alpha",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": true,
+            "alpha": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_no_alpha",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "alpha": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_hint_photo",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "hint": "photo"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_hint_graph",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "hint": "graph"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_hint_picture",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "hint": "picture"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_method_0",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "method": 0
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_method_6",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "method": 6
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_exif",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "exif": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_xmp",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "xmp": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_icc",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "icc": true
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1x1",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "size": [
+              1,
+              1
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false
+          },
+          "description": "Lossy WebP",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossless",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": true
+          },
+          "description": "Lossless WebP",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_alpha",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "alpha": true
+          },
+          "description": "Lossy with alpha",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossless_alpha",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": true,
+            "alpha": true
+          },
+          "description": "Lossless with alpha",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_quality_100",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 100
+          },
+          "description": "Lossy quality 100",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lossy_quality_10",
+          "type": "encode",
+          "format": "webp",
+          "params": {
+            "lossless": false,
+            "quality": 10
+          },
+          "description": "Lossy quality 10",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "tiff": {
+      "decode": [
+        {
+          "id": "byte_order_le",
+          "type": "decode",
+          "description": "Little-endian TIFF (II)",
+          "format": "tiff",
+          "category": "byte",
+          "status": "active",
+          "expect_error": false,
+          "asset": "le.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/le.tiff",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "byte_order_be",
+          "type": "decode",
+          "description": "Big-endian TIFF (MM)",
+          "format": "tiff",
+          "category": "byte",
+          "status": "active",
+          "expect_error": false,
+          "asset": "be.tiff"
+        },
+        {
+          "id": "compression_none",
+          "type": "decode",
+          "description": "No compression",
+          "format": "tiff",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "uncompressed.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/uncompressed.tiff",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compression_lzw",
+          "type": "decode",
+          "description": "LZW compression",
+          "format": "tiff",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "lzw.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/lzw.tiff",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compression_deflate",
+          "type": "decode",
+          "description": "Deflate/ZIP compression",
+          "format": "tiff",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "deflate.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/deflate.tiff",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "compression_packbits",
+          "type": "decode",
+          "description": "PackBits compression",
+          "format": "tiff",
+          "category": "compression",
+          "status": "active",
+          "expect_error": false,
+          "asset": "packbits.tiff"
+        },
+        {
+          "id": "bilevel",
+          "type": "decode",
+          "description": "Black and white (PHOTOMETRIC_MINISWHITE/BLACK)",
+          "format": "tiff",
+          "category": "bilevel",
+          "status": "active",
+          "expect_error": false,
+          "asset": "bilevel.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/bilevel.tiff",
+          "ref_mode": "1",
+          "ref_size": [
+            16,
+            16
+          ],
+          "ref_sha256": "3d92f194e3d8ff64db82b9d6d7c8888526665cbcbee3f4c5e3a6c097076c67c5",
+          "ref_bytes": 32
+        },
+        {
+          "id": "grayscale",
+          "type": "decode",
+          "description": "Grayscale",
+          "format": "tiff",
+          "category": "grayscale",
+          "status": "active",
+          "expect_error": false,
+          "asset": "gray.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/gray.tiff",
+          "ref_mode": "L",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+          "ref_bytes": 16384
+        },
+        {
+          "id": "palette",
+          "type": "decode",
+          "description": "Palette/indexed color",
+          "format": "tiff",
+          "category": "palette",
+          "status": "active",
+          "expect_error": false,
+          "asset": "palette.tiff"
+        },
+        {
+          "id": "rgb",
+          "type": "decode",
+          "description": "RGB",
+          "format": "tiff",
+          "category": "rgb",
+          "status": "active",
+          "expect_error": false,
+          "asset": "rgb.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/rgb.tiff",
+          "ref_mode": "RGB",
+          "ref_size": [
+            128,
+            128
+          ],
+          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 49152
+        },
+        {
+          "id": "rgba",
+          "type": "decode",
+          "description": "RGBA with extrasamples",
+          "format": "tiff",
+          "category": "rgba",
+          "status": "active",
+          "expect_error": false,
+          "asset": "rgba.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/rgba.tiff",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            16,
+            16
+          ],
+          "ref_sha256": "98f4b65a00baf17d30ebb2a9250399ab01972aaa17610fe55aebeda5f0e04fbe",
+          "ref_bytes": 1024
+        },
+        {
+          "id": "cmyk",
+          "type": "decode",
+          "description": "CMYK",
+          "format": "tiff",
+          "category": "cmyk",
+          "status": "active",
+          "expect_error": false,
+          "asset": "cmyk.tiff"
+        },
+        {
+          "id": "ycbcr",
+          "type": "decode",
+          "description": "YCbCr",
+          "format": "tiff",
+          "category": "ycbcr",
+          "status": "active",
+          "expect_error": false,
+          "asset": "ycbcr.tiff"
+        },
+        {
+          "id": "depth_1",
+          "type": "decode",
+          "description": "1-bit",
+          "format": "tiff",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "1bit.tiff"
+        },
+        {
+          "id": "depth_8",
+          "type": "decode",
+          "description": "8-bit per channel",
+          "format": "tiff",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "8bit.tiff"
+        },
+        {
+          "id": "depth_16",
+          "type": "decode",
+          "description": "16-bit per channel",
+          "format": "tiff",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "16bit.tiff"
+        },
+        {
+          "id": "depth_float",
+          "type": "decode",
+          "description": "32-bit float (F-mode)",
+          "format": "tiff",
+          "category": "depth",
+          "status": "active",
+          "expect_error": false,
+          "asset": "float32.tiff"
+        },
+        {
+          "id": "stripped",
+          "type": "decode",
+          "description": "Striped organization",
+          "format": "tiff",
+          "category": "stripped",
+          "status": "active",
+          "expect_error": false,
+          "asset": "stripped.tiff"
+        },
+        {
+          "id": "tiled",
+          "type": "decode",
+          "description": "Tiled organization",
+          "format": "tiff",
+          "category": "tiled",
+          "status": "active",
+          "expect_error": false,
+          "asset": "tiled.tiff"
+        },
+        {
+          "id": "single_page",
+          "type": "decode",
+          "description": "Single IFD TIFF",
+          "format": "tiff",
+          "category": "single",
+          "status": "active",
+          "expect_error": false,
+          "asset": "single.tiff"
+        },
+        {
+          "id": "multi_page",
+          "type": "decode",
+          "description": "Multi-page TIFF (decode first page)",
+          "format": "tiff",
+          "category": "multi",
+          "status": "active",
+          "expect_error": false,
+          "asset": "multipage.tiff"
+        },
+        {
+          "id": "error_bad_ifd",
+          "type": "decode",
+          "description": "Corrupt IFD entry",
+          "format": "tiff",
+          "category": "error",
+          "status": "active",
+          "expect_error": true,
+          "asset": "bad_ifd.tiff",
+          "asset_path": "tests/fixtures/input/images/tiff/bad_ifd.tiff",
+          "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>"
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_compress_none",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "none"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_lzw",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "lzw"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_deflate",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "deflate"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_compress_packbits",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "packbits"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_byte_le",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "byte_order": "le"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_byte_be",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "byte_order": "be"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bilevel",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "1bit"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_grayscale",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "gray"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgb",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "rgb"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgba",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "rgba"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_cmyk",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "cmyk"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_8bit",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "bit_depth": 8
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_16bit",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "bit_depth": 16
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_32bit",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "bit_depth": 32
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_stripped",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "organization": "stripped"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_tiled",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "organization": "tiled"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_single_page",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "pages": 1
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_multi_page",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "pages": 2
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_predictor_none",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "predictor": "none"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_predictor_horiz",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "predictor": "horizontal"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_1x1",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "size": [
+              1,
+              1
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_uncompressed",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "none"
+          },
+          "description": "Uncompressed",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_lzw",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "lzw"
+          },
+          "description": "LZW compression",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_deflate",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "compression": "deflate"
+          },
+          "description": "Deflate compression",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_le",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "byte_order": "le"
+          },
+          "description": "Little-endian",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_be",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "byte_order": "be"
+          },
+          "description": "Big-endian",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgb",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "rgb"
+          },
+          "description": "RGB TIFF",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_rgba",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "rgba"
+          },
+          "description": "RGBA TIFF",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_grayscale",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "gray"
+          },
+          "description": "Grayscale TIFF",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bilevel",
+          "type": "encode",
+          "format": "tiff",
+          "params": {
+            "color": "1bit"
+          },
+          "description": "Bilevel TIFF",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "ico": {
+      "decode": [
+        {
+          "id": "single_icon",
+          "type": "decode",
+          "description": "Single icon entry",
+          "format": "ico",
+          "category": "single",
+          "status": "active",
+          "expect_error": false,
+          "asset": "single.ico",
+          "asset_path": "tests/fixtures/input/images/ico/single.ico",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            16,
+            16
+          ],
+          "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+          "ref_bytes": 1024
+        },
+        {
+          "id": "multi_res",
+          "type": "decode",
+          "description": "Multiple resolution entries",
+          "format": "ico",
+          "category": "multi",
+          "status": "active",
+          "expect_error": false,
+          "asset": "multi.ico",
+          "asset_path": "tests/fixtures/input/images/ico/multi.ico",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            16,
+            16
+          ],
+          "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+          "ref_bytes": 1024
+        },
+        {
+          "id": "png_entry",
+          "type": "decode",
+          "description": "ICO with embedded PNG data",
+          "format": "ico",
+          "category": "png",
+          "status": "active",
+          "expect_error": false,
+          "asset": "png_entry.ico",
+          "asset_path": "tests/fixtures/input/images/ico/png_entry.ico",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            32,
+            32
+          ],
+          "ref_sha256": "725602d207f5bfda0cb87fa30b8bda67ac4fc857c6c6f9408a229cc460db15ad",
+          "ref_bytes": 4096
+        },
+        {
+          "id": "bmp_entry",
+          "type": "decode",
+          "description": "ICO with embedded BMP data (classic)",
+          "format": "ico",
+          "category": "bmp",
+          "status": "active",
+          "expect_error": false,
+          "asset": "bmp_entry.ico"
+        },
+        {
+          "id": "size_16x16",
+          "type": "decode",
+          "description": "16x16 icon (most common)",
+          "format": "ico",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "16x16.ico",
+          "asset_path": "tests/fixtures/input/images/ico/16x16.ico",
+          "ref_mode": "RGBA",
+          "ref_size": [
+            16,
+            16
+          ],
+          "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+          "ref_bytes": 1024
+        },
+        {
+          "id": "size_256x256",
+          "type": "decode",
+          "description": "256x256 icon (modern)",
+          "format": "ico",
+          "category": "size",
+          "status": "active",
+          "expect_error": false,
+          "asset": "256x256.ico"
+        }
+      ],
+      "encode": [
+        {
+          "id": "enc_16x16",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              "(16",
+              "16)"
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_32x32",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              "(32",
+              "32)"
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_48x48",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              "(48",
+              "48)"
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_256x256",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              "(256",
+              "256)"
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_multi_2",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              "(16",
+              "16)",
+              "(32",
+              "32)"
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_multi_4",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              "(16",
+              "16)",
+              "(32",
+              "32)",
+              "(48",
+              "48)",
+              "(256",
+              "256)"
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_bmp_entry",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "entry_type": "bmp"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_png_entry",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "entry_type": "png"
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_24bit",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "bit_depth": 24
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_32bit",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "bit_depth": 32
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_no_hotspot",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "hotspot": false
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_hotspot",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "hotspot": [
+              8,
+              8
+            ]
+          },
+          "description": null,
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_16x16",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              [
+                16,
+                16
+              ]
+            ]
+          },
+          "description": "16x16 icon",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_32x32",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              [
+                32,
+                32
+              ]
+            ]
+          },
+          "description": "32x32 icon",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_multi",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "sizes": [
+              [
+                16,
+                16
+              ],
+              [
+                32,
+                32
+              ]
+            ]
+          },
+          "description": "Multi-resolution",
+          "status": "not_wired"
+        },
+        {
+          "id": "enc_png_entry",
+          "type": "encode",
+          "format": "ico",
+          "params": {
+            "png_entry": true
+          },
+          "description": "PNG-encoded entry",
+          "status": "not_wired"
+        }
+      ]
+    },
+    "avif": {
+      "decode": [
+        {
+          "id": "baseline",
+          "type": "decode",
+          "description": "Baseline AVIF (8-bit, 4:2:0)",
+          "format": "avif",
+          "category": "baseline",
+          "status": "active",
+          "expect_error": false,
+          "asset": "baseline.avif"
+        },
+        {
+          "id": "high_bitdepth",
+          "type": "decode",
+          "description": "10-bit AVIF",
+          "format": "avif",
+          "category": "high",
+          "status": "active",
+          "expect_error": false,
+          "asset": "10bit.avif"
+        },
+        {
+          "id": "with_alpha",
+          "type": "decode",
+          "description": "AVIF with alpha channel",
+          "format": "avif",
+          "category": "with",
+          "status": "active",
+          "expect_error": false,
+          "asset": "alpha.avif"
+        },
+        {
+          "id": "hdr",
+          "type": "decode",
+          "description": "HDR AVIF (PQ/HLG transfer)",
+          "format": "avif",
+          "category": "hdr",
+          "status": "active",
+          "expect_error": false,
+          "asset": "hdr.avif"
+        },
+        {
+          "id": "grid",
+          "type": "decode",
+          "description": "Grid AVIF (tiled image)",
+          "format": "avif",
+          "category": "grid",
+          "status": "active",
+          "expect_error": false,
+          "asset": "grid.avif"
+        },
+        {
+          "id": "animated",
+          "type": "decode",
+          "description": "Animated AVIF (decode first frame)",
+          "format": "avif",
+          "category": "animated",
+          "status": "active",
+          "expect_error": false,
+          "asset": "animated.avif"
+        }
+      ],
+      "encode": []
+    }
+  },
+  "summary": {
+    "total_rows": 320,
+    "decode_rows": 143,
+    "encode_rows": 177,
+    "formats": 8,
+    "assets_available": 86,
+    "decode_active": 143,
+    "decode_planned": 0,
+    "encode_not_wired": 177
+  }
+}
