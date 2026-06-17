@@ -148,6 +148,14 @@ All work starts from `manifest.yaml`. To add a new function:
 - WASM: `wasm-pack build --target web` (from `pillow-rs-js/`)
 - Core tests: `cargo test -p pillow-rs-core`
 
+### Full build + test (single safe command)
+- **ALWAYS use this script** — it handles read-only fixtures, regeneration, and cache clearing safely:
+  - Suite0: `bash scripts/build_and_test.sh`
+  - Suite1: `bash scripts/build_and_test.sh 1`
+  - All suites: `bash scripts/build_and_test.sh all`
+- **NEVER run `rm -rf` manually** — fixtures are read-only. The script does `chmod u+w` first.
+- Output fixtures are read-only after generation — edit the GENERATOR, not the fixtures.
+
 ### Test Requirements
 - **Every test must validate PIL-RSPIL parity** — same inputs, same operation, compare outputs
 - Use `assert_images_equal(rs_img, pil_img)` for image output comparison (pixel-exact)
