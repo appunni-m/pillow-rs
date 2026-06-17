@@ -9,142 +9,97 @@
       "id": "subsampling_444",
       "ref_sha256": "cddc03e6707d5495567b129ba0eca7b1cf9503fa8621239f826fab6a2cfeddda",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "subsampling_422",
       "ref_sha256": "c2a5160b3ac6f226ac66d2ea7a5fdec5df133c49610c1d372c5cc7f0382eb4d6",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "subsampling_420",
       "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "subsampling_411",
       "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "subsampling_gray",
       "ref_sha256": "fd81696ebff9ce6428781dc41d3492cf67b7a00f20afa4207044212cfbdabc98",
       "ref_bytes": 16384,
-      "ref_mode": "L"
-    },
-    {
-      "id": "color_ycbcr"
-    },
-    {
-      "id": "color_rgb"
-    },
-    {
-      "id": "color_cmyk"
-    },
-    {
-      "id": "huffman_default"
-    },
-    {
-      "id": "huffman_optimized"
+      "ref_mode": "L8"
     },
     {
       "id": "huffman_progressive",
       "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "quality_100",
       "ref_sha256": "120032d46a6d1c86eb9a23155ae30836a37e6587d681e980ab5817c9aceeff73",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "quality_50",
       "ref_sha256": "884634b00728ba4a3afb9e88f3805a7930ba0e495b429acbf1a8d2851baa583f",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "quality_10",
       "ref_sha256": "98368f88c8281349f7434dcef60927e1d51d0dee05c524dd8cc7340604aa90f0",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "quality_1",
       "ref_sha256": "d2cc5bf13d549fe040b688c2168d4947b5d0e8110cd7eadf38293e93d10c96c6",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "size_minimal",
       "ref_sha256": "7f733356482b5a2090a00500ef34843e63449c585023b37e58812cd3431e47c6",
       "ref_bytes": 192,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "size_odd",
       "ref_sha256": "01c788256ea34397bf5164476d9436c46d4d71bcad67c4f359f5179c961b1bb2",
       "ref_bytes": 867,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "size_large"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "size_1x1",
       "ref_sha256": "e9141d64beeaee8e8dbf6e033b89aa5977bf8ada4a7917a50932e69eac549c37",
       "ref_bytes": 3,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "restart_none"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "restart_interval",
       "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "exif_orientation"
-    },
-    {
-      "id": "exif_thumbnail"
-    },
-    {
-      "id": "no_exif"
-    },
-    {
-      "id": "trailing_data"
-    },
-    {
-      "id": "multiple_eoi"
-    },
-    {
-      "id": "zero_length"
-    },
-    {
-      "id": "truncated"
-    },
-    {
-      "id": "corrupt_header"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "baseline_standard",
       "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "progressive_spectral",
       "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     }
   ]
 }

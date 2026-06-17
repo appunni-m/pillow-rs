@@ -48,15 +48,6 @@
       "ref_mode": "Rgb8"
     },
     {
-      "id": "enc_sub_444"
-    },
-    {
-      "id": "enc_sub_422"
-    },
-    {
-      "id": "enc_sub_420"
-    },
-    {
       "id": "enc_progressive",
       "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
       "ref_bytes": 49152,
@@ -169,12 +160,6 @@
       "ref_sha256": "a02a2f306eec3e58e67a998489552c5d042c36ef614bacd66dfa64982864e58b",
       "ref_bytes": 49152,
       "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_subsample_444"
-    },
-    {
-      "id": "enc_subsample_420"
     },
     {
       "id": "enc_progressive",

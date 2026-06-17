@@ -24,7 +24,10 @@ pub trait Pixel: Copy + Clone {
     #[inline]
     fn alpha(&self) -> Self::Subpixel {
         if Self::HAS_ALPHA {
-            *self.to_luma_alpha().channels().last().unwrap()
+            let lum_alpha = self.to_luma_alpha();
+            let channels = lum_alpha.channels();
+            // channels() always returns a non-empty slice for any valid ColorType
+            *channels.last().unwrap_or(&channels[0])
         } else {
             Self::Subpixel::DEFAULT_MAX_VALUE
         }

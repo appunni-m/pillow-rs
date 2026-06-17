@@ -11,13 +11,13 @@
 //! Reference: IJG libjpeg `jidctint.c`, `jdphuff.c`, `jdsample.c`
 //!            ISO/IEC 10918-1 / ITU-T T.81 (JPEG Standard)
 
-pub(super) mod bit_reader;
-pub(super) mod decode;
-pub(super) mod huffman;
-pub(super) mod idct;
-pub(super) mod parser;
-pub(super) mod progressive;
-pub(super) mod upsample;
+pub(crate) mod bit_reader;
+pub(crate) mod decode;
+pub(crate) mod huffman;
+pub(crate) mod idct;
+pub(crate) mod parser;
+pub(crate) mod progressive;
+pub(crate) mod upsample;
 
 // Re-export the public entry point so `crate::decode::jpeg::decode` still works.
 pub use decode::decode;

@@ -9,31 +9,25 @@
       "id": "byte_order_le",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "byte_order_be"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "compression_none",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "compression_lzw",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "compression_deflate",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "compression_packbits"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "bilevel",
@@ -45,55 +39,19 @@
       "id": "grayscale",
       "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
       "ref_bytes": 16384,
-      "ref_mode": "L"
-    },
-    {
-      "id": "palette"
+      "ref_mode": "L8"
     },
     {
       "id": "rgb",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "rgba",
       "ref_sha256": "98f4b65a00baf17d30ebb2a9250399ab01972aaa17610fe55aebeda5f0e04fbe",
       "ref_bytes": 1024,
-      "ref_mode": "RGBA"
-    },
-    {
-      "id": "cmyk"
-    },
-    {
-      "id": "ycbcr"
-    },
-    {
-      "id": "depth_1"
-    },
-    {
-      "id": "depth_8"
-    },
-    {
-      "id": "depth_16"
-    },
-    {
-      "id": "depth_float"
-    },
-    {
-      "id": "stripped"
-    },
-    {
-      "id": "tiled"
-    },
-    {
-      "id": "single_page"
-    },
-    {
-      "id": "multi_page"
-    },
-    {
-      "id": "error_bad_ifd"
+      "ref_mode": "Rgba8"
     }
   ]
 }

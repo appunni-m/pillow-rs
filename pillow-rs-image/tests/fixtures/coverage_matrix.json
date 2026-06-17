@@ -12,7 +12,7 @@
           "expect_error": false,
           "asset": "baseline_444.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/baseline_444.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -30,7 +30,7 @@
           "expect_error": false,
           "asset": "baseline_422.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/baseline_422.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -48,7 +48,7 @@
           "expect_error": false,
           "asset": "baseline_420.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/baseline_420.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -66,7 +66,7 @@
           "expect_error": false,
           "asset": "baseline_411.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/baseline_411.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -84,7 +84,7 @@
           "expect_error": false,
           "asset": "baseline_gray.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/baseline_gray.jpg",
-          "ref_mode": "L",
+          "ref_mode": "L8",
           "ref_size": [
             128,
             128
@@ -152,7 +152,7 @@
           "expect_error": false,
           "asset": "progressive.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/progressive.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -170,7 +170,7 @@
           "expect_error": false,
           "asset": "q100.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/q100.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -188,7 +188,7 @@
           "expect_error": false,
           "asset": "q50.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/q50.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -206,7 +206,7 @@
           "expect_error": false,
           "asset": "q10.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/q10.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -224,7 +224,7 @@
           "expect_error": false,
           "asset": "q1.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/q1.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -242,7 +242,7 @@
           "expect_error": false,
           "asset": "8x8.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/8x8.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             8,
             8
@@ -260,7 +260,7 @@
           "expect_error": false,
           "asset": "17x17.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/17x17.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             17,
             17
@@ -288,7 +288,7 @@
           "expect_error": false,
           "asset": "1x1.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/1x1.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             1,
             1
@@ -316,7 +316,7 @@
           "expect_error": false,
           "asset": "restart.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/restart.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -420,7 +420,7 @@
           "expect_error": false,
           "asset": "baseline.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/baseline.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -438,7 +438,7 @@
           "expect_error": false,
           "asset": "progressive_spectral.jpg",
           "asset_path": "tests/fixtures/input/images/jpeg/progressive_spectral.jpg",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -951,7 +951,7 @@
           "expect_error": false,
           "asset": "gray.png",
           "asset_path": "tests/fixtures/input/images/png/gray.png",
-          "ref_mode": "L",
+          "ref_mode": "L8",
           "ref_size": [
             128,
             128
@@ -969,7 +969,7 @@
           "expect_error": false,
           "asset": "gray_alpha.png",
           "asset_path": "tests/fixtures/input/images/png/gray_alpha.png",
-          "ref_mode": "LA",
+          "ref_mode": "La8",
           "ref_size": [
             128,
             128
@@ -987,7 +987,7 @@
           "expect_error": false,
           "asset": "rgb.png",
           "asset_path": "tests/fixtures/input/images/png/rgb.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1005,7 +1005,7 @@
           "expect_error": false,
           "asset": "rgba.png",
           "asset_path": "tests/fixtures/input/images/png/rgba.png",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             128,
             128
@@ -1113,7 +1113,7 @@
           "expect_error": false,
           "asset": "8bit.png",
           "asset_path": "tests/fixtures/input/images/png/8bit.png",
-          "ref_mode": "L",
+          "ref_mode": "L8",
           "ref_size": [
             128,
             128
@@ -1149,7 +1149,7 @@
           "expect_error": false,
           "asset": "no_interlace.png",
           "asset_path": "tests/fixtures/input/images/png/no_interlace.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1167,7 +1167,7 @@
           "expect_error": false,
           "asset": "adam7.png",
           "asset_path": "tests/fixtures/input/images/png/adam7.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1185,7 +1185,7 @@
           "expect_error": false,
           "asset": "filter_none.png",
           "asset_path": "tests/fixtures/input/images/png/filter_none.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1203,7 +1203,7 @@
           "expect_error": false,
           "asset": "filter_sub.png",
           "asset_path": "tests/fixtures/input/images/png/filter_sub.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1221,7 +1221,7 @@
           "expect_error": false,
           "asset": "filter_up.png",
           "asset_path": "tests/fixtures/input/images/png/filter_up.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1239,7 +1239,7 @@
           "expect_error": false,
           "asset": "filter_average.png",
           "asset_path": "tests/fixtures/input/images/png/filter_average.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1257,7 +1257,7 @@
           "expect_error": false,
           "asset": "filter_paeth.png",
           "asset_path": "tests/fixtures/input/images/png/filter_paeth.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1275,7 +1275,7 @@
           "expect_error": false,
           "asset": "filter_mixed.png",
           "asset_path": "tests/fixtures/input/images/png/filter_mixed.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1293,7 +1293,7 @@
           "expect_error": false,
           "asset": "compress_default.png",
           "asset_path": "tests/fixtures/input/images/png/compress_default.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1311,7 +1311,7 @@
           "expect_error": false,
           "asset": "compress_none.png",
           "asset_path": "tests/fixtures/input/images/png/compress_none.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1329,7 +1329,7 @@
           "expect_error": false,
           "asset": "compress_max.png",
           "asset_path": "tests/fixtures/input/images/png/compress_max.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1347,7 +1347,7 @@
           "expect_error": false,
           "asset": "gama.png",
           "asset_path": "tests/fixtures/input/images/png/gama.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1365,7 +1365,7 @@
           "expect_error": false,
           "asset": "srgb.png",
           "asset_path": "tests/fixtures/input/images/png/srgb.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1393,7 +1393,7 @@
           "expect_error": false,
           "asset": "text_chunks.png",
           "asset_path": "tests/fixtures/input/images/png/text_chunks.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -1441,7 +1441,7 @@
           "expect_error": false,
           "asset": "1x1.png",
           "asset_path": "tests/fixtures/input/images/png/1x1.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             1,
             1
@@ -1479,7 +1479,7 @@
           "expect_error": false,
           "asset": "odd_size.png",
           "asset_path": "tests/fixtures/input/images/png/odd_size.png",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             17,
             17
@@ -2566,7 +2566,7 @@
           "expect_error": false,
           "asset": "24bit.bmp",
           "asset_path": "tests/fixtures/input/images/bmp/24bit.bmp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -2584,7 +2584,7 @@
           "expect_error": false,
           "asset": "32bit.bmp",
           "asset_path": "tests/fixtures/input/images/bmp/32bit.bmp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -2612,7 +2612,7 @@
           "expect_error": false,
           "asset": "rle8.bmp",
           "asset_path": "tests/fixtures/input/images/bmp/rle8.bmp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -2700,7 +2700,7 @@
           "expect_error": false,
           "asset": "1x1.bmp",
           "asset_path": "tests/fixtures/input/images/bmp/1x1.bmp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             1,
             1
@@ -2718,7 +2718,7 @@
           "expect_error": false,
           "asset": "odd_width.bmp",
           "asset_path": "tests/fixtures/input/images/bmp/odd_width.bmp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             17,
             17
@@ -3075,7 +3075,7 @@
           "expect_error": false,
           "asset": "lossy.webp",
           "asset_path": "tests/fixtures/input/images/webp/lossy.webp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3093,7 +3093,7 @@
           "expect_error": false,
           "asset": "lossless.webp",
           "asset_path": "tests/fixtures/input/images/webp/lossless.webp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3121,7 +3121,7 @@
           "expect_error": false,
           "asset": "no_alpha.webp",
           "asset_path": "tests/fixtures/input/images/webp/no_alpha.webp",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3139,7 +3139,7 @@
           "expect_error": false,
           "asset": "with_alpha.webp",
           "asset_path": "tests/fixtures/input/images/webp/with_alpha.webp",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             128,
             128
@@ -3177,7 +3177,7 @@
           "expect_error": false,
           "asset": "16x16.webp",
           "asset_path": "tests/fixtures/input/images/webp/16x16.webp",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             16,
             16
@@ -3627,7 +3627,7 @@
           "expect_error": false,
           "asset": "le.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/le.tiff",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3655,7 +3655,7 @@
           "expect_error": false,
           "asset": "uncompressed.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/uncompressed.tiff",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3673,7 +3673,7 @@
           "expect_error": false,
           "asset": "lzw.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/lzw.tiff",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3691,7 +3691,7 @@
           "expect_error": false,
           "asset": "deflate.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/deflate.tiff",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3737,7 +3737,7 @@
           "expect_error": false,
           "asset": "gray.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/gray.tiff",
-          "ref_mode": "L",
+          "ref_mode": "L8",
           "ref_size": [
             128,
             128
@@ -3765,7 +3765,7 @@
           "expect_error": false,
           "asset": "rgb.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/rgb.tiff",
-          "ref_mode": "RGB",
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
@@ -3783,7 +3783,7 @@
           "expect_error": false,
           "asset": "rgba.tiff",
           "asset_path": "tests/fixtures/input/images/tiff/rgba.tiff",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             16,
             16
@@ -4372,7 +4372,7 @@
           "expect_error": false,
           "asset": "single.ico",
           "asset_path": "tests/fixtures/input/images/ico/single.ico",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             16,
             16
@@ -4390,7 +4390,7 @@
           "expect_error": false,
           "asset": "multi.ico",
           "asset_path": "tests/fixtures/input/images/ico/multi.ico",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             16,
             16
@@ -4408,7 +4408,7 @@
           "expect_error": false,
           "asset": "png_entry.ico",
           "asset_path": "tests/fixtures/input/images/ico/png_entry.ico",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             32,
             32
@@ -4436,7 +4436,7 @@
           "expect_error": false,
           "asset": "16x16.ico",
           "asset_path": "tests/fixtures/input/images/ico/16x16.ico",
-          "ref_mode": "RGBA",
+          "ref_mode": "Rgba8",
           "ref_size": [
             16,
             16

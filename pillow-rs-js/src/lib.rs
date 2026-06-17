@@ -1548,9 +1548,13 @@ pub fn effect_mandelbrot(
     y1: f64,
     quality: u32,
 ) -> Result<Image, JsValue> {
-    module_fns::effect_mandelbrot((w, h), (x0, y0, x1, y1), quality.try_into().unwrap())
-        .map(|i| Image { inner: i })
-        .map_err(err)
+    module_fns::effect_mandelbrot(
+        (w, h),
+        (x0, y0, x1, y1),
+        quality.try_into().expect("internal invariant"),
+    )
+    .map(|i| Image { inner: i })
+    .map_err(err)
 }
 
 #[wasm_bindgen(js_name = "effectNoiseFn")]
@@ -1693,11 +1697,16 @@ pub fn palette_save_to_file(palette: Vec<u8>, mode: &str, path: &str) -> Result<
 pub fn stat_from_list(data: Vec<f64>) -> JsValue {
     let (count, sum, mean, min, max) = image::stat_from_list(&data);
     let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("count"), &JsValue::from_f64(count)).unwrap();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("sum"), &JsValue::from_f64(sum)).unwrap();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("mean"), &JsValue::from_f64(mean)).unwrap();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("min"), &JsValue::from_f64(min)).unwrap();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("max"), &JsValue::from_f64(max)).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("count"), &JsValue::from_f64(count))
+        .expect("internal invariant");
+    js_sys::Reflect::set(&obj, &JsValue::from_str("sum"), &JsValue::from_f64(sum))
+        .expect("internal invariant");
+    js_sys::Reflect::set(&obj, &JsValue::from_str("mean"), &JsValue::from_f64(mean))
+        .expect("internal invariant");
+    js_sys::Reflect::set(&obj, &JsValue::from_str("min"), &JsValue::from_f64(min))
+        .expect("internal invariant");
+    js_sys::Reflect::set(&obj, &JsValue::from_str("max"), &JsValue::from_f64(max))
+        .expect("internal invariant");
     obj.into()
 }
 
@@ -1707,7 +1716,7 @@ pub fn stat_from_list(data: Vec<f64>) -> JsValue {
 
 #[wasm_bindgen(js_name = "outlineCurve")]
 pub fn outline_curve(points: Vec<f64>, steps: i32) -> Vec<i32> {
-    let pts = draw::outline_curve_points(&points, steps.try_into().unwrap());
+    let pts = draw::outline_curve_points(&points, steps.try_into().expect("internal invariant"));
     let mut flat = Vec::with_capacity(pts.len() * 2);
     for (x, y) in pts {
         flat.push(x);

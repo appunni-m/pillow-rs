@@ -7,31 +7,19 @@
   "cases": [
     {
       "id": "static_gif",
-      "asset": "static.gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
-      "ref_bytes": 16384,
-      "ref_mode": "P"
+      "asset": "static.gif"
     },
     {
       "id": "animated_gif",
-      "asset": "animated.gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
-      "ref_bytes": 16384,
-      "ref_mode": "P"
+      "asset": "animated.gif"
     },
     {
       "id": "transparent",
-      "asset": "transparent.gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
-      "ref_bytes": 16384,
-      "ref_mode": "P"
+      "asset": "transparent.gif"
     },
     {
       "id": "interlaced",
-      "asset": "interlaced.gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
-      "ref_bytes": 16384,
-      "ref_mode": "P"
+      "asset": "interlaced.gif"
     },
     {
       "id": "color_table_global",
@@ -43,17 +31,11 @@
     },
     {
       "id": "extension_gce",
-      "asset": "gce.gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
-      "ref_bytes": 16384,
-      "ref_mode": "P"
+      "asset": "gce.gif"
     },
     {
       "id": "size_1x1",
-      "asset": "1x1.gif",
-      "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
-      "ref_bytes": 1,
-      "ref_mode": "P"
+      "asset": "1x1.gif"
     },
     {
       "id": "error_empty",

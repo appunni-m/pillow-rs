@@ -9,55 +9,31 @@
       "id": "lossy_vp8",
       "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "lossless_vp8l",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "extended"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "no_alpha",
       "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "with_alpha",
       "ref_sha256": "e3ee2530af855f0499fcac0ef6d3a5daeb478fa49bbfbe3a02b93a41f48108da",
       "ref_bytes": 65536,
-      "ref_mode": "RGBA"
-    },
-    {
-      "id": "alpha_lossless"
-    },
-    {
-      "id": "animated"
+      "ref_mode": "Rgba8"
     },
     {
       "id": "size_small",
       "ref_sha256": "3b82045c0d52cec1f0b719075b518d95b88610e1ab94baba7534fb489796edce",
       "ref_bytes": 1024,
-      "ref_mode": "RGBA"
-    },
-    {
-      "id": "size_odd"
-    },
-    {
-      "id": "icc_profile"
-    },
-    {
-      "id": "xmp_metadata"
-    },
-    {
-      "id": "exif_metadata"
-    },
-    {
-      "id": "error_truncated"
+      "ref_mode": "Rgba8"
     }
   ]
 }

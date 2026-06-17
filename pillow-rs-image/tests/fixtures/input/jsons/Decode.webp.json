@@ -7,17 +7,11 @@
   "cases": [
     {
       "id": "lossy_vp8",
-      "asset": "lossy.webp",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "lossy.webp"
     },
     {
       "id": "lossless_vp8l",
-      "asset": "lossless.webp",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "lossless.webp"
     },
     {
       "id": "extended",
@@ -25,17 +19,11 @@
     },
     {
       "id": "no_alpha",
-      "asset": "no_alpha.webp",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "no_alpha.webp"
     },
     {
       "id": "with_alpha",
-      "asset": "with_alpha.webp",
-      "ref_sha256": "e3ee2530af855f0499fcac0ef6d3a5daeb478fa49bbfbe3a02b93a41f48108da",
-      "ref_bytes": 65536,
-      "ref_mode": "RGBA"
+      "asset": "with_alpha.webp"
     },
     {
       "id": "alpha_lossless",
@@ -47,10 +35,7 @@
     },
     {
       "id": "size_small",
-      "asset": "16x16.webp",
-      "ref_sha256": "3b82045c0d52cec1f0b719075b518d95b88610e1ab94baba7534fb489796edce",
-      "ref_bytes": 1024,
-      "ref_mode": "RGBA"
+      "asset": "16x16.webp"
     },
     {
       "id": "size_odd",

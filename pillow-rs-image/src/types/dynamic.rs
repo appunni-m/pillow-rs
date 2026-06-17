@@ -325,42 +325,58 @@ impl DynamicImage {
                 buf
             }
             Rgb8 => {
-                let img = self.as_rgb8().unwrap();
+                let Some(img) = self.as_rgb8() else {
+                    panic!("BUG: as_rgb8 returned None for Rgb8 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             Rgba8 => {
-                let img = self.as_rgba8().unwrap();
+                let Some(img) = self.as_rgba8() else {
+                    panic!("BUG: as_rgba8 returned None for Rgba8 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             L16 => {
-                let img = self.as_luma16().unwrap();
+                let Some(img) = self.as_luma16() else {
+                    panic!("BUG: as_luma16 returned None for L16 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             La16 => {
-                let img = self.as_luma_alpha16().unwrap();
+                let Some(img) = self.as_luma_alpha16() else {
+                    panic!("BUG: as_luma_alpha16 returned None for La16 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             Rgb16 => {
-                let img = self.as_rgb16().unwrap();
+                let Some(img) = self.as_rgb16() else {
+                    panic!("BUG: as_rgb16 returned None for Rgb16 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             Rgba16 => {
-                let img = self.as_rgba16().unwrap();
+                let Some(img) = self.as_rgba16() else {
+                    panic!("BUG: as_rgba16 returned None for Rgba16 image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             Rgb32F => {
-                let img = self.as_rgb32f().unwrap();
+                let Some(img) = self.as_rgb32f() else {
+                    panic!("BUG: as_rgb32f returned None for Rgb32F image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }
             Rgba32F => {
-                let img = self.as_rgba32f().unwrap();
+                let Some(img) = self.as_rgba32f() else {
+                    panic!("BUG: as_rgba32f returned None for Rgba32F image");
+                };
                 let buf: ImageBuffer<Px, Vec<Px::Subpixel>> = img.convert();
                 buf
             }

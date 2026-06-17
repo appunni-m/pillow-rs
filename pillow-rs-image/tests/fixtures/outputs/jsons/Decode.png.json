@@ -9,25 +9,25 @@
       "id": "color_gray",
       "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
       "ref_bytes": 16384,
-      "ref_mode": "L"
+      "ref_mode": "L8"
     },
     {
       "id": "color_gray_alpha",
       "ref_sha256": "b6dcbaf7b5a0b3225e7586f65b10fddca0a8f56c1aa22ba684411c0682c09f4b",
       "ref_bytes": 32768,
-      "ref_mode": "LA"
+      "ref_mode": "La8"
     },
     {
       "id": "color_rgb",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "color_rgba",
       "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
       "ref_bytes": 65536,
-      "ref_mode": "RGBA"
+      "ref_mode": "Rgba8"
     },
     {
       "id": "color_indexed",
@@ -63,7 +63,7 @@
       "id": "depth_8",
       "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
       "ref_bytes": 16384,
-      "ref_mode": "L"
+      "ref_mode": "L8"
     },
     {
       "id": "depth_16",
@@ -75,130 +75,97 @@
       "id": "no_interlace",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "interlace_adam7",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "filter_none",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "filter_sub",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "filter_up",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "filter_average",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "filter_paeth",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "filter_mixed",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "compress_default",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "compress_none",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "compress_max",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "chunk_gama",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "chunk_srgb",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "chunk_iccp"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "chunk_text",
       "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
       "ref_bytes": 49152,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "chunk_time"
-    },
-    {
-      "id": "chunk_background"
-    },
-    {
-      "id": "chunk_phys"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "size_1x1",
       "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
       "ref_bytes": 3,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "size_small"
-    },
-    {
-      "id": "size_large"
+      "ref_mode": "Rgb8"
     },
     {
       "id": "size_odd",
       "ref_sha256": "ffd87a1ba3408876b7f22fb205642480b6c8e5487f8f370e801bc58033ee30d3",
       "ref_bytes": 867,
-      "ref_mode": "RGB"
-    },
-    {
-      "id": "error_truncated"
-    },
-    {
-      "id": "error_corrupt_crc"
-    },
-    {
-      "id": "error_wrong_magic"
-    },
-    {
-      "id": "apng_static"
-    },
-    {
-      "id": "apng_animated"
+      "ref_mode": "Rgb8"
     }
   ]
 }

@@ -1,14 +1,14 @@
 use super::huffman::HuffTable;
 // ── Marker Constants ──────────────────────────────────────────────────────
 
-pub(super) const M_SOI: u16 = 0xFFD8;
-pub(super) const M_EOI: u16 = 0xFFD9;
-pub(super) const M_SOS: u16 = 0xFFDA;
-pub(super) const M_SOF0: u16 = 0xFFC0;
-pub(super) const M_SOF2: u16 = 0xFFC2;
-pub(super) const M_DHT: u16 = 0xFFC4;
-pub(super) const M_DQT: u16 = 0xFFDB;
-pub(super) const M_DRI: u16 = 0xFFDD;
+pub(crate) const M_SOI: u16 = 0xFFD8;
+pub(crate) const M_EOI: u16 = 0xFFD9;
+pub(crate) const M_SOS: u16 = 0xFFDA;
+pub(crate) const M_SOF0: u16 = 0xFFC0;
+pub(crate) const M_SOF2: u16 = 0xFFC2;
+pub(crate) const M_DHT: u16 = 0xFFC4;
+pub(crate) const M_DQT: u16 = 0xFFDB;
+pub(crate) const M_DRI: u16 = 0xFFDD;
 
 // ── JPEG Structures ───────────────────────────────────────────────────────
 

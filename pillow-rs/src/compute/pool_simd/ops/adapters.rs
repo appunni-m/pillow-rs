@@ -87,7 +87,7 @@ fn dynimg_from_rgba(pixels: Vec<u32>, w: u32, h: u32) -> DynamicImage {
             ]
         })
         .collect();
-    DynamicImage::ImageRgba8(RgbaImage::from_raw(w, h, rgba_bytes).unwrap())
+    DynamicImage::ImageRgba8(RgbaImage::from_raw(w, h, rgba_bytes).expect("internal invariant"))
 }
 
 /// Materialize an Arc<Image> → DynamicImage.

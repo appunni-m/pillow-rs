@@ -1,40 +1,40 @@
 // ── IDCT Constants (matching IJG jidctint.c) ──────────────────────────────
 
-pub(super) const CONST_BITS: i32 = 13;
-pub(super) const PASS1_BITS: i32 = 2;
+pub(crate) const CONST_BITS: i32 = 13;
+pub(crate) const PASS1_BITS: i32 = 2;
 
 // FIX(x) = (i32)(x * (1 << CONST_BITS) + 0.5)
-pub(super) const FIX_0_298631336: i32 = 2446;
-pub(super) const FIX_0_390180644: i32 = 3196;
-pub(super) const FIX_0_541196100: i32 = 4433;
-pub(super) const FIX_0_765366865: i32 = 6270;
-pub(super) const FIX_0_899976223: i32 = 7373;
-pub(super) const FIX_1_175875602: i32 = 9633;
-pub(super) const FIX_1_501321110: i32 = 12299;
-pub(super) const FIX_1_847759065: i32 = 15137;
-pub(super) const FIX_1_961570560: i32 = 16069;
-pub(super) const FIX_2_053119869: i32 = 16819;
-pub(super) const FIX_2_562915447: i32 = 20995;
-pub(super) const FIX_3_072711026: i32 = 25172;
+pub(crate) const FIX_0_298631336: i32 = 2446;
+pub(crate) const FIX_0_390180644: i32 = 3196;
+pub(crate) const FIX_0_541196100: i32 = 4433;
+pub(crate) const FIX_0_765366865: i32 = 6270;
+pub(crate) const FIX_0_899976223: i32 = 7373;
+pub(crate) const FIX_1_175875602: i32 = 9633;
+pub(crate) const FIX_1_501321110: i32 = 12299;
+pub(crate) const FIX_1_847759065: i32 = 15137;
+pub(crate) const FIX_1_961570560: i32 = 16069;
+pub(crate) const FIX_2_053119869: i32 = 16819;
+pub(crate) const FIX_2_562915447: i32 = 20995;
+pub(crate) const FIX_3_072711026: i32 = 25172;
 
-pub(super) const DCTSIZE: usize = 8;
-pub(super) const DCTSIZE2: usize = 64;
+pub(crate) const DCTSIZE: usize = 8;
+pub(crate) const DCTSIZE2: usize = 64;
 
 /// Full-precision multiply matching IJG's MULTIPLY macro (no premature descale).
 /// Returns v * c at CONST_BITS (2^13) scale.
 #[inline(always)]
-pub(super) fn mpy(v: i32, c: i32) -> i32 {
+pub(crate) fn mpy(v: i32, c: i32) -> i32 {
     (v as i64 * c as i64) as i32
 }
 
 #[inline(always)]
-pub(super) fn descale(x: i32, shift: i32) -> i32 {
+pub(crate) fn descale(x: i32, shift: i32) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
 /// IJG-style range_limit: clamps (x + 128) to [0, 255].
 #[inline(always)]
-pub(super) fn range_limit(x: i32) -> u8 {
+pub(crate) fn range_limit(x: i32) -> u8 {
     let x = x + 128;
     if x < 0 {
         0
@@ -165,7 +165,7 @@ pub(crate) fn jpeg_idct_islow(block: &mut [i32; DCTSIZE2], workspace: &mut [i32;
 // ── JPEG Utilities ────────────────────────────────────────────────────────
 
 /// `jpeg_natural_order` maps zigzag index to natural (row-major) position.
-pub(super) const JPEG_NATURAL_ORDER: [usize; 64] = [
+pub(crate) const JPEG_NATURAL_ORDER: [usize; 64] = [
     0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20,
     13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59,
     52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
@@ -173,7 +173,7 @@ pub(super) const JPEG_NATURAL_ORDER: [usize; 64] = [
 
 /// Sign extension for DC/AC coefficient additional bits (Figure F.12).
 #[inline(always)]
-pub(super) fn extend(value: u32, size: u8) -> i32 {
+pub(crate) fn extend(value: u32, size: u8) -> i32 {
     if size == 0 {
         return 0;
     }
@@ -194,7 +194,7 @@ pub(super) struct YccColorConverter {
 }
 
 impl YccColorConverter {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut cr_r_tab = [0i32; 256];
         let mut cb_b_tab = [0i32; 256];
         let mut cr_g_tab = [0i32; 256];
@@ -217,7 +217,7 @@ impl YccColorConverter {
     }
 
     #[inline(always)]
-    pub(super) fn ycc_to_rgb(&self, y: u8, cb: u8, cr: u8) -> (u8, u8, u8) {
+    pub(crate) fn ycc_to_rgb(&self, y: u8, cb: u8, cr: u8) -> (u8, u8, u8) {
         let y = y as i32;
         let r = y + self.cr_r_tab[cr as usize];
         let g = y + ((self.cb_g_tab[cb as usize] + self.cr_g_tab[cr as usize]) >> 16);

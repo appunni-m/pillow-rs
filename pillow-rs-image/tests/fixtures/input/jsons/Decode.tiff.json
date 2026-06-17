@@ -7,10 +7,7 @@
   "cases": [
     {
       "id": "byte_order_le",
-      "asset": "le.tiff",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "le.tiff"
     },
     {
       "id": "byte_order_be",
@@ -18,24 +15,15 @@
     },
     {
       "id": "compression_none",
-      "asset": "uncompressed.tiff",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "uncompressed.tiff"
     },
     {
       "id": "compression_lzw",
-      "asset": "lzw.tiff",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "lzw.tiff"
     },
     {
       "id": "compression_deflate",
-      "asset": "deflate.tiff",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "deflate.tiff"
     },
     {
       "id": "compression_packbits",
@@ -43,17 +31,11 @@
     },
     {
       "id": "bilevel",
-      "asset": "bilevel.tiff",
-      "ref_sha256": "3d92f194e3d8ff64db82b9d6d7c8888526665cbcbee3f4c5e3a6c097076c67c5",
-      "ref_bytes": 32,
-      "ref_mode": "1"
+      "asset": "bilevel.tiff"
     },
     {
       "id": "grayscale",
-      "asset": "gray.tiff",
-      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-      "ref_bytes": 16384,
-      "ref_mode": "L"
+      "asset": "gray.tiff"
     },
     {
       "id": "palette",
@@ -61,17 +43,11 @@
     },
     {
       "id": "rgb",
-      "asset": "rgb.tiff",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "RGB"
+      "asset": "rgb.tiff"
     },
     {
       "id": "rgba",
-      "asset": "rgba.tiff",
-      "ref_sha256": "98f4b65a00baf17d30ebb2a9250399ab01972aaa17610fe55aebeda5f0e04fbe",
-      "ref_bytes": 1024,
-      "ref_mode": "RGBA"
+      "asset": "rgba.tiff"
     },
     {
       "id": "cmyk",

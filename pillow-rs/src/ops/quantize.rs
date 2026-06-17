@@ -135,7 +135,7 @@ impl QuantHash {
                     return;
                 }
                 Some(e) if e.r == sr && e.g == sg && e.b == sb => {
-                    let entry = self.entries[idx].as_mut().unwrap();
+                    let entry = self.entries[idx].as_mut().expect("internal invariant");
                     entry.count += 1;
                     entry.r_sum += r as u64;
                     entry.g_sum += g as u64;
@@ -186,7 +186,7 @@ impl QuantHash {
                     return;
                 }
                 Some(e) if e.r == new_r && e.g == new_g && e.b == new_b => {
-                    let existing = self.entries[idx].as_mut().unwrap();
+                    let existing = self.entries[idx].as_mut().expect("internal invariant");
                     existing.count += entry.count;
                     existing.r_sum += entry.r_sum;
                     existing.g_sum += entry.g_sum;
