@@ -3,6 +3,7 @@ members = [
     "pillow-rs-core",
     "pillow-rs-py",
     "pillow-rs-js",
+    "pillow-rs-decode",
 ]
 resolver = "2"
 
