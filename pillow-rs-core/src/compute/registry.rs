@@ -163,6 +163,10 @@ pub enum OpId {
     GaussianBlur,
     Autocontrast,
     Equalize,
+    ExtractBand,
+    LinearGradient,
+    RadialGradient,
+    EffectMandelbrot,
 }
 
 /// GPU operation definition — holds compiled shader metadata.
@@ -423,6 +427,10 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::Autocontrast { .. } => Some(OpId::Autocontrast),
         PipelineOp::Equalize => Some(OpId::Equalize),
         PipelineOp::Color3DLut { .. } => Some(OpId::Color3DLut),
+        PipelineOp::ExtractBand { .. } => Some(OpId::ExtractBand),
+        PipelineOp::LinearGradient { .. } => Some(OpId::LinearGradient),
+        PipelineOp::RadialGradient { .. } => Some(OpId::RadialGradient),
+        PipelineOp::EffectMandelbrot { .. } => Some(OpId::EffectMandelbrot),
         _ => None,
     }
 }
@@ -757,6 +765,18 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── Color3DLut: size dims ──
         PipelineOp::Color3DLut { size, .. } => vec![size.0, size.1, size.2],
+
+        // ── ExtractBand: channel index ──
+        PipelineOp::ExtractBand { index } => vec![*index as u32],
+
+        // ── LinearGradient, RadialGradient: no params ──
+        PipelineOp::LinearGradient { .. } => vec![],
+        PipelineOp::RadialGradient { .. } => vec![],
+
+        // ── EffectMandelbrot: extent + quality ──
+        PipelineOp::EffectMandelbrot { w: _, h: _, x0, y0, x1, y1, quality } => {
+            vec![(*x0 as f32).to_bits(), (*y0 as f32).to_bits(), (*x1 as f32).to_bits(), (*y1 as f32).to_bits(), *quality]
+        }
 
         // ── Everything else (no GPU support / no params) ──
         _ => vec![],
@@ -2009,43 +2029,53 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
     // ── ExtractBand (CPU-only for now, GPU/SIMD later) ──
     m.insert(
         "ExtractBand",
-        OpEntry::cpu_only(|img, op, _mode| {
-            if let PipelineOp::ExtractBand { index } = op {
-                op_extract_band(img, *index)
-            } else {
-                Err(PilError::ValueError("expected ExtractBand op".into()))
-            }
-        }),
+        gpu_entry!(
+            |img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
+                if let PipelineOp::ExtractBand { index } = op {
+                    op_extract_band(img, *index)
+                } else {
+                    Err(PilError::ValueError("expected ExtractBand op".into()))
+                }
+            },
+            "extract_band.wgsl"
+        ),
     );
 
     // ── LinearGradient (CPU-only for now) ──
     m.insert(
         "LinearGradient",
-        OpEntry::cpu_only(|_img, op, _mode| {
-            if let PipelineOp::LinearGradient { mode } = op {
-                op_linear_gradient(mode)
-            } else {
-                Err(PilError::ValueError("expected LinearGradient op".into()))
-            }
-        }),
+        gpu_entry!(
+            |_img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
+                if let PipelineOp::LinearGradient { mode } = op {
+                    op_linear_gradient(mode)
+                } else {
+                    Err(PilError::ValueError("expected LinearGradient op".into()))
+                }
+            },
+            "linear_gradient.wgsl"
+        ),
     );
 
-    // ── RadialGradient (CPU-only for now) ──
+    // ── RadialGradient ──
     m.insert(
         "RadialGradient",
-        OpEntry::cpu_only(|_img, op, _mode| {
-            if let PipelineOp::RadialGradient { mode } = op {
-                op_radial_gradient(mode)
-            } else {
-                Err(PilError::ValueError("expected RadialGradient op".into()))
-            }
-        }),
+        gpu_entry!(
+            |_img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
+                if let PipelineOp::RadialGradient { mode } = op {
+                    op_radial_gradient(mode)
+                } else {
+                    Err(PilError::ValueError("expected RadialGradient op".into()))
+                }
+            },
+            "radial_gradient.wgsl"
+        ),
     );
 
-    // ── EffectMandelbrot (CPU-only for now) ──
+    // ── EffectMandelbrot ──
     m.insert(
         "EffectMandelbrot",
-        OpEntry::cpu_only(|_img, op, _mode| {
+        gpu_entry!(
+            |_img: &DynamicImage, op: &PipelineOp, _mode: Option<&str>| -> Result<DynamicImage, PilError> {
             if let PipelineOp::EffectMandelbrot {
                 w,
                 h,
@@ -2060,7 +2090,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
             } else {
                 Err(PilError::ValueError("expected EffectMandelbrot op".into()))
             }
-        }),
+        },
+        "effect_mandelbrot.wgsl"
+    ),
     );
 
     // ── ImageDraw ops (CPU-only for now) ──
