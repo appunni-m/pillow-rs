@@ -458,10 +458,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "81fd726bfcfc82144f6dc27ce9052c1af11cf8cd67e075f37682b25b2ab20f5f",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_q85",
@@ -473,10 +470,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "a3a3588a3426f40404bed3355a99b3562acaa82ae67f79ae0c98aae546ea43a3",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_q75",
@@ -488,10 +482,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_q50",
@@ -503,10 +494,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "da12540f158c632463bdbd7af3c75fac34ab92f5e3276ad5372e34e8fb2fb7d0",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_q25",
@@ -518,10 +506,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "5ecf5a06c40162a34d8ac9c9ca6a9c65b53c05ba332b10a38ba257f614e8b34c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_q10",
@@ -533,10 +518,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "a02a2f306eec3e58e67a998489552c5d042c36ef614bacd66dfa64982864e58b",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_q1",
@@ -548,10 +530,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "7615d8b6a92d62e90855231d66ec8d47359d9b27acb778fb3e5df27d4b7b82d8",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_sub_444",
@@ -599,10 +578,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_baseline",
@@ -614,10 +590,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_grayscale",
@@ -629,10 +602,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_rgb",
@@ -644,10 +614,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_1x1",
@@ -662,10 +629,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_8x8",
@@ -680,10 +644,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_odd_size",
@@ -698,10 +659,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_exif",
@@ -713,10 +671,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_no_exif",
@@ -728,10 +683,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_restart",
@@ -743,10 +695,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_no_restart",
@@ -758,10 +707,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_dct_fast",
@@ -773,10 +719,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_dct_slow",
@@ -788,10 +731,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_optimize",
@@ -803,10 +743,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_no_optimize",
@@ -818,10 +755,7 @@
           "description": null,
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_quality_100",
@@ -833,10 +767,7 @@
           "description": "Quality 100 (max)",
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "81fd726bfcfc82144f6dc27ce9052c1af11cf8cd67e075f37682b25b2ab20f5f",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_quality_85",
@@ -848,10 +779,7 @@
           "description": "Quality 85 (default)",
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "a3a3588a3426f40404bed3355a99b3562acaa82ae67f79ae0c98aae546ea43a3",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_quality_50",
@@ -863,10 +791,7 @@
           "description": "Quality 50",
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "da12540f158c632463bdbd7af3c75fac34ab92f5e3276ad5372e34e8fb2fb7d0",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_quality_10",
@@ -878,10 +803,7 @@
           "description": "Quality 10 (min)",
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "a02a2f306eec3e58e67a998489552c5d042c36ef614bacd66dfa64982864e58b",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_subsample_444",
@@ -917,10 +839,7 @@
           "description": "Progressive JPEG",
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         },
         {
           "id": "enc_grayscale",
@@ -932,10 +851,7 @@
           "description": "Grayscale JPEG",
           "status": "active",
           "source_format": "jpeg",
-          "source_asset": "baseline_444.jpg",
-          "ref_sha256": "321aebe5741c16cb0c38e1f5e9ee660a611b0aab45d1337ffd1bd7c8e4c679f5",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "baseline_444.jpg"
         }
       ]
     },
@@ -3250,10 +3166,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "9ff1ef8649d609f833a3cb8542517e341c7f73da4663be43e6ab1a58a15dbbbe",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_q80",
@@ -3266,10 +3179,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_q50",
@@ -3282,10 +3192,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "57cd1838ecb10fffd928e0862e5dff09212909c1897b55dc0c560e3dd3f1fbd1",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_q10",
@@ -3298,10 +3205,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "35c752c39041d25276745e68864f9535e4d68f7edce36cc531d36f59e19dc8f7",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_q1",
@@ -3314,10 +3218,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "25a3f7c72a21c39571fa88a7f45564bd9e3b92faba6df56da91cf53f0be5ead2",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossless",
@@ -3329,10 +3230,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_alpha",
@@ -3345,10 +3243,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossless_alpha",
@@ -3361,10 +3256,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_no_alpha",
@@ -3376,10 +3268,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_hint_photo",
@@ -3391,10 +3280,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_hint_graph",
@@ -3406,10 +3292,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_hint_picture",
@@ -3421,10 +3304,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_method_0",
@@ -3436,10 +3316,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_method_6",
@@ -3451,10 +3328,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_exif",
@@ -3466,10 +3340,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_xmp",
@@ -3481,10 +3352,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_icc",
@@ -3496,10 +3364,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_1x1",
@@ -3514,10 +3379,7 @@
           "description": null,
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy",
@@ -3529,10 +3391,7 @@
           "description": "Lossy WebP",
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossless",
@@ -3544,10 +3403,7 @@
           "description": "Lossless WebP",
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_alpha",
@@ -3560,10 +3416,7 @@
           "description": "Lossy with alpha",
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossless_alpha",
@@ -3576,10 +3429,7 @@
           "description": "Lossless with alpha",
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_quality_100",
@@ -3592,10 +3442,7 @@
           "description": "Lossy quality 100",
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "9ff1ef8649d609f833a3cb8542517e341c7f73da4663be43e6ab1a58a15dbbbe",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         },
         {
           "id": "enc_lossy_quality_10",
@@ -3608,10 +3455,7 @@
           "description": "Lossy quality 10",
           "status": "active",
           "source_format": "webp",
-          "source_asset": "lossless.webp",
-          "ref_sha256": "35c752c39041d25276745e68864f9535e4d68f7edce36cc531d36f59e19dc8f7",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8"
+          "source_asset": "lossless.webp"
         }
       ]
     },
@@ -4469,10 +4313,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_32x32",
@@ -4487,10 +4331,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_48x48",
@@ -4505,10 +4349,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_256x256",
@@ -4523,10 +4367,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_multi_2",
@@ -4543,10 +4387,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_multi_4",
@@ -4567,10 +4411,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_bmp_entry",
@@ -4582,10 +4426,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_png_entry",
@@ -4597,10 +4441,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_24bit",
@@ -4612,10 +4456,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_32bit",
@@ -4627,10 +4471,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_no_hotspot",
@@ -4642,10 +4486,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_hotspot",
@@ -4660,10 +4504,10 @@
           "description": null,
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_16x16",
@@ -4680,10 +4524,10 @@
           "description": "16x16 icon",
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_32x32",
@@ -4700,10 +4544,10 @@
           "description": "32x32 icon",
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_multi",
@@ -4724,10 +4568,10 @@
           "description": "Multi-resolution",
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         },
         {
           "id": "enc_png_entry",
@@ -4739,10 +4583,10 @@
           "description": "PNG-encoded entry",
           "status": "active",
           "source_format": "png",
-          "source_asset": "8bit.png",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
-          "ref_bytes": 16384,
-          "ref_mode": "L8"
+          "source_asset": "rgba.png",
+          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8"
         }
       ]
     },

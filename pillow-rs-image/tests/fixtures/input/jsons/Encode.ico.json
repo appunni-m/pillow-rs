@@ -7,7 +7,7 @@
   "cases": [
     {
       "id": "enc_16x16",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -18,7 +18,7 @@
     },
     {
       "id": "enc_32x32",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -29,7 +29,7 @@
     },
     {
       "id": "enc_48x48",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -40,7 +40,7 @@
     },
     {
       "id": "enc_256x256",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -51,7 +51,7 @@
     },
     {
       "id": "enc_multi_2",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -64,7 +64,7 @@
     },
     {
       "id": "enc_multi_4",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -81,7 +81,7 @@
     },
     {
       "id": "enc_bmp_entry",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "entry_type": "bmp"
@@ -89,7 +89,7 @@
     },
     {
       "id": "enc_png_entry",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "entry_type": "png"
@@ -97,7 +97,7 @@
     },
     {
       "id": "enc_24bit",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "bit_depth": 24
@@ -105,7 +105,7 @@
     },
     {
       "id": "enc_32bit",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "bit_depth": 32
@@ -113,7 +113,7 @@
     },
     {
       "id": "enc_no_hotspot",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "hotspot": false
@@ -121,7 +121,7 @@
     },
     {
       "id": "enc_hotspot",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "hotspot": [
@@ -132,7 +132,7 @@
     },
     {
       "id": "enc_16x16",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -145,7 +145,7 @@
     },
     {
       "id": "enc_32x32",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -158,7 +158,7 @@
     },
     {
       "id": "enc_multi",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "sizes": [
@@ -175,7 +175,7 @@
     },
     {
       "id": "enc_png_entry",
-      "source_asset": "8bit.png",
+      "source_asset": "rgba.png",
       "source_format": "png",
       "params": {
         "png_entry": true

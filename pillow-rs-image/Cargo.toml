@@ -5,7 +5,6 @@ edition = "2021"
 description = "Zero-dependency pixel-perfect image decoders (JPEG, PNG, GIF, BMP, WebP, TIFF)"
 
 [dependencies]
-jpeg-encoder = "0.6"
 log = "0.4"
 png = "0.17.16"
 gif = "0.14"

@@ -7,6 +7,7 @@ use super::parser::JpegInfo;
 use super::upsample::{crop_component, fancy_upsample};
 
 pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<DecodedImage> {
+
     let mcu_width = (info.max_h_samp as u32) * 8;
     let mcu_height = (info.max_v_samp as u32) * 8;
     let num_mcus_x = ((info.width as u32) + mcu_width - 1) / mcu_width;
@@ -53,7 +54,6 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         if segs.segments.is_empty() {
             continue;
         }
-
         let is_dc_scan = scan.ss == 0 && scan.se == 0;
         let is_dc_first = is_dc_scan && scan.ah == 0;
         let is_dc_refine = is_dc_scan && scan.ah > 0;
@@ -157,7 +157,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                     if k > se || k >= 64 { break; }
                                     let bits = br.read_bits(size as u32)?;
                                     let val = extend(bits, size);
-                                    coeff_storage[comp_idx][block_idx][k] = val << scan.al;
+                                    coeff_storage[comp_idx][block_idx][idct::JPEG_NATURAL_ORDER[k]] = val << scan.al;
                                     k += 1;
                                 }
                             }
@@ -185,11 +185,11 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                 // Phase 1: Huffman decode (only when EOBRUN == 0)
                                 if ac_refine_eobrun == 0 {
                                     while k <= se && k < 64 {
-                                        if coeffs[k] != 0 {
+                                        if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
                                             // Refine existing non-zero
                                             let bit = br.read_bits(1)?;
                                             if bit != 0 {
-                                                if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
+                                                if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
                                             }
                                             k += 1;
                                         } else {
@@ -201,10 +201,10 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                                 let mut r: i32 = 15;
                                                 loop {
                                                     if k > se || k >= 64 { break; }
-                                                    if coeffs[k] != 0 {
+                                                    if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
                                                         let bit = br.read_bits(1)?;
                                                         if bit != 0 {
-                                                            if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
+                                                            if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
                                                         }
                                                     } else { r -= 1; if r < 0 { k += 1; break; } }
                                                     k += 1;
@@ -223,10 +223,10 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                                 let mut r: i32 = run as i32;
                                                 loop {
                                                     if k > se || k >= 64 { break; }
-                                                    if coeffs[k] != 0 {
+                                                    if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
                                                         let bit = br.read_bits(1)?;
                                                         if bit != 0 {
-                                                            if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
+                                                            if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
                                                         }
                                                     } else {
                                                         r -= 1;
@@ -235,7 +235,7 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                                     k += 1;
                                                 }
                                                 if k <= se && k < 64 {
-                                                    coeffs[k] = val;
+                                                    coeffs[idct::JPEG_NATURAL_ORDER[k]] = val;
                                                     k += 1;
                                                 }
                                             }
@@ -246,10 +246,10 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                 // Phase 2: EOBRUN handler — refine remaining non-zero coefficients
                                 if ac_refine_eobrun > 0 {
                                     while k <= se && k < 64 {
-                                        if coeffs[k] != 0 {
+                                        if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
                                             let bit = br.read_bits(1)?;
                                             if bit != 0 {
-                                                if (coeffs[k] & p1) == 0 { coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 }; }
+                                                if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
                                             }
                                         }
                                         k += 1;
@@ -284,8 +284,11 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
 
         for block_idx in 0..total_blocks {
             let coeffs = &coeff_storage[comp_idx][block_idx];
+            // Convert quant table to natural order for natural-order coeff storage
+            let mut qt_nat = [0u16; 64];
+            for i in 0..64 { qt_nat[idct::JPEG_NATURAL_ORDER[i]] = quant_table[i]; }
             for i in 0..64 {
-                block_natural[idct::JPEG_NATURAL_ORDER[i]] = coeffs[i] * quant_table[i] as i32;
+                block_natural[i] = coeffs[i] * qt_nat[i] as i32;
             }
             jpeg_idct_islow(&mut block_natural, &mut workspace);
 
