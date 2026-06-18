@@ -50,23 +50,21 @@ impl HuffTable {
         }
         maxcode[17] = 0x7FFFFFFFi32; // IJG: ensures jpeg_huff_decode terminates
 
-        // Compute lookahead table (IJG: speeds up codes ≤ 8 bits)
+        // Compute lookahead table with IJG sentinel init
+        // Sentinel = (HUFF_LOOKAHEAD+1) << HUFF_LOOKAHEAD = 9 << 8 = 2304
         let mut lookup = [0u16; 256];
+        for i in 0..256 { lookup[i] = 9u16 << 8; }
         p = 0;
         for l in 1..=8u32 {
             for _ in 0..counts[l as usize - 1] as usize {
                 let lookbits = (huffcode[p] << (8 - l)) as usize;
                 let entry = ((l as u16) << 8) | values[p] as u16;
-                for ctr in 0..(1 << (8 - l)) {
-                    lookup[lookbits + ctr as usize] = entry;
+                for ctr in 0..(1u32 << (8 - l)) as usize {
+                    lookup[lookbits + ctr] = entry;
                 }
                 p += 1;
             }
         }
-        // Entries with (HUFF_LOOKAHEAD+1) in high byte mean "code > 8 bits"
-        // Our init: 0 means entry not set (high byte = 0). But IJG sets to
-        // (HUFF_LOOKAHEAD+1) << HUFF_LOOKAHEAD = 9 << 8. We use 0 as sentinel
-        // and check in the slow path.
 
         HuffTable { values: values.to_vec(), maxcode, valoffset, lookup }
     }
@@ -77,7 +75,7 @@ impl HuffTable {
         if let Some(look) = br.peek_bits(8) {
             let entry = self.lookup[look as usize];
             let len = (entry >> 8) as u32;
-            if len > 0 && len <= 8 {
+            if len <= 8 {
                 br.drop_bits(len);
                 return Some(entry as u8);
             }
