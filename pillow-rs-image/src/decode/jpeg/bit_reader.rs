@@ -5,17 +5,18 @@
 
 pub(super) struct BitReader<'a> {
     data: &'a [u8],
-    pos: usize,
-    end: usize,
+    pub(super) pos: usize,
+    pub(super) end: usize,
     buf: u64,        // IJG uses bit_buf_type (64-bit on x86-64)
     bits: u32,       // IJG bits_left
+    pub(super) total_bits: u64,  // debug: total bits consumed
 }
 
 const MIN_GET_BITS: u32 = 15;  // IJG default
 
 impl<'a> BitReader<'a> {
     pub(super) fn new(data: &'a [u8], start: usize, end: usize) -> Self {
-        BitReader { data, pos: start, end, buf: 0, bits: 0 }
+        BitReader { data, pos: start, end, buf: 0, bits: 0, total_bits: 0 }
     }
 
     /// Fill to at least MIN_GET_BITS. Matches IJG jpeg_fill_bit_buffer.
@@ -73,6 +74,7 @@ impl<'a> BitReader<'a> {
         if n > self.bits && !self.fill() && n > self.bits {
             return None;
         }
+        self.total_bits += n as u64;
         // GET_BITS: ((get_buffer >> (bits_left -= nbits)) & mask)
         self.bits -= n;
         let val = (self.buf >> self.bits) as u32 & ((1u32 << n) - 1);
@@ -91,6 +93,7 @@ impl<'a> BitReader<'a> {
     /// Drop n bits. Matches IJG DROP_BITS.
     #[allow(dead_code)]
     pub(super) fn drop_bits(&mut self, n: u32) {
+        self.total_bits += n as u64;
         self.bits = self.bits.saturating_sub(n);
     }
 }
