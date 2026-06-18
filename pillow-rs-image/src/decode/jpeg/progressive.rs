@@ -48,11 +48,8 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         .collect();
 
     // Process each scan in order
-    for (scan_idx, scan) in info.scans.iter().enumerate() {
+    for (_scan_idx, scan) in info.scans.iter().enumerate() {
         // Extract entropy segments (split at RST markers within the scan data)
-        eprintln!("SEG scan[{}]: entropy_start={}", scan_idx, scan.entropy_start);
-        std::fs::write(format!("/tmp/entropy_debug.txt", ), format!("scan[{}]: start={} end={}
-", scan_idx, scan.entropy_start, scan.entropy_end).as_bytes()).ok();
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
         if segs.segments.is_empty() {
             continue;
@@ -178,7 +175,8 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                         let m1 = (-1i32) << scan.al;
                         let ss = scan.ss as usize;
                         let se = scan.se as usize;
-                                                for by in 0..comp.v_samp as usize {
+
+                        for by in 0..comp.v_samp as usize {
                             for bx in 0..comp.h_samp as usize {
                                 let block_idx = (mcu_y * comp.v_samp as usize + by)
                                     * (comp_buf_width[comp_idx] / 8)
@@ -197,11 +195,10 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                             }
                                             k += 1;
                                         } else {
-                                            let peek8 = br.peek_bits(8).unwrap_or(999);
+
                                             let sym = ac_table.decode(&mut br)?;
                                             let run = (sym >> 4) as usize;
                                             let size = (sym & 0x0F) as u8;
-                                            if block_idx == 0 && k == scan.ss as usize { eprintln!("SEG: scan={} entropy_start={}", scan_idx, scan.entropy_start); }
                                             if size == 0 && run == 15 {
                                                 // ZRL: advance until 16 zero coefficients (IJG --r pattern)
                                                 let mut r: i32 = 15;
@@ -266,8 +263,6 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                         }
                     }
                 }
-
-                // RST handling at segment boundaries
                 if mcu_idx + 1 >= mcus_in_segment && seg_idx + 1 < segs.segments.len() {
                     for pred in dc_predictors.iter_mut() {
                         *pred = 0;
