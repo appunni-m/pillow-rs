@@ -1,67 +1,99 @@
+//! Huffman table matching IJG jpeg_make_d_derived_tbl + jpeg_huff_decode.
+//! See: /tmp/libjpeg_turbo/jdhuff.c:155 (make_derived_tbl), :449 (huff_decode)
+
 use super::bit_reader::BitReader;
-// ── Huffman Table ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub(super) struct HuffTable {
-    values: Vec<u8>,
-    maxcode: [i32; 17],
-    valoffset: [i32; 17],
+    pub(super) values: Vec<u8>,     // IJG: huffval[]
+    maxcode: [i32; 18],             // IJG: maxcode[0..17], maxcode[17]=sentinel
+    valoffset: [i32; 18],           // IJG: valoffset[0..17]
+    /// Lookup table for codes ≤ 8 bits: entry = (code_len << 8) | symbol
+    lookup: [u16; 256],             // IJG: lookup[1<<HUFF_LOOKAHEAD]
 }
 
 impl HuffTable {
-    /// Build a derived Huffman table from the DHT marker data.
+    /// Build from BITS and HUFFVAL arrays. Matches IJG jpeg_make_d_derived_tbl.
     pub(super) fn build(counts: &[u8; 16], values: &[u8]) -> Self {
-        let mut code = 0i32;
-        let mut huffcode: Vec<i32> = Vec::with_capacity(values.len());
-
+        // Figure C.1: make table of Huffman code length for each symbol
+        let mut huffsize = [0u8; 257];
+        let mut p = 0usize;
         for l in 1..=16 {
             let cnt = counts[l - 1] as usize;
-            for _ in 0..cnt {
-                huffcode.push(code);
-                code += 1;
+            for _ in 0..cnt { huffsize[p] = l as u8; p += 1; }
+        }
+        let numsymbols = p;
+
+        // Figure C.2: generate the codes themselves
+        let mut huffcode = [0u32; 257];
+        let mut code: u32 = 0;
+        let mut si = huffsize[0] as usize;
+        p = 0;
+        while p < numsymbols {
+            while p < numsymbols && huffsize[p] as usize == si {
+                huffcode[p] = code; code += 1; p += 1;
             }
-            code <<= 1;
+            code <<= 1; si += 1;
         }
 
-        let mut maxcode = [-1i32; 17];
-        let mut valoffset = [0i32; 17];
-        let mut p = 0i32;
-
+        // Figure F.15: generate decoding tables
+        let mut maxcode = [-1i32; 18];
+        let mut valoffset = [0i32; 18];
+        p = 0;
         for l in 1..=16 {
             let cnt = counts[l - 1] as usize;
             if cnt > 0 {
-                valoffset[l] = p - huffcode[p as usize];
-                p += cnt as i32;
-                maxcode[l] = huffcode[(p - 1) as usize];
+                valoffset[l] = p as i32 - huffcode[p] as i32;
+                p += cnt;
+                maxcode[l] = huffcode[p - 1] as i32;
             }
         }
-        maxcode[16] = 0x7FFFFFFF;
+        maxcode[17] = 0x7FFFFFFFi32; // IJG: ensures jpeg_huff_decode terminates
 
-        HuffTable {
-            values: values.to_vec(),
-            maxcode,
-            valoffset,
+        // Compute lookahead table (IJG: speeds up codes ≤ 8 bits)
+        let mut lookup = [0u16; 256];
+        p = 0;
+        for l in 1..=8u32 {
+            for _ in 0..counts[l as usize - 1] as usize {
+                let lookbits = (huffcode[p] << (8 - l)) as usize;
+                let entry = ((l as u16) << 8) | values[p] as u16;
+                for ctr in 0..(1 << (8 - l)) {
+                    lookup[lookbits + ctr as usize] = entry;
+                }
+                p += 1;
+            }
         }
+        // Entries with (HUFF_LOOKAHEAD+1) in high byte mean "code > 8 bits"
+        // Our init: 0 means entry not set (high byte = 0). But IJG sets to
+        // (HUFF_LOOKAHEAD+1) << HUFF_LOOKAHEAD = 9 << 8. We use 0 as sentinel
+        // and check in the slow path.
+
+        HuffTable { values: values.to_vec(), maxcode, valoffset, lookup }
     }
 
-    /// Decode one Huffman symbol from the bit reader.
+    /// Decode one Huffman symbol. Matches IJG HUFF_DECODE + jpeg_huff_decode.
     pub(super) fn decode(&self, br: &mut BitReader) -> Option<u8> {
+        // IJG: try fast path with 8-bit lookahead
+        if let Some(look) = br.peek_bits(8) {
+            let entry = self.lookup[look as usize];
+            let len = (entry >> 8) as u32;
+            if len > 0 && len <= 8 {
+                br.drop_bits(len);
+                return Some(entry as u8);
+            }
+        }
+
+        // IJG slow path: jpeg_huff_decode with l=1
         let mut code = br.read_bits(1)? as i32;
         let mut l = 1i32;
-
         while code > self.maxcode[l as usize] {
             l += 1;
-            if l > 16 {
-                return None;
-            }
-            let bit = br.read_bits(1)?;
-            code = (code << 1) | (bit as i32);
+            if l > 16 { return None; }
+            code = (code << 1) | (br.read_bits(1)? as i32);
         }
 
-        let idx = code + self.valoffset[l as usize];
-        if idx < 0 || idx >= self.values.len() as i32 {
-            return None;
-        }
-        Some(self.values[idx as usize])
+        let idx = (code + self.valoffset[l as usize]) as usize;
+        if idx >= self.values.len() { return None; }
+        Some(self.values[idx])
     }
 }
