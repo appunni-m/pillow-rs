@@ -9,6 +9,7 @@ pub(super) struct HuffTable {
     maxcode: [i32; 18],             // IJG: maxcode[0..17], maxcode[17]=sentinel
     valoffset: [i32; 18],           // IJG: valoffset[0..17]
     /// Lookup table for codes ≤ 8 bits: entry = (code_len << 8) | symbol
+    #[allow(dead_code)]
     lookup: [u16; 256],             // IJG: lookup[1<<HUFF_LOOKAHEAD]
 }
 
@@ -71,7 +72,7 @@ impl HuffTable {
 
     /// Decode one Huffman symbol. Matches IJG HUFF_DECODE + jpeg_huff_decode.
     pub(super) fn decode(&self, br: &mut BitReader) -> Option<u8> {
-        // IJG: try fast path with 8-bit lookahead
+        // IJG fast path with 8-bit lookahead
         if let Some(look) = br.peek_bits(8) {
             let entry = self.lookup[look as usize];
             let len = (entry >> 8) as u32;
@@ -80,7 +81,6 @@ impl HuffTable {
                 return Some(entry as u8);
             }
         }
-
         // IJG slow path: jpeg_huff_decode with l=1
         let mut code = br.read_bits(1)? as i32;
         let mut l = 1i32;

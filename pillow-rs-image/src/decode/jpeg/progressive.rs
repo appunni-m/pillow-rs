@@ -157,17 +157,41 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                     if k > se || k >= 64 { break; }
                                     let bits = br.read_bits(size as u32)?;
                                     let val = extend(bits, size);
-                                    coeff_storage[comp_idx][block_idx][idct::JPEG_NATURAL_ORDER[k]] = val << scan.al;
+                                    coeff_storage[comp_idx][block_idx][k] = val << scan.al;
                                     k += 1;
                                 }
                             }
                         }
                     } else if is_ac_refine {
-                        // ── AC refinement scan — matches IJG jdphuff.c decode_mcu_AC_refine ──
-                        // Two-phase per-block: Phase 1 Huffman-decodes (only when EOBRUN==0),
-                        // Phase 2 refines remaining non-zero coefficients and EOBRUN--.
-                        // EOBRUN is a BLOCK counter (decremented once per block), not position.
-                        // See: docs/jdphuff-vs-ours.md
+                        // ── AC refinement scan — IJG jdphuff.c decode_mcu_AC_refine ──
+                        //
+                        // Algorithm:
+                        //   for (k = Ss; k <= Se; k++) {
+                        //       HUFF_DECODE(s, ...);  ← ONE symbol per outer iteration
+                        //       r = s>>4;  s &= 15;
+                        //       if (s) { sign bit → s = ±p1 }
+                        //       else if (r != 15) { EOBRUN = (1<<r)|extra; break; }
+                        //       // else ZRL (r=15), fall through
+                        //
+                        //       do {                          ← traverse, refine non-zeros
+                        //           if (*coef != 0) { refine }
+                        //           else { if (--r < 0) break; }
+                        //           k++;
+                        //       } while (k <= Se);
+                        //
+                        //       if (s) { place new coeff at current k }
+                        //       // for-loop k++ advances past placed coeff
+                        //   }
+                        //
+                        //   // Phase 2: refine all remaining non-zeros, then EOBRUN--
+                        //   if (EOBRUN > 0) {
+                        //       for (; k <= Se; k++) { if (*coef != 0) refine; }
+                        //       EOBRUN--;
+                        //   }
+                        //
+                        // Critical: exactly ONE Huffman symbol is decoded per outer iteration,
+                        // regardless of whether coeff[k] is currently zero. The symbol's run
+                        // counts only zeros; existing non-zeros are refined during traversal.
 
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize].as_ref()?;
 
@@ -185,74 +209,72 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                                 let mut k = ss;
 
                                 // Phase 1: Huffman decode (only when EOBRUN == 0)
+                                // IJG: for (; k <= Se; k++) { HUFF_DECODE(...); ... }
                                 if ac_refine_eobrun == 0 {
                                     while k <= se && k < 64 {
-                                        if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
-                                            // Refine existing non-zero
+                                        // ── IJG: HUFF_DECODE — one symbol per outer iteration ──
+                                        let sym = ac_table.decode(&mut br)?;
+                                        let mut r = (sym >> 4) as i32; // run length
+                                        let size = sym & 0x0F;
+
+                                        let new_coeff_val: Option<i32> = if size != 0 {
+                                            // New coefficient: sign bit → ±(1<<Al)
                                             let bit = br.read_bits(1)?;
-                                            if bit != 0 {
-                                                if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
+                                            Some(if bit != 0 { p1 } else { m1 })
+                                        } else {
+                                            if r != 15 {
+                                                // EOB: EOBRUN = (1<<r) | extra_bits
+                                                ac_refine_eobrun = (1u32 << r) as u32;
+                                                if r > 0 {
+                                                    ac_refine_eobrun |= br.read_bits(r as u32)?;
+                                                }
+                                                break; // → Phase 2
+                                            }
+                                            // ZRL: r == 15, fall through to do-while below
+                                            None
+                                        };
+
+                                        // ── IJG: do-while — advance through coefficients ──
+                                        // Refine existing non-zeros; count zeros via --r.
+                                        // Breaks when r goes negative (reached target zero).
+                                        loop {
+                                            if k > se || k >= 64 { break; }
+                                            if coeffs[k] != 0 {
+                                                let bit = br.read_bits(1)?;
+                                                if bit != 0 {
+                                                    if (coeffs[k] & p1) == 0 {
+                                                        coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                    }
+                                                }
+                                            } else {
+                                                r -= 1;
+                                                if r < 0 { break; } // reached target zero
                                             }
                                             k += 1;
-                                        } else {
+                                        }
 
-                                            let sym = ac_table.decode(&mut br)?;
-                                            let run = (sym >> 4) as usize;
-                                            let size = (sym & 0x0F) as u8;
-                                            if size == 0 && run == 15 {
-                                                // ZRL: advance until 16 zero coefficients (IJG --r pattern)
-                                                let mut r: i32 = 15;
-                                                loop {
-                                                    if k > se || k >= 64 { break; }
-                                                    if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
-                                                        let bit = br.read_bits(1)?;
-                                                        if bit != 0 {
-                                                            if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
-                                                        }
-                                                    } else { r -= 1; if r < 0 { k += 1; break; } }
-                                                    k += 1;
-                                                }
-                                            } else if size == 0 {
-                                                // EOB: EOBRUN = (1<<run) | extra_bits, then break → Phase 2
-                                                ac_refine_eobrun = (1u32 << run) as u32;
-                                                if run > 0 {
-                                                    ac_refine_eobrun |= br.read_bits(run as u32)?;
-                                                }
-                                                break;
-                                            } else {
-                                                // New non-zero: skip `run` zeros (refining non-zeros), place ±p1
-                                                let bit = br.read_bits(1)?;
-                                                let val = if bit != 0 { p1 } else { m1 };
-                                                let mut r: i32 = run as i32;
-                                                loop {
-                                                    if k > se || k >= 64 { break; }
-                                                    if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
-                                                        let bit = br.read_bits(1)?;
-                                                        if bit != 0 {
-                                                            if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
-                                                        }
-                                                    } else {
-                                                        r -= 1;
-                                                        if r < 0 { break; }
-                                                    }
-                                                    k += 1;
-                                                }
-                                                if k <= se && k < 64 {
-                                                    coeffs[idct::JPEG_NATURAL_ORDER[k]] = val;
-                                                    k += 1;
-                                                }
+                                        // ── IJG: if (s) place new coefficient at current k ──
+                                        if let Some(val) = new_coeff_val {
+                                            if k <= se && k < 64 {
+                                                coeffs[k] = val;
                                             }
                                         }
+
+                                        // ── IJG: for-loop k++ — advance past placed coeff or past last consumed position ──
+                                        k += 1;
                                     }
                                 }
 
                                 // Phase 2: EOBRUN handler — refine remaining non-zero coefficients
+                                // IJG: for (; k <= Se; k++) { if (*coef != 0) refine; } EOBRUN--;
                                 if ac_refine_eobrun > 0 {
                                     while k <= se && k < 64 {
-                                        if coeffs[idct::JPEG_NATURAL_ORDER[k]] != 0 {
+                                        if coeffs[k] != 0 {
                                             let bit = br.read_bits(1)?;
                                             if bit != 0 {
-                                                if (coeffs[idct::JPEG_NATURAL_ORDER[k]] & p1) == 0 { coeffs[idct::JPEG_NATURAL_ORDER[k]] += if coeffs[idct::JPEG_NATURAL_ORDER[k]] >= 0 { p1 } else { m1 }; }
+                                                if (coeffs[k] & p1) == 0 {
+                                                    coeffs[k] += if coeffs[k] >= 0 { p1 } else { m1 };
+                                                }
                                             }
                                         }
                                         k += 1;
@@ -285,11 +307,8 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
 
         for block_idx in 0..total_blocks {
             let coeffs = &coeff_storage[comp_idx][block_idx];
-            // Convert quant table to natural order for natural-order coeff storage
-            let mut qt_nat = [0u16; 64];
-            for i in 0..64 { qt_nat[idct::JPEG_NATURAL_ORDER[i]] = quant_table[i]; }
             for i in 0..64 {
-                block_natural[i] = coeffs[i] * qt_nat[i] as i32;
+                block_natural[idct::JPEG_NATURAL_ORDER[i]] = coeffs[i] * quant_table[i] as i32;
             }
             jpeg_idct_islow(&mut block_natural, &mut workspace);
 
