@@ -664,6 +664,69 @@ pub fn execute_crop(
 
 /// Execute a Rotate operation.
 /// Fast-path for 90-degree multiples; otherwise uses arbitrary rotation.
+/// Rotate 90 or 270 degrees without expanding (clip to original size).
+/// Matches PIL's behavior: rotate and center the result in the original canvas,
+/// filling exposed areas with the fill color.
+fn rotate_90_non_expand(
+    img: &DynamicImage,
+    clockwise_270: bool,
+    fill: Option<(u8, u8, u8, u8)>,
+) -> DynamicImage {
+    let channels = img.color().channel_count() as usize;
+    let (w, h) = img.dimensions();
+    let raw = img.as_bytes();
+    let fill_color = fill.unwrap_or((0, 0, 0, 0));
+
+    // Initialize output with fill color
+    let fill_pixel: Vec<u8> = match channels {
+        1 => vec![fill_color.0],
+        2 => vec![fill_color.0, fill_color.3],
+        3 => vec![fill_color.0, fill_color.1, fill_color.2],
+        _ => vec![fill_color.0, fill_color.1, fill_color.2, fill_color.3],
+    };
+    let mut out = fill_pixel.repeat((w * h) as usize);
+
+    let dx_off = (w as i32 - h as i32) / 2; // center offset in x
+    let dy_off = (h as i32 - w as i32) / 2; // center offset in y
+
+    for dy in 0..h {
+        for dx in 0..w {
+            let (sx, sy) = if clockwise_270 {
+                // 270° CCW = 90° CW: expand_true uses input(dy, w-1-dx)
+                // dx_true = dx - dx_off, dy_true = dy - dy_off
+                // sx = dy_true = dy - dy_off, sy = w - 1 - dx_true = w - 1 - dx + dx_off
+                (dy as i32 - dy_off, w as i32 - 1 - dx as i32 + dx_off)
+            } else {
+                // 90° CCW: expand_true uses input(w-1-dy, dx)
+                // dx_true = dx - dx_off, dy_true = dy - dy_off
+                // sx = w - 1 - dy_true = w - 1 - dy + dy_off, sy = dx_true = dx - dx_off
+                (w as i32 - 1 - dy as i32 + dy_off, dx as i32 - dx_off)
+            };
+            if sx >= 0 && sx < w as i32 && sy >= 0 && sy < h as i32 {
+                let in_idx = (sy as u32 * w + sx as u32) as usize * channels;
+                let out_idx = (dy * w + dx) as usize * channels;
+                out[out_idx..out_idx + channels].copy_from_slice(&raw[in_idx..in_idx + channels]);
+            }
+        }
+    }
+
+    // Create output dynamic image
+    match channels {
+        1 => DynamicImage::ImageLuma8(
+            pillow_rs_image::GrayImage::from_raw(w, h, out).unwrap(),
+        ),
+        2 => DynamicImage::ImageLumaA8(
+            pillow_rs_image::GrayAlphaImage::from_raw(w, h, out).unwrap(),
+        ),
+        3 => DynamicImage::ImageRgb8(
+            pillow_rs_image::RgbImage::from_raw(w, h, out).unwrap(),
+        ),
+        _ => DynamicImage::ImageRgba8(
+            pillow_rs_image::RgbaImage::from_raw(w, h, out).unwrap(),
+        ),
+    }
+}
+
 pub fn execute_rotate(
     img: &DynamicImage,
     angle: f64,
@@ -675,12 +738,22 @@ pub fn execute_rotate(
     // Fast path: exact 90-degree multiples
     // PIL rotates counterclockwise; image crate rotates clockwise.
     // PIL 90° CCW = image crate 270° CW, PIL 270° CCW = image crate 90° CW.
+    // For 90/270 with expand=False, compute the clipped result directly
+    // by pasting the expanded result centered in the original-sized canvas.
     let result = if (deg - 90).abs() < 2 || (deg - 90).abs() >= 358 {
-        img.rotate270() // 270° CW = 90° CCW (PIL)
+        if expand {
+            img.rotate270() // 270° CW = 90° CCW (PIL)
+        } else {
+            rotate_90_non_expand(img, false, fill)
+        }
     } else if (deg - 180).abs() < 2 {
         img.rotate180()
     } else if (deg - 270).abs() < 2 || (deg - 270).abs() >= 358 {
-        img.rotate90() // 90° CW = 270° CCW (PIL)
+        if expand {
+            img.rotate90() // 90° CW = 270° CCW (PIL)
+        } else {
+            rotate_90_non_expand(img, true, fill)
+        }
     } else {
         // Multi-channel arbitrary rotation (no RGBA roundtrip)
         let nearest = explicit_mode == Some("P")
@@ -717,6 +790,18 @@ pub fn execute_transpose(
     }
 }
 
+/// Banker's rounding (round half to even), matching Python's built-in round().
+/// Used for thumbnail size computation where PIL uses Python's round().
+fn bankers_round(x: f64) -> u32 {
+    let floor = x.floor();
+    let frac = x - floor;
+    if frac > 0.5 || (frac == 0.5 && floor as u64 % 2 == 1) {
+        (floor + 1.0) as u32
+    } else {
+        floor as u32
+    }
+}
+
 /// Execute a Thumbnail operation.
 /// Computes the scale factor to fit within the given box, preserving aspect ratio.
 /// Matches PIL's thumbnail behavior including the reducing_gap optimization
@@ -733,8 +818,11 @@ pub fn execute_thumbnail(
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));
     }
     let scale = (w as f64 / cur_w as f64).min(h as f64 / cur_h as f64);
-    let new_w = (cur_w as f64 * scale).round() as u32;
-    let new_h = (cur_h as f64 * scale).round() as u32;
+    // PIL uses banker's rounding (round half to even), which matches Python's round().
+    // Rust's f64::round() uses round half away from zero, giving different results
+    // for values exactly at .5 (e.g., 12.5 → 13 vs PIL's 12).
+    let new_w = bankers_round(cur_w as f64 * scale);
+    let new_h = bankers_round(cur_h as f64 * scale);
     let new_w = new_w.max(1);
     let new_h = new_h.max(1);
     // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
