@@ -10,28 +10,28 @@
       "id": "default_suite1",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x76cb3552e4d0>"
+        "value": "<ImagingCore object at 0x75d0de00a4d0>"
       }
     },
     {
       "id": "getmask_L_suite1",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x76cb3552f550>"
+        "value": "<ImagingCore object at 0x75d0de00b550>"
       }
     },
     {
       "id": "getmask_RGB_suite1",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x76cb3552e4d0>"
+        "value": "<ImagingCore object at 0x75d0de00a4d0>"
       }
     },
     {
       "id": "getmask_RGBA_suite1",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x76cb3552f550>"
+        "value": "<ImagingCore object at 0x75d0de00b550>"
       }
     }
   ]

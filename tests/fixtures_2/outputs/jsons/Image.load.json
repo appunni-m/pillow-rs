@@ -10,42 +10,42 @@
       "id": "Image_load_1_suite1",
       "assert": {
         "method": "string",
-        "value": "<PixelAccess object at 0x76cb3552eed0>"
+        "value": "<PixelAccess object at 0x75d0de00aed0>"
       }
     },
     {
       "id": "Image_load_L_suite1",
       "assert": {
         "method": "string",
-        "value": "<PixelAccess object at 0x76cb3552f050>"
+        "value": "<PixelAccess object at 0x75d0de00b050>"
       }
     },
     {
       "id": "Image_load_LA_suite1",
       "assert": {
         "method": "string",
-        "value": "<PixelAccess object at 0x76cb3552f010>"
+        "value": "<PixelAccess object at 0x75d0de00b010>"
       }
     },
     {
       "id": "Image_load_P_suite1",
       "assert": {
         "method": "string",
-        "value": "<PixelAccess object at 0x76cb3552f190>"
+        "value": "<PixelAccess object at 0x75d0de00b190>"
       }
     },
     {
       "id": "Image_load_RGB_suite1",
       "assert": {
         "method": "string",
-        "value": "<PixelAccess object at 0x76cb3552f110>"
+        "value": "<PixelAccess object at 0x75d0de00b110>"
       }
     },
     {
       "id": "Image_load_RGBA_suite1",
       "assert": {
         "method": "string",
-        "value": "<PixelAccess object at 0x76cb3552f190>"
+        "value": "<PixelAccess object at 0x75d0de00b190>"
       }
     }
   ]

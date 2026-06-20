@@ -790,16 +790,19 @@ pub fn execute_transpose(
     }
 }
 
-/// Banker's rounding (round half to even), matching Python's built-in round().
-/// Used for thumbnail size computation where PIL uses Python's round().
-fn bankers_round(x: f64) -> u32 {
-    let floor = x.floor();
-    let frac = x - floor;
-    if frac > 0.5 || (frac == 0.5 && floor as u64 % 2 == 1) {
-        (floor + 1.0) as u32
-    } else {
-        floor as u32
+/// PIL's round_aspect: picks floor or ceil of `number` based on `key` function.
+/// Returns max(min(floor, ceil, key=key), 1). When floor == ceil (integer),
+/// returns that integer.
+fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {
+    let floor = number.trunc();
+    if number == floor {
+        return floor as u32;
     }
+    let ceil = floor + 1.0;
+    let floor_key = key(floor);
+    let ceil_key = key(ceil);
+    let best = if floor_key <= ceil_key { floor } else { ceil };
+    (best as u32).max(1)
 }
 
 /// Execute a Thumbnail operation.
@@ -817,12 +820,24 @@ pub fn execute_thumbnail(
     if w == 0 || h == 0 {
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));
     }
-    let scale = (w as f64 / cur_w as f64).min(h as f64 / cur_h as f64);
-    // PIL uses banker's rounding (round half to even), which matches Python's round().
-    // Rust's f64::round() uses round half away from zero, giving different results
-    // for values exactly at .5 (e.g., 12.5 → 13 vs PIL's 12).
-    let new_w = bankers_round(cur_w as f64 * scale);
-    let new_h = bankers_round(cur_h as f64 * scale);
+    // PIL's thumbnail uses round_aspect(): picks floor or ceil based on
+    // which better preserves the aspect ratio. This differs from simple
+    // rounding — e.g. round(12.5)=12 but if ceil=13 gives better aspect
+    // ratio preservation, PIL picks 13.
+    // Exact PIL formula:
+    //   if x / y >= aspect:
+    //       x = round_aspect(y * aspect, key=lambda n: abs(aspect - n / y))
+    //   else:
+    //       y = round_aspect(x / aspect, key=lambda n: 0 if n == 0 else abs(aspect - x / n))
+    let (new_w, new_h) = if w as f64 / h as f64 >= cur_w as f64 / cur_h as f64 {
+        let adjusted = round_aspect(h as f64 * (cur_w as f64 / cur_h as f64),
+            |n| (cur_w as f64 / cur_h as f64 - n / h as f64).abs());
+        (adjusted, h)
+    } else {
+        let adjusted = round_aspect(w as f64 / (cur_w as f64 / cur_h as f64),
+            |n| if n == 0.0 { 0.0 } else { (cur_w as f64 / cur_h as f64 - w as f64 / n).abs() });
+        (w, adjusted)
+    };
     let new_w = new_w.max(1);
     let new_h = new_h.max(1);
     // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
