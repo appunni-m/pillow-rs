@@ -226,6 +226,9 @@ pub fn op_alpha_composite(
     source: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
     let src_img = source.materialize_for_ops()?;
+    if (src_img.width(), src_img.height()) != (img.width(), img.height()) {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
 
     // LA mode: composite on native LA canvas, return LA (PIL behavior)
     if matches!(img.color(), pillow_rs_image::ColorType::La8) {
@@ -364,6 +367,9 @@ pub fn op_blend_module(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize_for_ops()?;
+    if (other_img.width(), other_img.height()) != (img.width(), img.height()) {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
     let a = alpha.clamp(0.0, 1.0);
     // CMYK mode: blend all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
     if explicit_mode == Some("CMYK") {
@@ -425,6 +431,14 @@ pub fn op_composite_module(
     mask: &Arc<Image>,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    // Validate size match: all three images must have the same dimensions
+    let other_img_pre = other.materialize_for_ops()?;
+    let mask_img_pre = mask.materialize_for_ops()?;
+    if (other_img_pre.width(), other_img_pre.height()) != (img.width(), img.height())
+        || (mask_img_pre.width(), mask_img_pre.height()) != (img.width(), img.height())
+    {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
     // P-mode: composite on palette indices (PIL operates on indices, not colors)
     if explicit_mode == Some("P") {
         let gray1 = img.to_luma8();
@@ -821,10 +835,7 @@ pub fn op_put_pixel(
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width(), img.height());
     if x >= w || y >= h {
-        return Err(PilError::ValueError(format!(
-            "pixel ({},{}) out of bounds ({}x{})",
-            x, y, w, h
-        )));
+        return Err(PilError::IndexError("image index out of range".into()));
     }
     match img.clone() {
         DynamicImage::ImageLuma8(mut l) => {

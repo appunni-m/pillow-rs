@@ -242,11 +242,7 @@ impl Image {
             }
         };
         if data.len() < expected {
-            return Err(PilError::ValueError(format!(
-                "frombytes: expected {} bytes, got {}",
-                expected,
-                data.len()
-            )));
+            return Err(PilError::ValueError("not enough image data".into()));
         }
         let img = match mode {
             "L" => DynamicImage::ImageLuma8(
@@ -606,6 +602,10 @@ impl Image {
 
     /// Set a single pixel. Mutates self in-place.
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), PilError> {
+        let (w, h) = self.size()?;
+        if x >= w || y >= h {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
         let new_self = Image::push_op(
             self,
             PipelineOp::PutPixel {

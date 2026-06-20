@@ -47,6 +47,11 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
 /// PIL: `Image.blend(im1, im2, alpha)` -> (1-alpha)*im1 + alpha*im2
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let alpha = alpha.clamp(0.0, 1.0);
+    let (w1, h1) = image1.size()?;
+    let (w2, h2) = image2.size()?;
+    if (w1, h1) != (w2, h2) {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
     Ok(Image::push_op(
         image1,
         PipelineOp::BlendModule {
@@ -65,6 +70,12 @@ pub fn composite(
     mask: &Image,
     mode: Option<&str>,
 ) -> Result<Image, PilError> {
+    let (w1, h1) = image1.size()?;
+    let (w2, h2) = image2.size()?;
+    let (wm, hm) = mask.size()?;
+    if (w1, h1) != (w2, h2) || (w1, h1) != (wm, hm) {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
     let mut result = Image::push_op(
         image1,
         PipelineOp::CompositeModule {

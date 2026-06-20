@@ -81,6 +81,11 @@ impl Image {
         dest: (i32, i32),
         src: (i32, i32),
     ) -> Result<(), PilError> {
+        let (w1, h1) = self.size()?;
+        let (w2, h2) = source.size()?;
+        if (w1, h1) != (w2, h2) {
+            return Err(PilError::ValueError("images do not match".into()));
+        }
         let new_self = Image::push_op(
             self,
             PipelineOp::AlphaComposite {
