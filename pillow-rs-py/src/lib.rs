@@ -595,7 +595,11 @@ impl PyImage {
         fill: Option<i32>,
         fillcolor: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
+        let mode = self.inner.mode().unwrap_or_else(|_| "RGB".to_string());
         let _ = (resample, fill);
+        // PIL's default fill for CMYK is (0,0,0,0) — white/transparent (no ink).
+        // For other modes, default fill is black (0,0,0,255).
+        let default_fill = if mode == "CMYK" { (0, 0, 0, 0) } else { (0, 0, 0, 255) };
         let fill = if let Some(fc) = fillcolor {
             if let Ok((r, g, b)) = fc.extract::<(u8, u8, u8)>() {
                 (r, g, b, 255)
@@ -604,10 +608,10 @@ impl PyImage {
             } else if let Ok(i) = fc.extract::<u8>() {
                 (i, i, i, 255)
             } else {
-                (0, 0, 0, 255)
+                default_fill
             }
         } else {
-            (0, 0, 0, 255)
+            default_fill
         };
 
         match method {
