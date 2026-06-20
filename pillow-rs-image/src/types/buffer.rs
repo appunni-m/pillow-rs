@@ -1,3 +1,7 @@
+// AS PER DESIGN: unsafe fn trait impls required by upstream image crate API.
+// No unsafe {} blocks in bodies — the unsafe tag is on the fn signature only.
+#![allow(unsafe_code)]
+
 //! Generic `ImageBuffer` and associated iterator types.
 //!
 //! This module provides the `ImageBuffer<P, Container>` generic struct and type

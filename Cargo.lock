@@ -879,6 +879,7 @@ dependencies = [
 name = "pillow-rs-image"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "gif",
  "md5",
  "png 0.17.16",

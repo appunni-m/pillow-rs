@@ -1,3 +1,6 @@
+// AS PER DESIGN: unsafe fn trait impls required by upstream image crate API.
+#![allow(unsafe_code)]
+
 use super::pixel::Pixel;
 use crate::types::buffer::ImageBuffer;
 pub trait GenericImageView {

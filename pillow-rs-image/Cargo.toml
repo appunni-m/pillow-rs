@@ -8,6 +8,7 @@ description = "Zero-dependency pixel-perfect image decoders (JPEG, PNG, GIF, BMP
 png = "0.17.16"
 gif = "0.14"
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate"] }
+bytemuck = { version = "1", features = ["derive"] }
 
 [features]
 avif = []

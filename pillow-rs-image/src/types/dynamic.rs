@@ -1,3 +1,4 @@
+
 //! Dynamic image type — an enum over supported image buffer types.
 //!
 //! Matches the `image` crate's `DynamicImage` API.
@@ -671,30 +672,12 @@ impl DynamicImage {
                 let raw: &[u8] = img.as_raw();
                 raw
             }
-            DynamicImage::ImageLuma16(ref img) => {
-                let raw: &[u16] = img.as_raw();
-                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
-            }
-            DynamicImage::ImageLumaA16(ref img) => {
-                let raw: &[u16] = img.as_raw();
-                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
-            }
-            DynamicImage::ImageRgb16(ref img) => {
-                let raw: &[u16] = img.as_raw();
-                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
-            }
-            DynamicImage::ImageRgba16(ref img) => {
-                let raw: &[u16] = img.as_raw();
-                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 2) }
-            }
-            DynamicImage::ImageRgb32F(ref img) => {
-                let raw: &[f32] = img.as_raw();
-                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 4) }
-            }
-            DynamicImage::ImageRgba32F(ref img) => {
-                let raw: &[f32] = img.as_raw();
-                unsafe { std::slice::from_raw_parts(raw.as_ptr() as *const u8, raw.len() * 4) }
-            }
+            DynamicImage::ImageLuma16(ref img) => bytemuck::cast_slice(img.as_raw()),
+            DynamicImage::ImageLumaA16(ref img) => bytemuck::cast_slice(img.as_raw()),
+            DynamicImage::ImageRgb16(ref img) => bytemuck::cast_slice(img.as_raw()),
+            DynamicImage::ImageRgba16(ref img) => bytemuck::cast_slice(img.as_raw()),
+            DynamicImage::ImageRgb32F(ref img) => bytemuck::cast_slice(img.as_raw()),
+            DynamicImage::ImageRgba32F(ref img) => bytemuck::cast_slice(img.as_raw()),
         }
     }
 
