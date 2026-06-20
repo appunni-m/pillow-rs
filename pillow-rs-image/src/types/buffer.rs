@@ -1,7 +1,3 @@
-// AS PER DESIGN: unsafe fn trait impls required by upstream image crate API.
-// No unsafe {} blocks in bodies — the unsafe tag is on the fn signature only.
-#![allow(unsafe_code)]
-
 //! Generic `ImageBuffer` and associated iterator types.
 //!
 //! This module provides the `ImageBuffer<P, Container>` generic struct and type
@@ -1018,10 +1014,6 @@ where
         *self.get_pixel(x, y)
     }
 
-    unsafe fn unsafe_get_pixel(&self, x: u32, y: u32) -> P {
-        let indices = self.pixel_indices_unchecked(x, y);
-        *<P as Pixel>::from_slice(self.data.get_unchecked(indices))
-    }
 }
 
 // GenericImage
@@ -1036,12 +1028,6 @@ where
 
     fn put_pixel(&mut self, x: u32, y: u32, pixel: P) {
         *self.get_pixel_mut(x, y) = pixel;
-    }
-
-    unsafe fn unsafe_put_pixel(&mut self, x: u32, y: u32, pixel: P) {
-        let indices = self.pixel_indices_unchecked(x, y);
-        let p = <P as Pixel>::from_slice_mut(self.data.get_unchecked_mut(indices));
-        *p = pixel;
     }
 
     fn blend_pixel(&mut self, x: u32, y: u32, p: P) {
