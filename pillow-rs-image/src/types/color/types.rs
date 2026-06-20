@@ -263,22 +263,22 @@ impl From<ColorType> for ExtendedColorType {
 ///
 /// For the purpose of color conversion, as well as blending, the implementation of `Pixel`
 /// assumes an `sRGB` color space of its data.
-#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(transparent)]
 pub struct Rgb<T>(pub [T; 3]);
 
 /// Grayscale colors.
-#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(transparent)]
 pub struct Luma<T>(pub [T; 1]);
 
 /// RGB colors + alpha channel
-#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(transparent)]
 pub struct Rgba<T>(pub [T; 4]);
 
 /// Grayscale colors + alpha channel
-#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy, Hash, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(transparent)]
 pub struct LumaA<T>(pub [T; 2]);
 impl<T> Index<usize> for Luma<T> {

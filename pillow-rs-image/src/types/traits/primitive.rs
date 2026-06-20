@@ -1,5 +1,6 @@
 /// The type of each channel in a pixel. For example, this can be `u8`, `u16`, `f32`.
-pub trait Primitive: Copy + Clone + PartialOrd + Sized + Default {
+// AS PER DESIGN: Pod + Zeroable enables safe bytemuck casts, eliminating unsafe blocks.
+pub trait Primitive: Copy + Clone + PartialOrd + Sized + Default + bytemuck::Pod + bytemuck::Zeroable {
     /// The maximum value for this type of primitive within the context of color.
     /// For floats, the maximum is `1.0`, whereas the integer types inherit their usual maximum values.
     const DEFAULT_MAX_VALUE: Self;
@@ -216,15 +217,13 @@ impl EncodableLayout for [u8] {
 
 impl EncodableLayout for [u16] {
     fn as_bytes(&self) -> &[u8] {
-        let len = self.len() * 2;
-        unsafe { std::slice::from_raw_parts(self.as_ptr() as *const u8, len) }
+        bytemuck::cast_slice(self)
     }
 }
 
 impl EncodableLayout for [f32] {
     fn as_bytes(&self) -> &[u8] {
-        let len = self.len() * 4;
-        unsafe { std::slice::from_raw_parts(self.as_ptr() as *const u8, len) }
+        bytemuck::cast_slice(self)
     }
 }
 
