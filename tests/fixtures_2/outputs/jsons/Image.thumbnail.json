@@ -31,7 +31,7 @@
       "id": "Image_thumbnail_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.thumbnail_Image_thumbnail_P_suite1.png"
+        "reference": "raws/Image.thumbnail_Image_thumbnail_P_suite1.bin"
       }
     },
     {

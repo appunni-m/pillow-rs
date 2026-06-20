@@ -17,7 +17,7 @@
       "id": "ImageChops_duplicate_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageChops.duplicate_ImageChops_duplicate_P_suite1.png"
+        "reference": "raws/ImageChops.duplicate_ImageChops_duplicate_P_suite1.bin"
       }
     },
     {

@@ -31,7 +31,7 @@
       "id": "Image_transpose_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.transpose_Image_transpose_P_suite1.png"
+        "reference": "raws/Image.transpose_Image_transpose_P_suite1.bin"
       }
     },
     {

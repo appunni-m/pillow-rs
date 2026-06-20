@@ -10,14 +10,14 @@
       "id": "ImageDraw_getfont_L",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011e7c470>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x7fe1c37f3aa0>"
       }
     },
     {
       "id": "ImageDraw_getfont_RGB",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011e7f650>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x7fe1c37f2d80>"
       }
     }
   ]

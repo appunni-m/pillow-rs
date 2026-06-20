@@ -38,7 +38,7 @@
       "id": "ImageDraw_pieslice_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.pieslice_ImageDraw_pieslice_P_suite1.png"
+        "reference": "raws/ImageDraw.pieslice_ImageDraw_pieslice_P_suite1.bin"
       }
     },
     {

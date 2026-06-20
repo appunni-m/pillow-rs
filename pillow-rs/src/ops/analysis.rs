@@ -97,8 +97,6 @@ impl Image {
     /// PIL: `histogram(mask=None, extrema=None) -> list[int]`
     /// Returns 256 values per band, concatenated.
     pub fn histogram(&self) -> Result<Vec<u32>, PilError> {
-        let mode = self.mode()?;
-        let is_mode1 = mode == "1";
         let img = self.materialize()?;
         let n_bands = match img.color() {
             pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => 1,
@@ -119,8 +117,7 @@ impl Image {
             pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for px in luma.pixels() {
-                    let val = if is_mode1 { (px[0] > 0) as u8 } else { px[0] };
-                    hist[val as usize] += 1;
+                    hist[px[0] as usize] += 1;
                 }
             }
             pillow_rs_image::ColorType::Rgb8 | pillow_rs_image::ColorType::Rgb16 => {

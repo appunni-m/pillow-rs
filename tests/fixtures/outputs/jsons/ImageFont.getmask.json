@@ -10,28 +10,28 @@
       "id": "default",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x73d011dabc70>"
+        "value": "<ImagingCore object at 0x7fe1c371fc70>"
       }
     },
     {
       "id": "getmask_L",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x73d011daa2f0>"
+        "value": "<ImagingCore object at 0x7fe1c371e2f0>"
       }
     },
     {
       "id": "getmask_RGB",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x73d011dab8f0>"
+        "value": "<ImagingCore object at 0x7fe1c371f8f0>"
       }
     },
     {
       "id": "getmask_RGBA",
       "assert": {
         "method": "string",
-        "value": "<ImagingCore object at 0x73d011dabc70>"
+        "value": "<ImagingCore object at 0x7fe1c371fc70>"
       }
     }
   ]

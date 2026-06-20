@@ -52,7 +52,7 @@
       "id": "Image_resize_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.resize_Image_resize_P_suite1.png"
+        "reference": "raws/Image.resize_Image_resize_P_suite1.bin"
       }
     },
     {

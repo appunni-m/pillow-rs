@@ -38,7 +38,7 @@
       "id": "Image_putdata_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.putdata_Image_putdata_P_suite1.png"
+        "reference": "raws/Image.putdata_Image_putdata_P_suite1.bin"
       }
     },
     {

@@ -10,28 +10,28 @@
       "id": "liberation_serif_20",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfaa20>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x7fe1c37f0260>"
       }
     },
     {
       "id": "dejavu_sans_16",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfa6c0>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x7fe1c37f3440>"
       }
     },
     {
       "id": "FreeTypeFont_L",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfa900>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x7fe1c37f37d0>"
       }
     },
     {
       "id": "FreeTypeFont_RGBA",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfa690>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x7fe1c37f1100>"
       }
     }
   ]

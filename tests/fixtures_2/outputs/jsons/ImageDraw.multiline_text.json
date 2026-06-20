@@ -38,7 +38,7 @@
       "id": "ImageDraw_multiline_text_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.multiline_text_ImageDraw_multiline_text_P_suite1.png"
+        "reference": "raws/ImageDraw.multiline_text_ImageDraw_multiline_text_P_suite1.bin"
       }
     },
     {

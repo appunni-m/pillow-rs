@@ -48,7 +48,7 @@
       "id": "Image_point_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.point_Image_point_P_suite1.png"
+        "reference": "raws/Image.point_Image_point_P_suite1.bin"
       }
     }
   ]

@@ -38,7 +38,7 @@
       "id": "ImageDraw_arc_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.arc_ImageDraw_arc_P_suite1.png"
+        "reference": "raws/ImageDraw.arc_ImageDraw_arc_P_suite1.bin"
       }
     },
     {

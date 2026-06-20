@@ -38,7 +38,7 @@
       "id": "ImageDraw_rectangle_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.rectangle_ImageDraw_rectangle_P_suite1.png"
+        "reference": "raws/ImageDraw.rectangle_ImageDraw_rectangle_P_suite1.bin"
       }
     },
     {

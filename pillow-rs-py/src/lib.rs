@@ -1685,7 +1685,7 @@ fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
 #[pyfunction]
 fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::ops::imageops::invert(&inner)))
+    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::ops::imageops::invert_ops(&inner)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

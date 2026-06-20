@@ -38,7 +38,7 @@
       "id": "ImageDraw_chord_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.chord_ImageDraw_chord_P_suite1.png"
+        "reference": "raws/ImageDraw.chord_ImageDraw_chord_P_suite1.bin"
       }
     },
     {

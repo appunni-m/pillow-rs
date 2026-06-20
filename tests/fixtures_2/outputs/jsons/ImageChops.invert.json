@@ -9,9 +9,8 @@
     {
       "id": "ImageChops.invert_P_suite1",
       "assert": {
-        "method": "error",
-        "exception": "NotImplementedError",
-        "message_contains": "mode P support coming soon"
+        "method": "image",
+        "reference": "raws/ImageChops.invert_ImageChops.invert_P_suite1.bin"
       }
     },
     {

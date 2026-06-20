@@ -38,7 +38,7 @@
       "id": "ImageDraw_rounded_rectangle_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_P_suite1.png"
+        "reference": "raws/ImageDraw.rounded_rectangle_ImageDraw_rounded_rectangle_P_suite1.bin"
       }
     },
     {

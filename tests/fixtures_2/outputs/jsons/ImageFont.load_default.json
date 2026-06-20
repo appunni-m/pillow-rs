@@ -10,21 +10,21 @@
       "id": "ImageFont_load_default_L_suite1",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x786741d70c80>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x76cb34def590>"
       }
     },
     {
       "id": "ImageFont_load_default_RGB_suite1",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x786741d71490>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x76cb34def530>"
       }
     },
     {
       "id": "ImageFont_load_default_RGBA_suite1",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x786741d71310>"
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x76cb34defb00>"
       }
     }
   ]

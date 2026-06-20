@@ -42,7 +42,7 @@
       "id": "ImageModule.composite_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.composite_ImageModule.composite_P_suite1.png"
+        "reference": "raws/ImageModule.composite_ImageModule.composite_P_suite1.bin"
       }
     },
     {

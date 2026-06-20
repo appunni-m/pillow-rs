@@ -38,7 +38,7 @@
       "id": "ImageDraw_polygon_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.polygon_ImageDraw_polygon_P_suite1.png"
+        "reference": "raws/ImageDraw.polygon_ImageDraw_polygon_P_suite1.bin"
       }
     },
     {

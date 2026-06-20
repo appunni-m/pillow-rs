@@ -38,7 +38,7 @@
       "id": "ImageDraw_point_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.point_ImageDraw_point_P_suite1.png"
+        "reference": "raws/ImageDraw.point_ImageDraw_point_P_suite1.bin"
       }
     },
     {

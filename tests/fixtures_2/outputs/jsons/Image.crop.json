@@ -59,7 +59,7 @@
       "id": "Image_crop_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.crop_Image_crop_P_suite1.png"
+        "reference": "raws/Image.crop_Image_crop_P_suite1.bin"
       }
     },
     {

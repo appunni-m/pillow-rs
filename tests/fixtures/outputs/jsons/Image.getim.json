@@ -10,14 +10,14 @@
       "id": "Image_getim_L",
       "assert": {
         "method": "string",
-        "value": "<capsule object \"Pillow Imaging\" at 0x73d011dfa790>"
+        "value": "<capsule object \"Pillow Imaging\" at 0x7fe1c376e940>"
       }
     },
     {
       "id": "Image_getim_RGB",
       "assert": {
         "method": "string",
-        "value": "<capsule object \"Pillow Imaging\" at 0x73d011dfa700>"
+        "value": "<capsule object \"Pillow Imaging\" at 0x7fe1c376e8b0>"
       }
     }
   ]

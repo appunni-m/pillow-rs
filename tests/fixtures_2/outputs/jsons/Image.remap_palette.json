@@ -10,14 +10,14 @@
       "id": "Image_remap_palette_L_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.remap_palette_Image_remap_palette_L_suite1.png"
+        "reference": "raws/Image.remap_palette_Image_remap_palette_L_suite1.bin"
       }
     },
     {
       "id": "Image_remap_palette_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.remap_palette_Image_remap_palette_P_suite1.png"
+        "reference": "raws/Image.remap_palette_Image_remap_palette_P_suite1.bin"
       }
     }
   ]

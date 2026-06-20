@@ -38,7 +38,7 @@
       "id": "ImageDraw_ellipse_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageDraw.ellipse_ImageDraw_ellipse_P_suite1.png"
+        "reference": "raws/ImageDraw.ellipse_ImageDraw_ellipse_P_suite1.bin"
       }
     },
     {

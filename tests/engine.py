@@ -433,7 +433,9 @@ CALL_STYLE = {
         getattr(b, tgt, None) if callable(getattr(b, tgt, None)) else _call_mod(b, tgt)
     )(img, img2, **p),
     "fromarray_mod":lambda b, img, img2, tgt, p: _fromarray(b, img, tgt, p),
-    "classmethod_triple":    lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, img2, create_input(b, "L", p.pop("mask_img", None)), **p),
+    "classmethod_triple":    lambda b, img, img2, tgt, p: (
+        b.Image.composite if tgt == "composite" else _call_mod(b, tgt)
+    )(img, img2, create_input(b, "L", p.pop("mask_img", None)), **p),
     "draw_shape":            lambda b, img, img2, tgt, p: _draw_shape(b, img, tgt, p),
     "frombytes_mod":         lambda b, img, img2, tgt, p: _frombytes_mod(b, img, tgt, p),
     "frombytes_instance":    lambda b, img, img2, tgt, p: _frombytes_instance(b, img, tgt, p),

@@ -38,7 +38,7 @@
       "id": "Image_effect_spread_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/Image.effect_spread_Image_effect_spread_P_suite1.png"
+        "reference": "raws/Image.effect_spread_Image_effect_spread_P_suite1.bin"
       }
     },
     {

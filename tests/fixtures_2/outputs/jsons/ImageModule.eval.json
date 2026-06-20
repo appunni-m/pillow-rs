@@ -31,7 +31,7 @@
       "id": "ImageModule.eval_P_suite1",
       "assert": {
         "method": "image",
-        "reference": "images/ImageModule.eval_ImageModule.eval_P_suite1.png"
+        "reference": "raws/ImageModule.eval_ImageModule.eval_P_suite1.bin"
       }
     },
     {

@@ -40,8 +40,6 @@ def difference(image1: Image, image2: Image) -> Image:
 
 def invert(image: Image) -> Image:
     """Invert image."""
-    if image.mode == "P":
-        raise NotImplementedError("mode P support coming soon")
     return Image(_core.chops_invert(image._rust_image))
 
 
