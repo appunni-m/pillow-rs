@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImagePalette",
+    "target": "copy"
+  },
+  "cases": [
+    {
+      "id": "ImagePalette_copy_L",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.copy_ImagePalette_copy_L.bin"
+      }
+    },
+    {
+      "id": "ImagePalette_copy_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.copy_ImagePalette_copy_P.bin"
+      }
+    },
+    {
+      "id": "ImagePalette_copy_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.copy_ImagePalette_copy_RGB.bin"
+      }
+    }
+  ]
+}

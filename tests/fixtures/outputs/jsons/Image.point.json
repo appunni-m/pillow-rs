@@ -1,0 +1,55 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "point"
+  },
+  "cases": [
+    {
+      "id": "Image.point_LA",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "wrong number of lut entries"
+      }
+    },
+    {
+      "id": "Image.point_RGB",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "wrong number of lut entries"
+      }
+    },
+    {
+      "id": "Image.point_RGBA",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "wrong number of lut entries"
+      }
+    },
+    {
+      "id": "Image_point_1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.point_Image_point_1.png"
+      }
+    },
+    {
+      "id": "Image_point_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.point_Image_point_L.png"
+      }
+    },
+    {
+      "id": "Image_point_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.point_Image_point_P.bin"
+      }
+    }
+  ]
+}

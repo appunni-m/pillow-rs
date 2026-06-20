@@ -1,0 +1,63 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageDraw",
+    "target": "bitmap"
+  },
+  "cases": [
+    {
+      "id": "ImageDraw.bitmap_1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.bitmap_ImageDraw.bitmap_1.png"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_CMYK",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_LA",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_P",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_RGB",
+      "assert": {
+        "method": "error",
+        "exception": "ValueError",
+        "message_contains": "bad transparency mask"
+      }
+    },
+    {
+      "id": "ImageDraw.bitmap_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.bitmap_ImageDraw.bitmap_RGBA.png"
+      }
+    },
+    {
+      "id": "ImageDraw_bitmap_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageDraw.bitmap_ImageDraw_bitmap_L.png"
+      }
+    }
+  ]
+}

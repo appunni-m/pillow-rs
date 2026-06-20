@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImagePalette",
+    "target": "save"
+  },
+  "cases": [
+    {
+      "id": "ImagePalette_save_L",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.save_ImagePalette_save_L.bin"
+      }
+    },
+    {
+      "id": "ImagePalette_save_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.save_ImagePalette_save_P.bin"
+      }
+    },
+    {
+      "id": "ImagePalette_save_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImagePalette.save_ImagePalette_save_RGB.bin"
+      }
+    }
+  ]
+}

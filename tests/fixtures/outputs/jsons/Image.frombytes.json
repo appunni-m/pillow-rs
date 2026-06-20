@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "frombytes"
+  },
+  "cases": [
+    {
+      "id": "Image.frombytes_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.frombytes_Image.frombytes_L.png"
+      }
+    },
+    {
+      "id": "Image.frombytes_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.frombytes_Image.frombytes_LA.png"
+      }
+    },
+    {
+      "id": "Image.frombytes_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.frombytes_Image.frombytes_RGBA.png"
+      }
+    },
+    {
+      "id": "raw_rgb",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.frombytes_raw_rgb.png"
+      }
+    }
+  ]
+}

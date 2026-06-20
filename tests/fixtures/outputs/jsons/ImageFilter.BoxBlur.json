@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "BoxBlur"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_BoxBlur_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.BoxBlur_ImageFilter_BoxBlur_L.png"
+      }
+    },
+    {
+      "id": "ImageFilter_BoxBlur_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.BoxBlur_ImageFilter_BoxBlur_LA.png"
+      }
+    },
+    {
+      "id": "ImageFilter_BoxBlur_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.BoxBlur_ImageFilter_BoxBlur_RGB.png"
+      }
+    },
+    {
+      "id": "ImageFilter_BoxBlur_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.BoxBlur_ImageFilter_BoxBlur_RGBA.png"
+      }
+    }
+  ]
+}

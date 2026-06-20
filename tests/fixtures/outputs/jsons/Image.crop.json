@@ -1,0 +1,87 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "crop"
+  },
+  "cases": [
+    {
+      "id": "Image_crop_1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.crop_Image_crop_1.png"
+      }
+    },
+    {
+      "id": "Image_crop_CMYK",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.crop_Image_crop_CMYK.bin"
+      }
+    },
+    {
+      "id": "Image_crop_F",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.crop_Image_crop_F.bin"
+      }
+    },
+    {
+      "id": "Image_crop_HSV",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.crop_Image_crop_HSV.bin"
+      }
+    },
+    {
+      "id": "Image_crop_I",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.crop_Image_crop_I.bin"
+      }
+    },
+    {
+      "id": "Image_crop_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.crop_Image_crop_L.png"
+      }
+    },
+    {
+      "id": "Image_crop_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.crop_Image_crop_LA.png"
+      }
+    },
+    {
+      "id": "Image_crop_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.crop_Image_crop_P.bin"
+      }
+    },
+    {
+      "id": "Image_crop_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.crop_Image_crop_RGB.png"
+      }
+    },
+    {
+      "id": "Image_crop_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.crop_Image_crop_RGBA.png"
+      }
+    },
+    {
+      "id": "Image_crop_YCbCr",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.crop_Image_crop_YCbCr.bin"
+      }
+    }
+  ]
+}

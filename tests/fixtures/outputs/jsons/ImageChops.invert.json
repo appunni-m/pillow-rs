@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageChops",
+    "target": "invert"
+  },
+  "cases": [
+    {
+      "id": "ImageChops.invert_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageChops.invert_ImageChops.invert_P.bin"
+      }
+    },
+    {
+      "id": "ImageChops_invert_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.invert_ImageChops_invert_L.png"
+      }
+    },
+    {
+      "id": "ImageChops_invert_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.invert_ImageChops_invert_RGB.png"
+      }
+    }
+  ]
+}

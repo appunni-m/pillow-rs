@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "putalpha"
+  },
+  "cases": [
+    {
+      "id": "Image_putalpha_CMYK",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putalpha_Image_putalpha_CMYK.png"
+      }
+    },
+    {
+      "id": "Image_putalpha_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putalpha_Image_putalpha_L.png"
+      }
+    },
+    {
+      "id": "Image_putalpha_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putalpha_Image_putalpha_LA.png"
+      }
+    },
+    {
+      "id": "Image_putalpha_P",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.putalpha_Image_putalpha_P.bin"
+      }
+    },
+    {
+      "id": "Image_putalpha_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putalpha_Image_putalpha_RGB.png"
+      }
+    },
+    {
+      "id": "Image_putalpha_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.putalpha_Image_putalpha_RGBA.png"
+      }
+    }
+  ]
+}

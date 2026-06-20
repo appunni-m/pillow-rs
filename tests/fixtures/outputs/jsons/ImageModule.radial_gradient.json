@@ -1,0 +1,17 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageModule",
+    "target": "radial_gradient"
+  },
+  "cases": [
+    {
+      "id": "L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageModule.radial_gradient_L.png"
+      }
+    }
+  ]
+}

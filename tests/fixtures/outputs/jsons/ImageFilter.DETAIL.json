@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "DETAIL"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_DETAIL_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.DETAIL_ImageFilter_DETAIL_L.png"
+      }
+    },
+    {
+      "id": "ImageFilter_DETAIL_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.DETAIL_ImageFilter_DETAIL_LA.png"
+      }
+    },
+    {
+      "id": "ImageFilter_DETAIL_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.DETAIL_ImageFilter_DETAIL_RGB.png"
+      }
+    },
+    {
+      "id": "ImageFilter_DETAIL_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.DETAIL_ImageFilter_DETAIL_RGBA.png"
+      }
+    }
+  ]
+}

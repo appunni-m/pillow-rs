@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "split"
+  },
+  "cases": [
+    {
+      "id": "Image_split_L",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_L_0.png"
+        ]
+      }
+    },
+    {
+      "id": "Image_split_LA",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_LA_0.png",
+          "images/Image.split_Image_split_LA_1.png"
+        ]
+      }
+    },
+    {
+      "id": "Image_split_RGB",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_RGB_0.png",
+          "images/Image.split_Image_split_RGB_1.png",
+          "images/Image.split_Image_split_RGB_2.png"
+        ]
+      }
+    },
+    {
+      "id": "Image_split_RGBA",
+      "assert": {
+        "method": "image_list",
+        "references": [
+          "images/Image.split_Image_split_RGBA_0.png",
+          "images/Image.split_Image_split_RGBA_1.png",
+          "images/Image.split_Image_split_RGBA_2.png",
+          "images/Image.split_Image_split_RGBA_3.png"
+        ]
+      }
+    }
+  ]
+}

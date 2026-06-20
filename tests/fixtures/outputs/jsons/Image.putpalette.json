@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "putpalette"
+  },
+  "cases": [
+    {
+      "id": "Image_putpalette_L",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_putpalette_P",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

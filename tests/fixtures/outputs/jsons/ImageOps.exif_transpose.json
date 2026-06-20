@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "exif_transpose"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_exif_transpose_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.exif_transpose_ImageOps_exif_transpose_L.png"
+      }
+    },
+    {
+      "id": "ImageOps_exif_transpose_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.exif_transpose_ImageOps_exif_transpose_RGB.png"
+      }
+    }
+  ]
+}

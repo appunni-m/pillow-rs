@@ -1,0 +1,31 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "get_variation_names"
+  },
+  "cases": [
+    {
+      "id": "non_variable_font",
+      "assert": {
+        "method": "exact",
+        "value": []
+      }
+    },
+    {
+      "id": "get_variation_names_L",
+      "assert": {
+        "method": "exact",
+        "value": []
+      }
+    },
+    {
+      "id": "get_variation_names_RGBA",
+      "assert": {
+        "method": "exact",
+        "value": []
+      }
+    }
+  ]
+}

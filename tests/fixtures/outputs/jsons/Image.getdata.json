@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "getdata"
+  },
+  "cases": [
+    {
+      "id": "Image_getdata_L",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x73d011e34dd0>"
+      }
+    },
+    {
+      "id": "Image_getdata_LA",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x73d011e362b0>"
+      }
+    },
+    {
+      "id": "Image_getdata_RGB",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x73d011e34dd0>"
+      }
+    },
+    {
+      "id": "Image_getdata_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "<ImagingCore object at 0x73d011e362b0>"
+      }
+    }
+  ]
+}

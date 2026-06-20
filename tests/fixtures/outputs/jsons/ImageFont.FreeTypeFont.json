@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "FreeTypeFont"
+  },
+  "cases": [
+    {
+      "id": "liberation_serif_20",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfaa20>"
+      }
+    },
+    {
+      "id": "dejavu_sans_16",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfa6c0>"
+      }
+    },
+    {
+      "id": "FreeTypeFont_L",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfa900>"
+      }
+    },
+    {
+      "id": "FreeTypeFont_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "<PIL.ImageFont.FreeTypeFont object at 0x73d011dfa690>"
+      }
+    }
+  ]
+}

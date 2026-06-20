@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageColor",
+    "target": "getcolor"
+  },
+  "cases": [
+    {
+      "id": "ImageColor_getcolor_L",
+      "assert": {
+        "method": "string",
+        "value": "(255, 0, 0)"
+      }
+    },
+    {
+      "id": "ImageColor_getcolor_RGB",
+      "assert": {
+        "method": "string",
+        "value": "(255, 0, 0)"
+      }
+    }
+  ]
+}

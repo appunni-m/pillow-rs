@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageChops",
+    "target": "add_modulo"
+  },
+  "cases": [
+    {
+      "id": "ImageChops_add_modulo_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.add_modulo_ImageChops_add_modulo_L.png"
+      }
+    },
+    {
+      "id": "ImageChops_add_modulo_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.add_modulo_ImageChops_add_modulo_LA.png"
+      }
+    },
+    {
+      "id": "ImageChops_add_modulo_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.add_modulo_ImageChops_add_modulo_RGB.png"
+      }
+    },
+    {
+      "id": "ImageChops_add_modulo_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageChops.add_modulo_ImageChops_add_modulo_RGBA.png"
+      }
+    }
+  ]
+}

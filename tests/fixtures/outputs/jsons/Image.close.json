@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "close"
+  },
+  "cases": [
+    {
+      "id": "Image_close_1",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_close_L",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_close_LA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_close_P",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_close_RGB",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    },
+    {
+      "id": "Image_close_RGBA",
+      "assert": {
+        "method": "exact",
+        "value": null
+      }
+    }
+  ]
+}

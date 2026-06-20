@@ -1,0 +1,87 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "convert"
+  },
+  "cases": [
+    {
+      "id": "Image_convert_1",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_1.png"
+      }
+    },
+    {
+      "id": "Image_convert_CMYK",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_CMYK.bin"
+      }
+    },
+    {
+      "id": "Image_convert_F",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_F.bin"
+      }
+    },
+    {
+      "id": "Image_convert_HSV",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_HSV.bin"
+      }
+    },
+    {
+      "id": "Image_convert_I",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_I.bin"
+      }
+    },
+    {
+      "id": "Image_convert_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_L.png"
+      }
+    },
+    {
+      "id": "Image_convert_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_LA.png"
+      }
+    },
+    {
+      "id": "Image_convert_P",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_P.png"
+      }
+    },
+    {
+      "id": "Image_convert_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_RGB.png"
+      }
+    },
+    {
+      "id": "Image_convert_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/Image.convert_Image_convert_RGBA.png"
+      }
+    },
+    {
+      "id": "Image_convert_YCbCr",
+      "assert": {
+        "method": "image",
+        "reference": "raws/Image.convert_Image_convert_YCbCr.bin"
+      }
+    }
+  ]
+}

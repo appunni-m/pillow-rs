@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "scale"
+  },
+  "cases": [
+    {
+      "id": "ImageOps_scale_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.scale_ImageOps_scale_L.png"
+      }
+    },
+    {
+      "id": "ImageOps_scale_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.scale_ImageOps_scale_LA.png"
+      }
+    },
+    {
+      "id": "ImageOps_scale_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.scale_ImageOps_scale_RGB.png"
+      }
+    },
+    {
+      "id": "ImageOps_scale_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.scale_ImageOps_scale_RGBA.png"
+      }
+    }
+  ]
+}

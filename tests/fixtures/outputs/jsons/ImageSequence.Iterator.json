@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageSequence",
+    "target": "Iterator"
+  },
+  "cases": [
+    {
+      "id": "ImageSequence.Iterator_L",
+      "assert": {
+        "method": "exact",
+        "value": 1
+      }
+    },
+    {
+      "id": "single_frame",
+      "assert": {
+        "method": "exact",
+        "value": 1
+      }
+    }
+  ]
+}

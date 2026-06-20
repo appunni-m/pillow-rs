@@ -1,0 +1,52 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "getbbox"
+  },
+  "cases": [
+    {
+      "id": "Image_getbbox_1",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0, 256, 256)"
+      }
+    },
+    {
+      "id": "Image_getbbox_L",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0, 256, 256)"
+      }
+    },
+    {
+      "id": "Image_getbbox_LA",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0, 256, 256)"
+      }
+    },
+    {
+      "id": "Image_getbbox_P",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0, 256, 256)"
+      }
+    },
+    {
+      "id": "Image_getbbox_RGB",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0, 256, 256)"
+      }
+    },
+    {
+      "id": "Image_getbbox_RGBA",
+      "assert": {
+        "method": "string",
+        "value": "(0, 0, 256, 256)"
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFont",
+    "target": "getlength"
+  },
+  "cases": [
+    {
+      "id": "default",
+      "assert": {
+        "method": "float",
+        "value": 25.0,
+        "tolerance": 1e-12
+      }
+    },
+    {
+      "id": "getlength_L",
+      "assert": {
+        "method": "float",
+        "value": 25.0,
+        "tolerance": 1e-12
+      }
+    },
+    {
+      "id": "getlength_RGB",
+      "assert": {
+        "method": "float",
+        "value": 25.0,
+        "tolerance": 1e-12
+      }
+    },
+    {
+      "id": "getlength_RGBA",
+      "assert": {
+        "method": "float",
+        "value": 25.0,
+        "tolerance": 1e-12
+      }
+    }
+  ]
+}

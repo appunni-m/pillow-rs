@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "MedianFilter"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter_MedianFilter_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MedianFilter_ImageFilter_MedianFilter_L.png"
+      }
+    },
+    {
+      "id": "ImageFilter_MedianFilter_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MedianFilter_ImageFilter_MedianFilter_LA.png"
+      }
+    },
+    {
+      "id": "ImageFilter_MedianFilter_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MedianFilter_ImageFilter_MedianFilter_RGB.png"
+      }
+    },
+    {
+      "id": "ImageFilter_MedianFilter_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.MedianFilter_ImageFilter_MedianFilter_RGBA.png"
+      }
+    }
+  ]
+}

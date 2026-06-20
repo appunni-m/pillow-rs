@@ -1,0 +1,24 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageOps",
+    "target": "deform"
+  },
+  "cases": [
+    {
+      "id": "L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.deform_L.png"
+      }
+    },
+    {
+      "id": "RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageOps.deform_RGB.png"
+      }
+    }
+  ]
+}

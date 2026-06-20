@@ -1,0 +1,26 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "Image",
+    "target": "toqpixmap"
+  },
+  "cases": [
+    {
+      "id": "rgb_10x10",
+      "assert": {
+        "method": "error",
+        "exception": "ImportError",
+        "message_contains": "Qt bindings are not installed"
+      }
+    },
+    {
+      "id": "l_10x10",
+      "assert": {
+        "method": "error",
+        "exception": "ImportError",
+        "message_contains": "Qt bindings are not installed"
+      }
+    }
+  ]
+}

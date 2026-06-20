@@ -1,0 +1,73 @@
+{
+  "format_version": 2,
+  "suite": 0,
+  "operation": {
+    "module": "ImageFilter",
+    "target": "SHARPEN"
+  },
+  "cases": [
+    {
+      "id": "ImageFilter.SHARPEN_HSV",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_HSV.bin"
+      }
+    },
+    {
+      "id": "ImageFilter.SHARPEN_YCbCr",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter.SHARPEN_YCbCr.bin"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_1",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_1.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_CMYK",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_CMYK.bin"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_I",
+      "assert": {
+        "method": "image",
+        "reference": "raws/ImageFilter.SHARPEN_ImageFilter_SHARPEN_I.bin"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_L",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_L.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_LA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_LA.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_RGB",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_RGB.png"
+      }
+    },
+    {
+      "id": "ImageFilter_SHARPEN_RGBA",
+      "assert": {
+        "method": "image",
+        "reference": "images/ImageFilter.SHARPEN_ImageFilter_SHARPEN_RGBA.png"
+      }
+    }
+  ]
+}
