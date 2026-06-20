@@ -15,9 +15,6 @@ pub struct Draw {
     image: Image,
     /// Original mode before draw canvas created. Used to convert back on image_clone().
     orig_mode: Option<String>,
-    /// True for F (float32) and I (int32) modes — pixel data is raw 32-bit LE values,
-    /// and drawing must bypass alpha blending and write the raw 4 bytes as-is.
-    raw_mode: bool,
 }
 
 impl Draw {
@@ -31,11 +28,9 @@ impl Draw {
             let clone = image.clone();
             clone.mode().ok()
         });
-        let raw_mode = matches!(mode.as_deref(), Some("F") | Some("I"));
         Draw {
             image,
             orig_mode: mode,
-            raw_mode,
         }
     }
 
@@ -46,12 +41,6 @@ impl Draw {
             .clone()
             .or_else(|| self.image.mode().ok())
             .unwrap_or_else(|| "RGBA".to_string())
-    }
-
-    /// Write a pixel to the canvas. For F/I modes (raw_mode=true), writes the 4 bytes
-    /// directly as-is without any alpha blending. For other modes, uses alpha blending.
-    fn put_pixel(&self, canvas: &mut RgbaImage, x: u32, y: u32, color: (u8, u8, u8, u8)) {
-        canvas.put_pixel(x, y, Rgba([color.0, color.1, color.2, color.3]));
     }
 
     /// Return the original PIL mode of the drawing target.

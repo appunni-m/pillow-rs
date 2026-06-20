@@ -28,7 +28,11 @@ const JPEG_NATURAL_ORDER: [usize; 64] = [
 /// `table` is 64 entries in NATURAL order; emitted in zigzag order per jcmarker.c.
 pub(crate) fn write_dqt(out: &mut Vec<u8>, slot: u8, precision: u8, table: &[u16; 64]) {
     // Determine precision by max value (libjpeg emit_dqt picks 16-bit if any >255).
-    let prec = if precision == 1 || table.iter().any(|&v| v > 255) { 1u8 } else { 0u8 };
+    let prec = if precision == 1 || table.iter().any(|&v| v > 255) {
+        1u8
+    } else {
+        0u8
+    };
     let sample_size = if prec == 1 { 2 } else { 1 };
     let length = 2u16 + 1 + 64 * sample_size as u16;
     out.extend_from_slice(&[0xFF, 0xDB]);

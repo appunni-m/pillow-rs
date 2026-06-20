@@ -810,28 +810,6 @@ impl Image {
         Ok(results)
     }
 
-    fn compute_stat_values(values: &[f64], _n_bands: usize) -> Vec<Vec<f64>> {
-        let mut sorted = values.to_vec();
-        sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let count = sorted.len() as f64;
-        if count == 0.0 {
-            return vec![vec![0.0; 10]; _n_bands];
-        }
-        let sum: f64 = sorted.iter().sum();
-        let sum2: f64 = sorted.iter().map(|&x| x * x).sum();
-        let mean = sum / count;
-        let rms = (sum2 / count).sqrt();
-        let var = (sum2 - sum * sum / count) / count;
-        let var = if var < 0.0 { 0.0 } else { var };
-        let stddev = var.sqrt();
-        let min = sorted[0];
-        let max = sorted[sorted.len() - 1];
-        let median = sorted[sorted.len() / 2];
-        vec![vec![
-            count, sum, sum2, mean, median, rms, var, stddev, min, max,
-        ]]
-    }
-
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
         if matches!(self, Image::Paletted(_)) {
             return Ok(vec!["P".to_string()]);

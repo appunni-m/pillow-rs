@@ -993,15 +993,6 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, explicit_mode: Option<&str>) 
 
 // ── Color3DLUT — trilinear interpolation (matching PIL's _imaging C code) ──
 
-const SCALE_BITS: u32 = 18;
-const SHIFT_BITS: u32 = 15;
-const PRECISION_BITS: u32 = 6;
-/// PIL's _prepare_lut_table converts [0,1] float table values to INT16
-/// by multiplying with `255 << PRECISION_BITS` = 255 * 64 = 16320.
-/// See: `_prepare_lut_table` in PIL's _imaging.c
-const TABLE_SCALE: f64 = (255 << 6) as f64; // 16320.0
-const SCALE_MASK: u32 = (1 << SCALE_BITS) - 1;
-
 fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize {
     x + y * sx + z * sxy
 }

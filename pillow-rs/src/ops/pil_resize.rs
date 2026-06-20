@@ -246,24 +246,7 @@ pub(crate) fn precompute_coeffs(
     _precompute_coeffs_impl(out_size, in_size, scale, kernel, support)
 }
 
-/// Precompute coefficients using a float-promoted scale, matching PIL's
-/// _resize C code where the scale factor is computed with float (32-bit)
-/// arithmetic and then converted to double (64-bit).
-pub(crate) fn precompute_coeffs_float(
-    out_size: u32,
-    in_size: u32,
-    kernel: fn(f64) -> f64,
-    support: f64,
-) -> FilterCoeffs {
-    // PIL computes: scale = (float)(box[2] - box[0]) / outSize
-    // The (float) cast and float division gives a slightly different result
-    // than double arithmetic, especially at exact integer boundaries.
-    let scale = (in_size as f32 / out_size as f32) as f64;
-    _precompute_coeffs_impl(out_size, in_size, scale, kernel, support)
-}
-
-/// Internal implementation with explicit scale, called by pil_resize (double scale)
-/// and resize_i (float-promoted scale).
+/// Internal implementation with explicit scale, called by pil_resize (double scale).
 fn _precompute_coeffs_impl(
     out_size: u32,
     in_size: u32,

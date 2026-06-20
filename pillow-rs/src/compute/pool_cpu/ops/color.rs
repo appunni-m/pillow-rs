@@ -181,10 +181,6 @@ pub fn op_convert(
             // YCbCr is stored in an Rgb8 container (Y→R, Cb→G, Cr→B).
             Ok(crate::color::rgb_to_ycbcr(img))
         }
-        _ => Err(PilError::NotImplementedError(format!(
-            "Convert to {:?} not yet implemented",
-            mode
-        ))),
     }
 }
 

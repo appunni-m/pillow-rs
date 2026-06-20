@@ -604,30 +604,6 @@ pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage,
     Ok(preserve_mode(img, result))
 }
 
-/// Execute a median filter (rank = size*size/2).
-pub fn execute_median_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, size * size / 2, None)
-}
-
-/// Execute a max filter (rank = size*size - 1).
-pub fn execute_max_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, size * size - 1, None)
-}
-
-/// Execute a min filter (rank = 0).
-pub fn execute_min_filter(img: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, 0, None)
-}
-
-/// Execute a rank filter (rank = given rank).
-pub fn execute_rank_filter(
-    img: &DynamicImage,
-    size: u32,
-    rank: u32,
-) -> Result<DynamicImage, PilError> {
-    rank_filter_impl(img, size, rank, None)
-}
-
 /// Execute a median filter with explicit mode.
 pub fn execute_median_filter_with_mode(
     img: &DynamicImage,
