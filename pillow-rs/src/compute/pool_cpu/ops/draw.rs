@@ -22,6 +22,9 @@ fn draw_preserve_p_mode<F>(img: &DynamicImage, mode: Option<&str>, draw_fn: F) -
 where
     F: Fn(&mut RgbaImage),
 {
+    // Detect mode from actual image type (LA is native, not explicit_mode)
+    let is_la = matches!(img, DynamicImage::ImageLumaA8(_))
+        || (mode == Some("LA"));
     let is_p_mode = matches!(img, DynamicImage::ImageLuma8(_)) && mode == Some("P");
     let mut canvas = img.to_rgba8();
     draw_fn(&mut canvas);
@@ -30,6 +33,13 @@ where
         let (w, h) = canvas.dimensions();
         DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
             pillow_rs_image::Luma([canvas.get_pixel(x, y)[0]])
+        }))
+    } else if is_la {
+        // Convert back to LumaA8 by extracting R (luma) and A (alpha)
+        let (w, h) = canvas.dimensions();
+        DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::from_fn(w, h, |x, y| {
+            let px = canvas.get_pixel(x, y);
+            pillow_rs_image::LumaA([px[0], px[3]])
         }))
     } else {
         DynamicImage::ImageRgba8(canvas)
@@ -147,8 +157,8 @@ fn draw_ellipse_on_canvas(
             let y_pos = y0 + ((py + b as i64) / 2) as i32;
             let y_neg = y0 + ((-py + b as i64) / 2) as i32;
             let xb = (pr / 2) as i32;
-            let left = (cx_i - xb).max(x0);
-            let right = (cx_i + xb).min(x1);
+            let left = (cx_i - xb).max(x0).max(0);
+            let right = (cx_i + xb).min(x1).min(img_w as i32 - 1);
             for &y_img in &[y_pos, y_neg] {
                 if y_img >= y0 && y_img <= y1 && xb > 0 {
                     for x in left..=right {
@@ -217,15 +227,12 @@ fn draw_ellipse_on_canvas(
             let y_neg = y0 + ((-py + b as i64) / 2) as i32;
             let xb = (pr / 2) as i32;
             if xb > 0 {
-                let left = (cx_i - xb).max(x0);
-                let right = (cx_i + xb).min(x1);
+                let left = (cx_i - xb).max(x0).max(0);
+                let right = (cx_i + xb).min(x1).min(img_w as i32 - 1);
                 for &y_img in &[y_pos, y_neg] {
-                    if y_img >= y0 && y_img <= y1 {
+                    if y_img >= y0 && y_img <= y1 && y_img >= 0 && (y_img as u32) < img_h {
                         for x in left..=right {
-                            if x >= 0 && y_img >= 0 && (x as u32) < img_w && (y_img as u32) < img_h
-                            {
-                                filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
-                            }
+                            filled[(y_img as usize) * (img_w as usize) + (x as usize)] = true;
                         }
                     }
                 }
@@ -279,10 +286,12 @@ fn draw_ellipse_on_canvas(
                 if !filled[idx] {
                     continue;
                 }
-                let lf = x > 0 && filled[(y as usize) * (img_w as usize) + ((x - 1) as usize)];
-                let rf = x < iw - 1 && filled[(y as usize) * (img_w as usize) + ((x + 1) as usize)];
-                let uf = y > 0 && filled[((y - 1) as usize) * (img_w as usize) + (x as usize)];
-                let df = y < ih - 1 && filled[((y + 1) as usize) * (img_w as usize) + (x as usize)];
+                // Treat out-of-bounds neighbors as "filled" to avoid
+                // false boundaries at image edges (clipped ellipse).
+                let lf = filled[(y as usize) * (img_w as usize) + ((x - 1).max(0) as usize)];
+                let rf = filled[(y as usize) * (img_w as usize) + ((x + 1).min(iw - 1) as usize)];
+                let uf = filled[((y - 1).max(0) as usize) * (img_w as usize) + (x as usize)];
+                let df = filled[((y + 1).min(ih - 1) as usize) * (img_w as usize) + (x as usize)];
                 if !lf || !rf || !uf || !df {
                     plot(canvas, x, y, oc, img_w, img_h, false);
                 }

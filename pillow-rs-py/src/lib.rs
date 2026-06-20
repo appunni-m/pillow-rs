@@ -1649,6 +1649,7 @@ fn parse_draw_color(
         match mode {
             Some("RGB") => Ok((i, 0, 0, 255)),
             Some("RGBA") => Ok((i, 0, 0, 0)),
+            // PIL's _getink for LA: (L=value, A=0) where A=0 means full opacity
             Some("LA") => Ok((i, i, i, 0)),
             Some("CMYK") => Ok((i, 0, 0, 0)),
             _ => Ok((i, i, i, 255)),

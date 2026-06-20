@@ -246,6 +246,89 @@ pub(crate) fn precompute_coeffs(
     _precompute_coeffs_impl(out_size, in_size, scale, kernel, support)
 }
 
+/// Precompute coefficients for a box-based resize (PIL's box parameter).
+/// The box is a (left, top, right, bottom) tuple in source coordinates,
+/// mapping to the output size. All coordinates are in the source image
+/// coordinate system (floating point).
+pub(crate) fn precompute_coeffs_boxed(
+    out_size: u32,
+    in_size: u32,
+    box_start: f64,
+    box_end: f64,
+    kernel: fn(f64) -> f64,
+    support: f64,
+) -> FilterCoeffs {
+    // Scale = box_length / output_size
+    let box_length = box_end - box_start;
+    let scale = box_length / out_size as f64;
+    let filterscale = scale.max(1.0);
+    let src_support = support * filterscale;
+
+    let n = out_size as usize;
+    let mut xmin = Vec::with_capacity(n);
+    let mut count = Vec::with_capacity(n);
+    let mut weights: Vec<Vec<i64>> = Vec::with_capacity(n);
+
+    for ox in 0..n {
+        // PIL: center = box_start + (ox + 0.5) * scale
+        let center = box_start + (ox as f64 + 0.5) * scale;
+
+        let mut x0 = (center - src_support + 0.5).trunc() as i64;
+        let mut x1 = (center + src_support + 0.5).trunc() as i64;
+
+        // Clamp to image bounds
+        if x0 < 0 {
+            x0 = 0;
+        }
+        if x1 > in_size as i64 {
+            x1 = in_size as i64;
+        }
+
+        let cnt = (x1 - x0) as usize;
+        xmin.push(x0);
+        count.push(cnt);
+
+        if cnt == 0 {
+            weights.push(Vec::new());
+            continue;
+        }
+
+        // Compute f64 weights, then convert to fixed-point
+        let ss = 1.0 / filterscale;
+        let mut w_f64 = Vec::with_capacity(cnt);
+        let mut wsum = 0.0;
+        for ix in 0..cnt {
+            let sx = x0 + ix as i64;
+            let val = kernel((sx as f64 + 0.5 - center) * ss);
+            w_f64.push(val);
+            wsum += val;
+        }
+
+        if wsum > 0.0 {
+            for wi in w_f64.iter_mut() {
+                *wi /= wsum;
+            }
+        }
+
+        let w_fixed: Vec<i64> = w_f64
+            .iter()
+            .map(|&w| {
+                let scaled = w * PRECISION as f64;
+                let rounded = if w >= 0.0 { scaled + 0.5 } else { scaled - 0.5 };
+                rounded as i64
+            })
+            .collect();
+
+        weights.push(w_fixed);
+    }
+
+    FilterCoeffs {
+        xmin,
+        count,
+        weights,
+    }
+}
+
 /// Internal implementation with explicit scale, called by pil_resize (double scale).
 fn _precompute_coeffs_impl(
     out_size: u32,
@@ -538,29 +621,36 @@ pub fn pil_resize(
     // using float then double promotion, causing exact-integer boundaries to
     // nudge down by ~1e-15.
     if matches!(filter, ResampleFilter::Nearest) {
-        let sw_f = sw as f64;
-        let sh_f = sh as f64;
-        let dw_f = dw as f64;
-        let dh_f = dh as f64;
-        // PIL uses float for box values then promotes to double, causing
-        // exact-integer boundaries to round slightly below the integer.
-        // Subtract a tiny epsilon to match this behavior.
-        let eps: f64 = -1e-14;
+        // PIL's NEAREST resize uses ImagingScaleAffine with cumulative f64 stepping.
+        // From _imaging.c for NEAREST filter:
+        //   a[0] = (double)(box[2] - box[0]) / xsize   (= sw / dw)
+        //   a[2] = box[0]                                (= 0)
+        // Then: xo = a[2] + a[0] * 0.5
+        //       for each x: xin = (int)(xo); xo += a[0]
+        let scale_x = sw as f64 / dw as f64;
+        let scale_y = sh as f64 / dh as f64;
         let n = (dw * dh) as usize;
         let mut out_bytes: Vec<u8> = Vec::with_capacity(n * channels);
-        for dy in 0..dh {
+        // Precompute x-mapping table matching PIL's xintab approach
+        let mut xintab: Vec<u32> = Vec::with_capacity(dw as usize);
+        let mut xo = scale_x * 0.5;
+        for _dx in 0..dw {
+            let xi = xo as u32;
+            xintab.push(if xi >= sw { sw - 1 } else { xi });
+            xo += scale_x;
+        }
+        // PIL also uses cumulative stepping for y: yo = a[4] * 0.5
+        let mut yo = scale_y * 0.5;
+        for _dy in 0..dh {
+            let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 };
             for dx in 0..dw {
-                let center_x = (dx as f64 + 0.5) * sw_f / dw_f;
-                let center_y = (dy as f64 + 0.5) * sh_f / dh_f;
-                let sx = (center_x + eps) as u32;
-                let sy = (center_y + eps) as u32;
-                let sx = sx.min(sw - 1);
-                let sy = sy.min(sh - 1);
+                let sx = xintab[dx as usize];
                 let p = pixel_at(&work, sx, sy);
                 for c in 0..channels {
                     out_bytes.push(pil_round(p[c]));
                 }
             }
+            yo += scale_y;
         }
         let result = raw_to_dynamic(&out_bytes, dw, dh, channels);
         let result = if needs_alpha {
@@ -607,6 +697,86 @@ pub fn pil_resize(
     let result = raw_to_dynamic(&out_bytes, dw, dh, channels);
 
     // Un-premultiply alpha if needed
+    let result = if needs_alpha {
+        unpremultiply_alpha(&result)
+    } else {
+        result
+    };
+
+    pil_preserve_mode(orig_img, result)
+}
+
+/// Box-based resize: maps source region [box_left, box_right] × [box_top, box_bottom]
+/// to the output (dst_w, dst_h). All box coordinates are in source pixel coordinates.
+pub fn pil_resize_boxed(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+) -> DynamicImage {
+    let orig_img = img;
+    let is_cmyk = explicit_mode == Some("CMYK");
+    let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
+    let needs_alpha = !is_cmyk
+        && !is_fi
+        && matches!(
+            img.color(),
+            pillow_rs_image::ColorType::Rgba8 | pillow_rs_image::ColorType::La8
+        );
+    let work = if needs_alpha {
+        premultiply_alpha(img)
+    } else {
+        img.clone()
+    };
+
+    let (kernel_fn, support) = filter_from_resample(filter);
+    let (sw, sh) = (work.width(), work.height());
+
+    let channels = match work.color() {
+        pillow_rs_image::ColorType::L8 => 1usize,
+        pillow_rs_image::ColorType::La8 => 2usize,
+        pillow_rs_image::ColorType::Rgb8 => 3usize,
+        _ => 4usize,
+    };
+
+    // Use box-parameter coefficients for both passes
+    let h_coeffs = precompute_coeffs_boxed(dst_w, sw, box_left, box_right, kernel_fn, support);
+    let v_coeffs = precompute_coeffs_boxed(dst_h, sh, box_top, box_bottom, kernel_fn, support);
+
+    // Allocate intermediate image (sh rows × dw columns × channels)
+    let mut intermediate = vec![0u8; (sh * dst_w) as usize * channels];
+
+    // Horizontal pass
+    let work_bytes = work.as_bytes();
+    for sy in 0..sh {
+        let src_start = (sy * sw) as usize * channels;
+        let src_row = &work_bytes[src_start..src_start + sw as usize * channels];
+        let inter_start = (sy * dst_w) as usize * channels;
+        let inter_row = &mut intermediate[inter_start..inter_start + dst_w as usize * channels];
+        horizontal_pass_row(src_row, sw, channels, &h_coeffs, dst_w, inter_row);
+    }
+
+    // Allocate output image
+    let mut out_bytes = vec![0u8; (dst_w * dst_h) as usize * channels];
+
+    // Vertical pass
+    for dy in 0..dst_h {
+        let out_start = (dy * dst_w) as usize * channels;
+        let out_row = &mut out_bytes[out_start..out_start + dst_w as usize * channels];
+        for dx in 0..dst_w {
+            let vert_result =
+                vertical_pass_col(&intermediate, sh, dx, dst_w, channels, &v_coeffs, dy as usize);
+            let dest = &mut out_row[dx as usize * channels..(dx as usize + 1) * channels];
+            dest[..channels].copy_from_slice(&vert_result[..channels]);
+        }
+    }
+
+    let result = raw_to_dynamic(&out_bytes, dst_w, dst_h, channels);
     let result = if needs_alpha {
         unpremultiply_alpha(&result)
     } else {

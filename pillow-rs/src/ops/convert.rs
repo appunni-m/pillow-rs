@@ -144,32 +144,67 @@ impl Image {
                     // Key detail: after the inner loop, PIL writes errors[w] = l0
                     // so the next row's last pixel reads the down/down-right error
                     // from this row's last pixel.
+                    // For RGB source, compute luminance inline using PIL's formula
+                    // (299*R + 587*G + 114*B) / 1000 to exactly match PIL behavior.
+                    // The pre-computed grayscale uses >> 16 which differs for 5 out
+                    // of 16M RGB values.
+                    let is_rgb = matches!(img.color(), pillow_rs_image::ColorType::Rgb8);
                     let mut errors = vec![0i32; (w + 1) as usize];
-                    let src: Vec<i32> = gray.pixels().map(|p| p[0] as i32).collect();
                     let wu = w as usize;
-                    for y in 0..h as usize {
-                        let mut l = 0i32;
-                        let mut l0: i32 = 0;
-                        let mut l1: i32 = 0;
-                        for x in 0..wu {
-                            let idx = y * wu + x;
-                            let acc = l + errors[x + 1];
-                            let v = src[idx] + acc / 16;
-                            let v = v.clamp(0, 255);
-                            let new = if v > 128 { 255i32 } else { 0i32 };
-                            out.get_pixel_mut(x as u32, y as u32)[0] = new as u8;
-                            l = v - new;
-                            let l2 = l;
-                            let d2 = l + l;
-                            l += d2;
-                            errors[x] = l + l0;
-                            l += d2;
-                            l0 = l + l1;
-                            l1 = l2;
-                            l += d2;
+                    if is_rgb {
+                        let rgb = img.to_rgb8();
+                        let rgb_raw = rgb.into_raw();
+                        for y in 0..h as usize {
+                            let mut l = 0i32;
+                            let mut l0: i32 = 0;
+                            let mut l1: i32 = 0;
+                            let row_base = y * wu * 3;
+                            for x in 0..wu {
+                                let r = rgb_raw[row_base + x * 3] as i32;
+                                let g = rgb_raw[row_base + x * 3 + 1] as i32;
+                                let b = rgb_raw[row_base + x * 3 + 2] as i32;
+                                let lum = (299 * r + 587 * g + 114 * b) / 1000;
+                                let acc = l + errors[x + 1];
+                                let v = (lum + acc / 16).clamp(0, 255);
+                                let new = if v > 128 { 255i32 } else { 0i32 };
+                                out.get_pixel_mut(x as u32, y as u32)[0] = new as u8;
+                                l = v - new;
+                                let l2 = l;
+                                let d2 = l + l;
+                                l += d2;
+                                errors[x] = l + l0;
+                                l += d2;
+                                l0 = l + l1;
+                                l1 = l2;
+                                l += d2;
+                            }
+                            errors[wu] = l0;
                         }
-                        // PIL: after the loop, propagate l0 to errors[w] for next row
-                        errors[wu] = l0;
+                    } else {
+                        let src: Vec<i32> = gray.pixels().map(|p| p[0] as i32).collect();
+                        for y in 0..h as usize {
+                            let mut l = 0i32;
+                            let mut l0: i32 = 0;
+                            let mut l1: i32 = 0;
+                            for x in 0..wu {
+                                let idx = y * wu + x;
+                                let acc = l + errors[x + 1];
+                                let v = src[idx] + acc / 16;
+                                let v = v.clamp(0, 255);
+                                let new = if v > 128 { 255i32 } else { 0i32 };
+                                out.get_pixel_mut(x as u32, y as u32)[0] = new as u8;
+                                l = v - new;
+                                let l2 = l;
+                                let d2 = l + l;
+                                l += d2;
+                                errors[x] = l + l0;
+                                l += d2;
+                                l0 = l + l1;
+                                l1 = l2;
+                                l += d2;
+                            }
+                            errors[wu] = l0;
+                        }
                     }
                 }
             }

@@ -590,6 +590,10 @@ impl Image {
     // ── Immediate ops (force materialize) ──
 
     pub fn getpixel(&self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
+        let (w, h) = self.size()?;
+        if x >= w || y >= h {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
         let img = self.materialize()?;
         let rgba = img.get_pixel(x, y).0;
         Ok((
@@ -1298,6 +1302,8 @@ impl Image {
     ///   h = self.im.histogram()
     ///   out = [(h[i], i) for i in range(256) if h[i]]
     fn getcolors_histogram(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
+        let mode = self.mode()?;
+        let is_mode1 = mode == "1";
         let img = self.materialize()?;
         // Compute 256-bin histogram
         let mut hist = [0u32; 256];
@@ -1305,7 +1311,8 @@ impl Image {
             pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for p in luma.pixels() {
-                    hist[p[0] as usize] += 1;
+                    let val = if is_mode1 { (p[0] > 0) as u8 } else { p[0] };
+                    hist[val as usize] += 1;
                 }
             }
             _ => {

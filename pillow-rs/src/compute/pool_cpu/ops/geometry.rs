@@ -587,10 +587,14 @@ pub fn execute_resize(
     filter: &ResampleFilter,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if explicit_mode == Some("F") {
+    // Only use F/I resize paths when the image is already stored as Rgba8
+    // (4 bytes per pixel), meaning it has been converted to F/I mode already.
+    // If the image is still RGB (3 bytes per pixel), use normal resize regardless
+    // of explicit_mode, because the F/I convert hasn't happened yet in the pipeline.
+    if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
         return resize_f(img, w, h, filter);
     }
-    if explicit_mode == Some("I") {
+    if explicit_mode == Some("I") && matches!(img, DynamicImage::ImageRgba8(_)) {
         return resize_i(img, w, h, filter);
     }
     // Mode "1": convert to L, resize, then convert back to "1" by thresholding at 128.
@@ -615,6 +619,7 @@ pub fn execute_resize(
 }
 
 /// Execute a Crop operation.
+/// PIL's crop fills out-of-bounds source pixels with 0 (black).
 pub fn execute_crop(
     img: &DynamicImage,
     left: u32,
@@ -624,7 +629,37 @@ pub fn execute_crop(
 ) -> Result<DynamicImage, PilError> {
     let w = right.saturating_sub(left);
     let h = bottom.saturating_sub(top);
-    Ok(img.crop_imm(left, top, w, h))
+    let (iw, ih) = (img.width(), img.height());
+    // PIL: out-of-bounds source pixels are filled with 0.
+    // If the crop region is fully within bounds, use the fast path.
+    if left < iw && top < ih && right <= iw && bottom <= ih {
+        return Ok(img.crop_imm(left, top, w, h));
+    }
+    // Out-of-bounds crop: fill missing pixels with 0.
+    let channels = img.color().channel_count() as usize;
+    let mut out = vec![0u8; (w * h) as usize * channels];
+    let raw = img.as_bytes();
+    for dy in 0..h {
+        let sy = top + dy;
+        if sy >= ih {
+            continue; // row is entirely out of bounds, leave as 0
+        }
+        for dx in 0..w {
+            let sx = left + dx;
+            if sx >= iw {
+                continue; // column is out of bounds, leave as 0
+            }
+            let src = ((sy * iw + sx) as usize) * channels;
+            let dst = ((dy * w + dx) as usize) * channels;
+            if src + channels <= raw.len() && dst + channels <= out.len() {
+                out[dst..dst + channels].copy_from_slice(&raw[src..src + channels]);
+            }
+        }
+    }
+    // Use the module-level raw_bytes_to_image defined above
+    let result = raw_bytes_to_image(w, h, out, channels)?;
+    Ok(result)
+
 }
 
 /// Execute a Rotate operation.
@@ -698,8 +733,8 @@ pub fn execute_thumbnail(
         return Err(PilError::ValueError("thumbnail size must be > 0".into()));
     }
     let scale = (w as f64 / cur_w as f64).min(h as f64 / cur_h as f64);
-    let new_w = (cur_w as f64 * scale) as u32;
-    let new_h = (cur_h as f64 * scale) as u32;
+    let new_w = (cur_w as f64 * scale).round() as u32;
+    let new_h = (cur_h as f64 * scale).round() as u32;
     let new_w = new_w.max(1);
     let new_h = new_h.max(1);
     // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
@@ -751,9 +786,13 @@ pub fn execute_thumbnail(
             work_img = raw_to_dynimage(&out, rw, rh, channels);
         }
     }
-    let result = match explicit_mode {
-        Some("F") => resize_f(&work_img, new_w, new_h, &effective_filter)?,
-        Some("I") => resize_i(&work_img, new_w, new_h, &effective_filter)?,
+    // Only use F/I thumbnail paths when the image is already stored as Rgba8
+    // (4 bytes per pixel), meaning it has been converted to F/I mode already.
+    // If the image is still RGB or other format, use normal thumbnail regardless
+    // of explicit_mode, because the F/I convert hasn't happened yet in the pipeline.
+    let result = match (explicit_mode, &work_img) {
+        (Some("F"), DynamicImage::ImageRgba8(_)) => resize_f(&work_img, new_w, new_h, &effective_filter)?,
+        (Some("I"), DynamicImage::ImageRgba8(_)) => resize_i(&work_img, new_w, new_h, &effective_filter)?,
         _ => pil_resize(&work_img, new_w, new_h, effective_filter, explicit_mode),
     };
     Ok(preserve_mode(img, result))

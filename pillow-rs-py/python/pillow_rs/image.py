@@ -50,7 +50,7 @@ class Image:
         # Extract palette for Paletted images (P-mode)
         if self._explicit_mode == "P":
             try:
-                p = self._rust_image.palette()
+                p = self._rust_image.getpalette_trimmed()
                 if p:
                     self._palette = list(p)
             except Exception:
@@ -85,7 +85,7 @@ class Image:
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
         # CMYK/YCbCr/HSV/I/F are stored as RGB/RGBA internally but tagged with mode
-        nonstandard = {"CMYK": "RGBA", "YCbCr": "RGB", "HSV": "RGB", "P": "L"}
+        nonstandard = {"I": "RGBA", "F": "RGBA"}
         rust_mode = nonstandard.get(mode, mode)
         # Convert list colors to tuples (JSON fixtures pass lists, PIL accepts both)
         if isinstance(color, list):
@@ -422,11 +422,14 @@ class Image:
             return self._palette
         try:
             p = self._rust_image.getpalette_trimmed()
-            if p:
+            if p is not None:
                 self._palette = list(p)
                 return self._palette
         except Exception:
             pass
+        # PIL: P-mode image with no palette returns empty list, not None
+        if self.mode == "P":
+            return []
         return None
 
     def getxmp(self):

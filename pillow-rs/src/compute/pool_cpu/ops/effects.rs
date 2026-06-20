@@ -431,14 +431,10 @@ pub fn op_composite_module(
     mask: &Arc<Image>,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    // Validate size match: all three images must have the same dimensions
-    let other_img_pre = other.materialize_for_ops()?;
-    let mask_img_pre = mask.materialize_for_ops()?;
-    if (other_img_pre.width(), other_img_pre.height()) != (img.width(), img.height())
-        || (mask_img_pre.width(), mask_img_pre.height()) != (img.width(), img.height())
-    {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
+    // PIL composite: copy image2, then paste image1 onto it with mask at (0,0).
+    // The output uses image2's size. Smaller images are pasted into the top-left.
+    let _other_img_pre = other.materialize_for_ops()?;
+    let _mask_img_pre = mask.materialize_for_ops()?;
     // P-mode: composite on palette indices (PIL operates on indices, not colors)
     if explicit_mode == Some("P") {
         let gray1 = img.to_luma8();
@@ -446,13 +442,19 @@ pub fn op_composite_module(
         let gray2 = other_indices.to_luma8();
         let mask_img = mask.materialize_for_ops()?;
         let mask_gray = mask_img.to_luma8();
-        let (w, h) = (
-            gray1.width().min(gray2.width()).min(mask_gray.width()),
-            gray1.height().min(gray2.height()).min(mask_gray.height()),
-        );
-        let mut out = GrayImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
+        let (out_w, out_h) = gray2.dimensions();
+        let mut out = GrayImage::new(out_w, out_h);
+        // Copy image2 as base, then blend image1 in overlap region
+        for y in 0..out_h {
+            for x in 0..out_w {
+                let i2 = gray2.get_pixel(x, y)[0] as u16;
+                out.put_pixel(x, y, pillow_rs_image::Luma([i2 as u8]));
+            }
+        }
+        let overlap_w = gray1.width().min(gray2.width()).min(mask_gray.width());
+        let overlap_h = gray1.height().min(gray2.height()).min(mask_gray.height());
+        for y in 0..overlap_h {
+            for x in 0..overlap_w {
                 let i1 = gray1.get_pixel(x, y)[0] as u16;
                 let i2 = gray2.get_pixel(x, y)[0] as u16;
                 let m = mask_gray.get_pixel(x, y)[0] as u16;
@@ -470,13 +472,17 @@ pub fn op_composite_module(
         let rgba1 = img.to_rgba8();
         let rgba2 = other_img.to_rgba8();
         let mask_gray = mask_img.to_luma8();
-        let (w, h) = (
-            rgba1.width().min(rgba2.width()).min(mask_gray.width()),
-            rgba1.height().min(rgba2.height()).min(mask_gray.height()),
-        );
-        let mut out = RgbaImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
+        let (out_w, out_h) = rgba2.dimensions();
+        let mut out = RgbaImage::new(out_w, out_h);
+        for y in 0..out_h {
+            for x in 0..out_w {
+                out.put_pixel(x, y, *rgba2.get_pixel(x, y));
+            }
+        }
+        let overlap_w = rgba1.width().min(rgba2.width()).min(mask_gray.width());
+        let overlap_h = rgba1.height().min(rgba2.height()).min(mask_gray.height());
+        for y in 0..overlap_h {
+            for x in 0..overlap_w {
                 let p1 = rgba1.get_pixel(x, y);
                 let p2 = rgba2.get_pixel(x, y);
                 let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
@@ -499,13 +505,17 @@ pub fn op_composite_module(
         let la1 = img.to_luma_alpha8();
         let la2 = other_img.to_luma_alpha8();
         let mask_gray = mask_img.to_luma8();
-        let (w, h) = (
-            la1.width().min(la2.width()).min(mask_gray.width()),
-            la1.height().min(la2.height()).min(mask_gray.height()),
-        );
-        let mut out = GrayAlphaImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
+        let (out_w, out_h) = la2.dimensions();
+        let mut out = GrayAlphaImage::new(out_w, out_h);
+        for y in 0..out_h {
+            for x in 0..out_w {
+                out.put_pixel(x, y, *la2.get_pixel(x, y));
+            }
+        }
+        let overlap_w = la1.width().min(la2.width()).min(mask_gray.width());
+        let overlap_h = la1.height().min(la2.height()).min(mask_gray.height());
+        for y in 0..overlap_h {
+            for x in 0..overlap_w {
                 let p1 = la1.get_pixel(x, y);
                 let p2 = la2.get_pixel(x, y);
                 let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
@@ -524,13 +534,17 @@ pub fn op_composite_module(
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
     let mask_gray = mask_img.to_luma8();
-    let (w, h) = (
-        rgb1.width().min(rgb2.width()).min(mask_gray.width()),
-        rgb1.height().min(rgb2.height()).min(mask_gray.height()),
-    );
-    let mut out = RgbImage::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
+    let (out_w, out_h) = rgb2.dimensions();
+    let mut out = RgbImage::new(out_w, out_h);
+    for y in 0..out_h {
+        for x in 0..out_w {
+            out.put_pixel(x, y, *rgb2.get_pixel(x, y));
+        }
+    }
+    let overlap_w = rgb1.width().min(rgb2.width()).min(mask_gray.width());
+    let overlap_h = rgb1.height().min(rgb2.height()).min(mask_gray.height());
+    for y in 0..overlap_h {
+        for x in 0..overlap_w {
             let p1 = rgb1.get_pixel(x, y);
             let p2 = rgb2.get_pixel(x, y);
             let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
