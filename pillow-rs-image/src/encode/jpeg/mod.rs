@@ -435,7 +435,7 @@ fn encode_one_block(
             r -= 16;
         }
         let nbits = jpeg_nbits(coef);
-        let sym = ((r << 4) | nbits as u32) as usize;
+        let sym = ((r << 4) | nbits) as usize;
         bw.write_bits(ac_tbl.codes[sym], ac_tbl.lengths[sym]);
         bw.write_bits(mag_bits(coef, nbits), nbits as u8);
         r = 0;
@@ -856,8 +856,7 @@ fn encode_ac_refine(
         .enumerate()
         .rev()
         .find(|(_, &v)| v == 1)
-        .map(|(i, _)| i)
-        .unwrap_or(usize::MAX);
+        .map_or(usize::MAX, |(i, _)| i);
 
     // Flush any pending cross-block EOBRUN+BE from previous blocks.
     if *eobrun > 0 {

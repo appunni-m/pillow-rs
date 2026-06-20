@@ -138,7 +138,7 @@ fn ac_refine_block(
                 Some(if bit != 0 { p1 } else { m1 })
             } else {
                 if r != 15 {
-                    *eobrun = (1u32 << r) as u32;
+                    *eobrun = 1u32 << r;
                     if r > 0 {
                         *eobrun += br.read_bits(r as u32)?;
                     }
@@ -376,10 +376,8 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         let comp = &info.components[comp_idx];
         let buf_w = comp_buf_width[comp_idx];
         let blocks_x = buf_w / 8;
-        let total_blocks = comp_num_blocks[comp_idx];
         let quant_table = info.quant_tables[comp.quant_tbl as usize].as_ref()?;
-        for block_idx in 0..total_blocks {
-            let coeffs = &coeff_storage[comp_idx][block_idx];
+        for (block_idx, coeffs) in coeff_storage[comp_idx].iter().enumerate() {
             for i in 0..64 {
                 block_natural[JPEG_NATURAL_ORDER[i]] = coeffs[i] * quant_table[i] as i32;
             }

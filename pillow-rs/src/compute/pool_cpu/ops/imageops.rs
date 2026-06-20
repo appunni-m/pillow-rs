@@ -13,7 +13,11 @@ fn bankers_round(x: f64) -> f64 {
     let floor = x.floor();
     let frac = x - floor;
     if frac == 0.5 {
-        if floor % 2.0 == 0.0 { floor } else { floor + 1.0 }
+        if floor % 2.0 == 0.0 {
+            floor
+        } else {
+            floor + 1.0
+        }
     } else {
         (x + 0.5).floor()
     }
@@ -61,7 +65,13 @@ pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, 
                 // Uses PIL's exact formula to match floating-point edge cases.
                 // (ix - lo) * scale can produce different fp results than ix*scale + offset
                 let val = out[idx] as f64 * scale + offset;
-                out[idx] = if val < 0.0 { 0 } else if val > 255.0 { 255 } else { val as u8 };
+                out[idx] = if val < 0.0 {
+                    0
+                } else if val > 255.0 {
+                    255
+                } else {
+                    val as u8
+                };
             }
         }
     }
@@ -325,8 +335,7 @@ pub fn op_pad(
     // RGBA/LA modes: transparent fill (alpha=0). L/RGB: opaque black.
     let has_alpha = matches!(
         img.color(),
-        pillow_rs_image::ColorType::Rgba8
-            | pillow_rs_image::ColorType::La8
+        pillow_rs_image::ColorType::Rgba8 | pillow_rs_image::ColorType::La8
     );
     let default_fill = if has_alpha {
         (0, 0, 0, 0)
@@ -355,7 +364,11 @@ pub fn op_pad(
     let mut padded = DynamicImage::new_rgba8(w, h);
     for py in 0..h {
         for px in 0..w {
-            padded.put_pixel(px, py, pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]));
+            padded.put_pixel(
+                px,
+                py,
+                pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]),
+            );
         }
     }
     // PIL: x = round((size[0] - resized.width) * max(0, min(centering[0], 1)))
@@ -376,9 +389,12 @@ pub fn op_pad(
                     let da = dp[3] as u32;
                     let oa = sa + (da * (255u32 - sa)) / 255;
                     if oa > 0 {
-                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
-                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
-                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255)
+                            / oa) as u8;
+                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255)
+                            / oa) as u8;
+                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255)
+                            / oa) as u8;
                         padded.put_pixel(dx, py, pillow_rs_image::Rgba([or, og, ob, oa as u8]));
                     }
                 }
@@ -396,9 +412,12 @@ pub fn op_pad(
                     let da = dp[3] as u32;
                     let oa = sa + (da * (255u32 - sa)) / 255;
                     if oa > 0 {
-                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
-                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
-                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255)
+                            / oa) as u8;
+                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255)
+                            / oa) as u8;
+                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255)
+                            / oa) as u8;
                         padded.put_pixel(px, dy, pillow_rs_image::Rgba([or, og, ob, oa as u8]));
                     }
                 }

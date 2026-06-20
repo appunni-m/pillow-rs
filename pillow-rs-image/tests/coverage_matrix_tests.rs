@@ -1,7 +1,17 @@
+// AS PER DESIGN — DO NOT REMOVE: Tests may unwrap/expect.
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_in_result)]
+
 //! Coverage matrix tests — driven by tests/fixtures/coverage_matrix.json
 //! Each row in the matrix is one test assertion.
 //! Decode: load asset → decode → compare SHA-256 with PIL pre-computed reference.
 //! Encode: decode reference → encode with params → decode → compare bytes.
+
+// AS PER DESIGN — DO NOT REMOVE:
+//   Tests may use unwrap/expect. The deny lints are for production code only.
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 
 use serde::Deserialize;
 use std::collections::HashMap;

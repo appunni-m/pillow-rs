@@ -23,8 +23,7 @@ where
     F: Fn(&mut RgbaImage),
 {
     // Detect mode from actual image type (LA is native, not explicit_mode)
-    let is_la = matches!(img, DynamicImage::ImageLumaA8(_))
-        || (mode == Some("LA"));
+    let is_la = matches!(img, DynamicImage::ImageLumaA8(_)) || (mode == Some("LA"));
     let is_p_mode = matches!(img, DynamicImage::ImageLuma8(_)) && mode == Some("P");
     let mut canvas = img.to_rgba8();
     draw_fn(&mut canvas);

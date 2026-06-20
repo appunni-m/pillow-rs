@@ -769,8 +769,15 @@ pub fn pil_resize_boxed(
         let out_start = (dy * dst_w) as usize * channels;
         let out_row = &mut out_bytes[out_start..out_start + dst_w as usize * channels];
         for dx in 0..dst_w {
-            let vert_result =
-                vertical_pass_col(&intermediate, sh, dx, dst_w, channels, &v_coeffs, dy as usize);
+            let vert_result = vertical_pass_col(
+                &intermediate,
+                sh,
+                dx,
+                dst_w,
+                channels,
+                &v_coeffs,
+                dy as usize,
+            );
             let dest = &mut out_row[dx as usize * channels..(dx as usize + 1) * channels];
             dest[..channels].copy_from_slice(&vert_result[..channels]);
         }

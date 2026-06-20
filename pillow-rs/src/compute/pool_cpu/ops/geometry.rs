@@ -659,7 +659,6 @@ pub fn execute_crop(
     // Use the module-level raw_bytes_to_image defined above
     let result = raw_bytes_to_image(w, h, out, channels)?;
     Ok(result)
-
 }
 
 /// Execute a Rotate operation.
@@ -712,18 +711,12 @@ fn rotate_90_non_expand(
 
     // Create output dynamic image
     match channels {
-        1 => DynamicImage::ImageLuma8(
-            pillow_rs_image::GrayImage::from_raw(w, h, out).unwrap(),
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            pillow_rs_image::GrayAlphaImage::from_raw(w, h, out).unwrap(),
-        ),
-        3 => DynamicImage::ImageRgb8(
-            pillow_rs_image::RgbImage::from_raw(w, h, out).unwrap(),
-        ),
-        _ => DynamicImage::ImageRgba8(
-            pillow_rs_image::RgbaImage::from_raw(w, h, out).unwrap(),
-        ),
+        1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::from_raw(w, h, out).unwrap()),
+        2 => {
+            DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::from_raw(w, h, out).unwrap())
+        }
+        3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::from_raw(w, h, out).unwrap()),
+        _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::from_raw(w, h, out).unwrap()),
     }
 }
 
@@ -830,12 +823,18 @@ pub fn execute_thumbnail(
     //   else:
     //       y = round_aspect(x / aspect, key=lambda n: 0 if n == 0 else abs(aspect - x / n))
     let (new_w, new_h) = if w as f64 / h as f64 >= cur_w as f64 / cur_h as f64 {
-        let adjusted = round_aspect(h as f64 * (cur_w as f64 / cur_h as f64),
-            |n| (cur_w as f64 / cur_h as f64 - n / h as f64).abs());
+        let adjusted = round_aspect(h as f64 * (cur_w as f64 / cur_h as f64), |n| {
+            (cur_w as f64 / cur_h as f64 - n / h as f64).abs()
+        });
         (adjusted, h)
     } else {
-        let adjusted = round_aspect(w as f64 / (cur_w as f64 / cur_h as f64),
-            |n| if n == 0.0 { 0.0 } else { (cur_w as f64 / cur_h as f64 - w as f64 / n).abs() });
+        let adjusted = round_aspect(w as f64 / (cur_w as f64 / cur_h as f64), |n| {
+            if n == 0.0 {
+                0.0
+            } else {
+                (cur_w as f64 / cur_h as f64 - w as f64 / n).abs()
+            }
+        });
         (w, adjusted)
     };
     let new_w = new_w.max(1);
@@ -894,8 +893,12 @@ pub fn execute_thumbnail(
     // If the image is still RGB or other format, use normal thumbnail regardless
     // of explicit_mode, because the F/I convert hasn't happened yet in the pipeline.
     let result = match (explicit_mode, &work_img) {
-        (Some("F"), DynamicImage::ImageRgba8(_)) => resize_f(&work_img, new_w, new_h, &effective_filter)?,
-        (Some("I"), DynamicImage::ImageRgba8(_)) => resize_i(&work_img, new_w, new_h, &effective_filter)?,
+        (Some("F"), DynamicImage::ImageRgba8(_)) => {
+            resize_f(&work_img, new_w, new_h, &effective_filter)?
+        }
+        (Some("I"), DynamicImage::ImageRgba8(_)) => {
+            resize_i(&work_img, new_w, new_h, &effective_filter)?
+        }
         _ => pil_resize(&work_img, new_w, new_h, effective_filter, explicit_mode),
     };
     Ok(preserve_mode(img, result))

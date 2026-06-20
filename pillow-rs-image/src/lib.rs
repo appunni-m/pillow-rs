@@ -1,3 +1,13 @@
+// AS PER DESIGN — DO NOT REMOVE:
+//   Workspace lints are DENY for these. This crate defers them explicitly.
+//   Tracked at CODEBASE_AUDIT.md Fixes 2, 12. Remove each when addressed.
+#![allow(missing_docs)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_in_result)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::map_unwrap_or)]
+
 //! pillow-rs-image — zero-dependency pixel-perfect image decoders and encoders.
 //!
 //! Goal: produce pixel-identical output to libjpeg/libpng so pillow-rs

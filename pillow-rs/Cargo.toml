@@ -19,6 +19,12 @@ wgpu = "24"
 pollster = "0.3"
 bytemuck = { version = "1", features = ["derive"] }
 
+# AS PER DESIGN — DO NOT REMOVE:
+# rayon provides safe parallelism for pixel loops via the par_rows!/par_pixels!
+# macros (see pillow-rs/src/par.rs). Every trivially-parallel operation should
+# use these macros. CI checks for serial loops that should be parallelized.
+rayon = "1"
+
 
 [lints]
 workspace = true

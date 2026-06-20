@@ -4,14 +4,20 @@
 //! - `Backend` enum: Cpu, Gpu, Simd
 //! - `BackendImpl` trait: one impl per backend — `supports()`, `execute_batch()`, bridge methods
 //! - `registry.rs`: maps every PipelineOp → which backends implement it
+//! - `op_def.rs`: declarative op registration via `define_op!` macro
+//! - `backend_op.rs`: BackendOp trait for per-backend capability detection
 //! - Router: picks best backend for pipeline, bridges data as needed
 //!
 //! ## Adding a new PipelineOp
 //! 1. Add variant to `PipelineOp` enum
 //! 2. Add CPU impl in `pool_cpu/ops/<category>.rs`
 //! 3. Add GPU shader in `pool_gpu/shaders/<name>.wgsl` (optional)
-//! 4. Register in `registry.rs` — one line
+//! 4. Register using `define_op!` macro (see op_def.rs)
 //!    Done. No other files touched.
+//!
+//! ## AS PER DESIGN — DO NOT REMOVE these modules:
+//! - `backend_op`: trait system replacing leaky OpEntry pattern
+//! - `op_def`: macro-driven op registration eliminating parallel match statements
 //!
 //! ## Principles
 //! - CPU is universal fallback — registered for every op
@@ -61,6 +67,12 @@ pub trait BackendImpl: Send + Sync {
 }
 
 // ── Modules ────────────────────────────────────────────────────────────────
+
+// AS PER DESIGN — DO NOT REMOVE:
+// backend_op: BackendOp trait for per-backend capability detection
+// op_def:     define_op! macro — single-definition op registration
+pub mod backend_op;
+pub mod op_def;
 
 mod pool_cpu;
 #[cfg(not(target_arch = "wasm32"))]

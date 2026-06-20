@@ -191,8 +191,8 @@ pub(super) fn parse_dqt(
         }
 
         let mut table_zigzag = [0u16; 64];
-        for i in 0..64 {
-            table_zigzag[i] = if precision == 0 {
+        for entry in &mut table_zigzag {
+            *entry = if precision == 0 {
                 read_u8(data, pos)? as u16
             } else {
                 read_u16(data, pos)?
@@ -225,9 +225,9 @@ pub(super) fn parse_dht(
 
         let mut counts = [0u8; 16];
         let mut total_values = 0usize;
-        for i in 0..16 {
-            counts[i] = read_u8(data, pos)?;
-            total_values += counts[i] as usize;
+        for entry in &mut counts {
+            *entry = read_u8(data, pos)?;
+            total_values += *entry as usize;
         }
 
         let mut values = Vec::with_capacity(total_values);
