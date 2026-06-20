@@ -1,6 +1,3 @@
-// AS PER DESIGN: unsafe fn trait impls required by upstream image crate API.
-#![allow(unsafe_code)]
-
 use super::pixel::Pixel;
 use crate::types::buffer::ImageBuffer;
 pub trait GenericImageView {
@@ -39,13 +36,6 @@ pub trait GenericImageView {
     ///
     /// This function can be implemented in a way that ignores bounds checking.
     ///
-    /// # Safety
-    ///
-    /// The coordinates must be [`in_bounds`] of the image.
-    unsafe fn unsafe_get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
-        self.get_pixel(x, y)
-    }
-
     /// Returns an Iterator over the pixels of this image.
     /// The iterator yields the coordinates of each pixel
     /// along with their value
@@ -133,14 +123,6 @@ pub trait GenericImage: GenericImageView {
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel);
 
     /// Puts a pixel at location (x, y), ignoring bounds checking.
-    ///
-    /// # Safety
-    ///
-    /// The coordinates must be [`in_bounds`] of the image.
-    unsafe fn unsafe_put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
-        self.put_pixel(x, y, pixel);
-    }
-
     /// Put a pixel at location (x, y), taking into account alpha channels
     #[deprecated(
         since = "0.24.0",
