@@ -1,0 +1,74 @@
+# ============================================================================
+# AS PER DESIGN — DO NOT REMOVE:
+#   cargo-deny configuration for supply chain security.
+#   Run in CI via: cargo deny check
+#   Install: cargo install cargo-deny
+#
+#   Enforces:
+#     - No known CVEs (deny)
+#     - No yanked crate versions (deny)
+#     - No unmaintained crates (warn)
+#     - No multiple versions of the same crate (deny, with exceptions)
+#     - License compliance (allowlist)
+#     - No unknown registries or git sources
+#
+#   See SYSTEMIC_FIXES.md Fix 14.
+# ============================================================================
+
+[advisories]
+# AS PER DESIGN: Known vulnerabilities are HARD ERRORS.
+vulnerability = "deny"
+# Unmaintained crates get manual review.
+unmaintained = "warn"
+# Yanked crates indicate a known defect.
+yanked = "deny"
+# CVEs with no fix available yet (add RUSTSEC IDs here to temporarily allow).
+ignore = []
+
+[bans]
+# AS PER DESIGN: Duplicate crate versions are denied (to prevent the
+# png 0.17+0.18 situation from recurring).
+multiple-versions = "deny"
+
+# Exceptions: crates that exist in two versions during migration.
+# Add explicit entries with a trail issue/PR link.
+skip = [
+    # { crate = "png", version = "=0.17.16" },           # TODO: unskip when migration complete
+]
+
+# AS PER DESIGN: Ban specific crates if they're superseded or dangerous.
+deny = [
+    # Example: { crate = "serde_yaml" },                 # deprecated, use serde_yml
+]
+
+[licenses]
+# AS PER DESIGN: Licenses compatible with MIT-CMU.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "Unicode-3.0",
+    "ISC",
+    "Zlib",
+    "OpenSSL",
+    "MPL-2.0",
+    "CC0-1.0",
+    "BSL-1.0",
+]
+# Copyleft licenses that are incompatible with MIT-CMU.
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-3.0",
+    "LGPL-2.0",
+    "LGPL-3.0",
+]
+copyleft = "deny"
+allow-osi-fsf-free = "neither"
+
+[sources]
+# AS PER DESIGN: Only crates.io is allowed. No git deps, no private registries.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = []
