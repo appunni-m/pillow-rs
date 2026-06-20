@@ -175,8 +175,9 @@ impl Image {
             "1" => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::from_pixel(
                 width,
                 height,
-                // PIL: any non-zero value in mode "1" is white (255)
-                pillow_rs_image::Luma([if color.0 > 0 { 255 } else { 0 }]),
+                // PIL: stores the exact pixel value (0 or 1 or 255).
+                // PIL's new("1") stores the raw color value as-is.
+                pillow_rs_image::Luma([color.0]),
             )),
             // P-mode: PIL creates a palette where index 0 maps to the given color,
             // with all other entries zero (not the web palette).
@@ -1302,8 +1303,6 @@ impl Image {
     ///   h = self.im.histogram()
     ///   out = [(h[i], i) for i in range(256) if h[i]]
     fn getcolors_histogram(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
-        let mode = self.mode()?;
-        let is_mode1 = mode == "1";
         let img = self.materialize()?;
         // Compute 256-bin histogram
         let mut hist = [0u32; 256];
@@ -1311,8 +1310,7 @@ impl Image {
             pillow_rs_image::ColorType::L8 | pillow_rs_image::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for p in luma.pixels() {
-                    let val = if is_mode1 { (p[0] > 0) as u8 } else { p[0] };
-                    hist[val as usize] += 1;
+                    hist[p[0] as usize] += 1;
                 }
             }
             _ => {
@@ -1401,6 +1399,8 @@ impl Image {
 
     /// Convert to X11 bitmap format (returns raw bitmap data).
     pub fn tobitmap(&self) -> Result<Vec<u8>, PilError> {
+        let mode = self.mode()?;
+        let is_mode1 = mode == "1";
         let img = self.materialize()?;
         let gray = img.to_luma8();
         let (w, h) = (gray.width(), gray.height());
@@ -1409,7 +1409,10 @@ impl Image {
         for y in 0..h {
             for x in 0..w {
                 let v = gray.get_pixel(x, y)[0];
-                if v >= 128 {
+                // Mode "1": any non-zero value is white (PIL stores mode "1" pixels
+                // as bit values where any non-zero = 1). Mode "L": threshold at 128.
+                let is_white = if is_mode1 { v != 0 } else { v >= 128 };
+                if is_white {
                     // PIL XBM: 1 = white, 0 = black; LSB = leftmost pixel
                     let byte_idx = (x / 8) as usize;
                     let bit_idx = x % 8;

@@ -10,6 +10,8 @@ You are a PIL parity fixer specializing in pillow-rs. Your role is to pick a fai
 
 **IMPORTANT: REQUIRED SKILL.** Use the `~fix-pil-parity` skill. Read `.claude/skills/fix-pil-parity/SKILL.md` before starting.
 
+use systematic-debugging skill to debug each and every issue, do not make changes to tests, python and js layer remains thin, we need to fix mode aware implementation, for each mode separate code
+
 ## When to invoke
 
 - **Fixing the next test.** The user says "continue", "next", "fix more", or "keep going". Pick the next `[ ]` entry from xfailed_tracker.txt and work through the full cycle.

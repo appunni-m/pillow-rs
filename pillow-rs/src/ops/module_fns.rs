@@ -70,14 +70,15 @@ pub fn composite(
     mask: &Image,
     mode: Option<&str>,
 ) -> Result<Image, PilError> {
-    let (w1, h1) = image1.size()?;
-    let (w2, h2) = image2.size()?;
-    let (wm, hm) = mask.size()?;
-    if (w1, h1) != (w2, h2) || (w1, h1) != (wm, hm) {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
     // PIL.composite = image2.copy() followed by image2.paste(image1, None, mask)
     // The output matches image2's size; smaller images are pasted at (0,0).
+    // PIL requires image1 and mask to have the same size (via paste).
+    // image2 can be a different size (it's the background canvas).
+    let (w1, h1) = image1.size()?;
+    let (wm, hm) = mask.size()?;
+    if (w1, h1) != (wm, hm) {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
     let mut result = Image::push_op(
         image1,
         PipelineOp::CompositeModule {
