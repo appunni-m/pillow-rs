@@ -76,6 +76,8 @@ pub fn composite(
     if (w1, h1) != (w2, h2) || (w1, h1) != (wm, hm) {
         return Err(PilError::ValueError("images do not match".into()));
     }
+    // PIL.composite = image2.copy() followed by image2.paste(image1, None, mask)
+    // The output matches image2's size; smaller images are pasted at (0,0).
     let mut result = Image::push_op(
         image1,
         PipelineOp::CompositeModule {

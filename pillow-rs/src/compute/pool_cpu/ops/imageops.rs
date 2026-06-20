@@ -3,40 +3,70 @@
 //! invert, flip, mirror, posterize, solarize, grayscale, colorize,
 //! contain, cover, fit, pad, scale, expand, and crop border.
 
-use pillow_rs_image::{DynamicImage, GenericImage};
+use pillow_rs_image::{DynamicImage, GenericImage, GenericImageView};
 
 use crate::color::pil_grayscale;
+
+/// Python 3's round() (banker's rounding): rounds half to even.
+/// This matches PIL's behavior: round(12.5) -> 12, round(13.5) -> 14.
+fn bankers_round(x: f64) -> f64 {
+    let floor = x.floor();
+    let frac = x - floor;
+    if frac == 0.5 {
+        if floor % 2.0 == 0.0 { floor } else { floor + 1.0 }
+    } else {
+        (x + 0.5).floor()
+    }
+}
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::pil_resize;
+use crate::ops::pil_resize::pil_resize_boxed;
 use crate::pipeline::ResampleFilter;
 
 /// Autocontrast: stretch image contrast based on histogram cutoff.
-/// PIL: compute histogram, sort pixel values, find lo/hi at cutoff percentiles,
-/// then linearly map [lo, hi] to [0, 255].
+/// PIL: per-channel histogram, find lo/hi at cutoff percentiles for each channel,
+/// then linearly map [lo, hi] to [0, 255] using truncation (int() cast).
 pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, PilError> {
-    let gray = img.to_luma8();
-    let total = gray.len() as f64;
-    let low_thresh = (total * cutoff / 100.0) as usize;
-    let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
-    let mut sorted: Vec<u8> = gray.iter().copied().collect();
-    sorted.sort_unstable();
-    let lo = *sorted.get(low_thresh).unwrap_or(&0);
-    let hi = *sorted
-        .get(high_thresh.min(sorted.len() - 1))
-        .unwrap_or(&255);
-    if hi <= lo {
-        return Ok(img.clone());
-    }
-    let mut rgb = img.to_rgb8();
-    let scale = 255.0 / (hi - lo) as f64;
-    let lo_f = lo as f64;
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] = ((p[c] as f64 - lo_f) * scale).clamp(0.0, 255.0) as u8;
+    let channels = img.color().channel_count() as usize;
+    let (w, h) = (img.width(), img.height());
+    let total = (w * h) as f64;
+    let raw = img.as_bytes();
+    let mut out = raw.to_vec();
+    let stride = w as usize * channels;
+    for c in 0..channels {
+        // Build sorted list of pixel values for this channel
+        let mut sorted: Vec<u8> = Vec::with_capacity((w * h) as usize);
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                sorted.push(raw[y * stride + x * channels + c]);
+            }
+        }
+        sorted.sort_unstable();
+        let low_thresh = (total * cutoff / 100.0) as usize;
+        let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
+        let lo = *sorted.get(low_thresh).unwrap_or(&0) as f64;
+        let hi = *sorted
+            .get(high_thresh.min(sorted.len() - 1))
+            .unwrap_or(&255) as f64;
+        if hi <= lo {
+            continue; // No stretch for this channel
+        }
+        let scale = 255.0 / (hi - lo);
+        let offset = -lo * scale;
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                let idx = y * stride + x * channels + c;
+                // PIL: int(ix * scale + offset) with clamping to [0,255]
+                // Uses PIL's exact formula to match floating-point edge cases.
+                // (ix - lo) * scale can produce different fp results than ix*scale + offset
+                let val = out[idx] as f64 * scale + offset;
+                out[idx] = if val < 0.0 { 0 } else if val > 255.0 { 255 } else { val as u8 };
+            }
         }
     }
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+    let result = super::filter::raw_bytes_to_image(w, h, out, channels)?;
+    Ok(preserve_mode(img, result))
 }
 
 /// Equalize: histogram equalization matching PIL's algorithm.
@@ -178,6 +208,7 @@ pub fn op_colorize(
 }
 
 /// Contain: resize to fit within (w, h) preserving aspect ratio.
+/// PIL: adjusts one dimension using round(), does not truncate.
 pub fn op_contain(
     img: &DynamicImage,
     w: u32,
@@ -186,14 +217,25 @@ pub fn op_contain(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
-    let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
-    let nw = (iw as f64 * ratio) as u32;
-    let nh = (ih as f64 * ratio) as u32;
+    let im_ratio = iw as f64 / ih as f64;
+    let dest_ratio = w as f64 / h as f64;
+    let (nw, nh) = if (im_ratio - dest_ratio).abs() < 1e-10 {
+        (w, h)
+    } else if im_ratio > dest_ratio {
+        // Image is wider: adjust height
+        let new_h = bankers_round(ih as f64 / iw as f64 * w as f64) as u32;
+        (w, new_h)
+    } else {
+        // Image is taller: adjust width
+        let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
+        (new_w, h)
+    };
     let result = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
     Ok(preserve_mode(img, result))
 }
 
-/// Cover: resize to cover (w, h) preserving aspect ratio, crop excess.
+/// Cover: resize to cover (w, h) preserving aspect ratio.
+/// PIL: adjusts one dimension using round(), does NOT crop.
 pub fn op_cover(
     img: &DynamicImage,
     w: u32,
@@ -202,16 +244,26 @@ pub fn op_cover(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
-    let ratio = (w as f64 / iw as f64).max(h as f64 / ih as f64);
-    let nw = (iw as f64 * ratio) as u32;
-    let nh = (ih as f64 * ratio) as u32;
-    let resized = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
-    let x = (nw.saturating_sub(w)) / 2;
-    let y = (nh.saturating_sub(h)) / 2;
-    Ok(preserve_mode(img, resized.crop_imm(x, y, w, h)))
+    let im_ratio = iw as f64 / ih as f64;
+    let dest_ratio = w as f64 / h as f64;
+    let (nw, nh) = if (im_ratio - dest_ratio).abs() < 1e-10 {
+        (w, h)
+    } else if im_ratio < dest_ratio {
+        // Image is taller: adjust height to cover
+        let new_h = bankers_round(ih as f64 / iw as f64 * w as f64) as u32;
+        (w, new_h)
+    } else {
+        // Image is wider: adjust width to cover
+        let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
+        (new_w, h)
+    };
+    let result = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
+    Ok(preserve_mode(img, result))
 }
 
 /// Fit: resize to fit within (w, h) with bleed and centering, then crop.
+/// PIL: applies bleed to source, computes crop box, resize with box parameter.
+/// Uses PIL's exact box-based resize to match pixel-perfect output.
 pub fn op_fit(
     img: &DynamicImage,
     w: u32,
@@ -222,27 +274,44 @@ pub fn op_fit(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
-    // PIL's fit algorithm: apply bleed, compute ratio, resize, crop with centering
-    let eff_w = w as f64 / (1.0 + 2.0 * bleed);
-    let eff_h = h as f64 / (1.0 + 2.0 * bleed);
-    let ratio = (eff_w / iw as f64).min(eff_h / ih as f64);
-    let nw = (iw as f64 * ratio) as u32;
-    let nh = (ih as f64 * ratio) as u32;
-    let resized = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
-    let crop_x = ((nw as f64 - w as f64) * centering.0) as u32;
-    let crop_y = ((nh as f64 - h as f64) * centering.1) as u32;
-    Ok(preserve_mode(
+    // Bleed pixels (PIL: bleed * image.size)
+    let bleed_w = bleed * iw as f64;
+    let bleed_h = bleed * ih as f64;
+    // Live size
+    let live_w = (iw as f64 - 2.0 * bleed_w).max(1.0);
+    let live_h = (ih as f64 - 2.0 * bleed_h).max(1.0);
+    let live_ratio = live_w / live_h;
+    let output_ratio = w as f64 / h as f64;
+    // Compute crop dimensions (PIL: floats, no rounding)
+    let (crop_w, crop_h) = if (live_ratio - output_ratio).abs() < 1e-10 {
+        (live_w, live_h)
+    } else if live_ratio >= output_ratio {
+        // Live is wider: crop sides
+        (output_ratio * live_h, live_h)
+    } else {
+        // Live is taller: crop top/bottom
+        (live_w, live_w / output_ratio)
+    };
+    // Compute crop position with centering (PIL: floats, no rounding)
+    let crop_left = bleed_w + (live_w - crop_w) * centering.0;
+    let crop_top = bleed_h + (live_h - crop_h) * centering.1;
+    // Use PIL's box-based resize (maps source box to target size)
+    let result = pil_resize_boxed(
         img,
-        resized.crop_imm(
-            crop_x.min(nw.saturating_sub(1)),
-            crop_y.min(nh.saturating_sub(1)),
-            w.min(nw),
-            h.min(nh),
-        ),
-    ))
+        w.max(1),
+        h.max(1),
+        crop_left,
+        crop_top,
+        crop_left + crop_w,
+        crop_top + crop_h,
+        filter,
+        explicit_mode,
+    );
+    Ok(preserve_mode(img, result))
 }
 
 /// Pad: resize to fit within (w, h), then pad with fill color.
+/// PIL: contain then paste with centering, using round() for paste offset.
 pub fn op_pad(
     img: &DynamicImage,
     w: u32,
@@ -252,34 +321,87 @@ pub fn op_pad(
     centering: (f64, f64),
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let fill = color.unwrap_or((0, 0, 0, 255));
+    // PIL: Image.new(image.mode, size, color) defaults to mode-appropriate fill
+    // RGBA/LA modes: transparent fill (alpha=0). L/RGB: opaque black.
+    let has_alpha = matches!(
+        img.color(),
+        pillow_rs_image::ColorType::Rgba8
+            | pillow_rs_image::ColorType::La8
+    );
+    let default_fill = if has_alpha {
+        (0, 0, 0, 0)
+    } else {
+        (0, 0, 0, 255)
+    };
+    let fill = color.unwrap_or(default_fill);
     let (iw, ih) = (img.width(), img.height());
-    // Step 1: contain (resize to fit within target, preserving aspect ratio)
-    let ratio = (w as f64 / iw as f64).min(h as f64 / ih as f64);
-    let nw = (iw as f64 * ratio) as u32;
-    let nh = (ih as f64 * ratio) as u32;
+    // Step 1: contain (resize to fit within target)
+    let im_ratio = iw as f64 / ih as f64;
+    let dest_ratio = w as f64 / h as f64;
+    let (nw, nh) = if (im_ratio - dest_ratio).abs() < 1e-10 {
+        (w, h)
+    } else if im_ratio > dest_ratio {
+        let new_h = bankers_round(ih as f64 / iw as f64 * w as f64) as u32;
+        (w, new_h)
+    } else {
+        let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
+        (new_w, h)
+    };
     let resized = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
+    if nw == w && nh == h {
+        return Ok(preserve_mode(img, resized));
+    }
     // Step 2: pad to target size
     let mut padded = DynamicImage::new_rgba8(w, h);
     for py in 0..h {
         for px in 0..w {
-            padded.put_pixel(
-                px,
-                py,
-                pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]),
-            );
+            padded.put_pixel(px, py, pillow_rs_image::Rgba([fill.0, fill.1, fill.2, fill.3]));
         }
     }
-    let ox = ((w as f64 - nw as f64) * centering.0) as i64;
-    let oy = ((h as f64 - nh as f64) * centering.1) as i64;
+    // PIL: x = round((size[0] - resized.width) * max(0, min(centering[0], 1)))
+    let cx = centering.0.clamp(0.0, 1.0);
+    let cy = centering.1.clamp(0.0, 1.0);
     let src_rgba = resized.to_rgba8();
-    let (sw, sh) = (src_rgba.width(), src_rgba.height());
-    for py in 0..sh.min(padded.height()) {
-        for px in 0..sw.min(padded.width()) {
-            let dx = (ox + px as i64) as u32;
-            let dy = (oy + py as i64) as u32;
-            if dx < padded.width() && dy < padded.height() {
-                padded.put_pixel(dx, dy, *src_rgba.get_pixel(px, py));
+    // For RGBA images, PIL's paste alpha-composites the source over the destination.
+    // We match this by blending source alpha with destination background.
+    if nw != w {
+        let ox = bankers_round((w as f64 - nw as f64) * cx) as u32;
+        for py in 0..nh.min(h) {
+            for px in 0..nw.min(w) {
+                let dx = ox + px;
+                if dx < w {
+                    let sp = *src_rgba.get_pixel(px, py);
+                    let dp = padded.get_pixel(dx, py);
+                    let sa = sp[3] as u32;
+                    let da = dp[3] as u32;
+                    let oa = sa + (da * (255u32 - sa)) / 255;
+                    if oa > 0 {
+                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        padded.put_pixel(dx, py, pillow_rs_image::Rgba([or, og, ob, oa as u8]));
+                    }
+                }
+            }
+        }
+    } else {
+        let oy = bankers_round((h as f64 - nh as f64) * cy) as u32;
+        for py in 0..nh.min(h) {
+            for px in 0..nw.min(w) {
+                let dy = oy + py;
+                if dy < h {
+                    let sp = *src_rgba.get_pixel(px, py);
+                    let dp = padded.get_pixel(px, dy);
+                    let sa = sp[3] as u32;
+                    let da = dp[3] as u32;
+                    let oa = sa + (da * (255u32 - sa)) / 255;
+                    if oa > 0 {
+                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255) / oa) as u8;
+                        padded.put_pixel(px, dy, pillow_rs_image::Rgba([or, og, ob, oa as u8]));
+                    }
+                }
             }
         }
     }
