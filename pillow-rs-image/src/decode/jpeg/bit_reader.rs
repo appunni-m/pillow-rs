@@ -12,7 +12,7 @@ pub(super) struct BitReader<'a> {
     data: &'a [u8],
     pos: usize,
     end: usize,
-    buf: u64, // get_buffer — bits accumulate at MSB
+    buf: u64,  // get_buffer — bits accumulate at MSB
     bits: u32, // bits_left — number of valid bits in buf
 }
 
@@ -33,7 +33,9 @@ impl<'a> BitReader<'a> {
     }
 
     #[allow(dead_code)]
-    pub(super) fn bits_left(&self) -> u32 { self.bits }
+    pub(super) fn bits_left(&self) -> u32 {
+        self.bits
+    }
 
     // ── jpeg_fill_bit_buffer (simplified: no suspension, no data source callbacks) ──
 

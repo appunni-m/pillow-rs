@@ -11,12 +11,12 @@
 // this means 4 blocks per MCU (2×2), processed in raster order within the MCU:
 // (0,0), (0,1), (1,0), (1,1).
 
-use crate::types::{ColorType, DecodedImage};
 use super::bit_reader::BitReader;
 use super::decode::extract_entropy_segments;
-use super::idct::{extend, jpeg_idct_islow, JPEG_NATURAL_ORDER, YccColorConverter};
+use super::idct::{extend, jpeg_idct_islow, YccColorConverter, JPEG_NATURAL_ORDER};
 use super::parser::JpegInfo;
 use super::upsample::{crop_component, fancy_upsample};
+use crate::types::{ColorType, DecodedImage};
 
 struct ProgressiveState {
     eobrun: u32,
@@ -32,7 +32,9 @@ impl ProgressiveState {
     }
     fn reset(&mut self) {
         self.eobrun = 0;
-        for p in &mut self.dc_predictors { *p = 0; }
+        for p in &mut self.dc_predictors {
+            *p = 0;
+        }
     }
 }
 
@@ -62,7 +64,9 @@ fn dc_refine_block(coeff: &mut i32, p1: i32) {
 fn ac_first_block(
     br: &mut BitReader,
     ac_table: &super::huffman::HuffTable,
-    ss: u8, se: u8, al: u8,
+    ss: u8,
+    se: u8,
+    al: u8,
     coeffs: &mut [i32; 64],
     eobrun: &mut u32,
 ) -> Option<usize> {
@@ -85,13 +89,17 @@ fn ac_first_block(
             }
             // EOB: EOBRUN = (1<<run) + extra_bits
             *eobrun = 1u32 << run;
-            if run > 0 { *eobrun += br.read_bits(run as u32)?; }
+            if run > 0 {
+                *eobrun += br.read_bits(run as u32)?;
+            }
             *eobrun -= 1; // this block consumes one from the run
             break;
         }
         // Coefficient at position k + run
         k += run;
-        if k > se || k >= 64 { break; }
+        if k > se || k >= 64 {
+            break;
+        }
         let bits = br.read_bits(size as u32)?;
         coeffs[k] = extend(bits, size) << al;
         ncoeffs += 1;
@@ -100,14 +108,14 @@ fn ac_first_block(
     Some(ncoeffs)
 }
 
-
-
 /// Process one AC-refinement block (decode_mcu_AC_refine).
 /// Updates eobrun.
 fn ac_refine_block(
     br: &mut BitReader,
     ac_table: &super::huffman::HuffTable,
-    ss: u8, se: u8, al: u8,
+    ss: u8,
+    se: u8,
+    al: u8,
     coeffs: &mut [i32; 64],
     eobrun: &mut u32,
 ) -> Option<()> {
@@ -131,15 +139,19 @@ fn ac_refine_block(
             } else {
                 if r != 15 {
                     *eobrun = (1u32 << r) as u32;
-                    if r > 0 { *eobrun += br.read_bits(r as u32)?; }
-                    break;  // → Phase 2
+                    if r > 0 {
+                        *eobrun += br.read_bits(r as u32)?;
+                    }
+                    break; // → Phase 2
                 }
                 None // ZRL
             };
 
             // do-while: traverse, refine non-zeros, count zeros
             loop {
-                if k > se || k >= 64 { break; }
+                if k > se || k >= 64 {
+                    break;
+                }
                 if coeffs[k] != 0 {
                     let bit = br.read_bits(1)?;
                     if bit != 0 && (coeffs[k] & p1) == 0 {
@@ -147,13 +159,17 @@ fn ac_refine_block(
                     }
                 } else {
                     r -= 1;
-                    if r < 0 { break; }
+                    if r < 0 {
+                        break;
+                    }
                 }
                 k += 1;
             }
 
             if let Some(val) = new_val {
-                if k <= se && k < 64 { coeffs[k] = val; }
+                if k <= se && k < 64 {
+                    coeffs[k] = val;
+                }
             }
             k += 1;
         }
@@ -190,18 +206,36 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
     let num_mcus_y = ((info.height as u32) + mcu_height - 1) / mcu_height;
 
     // Component buffer dimensions
-    let comp_buf_width: Vec<usize> = info.components.iter()
-        .map(|c| num_mcus_x as usize * c.h_samp as usize * 8).collect();
-    let comp_buf_height: Vec<usize> = info.components.iter()
-        .map(|c| num_mcus_y as usize * c.v_samp as usize * 8).collect();
-    let comp_num_blocks: Vec<usize> = info.components.iter().enumerate()
-        .map(|(i, _)| (comp_buf_width[i] / 8) * (comp_buf_height[i] / 8)).collect();
+    let comp_buf_width: Vec<usize> = info
+        .components
+        .iter()
+        .map(|c| num_mcus_x as usize * c.h_samp as usize * 8)
+        .collect();
+    let comp_buf_height: Vec<usize> = info
+        .components
+        .iter()
+        .map(|c| num_mcus_y as usize * c.v_samp as usize * 8)
+        .collect();
+    let comp_num_blocks: Vec<usize> = info
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, _)| (comp_buf_width[i] / 8) * (comp_buf_height[i] / 8))
+        .collect();
 
     // Coefficient storage: [component][block_idx][64] in zigzag order
-    let mut coeff_storage: Vec<Vec<[i32; 64]>> = info.components.iter().enumerate()
-        .map(|(i, _)| vec![[0i32; 64]; comp_num_blocks[i]]).collect();
-    let mut comp_buffers: Vec<Vec<u8>> = info.components.iter().enumerate()
-        .map(|(i, _)| vec![128u8; comp_buf_width[i] * comp_buf_height[i]]).collect();
+    let mut coeff_storage: Vec<Vec<[i32; 64]>> = info
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, _)| vec![[0i32; 64]; comp_num_blocks[i]])
+        .collect();
+    let mut comp_buffers: Vec<Vec<u8>> = info
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, _)| vec![128u8; comp_buf_width[i] * comp_buf_height[i]])
+        .collect();
 
     // ── Process scans ────────────────────────────────────────────────────
     // Per IJG jcmaster.c per_scan_setup: a scan with a single component is
@@ -212,7 +246,9 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
     // these scrambles block order for subsampled components (e.g. 4:2:0 chroma).
     for scan in info.scans.iter() {
         let segs = extract_entropy_segments(data, scan.entropy_start, scan.entropy_end);
-        if segs.segments.is_empty() { continue; }
+        if segs.segments.is_empty() {
+            continue;
+        }
 
         let is_dc_scan = scan.ss == 0 && scan.se == 0;
         let is_dc_first = is_dc_scan && scan.ah == 0;
@@ -251,7 +287,9 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
 
             for mcu_idx in 0..mcus_per_seg {
                 let absolute_mcu = mcu_offset + mcu_idx;
-                if absolute_mcu >= scan_total_mcus { break; }
+                if absolute_mcu >= scan_total_mcus {
+                    break;
+                }
                 let mcu_y = absolute_mcu / scan_mcus_x;
                 let mcu_x = absolute_mcu % scan_mcus_x;
 
@@ -265,12 +303,14 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                     //   top-left block (mcu_x*h_samp, mcu_y*v_samp).
                     // Non-interleaved: a single block at (mcu_x, mcu_y).
                     let block_list: Vec<usize> = if interleaved {
-                        let mut v = Vec::with_capacity(
-                            (comp.h_samp as usize) * (comp.v_samp as usize));
+                        let mut v =
+                            Vec::with_capacity((comp.h_samp as usize) * (comp.v_samp as usize));
                         for by in 0..comp.v_samp as usize {
                             for bx in 0..comp.h_samp as usize {
-                                v.push((mcu_y * comp.v_samp as usize + by) * blocks_per_row
-                                    + (mcu_x * comp.h_samp as usize + bx));
+                                v.push(
+                                    (mcu_y * comp.v_samp as usize + by) * blocks_per_row
+                                        + (mcu_x * comp.h_samp as usize + bx),
+                                );
                             }
                         }
                         v
@@ -281,9 +321,12 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                     if is_dc_first {
                         let dc_table = scan.dc_huff_tables[scan_comp.dc_tbl as usize].as_ref()?;
                         for &block_idx in &block_list {
-                            coeff_storage[comp_idx][block_idx][0] =
-                                dc_first_block(&mut br, dc_table,
-                                    &mut state.dc_predictors[comp_idx], scan.al)?;
+                            coeff_storage[comp_idx][block_idx][0] = dc_first_block(
+                                &mut br,
+                                dc_table,
+                                &mut state.dc_predictors[comp_idx],
+                                scan.al,
+                            )?;
                         }
                     } else if is_dc_refine {
                         let p1 = 1i32 << scan.al;
@@ -291,25 +334,34 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                             // DC refine: read 1 bit, OR into coefficient
                             let bit = br.read_bits(1)?;
                             if bit != 0 {
-                                dc_refine_block(
-                                    &mut coeff_storage[comp_idx][block_idx][0], p1);
+                                dc_refine_block(&mut coeff_storage[comp_idx][block_idx][0], p1);
                             }
                         }
                     } else if is_ac_first {
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize].as_ref()?;
                         for &block_idx in &block_list {
-                            ac_first_block(&mut br, ac_table,
-                                scan.ss, scan.se, scan.al,
+                            ac_first_block(
+                                &mut br,
+                                ac_table,
+                                scan.ss,
+                                scan.se,
+                                scan.al,
                                 &mut coeff_storage[comp_idx][block_idx],
-                                &mut state.eobrun)?;
+                                &mut state.eobrun,
+                            )?;
                         }
                     } else if is_ac_refine {
                         let ac_table = scan.ac_huff_tables[scan_comp.ac_tbl as usize].as_ref()?;
                         for &block_idx in &block_list {
-                            ac_refine_block(&mut br, ac_table,
-                                scan.ss, scan.se, scan.al,
+                            ac_refine_block(
+                                &mut br,
+                                ac_table,
+                                scan.ss,
+                                scan.se,
+                                scan.al,
                                 &mut coeff_storage[comp_idx][block_idx],
-                                &mut state.eobrun)?;
+                                &mut state.eobrun,
+                            )?;
                         }
                     }
                 }
@@ -354,8 +406,17 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         let y_buf = &comp_buffers[0];
         let y_w = comp_buf_width[0];
         let mut pixels = Vec::with_capacity(w * h);
-        for y in 0..h { for x in 0..w { pixels.push(y_buf[y * y_w + x]); } }
-        Some(DecodedImage::new(info.width as u32, info.height as u32, pixels, ColorType::L8))
+        for y in 0..h {
+            for x in 0..w {
+                pixels.push(y_buf[y * y_w + x]);
+            }
+        }
+        Some(DecodedImage::new(
+            info.width as u32,
+            info.height as u32,
+            pixels,
+            ColorType::L8,
+        ))
     } else if info.num_components == 3 {
         let y_buf = &comp_buffers[0];
         let y_w = comp_buf_width[0];
@@ -363,10 +424,38 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
         let v_ratio = (info.max_v_samp / info.components[1].v_samp) as usize;
         let chroma_src_w = (w + h_ratio - 1) / h_ratio;
         let chroma_src_h = (h + v_ratio - 1) / v_ratio;
-        let cb_cropped = crop_component(&comp_buffers[1], comp_buf_width[1], comp_buf_height[1], chroma_src_w, chroma_src_h);
-        let cr_cropped = crop_component(&comp_buffers[2], comp_buf_width[2], comp_buf_height[2], chroma_src_w, chroma_src_h);
-        let cb_up = fancy_upsample(&cb_cropped, chroma_src_w, chroma_src_h, h_ratio, v_ratio, w, h);
-        let cr_up = fancy_upsample(&cr_cropped, chroma_src_w, chroma_src_h, h_ratio, v_ratio, w, h);
+        let cb_cropped = crop_component(
+            &comp_buffers[1],
+            comp_buf_width[1],
+            comp_buf_height[1],
+            chroma_src_w,
+            chroma_src_h,
+        );
+        let cr_cropped = crop_component(
+            &comp_buffers[2],
+            comp_buf_width[2],
+            comp_buf_height[2],
+            chroma_src_w,
+            chroma_src_h,
+        );
+        let cb_up = fancy_upsample(
+            &cb_cropped,
+            chroma_src_w,
+            chroma_src_h,
+            h_ratio,
+            v_ratio,
+            w,
+            h,
+        );
+        let cr_up = fancy_upsample(
+            &cr_cropped,
+            chroma_src_w,
+            chroma_src_h,
+            h_ratio,
+            v_ratio,
+            w,
+            h,
+        );
         let chroma_stride = chroma_src_w * h_ratio;
         let mut pixels = Vec::with_capacity(w * h * 3);
         for y in 0..h {
@@ -376,10 +465,17 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
                     cb_up[y * chroma_stride + x],
                     cr_up[y * chroma_stride + x],
                 );
-                pixels.push(r); pixels.push(g); pixels.push(b);
+                pixels.push(r);
+                pixels.push(g);
+                pixels.push(b);
             }
         }
-        Some(DecodedImage::new(info.width as u32, info.height as u32, pixels, ColorType::Rgb8))
+        Some(DecodedImage::new(
+            info.width as u32,
+            info.height as u32,
+            pixels,
+            ColorType::Rgb8,
+        ))
     } else {
         None
     }

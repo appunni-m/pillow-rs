@@ -57,18 +57,6 @@ macro_rules! gpu_entry {
     };
 }
 
-/// Create an OpEntry with CPU function + SIMD accelerated function.
-macro_rules! simd_entry {
-    ($cpu:expr, $simd:expr) => {
-        $crate::compute::registry::OpEntry {
-            cpu_fn: Some($cpu as $crate::compute::registry::CpuOpFn),
-            gpu_shader: None,
-            gpu_source: None,
-            simd_fn: Some($simd as $crate::compute::registry::SimdOpFn),
-        }
-    };
-}
-
 pub(crate) use gpu_entry;
 
 static REGISTRY: OnceLock<HashMap<&'static str, OpEntry>> = OnceLock::new();
@@ -1193,7 +1181,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             mode: Option<&str>|
+             _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Invert) {
                     op_invert(img)

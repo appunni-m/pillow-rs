@@ -10,21 +10,21 @@
       "id": "ImageFont_ImageFont_L",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x774af6164350>"
+        "value": "<PIL.ImageFont.ImageFont object at 0x7ec301f64da0>"
       }
     },
     {
       "id": "ImageFont_ImageFont_RGB",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x774af6166b10>"
+        "value": "<PIL.ImageFont.ImageFont object at 0x7ec301f676b0>"
       }
     },
     {
       "id": "ImageFont_ImageFont_RGBA",
       "assert": {
         "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x774af6165be0>"
+        "value": "<PIL.ImageFont.ImageFont object at 0x7ec301f64920>"
       }
     }
   ]

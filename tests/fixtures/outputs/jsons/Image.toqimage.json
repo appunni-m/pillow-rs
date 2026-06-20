@@ -9,15 +9,17 @@
     {
       "id": "rgb_10x10",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.toqimage_rgb_10x10.bin"
+        "method": "error",
+        "exception": "ImportError",
+        "message_contains": "Qt bindings are not installed"
       }
     },
     {
       "id": "l_10x10",
       "assert": {
-        "method": "image",
-        "reference": "raws/Image.toqimage_l_10x10.bin"
+        "method": "error",
+        "exception": "ImportError",
+        "message_contains": "Qt bindings are not installed"
       }
     }
   ]

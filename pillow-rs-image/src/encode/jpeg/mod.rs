@@ -70,7 +70,8 @@ pub(crate) fn encode(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>
     };
 
     // Sampling factors (h, v) per component; max is the reference grid.
-    let (y_hs, y_vs, cb_hs, cb_vs, cr_hs, cr_vs, max_h, max_v) = match (num_components, subsampling) {
+    let (y_hs, y_vs, cb_hs, cb_vs, cr_hs, cr_vs, max_h, max_v) = match (num_components, subsampling)
+    {
         (1, _) => (1u8, 1u8, 0u8, 0u8, 0u8, 0u8, 1u8, 1u8),
         (_, "444") => (1, 1, 1, 1, 1, 1, 1, 1),
         (_, "422") => (2, 1, 1, 1, 1, 1, 2, 1),
@@ -88,12 +89,28 @@ pub(crate) fn encode(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>
 
     // Downsample chroma (jcsample.c h2v2 / h2v1 / identity).
     let cb_ds = if num_components >= 3 {
-        downsample(&cb_plane, w, h, cb_w, cb_h, max_h as usize / cb_hs as usize, max_v as usize / cb_vs as usize)
+        downsample(
+            &cb_plane,
+            w,
+            h,
+            cb_w,
+            cb_h,
+            max_h as usize / cb_hs as usize,
+            max_v as usize / cb_vs as usize,
+        )
     } else {
         Vec::new()
     };
     let cr_ds = if num_components >= 3 {
-        downsample(&cr_plane, w, h, cr_w, cr_h, max_h as usize / cr_hs as usize, max_v as usize / cr_vs as usize)
+        downsample(
+            &cr_plane,
+            w,
+            h,
+            cr_w,
+            cr_h,
+            max_h as usize / cr_hs as usize,
+            max_v as usize / cr_vs as usize,
+        )
     } else {
         Vec::new()
     };
@@ -167,15 +184,40 @@ pub(crate) fn encode(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>
     // DHT tables. Baseline: all 4 standard tables up front. Progressive: DHT
     // is emitted per-scan with only the tables that scan uses.
     if !progressive {
-        marker::write_dht(&mut out, 0, 0, &huffman::STD_DC_LUMA.0, &huffman::STD_DC_LUMA.1);
-        marker::write_dht(&mut out, 1, 0, &huffman::STD_AC_LUMA.0, &huffman::STD_AC_LUMA.1);
+        marker::write_dht(
+            &mut out,
+            0,
+            0,
+            &huffman::STD_DC_LUMA.0,
+            &huffman::STD_DC_LUMA.1,
+        );
+        marker::write_dht(
+            &mut out,
+            1,
+            0,
+            &huffman::STD_AC_LUMA.0,
+            &huffman::STD_AC_LUMA.1,
+        );
         if num_components >= 3 {
-            marker::write_dht(&mut out, 0, 1, &huffman::STD_DC_CHROMA.0, &huffman::STD_DC_CHROMA.1);
-            marker::write_dht(&mut out, 1, 1, &huffman::STD_AC_CHROMA.0, &huffman::STD_AC_CHROMA.1);
+            marker::write_dht(
+                &mut out,
+                0,
+                1,
+                &huffman::STD_DC_CHROMA.0,
+                &huffman::STD_DC_CHROMA.1,
+            );
+            marker::write_dht(
+                &mut out,
+                1,
+                1,
+                &huffman::STD_AC_CHROMA.0,
+                &huffman::STD_AC_CHROMA.1,
+            );
         }
 
         // Single SOS for baseline (interleaved).
-        let sos_comps: Vec<(u8, u8, u8)> = comps.iter().map(|c| (c.id, c.dc_tbl, c.ac_tbl)).collect();
+        let sos_comps: Vec<(u8, u8, u8)> =
+            comps.iter().map(|c| (c.id, c.dc_tbl, c.ac_tbl)).collect();
         marker::write_sos(&mut out, &sos_comps, 0, 63, 0, 0);
 
         encode_baseline_entropy(&mut out, &comps, max_h, max_v, &dc_tables, &ac_tables);
@@ -226,7 +268,15 @@ fn rgb_to_ycbcr(pixels: &[u8], w: usize, h: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>
 // (smooth_downsample).  For byte-exactness we'd replicate that; here we use
 // simple box averaging which is close and roundtrip-safe.
 
-fn downsample(plane: &[u8], sw: usize, sh: usize, dw: usize, dh: usize, hr: usize, vr: usize) -> Vec<u8> {
+fn downsample(
+    plane: &[u8],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+    hr: usize,
+    vr: usize,
+) -> Vec<u8> {
     let mut out = vec![0u8; dw * dh];
     if hr == 1 && vr == 1 {
         for i in 0..(dw * dh).min(plane.len()) {
@@ -257,7 +307,12 @@ fn downsample(plane: &[u8], sw: usize, sh: usize, dw: usize, dh: usize, hr: usiz
 /// Forward DCT all blocks of a component plane, then quantize with ISLOW
 /// divisors (quantval<<3) and round-to-nearest. Returns (blocks, blocks_per_row,
 /// block_rows) in natural order.
-fn fdct_quantize(plane: &[u8], w: usize, h: usize, qtable: &[u16; 64]) -> (Vec<[i16; 64]>, usize, usize) {
+fn fdct_quantize(
+    plane: &[u8],
+    w: usize,
+    h: usize,
+    qtable: &[u16; 64],
+) -> (Vec<[i16; 64]>, usize, usize) {
     let blocks_per_row = (w + 7) / 8;
     let block_rows = (h + 7) / 8;
     let mut blocks = vec![[0i16; 64]; blocks_per_row * block_rows];
@@ -426,9 +481,30 @@ struct ProgScan {
 fn default_progression_script(ncomp: u8) -> Vec<ProgScan> {
     let mut s = Vec::new();
     // ci index: 0=Y, 1=Cb, 2=Cr
-    let dc = |comps: Vec<usize>| ProgScan { comps, ss: 0, se: 0, ah: 0, al: 1, is_dc: true };
-    let dc_refine = |comps: Vec<usize>, ah, al| ProgScan { comps, ss: 0, se: 0, ah, al, is_dc: true };
-    let ac = |comps: Vec<usize>, ss, se, ah, al| ProgScan { comps, ss, se, ah, al, is_dc: false };
+    let dc = |comps: Vec<usize>| ProgScan {
+        comps,
+        ss: 0,
+        se: 0,
+        ah: 0,
+        al: 1,
+        is_dc: true,
+    };
+    let dc_refine = |comps: Vec<usize>, ah, al| ProgScan {
+        comps,
+        ss: 0,
+        se: 0,
+        ah,
+        al,
+        is_dc: true,
+    };
+    let ac = |comps: Vec<usize>, ss, se, ah, al| ProgScan {
+        comps,
+        ss,
+        se,
+        ah,
+        al,
+        is_dc: false,
+    };
 
     if ncomp == 3 {
         // Initial DC scan (interleaved), Al=1
@@ -512,7 +588,11 @@ fn emit_scan_dht(out: &mut Vec<u8>, scan: &ProgScan, comps: &[CompData]) {
         for &ci in &scan.comps {
             let t = comps[ci].dc_tbl as usize;
             if !dc_seen[t] {
-                let (bits, vals) = if t == 0 { huffman::STD_DC_LUMA } else { huffman::STD_DC_CHROMA };
+                let (bits, vals) = if t == 0 {
+                    huffman::STD_DC_LUMA
+                } else {
+                    huffman::STD_DC_CHROMA
+                };
                 marker::write_dht(out, 0, t as u8, &bits, &vals);
                 dc_seen[t] = true;
             }
@@ -521,7 +601,11 @@ fn emit_scan_dht(out: &mut Vec<u8>, scan: &ProgScan, comps: &[CompData]) {
         for &ci in &scan.comps {
             let t = comps[ci].ac_tbl as usize;
             if !ac_seen[t] {
-                let (bits, vals) = if t == 0 { huffman::STD_AC_LUMA } else { huffman::STD_AC_CHROMA };
+                let (bits, vals) = if t == 0 {
+                    huffman::STD_AC_LUMA
+                } else {
+                    huffman::STD_AC_CHROMA
+                };
                 marker::write_dht(out, 1, t as u8, &bits, &vals);
                 ac_seen[t] = true;
             }
@@ -563,7 +647,13 @@ fn encode_dc_scan(
                                 continue;
                             }
                             let blk = &c.blocks[brow * bpr + bcol];
-                            encode_dc_coeff(bw, blk, scan, &mut last_dc[s], dc_tables[c.dc_tbl as usize]);
+                            encode_dc_coeff(
+                                bw,
+                                blk,
+                                scan,
+                                &mut last_dc[s],
+                                dc_tables[c.dc_tbl as usize],
+                            );
                         }
                     }
                 }
@@ -751,15 +841,23 @@ fn encode_ac_refine(
     let sl = se - ss + 1;
 
     // Prepare absvalues = |coef| >> Al and find EOB (last newly-significant).
-    let absvalues: Vec<u32> = (0..sl).map(|k| {
-        let raw = block[ZIGZAG[ss + k]] as i32;
-        let temp2 = raw >> 31;
-        let mut temp = raw ^ temp2;
-        temp = temp.wrapping_sub(temp2);
-        (temp >> al) as u32
-    }).collect();
+    let absvalues: Vec<u32> = (0..sl)
+        .map(|k| {
+            let raw = block[ZIGZAG[ss + k]] as i32;
+            let temp2 = raw >> 31;
+            let mut temp = raw ^ temp2;
+            temp = temp.wrapping_sub(temp2);
+            (temp >> al) as u32
+        })
+        .collect();
 
-    let eob = absvalues.iter().enumerate().rev().find(|(_, &v)| v == 1).map(|(i, _)| i).unwrap_or(usize::MAX);
+    let eob = absvalues
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, &v)| v == 1)
+        .map(|(i, _)| i)
+        .unwrap_or(usize::MAX);
 
     // Flush any pending cross-block EOBRUN+BE from previous blocks.
     if *eobrun > 0 {
@@ -772,13 +870,19 @@ fn encode_ac_refine(
     }
 
     // Collect nonzero positions: (idx, absvalue).
-    let nonzero: Vec<(usize, u32)> = absvalues.iter().enumerate()
-        .filter(|(_, &v)| v > 0).map(|(i, &v)| (i, v)).collect();
+    let nonzero: Vec<(usize, u32)> = absvalues
+        .iter()
+        .enumerate()
+        .filter(|(_, &v)| v > 0)
+        .map(|(i, &v)| (i, v))
+        .collect();
     let has_new = nonzero.iter().any(|&(_, v)| v == 1);
 
     if !has_new {
         // No newly-significant: just emit correction bits + EOB0.
-        for &(_, v) in &nonzero { bw.write_bits(v & 1, 1); }
+        for &(_, v) in &nonzero {
+            bw.write_bits(v & 1, 1);
+        }
         bw.write_bits(tbl.codes[0], tbl.lengths[0]);
         return;
     }
@@ -788,12 +892,15 @@ fn encode_ac_refine(
     // buffer 1 correction bit.  For newly-significant: emit run/size=1 + sign
     // bit, flush accumulated correction bits, reset r.
 
-    let mut r: i32 = 0;        // zero-run counter
+    let mut r: i32 = 0; // zero-run counter
     let mut corr_bits: Vec<u8> = Vec::new();
 
     for k in 0..sl {
         let v = absvalues[k];
-        if v == 0 { r += 1; continue; }
+        if v == 0 {
+            r += 1;
+            continue;
+        }
         if v > 1 {
             // Already-nonzero: buffer correction bit.  These are consumed by
             // the decoder during inner-loop traversal.
@@ -806,7 +913,9 @@ fn encode_ac_refine(
             bw.write_bits(tbl.codes[0xF0], tbl.lengths[0xF0]);
             r -= 16;
             // Flush correction bits accumulated for this ZRL segment.
-            for &b in &corr_bits { bw.write_bits(b as u32, 1); }
+            for &b in &corr_bits {
+                bw.write_bits(b as u32, 1);
+            }
             corr_bits.clear();
         }
         // Emit run/size symbol (size=1) + sign bit.
@@ -815,7 +924,9 @@ fn encode_ac_refine(
         let raw = block[ZIGZAG[ss + k]] as i32;
         bw.write_bits(if raw >= 0 { 1 } else { 0 }, 1);
         // Flush accumulated correction bits.
-        for &b in &corr_bits { bw.write_bits(b as u32, 1); }
+        for &b in &corr_bits {
+            bw.write_bits(b as u32, 1);
+        }
         corr_bits.clear();
         r = 0;
     }
@@ -824,7 +935,9 @@ fn encode_ac_refine(
     // Need Phase 2 to consume them.  Emit EOB1 so eobrun=1 after -=1.
     if !corr_bits.is_empty() {
         bw.write_bits(tbl.codes[0x10], tbl.lengths[0x10]); // EOB1 (symbol 0x10)
-        for &b in &corr_bits { bw.write_bits(b as u32, 1); }
+        for &b in &corr_bits {
+            bw.write_bits(b as u32, 1);
+        }
     } else {
         bw.write_bits(tbl.codes[0], tbl.lengths[0]); // EOB0
     }
