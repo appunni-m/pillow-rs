@@ -11,6 +11,9 @@ pub enum PilError {
     #[error("{0}")]
     AssertionError(String),
 
+    #[error("{0}")]
+    IndexError(String),
+
     #[error("cannot identify image file '{0}'")]
     UnidentifiedImageError(String),
 

@@ -28,6 +28,11 @@ pub fn equalize(image: &Image) -> Result<Image, PilError> {
 /// Invert all pixel values (negative).
 pub fn invert(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
+    if mode == "P" {
+        return Err(PilError::NotImplementedError(
+            "mode P support coming soon".into(),
+        ));
+    }
     if mode == "LA" || mode == "RGBA" {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }

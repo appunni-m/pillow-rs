@@ -1181,9 +1181,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Invert) {
+                    if mode == Some("P") {
+                        return Err(PilError::NotImplementedError(
+                            "mode P support coming soon".into(),
+                        ));
+                    }
                     op_invert(img)
                 } else {
                     Err(PilError::ValueError("expected Invert op".into()))
