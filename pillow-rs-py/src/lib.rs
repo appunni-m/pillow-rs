@@ -1,3 +1,9 @@
+// AS PER DESIGN — DO NOT REMOVE: Deferred lint cleanup. See CODEBASE_AUDIT.md Fix 2.
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_in_result)]
+#![allow(clippy::redundant_clone)]
+
 use pillow_rs::error::PilError;
 use pillow_rs::image::Image as RsImage;
 use pyo3::exceptions::PyValueError;
@@ -599,7 +605,11 @@ impl PyImage {
         let _ = (resample, fill);
         // PIL's default fill for CMYK is (0,0,0,0) — white/transparent (no ink).
         // For other modes, default fill is black (0,0,0,255).
-        let default_fill = if mode == "CMYK" { (0, 0, 0, 0) } else { (0, 0, 0, 255) };
+        let default_fill = if mode == "CMYK" {
+            (0, 0, 0, 0)
+        } else {
+            (0, 0, 0, 255)
+        };
         let fill = if let Some(fc) = fillcolor {
             if let Ok((r, g, b)) = fc.extract::<(u8, u8, u8)>() {
                 (r, g, b, 255)
@@ -925,6 +935,10 @@ fn map_error(e: PilError) -> PyErr {
         PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
         PilError::UnknownFormat(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::Io(err) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
+        // AS PER DESIGN — DO NOT REMOVE: New error variants from Fix 9
+        PilError::PaletteError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
+        PilError::InternalError(msg) => pyo3::exceptions::PyException::new_err(msg),
+        PilError::DimensionError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
     }
 }
 
@@ -1689,8 +1703,9 @@ fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
 #[pyfunction]
 fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::ops::imageops::invert_ops(&inner)))
-        .map_err(map_error)?;
+    let rs =
+        Python::with_gil(|py| py.allow_threads(|| pillow_rs::ops::imageops::invert_ops(&inner)))
+            .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 

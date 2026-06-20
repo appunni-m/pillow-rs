@@ -1,1 +1,10 @@
-// Format handling stubs — implemented in Phase 2
+// ============================================================================
+// AS PER DESIGN — DO NOT REMOVE:
+//   FormatHandler trait (handler.rs) is the foundation for all image format
+//   support. Every format is a trait impl + registration. No more scattered
+//   match statements across image.rs / format.rs.
+//
+//   See handler.rs for the FormatHandler trait and FormatRegistry.
+// ============================================================================
+
+pub mod handler;

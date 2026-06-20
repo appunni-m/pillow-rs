@@ -1,8 +1,6 @@
-// build.rs scripts: CARGO_* env vars are always set by Cargo — unwrap is safe and idiomatic here.
-#![expect(
-    clippy::unwrap_used,
-    reason = "CARGO_MANIFEST_DIR is always set by Cargo"
-)]
+// build.rs scripts: CARGO_* env vars are always set by Cargo — unwrap is correct here.
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 
 fn main() {
     // Only link to libwebp on non-WASM targets

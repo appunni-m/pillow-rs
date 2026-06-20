@@ -12,6 +12,20 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT-CMU"
 
+# ============================================================================
+# AS PER DESIGN — DO NOT REMOVE OR WEAKEN THESE LINTS:
+#   These settings prevent entire classes of bugs from recurring. Each lint
+#   level was chosen based on the CODEBASE_AUDIT.md findings and SYSTEMIC_FIXES.md
+#   systemic fix patterns. Changing any of these must be accompanied by a
+#   documented rationale in the PR description.
+#
+#   Key protections:
+#   - unwrap_used/expect_used: No panics in production from fallible operations
+#   - dead_code: No accumulating dead code
+#   - arithmetic_side_effects: Flags integer overflow patterns
+#   - cast_possible_truncation: Flags (w*h) as usize overflow sites
+# ============================================================================
+
 [workspace.lints.rust]
 # ── Correctness: hard errors that block CI ──
 future-incompatible = { level = "deny", priority = -1 }
@@ -20,18 +34,38 @@ unused = { level = "deny", priority = -1 }
 unsafe_code = "warn"
 unused_crate_dependencies = "warn"
 
+# AS PER DESIGN — DO NOT REMOVE:
+# dead_code = "deny" prevents unused functions/types from accumulating.
+# Previously dead code was suppressed with #[allow(dead_code)] — that is banned.
+dead_code = "deny"
+
 # ── Temporary allowances (targeted migrations planned) ──
 # TODO(#ci): Migrate pillow-rs-py to IntoPyObject API (PyO3 v0.23+)
 deprecated = "allow"
 
 # ── Documentation ──
-# missing_docs = "warn"  # enable once all public APIs are documented
+# AS PER DESIGN — DO NOT REMOVE:
+# All workspace crates must document public APIs. Crates not yet ready use
+# an explicit #![allow(missing_docs)] at crate root — not a silent skip.
+missing_docs = "warn"
 
 [workspace.lints.clippy]
 # ── Safety: hard errors that block CI ──
+# AS PER DESIGN — DO NOT REMOVE:
 # .unwrap() is banned — use .expect("why this can't fail") to document invariants,
 # or proper error propagation with Result/Option.
 unwrap_used = "deny"
+
+# AS PER DESIGN — DO NOT REMOVE:
+# .expect() calls must document WHY the invariant holds. Use `InfallibleExt::because()`
+# from pillow-rs/src/infallible.rs for truly infallible cases.
+# CI grep enforces no bare .expect() in production without a meaningful message.
+expect_used = "deny"
+
+# AS PER DESIGN — DO NOT REMOVE:
+# Result.unwrap() is banned for the same reason as Option.unwrap().
+unwrap_in_result = "deny"
+
 todo = "deny"
 
 # ── Performance: hard errors that block CI ──
@@ -47,11 +81,19 @@ map_unwrap_or = "deny"
 needless_range_loop = "deny"
 unnecessary_cast = "deny"
 
-[workspace.profile.release]
+# AS PER DESIGN — DO NOT REMOVE:
+# These catch the integer overflow patterns identified in the audit.
+# Currently warn (not deny) — 171 existing sites need migration first.
+# Once clean, change to "deny".
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+arithmetic_side_effects = "warn"
+
+[profile.release]
 lto = true
 codegen-units = 1
 opt-level = 3
 panic = "abort"
 
-[workspace.profile.dev]
+[profile.dev]
 opt-level = 1

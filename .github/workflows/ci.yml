@@ -1,3 +1,10 @@
+# ============================================================================
+# AS PER DESIGN — DO NOT REMOVE CHECKS.
+#   Rust:     rustfmt → clippy (workspace lints) → tests → cargo-deny → cargo-audit
+#   Python:   AST binding check → parity tests → coverage report
+#   WASM:     build sanity
+# ============================================================================
+
 name: CI
 
 on:
@@ -6,21 +13,55 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
-  core-tests:
+  # ── Rust: format + clippy + tests + supply chain ──
+  rust:
+    name: Rust (${{ matrix.task }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        task: [fmt-clippy, test, supply-chain]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets --all-features -- -A deprecated
-      - run: cargo test -p pillow-rs
 
-  python-tests:
-    needs: core-tests
+      - name: rustfmt + clippy
+        if: matrix.task == 'fmt-clippy'
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets --all-features -- -A deprecated
+
+      - name: tests
+        if: matrix.task == 'test'
+        run: cargo test -p pillow-rs
+
+      - name: supply chain audit
+        if: matrix.task == 'supply-chain'
+        run: |
+          cargo install cargo-deny cargo-audit --locked
+          cargo deny check advisories
+          cargo deny check bans
+          cargo deny check licenses
+          cargo deny check sources
+          cargo audit
+
+  # ── Python: binding audit + parity tests ──
+  python:
+    name: Python ${{ matrix.python-version }}
+    needs: rust
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         python-version: ["3.8", "3.10", "3.12"]
@@ -30,18 +71,32 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install maturin pillow pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark numpy
-      - run: maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
-      - run: python -m pytest tests/ -q --tb=short --timeout=300 --json-report --json-report-file=/tmp/report.json
-      - run: python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
+
+      - name: install deps
+        run: pip install maturin pillow pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark numpy
+
+      - name: check Python binding rules
+        run: python scripts/check_bindings.py
+
+      - name: build + test
+        run: |
+          maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
+          python -m pytest tests/ -q --tb=short --timeout=300 --json-report --json-report-file=/tmp/report.json
+
+      - name: coverage
+        run: python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
+
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-py${{ matrix.python-version }}
+          name: coverage-py${{ matrix.python-version }}
           path: /tmp/report.json
 
-  wasm-build:
-    needs: core-tests
+  # ── WASM: build sanity ──
+  wasm:
+    name: WASM build
+    needs: rust
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -52,20 +107,3 @@ jobs:
           tool: wasm-pack
       - working-directory: pillow-rs-js
         run: wasm-pack build --target web --dev
-
-  benchmark:
-    needs: python-tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install maturin pillow pyyaml
-      - run: maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
-      - run: bash scripts/bench/bench_all.sh full
-      - uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks
-          path: BENCHMARKS.md
