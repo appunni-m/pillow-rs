@@ -1039,7 +1039,7 @@ modules:
       - cpu
     - name: toqimage
       signature: toqimage(*args, **kwargs)
-      status: implemented
+      status: ignored
       param_variants:
       - {}
       edge_cases: []
@@ -1047,7 +1047,7 @@ modules:
       - cpu
     - name: toqpixmap
       signature: toqpixmap(*args, **kwargs)
-      status: implemented
+      status: ignored
       param_variants:
       - {}
       edge_cases: []
