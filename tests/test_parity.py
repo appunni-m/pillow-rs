@@ -93,6 +93,8 @@ def test_parity(fixtures_base, fixture_file, case_id):
 
     # Override OUTPUTS_DIR so _load_reference reads from the correct directory
     _engine.OUTPUTS_DIR = base_dir / "outputs"
+    # Override ASSETS_DIR so _decode_asset/_encode_roundtrip resolve correctly
+    _engine.ASSETS_DIR = base_dir / "input" / "images"
 
     inp = json.loads((input_dir / fixture_file).read_text())
     out = json.loads((output_dir / fixture_file).read_text())
@@ -107,6 +109,13 @@ def test_parity(fixtures_base, fixture_file, case_id):
     img = create_input(rspil, mode, case.get("input"))
     img2 = create_input(rspil, mode, case.get("input2"))
     params = _pilify(dict(case.get("params", {})))
+
+    # Decode/Encode cases pass asset info via params (no input/mode fields)
+    if op["module"] == "Decode":
+        params["asset"] = case["asset"]
+    elif op["module"] == "Encode":
+        params["source_asset"] = case["source_asset"]
+        params["source_format"] = case.get("source_format", op["target"])
 
     try:
         result = CALL_STYLE[call_style](rspil, img, img2, op["target"], params)
