@@ -139,6 +139,12 @@ def generate_one(input_path):
         img = create_input(pil, mode, _pilify(case.get("input")))
         img2 = create_input(pil, mode, _pilify(case.get("input2")))
         params = _pilify(dict(case.get("params", {})))
+        # Decode/Encode: thread asset fields through params
+        if op["module"] == "Decode":
+            params["asset"] = case["asset"]
+        elif op["module"] == "Encode":
+            params["source_asset"] = case["source_asset"]
+            params["source_format"] = case.get("source_format", op["target"])
         # Seed srand() for deterministic effect_noise output.
         # PIL's effect_noise uses C rand() with global state; without a fixed
         # seed the output varies per process. Pillow-rs uses a deterministic
@@ -324,6 +330,7 @@ def main():
     extra_images = FIXTURES_DIR / "input" / "images"
     if extra_images.exists():
         engine.EXTRA_REFERENCE_DIRS = [str(extra_images)]
+        engine.ASSETS_DIR = extra_images  # For Decode/Encode asset resolution
 
     OUTPUT_JSONS_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)

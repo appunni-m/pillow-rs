@@ -93,6 +93,8 @@ def get_call_style(module, target):
     if module == "ImageColor":
         return "module_function_value"
     if module == "ImageStat":           return "stat"
+    if module == "Decode":              return "decode"
+    if module == "Encode":              return "encode"
     raise ValueError(f"Unknown module: {module}")
 
 
@@ -102,6 +104,11 @@ REFERENCE_IMAGE = Path(__file__).parent / "test_reference.png"
 # Additional directories to search for named reference images.
 # Populated at test time by test_parity.py for fixtures_2 support.
 EXTRA_REFERENCE_DIRS = []
+
+# Base directory for format asset images (e.g., webp/*.webp, png/*.png).
+# Overridden at test/generation time by test_parity.py and generate_fixtures.py
+# to point to the correct fixture directory (fixtures vs fixtures_2).
+ASSETS_DIR = Path(__file__).parent / "fixtures" / "input" / "images"
 
 def _find_reference_image(name):
     """Resolve a named reference image, checking extra dirs first."""
@@ -400,11 +407,51 @@ def _file_save(backend, img, target, params):
     return backend.Image.open(tmp)
 
 
+def _decode_asset(backend, img, img2, target, params):
+    """Decode an image asset file from ASSETS_DIR/target/asset_name.
+
+    Used for Decode module parity tests — reads the asset path from params,
+    resolves it relative to ASSETS_DIR, opens with the backend's Image.open,
+    and returns the decoded Image. img/img2 are unused (no input creation needed).
+    """
+    asset_name = params.pop("asset")
+    asset_path = ASSETS_DIR / target / asset_name
+    if not asset_path.exists():
+        raise FileNotFoundError(f"Decode asset not found: {asset_path}")
+    return _call_mod(backend, "open")(str(asset_path))
 
 
+def _encode_roundtrip(backend, img, img2, target, params):
+    """Encode a source image to the target format and decode back.
 
+    Used for Encode module parity tests. Reads source_asset and source_format
+    from params, opens the source image, re-encodes to the target format
+    with the given params, then re-opens the encoded output and returns
+    the decoded Image for comparison against the PIL-generated reference.
+    Uses a temp file for the encoded output to support backends that
+    do not accept BytesIO (e.g., pillow_rs).
+    """
+    source_asset = params.pop("source_asset")
+    source_format = params.pop("source_format", target)
+    source_path = ASSETS_DIR / source_format / source_asset
+    source_img = _call_mod(backend, "open")(str(source_path))
 
+    # Pop known save kwargs; silently drop unknown keys
+    save_kwargs = {}
+    for key in list(params.keys()):
+        if key in {"lossless", "quality", "method", "alpha", "hint", "alpha_q", "exif", "xmp", "icc"}:
+            save_kwargs[key] = params.pop(key)
 
+    # Handle resize-before-encode (used by enc_1x1)
+    if "size" in params:
+        size = tuple(params.pop("size"))
+        source_img = source_img.resize(size, backend.Image.LANCZOS)
+
+    fd, tmp = tempfile.mkstemp(suffix="." + target)
+    os.close(fd)
+    source_img.save(tmp, format=target.upper(), **save_kwargs)
+    # NOTE: temp file is NOT deleted — RSPIL may lazily load image data.
+    return _call_mod(backend, "open")(tmp)
 
 
 def _frombytes_instance(backend, img, target, params):
@@ -486,6 +533,8 @@ CALL_STYLE = {
     "stat": lambda b, img, img2, tgt, p: _stat_to_dict(getattr(b.ImageStat, tgt)(img)),
     "file_open": lambda b, img, img2, tgt, p: _file_open(b, img, tgt, p),
     "file_save": lambda b, img, img2, tgt, p: _file_save(b, img, tgt, p),
+    "decode": lambda b, img, img2, tgt, p: _decode_asset(b, img, img2, tgt, p),
+    "encode": lambda b, img, img2, tgt, p: _encode_roundtrip(b, img, img2, tgt, p),
 }
 
 
