@@ -32,8 +32,7 @@ future-incompatible = { level = "deny", priority = -1 }
 nonstandard_style = { level = "deny", priority = -1 }
 unused = { level = "deny", priority = -1 }
 # AS PER DESIGN — DO NOT REMOVE:
-# No unsafe blocks allowed. pillow-rs-image WebP FFI is the sole exception
-# and has per-file allows with explanation.
+# No unsafe blocks allowed anywhere in the workspace.
 unsafe_code = "deny"
 unused_crate_dependencies = "warn"
 

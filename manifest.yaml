@@ -26,6 +26,9 @@ modules:
       - nonexistent_file
       - invalid_bytes
       - empty_bytes
+      - webp_corrupt_vp8_bitstream
+      - webp_truncated_riff
+      - webp_invalid_riff_header
       status: implemented
       pillow_since: '1.0'
       supported_targets:
@@ -114,6 +117,9 @@ modules:
       - invalid_path
       - unsupported_format
       - read_only_directory
+      - webp_lossless_fallback
+      - webp_alpha_mismatch
+      - webp_metadata_preservation
       status: implemented
       pillow_since: '1.0'
       supported_targets:
