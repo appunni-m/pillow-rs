@@ -9,6 +9,7 @@ png = "0.18"
 gif = "0.14"
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate"] }
 bytemuck = { version = "1", features = ["derive"] }
+image-webp = "0.2"
 
 [features]
 avif = []
