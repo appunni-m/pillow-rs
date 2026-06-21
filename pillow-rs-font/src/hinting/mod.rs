@@ -51,6 +51,11 @@ impl HintingEngine {
     }
 
     fn reset_for_size(&mut self, data: &FontData, ppem: u16) {
+        use crate::scaler::ScaleMetrics;
+        let metrics = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
+        self.exec.ppem = ppem;
+        self.exec.point_size = (ppem as i32) << 6;
+        self.exec.scale = metrics.x_scale;
         self.exec.cvt = data.cvt.clone();
         self.exec.glyf_cvt = data.cvt.clone();
         self.exec.glyf_storage = vec![0i32; self.exec.storage.len().max(32)];
@@ -72,6 +77,8 @@ impl HintingEngine {
         glyph_index: u16,
         glyph: &mut crate::scaler::ScaledGlyph,
     ) {
+        let ppem = data.size_pt.ceil() as u16;
+        self.ensure_prep(data, ppem);
         self.exec.hint_glyph(data, glyph_index, glyph);
     }
 }
