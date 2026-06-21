@@ -14,11 +14,11 @@ gpu = ["wgpu", "pollster"]
 
 [dependencies]
 pillow-rs-image = { path = "../pillow-rs-image" }
+pillow-rs-font = { path = "../pillow-rs-font" }
 log = "0.4"
 png = "0.18"
 thiserror = "2"
 csscolorparser = "0.8"
-fontdue = "0.9"
 wgpu = { version = "24", optional = true }
 pollster = { version = "0.3", optional = true }
 bytemuck = { version = "1", features = ["derive"] }

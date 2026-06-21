@@ -1,4 +1,4 @@
-"""ImageFont — font loading and text rendering via fontdue (pure Rust FreeType equivalent)."""
+"""ImageFont — font loading and text rendering via pillow-rs-font (pure Rust FreeType compatible)."""
 from . import _core
 from .image import Image
 
@@ -51,11 +51,9 @@ class ImageFont:
 
 
 class FreeTypeFont:
-    """TrueType/OpenType font loaded via fontdue.
+    """TrueType/OpenType font loaded via pillow-rs-font.
 
-    When PIL is installed, delegates getmask/getmask2 to PIL's FreeTypeFont
-    for pixel-identical font rendering. This ensures all text-based tests
-    (including TransposedFont) produce identical output to PIL.
+    Pure Rust font rendering — no PIL dependency required.
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
@@ -71,17 +69,6 @@ class FreeTypeFont:
         self.index = index
         self.encoding = encoding
         self.layout_engine = layout_engine
-        # PIL FreeTypeFont fallback for pixel-identical rendering in tests.
-        # Uses PIL when available; falls back to Rust fontdue when PIL is absent.
-        self._pil_font = None
-        try:
-            from PIL import ImageFont as PILFreeType
-            if isinstance(font, str):
-                self._pil_font = PILFreeType.truetype(font, float(size))
-            elif hasattr(font, 'read'):
-                self._pil_font = PILFreeType.truetype(font, float(size))
-        except Exception:
-            pass
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
@@ -93,18 +80,8 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        """Return glyph mask as L-mode Image.
-
-        Delegates to PIL's FreeTypeFont when available for pixel-identical output.
-        Falls back to fontdue-based Rust rendering otherwise.
-        """
+        """Return glyph mask as L-mode Image using pillow-rs-font."""
         from .image import Image as PILImage
-        if self._pil_font is not None:
-            core_mask = self._pil_font.getmask(str(text), mode, direction=direction,
-                                                features=features, language=language,
-                                                stroke_width=stroke_width, anchor=anchor,
-                                                ink=ink, start=start)
-            return PILImage.frombytes("L", core_mask.size, bytes(core_mask))
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
         return PILImage.frombytes("L", (w, h), bytes(alpha))
 
@@ -112,21 +89,10 @@ class FreeTypeFont:
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
         """Create a bitmap for the text and return the text offset.
 
-        Delegates to PIL's FreeTypeFont when available for pixel-identical output.
-        Falls back to fontdue-based Rust rendering otherwise.
-
         :return: A tuple of the mask (L-mode Image) and the text offset
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
-        if self._pil_font is not None:
-            core_mask, offset = self._pil_font.getmask2(
-                str(text), mode, direction=direction, features=features,
-                language=language, stroke_width=stroke_width, anchor=anchor,
-                ink=ink, start=start, *args, **kwargs
-            )
-            mask = PILImage.frombytes("L", core_mask.size, bytes(core_mask))
-            return mask, offset
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
         mask = PILImage.frombytes("L", (w, h), bytes(alpha))
         if start is not None:
@@ -136,6 +102,7 @@ class FreeTypeFont:
         return mask, offset
 
     def getmetrics(self):
+        """Get font metrics: (ascent, descent) in pixels."""
         sz = self._rust_font.get_size()
         return (sz, sz)
 
