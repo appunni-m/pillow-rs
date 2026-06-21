@@ -1,0 +1,94 @@
+{
+  "format_version": 2,
+  "suite": 1,
+  "operation": {
+    "module": "Decode",
+    "target": "webp"
+  },
+  "cases": [
+    {
+      "id": "decode_lossy_vp8",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_lossy_vp8.png"
+      }
+    },
+    {
+      "id": "decode_lossless_vp8l",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_lossless_vp8l.png"
+      }
+    },
+    {
+      "id": "decode_extended",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_extended.png"
+      }
+    },
+    {
+      "id": "decode_no_alpha",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_no_alpha.png"
+      }
+    },
+    {
+      "id": "decode_with_alpha",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_with_alpha.png"
+      }
+    },
+    {
+      "id": "decode_alpha_lossless",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_alpha_lossless.png"
+      }
+    },
+    {
+      "id": "decode_animated",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_animated.png"
+      }
+    },
+    {
+      "id": "decode_size_small",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_size_small.png"
+      }
+    },
+    {
+      "id": "decode_size_odd",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_size_odd.png"
+      }
+    },
+    {
+      "id": "decode_icc_profile",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_icc_profile.png"
+      }
+    },
+    {
+      "id": "decode_xmp_metadata",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_xmp_metadata.png"
+      }
+    },
+    {
+      "id": "decode_exif_metadata",
+      "assert": {
+        "method": "image",
+        "reference": "images/Decode.webp_decode_exif_metadata.png"
+      }
+    }
+  ]
+}
