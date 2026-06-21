@@ -8,7 +8,7 @@ use crate::tables::FontData;
 use super::graphics::*;
 use super::round;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CodeRange {
     None,
     Font,
@@ -33,6 +33,7 @@ pub struct CallRecord {
     pub def: FnDef,
 }
 
+#[derive(Clone, Debug)]
 pub struct ExecContext {
     pub gs: GraphicsState,
     pub zp0: Zone,
@@ -66,7 +67,7 @@ pub struct ExecContext {
 }
 
 impl ExecContext {
-    pub fn new(data: &FontData) -> Self {
+    pub(crate) fn new(data: &FontData) -> Self {
         let ppem = data.size_pt.ceil() as u16;
         let point_size = (ppem as i32) << 6;
 
@@ -546,12 +547,8 @@ impl ExecContext {
                 self.push(if b != 0 || a != 0 { 1 } else { 0 });
                 Ok(1)
             }
-            // NOT
-            0x58 => {
-                let a = self.pop();
-                self.push(if a == 0 { 1 } else { 0 });
-                Ok(1)
-            }
+            // IF (TrueType spec: 0x58) — will be implemented in Task 3
+            // For now, fall through to default NOOP
             // ODD
             0x7B => {
                 let a = self.pop();
@@ -689,7 +686,7 @@ impl ExecContext {
         }
     }
 
-    pub fn hint_glyph(
+    pub(crate) fn hint_glyph(
         &mut self,
         data: &FontData,
         _glyph_index: u16,

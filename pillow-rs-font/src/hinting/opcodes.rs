@@ -73,7 +73,7 @@ pub const EQ: u8 = 0x54;
 pub const NEQ: u8 = 0x55;
 pub const AND: u8 = 0x56;
 pub const OR: u8 = 0x57;
-pub const NOT: u8 = 0x58;
+// NOT is not a TrueType opcode; 0x58 is IF
 pub const DELTAP1: u8 = 0x5D;
 pub const DELTAP2: u8 = 0x5E;
 pub const DELTAP3: u8 = 0x5F;

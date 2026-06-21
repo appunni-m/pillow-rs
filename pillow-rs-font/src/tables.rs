@@ -3,8 +3,10 @@
 //! `Font` holds `Arc<FontData>`, enabling cheap `font_variant()` construction
 //! without re-parsing. All table types are `Clone`.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
+use crate::hinting::HintingEngine;
 use crate::parser::cmap::CmapTable;
 use crate::parser::head::HeadTable;
 use crate::parser::hhea::HheaTable;
@@ -57,4 +59,6 @@ pub struct Font {
     pub(crate) data: Arc<FontData>,
     /// Requested point size.
     pub(crate) size_pt: f32,
+    /// Optional TrueType hinting engine (present when fpgm or prep tables exist).
+    pub hint_engine: Option<RefCell<HintingEngine>>,
 }

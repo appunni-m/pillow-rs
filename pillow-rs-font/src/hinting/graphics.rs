@@ -73,7 +73,7 @@ impl Default for GraphicsState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Zone {
     pub points: Vec<F26Dot6Vector>,
     pub org: Vec<F26Dot6Vector>,
