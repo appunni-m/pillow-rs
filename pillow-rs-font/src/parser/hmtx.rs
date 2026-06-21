@@ -30,9 +30,9 @@ impl HmtxTable {
             self.h_metrics[idx]
         } else {
             // Use last advance_width with per-glyph lsb
-            let last_advance = self.h_metrics.last()
-                .map_or(0, |m| m.advance_width);
-            let lsb = self.left_side_bearings
+            let last_advance = self.h_metrics.last().map_or(0, |m| m.advance_width);
+            let lsb = self
+                .left_side_bearings
                 .get(idx - self.h_metrics.len())
                 .copied()
                 .unwrap_or(0);
@@ -55,7 +55,7 @@ pub(crate) fn parse_hmtx(
 
     if hm_count > total_glyphs || hm_count == 0 {
         return Err(FontError::InvalidFont(
-            "hmtx: num_hmetrics out of range".into()
+            "hmtx: num_hmetrics out of range".into(),
         ));
     }
 
@@ -64,7 +64,8 @@ pub(crate) fn parse_hmtx(
     if data.len() < needed {
         return Err(FontError::InvalidFont(format!(
             "hmtx table too short: need {} bytes, have {}",
-            needed, data.len()
+            needed,
+            data.len()
         )));
     }
 

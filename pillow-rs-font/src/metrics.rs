@@ -2,7 +2,7 @@
 //!
 //! Matches PIL's ImageFont metrics exactly.
 
-use crate::scaler::{pixel_ceil, pixel_round, mul_fix, ScaleMetrics};
+use crate::scaler::{mul_fix, pixel_ceil, pixel_round, ScaleMetrics};
 use crate::tables::Font;
 
 /// Rendered glyph mask with metrics.
@@ -102,8 +102,8 @@ impl Font {
             };
 
             if scaled.num_contours > 0 {
-                let floor_x = scaled.xmin;  // PIX_FLOOR
-                let ceil_x = scaled.xmax;   // PIX_CEIL
+                let floor_x = scaled.xmin; // PIX_FLOOR
+                let ceil_x = scaled.xmax; // PIX_CEIL
                 let floor_y = scaled.ymin;
                 let ceil_y = scaled.ymax;
 
@@ -120,23 +120,27 @@ impl Font {
                 y_min = y_min.min(gy_min);
                 y_max = y_max.max(gy_max);
             } else {
-                    // Empty glyph (space, etc.) — use advance width for x,
-                    // baseline position for y
-                    let gx_min = x + lsb;
-                    let gx_max = gx_min + advance;
+                // Empty glyph (space, etc.) — use advance width for x,
+                // baseline position for y
+                let gx_min = x + lsb;
+                let gx_max = gx_min + advance;
 
-                    x_min = x_min.min(gx_min);
-                    x_max = x_max.max(gx_max);
-                    if y_min == i32::MAX {
-                        y_min = asc_px;
-                        y_max = asc_px;
-                    }
+                x_min = x_min.min(gx_min);
+                x_max = x_max.max(gx_max);
+                if y_min == i32::MAX {
+                    y_min = asc_px;
+                    y_max = asc_px;
+                }
             }
 
             x += advance;
         }
 
-        if x_min == i32::MAX { (0, 0, 0, 0) } else { (x_min, y_min, x_max, y_max) }
+        if x_min == i32::MAX {
+            (0, 0, 0, 0)
+        } else {
+            (x_min, y_min, x_max, y_max)
+        }
     }
 
     /// Render a glyph as alpha mask (PIL: getmask).
@@ -145,8 +149,12 @@ impl Font {
 
         if text.is_empty() {
             return Ok(GlyphMask {
-                width: 0, height: 0, pixels: vec![],
-                xmin: 0, ymin: 0, advance_width: 0.0,
+                width: 0,
+                height: 0,
+                pixels: vec![],
+                xmin: 0,
+                ymin: 0,
+                advance_width: 0.0,
             });
         }
 
@@ -195,5 +203,4 @@ impl Font {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

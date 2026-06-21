@@ -52,18 +52,24 @@ fn get_glyph_offset(
     let idx = glyph_index as usize;
     if index_to_loc_format == 0 {
         let off = idx * 2;
-        let this = u16::from_be_bytes([*loca_data.get(off)?, *loca_data.get(off + 1)?]) as usize * 2;
-        let next = u16::from_be_bytes([*loca_data.get(off + 2)?, *loca_data.get(off + 3)?]) as usize * 2;
+        let this =
+            u16::from_be_bytes([*loca_data.get(off)?, *loca_data.get(off + 1)?]) as usize * 2;
+        let next =
+            u16::from_be_bytes([*loca_data.get(off + 2)?, *loca_data.get(off + 3)?]) as usize * 2;
         Some((this, next - this))
     } else {
         let off = idx * 4;
         let this = u32::from_be_bytes([
-            *loca_data.get(off)?, *loca_data.get(off + 1)?,
-            *loca_data.get(off + 2)?, *loca_data.get(off + 3)?,
+            *loca_data.get(off)?,
+            *loca_data.get(off + 1)?,
+            *loca_data.get(off + 2)?,
+            *loca_data.get(off + 3)?,
         ]) as usize;
         let next = u32::from_be_bytes([
-            *loca_data.get(off + 4)?, *loca_data.get(off + 5)?,
-            *loca_data.get(off + 6)?, *loca_data.get(off + 7)?,
+            *loca_data.get(off + 4)?,
+            *loca_data.get(off + 5)?,
+            *loca_data.get(off + 6)?,
+            *loca_data.get(off + 7)?,
         ]) as usize;
         Some((this, next - this))
     }
@@ -84,12 +90,16 @@ pub(crate) fn parse_glyph(
             num_contours: 0,
             end_pts_of_contours: vec![],
             points: vec![],
-            xmin: 0, ymin: 0, xmax: 0, ymax: 0,
+            xmin: 0,
+            ymin: 0,
+            xmax: 0,
+            ymax: 0,
             instruction_length: 0,
         });
     }
 
-    let glyph_bytes = glyf_data.get(offset..offset + length)
+    let glyph_bytes = glyf_data
+        .get(offset..offset + length)
         .ok_or_else(|| FontError::InvalidOutline("glyf: data out of range".into()))?;
 
     if glyph_bytes.len() < 10 {
@@ -105,12 +115,18 @@ pub(crate) fn parse_glyph(
     if num_contours >= 0 {
         parse_simple_glyph(glyph_bytes, num_contours as u16, xmin, ymin, xmax, ymax)
     } else {
-        log::debug!("[glyf] composite glyph {}: not yet supported, returning empty", glyph_index);
+        log::debug!(
+            "[glyf] composite glyph {}: not yet supported, returning empty",
+            glyph_index
+        );
         Ok(GlyphOutline {
             num_contours: 0,
             end_pts_of_contours: vec![],
             points: vec![],
-            xmin, ymin, xmax, ymax,
+            xmin,
+            ymin,
+            xmax,
+            ymax,
             instruction_length: 0,
         })
     }
@@ -120,7 +136,10 @@ pub(crate) fn parse_glyph(
 fn parse_simple_glyph(
     data: &[u8],
     num_contours: u16,
-    xmin: i16, ymin: i16, xmax: i16, ymax: i16,
+    xmin: i16,
+    ymin: i16,
+    xmax: i16,
+    ymax: i16,
 ) -> Result<GlyphOutline, FontError> {
     let nc = num_contours as usize;
     let end_pts_off = 10usize;
@@ -169,10 +188,12 @@ fn parse_simple_glyph(
         if flag & X_SHORT_VECTOR != 0 {
             let dx = data[pos] as i16;
             pos += 1;
+            // TrueType spec: X_SHORT | X_IS_SAME → positive short (x += dx)
+            //              X_SHORT only          → negative short (x -= dx)
             if flag & X_IS_SAME == 0 {
-                x += dx;
-            } else {
                 x -= dx;
+            } else {
+                x += dx;
             }
         } else if flag & X_IS_SAME == 0 {
             let dx = i16::from_be_bytes([data[pos], data[pos + 1]]);
@@ -189,10 +210,12 @@ fn parse_simple_glyph(
         if flag & Y_SHORT_VECTOR != 0 {
             let dy = data[pos] as i16;
             pos += 1;
+            // TrueType spec: Y_SHORT | Y_IS_SAME → positive short (y += dy)
+            //              Y_SHORT only          → negative short (y -= dy)
             if flag & Y_IS_SAME == 0 {
-                y += dy;
-            } else {
                 y -= dy;
+            } else {
+                y += dy;
             }
         } else if flag & Y_IS_SAME == 0 {
             let dy = i16::from_be_bytes([data[pos], data[pos + 1]]);
@@ -215,7 +238,10 @@ fn parse_simple_glyph(
         num_contours,
         end_pts_of_contours: end_pts,
         points,
-        xmin, ymin, xmax, ymax,
+        xmin,
+        ymin,
+        xmax,
+        ymax,
         instruction_length,
     })
 }
@@ -307,23 +333,25 @@ mod tests {
     fn empty_glyph_returns_zero_contours() {
         let loca_data = vec![0u8; 4];
         let glyf_data = vec![0u8; 1];
-        let outline = parse_glyph(&glyf_data, &loca_data, 0, 0)
-            .expect("should parse empty glyph");
+        let outline = parse_glyph(&glyf_data, &loca_data, 0, 0).expect("should parse empty glyph");
         assert_eq!(outline.num_contours, 0);
     }
 
     #[test]
     fn simple_square_glyph_parses_four_points() {
-        let points = [(0i16, 0i16, true), (100i16, 0i16, true),
-                      (100i16, 100i16, true), (0i16, 100i16, true)];
+        let points = [
+            (0i16, 0i16, true),
+            (100i16, 0i16, true),
+            (100i16, 100i16, true),
+            (0i16, 100i16, true),
+        ];
         let glyph_bytes = build_minimal_glyph(1, &points);
         let len = glyph_bytes.len();
 
         let mut loca_data = vec![0u8; 10];
         loca_data[4..8].copy_from_slice(&(len as u32).to_be_bytes());
 
-        let outline = parse_glyph(&glyph_bytes, &loca_data, 1, 0)
-            .expect("should parse glyph");
+        let outline = parse_glyph(&glyph_bytes, &loca_data, 1, 0).expect("should parse glyph");
         assert_eq!(outline.num_contours, 1);
         assert_eq!(outline.points.len(), 4);
     }

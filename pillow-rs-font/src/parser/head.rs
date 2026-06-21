@@ -20,7 +20,7 @@ pub(crate) struct HeadTable {
 pub(crate) fn parse_head(data: &[u8]) -> Result<HeadTable, FontError> {
     if data.len() < 54 {
         return Err(FontError::InvalidFont(
-            "head table too short (need 54 bytes)".into()
+            "head table too short (need 54 bytes)".into(),
         ));
     }
     let units_per_em = u16::from_be_bytes([data[18], data[19]]);
@@ -28,9 +28,7 @@ pub(crate) fn parse_head(data: &[u8]) -> Result<HeadTable, FontError> {
     let flags = u16::from_be_bytes([data[16], data[17]]);
 
     if units_per_em == 0 {
-        return Err(FontError::InvalidFont(
-            "head: units_per_em is zero".into()
-        ));
+        return Err(FontError::InvalidFont("head: units_per_em is zero".into()));
     }
 
     Ok(HeadTable {

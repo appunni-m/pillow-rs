@@ -15,13 +15,14 @@ pub(crate) struct MaxpTable {
 pub(crate) fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
     if data.len() < 6 {
         return Err(FontError::InvalidFont(
-            "maxp table too short (need 6 bytes)".into()
+            "maxp table too short (need 6 bytes)".into(),
         ));
     }
     let version = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
     if version != 0x00010000 {
         return Err(FontError::InvalidFont(format!(
-            "maxp: unsupported version 0x{:08X}", version
+            "maxp: unsupported version 0x{:08X}",
+            version
         )));
     }
     let num_glyphs = u16::from_be_bytes([data[4], data[5]]);

@@ -5,12 +5,12 @@
 
 #![allow(missing_docs)]
 
-pub mod graphics;
 pub mod exec;
-pub mod round;
-pub mod opcodes;
-pub mod iup;
 pub(crate) mod fragments;
+pub mod graphics;
+pub mod iup;
+pub mod opcodes;
+pub mod round;
 
 use crate::tables::FontData;
 use exec::ExecContext;

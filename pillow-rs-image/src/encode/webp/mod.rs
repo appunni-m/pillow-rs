@@ -29,9 +29,7 @@ fn encode_lossless(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>>
 
     let mut out = Cursor::new(Vec::new());
     let encoder = image_webp::WebPEncoder::new(&mut out);
-    encoder
-        .encode(&img.pixels, width, height, color)
-        .ok()?;
+    encoder.encode(&img.pixels, width, height, color).ok()?;
 
     Some(out.into_inner())
 }

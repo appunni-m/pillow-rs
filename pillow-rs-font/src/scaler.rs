@@ -53,7 +53,11 @@ pub(crate) fn mul_fix(a: i32, b: i32) -> i32 {
     let ua = a.unsigned_abs() as u64;
     let ub = b.unsigned_abs() as u64;
     let c = ((ua * ub) + 0x8000) >> 16;
-    if neg { -(c as i32) } else { c as i32 }
+    if neg {
+        -(c as i32)
+    } else {
+        c as i32
+    }
 }
 
 /// FreeType FT_DivFix: compute (a << 16) / b with rounding bias.
@@ -73,13 +77,13 @@ pub(crate) fn div_fix(a: i32, b: i32) -> i32 {
 /// Round 26.6 to nearest integer pixel (standard rounding).
 #[inline]
 pub(crate) fn pixel_round(x: i32) -> i32 {
-    (x + 32) >> 6  // add 0.5 in 26.6, then truncate
+    (x + 32) >> 6 // add 0.5 in 26.6, then truncate
 }
 
 /// Ceil 26.6 to integer pixel (round up, matching FreeType's ascender/descender).
 #[inline]
 pub(crate) fn pixel_ceil(x: i32) -> i32 {
-    (x + 63) >> 6  // add (1.0 - epsilon) in 26.6, truncate = ceil
+    (x + 63) >> 6 // add (1.0 - epsilon) in 26.6, truncate = ceil
 }
 
 impl ScaleMetrics {
@@ -91,7 +95,11 @@ impl ScaleMetrics {
         let upe = units_per_em as i32;
         let x_scale = div_fix(ppem_26dot6, upe);
         let y_scale = div_fix(ppem_26dot6, upe);
-        ScaleMetrics { x_scale, y_scale, ppem }
+        ScaleMetrics {
+            x_scale,
+            y_scale,
+            ppem,
+        }
     }
 
     /// Scale a font-unit coordinate to 26.6.
@@ -108,10 +116,7 @@ impl ScaleMetrics {
 }
 
 /// Scale a glyph outline to 26.6 coordinates.
-pub(crate) fn scale_glyph(
-    data: &FontData,
-    glyph_index: u16,
-) -> Result<ScaledGlyph, FontError> {
+pub(crate) fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
     // Get metrics
@@ -135,7 +140,10 @@ pub(crate) fn scale_glyph(
             num_contours: 0,
             lsb,
             advance_width,
-            xmin: 0, ymin: 0, xmax: 0, ymax: 0,
+            xmin: 0,
+            ymin: 0,
+            xmax: 0,
+            ymax: 0,
         });
     }
 
@@ -161,10 +169,10 @@ pub(crate) fn scale_glyph(
         lsb,
         advance_width,
         // Use FreeType PIX_FLOOR for min, PIX_CEIL for max to match FT_BBox
-        xmin: xmin_26 >> 6,            // FT_PIX_FLOOR / 64
-        ymin: ymin_26 >> 6,            // FT_PIX_FLOOR / 64
-        xmax: (xmax_26 + 63) >> 6,     // FT_PIX_CEIL / 64
-        ymax: (ymax_26 + 63) >> 6,     // FT_PIX_CEIL / 64
+        xmin: xmin_26 >> 6,        // FT_PIX_FLOOR / 64
+        ymin: ymin_26 >> 6,        // FT_PIX_FLOOR / 64
+        xmax: (xmax_26 + 63) >> 6, // FT_PIX_CEIL / 64
+        ymax: (ymax_26 + 63) >> 6, // FT_PIX_CEIL / 64
     })
 }
 

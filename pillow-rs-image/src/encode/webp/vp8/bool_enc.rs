@@ -387,7 +387,10 @@ mod tests {
         assert_ne!(out0, out255, "0 and 255 should produce different output");
 
         let out42 = encode_val(42, 6);
-        assert!(!out42.is_empty(), "literal 42 in 6 bits must produce output");
+        assert!(
+            !out42.is_empty(),
+            "literal 42 in 6 bits must produce output"
+        );
     }
 
     #[test]
@@ -431,7 +434,10 @@ mod tests {
             enc.encode_bool(prob, val);
         }
         let output = enc.finish();
-        assert!(!output.is_empty(), "50 sequential encodes should produce output");
+        assert!(
+            !output.is_empty(),
+            "50 sequential encodes should produce output"
+        );
     }
 
     // ── 5. finish consistency ────────────────────────────────────────────────
@@ -530,7 +536,11 @@ mod tests {
         let enc = BoolEncoder::new();
         let output = enc.finish();
         // With initial count=-8, finish emits some padding bytes — that's fine
-        assert!(output.len() <= 8, "empty encoder should produce minimal output, got {}", output.len());
+        assert!(
+            output.len() <= 8,
+            "empty encoder should produce minimal output, got {}",
+            output.len()
+        );
     }
 
     // ── 9. Encoder state isolation ──────────────────────────────────────────
@@ -567,7 +577,11 @@ mod tests {
 
         for _ in 0..10 {
             let out = run();
-            assert_eq!(out, run(), "same input must be deterministic across fresh encoders");
+            assert_eq!(
+                out,
+                run(),
+                "same input must be deterministic across fresh encoders"
+            );
         }
     }
 
@@ -634,9 +648,18 @@ mod tests {
         let out0 = enc_val(0);
         let out1 = enc_val(1);
         let out2 = enc_val(2);
-        assert_ne!(out0, out1, "tree values 0 and 1 must produce different outputs");
-        assert_ne!(out0, out2, "tree values 0 and 2 must produce different outputs");
-        assert_ne!(out1, out2, "tree values 1 and 2 must produce different outputs");
+        assert_ne!(
+            out0, out1,
+            "tree values 0 and 1 must produce different outputs"
+        );
+        assert_ne!(
+            out0, out2,
+            "tree values 0 and 2 must produce different outputs"
+        );
+        assert_ne!(
+            out1, out2,
+            "tree values 1 and 2 must produce different outputs"
+        );
     }
 
     #[test]

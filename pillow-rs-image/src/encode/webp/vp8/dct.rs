@@ -68,17 +68,34 @@ pub fn idct_4x4(coeffs: &[i16; 16]) -> [i16; 16] {
     let mut result = [0i16; 16];
     for r in 0..4 {
         let offset = r * 4;
-        result[offset] = idct_1d_0(cols[offset], cols[offset + 1], cols[offset + 2], cols[offset + 3])
-            .round() as i16;
-        result[offset + 1] =
-            idct_1d_1(cols[offset], cols[offset + 1], cols[offset + 2], cols[offset + 3]).round()
-                as i16;
-        result[offset + 2] =
-            idct_1d_2(cols[offset], cols[offset + 1], cols[offset + 2], cols[offset + 3]).round()
-                as i16;
-        result[offset + 3] =
-            idct_1d_3(cols[offset], cols[offset + 1], cols[offset + 2], cols[offset + 3]).round()
-                as i16;
+        result[offset] = idct_1d_0(
+            cols[offset],
+            cols[offset + 1],
+            cols[offset + 2],
+            cols[offset + 3],
+        )
+        .round() as i16;
+        result[offset + 1] = idct_1d_1(
+            cols[offset],
+            cols[offset + 1],
+            cols[offset + 2],
+            cols[offset + 3],
+        )
+        .round() as i16;
+        result[offset + 2] = idct_1d_2(
+            cols[offset],
+            cols[offset + 1],
+            cols[offset + 2],
+            cols[offset + 3],
+        )
+        .round() as i16;
+        result[offset + 3] = idct_1d_3(
+            cols[offset],
+            cols[offset + 1],
+            cols[offset + 2],
+            cols[offset + 3],
+        )
+        .round() as i16;
     }
     result
 }
@@ -229,12 +246,7 @@ mod tests {
     #[test]
     fn test_fdct_idct_roundtrip_random() {
         // Alternating pattern: roundtrip error stays within ±1
-        let block: [i16; 16] = [
-            1, -1, 1, -1,
-            -1, 1, -1, 1,
-            1, -1, 1, -1,
-            -1, 1, -1, 1,
-        ];
+        let block: [i16; 16] = [1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1];
         let coeffs = fdct_4x4(&block);
         let reconstructed = idct_4x4(&coeffs);
         let err = max_abs_diff(&block, &reconstructed);
@@ -269,7 +281,10 @@ mod tests {
         // (the IDCT basis vector for k=0 is constant across n)
         let coeffs = [100i16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         let output = idct_4x4(&coeffs);
-        assert_eq!(output, [13i16; 16], "DC-only should produce all-equal output");
+        assert_eq!(
+            output, [13i16; 16],
+            "DC-only should produce all-equal output"
+        );
     }
 
     #[test]
@@ -353,12 +368,7 @@ mod tests {
         //   ACs at (0,1)=-4, (0,3)=-2, (1,0)=-16, (3,0)=-8, rest zero
         let block: [i16; 16] = std::array::from_fn(|i| i as i16);
         let coeffs = wht_4x4(&block);
-        let expected: [i16; 16] = [
-            30, -4, 0, -2,
-            -16, 0, 0, 0,
-            0, 0, 0, 0,
-            -8, 0, 0, 0,
-        ];
+        let expected: [i16; 16] = [30, -4, 0, -2, -16, 0, 0, 0, 0, 0, 0, 0, -8, 0, 0, 0];
         assert_eq!(coeffs, expected, "WHT of gradient 0..15");
     }
 

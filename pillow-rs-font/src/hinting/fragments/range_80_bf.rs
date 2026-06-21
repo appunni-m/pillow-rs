@@ -19,9 +19,9 @@
 //! 0xB0-0xB7 PUSHB[0-7]
 //! 0xB8-0xBF PUSHW[0-7]
 
-use crate::error::FontError;
 use super::super::exec::ExecContext;
 use super::super::graphics::*;
+use crate::error::FontError;
 
 impl ExecContext {
     pub(crate) fn handle_80_bf(&mut self) -> Result<i32, FontError> {
@@ -78,8 +78,16 @@ impl ExecContext {
             0x86 => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let point1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let point2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let point1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let point2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dx = point2.x - point1.x;
                 let dy = point2.y - point1.y;
                 let len = ((dx as i64).abs().max((dy as i64).abs())) as i32;
@@ -96,8 +104,16 @@ impl ExecContext {
             0x87 => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let point1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let point2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let point1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let point2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dx = point2.x - point1.x;
                 let dy = point2.y - point1.y;
                 let len = ((dx as i64).abs().max((dy as i64).abs())) as i32;
@@ -113,10 +129,18 @@ impl ExecContext {
             0x88 => {
                 let selector = self.pop();
                 let mut result = 0i32;
-                if selector & 1 != 0 { result |= 35; } // version 35
-                if selector & 2 != 0 && self.grayscale { result |= 0x100; }
-                if selector & 16 != 0 { result |= 16; }
-                if selector & 32 != 0 { result |= 32; }
+                if selector & 1 != 0 {
+                    result |= 35;
+                } // version 35
+                if selector & 2 != 0 && self.grayscale {
+                    result |= 0x100;
+                }
+                if selector & 16 != 0 {
+                    result |= 16;
+                }
+                if selector & 32 != 0 {
+                    result |= 32;
+                }
                 self.push(result);
                 Ok(1)
             }
@@ -125,7 +149,8 @@ impl ExecContext {
                 let fn_idx = self.pop() as usize;
                 let start = self.ip + 1;
                 if fn_idx >= self.idefs.len() {
-                    self.idefs.resize(fn_idx + 16, super::super::exec::FnDef::default());
+                    self.idefs
+                        .resize(fn_idx + 16, super::super::exec::FnDef::default());
                 }
                 self.idefs[fn_idx] = super::super::exec::FnDef {
                     range: self.cur_range as i32,
@@ -138,8 +163,11 @@ impl ExecContext {
                 let mut depth = 1;
                 let mut i = self.ip as usize + 1;
                 while i < self.code.len() && depth > 0 {
-                    if self.code[i] == 0x2C { depth += 1; }
-                    else if self.code[i] == 0x2D { depth -= 1; }
+                    if self.code[i] == 0x2C {
+                        depth += 1;
+                    } else if self.code[i] == 0x2D {
+                        depth -= 1;
+                    }
                     i += 1;
                 }
                 self.idefs[fn_idx].end = (i - 1) as i32;
@@ -192,14 +220,18 @@ impl ExecContext {
             0xB0..=0xB7 => {
                 let n = (self.opcode - 0xB0 + 1) as usize;
                 let vals = self.read_bytes(n);
-                for &v in &vals { self.push(v); }
+                for &v in &vals {
+                    self.push(v);
+                }
                 Ok(1 + n as i32)
             }
             // PUSHW[0-7]
             0xB8..=0xBF => {
                 let n = (self.opcode - 0xB8 + 1) as usize;
                 let vals = self.read_words(n);
-                for &v in &vals { self.push(v); }
+                for &v in &vals {
+                    self.push(v);
+                }
                 Ok(1 + (n * 2) as i32)
             }
             _ => {
@@ -213,33 +245,35 @@ impl ExecContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     fn make_ctx() -> ExecContext {
-        
         ExecContext::new_test()
     }
 
     #[test]
     fn test_roll() {
         let mut ctx = make_ctx();
-        ctx.push(1); ctx.push(2); ctx.push(3);
+        ctx.push(1);
+        ctx.push(2);
+        ctx.push(3);
         ctx.opcode = 0x8A;
         ctx.handle_80_bf().unwrap();
         assert_eq!(ctx.pop(), 2); // top after roll = a
         assert_eq!(ctx.pop(), 1); // = c ?
-        // Actually roll: (a b c) -> (c a b). So from top: b, a, c
+                                  // Actually roll: (a b c) -> (c a b). So from top: b, a, c
     }
 
     #[test]
     fn test_max_min() {
         let mut ctx = make_ctx();
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x8B; // MAX
         ctx.handle_80_bf().unwrap();
         assert_eq!(ctx.pop(), 20);
 
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x8C; // MIN
         ctx.handle_80_bf().unwrap();
         assert_eq!(ctx.pop(), 10);

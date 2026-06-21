@@ -18,9 +18,9 @@
 //! 0x1E SSWCI     — set single width cut-in
 //! 0x1F SSW       — set single width value
 
-use crate::error::FontError;
 use super::super::exec::ExecContext;
 use super::super::round;
+use crate::error::FontError;
 
 impl ExecContext {
     pub(crate) fn handle_10_1f(&mut self) -> Result<i32, FontError> {
@@ -145,10 +145,8 @@ impl ExecContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     fn make_ctx() -> ExecContext {
-        
         ExecContext::new_test()
     }
 

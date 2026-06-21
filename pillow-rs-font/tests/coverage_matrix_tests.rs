@@ -130,10 +130,7 @@ fn test_font_coverage_matrix() {
                         if let Some(ref expected_hash) = row.ref_sha256 {
                             let actual = sha256_hex(&mask.pixels);
                             if actual == *expected_hash {
-                                eprintln!(
-                                    "  OK   [{}] {}x{}",
-                                    row.id, mask.width, mask.height
-                                );
+                                eprintln!("  OK   [{}] {}x{}", row.id, mask.width, mask.height);
                                 passed += 1;
                             } else {
                                 eprintln!(
@@ -198,10 +195,7 @@ fn test_font_coverage_matrix() {
                 if let Some(ref expected) = row.ref_value {
                     let actual_val = serde_json::json!([family, style]);
                     if &actual_val == expected {
-                        eprintln!(
-                            "  OK   [{}] name=(\"{}\",\"{}\")",
-                            row.id, family, style
-                        );
+                        eprintln!("  OK   [{}] name=(\"{}\",\"{}\")", row.id, family, style);
                         passed += 1;
                     } else {
                         eprintln!(
@@ -240,11 +234,12 @@ fn test_font_coverage_matrix() {
         }
     }
 
-    eprintln!(
-        "\nfont matrix: {passed}/{total} passed, {failed} failed, {skipped} skipped"
-    );
+    eprintln!("\nfont matrix: {passed}/{total} passed, {failed} failed, {skipped} skipped");
     if failed > 0 {
         panic!("{failed} font test(s) failed");
     }
-    assert!(passed > 0, "No tests passed -- check font files and references");
+    assert!(
+        passed > 0,
+        "No tests passed -- check font files and references"
+    );
 }

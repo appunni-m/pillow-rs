@@ -12,7 +12,6 @@
 #![allow(clippy::map_unwrap_or)]
 #![allow(clippy::redundant_clone)]
 #![allow(clippy::needless_range_loop)]
-
 // PIL API compatibility — many functions have 8+ parameters matching PIL signatures
 #![allow(clippy::too_many_arguments)]
 

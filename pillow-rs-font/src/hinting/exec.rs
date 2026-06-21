@@ -40,6 +40,9 @@ pub struct ExecContext {
     pub zp0: Zone,
     pub zp1: Zone,
     pub zp2: Zone,
+    /// Tracks which canonical zone each zp pointer refers to:
+    /// 0 = twilight, 1 = glyph (pts), -1 = uninitialized.
+    pub zp_zone: [i32; 3],
     pub pts: Zone,
     pub twilight: Zone,
     pub code: Vec<u8>,
@@ -67,8 +70,6 @@ pub struct ExecContext {
     pub grayscale: bool,
 }
 
-
-
 impl ExecContext {
     pub(crate) fn new(data: &FontData) -> Self {
         let ppem = data.size_pt.ceil() as u16;
@@ -79,6 +80,7 @@ impl ExecContext {
             zp0: Zone::new(),
             zp1: Zone::new(),
             zp2: Zone::new(),
+            zp_zone: [-1, -1, -1],
             pts: Zone::new(),
             twilight: Zone::new(),
             code: Vec::new(),
@@ -115,6 +117,7 @@ impl ExecContext {
             zp0: Zone::new(),
             zp1: Zone::new(),
             zp2: Zone::new(),
+            zp_zone: [-1, -1, -1],
             pts: Zone::new(),
             twilight: Zone::new(),
             code: Vec::new(),
@@ -143,11 +146,10 @@ impl ExecContext {
         }
     }
 
-
     pub fn run(&mut self) -> Result<(), FontError> {
         self.ip = 0;
         self.top = 0; // Reset stack for new program execution
-        // Safety limit to prevent infinite loops from buggy or malicious bytecode
+                      // Safety limit to prevent infinite loops from buggy or malicious bytecode
         let max_ops: i32 = 20000;
         let mut ops = 0i32;
         while self.ip < self.code.len() as i32 && ops < max_ops {
@@ -217,20 +219,20 @@ impl ExecContext {
             0x20..=0x3F => self.handle_20_3f(),
             0x40..=0x5F => self.handle_40_5f(),
             0x60..=0x7F => self.handle_60_7f(),
+            // Apple convention: 0x80-0xBF = FLIPPT/ROLL/PUSHB/PUSHW etc.
             0x80..=0xBF => self.handle_80_bf(),
-            // MDRP — Move Direct Relative Point (32 variants)
+            // MDRP — Move Direct Relative Point (0xC0-0xDF).
             0xC0..=0xDF => {
                 let flags = opcodes::decode_mirp_flags(self.opcode);
                 self.do_mdrp(flags)
             }
-            // MIRP — Move Indirect Relative Point (32 variants)
+            // MIRP — Move Indirect Relative Point (0xE0-0xFF).
             0xE0..=0xFF => {
                 let flags = opcodes::decode_mirp_flags(self.opcode);
                 self.do_mirp(flags)
             }
         }
     }
-
 
     /// MDRP — Move Direct Relative Point (0xC0-0xDF).
     ///
@@ -282,10 +284,18 @@ impl ExecContext {
             // Round_None: just add compensation
             if org_dist >= 0 {
                 let v = org_dist + comp;
-                if v < 0 { 0 } else { v }
+                if v < 0 {
+                    0
+                } else {
+                    v
+                }
             } else {
                 let v = org_dist - comp;
-                if v > 0 { 0 } else { v }
+                if v > 0 {
+                    0
+                } else {
+                    v
+                }
             }
         };
 
@@ -293,9 +303,17 @@ impl ExecContext {
         let distance = if flags.minimum_distance {
             let min_dist = self.gs.minimum_distance;
             if org_dist >= 0 {
-                if distance < min_dist { min_dist } else { distance }
+                if distance < min_dist {
+                    min_dist
+                } else {
+                    distance
+                }
             } else {
-                if distance > -min_dist { -min_dist } else { distance }
+                if distance > -min_dist {
+                    -min_dist
+                } else {
+                    distance
+                }
             }
         } else {
             distance
@@ -324,6 +342,9 @@ impl ExecContext {
 
     /// MIRP — Move Indirect Relative Point (0xE0-0xFF).
     ///
+    /// TrueType spec: pops point_number, cvt_entry_number.
+    /// cvt_entry_number = 0 → value 0, otherwise CVT[cvt_entry_number - 1].
+    ///
     /// FreeType-equivalent: Ins_MIRP
     ///
     ///  1. Read CVT value (entry = stack_value + 1)
@@ -338,12 +359,20 @@ impl ExecContext {
     /// 10. Move by (distance - cur_dist) along freedom vector
     /// 11. Update reference points
     fn do_mirp(&mut self, flags: opcodes::MirpFlags) -> Result<i32, FontError> {
-        let cvt_idx = self.pop() as usize;
-        let p_idx = self.pop() as usize;
+        // TrueType stack: push cvt_entry, push point_number
+        // MIRP pops: point_number (top), then cvt_entry
+        if self.top < 2 { return Ok(1); }
+        let p_idx = self.pop() as usize;     // top of stack = point_number
+        let cvt_idx = self.pop() as usize;   // second = cvt_entry
         let rp_idx = self.gs.rp0 as usize;
 
-        // Validate bounds
-        if p_idx >= self.zp2.n_points as usize || rp_idx >= self.zp0.n_points as usize {
+        // Validate bounds — skip if OOB (prevents crash on capacity overflow)
+        if p_idx >= self.zp2.n_points as usize
+            || p_idx >= self.zp2.points.len()
+            || rp_idx >= self.zp0.n_points as usize
+            || rp_idx >= self.zp0.points.len()
+            || rp_idx >= self.zp0.org.len()
+        {
             self.gs.rp1 = self.gs.rp0;
             self.gs.rp2 = p_idx as u16;
             if flags.set_rp0 {
@@ -352,9 +381,9 @@ impl ExecContext {
             return Ok(1);
         }
 
-        // Step 1: CVT value — FreeType: cvtEntry = arg + 1, cvt[-1] = 0
-        let mut cvt_dist = if cvt_idx < self.glyf_cvt.len() {
-            self.glyf_cvt[cvt_idx]
+        // Step 1: CVT value — FreeType: cvtEntry = arg, CVT[cvtEntry-1], cvtEntry=0 → 0
+        let mut cvt_dist = if cvt_idx > 0 && cvt_idx - 1 < self.glyf_cvt.len() {
+            self.glyf_cvt[cvt_idx - 1]
         } else {
             0
         };
@@ -375,6 +404,15 @@ impl ExecContext {
 
         // Step 3: Twilight-zone special case
         // When zp1 (gep1) is twilight, set org/cur = rp0.org + (cvt_dist * fv / 16384)
+        // Bounds check: ensure zp2 has room for p_idx
+        if p_idx >= self.zp2.points.len() || p_idx >= self.zp2.org.len() {
+            self.gs.rp1 = self.gs.rp0;
+            self.gs.rp2 = p_idx as u16;
+            if flags.set_rp0 {
+                self.gs.rp0 = p_idx as u16;
+            }
+            return Ok(1);
+        }
         if self.gs.gep1 == 0 {
             let fv = self.gs.free_vector;
             let cx = self.zp0.org[rp_idx].x + ((cvt_dist * fv.x + 8192) >> 14);
@@ -421,10 +459,18 @@ impl ExecContext {
             // Round_None: just add compensation
             if distance_target >= 0 {
                 let v = distance_target + comp;
-                if v < 0 { 0 } else { v }
+                if v < 0 {
+                    0
+                } else {
+                    v
+                }
             } else {
                 let v = distance_target - comp;
-                if v > 0 { 0 } else { v }
+                if v > 0 {
+                    0
+                } else {
+                    v
+                }
             }
         };
 
@@ -432,9 +478,17 @@ impl ExecContext {
         let distance = if flags.minimum_distance {
             let min_dist = self.gs.minimum_distance;
             if org_dist >= 0 {
-                if distance < min_dist { min_dist } else { distance }
+                if distance < min_dist {
+                    min_dist
+                } else {
+                    distance
+                }
             } else {
-                if distance > -min_dist { -min_dist } else { distance }
+                if distance > -min_dist {
+                    -min_dist
+                } else {
+                    distance
+                }
             }
         } else {
             distance
@@ -456,8 +510,6 @@ impl ExecContext {
         Ok(1)
     }
 
-
-
     /// Dispatch rounding based on round_state (FreeType-compatible).
     /// 0 = none/gray, 1 = grid, 2 = double, 3 = down, 4 = up,
     /// 5 = off, 6 = half grid, 7 = super (SROUND/S45ROUND).
@@ -475,7 +527,6 @@ impl ExecContext {
         }
     }
 
-
     /// FreeType-style absolute rounding (matches func_round signature).
     /// Returns the absolute rounded distance (not a delta).
     /// Compensation is added inside the rounding function, matching FreeType's
@@ -486,60 +537,108 @@ impl ExecContext {
                 // Round_Off / Round_None: just add compensation
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 0 } else { v }
+                    if v < 0 {
+                        0
+                    } else {
+                        v
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { 0 } else { v }
+                    if v > 0 {
+                        0
+                    } else {
+                        v
+                    }
                 }
             }
             1 => {
                 // Round_To_Grid: ((distance + comp) + 32) & ~63
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 0 } else { (v + 32) & !63 }
+                    if v < 0 {
+                        0
+                    } else {
+                        (v + 32) & !63
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { 0 } else { -((((-v) + 32) & !63)) }
+                    if v > 0 {
+                        0
+                    } else {
+                        -(((-v) + 32) & !63)
+                    }
                 }
             }
             2 => {
                 // Round_To_Double_Grid: grid at 32-unit intervals
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 0 } else { (v + 16) & !31 }
+                    if v < 0 {
+                        0
+                    } else {
+                        (v + 16) & !31
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { 0 } else { -((((-v) + 16) & !31)) }
+                    if v > 0 {
+                        0
+                    } else {
+                        -(((-v) + 16) & !31)
+                    }
                 }
             }
             3 => {
                 // Round_Down_To_Grid: (distance + comp) & ~63
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 0 } else { v & !63 }
+                    if v < 0 {
+                        0
+                    } else {
+                        v & !63
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { 0 } else { -(((-v) & !63)) }
+                    if v > 0 {
+                        0
+                    } else {
+                        -((-v) & !63)
+                    }
                 }
             }
             4 => {
                 // Round_Up_To_Grid: ((distance + comp) + 63) & ~63
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 0 } else { (v + 63) & !63 }
+                    if v < 0 {
+                        0
+                    } else {
+                        (v + 63) & !63
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { 0 } else { -((((-v) + 63) & !63)) }
+                    if v > 0 {
+                        0
+                    } else {
+                        -(((-v) + 63) & !63)
+                    }
                 }
             }
             6 => {
                 // Round_To_Half_Grid: ((distance + comp) & ~63) + 32
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 32 } else { (v & !63) + 32 }
+                    if v < 0 {
+                        32
+                    } else {
+                        (v & !63) + 32
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { -32 } else { -(((-v) & !63) + 32) }
+                    if v > 0 {
+                        -32
+                    } else {
+                        -(((-v) & !63) + 32)
+                    }
                 }
             }
             7 => {
@@ -549,10 +648,18 @@ impl ExecContext {
             _ => {
                 if distance >= 0 {
                     let v = distance + compensation;
-                    if v < 0 { 0 } else { (v + 32) & !63 }
+                    if v < 0 {
+                        0
+                    } else {
+                        (v + 32) & !63
+                    }
                 } else {
                     let v = distance - compensation;
-                    if v > 0 { 0 } else { -((((-v) + 32) & !63)) }
+                    if v > 0 {
+                        0
+                    } else {
+                        -(((-v) + 32) & !63)
+                    }
                 }
             }
         }
@@ -583,7 +690,11 @@ impl ExecContext {
             if self.period > 0 {
                 let inner = val + self.threshold - self.phase + compensation;
                 let result = (inner / self.period) * self.period + self.phase;
-                if result < self.phase { self.phase } else { result }
+                if result < self.phase {
+                    self.phase
+                } else {
+                    result
+                }
             } else {
                 val
             }
@@ -592,7 +703,11 @@ impl ExecContext {
                 let abs_val = -val;
                 let inner = abs_val + self.threshold - self.phase + compensation;
                 let result = -((inner / self.period) * self.period) - self.phase;
-                if result > -self.phase { -self.phase } else { result }
+                if result > -self.phase {
+                    -self.phase
+                } else {
+                    result
+                }
             } else {
                 val
             }
@@ -614,7 +729,11 @@ impl ExecContext {
             if self.period > 0 {
                 let inner = val + self.threshold - self.phase + compensation;
                 let result = (inner / self.period) * self.period + self.phase;
-                if result < self.phase { self.phase } else { result }
+                if result < self.phase {
+                    self.phase
+                } else {
+                    result
+                }
             } else {
                 val
             }
@@ -623,7 +742,11 @@ impl ExecContext {
                 let abs_val = -val;
                 let inner = abs_val + self.threshold - self.phase + compensation;
                 let result = -((inner / self.period) * self.period) - self.phase;
-                if result > -self.phase { -self.phase } else { result }
+                if result > -self.phase {
+                    -self.phase
+                } else {
+                    result
+                }
             } else {
                 val
             }
@@ -648,9 +771,13 @@ impl ExecContext {
         }
     }
 
-
     pub(crate) fn select_zone(&mut self, ptr: usize, zone_id: i32) {
         // FreeType convention: zone_id 0 = twilight, zone_id 1 = glyph (pts)
+        // Skip re-cloning if this pointer already points to the requested zone.
+        // This preserves modifications made through this pointer.
+        if ptr < 3 && self.zp_zone[ptr] == zone_id {
+            return;
+        }
         let src = if zone_id == 1 {
             &self.pts
         } else if zone_id == 0 {
@@ -663,6 +790,9 @@ impl ExecContext {
             1 => self.zp1 = src.clone(),
             2 => self.zp2 = src.clone(),
             _ => {}
+        }
+        if ptr < 3 {
+            self.zp_zone[ptr] = zone_id;
         }
     }
 
@@ -702,19 +832,22 @@ impl ExecContext {
         self.pts.n_points = n;
         self.pts.n_contours = glyph.num_contours as u16;
 
+        let twilight_n = n.max(data.maxp.num_glyphs as u16 * 2).min(256);
+        self.twilight.allocate_twilight(twilight_n);
+
         // FreeType: zp[0] = twilight, zp[1] = glyph, zp[2] = glyph
+        // IMPORTANT: allocate twilight BEFORE cloning into zp0 — twilight must
+        // have proper capacity so MIRP/MDRP can access remote twlight points.
         self.zp0 = self.twilight.clone();
         self.zp1 = self.pts.clone();
         self.zp2 = self.pts.clone();
+        self.zp_zone = [0, 1, 1]; // track which zone each zp points to
         self.gs.gep0 = 0;
         self.gs.gep1 = 1;
         self.gs.gep2 = 1;
         self.gs.rp0 = 0;
         self.gs.rp1 = 0;
         self.gs.rp2 = 0;
-
-        let twilight_n = n.max(data.maxp.num_glyphs as u16 * 2).min(256);
-        self.twilight.allocate_twilight(twilight_n);
 
         self.glyf_cvt.clone_from(&self.cvt);
         self.glyf_storage.clone_from(&self.storage);
@@ -727,20 +860,30 @@ impl ExecContext {
             return;
         }
 
-        self.code = ins;
+        self.code = ins.clone();
         self.cur_range = CodeRange::Glyph;
         self.ip = 0;
         if let Err(e) = self.run() {
             log::warn!("[hinting] glyph {} exec error: {}", _glyph_index, e);
         }
 
-        // Sync zone pointer data back to self.pts for IUP and copy-back.
-        // zp0/zp1/zp2 are cloned from pts/twilight (select_zone), so point
-        // modifications through zp0 don't reach self.pts without this sync.
-        // FreeType zone convention: zone 0 = twilight, zone 1 = glyph
-        if self.gs.gep0 == 1 && self.zp0.points.len() == self.pts.points.len() {
-            self.pts.points.clone_from(&self.zp0.points);
-            self.pts.tags.clone_from(&self.zp0.tags);
+        // Sync ALL zone pointers back to self.pts for IUP and copy-back.
+        // Each zp pointer that points to the glyph zone may have accumulated
+        // modifications that need to reach self.pts.
+        for ptr in 0..3u8 {
+            if self.zp_zone[ptr as usize] != 1 {
+                continue; // skip twilight zone pointers
+            }
+            let src = match ptr {
+                0 => &self.zp0,
+                1 => &self.zp1,
+                2 => &self.zp2,
+                _ => continue,
+            };
+            if src.points.len() == self.pts.points.len() {
+                self.pts.points.clone_from(&src.points);
+                self.pts.tags.clone_from(&src.tags);
+            }
         }
 
         self.iup(0);
@@ -762,8 +905,7 @@ impl ExecContext {
         if slice.len() <= end_pts_end + 2 {
             return Vec::new();
         }
-        let inst_len =
-            u16::from_be_bytes([slice[end_pts_end], slice[end_pts_end + 1]]) as usize;
+        let inst_len = u16::from_be_bytes([slice[end_pts_end], slice[end_pts_end + 1]]) as usize;
         let start = end_pts_end + 2;
         if start + inst_len > slice.len() {
             return Vec::new();
@@ -786,13 +928,10 @@ impl ExecContext {
             if off + 3 > data.loca_data.len() {
                 return (0, 0);
             }
-            let this = u16::from_be_bytes([data.loca_data[off], data.loca_data[off + 1]])
-                as usize
-                * 2;
+            let this =
+                u16::from_be_bytes([data.loca_data[off], data.loca_data[off + 1]]) as usize * 2;
             let next =
-                u16::from_be_bytes([data.loca_data[off + 2], data.loca_data[off + 3]])
-                    as usize
-                    * 2;
+                u16::from_be_bytes([data.loca_data[off + 2], data.loca_data[off + 3]]) as usize * 2;
             (this, next - this)
         } else {
             let off = idx * 4;
@@ -835,13 +974,14 @@ impl ExecContext {
         let mut i = self.ip as usize + 1;
         while i < self.code.len() && depth > 0 {
             match self.code[i] {
-                0x58 => depth += 1,   // nested IF
-                0x1B => {              // ELSE (FreeType dispatch)
+                0x58 => depth += 1, // nested IF
+                0x1B => {
+                    // ELSE (FreeType dispatch)
                     if depth == 1 {
                         break;
                     }
                 }
-                0x59 => depth -= 1,    // EIF (FreeType dispatch)
+                0x59 => depth -= 1, // EIF (FreeType dispatch)
                 _ => {}
             }
             i += 1;
@@ -856,8 +996,8 @@ impl ExecContext {
         let mut i = self.ip as usize + 1;
         while i < self.code.len() && depth > 0 {
             match self.code[i] {
-                0x58 => depth += 1,   // IF
-                0x59 => depth -= 1,    // EIF (FreeType dispatch)
+                0x58 => depth += 1, // IF
+                0x59 => depth -= 1, // EIF (FreeType dispatch)
                 _ => {}
             }
             i += 1;
@@ -881,7 +1021,12 @@ mod sanity_tests {
     fn test_font_loading() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         for name in ["DejaVuSans", "LiberationSerif"] {
-            let path = manifest_dir.join("tests").join("fixtures").join("input").join("fonts").join(format!("{}.ttf", name));
+            let path = manifest_dir
+                .join("tests")
+                .join("fixtures")
+                .join("input")
+                .join("fonts")
+                .join(format!("{}.ttf", name));
             let data = std::fs::read(&path).unwrap();
             let font = Font::truetype(&data, 10.0).unwrap();
             let mask = font.getmask("a").unwrap();

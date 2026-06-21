@@ -262,17 +262,28 @@ pub const COEFF_PROBS: [[[[u8; 11]; 3]; 8]; 4] = [
 /// negative = leaf token value.
 // VP8 tree convention: leaf values use -(token_value+1) so all leaves are negative (RFC 6386 Section 8).
 pub const DCT_TOKEN_TREE: [i8; 22] = [
-    -(DCT_EOB + 1), 2,
-    -(DCT_0 + 1), 4,
-    -(DCT_1 + 1), 6,
-    8, 12,
-    -(DCT_2 + 1), 10,
-    -(DCT_3 + 1), -(DCT_4 + 1),
-    14, 16,
-    -(DCT_CAT1 + 1), -(DCT_CAT2 + 1),
-    18, 20,
-    -(DCT_CAT3 + 1), -(DCT_CAT4 + 1),
-    -(DCT_CAT5 + 1), -(DCT_CAT6 + 1),
+    -(DCT_EOB + 1),
+    2,
+    -(DCT_0 + 1),
+    4,
+    -(DCT_1 + 1),
+    6,
+    8,
+    12,
+    -(DCT_2 + 1),
+    10,
+    -(DCT_3 + 1),
+    -(DCT_4 + 1),
+    14,
+    16,
+    -(DCT_CAT1 + 1),
+    -(DCT_CAT2 + 1),
+    18,
+    20,
+    -(DCT_CAT3 + 1),
+    -(DCT_CAT4 + 1),
+    -(DCT_CAT5 + 1),
+    -(DCT_CAT6 + 1),
 ];
 
 // ── Functions ──
@@ -622,8 +633,10 @@ mod tests {
 
     #[test]
     fn test_dct_token_constants_unique() {
-        let tokens = [DCT_EOB, DCT_0, DCT_1, DCT_2, DCT_3, DCT_4,
-                      DCT_CAT1, DCT_CAT2, DCT_CAT3, DCT_CAT4, DCT_CAT5, DCT_CAT6];
+        let tokens = [
+            DCT_EOB, DCT_0, DCT_1, DCT_2, DCT_3, DCT_4, DCT_CAT1, DCT_CAT2, DCT_CAT3, DCT_CAT4,
+            DCT_CAT5, DCT_CAT6,
+        ];
         let mut seen = std::collections::HashSet::new();
         for &t in &tokens {
             assert!(seen.insert(t), "duplicate constant value {}", t);
@@ -646,8 +659,12 @@ mod tests {
     #[test]
     fn test_coeff_bands_all_in_range() {
         for &b in COEFF_BANDS.iter() {
-            assert!(b < NUM_COEFF_BANDS as u8,
-                    "band {} >= NUM_COEFF_BANDS={}", b, NUM_COEFF_BANDS);
+            assert!(
+                b < NUM_COEFF_BANDS as u8,
+                "band {} >= NUM_COEFF_BANDS={}",
+                b,
+                NUM_COEFF_BANDS
+            );
         }
     }
 
@@ -667,14 +684,27 @@ mod tests {
             if val < 0 {
                 // Leaf: extract token = -(val + 1); verify in valid range
                 let token = -val as i32 - 1;
-                assert!(token >= 0 && token <= DCT_EOB as i32,
-                        "leaf value {} at index {} yields token {} out of range", val, i, token);
+                assert!(
+                    token >= 0 && token <= DCT_EOB as i32,
+                    "leaf value {} at index {} yields token {} out of range",
+                    val,
+                    i,
+                    token
+                );
             } else {
                 // Interior node: should be an even index within bounds
-                assert!(val % 2 == 0,
-                        "interior node {} at index {} is not even", val, i);
-                assert!((val as usize) < DCT_TOKEN_TREE.len(),
-                        "interior node {} at index {} out of bounds", val, i);
+                assert!(
+                    val % 2 == 0,
+                    "interior node {} at index {} is not even",
+                    val,
+                    i
+                );
+                assert!(
+                    (val as usize) < DCT_TOKEN_TREE.len(),
+                    "interior node {} at index {} out of bounds",
+                    val,
+                    i
+                );
             }
         }
     }
@@ -745,8 +775,12 @@ mod tests {
             assert!(seen.insert(idx), "duplicate coeff type index {}", idx);
         }
         for &idx in &indices {
-            assert!(idx < NUM_COEFF_TYPES,
-                    "coeff type index {} >= NUM_COEFF_TYPES={}", idx, NUM_COEFF_TYPES);
+            assert!(
+                idx < NUM_COEFF_TYPES,
+                "coeff type index {} >= NUM_COEFF_TYPES={}",
+                idx,
+                NUM_COEFF_TYPES
+            );
         }
     }
 }

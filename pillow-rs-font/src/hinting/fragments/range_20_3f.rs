@@ -34,11 +34,11 @@
 //! 0x3E MIAP       — move indirect absolute point (rounded)
 //! 0x3F MIAP       — move indirect absolute point (no rounding)
 
-use crate::error::FontError;
-use crate::hinting::exec::dot_product;
 use super::super::exec::ExecContext;
 use super::super::graphics::*;
 use super::super::round;
+use crate::error::FontError;
+use crate::hinting::exec::dot_product;
 
 // ---------------------------------------------------------------------------
 // FreeType-compatible arithmetic helpers
@@ -96,10 +96,7 @@ fn move_zp2_point(ctx: &mut ExecContext, point: usize, dx: i32, dy: i32) {
 /// caller to skip it). Pass `None` if the caller doesn't need to skip.
 ///
 /// Returns `None` when the reference point is out of bounds (FreeType FAILURE).
-fn compute_point_displacement(
-    ctx: &ExecContext,
-    use_rp1: bool,
-) -> Option<(i32, i32, usize)> {
+fn compute_point_displacement(ctx: &ExecContext, use_rp1: bool) -> Option<(i32, i32, usize)> {
     let (zone, rp) = if use_rp1 {
         (&ctx.zp0, ctx.gs.rp1 as usize)
     } else {
@@ -281,7 +278,8 @@ impl ExecContext {
                 let fn_idx = self.pop() as usize;
                 let start = self.ip + 1;
                 if fn_idx >= self.fdefs.len() {
-                    self.fdefs.resize(fn_idx + 16, super::super::exec::FnDef::default());
+                    self.fdefs
+                        .resize(fn_idx + 16, super::super::exec::FnDef::default());
                 }
                 self.fdefs[fn_idx] = super::super::exec::FnDef {
                     range: self.cur_range as i32,
@@ -339,8 +337,12 @@ impl ExecContext {
                 let touch_y = self.gs.proj_vector.y != 0;
                 let zone = self.get_zone(0);
                 if (p as usize) < zone.points.len() {
-                    if touch_x { zone.tags[p as usize] |= TOUCH_X; }
-                    if touch_y { zone.tags[p as usize] |= TOUCH_Y; }
+                    if touch_x {
+                        zone.tags[p as usize] |= TOUCH_X;
+                    }
+                    if touch_y {
+                        zone.tags[p as usize] |= TOUCH_Y;
+                    }
                 }
                 Ok(1)
             }
@@ -353,19 +355,23 @@ impl ExecContext {
                 let touch_y = self.gs.proj_vector.y != 0;
                 let zone = self.get_zone(0);
                 if (p as usize) < zone.points.len() {
-                    if touch_x { zone.tags[p as usize] |= TOUCH_X; }
-                    if touch_y { zone.tags[p as usize] |= TOUCH_Y; }
+                    if touch_x {
+                        zone.tags[p as usize] |= TOUCH_X;
+                    }
+                    if touch_y {
+                        zone.tags[p as usize] |= TOUCH_Y;
+                    }
                 }
                 Ok(1)
             }
-            // 0x30 IUP[y]
+            // 0x30 IUP[y] — FreeType: direction 0 = Y
             0x30 => {
-                crate::hinting::iup::iup_zone(&mut self.pts, 0);
+                crate::hinting::iup::iup_zone(&mut self.pts, 1);
                 Ok(1)
             }
-            // 0x31 IUP[x]
+            // 0x31 IUP[x] — FreeType: direction 1 = X
             0x31 => {
-                crate::hinting::iup::iup_zone(&mut self.pts, 1);
+                crate::hinting::iup::iup_zone(&mut self.pts, 0);
                 Ok(1)
             }
             // ------------------------------------------------------------------
@@ -426,7 +432,11 @@ impl ExecContext {
                 // Bounds check on contour.
                 // FreeType: contour_limit = (gep2 == 0) ? 1 : zp2.n_contours
                 // (zone 0 = twilight, zone 1+ = glyph with contours)
-                let contour_limit = if self.gs.gep2 == 0 { 1 } else { self.zp2.n_contours as usize };
+                let contour_limit = if self.gs.gep2 == 0 {
+                    1
+                } else {
+                    self.zp2.n_contours as usize
+                };
                 if contour >= contour_limit {
                     if self.gs.instruct_control & 0x04 != 0 {
                         log::warn!("[hinting] SHC: contour {} out of bounds", contour);
@@ -638,7 +648,11 @@ impl ExecContext {
                             let numer = org_dist * cur_range;
                             let (q, r) = (numer / old_range, numer % old_range);
                             if r.abs() * 2 >= old_range.abs() {
-                                q + if numer.signum() == old_range.signum() { 1 } else { -1 }
+                                q + if numer.signum() == old_range.signum() {
+                                    1
+                                } else {
+                                    -1
+                                }
                             } else {
                                 q
                             }
@@ -658,8 +672,12 @@ impl ExecContext {
                         let fy = (fv.y * delta) >> 6;
                         self.zp2.points[point].x = self.zp2.points[point].x.wrapping_add(fx);
                         self.zp2.points[point].y = self.zp2.points[point].y.wrapping_add(fy);
-                        if fv.x != 0 { self.zp2.tags[point] |= TOUCH_X; }
-                        if fv.y != 0 { self.zp2.tags[point] |= TOUCH_Y; }
+                        if fv.x != 0 {
+                            self.zp2.tags[point] |= TOUCH_X;
+                        }
+                        if fv.y != 0 {
+                            self.zp2.tags[point] |= TOUCH_Y;
+                        }
                     }
                 }
                 self.gs.loop_count = 1;
@@ -724,10 +742,17 @@ impl ExecContext {
                 Ok(1)
             }
             // 0x3E MIAP — move indirect absolute point (rounded)
+            // TrueType stack: push cvt_entry, push point_number
+            // MIAP pops: point_number (top), then cvt_entry
             0x3E => {
-                let cvt_idx = self.pop() as usize;
-                let p_idx = self.pop() as usize;
-                let cvt_val = if cvt_idx < self.glyf_cvt.len() { self.glyf_cvt[cvt_idx] } else { 0 };
+                if self.top < 2 { return Ok(1); }
+                let p_idx = self.pop() as usize;       // top = point_number
+                let cvt_idx = self.pop() as usize;     // next = cvt_entry
+                let cvt_val = if cvt_idx < self.glyf_cvt.len() {
+                    self.glyf_cvt[cvt_idx]
+                } else {
+                    0
+                };
                 if p_idx < self.zp0.points.len() {
                     let p = self.zp0.points[p_idx];
                     let cur_proj = dot_product(p.x, p.y, &self.gs.proj_vector);
@@ -735,8 +760,12 @@ impl ExecContext {
                     let fv = self.gs.free_vector;
                     self.zp0.points[p_idx].x += (fv.x * diff) >> 6;
                     self.zp0.points[p_idx].y += (fv.y * diff) >> 6;
-                    if fv.x != 0 { self.zp0.tags[p_idx] |= TOUCH_X; }
-                    if fv.y != 0 { self.zp0.tags[p_idx] |= TOUCH_Y; }
+                    if fv.x != 0 {
+                        self.zp0.tags[p_idx] |= TOUCH_X;
+                    }
+                    if fv.y != 0 {
+                        self.zp0.tags[p_idx] |= TOUCH_Y;
+                    }
                 }
                 self.gs.rp2 = self.gs.rp1;
                 self.gs.rp1 = self.gs.rp0;
@@ -747,7 +776,11 @@ impl ExecContext {
             0x3F => {
                 let cvt_idx = self.pop() as usize;
                 let p_idx = self.pop() as usize;
-                let cvt_val = if cvt_idx < self.glyf_cvt.len() { self.glyf_cvt[cvt_idx] } else { 0 };
+                let cvt_val = if cvt_idx < self.glyf_cvt.len() {
+                    self.glyf_cvt[cvt_idx]
+                } else {
+                    0
+                };
                 if p_idx < self.zp0.points.len() {
                     let p = self.zp0.points[p_idx];
                     let cur_proj = dot_product(p.x, p.y, &self.gs.proj_vector);
@@ -755,8 +788,12 @@ impl ExecContext {
                     let fv = self.gs.free_vector;
                     self.zp0.points[p_idx].x += (fv.x * diff) >> 6;
                     self.zp0.points[p_idx].y += (fv.y * diff) >> 6;
-                    if fv.x != 0 { self.zp0.tags[p_idx] |= TOUCH_X; }
-                    if fv.y != 0 { self.zp0.tags[p_idx] |= TOUCH_Y; }
+                    if fv.x != 0 {
+                        self.zp0.tags[p_idx] |= TOUCH_X;
+                    }
+                    if fv.y != 0 {
+                        self.zp0.tags[p_idx] |= TOUCH_Y;
+                    }
                 }
                 self.gs.rp2 = self.gs.rp1;
                 self.gs.rp1 = self.gs.rp0;
@@ -775,9 +812,7 @@ impl ExecContext {
 mod tests {
     use super::*;
 
-
     fn make_ctx() -> ExecContext {
-
         ExecContext::new_test()
     }
 
@@ -794,7 +829,9 @@ mod tests {
     #[test]
     fn test_clear() {
         let mut ctx = make_ctx();
-        ctx.push(1); ctx.push(2); ctx.push(3);
+        ctx.push(1);
+        ctx.push(2);
+        ctx.push(3);
         ctx.opcode = 0x22;
         ctx.handle_20_3f().unwrap();
         assert_eq!(ctx.top, 0);
@@ -803,10 +840,11 @@ mod tests {
     #[test]
     fn test_depth() {
         let mut ctx = make_ctx();
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x24;
         ctx.handle_20_3f().unwrap();
-        assert_eq!(ctx.pop(), 2);  // depth (on top after DEPTH)
+        assert_eq!(ctx.pop(), 2); // depth (on top after DEPTH)
         assert_eq!(ctx.pop(), 20);
         assert_eq!(ctx.pop(), 10);
     }

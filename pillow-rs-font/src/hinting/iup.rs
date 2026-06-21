@@ -61,14 +61,7 @@ fn iup_shift(zone: &mut Zone, p1: usize, p2: usize, p: usize, dir: u8) {
 // separate unscaled array.  This gives the same structural algorithm;
 // the ratio approximates FreeType's to within rounding.
 // ---------------------------------------------------------------------------
-fn iup_interpolate(
-    zone: &mut Zone,
-    p1: usize,
-    p2: usize,
-    ref1: usize,
-    ref2: usize,
-    dir: u8,
-) {
+fn iup_interpolate(zone: &mut Zone, p1: usize, p2: usize, ref1: usize, ref2: usize, dir: u8) {
     if p1 > p2 {
         return;
     }
