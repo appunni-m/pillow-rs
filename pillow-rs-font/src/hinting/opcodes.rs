@@ -104,17 +104,26 @@ pub const PUSHW: [u8; 8] = [0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF];
 pub const MDRP_BASE: u8 = 0xC0;
 pub const MIRP_BASE: u8 = 0xE0;
 
+/// FreeType-compatible MDRP/MIRP flag decoding.
+///
+/// FreeType bit layout for opcodes 0xC0-0xFF:
+///   bits [1:0] = compensation index
+///   bit  2     = round flag (0=Round_None, 1=use current rounding)
+///   bit  3     = minimum distance flag
+///   bit  4     = set rp0 flag
 #[derive(Copy, Clone, Debug, Default)]
 pub struct MirpFlags {
-    pub round: bool,
-    pub without_set: bool,
-    pub set_round_state: bool,
+    pub round: bool,            // bit 2 (0x04)
+    pub minimum_distance: bool, // bit 3 (0x08)
+    pub set_rp0: bool,          // bit 4 (0x10)
+    pub compensation: usize,    // bits [1:0]
 }
 
 pub fn decode_mirp_flags(opcode: u8) -> MirpFlags {
     MirpFlags {
-        round: (opcode & 0x01) != 0,
-        without_set: (opcode & 0x02) != 0,
-        set_round_state: (opcode & 0x04) != 0,
+        round: (opcode & 0x04) != 0,
+        minimum_distance: (opcode & 0x08) != 0,
+        set_rp0: (opcode & 0x10) != 0,
+        compensation: (opcode as usize) & 3,
     }
 }

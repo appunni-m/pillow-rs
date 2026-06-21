@@ -113,4 +113,17 @@ impl Zone {
     pub fn on_curve(&self, idx: usize) -> bool {
         idx < self.tags.len() && (self.tags[idx] & ON_CURVE) != 0
     }
+
+    /// Move a point by `distance` F26Dot6 units along the freedom vector,
+    /// marking touched axes.  Matches FreeType `Direct_Move`.
+    pub fn direct_move(&mut self, fv: &F26Dot6Vector, point: usize, distance: i32) {
+        if fv.x != 0 {
+            self.points[point].x += (fv.x * distance) >> 6;
+            self.tags[point] |= TOUCH_X;
+        }
+        if fv.y != 0 {
+            self.points[point].y += (fv.y * distance) >> 6;
+            self.tags[point] |= TOUCH_Y;
+        }
+    }
 }
