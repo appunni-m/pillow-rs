@@ -16,6 +16,7 @@ mod metrics;
 mod tables;
 mod hinting;
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use parser::cmap::parse_cmap;
@@ -27,6 +28,7 @@ use parser::name::parse_name;
 use parser::os2::parse_os2;
 use parser::{parse_table_directory, find_table, tag};
 
+use hinting::HintingEngine;
 use tables::FontData;
 
 pub use error::FontError;
@@ -100,25 +102,34 @@ impl Font {
             .map(|d| d.to_vec())
             .unwrap_or_default();
 
-        Ok(Font {
-            data: Arc::new(FontData {
-                cmap,
-                head,
-                hhea,
-                hmtx,
-                maxp,
-                name,
-                os2,
-                loca_data,
-                glyf_data,
-                loca_format,
-                size_pt,
-                cvt,
-                fpgm,
-                prep,
-                cvt_size,
-            }),
+        let font_data = FontData {
+            cmap,
+            head,
+            hhea,
+            hmtx,
+            maxp,
+            name,
+            os2,
+            loca_data,
+            glyf_data,
+            loca_format,
             size_pt,
+            cvt,
+            fpgm,
+            prep,
+            cvt_size,
+        };
+
+        let hint_engine = {
+            let engine = HintingEngine::new(&font_data);
+            (!font_data.fpgm.is_empty() || !font_data.prep.is_empty())
+                .then_some(RefCell::new(engine))
+        };
+
+        Ok(Font {
+            data: Arc::new(font_data),
+            size_pt,
+            hint_engine,
         })
     }
 }

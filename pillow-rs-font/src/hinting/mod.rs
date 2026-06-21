@@ -15,6 +15,7 @@ use crate::tables::FontData;
 use exec::ExecContext;
 
 /// The hinting engine: manages FPGM/PREP execution and per-glyph hinting.
+#[derive(Clone, Debug)]
 pub struct HintingEngine {
     pub exec: ExecContext,
     pub fpgm_ready: bool,
@@ -23,7 +24,7 @@ pub struct HintingEngine {
 }
 
 impl HintingEngine {
-    pub fn new(data: &FontData) -> Self {
+    pub(crate) fn new(data: &FontData) -> Self {
         let exec = ExecContext::new(data);
         let mut engine = HintingEngine {
             exec,
@@ -42,7 +43,7 @@ impl HintingEngine {
         engine
     }
 
-    pub fn ensure_prep(&mut self, data: &FontData, ppem: u16) {
+    pub(crate) fn ensure_prep(&mut self, data: &FontData, ppem: u16) {
         if ppem == self.last_ppem && self.cvt_ready {
             return;
         }
@@ -65,7 +66,7 @@ impl HintingEngine {
         self.last_ppem = ppem;
     }
 
-    pub fn hint_glyph(
+    pub(crate) fn hint_glyph(
         &mut self,
         data: &FontData,
         glyph_index: u16,
