@@ -20,8 +20,8 @@ use super::{
     predict::{choose_luma_mode, predict_chroma_8x8, predict_luma_16x16, MbPredictionMode},
     quant::{quality_to_quant_index, rgb_to_yuv},
     tokenize::{
-        classify_coefficient, COEFF_BANDS, COEFF_PROBS, DCT_CAT1, DCT_CAT2, DCT_CAT4, DCT_CAT6,
-        DCT_1, DCT_2, DCT_4, ZIGZAG,
+        classify_coefficient, COEFF_BANDS, COEFF_PROBS, DCT_1, DCT_2, DCT_4, DCT_CAT1, DCT_CAT2,
+        DCT_CAT4, DCT_CAT6, ZIGZAG,
     },
 };
 
@@ -73,16 +73,16 @@ fn encode_frame_header(enc: &mut BoolEncoder, _width: u32, _height: u32, qi: u8)
 
     // ── Loop filter (Section 9.4) ──
     enc.encode_bool(128, false); // filter_type = 0 (simple)
-    enc.encode_literal(0, 6);   // filter_level = 0
-    enc.encode_literal(0, 3);   // sharpness_level = 0
+    enc.encode_literal(0, 6); // filter_level = 0
+    enc.encode_literal(0, 3); // sharpness_level = 0
     enc.encode_bool(128, false); // loop_filter_adjustments_enabled = false
 
     // ── DCT partitions (Section 9.5) ──
-    enc.encode_literal(0, 2);   // log2_num_partitions_minus_1 = 0 (single partition)
+    enc.encode_literal(0, 2); // log2_num_partitions_minus_1 = 0 (single partition)
 
     // ── Quantization indices (Section 9.6) ──
     enc.encode_literal(qi as u32, 7); // yac_abs (7 bits, 0-127)
-    // All deltas = 0: encode single false bit each
+                                      // All deltas = 0: encode single false bit each
     enc.encode_bool(128, false); // ydc_delta
     enc.encode_bool(128, false); // y2dc_delta
     enc.encode_bool(128, false); // y2ac_delta
@@ -144,24 +144,24 @@ fn encode_luma_mode_tree(enc: &mut BoolEncoder, mode: MbPredictionMode) {
             enc.encode_bool(KEYFRAME_YMODE_PROBS[0], false);
         }
         MbPredictionMode::DcPred => {
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true);  // not B_PRED → Node 1
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true); // not B_PRED → Node 1
             enc.encode_bool(KEYFRAME_YMODE_PROBS[1], false); // left → Node 2
             enc.encode_bool(KEYFRAME_YMODE_PROBS[2], false); // left → DC_PRED
         }
         MbPredictionMode::VPred => {
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true);  // not B_PRED → Node 1
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true); // not B_PRED → Node 1
             enc.encode_bool(KEYFRAME_YMODE_PROBS[1], false); // left → Node 2
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[2], true);  // right → V_PRED
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[2], true); // right → V_PRED
         }
         MbPredictionMode::HPred => {
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true);  // not B_PRED → Node 1
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[1], true);  // right → Node 3
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true); // not B_PRED → Node 1
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[1], true); // right → Node 3
             enc.encode_bool(KEYFRAME_YMODE_PROBS[3], false); // left → H_PRED
         }
         MbPredictionMode::TmPred => {
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true);  // not B_PRED → Node 1
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[1], true);  // right → Node 3
-            enc.encode_bool(KEYFRAME_YMODE_PROBS[3], true);  // right → TM_PRED
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[0], true); // not B_PRED → Node 1
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[1], true); // right → Node 3
+            enc.encode_bool(KEYFRAME_YMODE_PROBS[3], true); // right → TM_PRED
         }
     }
 }
@@ -203,11 +203,7 @@ fn encode_chroma_mode_tree(enc: &mut BoolEncoder, mode: MbPredictionMode) {
 ///
 /// * `coeff_type`: 0=Y, 1=U, 2=V, 3=Y2 (selects probability table)
 /// * The DCT token value scheme: 0-4 direct, 5-10 category tokens, 11=EOB
-fn encode_coeff_block(
-    enc: &mut BoolEncoder,
-    qcoeffs: &[i16; 16],
-    coeff_type: usize,
-) {
+fn encode_coeff_block(enc: &mut BoolEncoder, qcoeffs: &[i16; 16], coeff_type: usize) {
     // Determine first zigzag position:
     // For luma (type 0), skip DC (pos 0) because it was handled by Y2/WHT.
     // For Y2/U/V, include position 0.
@@ -228,7 +224,10 @@ fn encode_coeff_block(
         None => {
             // All coefficients are zero: encode a single EOB token.
             // EOB = left leaf of tree root (tree[0] = -(DCT_EOB+1))
-            enc.encode_bool(COEFF_PROBS[coeff_type][COEFF_BANDS[first] as usize][0][0], false);
+            enc.encode_bool(
+                COEFF_PROBS[coeff_type][COEFF_BANDS[first] as usize][0][0],
+                false,
+            );
             return;
         }
     };
@@ -322,31 +321,31 @@ fn encode_non_small_token(enc: &mut BoolEncoder, token: i8, probs: &[u8; 11]) {
     // At tree[3]: 2-4 vs 5+
     if token <= DCT_4 && token >= DCT_2 {
         enc.encode_bool(probs[3], false); // left → tree[4]
-        // tree[4]: DCT_2 vs 3-4
+                                          // tree[4]: DCT_2 vs 3-4
         if token == DCT_2 {
             enc.encode_bool(probs[4], false); // left leaf: DCT_2
         } else {
             enc.encode_bool(probs[4], true); // right → tree[5]
-            // tree[5]: DCT_3 vs DCT_4
+                                             // tree[5]: DCT_3 vs DCT_4
             enc.encode_bool(probs[5], token == DCT_4); // left=DCT_3, right=DCT_4
         }
     } else {
         enc.encode_bool(probs[3], true); // right → tree[6]
-        // tree[6]: CAT1-2 vs CAT3-6
+                                         // tree[6]: CAT1-2 vs CAT3-6
         if token <= DCT_CAT2 {
             enc.encode_bool(probs[6], false); // left → tree[7]
-            // tree[7]: CAT1 vs CAT2
+                                              // tree[7]: CAT1 vs CAT2
             enc.encode_bool(probs[7], token == DCT_CAT2);
         } else {
             enc.encode_bool(probs[6], true); // right → tree[8]
-            // tree[8]: CAT3-4 vs CAT5-6
+                                             // tree[8]: CAT3-4 vs CAT5-6
             if token <= DCT_CAT4 {
                 enc.encode_bool(probs[8], false); // left → tree[9]
-                // tree[9]: CAT3 vs CAT4
+                                                  // tree[9]: CAT3 vs CAT4
                 enc.encode_bool(probs[9], token == DCT_CAT4);
             } else {
                 enc.encode_bool(probs[8], true); // right → tree[10]
-                // tree[10]: CAT5 vs CAT6
+                                                 // tree[10]: CAT5 vs CAT6
                 enc.encode_bool(probs[10], token == DCT_CAT6);
             }
         }
@@ -567,7 +566,13 @@ fn compute_macroblock(
     let u_sub_coeffs = compute_chroma_sub_blocks(u_plane, uv_w, mb_x, mb_y, qi);
     let v_sub_coeffs = compute_chroma_sub_blocks(v_plane, uv_w, mb_x, mb_y, qi);
 
-    (luma_mode, y2_coeffs, y_sub_coeffs, u_sub_coeffs, v_sub_coeffs)
+    (
+        luma_mode,
+        y2_coeffs,
+        y_sub_coeffs,
+        u_sub_coeffs,
+        v_sub_coeffs,
+    )
 }
 
 /// Compute chroma 4x4 sub-blocks for a macroblock.
@@ -596,7 +601,13 @@ fn compute_chroma_sub_blocks(
     let above = [128u8; 8];
     let left = [128u8; 8];
     let mut chroma_pred = [0u8; 64];
-    predict_chroma_8x8(&mut chroma_pred, &above, &left, 128, MbPredictionMode::DcPred);
+    predict_chroma_8x8(
+        &mut chroma_pred,
+        &above,
+        &left,
+        128,
+        MbPredictionMode::DcPred,
+    );
 
     let mut blocks = [[0i16; 16]; 4];
     for sub_y in 0..2 {
@@ -715,9 +726,20 @@ fn rgb_to_yuv_planes_internal(rgb: &[u8], width: u32, height: u32) -> (Vec<u8>, 
             let p10 = (r1 * w + c0) * 3;
             let p11 = (r1 * w + c1) * 3;
 
-            let r_avg = (rgb[p00] as u32 + rgb[p01] as u32 + rgb[p10] as u32 + rgb[p11] as u32 + 2) / 4;
-            let g_avg = (rgb[p00 + 1] as u32 + rgb[p01 + 1] as u32 + rgb[p10 + 1] as u32 + rgb[p11 + 1] as u32 + 2) / 4;
-            let b_avg = (rgb[p00 + 2] as u32 + rgb[p01 + 2] as u32 + rgb[p10 + 2] as u32 + rgb[p11 + 2] as u32 + 2) / 4;
+            let r_avg =
+                (rgb[p00] as u32 + rgb[p01] as u32 + rgb[p10] as u32 + rgb[p11] as u32 + 2) / 4;
+            let g_avg = (rgb[p00 + 1] as u32
+                + rgb[p01 + 1] as u32
+                + rgb[p10 + 1] as u32
+                + rgb[p11 + 1] as u32
+                + 2)
+                / 4;
+            let b_avg = (rgb[p00 + 2] as u32
+                + rgb[p01 + 2] as u32
+                + rgb[p10 + 2] as u32
+                + rgb[p11 + 2] as u32
+                + 2)
+                / 4;
 
             let (_, u, v) = rgb_to_yuv(r_avg as u8, g_avg as u8, b_avg as u8);
             let uv_idx = row * uv_w + col;
@@ -874,7 +896,15 @@ mod tests {
 
     #[test]
     fn test_encode_vp8_lossy_various_dimensions() {
-        for &(w, h) in &[(1, 1), (4, 4), (16, 16), (32, 32), (17, 33), (48, 16), (64, 64)] {
+        for &(w, h) in &[
+            (1, 1),
+            (4, 4),
+            (16, 16),
+            (32, 32),
+            (17, 33),
+            (48, 16),
+            (64, 64),
+        ] {
             let rgb = make_rgb(w, h, 128);
             let result = encode_vp8_lossy(&rgb, w, h, 50);
             assert!(!result.is_empty(), "{w}x{h}: should produce output");
@@ -915,19 +945,24 @@ mod tests {
         let rgb = make_rgb(w, h, 128);
         let encoded = encode_vp8_lossy(&rgb, w, h, 75);
 
-        let mut decoder = image_webp::WebPDecoder::new(Cursor::new(&encoded))
-            .expect("decoder created");
+        let mut decoder =
+            image_webp::WebPDecoder::new(Cursor::new(&encoded)).expect("decoder created");
         let size = decoder.output_buffer_size().expect("buffer size");
         let mut decoded = vec![0u8; size];
-        decoder.read_image(&mut decoded)
+        decoder
+            .read_image(&mut decoded)
             .expect("should decode via WebPDecoder");
         assert!(!decoded.is_empty(), "decoded image has data");
 
         // Verify all pixels decoded successfully
         let has_non_zero = decoded.iter().any(|&b| b != 0);
         let has_255 = decoded.iter().any(|&b| b >= 254);
-        eprintln!("Decoded {} pixels, any non-zero={}, any 255={}",
-            decoded.len() / 3, has_non_zero, has_255);
+        eprintln!(
+            "Decoded {} pixels, any non-zero={}, any 255={}",
+            decoded.len() / 3,
+            has_non_zero,
+            has_255
+        );
     }
 
     #[test]
@@ -944,14 +979,22 @@ mod tests {
             let header_data = enc.finish();
 
             let mut coeff_enc = BoolEncoder::new();
-            let (y_plane, u_plane, v_plane) = rgb_to_yuv_planes_internal(&make_rgb(16, 16, 128), 16, 16);
+            let (y_plane, u_plane, v_plane) =
+                rgb_to_yuv_planes_internal(&make_rgb(16, 16, 128), 16, 16);
             let mut yp = y_plane;
             yp.resize(256, 128);
-            let (_, y2, y_subs, u_subs, v_subs) = compute_macroblock(&yp, &u_plane, &v_plane, 16, 8, 0, 0, qi);
+            let (_, y2, y_subs, u_subs, v_subs) =
+                compute_macroblock(&yp, &u_plane, &v_plane, 16, 8, 0, 0, qi);
             encode_coeff_block(&mut coeff_enc, &y2, 1);
-            for b in &y_subs { encode_coeff_block(&mut coeff_enc, b, 0); }
-            for b in &u_subs { encode_coeff_block(&mut coeff_enc, b, 1); }
-            for b in &v_subs { encode_coeff_block(&mut coeff_enc, b, 2); }
+            for b in &y_subs {
+                encode_coeff_block(&mut coeff_enc, b, 0);
+            }
+            for b in &u_subs {
+                encode_coeff_block(&mut coeff_enc, b, 1);
+            }
+            for b in &v_subs {
+                encode_coeff_block(&mut coeff_enc, b, 2);
+            }
             let coeff_data = coeff_enc.finish();
 
             let frame_header = build_frame_header(16, 16, header_data.len() as u32);
@@ -961,10 +1004,21 @@ mod tests {
 
             let result = image_webp::vp8::Vp8Decoder::decode_frame(Cursor::new(&vp8_data));
             match &result {
-                Ok(f) => eprintln!("qi={}: OK {}x{} hdr={}B coeff={}B",
-                    qi, f.width, f.height, header_data.len(), coeff_data.len()),
-                Err(e) => eprintln!("qi={}: FAILED {:?} hdr={}B coeff={}B",
-                    qi, e, header_data.len(), coeff_data.len()),
+                Ok(f) => eprintln!(
+                    "qi={}: OK {}x{} hdr={}B coeff={}B",
+                    qi,
+                    f.width,
+                    f.height,
+                    header_data.len(),
+                    coeff_data.len()
+                ),
+                Err(e) => eprintln!(
+                    "qi={}: FAILED {:?} hdr={}B coeff={}B",
+                    qi,
+                    e,
+                    header_data.len(),
+                    coeff_data.len()
+                ),
             }
             if let Err(e) = &result {
                 eprintln!("qi={}: FAILED {:?} (continuing)", qi, e);
@@ -982,15 +1036,19 @@ mod tests {
             enc.encode_bool(128, false); // pixel_type
             enc.encode_bool(128, false); // seg
             enc.encode_bool(128, false); // filter_type
-            enc.encode_literal(0, 6);    // filter_level
-            enc.encode_literal(0, 3);    // sharpness
+            enc.encode_literal(0, 6); // filter_level
+            enc.encode_literal(0, 3); // sharpness
             enc.encode_bool(128, false); // adj
-            enc.encode_literal(0, 2);    // partitions
+            enc.encode_literal(0, 2); // partitions
             enc.encode_literal(qi as u32, 7); // yac_abs
-            for _ in 0..5 { enc.encode_bool(128, false); } // deltas
-            enc.encode_bool(128, true);  // refresh
-            // ALL coeff updates at prob=255
-            for _ in 0..1056 { enc.encode_bool(255, false); }
+            for _ in 0..5 {
+                enc.encode_bool(128, false);
+            } // deltas
+            enc.encode_bool(128, true); // refresh
+                                        // ALL coeff updates at prob=255
+            for _ in 0..1056 {
+                enc.encode_bool(255, false);
+            }
             enc.encode_bool(128, false); // mb_no_skip_coeff
             encode_luma_mode_tree(&mut enc, MbPredictionMode::DcPred);
             encode_chroma_mode_tree(&mut enc, MbPredictionMode::DcPred);
@@ -999,12 +1057,20 @@ mod tests {
 
             let mut coeff_enc = BoolEncoder::new();
             let (yp, up, vp) = rgb_to_yuv_planes_internal(&make_rgb(16, 16, 128), 16, 16);
-            let mut y_plane = yp; y_plane.resize(256, 128);
-            let (_, y2, y_subs, u_subs, v_subs) = compute_macroblock(&y_plane, &up, &vp, 16, 8, 0, 0, qi);
+            let mut y_plane = yp;
+            y_plane.resize(256, 128);
+            let (_, y2, y_subs, u_subs, v_subs) =
+                compute_macroblock(&y_plane, &up, &vp, 16, 8, 0, 0, qi);
             encode_coeff_block(&mut coeff_enc, &y2, 1);
-            for b in &y_subs { encode_coeff_block(&mut coeff_enc, b, 0); }
-            for b in &u_subs { encode_coeff_block(&mut coeff_enc, b, 1); }
-            for b in &v_subs { encode_coeff_block(&mut coeff_enc, b, 2); }
+            for b in &y_subs {
+                encode_coeff_block(&mut coeff_enc, b, 0);
+            }
+            for b in &u_subs {
+                encode_coeff_block(&mut coeff_enc, b, 1);
+            }
+            for b in &v_subs {
+                encode_coeff_block(&mut coeff_enc, b, 2);
+            }
             let coeff_data = coeff_enc.finish();
             eprintln!("  coeff={}B", coeff_data.len());
 
@@ -1025,7 +1091,8 @@ mod tests {
     #[test]
     fn test_find_difference() {
         // Compare: manual encode vs full encode_vp8_lossy
-        let w = 16u32; let h = 16u32;
+        let w = 16u32;
+        let h = 16u32;
         let rgb = make_rgb(w, h, 128);
         let quality = 75u8;
         let qi = quality_to_quant_index(quality);
@@ -1043,7 +1110,7 @@ mod tests {
         let mut header_enc = BoolEncoder::new();
         encode_frame_header(&mut header_enc, w, h, qi);
         let (luma_mode, y2, y_subs, u_subs, v_subs) =
-            compute_macroblock(&yp, &up, &vp, w, (w+1)/2, 0, 0, qi);
+            compute_macroblock(&yp, &up, &vp, w, (w + 1) / 2, 0, 0, qi);
         encode_luma_mode_tree(&mut header_enc, luma_mode);
         encode_chroma_mode_tree(&mut header_enc, MbPredictionMode::DcPred);
         let manual_header = header_enc.finish();
@@ -1051,9 +1118,15 @@ mod tests {
         // Manual coeff
         let mut coeff_enc = BoolEncoder::new();
         encode_coeff_block(&mut coeff_enc, &y2, 1);
-        for b in &y_subs { encode_coeff_block(&mut coeff_enc, b, 0); }
-        for b in &u_subs { encode_coeff_block(&mut coeff_enc, b, 1); }
-        for b in &v_subs { encode_coeff_block(&mut coeff_enc, b, 2); }
+        for b in &y_subs {
+            encode_coeff_block(&mut coeff_enc, b, 0);
+        }
+        for b in &u_subs {
+            encode_coeff_block(&mut coeff_enc, b, 1);
+        }
+        for b in &v_subs {
+            encode_coeff_block(&mut coeff_enc, b, 2);
+        }
         let manual_coeff = coeff_enc.finish();
 
         // Full encoder output
@@ -1061,16 +1134,32 @@ mod tests {
         let vp8_size = u32::from_le_bytes(full_encoded[16..20].try_into().unwrap()) as usize;
         let tag = u32::from_le_bytes([full_encoded[20], full_encoded[21], full_encoded[22], 0]);
         let part_size = (tag >> 5) as usize;
-        let full_vp8 = &full_encoded[20..20+vp8_size];
-        let full_header = &full_vp8[10..10+part_size];
-        let full_coeff = &full_vp8[10+part_size..vp8_size];
+        let full_vp8 = &full_encoded[20..20 + vp8_size];
+        let full_header = &full_vp8[10..10 + part_size];
+        let full_coeff = &full_vp8[10 + part_size..vp8_size];
 
-        eprintln!("Manual header: {} B, Manual coeff: {} B", manual_header.len(), manual_coeff.len());
-        eprintln!("Full header:   {} B, Full coeff:   {} B", full_header.len(), full_coeff.len());
+        eprintln!(
+            "Manual header: {} B, Manual coeff: {} B",
+            manual_header.len(),
+            manual_coeff.len()
+        );
+        eprintln!(
+            "Full header:   {} B, Full coeff:   {} B",
+            full_header.len(),
+            full_coeff.len()
+        );
         eprintln!("VP8 data: {} B, part_size={}", vp8_size, part_size);
 
-        eprintln!("Manual header: {} B, Manual coeff: {} B", manual_header.len(), manual_coeff.len());
-        eprintln!("Full header:   {} B, Full coeff:   {} B", full_header.len(), full_coeff.len());
+        eprintln!(
+            "Manual header: {} B, Manual coeff: {} B",
+            manual_header.len(),
+            manual_coeff.len()
+        );
+        eprintln!(
+            "Full header:   {} B, Full coeff:   {} B",
+            full_header.len(),
+            full_coeff.len()
+        );
 
         if manual_header != full_header {
             eprintln!("HEADERS DIFFER!");
@@ -1099,8 +1188,7 @@ mod tests {
         let h = 16u32;
         let rgb = make_rgb(w, h, 200);
         let encoded = encode_vp8_lossy(&rgb, w, h, 75);
-        let decoder = image_webp::WebPDecoder::new(Cursor::new(&encoded))
-            .expect("decoder created");
+        let decoder = image_webp::WebPDecoder::new(Cursor::new(&encoded)).expect("decoder created");
         assert!(!decoder.has_alpha(), "lossy VP8 has no alpha");
     }
 
@@ -1111,7 +1199,11 @@ mod tests {
         let rgb = make_gradient(w, h);
         let encoded = encode_vp8_lossy(&rgb, w, h, 90);
         let result = image_webp::WebPDecoder::new(Cursor::new(&encoded));
-        assert!(result.is_ok(), "gradient image should decode, got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "gradient image should decode, got: {:?}",
+            result.err()
+        );
     }
 
     // ── Edge cases ──
@@ -1121,7 +1213,9 @@ mod tests {
         let gray_enc = encode_vp8_lossy(&make_rgb(16, 16, 128), 16, 16, 50);
         let white_enc = encode_vp8_lossy(&make_rgb(16, 16, 255), 16, 16, 50);
         let black_enc = encode_vp8_lossy(&make_rgb(16, 16, 0), 16, 16, 50);
-        assert!(gray_enc != white_enc || white_enc != black_enc,
-                "different inputs should produce different encodings");
+        assert!(
+            gray_enc != white_enc || white_enc != black_enc,
+            "different inputs should produce different encodings"
+        );
     }
 }

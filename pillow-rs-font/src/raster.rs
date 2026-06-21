@@ -78,7 +78,11 @@ pub(crate) fn rasterize(glyph: &ScaledGlyph) -> RasterizedGlyph {
         let contour_end = end_idx as usize + 1;
 
         for i in contour_start..contour_end {
-            let next = if i + 1 < contour_end { i + 1 } else { contour_start };
+            let next = if i + 1 < contour_end {
+                i + 1
+            } else {
+                contour_start
+            };
 
             let p0 = glyph.points[i];
             let p1 = glyph.points[next];
@@ -137,7 +141,15 @@ pub(crate) fn rasterize(glyph: &ScaledGlyph) -> RasterizedGlyph {
                         span_start_x = crossing.x;
                     } else {
                         // Exiting filled region: fill span
-                        fill_span(span_start_x, crossing.x, py, w, h, offset_x, &mut pixel_areas);
+                        fill_span(
+                            span_start_x,
+                            crossing.x,
+                            py,
+                            w,
+                            h,
+                            offset_x,
+                            &mut pixel_areas,
+                        );
                     }
                 }
             }
@@ -145,7 +157,15 @@ pub(crate) fn rasterize(glyph: &ScaledGlyph) -> RasterizedGlyph {
             // If winding remains non-zero, close to right edge
             if winding != 0 {
                 let right_edge = ((offset_x + w as i32) << 6) as i32;
-                fill_span(span_start_x, right_edge, py, w, h, offset_x, &mut pixel_areas);
+                fill_span(
+                    span_start_x,
+                    right_edge,
+                    py,
+                    w,
+                    h,
+                    offset_x,
+                    &mut pixel_areas,
+                );
             }
         }
 
@@ -184,11 +204,7 @@ pub(crate) fn rasterize(glyph: &ScaledGlyph) -> RasterizedGlyph {
 /// In TrueType, a quadratic Bézier has three points: on, off, on.
 /// We pass (start_on_curve, off_curve). The subdivision splits the curve
 /// where the flatness is within tolerance.
-fn flatten_quadratic_bezier(
-    p0: (i32, i32),
-    p1: (i32, i32),
-    crossings: &mut Vec<EdgeCrossing>,
-) {
+fn flatten_quadratic_bezier(p0: (i32, i32), p1: (i32, i32), crossings: &mut Vec<EdgeCrossing>) {
     // For TrueType outlines, a quadratic Bézier is defined by:
     //   start (on-curve), control (off-curve), end (on-curve)
     // This function receives (start, control). The end is attached to p1
@@ -287,11 +303,7 @@ fn fill_span(
 ///
 /// Records a crossing at each pixel-row center that the segment passes through.
 /// p0 and p1 are in 26.6 fixed-point.
-fn add_line_crossings(
-    p0: (i32, i32),
-    p1: (i32, i32),
-    crossings: &mut Vec<EdgeCrossing>,
-) {
+fn add_line_crossings(p0: (i32, i32), p1: (i32, i32), crossings: &mut Vec<EdgeCrossing>) {
     let (x0, y0) = p0;
     let (x1, y1) = p1;
 
@@ -301,7 +313,7 @@ fn add_line_crossings(
     }
 
     let dir = if y0 < y1 { 1i32 } else { -1i32 };
-    let dy = y1 as i64 - y0 as i64;  // signed 26.6
+    let dy = y1 as i64 - y0 as i64; // signed 26.6
 
     // Pixel rows spanned
     let py0 = y0 >> 6;
@@ -309,7 +321,7 @@ fn add_line_crossings(
     let py_start = py0.min(py1).max(0);
     let py_end = py0.max(py1);
 
-    let dx = x1 as i64 - x0 as i64;  // signed 26.6
+    let dx = x1 as i64 - x0 as i64; // signed 26.6
 
     // For each scanline center the edge crosses:
     // x_interp = x0 + (y_center - y0) * dx / dy  (all signed 26.6)

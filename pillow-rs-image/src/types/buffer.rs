@@ -1013,7 +1013,6 @@ where
     fn get_pixel(&self, x: u32, y: u32) -> P {
         *self.get_pixel(x, y)
     }
-
 }
 
 // GenericImage

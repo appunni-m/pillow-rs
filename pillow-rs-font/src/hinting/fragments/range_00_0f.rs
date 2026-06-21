@@ -20,9 +20,9 @@
 //! 0x0E SFVTPV     — set free  vector = proj vector
 //! 0x0F ISECT      — intersection of two line segments
 
-use crate::error::FontError;
 use super::super::exec::ExecContext;
 use super::super::graphics::F26Dot6Vector;
+use crate::error::FontError;
 
 impl ExecContext {
     pub(crate) fn handle_00_0f(&mut self) -> Result<i32, FontError> {
@@ -69,8 +69,16 @@ impl ExecContext {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
                 // Read from zp0
-                let point1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let point2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let point1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let point2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dx = point2.x - point1.x;
                 let dy = point2.y - point1.y;
                 let len = ((dx as i64).abs().max((dy as i64).abs())) as i32;
@@ -87,8 +95,16 @@ impl ExecContext {
             0x07 => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let point1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let point2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let point1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let point2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dx = point2.x - point1.x;
                 let dy = point2.y - point1.y;
                 let len = ((dx as i64).abs().max((dy as i64).abs())) as i32;
@@ -106,8 +122,16 @@ impl ExecContext {
             0x08 => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let point1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let point2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let point1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let point2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dx = point2.x - point1.x;
                 let dy = point2.y - point1.y;
                 let len = ((dx as i64).abs().max((dy as i64).abs())) as i32;
@@ -123,8 +147,16 @@ impl ExecContext {
             0x09 => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let point1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let point2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let point1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let point2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dx = point2.x - point1.x;
                 let dy = point2.y - point1.y;
                 let len = ((dx as i64).abs().max((dy as i64).abs())) as i32;
@@ -175,10 +207,26 @@ impl ExecContext {
                 let b2 = self.pop() as usize;
                 let b1 = self.pop() as usize;
                 let p_idx = self.pop() as usize;
-                let p_a1 = if a1 < self.zp0.points.len() { self.zp0.points[a1] } else { F26Dot6Vector::new(0, 0) };
-                let p_a2 = if a2 < self.zp0.points.len() { self.zp0.points[a2] } else { F26Dot6Vector::new(0, 0) };
-                let p_b1 = if b1 < self.zp1.points.len() { self.zp1.points[b1] } else { F26Dot6Vector::new(0, 0) };
-                let p_b2 = if b2 < self.zp1.points.len() { self.zp1.points[b2] } else { F26Dot6Vector::new(0, 0) };
+                let p_a1 = if a1 < self.zp0.points.len() {
+                    self.zp0.points[a1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let p_a2 = if a2 < self.zp0.points.len() {
+                    self.zp0.points[a2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let p_b1 = if b1 < self.zp1.points.len() {
+                    self.zp1.points[b1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let p_b2 = if b2 < self.zp1.points.len() {
+                    self.zp1.points[b2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 if p_idx < self.zp2.points.len() {
                     let a_dx = p_a2.x - p_a1.x;
                     let a_dy = p_a2.y - p_a1.y;
@@ -187,7 +235,7 @@ impl ExecContext {
                     let denom = a_dx as i64 * b_dy as i64 - a_dy as i64 * b_dx as i64;
                     if denom != 0 {
                         let t_num = (p_b1.x - p_a1.x) as i64 * b_dy as i64
-                                  - (p_b1.y - p_a1.y) as i64 * b_dx as i64;
+                            - (p_b1.y - p_a1.y) as i64 * b_dx as i64;
                         let ix = p_a1.x as i64 + (a_dx as i64 * t_num) / denom;
                         let iy = p_a1.y as i64 + (a_dy as i64 * t_num) / denom;
                         self.zp2.points[p_idx] = F26Dot6Vector::new(ix as i32, iy as i32);
@@ -206,10 +254,8 @@ impl ExecContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     fn make_ctx() -> ExecContext {
-        
         ExecContext::new_test()
     }
 

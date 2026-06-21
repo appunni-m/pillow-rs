@@ -1,6 +1,8 @@
 /// The type of each channel in a pixel. For example, this can be `u8`, `u16`, `f32`.
 // AS PER DESIGN: Pod + Zeroable enables safe bytemuck casts, eliminating unsafe blocks.
-pub trait Primitive: Copy + Clone + PartialOrd + Sized + Default + bytemuck::Pod + bytemuck::Zeroable {
+pub trait Primitive:
+    Copy + Clone + PartialOrd + Sized + Default + bytemuck::Pod + bytemuck::Zeroable
+{
     /// The maximum value for this type of primitive within the context of color.
     /// For floats, the maximum is `1.0`, whereas the integer types inherit their usual maximum values.
     const DEFAULT_MAX_VALUE: Self;

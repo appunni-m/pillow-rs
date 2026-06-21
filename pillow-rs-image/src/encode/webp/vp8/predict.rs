@@ -159,8 +159,7 @@ fn predict_16x16_h(dst: &mut [u8], left: &[u8]) {
 fn predict_16x16_tm(dst: &mut [u8], above: &[u8], left: &[u8], top_left: u8) {
     for y in 0..16 {
         for x in 0..16 {
-            dst[y * 16 + x] =
-                clamp_u8(above[x] as i16 + left[y] as i16 - top_left as i16);
+            dst[y * 16 + x] = clamp_u8(above[x] as i16 + left[y] as i16 - top_left as i16);
         }
     }
 }
@@ -280,8 +279,7 @@ fn predict_8x8_h(dst: &mut [u8], left: &[u8]) {
 fn predict_8x8_tm(dst: &mut [u8], above: &[u8], left: &[u8], top_left: u8) {
     for y in 0..8 {
         for x in 0..8 {
-            dst[y * 8 + x] =
-                clamp_u8(above[x] as i16 + left[y] as i16 - top_left as i16);
+            dst[y * 8 + x] = clamp_u8(above[x] as i16 + left[y] as i16 - top_left as i16);
         }
     }
 }
@@ -296,13 +294,7 @@ fn predict_8x8_tm(dst: &mut [u8], above: &[u8], left: &[u8], top_left: u8) {
 /// `above` is 4 pixels from the edge above (indices 0..3, column -1..3).
 /// `left` is 4 pixels from the edge left (indices 0..3, row -1..3).
 /// `top_left` is the pixel at (-1,-1).
-pub fn predict_4x4(
-    dst: &mut [u8],
-    above: &[u8],
-    left: &[u8],
-    top_left: u8,
-    mode: SubBlockMode,
-) {
+pub fn predict_4x4(dst: &mut [u8], above: &[u8], left: &[u8], top_left: u8, mode: SubBlockMode) {
     assert!(dst.len() >= 16);
     assert!(above.len() >= 4);
     assert!(left.len() >= 4);
@@ -363,8 +355,7 @@ fn predict_4x4_h(dst: &mut [u8], left: &[u8]) {
 fn predict_4x4_tm(dst: &mut [u8], above: &[u8], left: &[u8], top_left: u8) {
     for y in 0..4 {
         for x in 0..4 {
-            dst[y * 4 + x] =
-                clamp_u8(above[x] as i16 + left[y] as i16 - top_left as i16);
+            dst[y * 4 + x] = clamp_u8(above[x] as i16 + left[y] as i16 - top_left as i16);
         }
     }
 }
@@ -618,12 +609,7 @@ fn compute_sad_16x16(block: &[u8], prediction: &[u8]) -> u32 {
 ///
 /// `block` is the original 16×16 source data (256 bytes, row-major).
 /// `above`, `left`, `top_left` describe the neighbour edge.
-pub fn choose_luma_mode(
-    block: &[u8],
-    above: &[u8],
-    left: &[u8],
-    top_left: u8,
-) -> MbPredictionMode {
+pub fn choose_luma_mode(block: &[u8], above: &[u8], left: &[u8], top_left: u8) -> MbPredictionMode {
     let modes = [
         MbPredictionMode::DcPred,
         MbPredictionMode::VPred,
@@ -657,12 +643,7 @@ pub fn choose_luma_mode(
 
 /// Evaluate the SAD for B_PRED mode by independently choosing the best 4×4
 /// sub-block mode for each of the 16 sub-blocks.
-fn evaluate_bpred_sad(
-    block: &[u8],
-    above: &[u8],
-    left: &[u8],
-    top_left: u8,
-) -> u32 {
+fn evaluate_bpred_sad(block: &[u8], above: &[u8], left: &[u8], top_left: u8) -> u32 {
     let sub_modes = [
         SubBlockMode::Dc,
         SubBlockMode::V,
@@ -737,9 +718,9 @@ fn evaluate_bpred_sad(
 /// Tries all modes in the [`SubBlockMode`] enum and returns the one with the
 /// lowest SAD against `block`.
 pub fn choose_4x4_mode(
-    block: &[u8],     // 16 bytes, row-major
-    above: &[u8],     // 4 bytes
-    left: &[u8],      // 4 bytes
+    block: &[u8], // 16 bytes, row-major
+    above: &[u8], // 4 bytes
+    left: &[u8],  // 4 bytes
     top_left: u8,
 ) -> SubBlockMode {
     let all_modes = [
@@ -810,12 +791,7 @@ pub fn choose_luma_mode_full(
     best_mode
 }
 
-fn evaluate_bpred_sad_full(
-    block: &[u8],
-    above: &[u8],
-    left: &[u8],
-    top_left: u8,
-) -> u32 {
+fn evaluate_bpred_sad_full(block: &[u8], above: &[u8], left: &[u8], top_left: u8) -> u32 {
     let all_modes = [
         SubBlockMode::Dc,
         SubBlockMode::V,
@@ -835,8 +811,7 @@ fn evaluate_bpred_sad_full(
             let mut src_4x4 = [0u8; 16];
             for y in 0..4 {
                 for x in 0..4 {
-                    src_4x4[y * 4 + x] =
-                        block[(sub_y * 4 + y) * 16 + (sub_x * 4 + x)];
+                    src_4x4[y * 4 + x] = block[(sub_y * 4 + y) * 16 + (sub_x * 4 + x)];
                 }
             }
 
@@ -899,7 +874,13 @@ mod tests {
     #[test]
     fn test_predict_16x16_dc() {
         let mut dst = [0u8; 256];
-        predict_luma_16x16(&mut dst, &EDGE_ABOVE, &EDGE_LEFT, EDGE_TL, MbPredictionMode::DcPred);
+        predict_luma_16x16(
+            &mut dst,
+            &EDGE_ABOVE,
+            &EDGE_LEFT,
+            EDGE_TL,
+            MbPredictionMode::DcPred,
+        );
         // Average of 32 values (16 above + 16 left).
         // Sum above = 2800, sum left = 2480, total = 5280.  (5280+16)/32 = 165.
         let expected_avg = 165u8;
@@ -911,7 +892,13 @@ mod tests {
     #[test]
     fn test_predict_16x16_v() {
         let mut dst = [0u8; 256];
-        predict_luma_16x16(&mut dst, &EDGE_ABOVE, &EDGE_LEFT, EDGE_TL, MbPredictionMode::VPred);
+        predict_luma_16x16(
+            &mut dst,
+            &EDGE_ABOVE,
+            &EDGE_LEFT,
+            EDGE_TL,
+            MbPredictionMode::VPred,
+        );
         for y in 0..16 {
             for x in 0..16 {
                 assert_eq!(dst[y * 16 + x], EDGE_ABOVE[x], "y={y} x={x}");
@@ -922,7 +909,13 @@ mod tests {
     #[test]
     fn test_predict_16x16_h() {
         let mut dst = [0u8; 256];
-        predict_luma_16x16(&mut dst, &EDGE_ABOVE, &EDGE_LEFT, EDGE_TL, MbPredictionMode::HPred);
+        predict_luma_16x16(
+            &mut dst,
+            &EDGE_ABOVE,
+            &EDGE_LEFT,
+            EDGE_TL,
+            MbPredictionMode::HPred,
+        );
         for y in 0..16 {
             for x in 0..16 {
                 assert_eq!(dst[y * 16 + x], EDGE_LEFT[y], "y={y} x={x}");
@@ -933,7 +926,13 @@ mod tests {
     #[test]
     fn test_predict_16x16_tm() {
         let mut dst = [0u8; 256];
-        predict_luma_16x16(&mut dst, &EDGE_ABOVE, &EDGE_LEFT, EDGE_TL, MbPredictionMode::TmPred);
+        predict_luma_16x16(
+            &mut dst,
+            &EDGE_ABOVE,
+            &EDGE_LEFT,
+            EDGE_TL,
+            MbPredictionMode::TmPred,
+        );
         for y in 0..16 {
             for x in 0..16 {
                 let expected =

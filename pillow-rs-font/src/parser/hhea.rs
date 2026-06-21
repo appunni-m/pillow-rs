@@ -23,7 +23,7 @@ pub(crate) struct HheaTable {
 pub(crate) fn parse_hhea(data: &[u8]) -> Result<HheaTable, FontError> {
     if data.len() < 36 {
         return Err(FontError::InvalidFont(
-            "hhea table too short (need 36 bytes)".into()
+            "hhea table too short (need 36 bytes)".into(),
         ));
     }
     let ascent = i16::from_be_bytes([data[4], data[5]]);

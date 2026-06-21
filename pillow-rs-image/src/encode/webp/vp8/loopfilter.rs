@@ -151,12 +151,7 @@ fn filter_frame_horizontal(
 ///
 /// Returns `Some(filtered_segment)` if the filter was applied, or `None` if
 /// the edge was skipped (no detectable blocking artifact).
-fn simple_filter(
-    seg: &[u8; 8],
-    limit: u8,
-    blimit: u8,
-    interior_limit: u8,
-) -> Option<[u8; 8]> {
+fn simple_filter(seg: &[u8; 8], limit: u8, blimit: u8, interior_limit: u8) -> Option<[u8; 8]> {
     let p0 = seg[3];
     let p1 = seg[2];
     let q0 = seg[4];
@@ -214,7 +209,11 @@ fn simple_filter(
 #[inline]
 fn compute_blimit(filter_level: u8) -> u8 {
     let v = (filter_level as u16) * 2 + 60;
-    if v > 255 { 255 } else { v as u8 }
+    if v > 255 {
+        255
+    } else {
+        v as u8
+    }
 }
 
 /// Compute the interior (flatness) threshold from filter level and sharpness.
@@ -239,7 +238,11 @@ fn compute_interior_limit(filter_level: u8, sharpness: u8) -> u8 {
 /// Absolute difference between two `u8` values.
 #[inline]
 fn abs_diff(a: u8, b: u8) -> u8 {
-    if a > b { a - b } else { b - a }
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
 }
 
 /// Clamp a `i16` pixel value to `[0, 255]`.
@@ -345,13 +348,11 @@ mod tests {
         let mut u = vec![128u8; (width * height / 4) as usize];
         let mut v = vec![128u8; (width * height / 4) as usize];
 
-        let diff_before =
-            (y[15 * w] as i16 - y[16 * w] as i16).abs();
+        let diff_before = (y[15 * w] as i16 - y[16 * w] as i16).abs();
 
         loop_filter_frame(&mut y, &mut u, &mut v, width, height, 20, 2);
 
-        let diff_after =
-            (y[15 * w] as i16 - y[16 * w] as i16).abs();
+        let diff_after = (y[15 * w] as i16 - y[16 * w] as i16).abs();
 
         assert!(
             diff_after < diff_before,

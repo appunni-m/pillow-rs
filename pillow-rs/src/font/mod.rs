@@ -101,9 +101,7 @@ impl Font {
 
                 let mut xo = 0i32;
                 for mask in &glyphs {
-                    let dx = (xo as i64 + mask.xmin as i64)
-                        .max(0)
-                        .min(u32::MAX as i64) as u32;
+                    let dx = (xo as i64 + mask.xmin as i64).max(0).min(u32::MAX as i64) as u32;
                     for gy in 0..mask.height {
                         for gx in 0..mask.width {
                             let a = mask.pixels[(gy * mask.width + gx) as usize];
@@ -201,7 +199,11 @@ impl Font {
                         for gx in 0..gw {
                             let cov = mask.pixels[(gy * gw + gx) as usize];
                             let effective_cov = if binary {
-                                if cov >= 128 { 255u8 } else { 0u8 }
+                                if cov >= 128 {
+                                    255u8
+                                } else {
+                                    0u8
+                                }
                             } else {
                                 cov
                             };
@@ -230,15 +232,18 @@ impl Font {
                                                 canvas[dst_off] = ((fill.0 as u16 * sa
                                                     + canvas[dst_off] as u16 * da * (255 - sa)
                                                         / 255)
-                                                    / out_a) as u8;
+                                                    / out_a)
+                                                    as u8;
                                                 canvas[dst_off + 1] = ((fill.1 as u16 * sa
                                                     + canvas[dst_off + 1] as u16 * da * (255 - sa)
                                                         / 255)
-                                                    / out_a) as u8;
+                                                    / out_a)
+                                                    as u8;
                                                 canvas[dst_off + 2] = ((fill.2 as u16 * sa
                                                     + canvas[dst_off + 2] as u16 * da * (255 - sa)
                                                         / 255)
-                                                    / out_a) as u8;
+                                                    / out_a)
+                                                    as u8;
                                                 canvas[dst_off + 3] = out_a as u8;
                                             }
                                         }

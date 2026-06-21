@@ -49,22 +49,23 @@ fn read_u32(data: &[u8], offset: usize) -> Option<u32> {
 pub(crate) fn parse_table_directory(data: &[u8]) -> Result<TableDirectory, FontError> {
     if data.len() < 12 {
         return Err(FontError::InvalidFont(
-            "data too short for offset table (need 12 bytes)".into()
+            "data too short for offset table (need 12 bytes)".into(),
         ));
     }
 
-    let sf_version = read_u32(data, 0)
-        .ok_or_else(|| FontError::InvalidFont("cannot read sfVersion".into()))?;
+    let sf_version =
+        read_u32(data, 0).ok_or_else(|| FontError::InvalidFont("cannot read sfVersion".into()))?;
 
     // Accept TrueType (0x00010000) and OpenType with TrueType outlines ("OTTO")
     if sf_version != TRUE_MAGIC && sf_version != OTTO_MAGIC {
         return Err(FontError::InvalidFont(format!(
-            "unknown sfVersion: 0x{:08X}", sf_version
+            "unknown sfVersion: 0x{:08X}",
+            sf_version
         )));
     }
 
-    let num_tables = read_u16(data, 4)
-        .ok_or_else(|| FontError::InvalidFont("cannot read numTables".into()))?;
+    let num_tables =
+        read_u16(data, 4).ok_or_else(|| FontError::InvalidFont("cannot read numTables".into()))?;
 
     let entry_size = 16usize;
     let dir_start = 12usize;
@@ -72,7 +73,8 @@ pub(crate) fn parse_table_directory(data: &[u8]) -> Result<TableDirectory, FontE
 
     if data.len() < dir_end {
         return Err(FontError::InvalidFont(format!(
-            "data too short for {} table records", num_tables
+            "data too short for {} table records",
+            num_tables
         )));
     }
 
@@ -87,18 +89,21 @@ pub(crate) fn parse_table_directory(data: &[u8]) -> Result<TableDirectory, FontE
         let length = read_u32(data, off + 12)
             .ok_or_else(|| FontError::InvalidFont("cannot read table length".into()))?;
 
-        records.push(TableRecord { tag, offset, length });
+        records.push(TableRecord {
+            tag,
+            offset,
+            length,
+        });
     }
 
-    Ok(TableDirectory { num_tables, records })
+    Ok(TableDirectory {
+        num_tables,
+        records,
+    })
 }
 
 /// Look up a table by its 4-byte tag, returning a slice into the font data.
-pub(crate) fn find_table<'a>(
-    data: &'a [u8],
-    dir: &TableDirectory,
-    tag: u32,
-) -> Option<&'a [u8]> {
+pub(crate) fn find_table<'a>(data: &'a [u8], dir: &TableDirectory, tag: u32) -> Option<&'a [u8]> {
     for record in &dir.records {
         if record.tag == tag {
             let start = record.offset as usize;
@@ -113,12 +118,12 @@ pub(crate) mod cmap;
 pub(crate) mod head;
 pub(crate) mod hhea;
 pub(crate) mod hmtx;
+pub(crate) mod kern;
+pub(crate) mod loca_glyf;
 pub(crate) mod maxp;
 pub(crate) mod name;
 pub(crate) mod os2;
 pub(crate) mod post;
-pub(crate) mod kern;
-pub(crate) mod loca_glyf;
 
 /// Build a u32 tag from 4 ASCII bytes. E.g., tag(b"cmap") = 0x636D6170.
 #[inline]
@@ -142,7 +147,7 @@ mod tests {
         let mut data = vec![0u8; 12 + 16];
         data[0..4].copy_from_slice(&[0x00, 0x01, 0x00, 0x00]); // TRUE_MAGIC
         data[4..6].copy_from_slice(&[0x00, 0x01]); // numTables = 1
-        // table record at offset 12
+                                                   // table record at offset 12
         data[12..16].copy_from_slice(b"cmap");
         data[20..24].copy_from_slice(&[0x00, 0x00, 0x00, 0x1C]); // offset = 28
 

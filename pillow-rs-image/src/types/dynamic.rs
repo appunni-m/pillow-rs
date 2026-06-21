@@ -1,4 +1,3 @@
-
 //! Dynamic image type — an enum over supported image buffer types.
 //!
 //! Matches the `image` crate's `DynamicImage` API.

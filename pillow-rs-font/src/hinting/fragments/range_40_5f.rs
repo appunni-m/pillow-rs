@@ -34,42 +34,56 @@
 //! 0x5E SDB       — set delta base
 //! 0x5F SDS       — set delta shift
 
-use crate::error::FontError;
-use crate::hinting::exec::dot_product;
 use super::super::exec::ExecContext;
 use super::super::graphics::*;
+use crate::error::FontError;
+use crate::hinting::exec::dot_product;
 
 impl ExecContext {
     pub(crate) fn handle_40_5f(&mut self) -> Result<i32, FontError> {
         match self.opcode {
-            // 0x40 NPUSHB
+            // 0x40 NPUSHB (Apple convention)
             0x40 => {
                 let n = self.read_bytes(1)[0] as usize;
                 let vals = self.read_bytes(n);
-                for &v in &vals { self.push(v); }
+                for &v in &vals {
+                    self.push(v);
+                }
                 Ok(1 + n as i32)
             }
-            // 0x41 NPUSHW
+            // 0x41 NPUSHW (Apple convention)
             0x41 => {
                 let n = self.read_bytes(1)[0] as usize;
                 let vals = self.read_words(n);
-                for &v in &vals { self.push(v); }
+                for &v in &vals {
+                    self.push(v);
+                }
                 Ok(1 + (n * 2) as i32)
             }
-            // 0x42 WS
+            // 0x42 WS — write store (Apple convention)
+            // TrueType pops: location first, then value
             0x42 => {
-                let val = self.pop();
                 let loc = self.pop() as usize;
-                if loc >= self.glyf_storage.len() {
-                    self.glyf_storage.resize(loc + 64, 0);
+                let val = self.pop();
+                if loc < 4096 { // safety cap
+                    if loc >= self.glyf_storage.len() {
+                        self.glyf_storage.resize((loc + 64).min(4096), 0);
+                    }
+                    if loc < self.glyf_storage.len() {
+                        self.glyf_storage[loc] = val;
+                    }
                 }
-                self.glyf_storage[loc] = val;
                 Ok(1)
             }
-            // 0x43 RS
+            // 0x43 RS — read store (Apple convention)
+            // TrueType pops: location, pushes: value
             0x43 => {
                 let loc = self.pop() as usize;
-                let val = if loc < self.glyf_storage.len() { self.glyf_storage[loc] } else { 0 };
+                let val = if loc < self.glyf_storage.len() {
+                    self.glyf_storage[loc]
+                } else {
+                    0
+                };
                 self.push(val);
                 Ok(1)
             }
@@ -85,7 +99,11 @@ impl ExecContext {
             // 0x45 RCVT
             0x45 => {
                 let loc = self.pop() as usize;
-                let val = if loc < self.glyf_cvt.len() { self.glyf_cvt[loc] } else { 0 };
+                let val = if loc < self.glyf_cvt.len() {
+                    self.glyf_cvt[loc]
+                } else {
+                    0
+                };
                 self.push(val);
                 Ok(1)
             }
@@ -95,7 +113,9 @@ impl ExecContext {
                 let val = if p_idx < self.zp2.points.len() {
                     let p = self.zp2.points[p_idx];
                     dot_product(p.x, p.y, &self.gs.proj_vector)
-                } else { 0 };
+                } else {
+                    0
+                };
                 self.push(val);
                 Ok(1)
             }
@@ -105,7 +125,9 @@ impl ExecContext {
                 let val = if p_idx < self.zp0.points.len() {
                     let p = self.zp0.points[p_idx];
                     dot_product(p.x, p.y, &self.gs.proj_vector)
-                } else { 0 };
+                } else {
+                    0
+                };
                 self.push(val);
                 Ok(1)
             }
@@ -120,8 +142,12 @@ impl ExecContext {
                     let fv = self.gs.free_vector;
                     self.zp2.points[p_idx].x += (fv.x * diff) >> 6;
                     self.zp2.points[p_idx].y += (fv.y * diff) >> 6;
-                    if fv.x != 0 { self.zp2.tags[p_idx] |= TOUCH_X; }
-                    if fv.y != 0 { self.zp2.tags[p_idx] |= TOUCH_Y; }
+                    if fv.x != 0 {
+                        self.zp2.tags[p_idx] |= TOUCH_X;
+                    }
+                    if fv.y != 0 {
+                        self.zp2.tags[p_idx] |= TOUCH_Y;
+                    }
                 }
                 Ok(1)
             }
@@ -129,8 +155,16 @@ impl ExecContext {
             0x49 => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let pp1 = if p1 < self.zp1.points.len() { self.zp1.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let pp2 = if p2 < self.zp2.points.len() { self.zp2.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let pp1 = if p1 < self.zp1.points.len() {
+                    self.zp1.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let pp2 = if p2 < self.zp2.points.len() {
+                    self.zp2.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dist = dot_product(pp2.x - pp1.x, pp2.y - pp1.y, &self.gs.proj_vector);
                 self.push(dist);
                 Ok(1)
@@ -139,15 +173,23 @@ impl ExecContext {
             0x4A => {
                 let p2 = self.pop() as usize;
                 let p1 = self.pop() as usize;
-                let pp1 = if p1 < self.zp0.points.len() { self.zp0.points[p1] } else { F26Dot6Vector::new(0, 0) };
-                let pp2 = if p2 < self.zp0.points.len() { self.zp0.points[p2] } else { F26Dot6Vector::new(0, 0) };
+                let pp1 = if p1 < self.zp0.points.len() {
+                    self.zp0.points[p1]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
+                let pp2 = if p2 < self.zp0.points.len() {
+                    self.zp0.points[p2]
+                } else {
+                    F26Dot6Vector::new(0, 0)
+                };
                 let dist = dot_product(pp2.x - pp1.x, pp2.y - pp1.y, &self.gs.proj_vector);
                 self.push(dist);
                 Ok(1)
             }
-            // 0x4B MPPEM
+            // 0x4B MPPEM — returns ppem in F26Dot6 format (ppem * 64)
             0x4B => {
-                self.push(self.ppem as i32);
+                self.push((self.ppem as i32) << 6);
                 Ok(1)
             }
             // 0x4C MPS
@@ -233,9 +275,7 @@ impl ExecContext {
                 Ok(1)
             }
             // 0x59 EIF
-            0x59 => {
-                Ok(1)
-            }
+            0x59 => Ok(1),
             // 0x5A AND
             0x5A => {
                 let a = self.pop();
@@ -264,22 +304,29 @@ impl ExecContext {
                     let p_idx = ((arg >> 4) & 0xFF) as usize;
                     let delta_code = arg & 0x0F;
                     let shift = (self.gs.delta_shift.min(6)) as i32;
-                    let d = if delta_code >= 8 { ((delta_code as i32) - 16) << shift }
-                            else { (delta_code as i32) << shift };
+                    let d = if delta_code >= 8 {
+                        ((delta_code as i32) - 16) << shift
+                    } else {
+                        (delta_code as i32) << shift
+                    };
                     if p_idx < self.zp0.points.len() {
                         let fv = self.gs.free_vector;
                         let fx = (fv.x * d) >> 6;
                         let fy = (fv.y * d) >> 6;
                         self.zp0.points[p_idx].x += fx;
                         self.zp0.points[p_idx].y += fy;
-                        if fv.x != 0 { self.zp0.tags[p_idx] |= TOUCH_X; }
-                        if fv.y != 0 { self.zp0.tags[p_idx] |= TOUCH_Y; }
+                        if fv.x != 0 {
+                            self.zp0.tags[p_idx] |= TOUCH_X;
+                        }
+                        if fv.y != 0 {
+                            self.zp0.tags[p_idx] |= TOUCH_Y;
+                        }
                     }
                 }
                 Ok(1)
             }
 
-// 0x5E SDB — set delta base
+            // 0x5E SDB — set delta base
             0x5E => {
                 let n = self.pop() as u16;
                 self.gs.delta_base = n;
@@ -302,17 +349,15 @@ impl ExecContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     fn make_ctx() -> ExecContext {
-        
         ExecContext::new_test()
     }
 
     #[test]
     fn test_ws_rs() {
         let mut ctx = make_ctx();
-        ctx.push(0);  // location first
+        ctx.push(0); // location first
         ctx.push(42); // value second (on top)
         ctx.opcode = 0x42;
         ctx.handle_40_5f().unwrap();
@@ -326,23 +371,27 @@ mod tests {
     #[test]
     fn test_comparison() {
         let mut ctx = make_ctx();
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x50; // LT
         ctx.handle_40_5f().unwrap();
         assert_eq!(ctx.pop(), 1); // 20 < 10? false -> 0
 
         // GT
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x52;
         ctx.handle_40_5f().unwrap();
         assert_eq!(ctx.pop(), 0); // 20 > 10? true -> 1
 
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x54; // EQ
         ctx.handle_40_5f().unwrap();
         assert_eq!(ctx.pop(), 0); // equal? no
 
-        ctx.push(20); ctx.push(20);
+        ctx.push(20);
+        ctx.push(20);
         ctx.opcode = 0x54;
         ctx.handle_40_5f().unwrap();
         assert_eq!(ctx.pop(), 1); // equal? yes
@@ -351,12 +400,14 @@ mod tests {
     #[test]
     fn test_and_or_not() {
         let mut ctx = make_ctx();
-        ctx.push(1); ctx.push(0);
+        ctx.push(1);
+        ctx.push(0);
         ctx.opcode = 0x5A; // AND
         ctx.handle_40_5f().unwrap();
         assert_eq!(ctx.pop(), 0);
 
-        ctx.push(1); ctx.push(0);
+        ctx.push(1);
+        ctx.push(0);
         ctx.opcode = 0x5B; // OR
         ctx.handle_40_5f().unwrap();
         assert_eq!(ctx.pop(), 1);

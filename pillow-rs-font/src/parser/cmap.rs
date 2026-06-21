@@ -108,8 +108,8 @@ impl Format4Subtable {
             }
             if self.id_range_offsets[seg] == 0 {
                 // Contiguous mapping: glyph = (char + delta) mod 65536
-                let glyph = (char_code as u32)
-                    .wrapping_add_signed(self.id_deltas[seg] as i32) as u16;
+                let glyph =
+                    (char_code as u32).wrapping_add_signed(self.id_deltas[seg] as i32) as u16;
                 return Some(glyph);
             }
             // Non-contiguous: use range offset to index into glyph_id_array
@@ -119,8 +119,7 @@ impl Format4Subtable {
             if glyph_idx < self.glyph_id_array.len() {
                 let raw = self.glyph_id_array[glyph_idx];
                 if raw != 0 {
-                    let glyph = (raw as u32)
-                        .wrapping_add_signed(self.id_deltas[seg] as i32) as u16;
+                    let glyph = (raw as u32).wrapping_add_signed(self.id_deltas[seg] as i32) as u16;
                     return Some(glyph);
                 }
             }
@@ -141,7 +140,9 @@ pub(crate) fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
     let record_size = 8usize;
 
     if data.len() < header_size + num_tables * record_size {
-        return Err(FontError::InvalidFont("cmap: encoding records overflow".into()));
+        return Err(FontError::InvalidFont(
+            "cmap: encoding records overflow".into(),
+        ));
     }
 
     let mut records = Vec::with_capacity(num_tables);
@@ -149,9 +150,8 @@ pub(crate) fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
         let off = header_size + i * record_size;
         let platform_id = u16::from_be_bytes([data[off], data[off + 1]]);
         let encoding_id = u16::from_be_bytes([data[off + 2], data[off + 3]]);
-        let subtable_offset = u32::from_be_bytes([
-            data[off + 4], data[off + 5], data[off + 6], data[off + 7],
-        ]);
+        let subtable_offset =
+            u32::from_be_bytes([data[off + 4], data[off + 5], data[off + 6], data[off + 7]]);
         records.push(EncodingRecord {
             platform_id,
             encoding_id,
@@ -208,14 +208,18 @@ fn parse_format4(data: &[u8], offset: usize) -> Result<Format4Subtable, FontErro
 
     let length = u16::from_be_bytes([b[2], b[3]]) as usize;
     if offset + length > data.len() {
-        return Err(FontError::InvalidFont("cmap format 4: length exceeds data".into()));
+        return Err(FontError::InvalidFont(
+            "cmap format 4: length exceeds data".into(),
+        ));
     }
     let _language = u16::from_be_bytes([b[4], b[5]]);
     let seg_count_x2 = u16::from_be_bytes([b[6], b[7]]);
     let seg_count = (seg_count_x2 / 2) as usize;
 
     if seg_count == 0 {
-        return Err(FontError::InvalidFont("cmap format 4: zero segments".into()));
+        return Err(FontError::InvalidFont(
+            "cmap format 4: zero segments".into(),
+        ));
     }
 
     // Tables: endCode (seg_count), reservedPad (2), startCode (seg_count),
@@ -280,7 +284,9 @@ fn parse_format12(data: &[u8], offset: usize) -> Result<Format12Subtable, FontEr
 
     let group_start = 16usize;
     if group_start + num_groups * 12 > length || offset + length > data.len() {
-        return Err(FontError::InvalidFont("cmap format 12: groups overflow".into()));
+        return Err(FontError::InvalidFont(
+            "cmap format 12: groups overflow".into(),
+        ));
     }
 
     let mut start_codes = Vec::with_capacity(num_groups);
@@ -311,7 +317,10 @@ mod tests {
     use super::*;
 
     fn build_format4_segment(
-        start: u16, end: u16, delta: i16, range_offset: u16,
+        start: u16,
+        end: u16,
+        delta: i16,
+        range_offset: u16,
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
         let e = end.to_be_bytes().to_vec();
         let s = start.to_be_bytes().to_vec();
@@ -323,10 +332,13 @@ mod tests {
     fn build_format4_bytes(segments: &[(u16, u16, i16, u16, Vec<u16>)]) -> Vec<u8> {
         let seg_count = segments.len() as u16;
         let mut b = vec![0u8; 14]; // header
-        b[0] = 0x00; b[1] = 0x04; // format 4
+        b[0] = 0x00;
+        b[1] = 0x04; // format 4
         let total_len = 14u16 + seg_count * 8 + 2; // header (14) + endCodes + reservedPad + startCodes + idDelta + idRangeOffset
-        b[2] = (total_len >> 8) as u8; b[3] = total_len as u8;
-        b[6] = ((seg_count * 2) >> 8) as u8; b[7] = (seg_count * 2) as u8;
+        b[2] = (total_len >> 8) as u8;
+        b[3] = total_len as u8;
+        b[6] = ((seg_count * 2) >> 8) as u8;
+        b[7] = (seg_count * 2) as u8;
 
         // Collect glyph arrays
         let mut end_codes = Vec::new();
@@ -361,7 +373,8 @@ mod tests {
 
         // Wrap in cmap header: version=0, numTables=1, encoding record→offset 24
         let mut full_data = vec![0u8; 24]; // 4 (version+count) + 8 (record) + 12 (pad)
-        full_data[2] = 0x00; full_data[3] = 0x01; // numTables = 1
+        full_data[2] = 0x00;
+        full_data[3] = 0x01; // numTables = 1
         full_data[4..8].copy_from_slice(&[0x00, 0x03, 0x00, 0x01]); // platform 3, encoding 1
         let sub_off = 24u32;
         full_data[8..12].copy_from_slice(&sub_off.to_be_bytes());
@@ -379,7 +392,8 @@ mod tests {
         let segments = vec![(65u16, 90u16, 0i16, 0u16, vec![])]; // only A-Z
         let cmap_data_bytes = build_format4_bytes(&segments);
         let mut full_data = vec![0u8; 24];
-        full_data[2] = 0x00; full_data[3] = 0x01;
+        full_data[2] = 0x00;
+        full_data[3] = 0x01;
         full_data[4..8].copy_from_slice(&[0x00, 0x03, 0x00, 0x01]);
         let sub_off = 24u32;
         full_data[8..12].copy_from_slice(&sub_off.to_be_bytes());

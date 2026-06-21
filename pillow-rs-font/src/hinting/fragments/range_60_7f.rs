@@ -34,11 +34,11 @@
 //! 0x7E SANGW     — set angle weight
 //! 0x7F AA        — adjust angle
 
-use crate::error::FontError;
 use super::super::exec::ExecContext;
 #[allow(unused_imports)]
 use super::super::graphics::*;
 use super::super::round;
+use crate::error::FontError;
 
 impl ExecContext {
     pub(crate) fn handle_60_7f(&mut self) -> Result<i32, FontError> {
@@ -61,7 +61,11 @@ impl ExecContext {
             0x62 => {
                 let a = self.pop();
                 let b = self.pop();
-                if a == 0 { self.push(0); } else { self.push(b / a); }
+                if a == 0 {
+                    self.push(0);
+                } else {
+                    self.push(b / a);
+                }
                 Ok(1)
             }
             // 0x63 MUL
@@ -158,7 +162,7 @@ impl ExecContext {
                 }
                 Ok(1)
             }
-                        // 0x71 DELTAP2 — Delta Exception Point 2 (FreeType: uses shift=4, base=16)
+            // 0x71 DELTAP2 — Delta Exception Point 2 (FreeType: uses shift=4, base=16)
             0x71 => {
                 let saved_shift = self.gs.delta_shift;
                 let saved_base = self.gs.delta_base;
@@ -169,16 +173,23 @@ impl ExecContext {
                     let arg = self.pop();
                     let p_idx = ((arg >> 4) & 0xFF) as usize;
                     let delta_code = arg & 0x0F;
-                    let d = if delta_code >= 8 { ((delta_code as i32) - 16) << (self.gs.delta_shift as i32) }
-                            else { (delta_code as i32) << (self.gs.delta_shift as i32) };
+                    let d = if delta_code >= 8 {
+                        ((delta_code as i32) - 16) << (self.gs.delta_shift as i32)
+                    } else {
+                        (delta_code as i32) << (self.gs.delta_shift as i32)
+                    };
                     if p_idx < self.zp0.points.len() {
                         let fv = self.gs.free_vector;
                         let fx = (fv.x * d) >> 6;
                         let fy = (fv.y * d) >> 6;
                         self.zp0.points[p_idx].x += fx;
                         self.zp0.points[p_idx].y += fy;
-                        if fv.x != 0 { self.zp0.tags[p_idx] |= TOUCH_X; }
-                        if fv.y != 0 { self.zp0.tags[p_idx] |= TOUCH_Y; }
+                        if fv.x != 0 {
+                            self.zp0.tags[p_idx] |= TOUCH_X;
+                        }
+                        if fv.y != 0 {
+                            self.zp0.tags[p_idx] |= TOUCH_Y;
+                        }
                     }
                 }
                 self.gs.delta_shift = saved_shift;
@@ -197,16 +208,23 @@ impl ExecContext {
                     let arg = self.pop();
                     let p_idx = ((arg >> 4) & 0xFF) as usize;
                     let delta_code = arg & 0x0F;
-                    let d = if delta_code >= 8 { ((delta_code as i32) - 16) << (self.gs.delta_shift as i32) }
-                            else { (delta_code as i32) << (self.gs.delta_shift as i32) };
+                    let d = if delta_code >= 8 {
+                        ((delta_code as i32) - 16) << (self.gs.delta_shift as i32)
+                    } else {
+                        (delta_code as i32) << (self.gs.delta_shift as i32)
+                    };
                     if p_idx < self.zp0.points.len() {
                         let fv = self.gs.free_vector;
                         let fx = (fv.x * d) >> 6;
                         let fy = (fv.y * d) >> 6;
                         self.zp0.points[p_idx].x += fx;
                         self.zp0.points[p_idx].y += fy;
-                        if fv.x != 0 { self.zp0.tags[p_idx] |= TOUCH_X; }
-                        if fv.y != 0 { self.zp0.tags[p_idx] |= TOUCH_Y; }
+                        if fv.x != 0 {
+                            self.zp0.tags[p_idx] |= TOUCH_X;
+                        }
+                        if fv.y != 0 {
+                            self.zp0.tags[p_idx] |= TOUCH_Y;
+                        }
                     }
                 }
                 self.gs.delta_shift = saved_shift;
@@ -221,9 +239,14 @@ impl ExecContext {
                     let arg = self.pop();
                     let c_idx = ((arg >> 4) & 0xFF) as usize;
                     let delta_code = arg & 0x0F;
-                    let d = if delta_code >= 8 { ((delta_code as i32) - 16) << (self.gs.delta_shift as i32) }
-                            else { (delta_code as i32) << (self.gs.delta_shift as i32) };
-                    if c_idx < self.glyf_cvt.len() { self.glyf_cvt[c_idx] += d; }
+                    let d = if delta_code >= 8 {
+                        ((delta_code as i32) - 16) << (self.gs.delta_shift as i32)
+                    } else {
+                        (delta_code as i32) << (self.gs.delta_shift as i32)
+                    };
+                    if c_idx < self.glyf_cvt.len() {
+                        self.glyf_cvt[c_idx] += d;
+                    }
                 }
                 Ok(1)
             }
@@ -235,9 +258,14 @@ impl ExecContext {
                     let arg = self.pop();
                     let c_idx = ((arg >> 4) & 0xFF) as usize;
                     let delta_code = arg & 0x0F;
-                    let d = if delta_code >= 8 { ((delta_code as i32) - 16) << 4 }
-                            else { (delta_code as i32) << 4 };
-                    if c_idx < self.glyf_cvt.len() { self.glyf_cvt[c_idx] += d; }
+                    let d = if delta_code >= 8 {
+                        ((delta_code as i32) - 16) << 4
+                    } else {
+                        (delta_code as i32) << 4
+                    };
+                    if c_idx < self.glyf_cvt.len() {
+                        self.glyf_cvt[c_idx] += d;
+                    }
                 }
                 Ok(1)
             }
@@ -249,14 +277,19 @@ impl ExecContext {
                     let arg = self.pop();
                     let c_idx = ((arg >> 4) & 0xFF) as usize;
                     let delta_code = arg & 0x0F;
-                    let d = if delta_code >= 8 { ((delta_code as i32) - 16) << 5 }
-                            else { (delta_code as i32) << 5 };
-                    if c_idx < self.glyf_cvt.len() { self.glyf_cvt[c_idx] += d; }
+                    let d = if delta_code >= 8 {
+                        ((delta_code as i32) - 16) << 5
+                    } else {
+                        (delta_code as i32) << 5
+                    };
+                    if c_idx < self.glyf_cvt.len() {
+                        self.glyf_cvt[c_idx] += d;
+                    }
                 }
                 Ok(1)
             }
 
-// 0x76 SROUND -- FreeType SetSuperRound
+            // 0x76 SROUND -- FreeType SetSuperRound
             0x76 => {
                 self.gs.round_state = 7;
                 let n = self.pop();
@@ -382,17 +415,16 @@ impl ExecContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     fn make_ctx() -> ExecContext {
-        
         ExecContext::new_test()
     }
 
     #[test]
     fn test_add() {
         let mut ctx = make_ctx();
-        ctx.push(10); ctx.push(20);
+        ctx.push(10);
+        ctx.push(20);
         ctx.opcode = 0x60;
         ctx.handle_60_7f().unwrap();
         assert_eq!(ctx.pop(), 30);
@@ -401,7 +433,8 @@ mod tests {
     #[test]
     fn test_sub() {
         let mut ctx = make_ctx();
-        ctx.push(30); ctx.push(10);
+        ctx.push(30);
+        ctx.push(10);
         ctx.opcode = 0x61;
         ctx.handle_60_7f().unwrap();
         assert_eq!(ctx.pop(), 20);
@@ -410,7 +443,8 @@ mod tests {
     #[test]
     fn test_div() {
         let mut ctx = make_ctx();
-        ctx.push(15); ctx.push(3);
+        ctx.push(15);
+        ctx.push(3);
         ctx.opcode = 0x62;
         ctx.handle_60_7f().unwrap();
         assert_eq!(ctx.pop(), 5);
@@ -419,7 +453,8 @@ mod tests {
     #[test]
     fn test_mul() {
         let mut ctx = make_ctx();
-        ctx.push(3); ctx.push(5);
+        ctx.push(3);
+        ctx.push(5);
         ctx.opcode = 0x63;
         ctx.handle_60_7f().unwrap();
         assert_eq!(ctx.pop(), 15);

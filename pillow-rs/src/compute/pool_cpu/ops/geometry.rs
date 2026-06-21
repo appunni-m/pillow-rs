@@ -400,12 +400,14 @@ fn rotate_arbitrary_generic(
 
     let mut out = match CheckedDims::new(dw, dh, channels as u8) {
         Ok(dims) => dims.alloc_buffer(),
-        Err(_) => return match channels {
-            1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dw, dh)),
-            2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dw, dh)),
-            3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dw, dh)),
-            _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dw, dh)),
-        },
+        Err(_) => {
+            return match channels {
+                1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dw, dh)),
+                2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dw, dh)),
+                3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dw, dh)),
+                _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dw, dh)),
+            }
+        }
     };
 
     for dy in 0..dh {
@@ -509,12 +511,14 @@ fn transform_affine_generic(
 
     let mut out = match CheckedDims::new(dst_w, dst_h, channels as u8) {
         Ok(dims) => dims.alloc_buffer(),
-        Err(_) => return match channels {
-            1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dst_w, dst_h)),
-            2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dst_w, dst_h)),
-            3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dst_w, dst_h)),
-            _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dst_w, dst_h)),
-        },
+        Err(_) => {
+            return match channels {
+                1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dst_w, dst_h)),
+                2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dst_w, dst_h)),
+                3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dst_w, dst_h)),
+                _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dst_w, dst_h)),
+            }
+        }
     };
 
     for dy in 0..dst_h {

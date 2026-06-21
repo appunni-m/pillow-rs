@@ -9,12 +9,12 @@
 #![allow(dead_code)]
 
 pub mod error;
-mod parser;
-mod scaler;
-mod raster;
-mod metrics;
-mod tables;
 mod hinting;
+mod metrics;
+mod parser;
+mod raster;
+mod scaler;
+mod tables;
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ use parser::hmtx::parse_hmtx;
 use parser::maxp::parse_maxp;
 use parser::name::parse_name;
 use parser::os2::parse_os2;
-use parser::{parse_table_directory, find_table, tag};
+use parser::{find_table, parse_table_directory, tag};
 
 use hinting::HintingEngine;
 use tables::FontData;

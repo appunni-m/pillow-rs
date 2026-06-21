@@ -33,7 +33,7 @@ struct NameRecord {
 pub(crate) fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     if data.len() < 6 {
         return Err(FontError::InvalidFont(
-            "name table too short (need 6 bytes)".into()
+            "name table too short (need 6 bytes)".into(),
         ));
     }
     let _format = u16::from_be_bytes([data[0], data[1]]);
@@ -42,7 +42,7 @@ pub(crate) fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
 
     if data.len() < 6 + count * 12 {
         return Err(FontError::InvalidFont(
-            "name table: records overflow data".into()
+            "name table: records overflow data".into(),
         ));
     }
 
@@ -92,7 +92,8 @@ fn find_name_string(
     // Priority 2: platform 1 (Mac), encoding 0 (Roman)
     for r in records {
         if r.name_id == name_id && r.platform_id == 1 && r.encoding_id == 0 {
-            if let Ok(s) = decode_mac_roman(data, string_base, r.offset as usize, r.length as usize) {
+            if let Ok(s) = decode_mac_roman(data, string_base, r.offset as usize, r.length as usize)
+            {
                 return Some(s);
             }
         }
@@ -101,7 +102,9 @@ fn find_name_string(
     for r in records {
         if r.name_id == name_id {
             if r.platform_id == 3 {
-                if let Ok(s) = decode_utf16be(data, string_base, r.offset as usize, r.length as usize) {
+                if let Ok(s) =
+                    decode_utf16be(data, string_base, r.offset as usize, r.length as usize)
+                {
                     return Some(s);
                 }
             }
@@ -112,16 +115,19 @@ fn find_name_string(
 
 /// Decode a UTF-16BE string from the name table's string storage.
 fn decode_utf16be(
-    data: &[u8], base: usize, offset: usize, length: usize,
+    data: &[u8],
+    base: usize,
+    offset: usize,
+    length: usize,
 ) -> Result<String, FontError> {
     let start = base + offset;
     let end = start + length;
-    let bytes = data.get(start..end).ok_or_else(|| {
-        FontError::InvalidFont("name: string offset out of range".into())
-    })?;
+    let bytes = data
+        .get(start..end)
+        .ok_or_else(|| FontError::InvalidFont("name: string offset out of range".into()))?;
     if length % 2 != 0 {
         return Err(FontError::InvalidFont(
-            "name: UTF-16BE string has odd length".into()
+            "name: UTF-16BE string has odd length".into(),
         ));
     }
     let chars: Vec<u16> = bytes
@@ -134,7 +140,10 @@ fn decode_utf16be(
 
 /// Decode a Mac Roman string from the name table. Maps bytes 0-127 directly (ASCII subset).
 fn decode_mac_roman(
-    data: &[u8], base: usize, offset: usize, length: usize,
+    data: &[u8],
+    base: usize,
+    offset: usize,
+    length: usize,
 ) -> Result<String, FontError> {
     let start = base + offset;
     let end = start + length;
@@ -187,10 +196,7 @@ mod tests {
 
     #[test]
     fn extract_family_and_style_platform_3_encoding_1() {
-        let data = build_name_table(&[
-            (3, 1, 0x0409, 1, "DejaVu Sans"),
-            (3, 1, 0x0409, 2, "Book"),
-        ]);
+        let data = build_name_table(&[(3, 1, 0x0409, 1, "DejaVu Sans"), (3, 1, 0x0409, 2, "Book")]);
         let name = parse_name(&data).expect("should parse");
         assert_eq!(name.family, "DejaVu Sans");
         assert_eq!(name.subfamily, "Book");

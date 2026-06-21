@@ -1,8 +1,8 @@
 //! Color/Convert CPU operations extracted from image.rs execute_op().
 //! These implement PIL-compatible color mode conversion, quantization, and palette remapping.
 
-use crate::color::{pil_grayscale, pil_grayscale_truncate};
 use crate::checked_dims::CheckedDims;
+use crate::color::{pil_grayscale, pil_grayscale_truncate};
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::quantize::median_cut_quantize_rgb;

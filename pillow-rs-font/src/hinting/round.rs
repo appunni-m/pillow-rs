@@ -17,10 +17,18 @@
 pub fn round_to_grid(distance: i32, compensation: i32) -> i32 {
     if distance >= 0 {
         let val = (distance + compensation + 32) & !63;
-        if val < 0 { 0 } else { val }
+        if val < 0 {
+            0
+        } else {
+            val
+        }
     } else {
         let val = -(((-distance) + compensation + 32) & !63);
-        if val > 0 { 0 } else { val }
+        if val > 0 {
+            0
+        } else {
+            val
+        }
     }
 }
 
@@ -32,10 +40,18 @@ pub fn round_to_grid(distance: i32, compensation: i32) -> i32 {
 pub fn round_to_double_grid(distance: i32, compensation: i32) -> i32 {
     if distance >= 0 {
         let val = (distance + compensation + 16) & !31;
-        if val < 0 { 0 } else { val }
+        if val < 0 {
+            0
+        } else {
+            val
+        }
     } else {
         let val = -(((-distance) + compensation + 16) & !31);
-        if val > 0 { 0 } else { val }
+        if val > 0 {
+            0
+        } else {
+            val
+        }
     }
 }
 
@@ -44,10 +60,18 @@ pub fn round_to_double_grid(distance: i32, compensation: i32) -> i32 {
 pub fn round_down_to_grid(distance: i32, compensation: i32) -> i32 {
     if distance >= 0 {
         let val = (distance + compensation) & !63;
-        if val < 0 { 0 } else { val }
+        if val < 0 {
+            0
+        } else {
+            val
+        }
     } else {
         let val = -(((-distance) + compensation) & !63);
-        if val > 0 { 0 } else { val }
+        if val > 0 {
+            0
+        } else {
+            val
+        }
     }
 }
 
@@ -56,10 +80,18 @@ pub fn round_down_to_grid(distance: i32, compensation: i32) -> i32 {
 pub fn round_up_to_grid(distance: i32, compensation: i32) -> i32 {
     if distance >= 0 {
         let val = (distance + compensation + 63) & !63;
-        if val < 0 { 0 } else { val }
+        if val < 0 {
+            0
+        } else {
+            val
+        }
     } else {
         let val = -(((-distance) + compensation + 63) & !63);
-        if val > 0 { 0 } else { val }
+        if val > 0 {
+            0
+        } else {
+            val
+        }
     }
 }
 
@@ -68,10 +100,18 @@ pub fn round_up_to_grid(distance: i32, compensation: i32) -> i32 {
 pub fn round_off(distance: i32, compensation: i32) -> i32 {
     if distance >= 0 {
         let val = distance + compensation;
-        if val < 0 { 0 } else { val }
+        if val < 0 {
+            0
+        } else {
+            val
+        }
     } else {
         let val = distance - compensation;
-        if val > 0 { 0 } else { val }
+        if val > 0 {
+            0
+        } else {
+            val
+        }
     }
 }
 
@@ -82,10 +122,18 @@ pub fn round_off(distance: i32, compensation: i32) -> i32 {
 pub fn round_to_half_grid(distance: i32, compensation: i32) -> i32 {
     if distance >= 0 {
         let val = ((distance + compensation) & !63) + 32;
-        if val < 32 { 32 } else { val }
+        if val < 32 {
+            32
+        } else {
+            val
+        }
     } else {
         let val = -(((-distance) + compensation) & !63) - 32;
-        if val > -32 { -32 } else { val }
+        if val > -32 {
+            -32
+        } else {
+            val
+        }
     }
 }
 
