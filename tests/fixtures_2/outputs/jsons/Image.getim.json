@@ -9,15 +9,15 @@
     {
       "id": "Image_getim_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "<capsule object \"Pillow Imaging\" at 0x75d0dd8fa7f0>"
+        "method": "image",
+        "reference": "raws/Image.getim_Image_getim_L_suite1.bin"
       }
     },
     {
       "id": "Image_getim_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "<capsule object \"Pillow Imaging\" at 0x75d0dd8fa7c0>"
+        "method": "image",
+        "reference": "raws/Image.getim_Image_getim_RGB_suite1.bin"
       }
     }
   ]

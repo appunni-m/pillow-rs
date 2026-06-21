@@ -10,21 +10,24 @@
       "id": "ImageFont.load_path_L",
       "assert": {
         "method": "string",
-        "value": "('Liberation Serif', 'Regular')"
+        "value": "('Liberation Serif', 'Regular')",
+        "prefix": ""
       }
     },
     {
       "id": "ImageFont.load_path_RGBA",
       "assert": {
         "method": "string",
-        "value": "('Liberation Serif', 'Regular')"
+        "value": "('Liberation Serif', 'Regular')",
+        "prefix": ""
       }
     },
     {
       "id": "liberation_serif_20",
       "assert": {
         "method": "string",
-        "value": "('Liberation Serif', 'Regular')"
+        "value": "('Liberation Serif', 'Regular')",
+        "prefix": ""
       }
     }
   ]

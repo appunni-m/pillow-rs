@@ -10,14 +10,16 @@
       "id": "ImageColor_getcolor_L",
       "assert": {
         "method": "string",
-        "value": "(255, 0, 0)"
+        "value": "(255, 0, 0)",
+        "prefix": ""
       }
     },
     {
       "id": "ImageColor_getcolor_RGB",
       "assert": {
         "method": "string",
-        "value": "(255, 0, 0)"
+        "value": "(255, 0, 0)",
+        "prefix": ""
       }
     }
   ]

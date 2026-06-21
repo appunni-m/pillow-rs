@@ -9,22 +9,22 @@
     {
       "id": "ImageFont_load_default_imagefont_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x75d0dd986a50>"
+        "method": "image",
+        "reference": "images/ImageFont.load_default_imagefont_ImageFont_load_default_imagefont_L_suite1.png"
       }
     },
     {
       "id": "ImageFont_load_default_imagefont_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x75d0dd986960>"
+        "method": "image",
+        "reference": "images/ImageFont.load_default_imagefont_ImageFont_load_default_imagefont_RGB_suite1.png"
       }
     },
     {
       "id": "ImageFont_load_default_imagefont_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.ImageFont object at 0x75d0dd9878f0>"
+        "method": "image",
+        "reference": "images/ImageFont.load_default_imagefont_ImageFont_load_default_imagefont_RGBA_suite1.png"
       }
     }
   ]

@@ -9,43 +9,43 @@
     {
       "id": "Image_load_1_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x75d0de00aed0>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_1_suite1.bin"
       }
     },
     {
       "id": "Image_load_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x75d0de00b050>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_L_suite1.bin"
       }
     },
     {
       "id": "Image_load_LA_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x75d0de00b010>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_LA_suite1.bin"
       }
     },
     {
       "id": "Image_load_P_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x75d0de00b190>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_P_suite1.bin"
       }
     },
     {
       "id": "Image_load_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x75d0de00b110>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_RGB_suite1.bin"
       }
     },
     {
       "id": "Image_load_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x75d0de00b190>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_RGBA_suite1.bin"
       }
     }
   ]

@@ -78,6 +78,47 @@ def _pilify(v):
 
 
 
+def _normalize_pil_result(result):
+    """Convert PIL internal types to standard types for assertion dispatch.
+
+    - ImagingCore (font mask, getdata) -> Image or list
+    - Tuple containing ImagingCore (getmask2) -> normalize each element
+    - Font objects (FreeTypeFont, ImageFont with .font) -> rendered mask Image
+    - PixelAccess (load) -> pass through (handled by call_style change)
+
+    Returns (normalized_result, changed) tuple.
+    """
+    # Tuple: recursively normalize each element
+    if isinstance(result, tuple):
+        normalized = []
+        any_changed = False
+        for r in result:
+            nr, ch = _normalize_pil_result(r)
+            normalized.append(nr)
+            any_changed = any_changed or ch
+        if any_changed:
+            return tuple(normalized), True
+        return result, False
+
+    # ImagingCore
+    if type(result).__name__ == 'ImagingCore':
+        # Try bytes() -- works for font masks (always L-mode)
+        try:
+            b = bytes(result)
+            img = PIL.Image.frombytes(result.mode, result.size, b)
+            return img, True
+        except (TypeError, ValueError):
+            pass
+        # Fallback: try iterating (getdata)
+        try:
+            return list(result), True
+        except TypeError:
+            pass
+        return result, False
+
+    return result, False
+
+
 def generate_one(input_path):
     """Run one input fixture through PIL, produce output JSON + reference files."""
     inp = json.loads(input_path.read_text())
@@ -140,6 +181,9 @@ def generate_one(input_path):
             if hasattr(ptr, 'setsize'):
                 ptr.setsize(result.sizeInBytes())
             result = bytes(ptr)
+
+        # Normalize PIL internal types to standard types for comparison
+        result, _ = _normalize_pil_result(result)
         if isinstance(result, bytes):
             # Raw bytes → save as .bin file (e.g. toqimage, toqpixmap)
             ref = f"raws/{stem}_{cid}.bin"
@@ -181,9 +225,35 @@ def generate_one(input_path):
                 "assert": {"method": "image", "reference": ref},
             })
 
+        elif (isinstance(result, tuple)
+              and len(result) > 0
+              and any(hasattr(r, 'tobytes') for r in result)
+              and not all(hasattr(r, 'tobytes') for r in result)):
+            # Mixed-type tuple (e.g. (Image, offset) from getmask2) → tuple assertion
+            items = []
+            for i, r in enumerate(result):
+                if hasattr(r, 'tobytes') or hasattr(r, 'save'):
+                    ref = f"images/{stem}_{cid}_{i}.png"
+                    img_path = OUTPUT_IMAGES_DIR / f"{stem}_{cid}_{i}.png"
+                    img_path.parent.mkdir(parents=True, exist_ok=True)
+                    if hasattr(r, 'save'):
+                        r.save(str(img_path))
+                    else:
+                        bin_path = OUTPUT_RAWS_DIR / f"{stem}_{cid}_{i}.bin"
+                        bin_path.parent.mkdir(parents=True, exist_ok=True)
+                        bin_path.write_bytes(r.tobytes())
+                        ref = f"raws/{stem}_{cid}_{i}.bin"
+                    items.append({"method": "image", "reference": ref})
+                else:
+                    items.append({"method": "json", "value": list(r) if isinstance(r, tuple) else r})
+            out["cases"].append({
+                "id": cid,
+                "assert": {"method": "tuple", "items": items},
+            })
+
         elif (isinstance(result, (list, tuple))
               and len(result) > 0
-              and hasattr(result[0], 'tobytes')):
+              and all(hasattr(r, 'tobytes') for r in result)):
             # List of images (e.g. split) → save each as PNG
             refs = []
             for j, band in enumerate(result):

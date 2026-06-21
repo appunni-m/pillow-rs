@@ -10,49 +10,56 @@
       "id": "Image_getextrema_1",
       "assert": {
         "method": "string",
-        "value": "(0, 255)"
+        "value": "(0, 255)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getextrema_CMYK",
       "assert": {
         "method": "string",
-        "value": "((0, 255), (0, 255), (0, 255), (0, 0))"
+        "value": "((0, 255), (0, 255), (0, 255), (0, 0))",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getextrema_L",
       "assert": {
         "method": "string",
-        "value": "(0, 255)"
+        "value": "(0, 255)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getextrema_LA",
       "assert": {
         "method": "string",
-        "value": "((0, 255), (255, 255))"
+        "value": "((0, 255), (255, 255))",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getextrema_P",
       "assert": {
         "method": "string",
-        "value": "(0, 225)"
+        "value": "(0, 225)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getextrema_RGB",
       "assert": {
         "method": "string",
-        "value": "((0, 255), (0, 255), (0, 255))"
+        "value": "((0, 255), (0, 255), (0, 255))",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getextrema_RGBA",
       "assert": {
         "method": "string",
-        "value": "((0, 255), (0, 255), (0, 255), (255, 255))"
+        "value": "((0, 255), (0, 255), (0, 255), (255, 255))",
+        "prefix": ""
       }
     }
   ]

@@ -9,29 +9,29 @@
     {
       "id": "liberation_serif_20_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x75d0dd97dd60>"
+        "method": "image",
+        "reference": "images/ImageFont.FreeTypeFont_liberation_serif_20_suite1.png"
       }
     },
     {
       "id": "dejavu_sans_16_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x75d0dd97fd70>"
+        "method": "image",
+        "reference": "images/ImageFont.FreeTypeFont_dejavu_sans_16_suite1.png"
       }
     },
     {
       "id": "FreeTypeFont_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x75d0dd97dd60>"
+        "method": "image",
+        "reference": "images/ImageFont.FreeTypeFont_FreeTypeFont_L_suite1.png"
       }
     },
     {
       "id": "FreeTypeFont_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "<PIL.ImageFont.FreeTypeFont object at 0x75d0dd97fd70>"
+        "method": "image",
+        "reference": "images/ImageFont.FreeTypeFont_FreeTypeFont_RGBA_suite1.png"
       }
     }
   ]

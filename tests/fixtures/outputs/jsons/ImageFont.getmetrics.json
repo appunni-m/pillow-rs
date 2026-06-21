@@ -10,28 +10,32 @@
       "id": "default",
       "assert": {
         "method": "string",
-        "value": "(10, 3)"
+        "value": "(10, 3)",
+        "prefix": ""
       }
     },
     {
       "id": "getmetrics_L",
       "assert": {
         "method": "string",
-        "value": "(10, 3)"
+        "value": "(10, 3)",
+        "prefix": ""
       }
     },
     {
       "id": "getmetrics_RGB",
       "assert": {
         "method": "string",
-        "value": "(10, 3)"
+        "value": "(10, 3)",
+        "prefix": ""
       }
     },
     {
       "id": "getmetrics_RGBA",
       "assert": {
         "method": "string",
-        "value": "(10, 3)"
+        "value": "(10, 3)",
+        "prefix": ""
       }
     }
   ]

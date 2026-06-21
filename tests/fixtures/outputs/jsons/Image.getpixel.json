@@ -24,7 +24,8 @@
       "id": "Image_getpixel_LA",
       "assert": {
         "method": "string",
-        "value": "(255, 255)"
+        "value": "(255, 255)",
+        "prefix": ""
       }
     },
     {
@@ -38,14 +39,16 @@
       "id": "Image_getpixel_RGB",
       "assert": {
         "method": "string",
-        "value": "(255, 255, 255)"
+        "value": "(255, 255, 255)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getpixel_RGBA",
       "assert": {
         "method": "string",
-        "value": "(255, 255, 255, 255)"
+        "value": "(255, 255, 255, 255)",
+        "prefix": ""
       }
     }
   ]

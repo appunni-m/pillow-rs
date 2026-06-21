@@ -10,21 +10,24 @@
       "id": "ImagePalette_getdata_L",
       "assert": {
         "method": "string",
-        "value": "('RGB', b'')"
+        "value": "('RGB', b'')",
+        "prefix": ""
       }
     },
     {
       "id": "ImagePalette_getdata_P",
       "assert": {
         "method": "string",
-        "value": "('RGB', b'')"
+        "value": "('RGB', b'')",
+        "prefix": ""
       }
     },
     {
       "id": "ImagePalette_getdata_RGB",
       "assert": {
         "method": "string",
-        "value": "('RGB', b'')"
+        "value": "('RGB', b'')",
+        "prefix": ""
       }
     }
   ]

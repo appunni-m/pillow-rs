@@ -9,29 +9,29 @@
     {
       "id": "default_suite1",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x75d0de00a4d0>"
+        "method": "image",
+        "reference": "images/ImageFont.getmask_default_suite1.png"
       }
     },
     {
       "id": "getmask_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x75d0de00b550>"
+        "method": "image",
+        "reference": "images/ImageFont.getmask_getmask_L_suite1.png"
       }
     },
     {
       "id": "getmask_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x75d0de00a4d0>"
+        "method": "image",
+        "reference": "images/ImageFont.getmask_getmask_RGB_suite1.png"
       }
     },
     {
       "id": "getmask_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x75d0de00b550>"
+        "method": "image",
+        "reference": "images/ImageFont.getmask_getmask_RGBA_suite1.png"
       }
     }
   ]

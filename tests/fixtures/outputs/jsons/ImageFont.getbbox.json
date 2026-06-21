@@ -10,28 +10,32 @@
       "id": "default",
       "assert": {
         "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "value": "(0, 2, 25, 10)",
+        "prefix": ""
       }
     },
     {
       "id": "getbbox_L",
       "assert": {
         "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "value": "(0, 2, 25, 10)",
+        "prefix": ""
       }
     },
     {
       "id": "getbbox_RGB",
       "assert": {
         "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "value": "(0, 2, 25, 10)",
+        "prefix": ""
       }
     },
     {
       "id": "getbbox_RGBA",
       "assert": {
         "method": "string",
-        "value": "(0, 2, 25, 10)"
+        "value": "(0, 2, 25, 10)",
+        "prefix": ""
       }
     }
   ]

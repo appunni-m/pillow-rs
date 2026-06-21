@@ -43,6 +43,7 @@ def get_call_style(module, target):
         if target in ("open",):                  return "file_open"
         if target in ("toqimage", "toqpixmap"):  return "instance_method_value"
         if target in ("frombytes",):             return "frombytes_instance"
+        if target in ("getim", "load", "getdata"): return "instance_method_bytes"
         if target in DUAL_TARGETS:               return "instance_method_dual"
         if target in MUTATE_TARGETS:             return "instance_method_mutate"
         if target in VALUE_TARGETS:              return "instance_method_value"
@@ -77,7 +78,11 @@ def get_call_style(module, target):
         if target in ("truetype", "load", "load_path"):
             return "font_truetype"
         if target == "TransposedFont":             return "transposed_font"
-        if target in ("FreeTypeFont", "ImageFont"):
+        if target in ("FreeTypeFont",):
+            return "font_constructor"
+        if target in ("load_default", "load_default_imagefont"):
+            return "font_constructor"
+        if target in ("ImageFont",):
             return "module_function_value"
         return "module_function_value"
     if module == "ImagePalette":
@@ -257,6 +262,36 @@ def _font_truetype(backend, img, target, params):
     font = backend.ImageFont.truetype(font_path, size)
     return font.getname()
 
+def _render_font_mask(backend, font, text="A"):
+    """Render a single glyph and return as an Image for comparison.
+
+    PIL fonts return ImagingCore; RSPIL fonts return Image.
+    Normalize both to Image for uniform comparison.
+    """
+    from PIL import Image as PILImage
+    mask = font.getmask(text)
+    if type(mask).__name__ == 'ImagingCore':
+        b = bytes(mask)
+        return PILImage.frombytes(mask.mode, mask.size, b)
+    # RSPIL or PIL Image — may already have tobytes
+    if hasattr(mask, 'tobytes'):
+        return mask
+    return mask
+
+
+def _font_constructor(backend, img, target, params):
+    """Create a font via constructor, render 'A', return Image for comparison."""
+    font = _call_mod(backend, target)(**params)
+    return _render_font_mask(backend, font)
+
+
+def _draw_getfont(backend, img, target, params):
+    """Get default font from ImageDraw and render 'A' for comparison."""
+    draw = backend.ImageDraw.Draw(img)
+    font = getattr(draw, target)(**params)
+    return _render_font_mask(backend, font)
+
+
 def _palette_method(backend, img, target, params):
     """Create default palette, then call method on it."""
     import io
@@ -413,15 +448,18 @@ def _fromarray(backend, img, target, params):
 CALL_STYLE = {
     "instance_method":        lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
     "instance_method_value":  lambda b, img, img2, tgt, p: getattr(img, tgt)(**p),
+    "instance_method_bytes":lambda b, img, img2, tgt, p: (getattr(img, tgt)(**p), img.tobytes())[1],
     "instance_method_mutate": lambda b, img, img2, tgt, p: (getattr(img, tgt)(**p), img)[1],
     "instance_method_dual":   lambda b, img, img2, tgt, p: getattr(img, tgt)(img2, **p),
     "draw":       lambda b, img, img2, tgt, p: (_draw(b, img, tgt, p), img)[1],
     "draw_value": lambda b, img, img2, tgt, p: _draw(b, img, tgt, p),
+    "draw_getfont":lambda b, img, img2, tgt, p: _draw_getfont(b, img, tgt, p),
     "draw_bitmap":lambda b, img, img2, tgt, p: (_draw_bitmap(b, img, img2, tgt, p), img)[1],
     "filter":     lambda b, img, img2, tgt, p: img.filter(_make_filter(b, tgt if tgt != "filter" else p.pop("filter"), p)),
     "enhance":    lambda b, img, img2, tgt, p: getattr(b.ImageEnhance, tgt)(img).enhance(p.pop("factor", 1.0)),
     "font_method":lambda b, img, img2, tgt, p: _font_method(b, img, tgt, p),
     "font_truetype":lambda b, img, img2, tgt, p: _font_truetype(b, img, tgt, p),
+    "font_constructor": lambda b, img, img2, tgt, p: _font_constructor(b, img, tgt, p),
     "palette_method":lambda b, img, img2, tgt, p: _palette_method(b, img, tgt, p),
     "module_function":       lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, **p),
     "single_chops":          lambda b, img, img2, tgt, p: _call_mod(b, tgt, prefer_chops=True)(img, **p),
@@ -506,8 +544,8 @@ ASSERT = {
     "json": lambda case, result:
         json.dumps(_to_json_compat(result)) == json.dumps(case["value"]),
     "string": lambda case, result:
-        str(result).startswith(case.get("prefix", ""))
-        or repr(result) == case.get("value", ""),
+        repr(result) == case.get("value", "")
+        or str(result).startswith(case.get("prefix", "")),
     "float": lambda case, result:
         abs(result - case["value"]) < case.get("tolerance", 0.0001),
     "error": lambda case, result:
@@ -515,3 +553,9 @@ ASSERT = {
         and case.get("exception", "") in type(result).__name__
         and case.get("message_contains", "") in str(result),
 }
+# Add tuple assertion that dispatches element-wise to ASSERT entries.
+# Must be added after ASSERT is defined so the closure captures it correctly.
+ASSERT["tuple"] = lambda case, result: all(
+    ASSERT[item["method"]](item, result[i])
+    for i, item in enumerate(case["items"])
+)

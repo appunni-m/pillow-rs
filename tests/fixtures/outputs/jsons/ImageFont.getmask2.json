@@ -9,29 +9,77 @@
     {
       "id": "default",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x740c63d977d0>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_default_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     },
     {
       "id": "getmask2_L",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x740c63d978b0>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_getmask2_L_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     },
     {
       "id": "getmask2_RGB",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x740c63d962f0>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_getmask2_RGB_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     },
     {
       "id": "getmask2_RGBA",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x740c63d977d0>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_getmask2_RGBA_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     }
   ]

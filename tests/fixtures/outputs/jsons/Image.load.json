@@ -9,43 +9,43 @@
     {
       "id": "Image_load_1",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x740c63d977b0>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_1.bin"
       }
     },
     {
       "id": "Image_load_L",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x740c633d8a10>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_L.bin"
       }
     },
     {
       "id": "Image_load_LA",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x740c63d977b0>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_LA.bin"
       }
     },
     {
       "id": "Image_load_P",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x740c633d89d0>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_P.bin"
       }
     },
     {
       "id": "Image_load_RGB",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x740c63d977b0>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_RGB.bin"
       }
     },
     {
       "id": "Image_load_RGBA",
       "assert": {
-        "method": "string",
-        "value": "<PixelAccess object at 0x740c63d977f0>"
+        "method": "image",
+        "reference": "raws/Image.load_Image_load_RGBA.bin"
       }
     }
   ]

@@ -10,21 +10,24 @@
       "id": "ImageDraw.multiline_textbbox_RGB",
       "assert": {
         "method": "string",
-        "value": "(5, 7, 30, 15)"
+        "value": "(5, 7, 30, 15)",
+        "prefix": ""
       }
     },
     {
       "id": "ImageDraw.multiline_textbbox_RGBA",
       "assert": {
         "method": "string",
-        "value": "(5, 7, 30, 15)"
+        "value": "(5, 7, 30, 15)",
+        "prefix": ""
       }
     },
     {
       "id": "L",
       "assert": {
         "method": "string",
-        "value": "(5, 7, 30, 15)"
+        "value": "(5, 7, 30, 15)",
+        "prefix": ""
       }
     }
   ]

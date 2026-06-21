@@ -10,42 +10,48 @@
       "id": "Image_getbands_1",
       "assert": {
         "method": "string",
-        "value": "('1',)"
+        "value": "('1',)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getbands_L",
       "assert": {
         "method": "string",
-        "value": "('L',)"
+        "value": "('L',)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getbands_LA",
       "assert": {
         "method": "string",
-        "value": "('L', 'A')"
+        "value": "('L', 'A')",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getbands_P",
       "assert": {
         "method": "string",
-        "value": "('P',)"
+        "value": "('P',)",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getbands_RGB",
       "assert": {
         "method": "string",
-        "value": "('R', 'G', 'B')"
+        "value": "('R', 'G', 'B')",
+        "prefix": ""
       }
     },
     {
       "id": "Image_getbands_RGBA",
       "assert": {
         "method": "string",
-        "value": "('R', 'G', 'B', 'A')"
+        "value": "('R', 'G', 'B', 'A')",
+        "prefix": ""
       }
     }
   ]

@@ -9,29 +9,77 @@
     {
       "id": "default_suite1",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x75d0de00b350>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_default_suite1_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     },
     {
       "id": "getmask2_L_suite1",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x75d0de0089f0>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_getmask2_L_suite1_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     },
     {
       "id": "getmask2_RGB_suite1",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x75d0de00b350>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_getmask2_RGB_suite1_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     },
     {
       "id": "getmask2_RGBA_suite1",
       "assert": {
-        "method": "string",
-        "value": "(<ImagingCore object at 0x75d0de0089f0>, (0, 2))"
+        "method": "tuple",
+        "items": [
+          {
+            "method": "image",
+            "reference": "images/ImageFont.getmask2_getmask2_RGBA_suite1_0.png"
+          },
+          {
+            "method": "json",
+            "value": [
+              0,
+              2
+            ]
+          }
+        ]
       }
     }
   ]

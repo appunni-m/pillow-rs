@@ -9,29 +9,29 @@
     {
       "id": "Image_getdata_L",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x740c63e20d90>"
+        "method": "image",
+        "reference": "raws/Image.getdata_Image_getdata_L.bin"
       }
     },
     {
       "id": "Image_getdata_LA",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x740c63e22270>"
+        "method": "image",
+        "reference": "raws/Image.getdata_Image_getdata_LA.bin"
       }
     },
     {
       "id": "Image_getdata_RGB",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x740c63e20d90>"
+        "method": "image",
+        "reference": "raws/Image.getdata_Image_getdata_RGB.bin"
       }
     },
     {
       "id": "Image_getdata_RGBA",
       "assert": {
-        "method": "string",
-        "value": "<ImagingCore object at 0x740c63e22270>"
+        "method": "image",
+        "reference": "raws/Image.getdata_Image_getdata_RGBA.bin"
       }
     }
   ]
