@@ -67,6 +67,8 @@ impl HintingEngine {
             if let Err(e) = self.exec.run() {
                 log::warn!("[hinting] PREP execution failed: {}", e);
             }
+            // Sync PREP modifications back to shared cvt
+            self.exec.cvt = self.exec.glyf_cvt.clone();
         }
         self.cvt_ready = true;
         self.last_ppem = ppem;
