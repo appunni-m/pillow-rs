@@ -69,6 +69,10 @@ class FreeTypeFont:
         self.index = index
         self.encoding = encoding
         self.layout_engine = layout_engine
+        # Note: PIL fallback for pixel-identical font rendering was removed.
+        # Font rendering uses pillow-rs-font. Font rendering may differ
+        # slightly from PIL's FreeType output in edge cases.
+        self._pil_font = None
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
@@ -87,7 +91,22 @@ class FreeTypeFont:
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
-        """Create a bitmap for the text and return the text offset.
+        """Create a bitmap for the text and return the text offset using pillow-rs-font.
+
+        :param text: Text to render.
+        :param mode: Used by some graphics drivers to indicate what mode the
+                     driver prefers; if empty, the renderer may return either
+                     mode.
+        :param direction: Direction of the text. It can be 'rtl' (right to
+                          left), 'ltr' (left to right) or 'ttb' (top to bottom).
+                          Requires libraqm — currently ignored.
+        :param features: A list of OpenType font features to be used during text
+                         layout. Currently ignored.
+        :param language: Language of the text. Currently ignored.
+        :param stroke_width: The width of the text stroke. Currently ignored.
+        :param anchor: The text anchor alignment. Currently ignored.
+        :param ink: Foreground ink for rendering. Currently ignored.
+        :param start: Tuple of horizontal and vertical offset.
 
         :return: A tuple of the mask (L-mode Image) and the text offset
                  ``(offset_x, offset_y)``.
