@@ -14,6 +14,7 @@ mod scaler;
 mod raster;
 mod metrics;
 mod tables;
+mod hinting;
 
 use std::sync::Arc;
 
