@@ -645,16 +645,10 @@ class Image:
             return Image(self._rust_image.transform(size, "AFFINE", data, resample, fill, fillcolor))
         is_mesh = method == "MESH" or (isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)))
         if is_mesh:
-            # PIL's MESH data is a list of (bbox, quad) tuples, or a single (bbox, quad) pair
-            # [( (x0,y0,x1,y1), (q0,q1,...,q7) ), ...] — list of mesh items
-            #  ( (x0,y0,x1,y1), (q0,q1,...,q7) )     — single mesh item
-            if (isinstance(data, (list, tuple)) and data
-                    and isinstance(data[0], (list, tuple))
-                    and isinstance(data[0][0], (list, tuple))):
-                # data[0] is a tuple of tuples → list of mesh items
+            # PIL's MESH data is a list of (bbox, quad) tuples, or a single tuple
+            if isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)):
                 mesh_flat = _core.mesh_flatten(data)
             else:
-                # single mesh item: ((bbox), (quad))
                 mesh_flat = _core.mesh_flatten([data])
             return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
         raise NotImplementedError(f"transform method '{method}' not yet implemented")
