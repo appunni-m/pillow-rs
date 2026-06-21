@@ -183,6 +183,15 @@ impl Font {
             hint_engine: self.hint_engine.clone(),
         }
     }
+
+    /// Create a font variant without hinting (for comparison).
+    pub fn font_variant_no_hint(&self) -> Font {
+        Font {
+            data: self.data.clone(),
+            size_pt: self.size_pt,
+            hint_engine: None,
+        }
+    }
 }
 
 #[cfg(test)]

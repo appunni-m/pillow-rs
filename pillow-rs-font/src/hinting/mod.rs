@@ -10,6 +10,7 @@ pub mod exec;
 pub mod round;
 pub mod opcodes;
 pub mod iup;
+pub(crate) mod fragments;
 
 use crate::tables::FontData;
 use exec::ExecContext;
