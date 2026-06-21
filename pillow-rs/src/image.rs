@@ -3,6 +3,7 @@ use std::io::{BufReader, Read, Seek};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::checked_dims::CheckedDims;
 use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
@@ -229,11 +230,11 @@ impl Image {
             return Err(PilError::ValueError("frombytes: size must be > 0".into()));
         }
         let expected = match mode {
-            "L" => (w * h) as usize,
-            "LA" => (w * h * 2) as usize,
-            "RGB" | "HSV" | "YCbCr" => (w * h * 3) as usize,
-            "RGBA" | "CMYK" | "I" | "F" => (w * h * 4) as usize,
-            "P" => (w * h) as usize,
+            "L" => CheckedDims::new(w, h, 1)?.total_bytes(),
+            "LA" => CheckedDims::new(w, h, 2)?.total_bytes(),
+            "RGB" | "HSV" | "YCbCr" => CheckedDims::new(w, h, 3)?.total_bytes(),
+            "RGBA" | "CMYK" | "I" | "F" => CheckedDims::new(w, h, 4)?.total_bytes(),
+            "P" => CheckedDims::new(w, h, 1)?.total_bytes(),
             "1" => (w as usize).div_ceil(8) * h as usize,
             _ => {
                 return Err(PilError::ValueError(format!(
@@ -280,7 +281,7 @@ impl Image {
             "1" => {
                 // PIL packs 8 pixels per byte, MSB first, rows padded to byte boundary
                 let row_bytes = (w as usize).div_ceil(8);
-                let mut pixels = vec![0u8; (w * h) as usize];
+                let mut pixels = CheckedDims::new(w, h, 1)?.alloc_buffer();
                 for y in 0..h as usize {
                     for x in 0..w as usize {
                         let byte_idx = y * row_bytes + x / 8;

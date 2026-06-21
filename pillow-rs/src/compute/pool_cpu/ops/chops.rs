@@ -1,5 +1,6 @@
 // ── ImageChops operations extracted from image.rs execute_op() ──
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::{preserve_mode, Image};
 use pillow_rs_image::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -61,7 +62,7 @@ fn channel_op_binary(
     let stride_b = other_img.width() as usize * ch;
     let stride_out = w as usize * ch;
 
-    let mut out = vec![0u8; (w * h) as usize * ch];
+    let mut out = CheckedDims::new(w, h, ch as u8)?.alloc_buffer();
 
     for y in 0..h as usize {
         for x in 0..w as usize {
@@ -124,7 +125,7 @@ fn channel_op_binary_lut(
     let stride_b = other_img.width() as usize * ch;
     let stride_out = w as usize * ch;
 
-    let mut out = vec![0u8; (w * h) as usize * ch];
+    let mut out = CheckedDims::new(w, h, ch as u8)?.alloc_buffer();
 
     for y in 0..h as usize {
         for x in 0..w as usize {

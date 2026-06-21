@@ -51,7 +51,7 @@ def convert(image: Image, mode: str) -> Image:
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
     from . import _core
-    rust_bands = tuple(b._rust_image for b in bands)
+    rust_bands = tuple(map(lambda b: b._rust_image, bands))
     return Image(_core.image_merge(mode, rust_bands))
 
 
@@ -80,6 +80,8 @@ def alpha_composite(im1: Image, im2: Image) -> Image:
 
 def fromarray(obj, mode=None):
     """Create image from array-like object (list of lists or bytes)."""
+    from . import _core
+
     if isinstance(obj, bytes):
         return Image.frombytes(mode or "L", (len(obj), 1), obj)
     # numpy arrays: use tobytes() for safe memory access
@@ -109,19 +111,13 @@ def fromarray(obj, mode=None):
                 mode = "RGBA"
             else:
                 mode = "L"
-        # Use the underlying object if data is a tuple (pointer, readonly)
         if isinstance(arr["data"], tuple):
             data = memoryview(obj).tobytes() if hasattr(obj, '__buffer__') else bytes(obj)
         else:
             data = bytes(arr["data"])
         return Image.frombytes(mode, (w, h), data)
     if isinstance(obj, (list, tuple)):
-        # Attempt to flatten pixel values
-        import itertools
-        flat = list(itertools.chain.from_iterable(obj)) if obj and isinstance(obj[0], (list, tuple)) else list(obj)
-        if all(isinstance(v, int) for v in flat):
-            size = (len(flat), 1) if mode is None else (len(flat) // len(mode), 1)
-            return Image.frombytes(mode or "L", size, bytes(flat))
+        return Image(_core.fromarray_pixel_list(obj, mode))
     raise NotImplementedError(f"fromarray: unsupported object type ({type(obj).__name__})")
 
 

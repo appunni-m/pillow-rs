@@ -629,6 +629,13 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
             let v2 = rng.next() as f64 * (2.0 / RAND_MAX_F64) - 1.0;
             let radius = v1 * v1 + v2 * v2;
             if radius < 1.0 {
+                // Guard: if radius is too close to zero the Box-Muller division
+                // produces Inf/NaN. PIL never hits this with its rand() range
+                // (radius >= 2.0/RAND_MAX^2 ~ 4e-19), but attacker-controlled
+                // noise seeds could in principle produce pathological radii.
+                if radius < 1e-10 {
+                    continue;
+                }
                 break (v1, radius);
             }
         };
@@ -1153,16 +1160,14 @@ pub fn transform_mesh(
         let x3_s = mesh_data[base + 10];
         let y3_s = mesh_data[base + 11];
 
-        let bw = (x1_d - x0_d) as f64;
-        let bh = (y1_d - y0_d) as f64;
-        if bw <= 0.0 || bh <= 0.0 {
-            continue;
-        }
-
-        let bx0 = x0_d.max(0);
-        let by0 = y0_d.max(0);
-        let bx1 = x1_d.min(dst_w as i32);
-        let by1 = y1_d.min(dst_h as i32);
+        // Clamp bounding box to output image dimensions to prevent CPU DoS
+        // from attacker-controlled mesh data with extreme bx/bw values.
+        let bx0 = x0_d.max(0).min(dst_w as i32);
+        let by0 = y0_d.max(0).min(dst_h as i32);
+        let bx1 = x1_d.max(1).min(dst_w as i32);
+        let by1 = y1_d.max(1).min(dst_h as i32);
+        let bw = (bx1 - bx0).max(1) as f64;
+        let bh = (by1 - by0).max(1) as f64;
 
         for dy in by0..by1 {
             let v = (dy - y0_d) as f64 / bh;

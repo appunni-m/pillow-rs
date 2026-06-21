@@ -169,7 +169,7 @@ class Draw:
             elif fill is not None:
                 self.polygon(xy, fill=fill, outline=None)
         elif isinstance(shape, (list, tuple)):
-            if all(isinstance(p, (list, tuple)) and len(p) == 2 for p in shape):
+            if all(map(lambda p: isinstance(p, (list, tuple)) and len(p) == 2, shape)):
                 if outline is not None:
                     self.polygon(shape, fill=outline, outline=None)
                 elif fill is not None:

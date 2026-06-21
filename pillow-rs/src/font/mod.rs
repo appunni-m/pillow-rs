@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use crate::bitmap_font::BitmapFont;
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 
 /// A loaded font that can render text to bitmaps.
@@ -91,7 +92,10 @@ impl Font {
                 if w == 0 || h == 0 {
                     return (w, h, vec![]);
                 }
-                let mut canvas = vec![0u8; (w * h) as usize];
+                let mut canvas = match CheckedDims::new(w, h, 1) {
+                    Ok(dims) => dims.alloc_buffer(),
+                    Err(_) => return (0, 0, vec![]),
+                };
                 let mut xo = 0i32;
                 for (metrics, data) in &glyphs {
                     let dx = (xo as i64 + metrics.xmin as i64)
@@ -163,7 +167,12 @@ impl Font {
                     total_w += metrics.advance_width;
                     max_h = max_h.max(metrics.height as u32);
                     // Convert coverage bitmap to RGBA
-                    let mut rgba = vec![0u8; metrics.width * metrics.height * 4];
+                    let mut rgba = match CheckedDims::new(
+                        metrics.width as u32, metrics.height as u32, 4,
+                    ) {
+                        Ok(dims) => dims.alloc_buffer(),
+                        Err(_) => continue,
+                    };
                     for y in 0..metrics.height {
                         for x in 0..metrics.width {
                             let cov = bitmap[y * metrics.width + x];
@@ -198,7 +207,10 @@ impl Font {
                 }
 
                 // Compose glyphs onto a single RGBA canvas
-                let mut canvas = vec![0u8; (w * h * 4) as usize];
+                let mut canvas = match CheckedDims::new(w, h, 4) {
+                    Ok(dims) => dims.alloc_buffer(),
+                    Err(_) => return (0, 0, vec![]),
+                };
                 let mut x_offset = 0i32;
 
                 for (metrics, rgba) in &glyphs {

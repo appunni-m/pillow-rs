@@ -1,3 +1,4 @@
+use crate::checked_dims::CheckedDims;
 use pillow_rs_image::{ColorType, DynamicImage, RgbImage};
 
 /// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
@@ -49,14 +50,15 @@ pub fn pil_grayscale_truncate(img: &DynamicImage) -> pillow_rs_image::GrayImage 
 fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> pillow_rs_image::GrayImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let n = (w as usize) * (h as usize);
+    let dims = CheckedDims::new(w, h, 1)
+        .expect("pil_grayscale: image already validated, dimensions must be valid");
     let rgb_data = rgb.as_raw().as_slice();
 
     // PIL-identical 16-bit fixed-point BT.601:
     // Y = (19595*R + 38470*G + 7471*B + [32768]) >> 16
     let rounding = if round { 32768u32 } else { 0u32 };
-    let mut gray = vec![0u8; n];
-    let len = rgb_data.len().min(n * 3);
+    let mut gray = dims.alloc_buffer();
+    let len = rgb_data.len().min(dims.total_pixels() * 3);
     let mut i = 0;
     while i + 2 < len {
         let r = rgb_data[i] as u32;
@@ -75,8 +77,9 @@ fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> pillow_rs_image::Gray
 pub fn cmyk_to_grayscale(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let n = (w * h) as usize;
-    let mut gray = vec![0u8; n];
+    let dims = CheckedDims::new(w, h, 1)
+        .expect("cmyk_to_grayscale: image already validated, dimensions must be valid");
+    let mut gray = dims.alloc_buffer();
     for (i, p) in rgba.pixels().enumerate() {
         let c = p[0] as u32;
         let m = p[1] as u32;

@@ -22,6 +22,7 @@ macro_rules! gpu_log {
 // (R|G<<8|B<<16|A<<24) and 16x16 workgroups.
 // GPU init is lazy — happens on first `execute_batch` call.
 
+use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
@@ -97,7 +98,7 @@ impl BufferPool {
 
     fn upload_rgba(&self, queue: &wgpu::Queue, rgba: &RgbaImage) -> Result<(), PilError> {
         let (w, h) = rgba.dimensions();
-        let n = (w * h) as usize;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
         if n > self.capacity as usize {
             return Err(PilError::ValueError(format!(
                 "BufferPool capacity {} < image size {}",
@@ -632,7 +633,7 @@ impl GpuInner {
         } else {
             &self.buffers.buf_b
         };
-        let size = (w * h * 4) as u64;
+        let size = CheckedDims::new(w, h, 4)?.total_bytes() as u64;
 
         // TEST: skip pool, create fresh staging buffer each time
         let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -682,7 +683,7 @@ impl GpuInner {
         self.queue.submit([]);
         self.device.poll(wgpu::Maintain::Wait);
 
-        let n = (w * h) as usize;
+        let n = CheckedDims::new(w, h, 1)?.total_pixels();
         let mut rgba_bytes = Vec::with_capacity(n * 4);
         for &pixel in bytemuck::cast_slice::<u8, u32>(&data)[..n].iter() {
             rgba_bytes.push((pixel & 0xff) as u8);

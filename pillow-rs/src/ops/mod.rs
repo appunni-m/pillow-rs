@@ -15,6 +15,7 @@ pub mod rotate;
 pub mod split;
 pub mod transform;
 pub mod transpose;
+pub mod utils;
 
 // Re-export types needed by binding layers
 pub use paste::PasteSource;

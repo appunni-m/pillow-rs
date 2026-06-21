@@ -1,6 +1,7 @@
 //! Parameterized image filters — GaussianBlur, BoxBlur, UnsharpMask,
 //! MaxFilter, MinFilter, MedianFilter, ModeFilter, RankFilter.
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -74,7 +75,7 @@ impl Image {
 
         let raw = img.as_bytes();
         let blur_raw = blurred.as_bytes();
-        let mut out = vec![0u8; (w * h) as usize * channels];
+        let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
 
         for y in 0..h {
             for x in 0..w {

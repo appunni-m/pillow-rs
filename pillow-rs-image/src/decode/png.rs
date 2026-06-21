@@ -16,7 +16,7 @@ use png::{BitDepth, ColorType as PngColorType};
 pub fn decode(data: &[u8]) -> Option<DecodedImage> {
     let decoder = png::Decoder::new(std::io::Cursor::new(data));
     let mut reader = decoder.read_info().ok()?;
-    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let mut buf = vec![0u8; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut buf).ok()?;
 
     let w = info.width;

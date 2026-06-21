@@ -5,7 +5,7 @@ edition = "2021"
 description = "Zero-dependency pixel-perfect image decoders (JPEG, PNG, GIF, BMP, WebP, TIFF)"
 
 [dependencies]
-png = "0.17.16"
+png = "0.18"
 gif = "0.14"
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate"] }
 bytemuck = { version = "1", features = ["derive"] }
@@ -17,7 +17,6 @@ avif = []
 md5 = "0.8.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-serde_yaml = "0.9.34"
 sha2 = "0.11.0"
 
 [lints]

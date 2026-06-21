@@ -22,6 +22,7 @@ fn bankers_round(x: f64) -> f64 {
         (x + 0.5).floor()
     }
 }
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::pil_resize;
@@ -34,13 +35,14 @@ use crate::pipeline::ResampleFilter;
 pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
-    let total = (w * h) as f64;
+    let dims = CheckedDims::new(w, h, 1)?;
+    let total = dims.total_pixels() as f64;
     let raw = img.as_bytes();
     let mut out = raw.to_vec();
     let stride = w as usize * channels;
     for c in 0..channels {
         // Build sorted list of pixel values for this channel
-        let mut sorted: Vec<u8> = Vec::with_capacity((w * h) as usize);
+        let mut sorted: Vec<u8> = Vec::with_capacity(dims.total_pixels());
         for y in 0..h as usize {
             for x in 0..w as usize {
                 sorted.push(raw[y * stride + x * channels + c]);
