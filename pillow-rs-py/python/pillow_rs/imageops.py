@@ -66,11 +66,9 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
     if isinstance(black, str):
-        from PIL.ImageColor import getrgb
-        black = getrgb(black)
+        black = _core.getrgb(black)
     if isinstance(white, str):
-        from PIL.ImageColor import getrgb
-        white = getrgb(white)
+        white = _core.getrgb(white)
     return Image(_core.ops_colorize(image._rust_image, black[:3], white[:3]))
 
 

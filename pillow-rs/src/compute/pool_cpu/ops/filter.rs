@@ -5,10 +5,10 @@
 //! MaxFilter, MinFilter, RankFilter) that operate on DynamicImage and return
 //! new DynamicImage instances.
 
-use pillow_rs_image::DynamicImage;
-
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
+use pillow_rs_image::DynamicImage;
 
 // ─── Clip helper ──
 
@@ -253,7 +253,7 @@ pub fn pil_box_blur(
 
     // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
     for _pass in 0..passes {
-        let mut hpass = vec![0u8; (w * h) as usize * channels];
+        let mut hpass = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
         for y in 0..h {
             for x in 0..w {
                 for c in 0..channels {
@@ -277,7 +277,7 @@ pub fn pil_box_blur(
 
     // PIL does ALL vertical passes after all horizontal passes
     for _pass in 0..passes {
-        let mut vpass = vec![0u8; (w * h) as usize * channels];
+        let mut vpass = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
         for x in 0..w {
             for y in 0..h {
                 for c in 0..channels {
@@ -325,7 +325,7 @@ fn rank_filter_impl(
     if mode == Some("F") {
         let rgba = img.to_rgba8();
         let raw = rgba.into_raw();
-        let mut out = vec![0u8; (w * h) as usize * 4];
+        let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
 
         for y in 0..h {
             for x in 0..w {
@@ -363,7 +363,7 @@ fn rank_filter_impl(
 
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
-    let mut out = vec![0u8; (w * h) as usize * channels];
+    let mut out = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
 
     for y in 0..h {
         for x in 0..w {
@@ -585,7 +585,7 @@ pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage,
             }
         }
     }
-    let mut out = vec![0u8; (w * h) as usize * channels];
+    let mut out = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
     for y in 0..h {
         for x in 0..w {
             for c in 0..channels {

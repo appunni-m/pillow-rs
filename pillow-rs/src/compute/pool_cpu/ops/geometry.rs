@@ -7,6 +7,7 @@
 use pillow_rs_image::{DynamicImage, GenericImageView};
 use std::f64;
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::{pil_resize, precompute_coeffs_f64, round_up};
@@ -397,7 +398,15 @@ fn rotate_arbitrary_generic(
     let cx_dst = dw as f64 / 2.0;
     let cy_dst = dh as f64 / 2.0;
 
-    let mut out = vec![0u8; (dw * dh) as usize * channels];
+    let mut out = match CheckedDims::new(dw, dh, channels as u8) {
+        Ok(dims) => dims.alloc_buffer(),
+        Err(_) => return match channels {
+            1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dw, dh)),
+            2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dw, dh)),
+            3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dw, dh)),
+            _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dw, dh)),
+        },
+    };
 
     for dy in 0..dh {
         for dx in 0..dw {
@@ -498,7 +507,15 @@ fn transform_affine_generic(
     let (sw, sh) = img.dimensions();
     let fill_color = fill.unwrap_or((0, 0, 0, 255));
 
-    let mut out = vec![0u8; (dst_w * dst_h) as usize * channels];
+    let mut out = match CheckedDims::new(dst_w, dst_h, channels as u8) {
+        Ok(dims) => dims.alloc_buffer(),
+        Err(_) => return match channels {
+            1 => DynamicImage::ImageLuma8(pillow_rs_image::GrayImage::new(dst_w, dst_h)),
+            2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dst_w, dst_h)),
+            3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dst_w, dst_h)),
+            _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dst_w, dst_h)),
+        },
+    };
 
     for dy in 0..dst_h {
         for dx in 0..dst_w {
@@ -637,7 +654,7 @@ pub fn execute_crop(
     }
     // Out-of-bounds crop: fill missing pixels with 0.
     let channels = img.color().channel_count() as usize;
-    let mut out = vec![0u8; (w * h) as usize * channels];
+    let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
     let raw = img.as_bytes();
     for dy in 0..h {
         let sy = top + dy;
@@ -683,7 +700,11 @@ fn rotate_90_non_expand(
         3 => vec![fill_color.0, fill_color.1, fill_color.2],
         _ => vec![fill_color.0, fill_color.1, fill_color.2, fill_color.3],
     };
-    let mut out = fill_pixel.repeat((w * h) as usize);
+    let dims = match CheckedDims::new(w, h, channels as u8) {
+        Ok(d) => d,
+        Err(_) => return img.clone(),
+    };
+    let mut out = fill_pixel.repeat(dims.total_pixels());
 
     let dx_off = (w as i32 - h as i32) / 2; // center offset in x
     let dy_off = (h as i32 - w as i32) / 2; // center offset in y
@@ -864,7 +885,7 @@ pub fn execute_thumbnail(
             // Average each factor×factor block per-channel (matching PIL's ImagingReduce)
             let channels = work_img.color().channel_count() as usize;
             let raw = work_img.as_bytes();
-            let mut out = vec![0u8; (rw * rh * channels as u32) as usize];
+            let mut out = CheckedDims::new(rw, rh, channels as u8)?.alloc_buffer();
             for y in 0..rh {
                 for x in 0..rw {
                     for c in 0..channels {
@@ -939,7 +960,7 @@ pub fn execute_reduce(img: &DynamicImage, factor: u32) -> Result<DynamicImage, P
     let new_w = w / f;
     let new_h = h / f;
     let raw = img.as_bytes().to_vec();
-    let mut out = vec![0u8; (new_w * new_h * channels as u32) as usize];
+    let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
     for y in 0..new_h {
         for x in 0..new_w {
             let mut sums = vec![0u64; channels];

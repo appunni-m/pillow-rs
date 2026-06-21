@@ -2,6 +2,7 @@
 //! These implement PIL-compatible color mode conversion, quantization, and palette remapping.
 
 use crate::color::{pil_grayscale, pil_grayscale_truncate};
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::quantize::median_cut_quantize_rgb;
@@ -76,7 +77,7 @@ pub fn op_convert(
                     // Truncation-toward-zero division, no intermediate clipping.
                     let mut errors = vec![0i32; (w + 1) as usize];
                     let src: Vec<i32> = gray.pixels().map(|p| p[0] as i32).collect();
-                    let mut fs_out = vec![0u8; (w * h) as usize];
+                    let mut fs_out = CheckedDims::new(w, h, 1)?.alloc_buffer();
                     let wu = w as usize;
                     for y in 0..h as usize {
                         let mut l = 0i32;
@@ -111,7 +112,7 @@ pub fn op_convert(
             // convert("P") = quantize(256) with dither
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
-            let n = (w * h) as usize;
+            let n = CheckedDims::new(w, h, 1)?.total_pixels();
             let rgb_raw = rgb.into_raw();
             let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, 256);
             let mut out = pillow_rs_image::GrayImage::new(w, h);
@@ -193,7 +194,7 @@ pub fn op_quantize(
 ) -> Result<DynamicImage, PilError> {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let n = (w * h) as usize;
+    let n = CheckedDims::new(w, h, 1)?.total_pixels();
     if n == 0 {
         return Err(PilError::ValueError("quantize: empty image".into()));
     }

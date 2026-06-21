@@ -11,7 +11,6 @@
 use crate::draw::{bresenham_line, plot, scanline_polygon_fill};
 use crate::error::PilError;
 use pillow_rs_image::{DynamicImage, GrayImage, Rgba, RgbaImage};
-
 /// Helper: draw on an image, preserving P-mode (Luma8) when possible.
 /// For P-mode (`mode == Some("P")` with Luma8 input), converts to RGBA
 /// temporarily for drawing, then converts back to Luma8 by taking the
@@ -56,6 +55,13 @@ fn draw_line_on_canvas(
     width: u32,
 ) {
     let (w, h) = (canvas.width(), canvas.height());
+    let max_w = w.min(h).min(100);
+    let width = if width > max_w {
+        log::warn!("draw_line: width {} clamped to {}", width, max_w);
+        max_w
+    } else {
+        width
+    };
     if width <= 1 {
         bresenham_line(canvas, x0, y0, x1, y1, fill, w, h, false);
     } else {
@@ -84,6 +90,15 @@ fn draw_rect_on_canvas(
     let y0 = y0.clamp(0, img_h as i32 - 1);
     let x1 = x1.clamp(0, img_w as i32);
     let y1 = y1.clamp(0, img_h as i32);
+
+    // Clamp outline width to prevent CPU DoS from attacker-controlled width
+    let max_w = img_w.min(img_h).min(100);
+    let width = if width > max_w {
+        log::warn!("draw_rect: outline width {} clamped to {}", width, max_w);
+        max_w
+    } else {
+        width
+    };
 
     // Fill (inclusive range, matching PIL)
     if let Some(fc) = fill {

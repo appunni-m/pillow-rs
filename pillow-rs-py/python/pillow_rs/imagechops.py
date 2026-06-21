@@ -80,11 +80,6 @@ def composite(image1: Image, image2: Image, mask: Image) -> Image:
 
 def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
     """Offset image contents."""
-    raise NotImplementedError("ImageChops.offset")
-
-
-def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
-    """Offset image contents."""
     from . import _core
     if yoffset is None:
         yoffset = xoffset

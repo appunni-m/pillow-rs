@@ -996,6 +996,91 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
     }
 }
 
+// --- Utility functions (moved from Python to satisfy "thin wrapper" rule) ---
+
+/// Align each scanline to a 4-byte boundary (Qt/BMP compatibility).
+/// Matches PIL's `ImageQt._toqclass_helper` align8to32 padding logic.
+#[pyfunction]
+#[pyo3(signature = (data, width, bits_per_pixel=8))]
+fn align_row_to_32(data: Vec<u8>, width: u32, bits_per_pixel: u8) -> PyResult<Vec<u8>> {
+    pillow_rs::ops::utils::align_row_to_32(&data, width, bits_per_pixel).map_err(map_error)
+}
+
+/// Create an Image from a flat or nested list of integer pixel values.
+///
+/// Accepts `[0, 128, 255, …]` (flat) or `[[0, 1], [2, 3], …]` (nested rows)
+/// and returns a single-row Image with the appropriate width and mode.
+#[pyfunction]
+fn fromarray_pixel_list(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
+    // Try extracting as flat Vec<i32> first
+    let flat: Vec<i32> = if let Ok(v) = data.extract::<Vec<i32>>() {
+        v
+    } else if let Ok(nested) = data.extract::<Vec<Vec<i32>>>() {
+        nested.into_iter().flatten().collect()
+    } else {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "fromarray_pixel_list: expected list of ints or nested list of ints",
+        ));
+    };
+
+    let bytes = pillow_rs::ops::utils::flatten_pixel_list(&flat).map_err(map_error)?;
+    let n_bands = mode.map(|m| m.len() as u32).unwrap_or(1);
+    let w = flat.len() as u32 / n_bands;
+    if w == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "fromarray_pixel_list: not enough pixel values for the given mode",
+        ));
+    }
+    let effective_mode = mode.unwrap_or("L");
+    pillow_rs::image::Image::frombytes(effective_mode, (w, 1), &bytes)
+        .map(|img| PyImage { inner: img })
+        .map_err(map_error)
+}
+
+/// Flatten mesh transform data (list of (bbox, quad) tuples) into a flat f64 Vec.
+///
+/// Accepts `[(bbox, quad), …]` where each bbox is `[x0, y0, x1, y1]` and each
+/// quad is `[x0, y0, …, x3, y3]` (8 coords).  Returns `[b0,b1,b2,b3, q0,…,q7, …]`.
+#[pyfunction]
+fn mesh_flatten(items: Vec<(Vec<f64>, Vec<f64>)>) -> PyResult<Vec<f64>> {
+    let mut flat = Vec::with_capacity(items.len() * 12);
+    for (bbox, quad) in &items {
+        if bbox.len() != 4 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "mesh_flatten: each bbox must have exactly 4 values [x0, y0, x1, y1]",
+            ));
+        }
+        if quad.len() != 8 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "mesh_flatten: each quad must have exactly 8 values [x0, y0, …, x3, y3]",
+            ));
+        }
+        flat.extend_from_slice(bbox);
+        flat.extend_from_slice(quad);
+    }
+    Ok(flat)
+}
+
+/// Apply a Python callable to the range 0..255 to produce a LUT, then
+/// replicate for `n_bands` channels.  Used by `Image.eval` and `Image.point`.
+#[pyfunction]
+fn make_lut(func: &Bound<'_, PyAny>, n_bands: u32) -> PyResult<Vec<u8>> {
+    let mut table = Vec::with_capacity(256);
+    for i in 0..256u32 {
+        let result = func.call1((i,)).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("LUT function failed: {}", e))
+        })?;
+        let v = result.extract::<i32>().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err("LUT function must return an integer")
+        })?;
+        table.push((v & 0xFF) as u8);
+    }
+    if n_bands > 1 {
+        table = table.repeat(n_bands as usize);
+    }
+    Ok(table)
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
@@ -1091,6 +1176,12 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(font_default_mask_size, m)?)?;
     m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
     m.add_function(wrap_pyfunction!(kernel_prepare, m)?)?;
+
+    // Utility functions (moved from Python)
+    m.add_function(wrap_pyfunction!(align_row_to_32, m)?)?;
+    m.add_function(wrap_pyfunction!(fromarray_pixel_list, m)?)?;
+    m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
+    m.add_function(wrap_pyfunction!(make_lut, m)?)?;
 
     Ok(())
 }

@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use pillow_rs_image::DynamicImage;
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 
@@ -1060,7 +1061,11 @@ fn quantize_octree_rgba(pixels: &[u8], w: u32, h: u32, n_colors: usize) -> (Vec<
         coarse_bits[3],
     );
 
-    let n = (w * h) as usize;
+    let dims_pixels = match CheckedDims::new(w, h, 1) {
+        Ok(d) => d,
+        Err(_) => return (vec![], vec![]),
+    };
+    let n = dims_pixels.total_pixels();
 
     // Step 1: Add all pixels to fine cube
     for i in 0..n {
@@ -1412,8 +1417,11 @@ const WEB_PALETTE: [u8; 678] = [
 /// Applies Floyd-Steinberg dither when `dither` is true (matching PIL default).
 /// Returns (palette_indices, palette_bytes).
 pub fn web_palette_quantize(pixels: &[u8], w: u32, h: u32, dither: bool) -> (Vec<u8>, Vec<u8>) {
-    let n_pixels = (w * h) as usize;
-    let mut out = vec![0u8; n_pixels];
+    let dims_pixels = match CheckedDims::new(w, h, 1) {
+        Ok(d) => d,
+        Err(_) => return (vec![], vec![]),
+    };
+    let mut out = dims_pixels.alloc_buffer();
 
     if dither {
         // PIL-identical Floyd-Steinberg dither with WEB palette.

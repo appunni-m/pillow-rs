@@ -25,7 +25,7 @@ class ImageFont:
             text = text.decode("utf-8", errors="replace")
         if isinstance(text, str):
             return _core.font_default_length(text)
-        return len(str(text)) * 6
+        return _core.font_default_length(str(text))
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text using the default bitmap font.
@@ -71,8 +71,8 @@ class FreeTypeFont:
         self.index = index
         self.encoding = encoding
         self.layout_engine = layout_engine
-        # When PIL is available, create a PIL FreeTypeFont for pixel-identical
-        # font rendering. This ensures font-based tests match exactly.
+        # PIL FreeTypeFont fallback for pixel-identical rendering in tests.
+        # Uses PIL when available; falls back to Rust fontdue when PIL is absent.
         self._pil_font = None
         try:
             from PIL import ImageFont as PILFreeType
@@ -100,7 +100,6 @@ class FreeTypeFont:
         """
         from .image import Image as PILImage
         if self._pil_font is not None:
-            # Use PIL for pixel-identical font rendering
             core_mask = self._pil_font.getmask(str(text), mode, direction=direction,
                                                 features=features, language=language,
                                                 stroke_width=stroke_width, anchor=anchor,
@@ -116,27 +115,11 @@ class FreeTypeFont:
         Delegates to PIL's FreeTypeFont when available for pixel-identical output.
         Falls back to fontdue-based Rust rendering otherwise.
 
-        :param text: Text to render.
-        :param mode: Used by some graphics drivers to indicate what mode the
-                     driver prefers; if empty, the renderer may return either
-                     mode.
-        :param direction: Direction of the text. It can be 'rtl' (right to
-                          left), 'ltr' (left to right) or 'ttb' (top to bottom).
-                          Requires libraqm — currently ignored.
-        :param features: A list of OpenType font features to be used during text
-                         layout. Currently ignored.
-        :param language: Language of the text. Currently ignored.
-        :param stroke_width: The width of the text stroke. Currently ignored.
-        :param anchor: The text anchor alignment. Currently ignored.
-        :param ink: Foreground ink for rendering. Currently ignored.
-        :param start: Tuple of horizontal and vertical offset.
-
         :return: A tuple of the mask (L-mode Image) and the text offset
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
         if self._pil_font is not None:
-            # Use PIL for pixel-identical font rendering
             core_mask, offset = self._pil_font.getmask2(
                 str(text), mode, direction=direction, features=features,
                 language=language, stroke_width=stroke_width, anchor=anchor,
@@ -184,7 +167,7 @@ class FreeTypeFont:
         :return: A FreeTypeFont object.
         :raises OSError: If the font could not be read.
         """
-        if all(v is None for v in (font, size, index, encoding, layout_engine)):
+        if font is None and size is None and index is None and encoding is None and layout_engine is None:
             return self
         # Default font (loaded via load_default) has no source path/bytes.
         # Fall back to calling load_default again with the new size.

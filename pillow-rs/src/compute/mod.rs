@@ -75,13 +75,13 @@ pub mod backend_op;
 pub mod op_def;
 
 mod pool_cpu;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "gpu")]
 mod pool_gpu;
 mod pool_simd;
 pub mod registry;
 
 pub use pool_cpu::CpuPool;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "gpu")]
 pub use pool_gpu::GpuPool;
 pub use pool_simd::SimdPool;
 
@@ -123,7 +123,7 @@ fn pools() -> &'static [Box<dyn BackendImpl>] {
     POOLS.get_or_init(|| {
         let mut v: Vec<Box<dyn BackendImpl>> = vec![
             Box::new(CpuPool),
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(feature = "gpu")]
             Box::new(GpuPool),
             Box::new(SimdPool),
         ];

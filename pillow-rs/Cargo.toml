@@ -8,15 +8,19 @@ description = "Pure Rust image processing — Pillow reimplementation"
 [lib]
 name = "pillow_rs"
 
+[features]
+default = ["gpu"]
+gpu = ["wgpu", "pollster"]
+
 [dependencies]
 pillow-rs-image = { path = "../pillow-rs-image" }
 log = "0.4"
 png = "0.18"
-thiserror = "1"
+thiserror = "2"
 csscolorparser = "0.8"
 fontdue = "0.9"
-wgpu = "24"
-pollster = "0.3"
+wgpu = { version = "24", optional = true }
+pollster = { version = "0.3", optional = true }
 bytemuck = { version = "1", features = ["derive"] }
 
 # AS PER DESIGN — DO NOT REMOVE:

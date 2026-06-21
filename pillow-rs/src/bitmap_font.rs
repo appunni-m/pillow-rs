@@ -9,6 +9,8 @@ mod data;
 use data::BITMAP_GLYPH_DATA;
 use data::BITMAP_GLYPH_DATA_BINARY;
 
+use crate::checked_dims::CheckedDims;
+
 /// A bitmap font using pre-rendered glyphs matching PIL's default font exactly.
 #[derive(Debug, Clone)]
 pub struct BitmapFont {
@@ -94,7 +96,10 @@ impl BitmapFont {
         let line_h = max_ymax as u32;
 
         // Allocate canvas
-        let mut canvas = vec![0u8; (total_w * line_h) as usize];
+        let mut canvas = match CheckedDims::new(total_w, line_h, 1) {
+            Ok(dims) => dims.alloc_buffer(),
+            Err(_) => return (total_w, 0, vec![]),
+        };
         let mut cx = 0u32;
 
         for &(gw, gh, ymin, data) in &glyphs {
@@ -164,7 +169,10 @@ impl BitmapFont {
         }
 
         // Convert mask (alpha values) to RGBA using fill color
-        let mut pixels = vec![0u8; (w * h * 4) as usize];
+        let mut pixels = match CheckedDims::new(w, h, 4) {
+            Ok(dims) => dims.alloc_buffer(),
+            Err(_) => return (w, h, vec![]),
+        };
         for y in 0..h {
             for x in 0..w {
                 let alpha = mask[(y * w + x) as usize];
@@ -216,7 +224,10 @@ impl BitmapFont {
         }
 
         let line_h = max_ymax as u32;
-        let mut canvas = vec![0u8; (total_w * line_h) as usize];
+        let mut canvas = match CheckedDims::new(total_w, line_h, 1) {
+            Ok(dims) => dims.alloc_buffer(),
+            Err(_) => return (total_w, 0, vec![]),
+        };
         let mut cx = 0u32;
 
         for &(gw, gh, ymin, data) in &glyphs {

@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
 
+from . import _core
 from ._core import Image as RustImage
 from .enums import Palette, Resampling, Transpose
 
@@ -117,7 +118,7 @@ class Image:
     @classmethod
     def merge(cls, mode: str, bands: Tuple["Image", ...]) -> "Image":
         """Merge a set of single-band images into a new multi-band image."""
-        rust_bands = [b._rust_image for b in bands]
+        rust_bands = list(map(lambda b: b._rust_image, bands))
         rust_image = RustImage.merge(mode, rust_bands)
         return cls(rust_image)
 
@@ -210,7 +211,7 @@ class Image:
         self._rust_image.paste(rust_im, rust_box, rust_mask)
 
     def split(self) -> Tuple["Image", ...]:
-        return tuple(Image(band) for band in self._rust_image.split())
+        return tuple(map(Image, self._rust_image.split()))
 
     def getbands(self) -> Tuple[str, ...]:
         return _BAND_NAMES.get(self.mode, (self.mode,))
@@ -365,8 +366,8 @@ class Image:
         """Apply lookup table or function to each pixel."""
         n_bands = len(self.getbands())
         if callable(lut):
-            lut = bytes(lut(i) & 0xFF for i in range(256))
-            return Image(self._rust_image.point_replicated(list(lut), n_bands))
+            lut = _core.make_lut(lut, 1)
+            return Image(self._rust_image.point_replicated(lut, n_bands))
         # LUT validation (PIL requires 256 * n_bands entries) handled in Rust
         return Image(self._rust_image.point_validated(list(lut)))
 
@@ -394,7 +395,7 @@ class Image:
 
     def get_child_images(self):
         """Return list of child images (multi-frame)."""
-        return [Image(img) for img in self._rust_image.get_child_images()]
+        return list(map(Image, self._rust_image.get_child_images()))
 
     def get_flattened_data(self, band=None):
         """Return flattened pixel data matching PIL format."""
@@ -493,28 +494,12 @@ class Image:
 
     @staticmethod
     def _align8to32(data: bytes, width: int, mode: str) -> bytes:
-        """Convert each scanline from 8-bit to 32-bit aligned (PIL compatibility).
+        """Convert each scanline from 8-bit to 32-bit aligned (PIL / Qt compatibility).
 
-        PIL's ImageQt._toqclass_helper calls align8to32() to pad each row to a
-        4-byte boundary, which is what QImage expects internally. Without this
-        padding, QImage(buffer, w, h, fmt) will overread the buffer and pick up
-        garbage padding bytes.
+        Delegates to Rust core for row alignment padding logic.
         """
         bits_per_pixel = {"1": 1, "L": 8, "P": 8}.get(mode, 8)
-        bits_per_line = bits_per_pixel * width
-        full_bytes_per_line, remaining_bits = divmod(bits_per_line, 8)
-        bytes_per_line = full_bytes_per_line + (1 if remaining_bits else 0)
-        extra_padding = -bytes_per_line % 4
-        if not extra_padding:
-            return data
-        rows = len(data) // bytes_per_line
-        padded = bytearray(rows * (bytes_per_line + extra_padding))
-        for i in range(rows):
-            src_start = i * bytes_per_line
-            dst_start = i * (bytes_per_line + extra_padding)
-            padded[dst_start:dst_start + bytes_per_line] = data[src_start:src_start + bytes_per_line]
-            # Remaining bytes are already zero from bytearray initialization
-        return bytes(padded)
+        return _core.align_row_to_32(data, width, bits_per_pixel)
 
     def toqimage(self):
         """Convert to Qt QImage. Matches PIL's ImageQt._toqclass_helper format mapping."""
@@ -532,14 +517,14 @@ class Image:
             raw_data = self.tobytes("raw", "L")
             raw_data = self._align8to32(raw_data, w, "L")
             fmt = QImage.Format_Indexed8
-            colortable = [qRgb(i, i, i) for i in range(256)]
+            colortable = list(map(lambda i: qRgb(i, i, i), range(256)))
         elif mode == "P":
             raw_data = self.tobytes("raw", "P")
             raw_data = self._align8to32(raw_data, w, "P")
             fmt = QImage.Format_Indexed8
             palette = self.getpalette()
             if palette:
-                colortable = [qRgb(*palette[i:i+3]) for i in range(0, len(palette), 3)]
+                colortable = list(map(lambda i: qRgb(palette[i], palette[i+1], palette[i+2]), range(0, len(palette), 3)))
         elif mode == "RGB":
             # Match PIL: convert to RGBA, use BGRA byte order, Format_RGB32
             rgba = self.convert("RGBA")
@@ -638,9 +623,8 @@ class Image:
         if args:
             func = args[0]
             n_bands = len(image.getbands())
-            table = [func(i) & 0xFF for i in range(256)] * n_bands
-            lut = bytes(table)
-            return Image(image._rust_image.point(list(lut)))
+            lut = _core.make_lut(func, n_bands)
+            return Image(image._rust_image.point(lut))
         raise ValueError("eval requires a function argument")
 
     def tobitmap(self, name="image"):
@@ -659,23 +643,19 @@ class Image:
         """General affine/perspective/mesh transform."""
         if method == 0 or method == "AFFINE" or (isinstance(data, list) and len(data) == 6 and not isinstance(data[0], (list, tuple))):
             return Image(self._rust_image.transform(size, "AFFINE", data, resample, fill, fillcolor))
-        if method == "MESH" or (isinstance(data, (list, tuple)) and len(data) > 0 and isinstance(data[0], (list, tuple))):
-            # PIL's MESH data is list of (bbox, quad) tuples, or a single (bbox, quad) tuple
-            mesh_items = data if isinstance(data, list) else [data]
-            # Check if it's a single mesh element (bbox, quad) tuple
-            if len(mesh_items) == 2 and all(isinstance(x, (int, float)) for x in mesh_items[:4]):
-                # Single mesh element tuple
-                mesh_flat = []
-                mesh_flat.extend([float(mesh_items[0][0]), float(mesh_items[0][1]),
-                                  float(mesh_items[0][2]), float(mesh_items[0][3])])
-                mesh_flat.extend([float(v) for v in mesh_items[1]])
-                return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
-            # List of mesh elements
-            mesh_flat = []
-            for item in mesh_items:
-                bbox, quad = item
-                mesh_flat.extend([float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])])
-                mesh_flat.extend([float(v) for v in quad])
+        is_mesh = method == "MESH" or (isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)))
+        if is_mesh:
+            # PIL's MESH data is a list of (bbox, quad) tuples, or a single (bbox, quad) pair
+            # [( (x0,y0,x1,y1), (q0,q1,...,q7) ), ...] — list of mesh items
+            #  ( (x0,y0,x1,y1), (q0,q1,...,q7) )     — single mesh item
+            if (isinstance(data, (list, tuple)) and data
+                    and isinstance(data[0], (list, tuple))
+                    and isinstance(data[0][0], (list, tuple))):
+                # data[0] is a tuple of tuples → list of mesh items
+                mesh_flat = _core.mesh_flatten(data)
+            else:
+                # single mesh item: ((bbox), (quad))
+                mesh_flat = _core.mesh_flatten([data])
             return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
         raise NotImplementedError(f"transform method '{method}' not yet implemented")
 

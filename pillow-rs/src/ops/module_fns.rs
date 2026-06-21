@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::convert::parse_mode;
@@ -289,7 +290,7 @@ pub fn effect_mandelbrot(
 
     // PIL uses escape radius 100.0 (NOT the common 4.0)
     let radius = 100.0f64;
-    let mut data = vec![0u8; (w * h) as usize];
+    let mut data = CheckedDims::new(w, h, 1)?.alloc_buffer();
 
     for y in 0..h {
         let row_start = (y * w) as usize;
