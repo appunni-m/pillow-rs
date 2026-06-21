@@ -60,11 +60,11 @@ impl ExecContext {
                 }
                 Ok(1 + (n * 2) as i32)
             }
-            // 0x42 WS — write store (Apple convention)
-            // TrueType pops: location first, then value
+            // 0x42 WS — write store
+            // Stack: push location (bottom), push value (top) → pop value first
             0x42 => {
-                let loc = self.pop() as usize;
                 let val = self.pop();
+                let loc = self.pop() as usize;
                 if loc < 4096 { // safety cap
                     if loc >= self.glyf_storage.len() {
                         self.glyf_storage.resize((loc + 64).min(4096), 0);
@@ -87,7 +87,7 @@ impl ExecContext {
                 self.push(val);
                 Ok(1)
             }
-            // 0x44 WCVTP
+            // 0x44 WCVTP — Write CVT (pixel units → F26Dot6)
             0x44 => {
                 let val = self.pop();
                 let loc = self.pop() as usize;

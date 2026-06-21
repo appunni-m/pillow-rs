@@ -100,33 +100,33 @@ impl ExecContext {
                 Ok(1)
             }
             // 0x68 ROUND[0] — round to grid (standard rounding)
+            // Pops value, pushes the rounded value (NOT original + rounded).
+            // Matches FreeType: Round_To_Grid returns grid-aligned value.
             0x68 => {
                 let val = self.pop();
-                // ROUND pops grid period from stack when bit 6 is set
-                // For now: apply current rounding
                 let result = self.round_distance(val, 0);
-                self.push(val + result);
+                self.push(result);
                 Ok(1)
             }
-            // 0x69 ROUND[1]
+            // 0x69 ROUND[1] — round to double grid
             0x69 => {
                 let val = self.pop();
                 let result = self.round_distance(val, 0);
-                self.push(val + result);
+                self.push(result);
                 Ok(1)
             }
-            // 0x6A ROUND[2]
+            // 0x6A ROUND[2] — round down to grid
             0x6A => {
                 let val = self.pop();
                 let result = self.round_distance(val, 0);
-                self.push(val + result);
+                self.push(result);
                 Ok(1)
             }
-            // 0x6B ROUND[3]
+            // 0x6B ROUND[3] — round up to grid
             0x6B => {
                 let val = self.pop();
                 let result = self.round_distance(val, 0);
-                self.push(val + result);
+                self.push(result);
                 Ok(1)
             }
             // 0x6C NROUND[0] — no rounding
@@ -153,7 +153,7 @@ impl ExecContext {
                 self.push(val);
                 Ok(1)
             }
-            // 0x70 WCVTF
+            // 0x70 WCVTF — Write CVT (font units, scaled to F26Dot6)
             0x70 => {
                 let val = self.pop();
                 let loc = self.pop() as usize;

@@ -87,7 +87,9 @@ impl ExecContext {
             ip: 0,
             opcode: 0,
             cur_range: CodeRange::None,
-            stack: vec![0i32; 512],
+            // Stack size: some fonts push 1000+ values in PREP (e.g., DejaVuSans
+            // uses NPUSHB 255 four times). Use 2048 to be safe.
+            stack: vec![0i32; 2048],
             top: 0,
             cvt: data.cvt.clone(),
             storage: vec![0i32; 64],
@@ -124,7 +126,7 @@ impl ExecContext {
             ip: 0,
             opcode: 0,
             cur_range: CodeRange::None,
-            stack: vec![0i32; 512],
+            stack: vec![0i32; 2048],
             top: 0,
             cvt: Vec::new(),
             storage: vec![0i32; 64],
@@ -815,7 +817,7 @@ impl ExecContext {
             return;
         }
 
-        let n = glyph.points.len() as u16;
+        let n_glyph = glyph.points.len() as u16;
 
         self.pts.points = glyph
             .points
@@ -829,10 +831,34 @@ impl ExecContext {
             .map(|&oc| if oc { ON_CURVE } else { 0 })
             .collect();
         self.pts.contours = glyph.end_pts.clone();
-        self.pts.n_points = n;
+        self.pts.n_points = n_glyph;
         self.pts.n_contours = glyph.num_contours as u16;
 
-        let twilight_n = n.max(data.maxp.num_glyphs as u16 * 2).min(256);
+        // Append 4 phantom points (required by many font programs).
+        // These represent the left/right bearing edges and vertical bearing edges.
+        // The glyph program references them with MIRP/MDRP to adjust positioning.
+        // FreeType equivalent: ttgload.c TT_Hint_Glyph — phantom point setup.
+        let ph_lsb = glyph.lsb; // left side bearing (26.6)
+        let ph_aw = glyph.advance_width; // advance width (26.6)
+        let ph0 = F26Dot6Vector::new(ph_lsb, 0); // left bearing
+        let ph1 = F26Dot6Vector::new(ph_lsb + ph_aw, 0); // right bearing
+        let ph2 = F26Dot6Vector::new(0, 0); // vertical top (stub)
+        let ph3 = F26Dot6Vector::new(0, 0); // vertical bottom (stub)
+        self.pts.points.push(ph0);
+        self.pts.points.push(ph1);
+        self.pts.points.push(ph2);
+        self.pts.points.push(ph3);
+        self.pts.org.push(ph0);
+        self.pts.org.push(ph1);
+        self.pts.org.push(ph2);
+        self.pts.org.push(ph3);
+        self.pts.tags.push(ON_CURVE);
+        self.pts.tags.push(ON_CURVE);
+        self.pts.tags.push(ON_CURVE);
+        self.pts.tags.push(ON_CURVE);
+        self.pts.n_points = n_glyph + 4;
+
+        let twilight_n = n_glyph.max(data.maxp.num_glyphs as u16 * 2).min(256);
         self.twilight.allocate_twilight(twilight_n);
 
         // FreeType: zp[0] = twilight, zp[1] = glyph, zp[2] = glyph

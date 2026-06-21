@@ -346,22 +346,41 @@ impl ExecContext {
                 }
                 Ok(1)
             }
-            // 0x2F MDAP (with rounding) — same as MIAP2 semantics
+            // 0x2F MDAP[1] — Move Direct Absolute Point (with rounding)
+            // Computes the point's projection from rp0[0], rounds it, then
+            // moves the point to the rounded position along the freedom vector.
+            // FreeType-equivalent: Ins_MDAP with (opcode & 1) branch.
             0x2F => {
-                let p = self.pop() as u16;
-                self.gs.rp0 = p;
-                self.gs.rp1 = p;
-                let touch_x = self.gs.proj_vector.x != 0;
-                let touch_y = self.gs.proj_vector.y != 0;
-                let zone = self.get_zone(0);
-                if (p as usize) < zone.points.len() {
-                    if touch_x {
-                        zone.tags[p as usize] |= TOUCH_X;
+                let p = self.pop() as usize;
+                let rp_idx = self.gs.rp0 as usize;
+                let (old_dist, needs_move) = {
+                    let zone = self.get_zone(0);
+                    if p < zone.points.len() && rp_idx < zone.points.len() {
+                        let dx = zone.points[p].x - zone.points[rp_idx].x;
+                        let dy = zone.points[p].y - zone.points[rp_idx].y;
+                        (dot_product(dx, dy, &self.gs.proj_vector), true)
+                    } else {
+                        (0, false)
                     }
-                    if touch_y {
-                        zone.tags[p as usize] |= TOUCH_Y;
+                };
+                if needs_move {
+                    let new_dist = self.round_distance(old_dist, (self.opcode & 3) as i32);
+                    let delta = new_dist - old_dist;
+                    let fv = self.gs.free_vector;
+                    let zone = self.get_zone(0);
+                    if delta != 0 {
+                        Self::direct_move_with_vec(zone, &fv, p, delta);
+                    } else {
+                        if fv.x != 0 {
+                            zone.tags[p] |= TOUCH_X;
+                        }
+                        if fv.y != 0 {
+                            zone.tags[p] |= TOUCH_Y;
+                        }
                     }
                 }
+                self.gs.rp0 = p as u16;
+                self.gs.rp1 = p as u16;
                 Ok(1)
             }
             // 0x30 IUP[y] — FreeType: direction 0 = Y
