@@ -166,5 +166,6 @@ mod tests {
 
         let dir = parse_table_directory(&data).expect("OTTO should parse");
         assert_eq!(dir.num_tables, 1);
+        assert_eq!(dir.records[0].tag, tag(b"cmap"));
     }
 }

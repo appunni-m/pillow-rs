@@ -152,14 +152,32 @@ pub(crate) fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGly
     let mut on_curve = Vec::with_capacity(n);
 
     for p in &outline.points {
-        points.push((scale.scale_x(p.x), scale.scale_y(p.y)));
+        let sx = scale.scale_x(p.x);
+        let sy = scale.scale_y(p.y);
+        points.push((sx, sy));
         on_curve.push(p.on_curve);
     }
 
-    let xmin_26 = scale.scale_x(outline.xmin);
-    let ymin_26 = scale.scale_y(outline.ymin);
-    let xmax_26 = scale.scale_x(outline.xmax);
-    let ymax_26 = scale.scale_y(outline.ymax);
+    // Compute bbox from actual scaled point coordinates, not from the glyf
+    // table header (which can be imprecise or use different conventions).
+    // This ensures the pixel bbox matches what FreeType computes from the
+    // actual outline points.
+    let mut xmin_26 = i32::MAX;
+    let mut ymin_26 = i32::MAX;
+    let mut xmax_26 = i32::MIN;
+    let mut ymax_26 = i32::MIN;
+    for &(x, y) in &points {
+        xmin_26 = xmin_26.min(x);
+        ymin_26 = ymin_26.min(y);
+        xmax_26 = xmax_26.max(x);
+        ymax_26 = ymax_26.max(y);
+    }
+    if xmin_26 == i32::MAX {
+        xmin_26 = 0;
+        ymin_26 = 0;
+        xmax_26 = 0;
+        ymax_26 = 0;
+    }
 
     Ok(ScaledGlyph {
         points,

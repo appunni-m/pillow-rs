@@ -230,5 +230,3 @@ impl Font {
     }
 }
 
-#[cfg(test)]
-mod tests {}

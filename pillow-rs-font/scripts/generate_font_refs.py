@@ -22,12 +22,13 @@ FONTS = {
     "LiberationSerif": "LiberationSerif-Regular.ttf",
 }
 SIZES = [10, 12, 16, 20, 24]
-# Printable ASCII
-CHARS = [chr(c) for c in range(32, 127)]
-# Key boundary cases
-EXTRA_CHARS = ["\t", "\n"]
-ALL_CHARS = CHARS + EXTRA_CHARS
+# Printable ASCII (skip whitespace: 32=space, 9=tab, 10=LF)
+CHARS = [chr(c) for c in range(33, 127)]
+ALL_CHARS = CHARS
 OPERATIONS = ["getmask", "getbbox", "getmetrics", "getname", "getlength", "font_variant"]
+
+# Set to "fonts_nohint" to use fonts with stripped bytecode programs
+FONT_SUBDIR = "fonts"  # change to "fonts_nohint" for unhinted references
 
 
 def sha256_hex(data: bytes) -> str:
@@ -39,7 +40,7 @@ def generate() -> int:
     generated = 0
 
     for font_name, font_file in FONTS.items():
-        font_path = INPUT_FONTS / font_file
+        font_path = INPUT_FONTS / FONT_SUBDIR / font_file
         if not font_path.exists():
             print(f"  SKIP {font_name}: font file not found at {font_path}", file=sys.stderr)
             continue
