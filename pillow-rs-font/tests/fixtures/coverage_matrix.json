@@ -38,35 +38,6 @@
       "ref_value": 25.359375
     },
     {
-      "id": "DejaVuSans_10_32_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        3,
-        0
-      ]
-    },
-    {
-      "id": "DejaVuSans_10_32_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        10,
-        3,
-        10
-      ]
-    },
-    {
       "id": "DejaVuSans_10_33_getmask",
       "font": "DejaVuSans",
       "size_pt": 10,
@@ -2793,64 +2764,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_10_9_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "18c941116b56f3d30b29c697f68b4d9ddc41eb17da0ab6f4a8d9b71bc19b2e92",
-      "ref_size": [
-        6,
-        9
-      ]
-    },
-    {
-      "id": "DejaVuSans_10_9_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        3,
-        6,
-        12
-      ]
-    },
-    {
-      "id": "DejaVuSans_10_10_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "18c941116b56f3d30b29c697f68b4d9ddc41eb17da0ab6f4a8d9b71bc19b2e92",
-      "ref_size": [
-        6,
-        9
-      ]
-    },
-    {
-      "id": "DejaVuSans_10_10_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        3,
-        6,
-        12
-      ]
-    },
-    {
       "id": "DejaVuSans_12_getmetrics",
       "font": "DejaVuSans",
       "size_pt": 12,
@@ -2885,35 +2798,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 30.421875
-    },
-    {
-      "id": "DejaVuSans_12_32_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        4,
-        0
-      ]
-    },
-    {
-      "id": "DejaVuSans_12_32_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        12,
-        4,
-        12
-      ]
     },
     {
       "id": "DejaVuSans_12_33_getmask",
@@ -5642,64 +5526,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_12_9_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "7ed42c424f325a54fb494eb921bb5e2f9d00e3b681bb44a6bfb815566c0a533e",
-      "ref_size": [
-        7,
-        11
-      ]
-    },
-    {
-      "id": "DejaVuSans_12_9_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        4,
-        7,
-        15
-      ]
-    },
-    {
-      "id": "DejaVuSans_12_10_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "7ed42c424f325a54fb494eb921bb5e2f9d00e3b681bb44a6bfb815566c0a533e",
-      "ref_size": [
-        7,
-        11
-      ]
-    },
-    {
-      "id": "DejaVuSans_12_10_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        4,
-        7,
-        15
-      ]
-    },
-    {
       "id": "DejaVuSans_16_getmetrics",
       "font": "DejaVuSans",
       "size_pt": 16,
@@ -5734,35 +5560,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 40.578125
-    },
-    {
-      "id": "DejaVuSans_16_32_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        5,
-        0
-      ]
-    },
-    {
-      "id": "DejaVuSans_16_32_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        15,
-        5,
-        15
-      ]
     },
     {
       "id": "DejaVuSans_16_33_getmask",
@@ -8491,64 +8288,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_16_9_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "5b3d6302d5076e0f131904a170c208a37efc50cfe33c370c21e2a47a6d14850d",
-      "ref_size": [
-        10,
-        14
-      ]
-    },
-    {
-      "id": "DejaVuSans_16_9_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        4,
-        10,
-        18
-      ]
-    },
-    {
-      "id": "DejaVuSans_16_10_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "5b3d6302d5076e0f131904a170c208a37efc50cfe33c370c21e2a47a6d14850d",
-      "ref_size": [
-        10,
-        14
-      ]
-    },
-    {
-      "id": "DejaVuSans_16_10_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        4,
-        10,
-        18
-      ]
-    },
-    {
       "id": "DejaVuSans_20_getmetrics",
       "font": "DejaVuSans",
       "size_pt": 20,
@@ -8583,35 +8322,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 50.71875
-    },
-    {
-      "id": "DejaVuSans_20_32_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        6,
-        0
-      ]
-    },
-    {
-      "id": "DejaVuSans_20_32_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        19,
-        6,
-        19
-      ]
     },
     {
       "id": "DejaVuSans_20_33_getmask",
@@ -11340,64 +11050,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_20_9_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "695e3f5ea8ca0ab07dbfd7457a009a03f0a3d8965090feb4673c4ada54ffb173",
-      "ref_size": [
-        12,
-        18
-      ]
-    },
-    {
-      "id": "DejaVuSans_20_9_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        5,
-        12,
-        23
-      ]
-    },
-    {
-      "id": "DejaVuSans_20_10_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "695e3f5ea8ca0ab07dbfd7457a009a03f0a3d8965090feb4673c4ada54ffb173",
-      "ref_size": [
-        12,
-        18
-      ]
-    },
-    {
-      "id": "DejaVuSans_20_10_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        5,
-        12,
-        23
-      ]
-    },
-    {
       "id": "DejaVuSans_24_getmetrics",
       "font": "DejaVuSans",
       "size_pt": 24,
@@ -11432,35 +11084,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 60.84375
-    },
-    {
-      "id": "DejaVuSans_24_32_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        8,
-        0
-      ]
-    },
-    {
-      "id": "DejaVuSans_24_32_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        23,
-        8,
-        23
-      ]
     },
     {
       "id": "DejaVuSans_24_33_getmask",
@@ -14189,64 +13812,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_24_9_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "2bb0fa6c4c0bf299f674cb76c0fb31c2d496255384915dda04838ec74be51d46",
-      "ref_size": [
-        14,
-        21
-      ]
-    },
-    {
-      "id": "DejaVuSans_24_9_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        6,
-        14,
-        27
-      ]
-    },
-    {
-      "id": "DejaVuSans_24_10_getmask",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "2bb0fa6c4c0bf299f674cb76c0fb31c2d496255384915dda04838ec74be51d46",
-      "ref_size": [
-        14,
-        21
-      ]
-    },
-    {
-      "id": "DejaVuSans_24_10_getbbox",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        6,
-        14,
-        27
-      ]
-    },
-    {
       "id": "LiberationSerif_10_getmetrics",
       "font": "LiberationSerif",
       "size_pt": 10,
@@ -14281,35 +13846,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 22.21875
-    },
-    {
-      "id": "LiberationSerif_10_32_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        3,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_10_32_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        9,
-        3,
-        9
-      ]
     },
     {
       "id": "LiberationSerif_10_33_getmask",
@@ -17038,64 +16574,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_10_9_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        8,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_10_9_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        9,
-        8,
-        9
-      ]
-    },
-    {
-      "id": "LiberationSerif_10_10_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        8,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_10_10_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        9,
-        8,
-        9
-      ]
-    },
-    {
       "id": "LiberationSerif_12_getmetrics",
       "font": "LiberationSerif",
       "size_pt": 12,
@@ -17130,35 +16608,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 26.65625
-    },
-    {
-      "id": "LiberationSerif_12_32_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        3,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_12_32_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        11,
-        3,
-        11
-      ]
     },
     {
       "id": "LiberationSerif_12_33_getmask",
@@ -19887,64 +19336,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_12_9_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        9,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_12_9_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        11,
-        9,
-        11
-      ]
-    },
-    {
-      "id": "LiberationSerif_12_10_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        9,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_12_10_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        11,
-        9,
-        11
-      ]
-    },
-    {
       "id": "LiberationSerif_16_getmetrics",
       "font": "LiberationSerif",
       "size_pt": 16,
@@ -19979,35 +19370,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 35.578125
-    },
-    {
-      "id": "LiberationSerif_16_32_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        4,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_16_32_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        15,
-        4,
-        15
-      ]
     },
     {
       "id": "LiberationSerif_16_33_getmask",
@@ -22736,64 +22098,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_16_9_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        12,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_16_9_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        15,
-        12,
-        15
-      ]
-    },
-    {
-      "id": "LiberationSerif_16_10_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        12,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_16_10_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        15,
-        12,
-        15
-      ]
-    },
-    {
       "id": "LiberationSerif_20_getmetrics",
       "font": "LiberationSerif",
       "size_pt": 20,
@@ -22828,35 +22132,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 44.4375
-    },
-    {
-      "id": "LiberationSerif_20_32_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        5,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_20_32_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        18,
-        5,
-        18
-      ]
     },
     {
       "id": "LiberationSerif_20_33_getmask",
@@ -25585,64 +24860,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_20_9_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        16,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_20_9_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        18,
-        16,
-        18
-      ]
-    },
-    {
-      "id": "LiberationSerif_20_10_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        16,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_20_10_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        18,
-        16,
-        18
-      ]
-    },
-    {
       "id": "LiberationSerif_24_getmetrics",
       "font": "LiberationSerif",
       "size_pt": 24,
@@ -25677,35 +24894,6 @@
       "operation": "getlength",
       "status": "active",
       "ref_value": 53.328125
-    },
-    {
-      "id": "LiberationSerif_24_32_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        6,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_24_32_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 32,
-      "char": " ",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        22,
-        6,
-        22
-      ]
     },
     {
       "id": "LiberationSerif_24_33_getmask",
@@ -28432,69 +27620,11 @@
         13,
         22
       ]
-    },
-    {
-      "id": "LiberationSerif_24_9_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        19,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_24_9_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 9,
-      "char": "\t",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        22,
-        19,
-        22
-      ]
-    },
-    {
-      "id": "LiberationSerif_24_10_getmask",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getmask",
-      "status": "active",
-      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ref_size": [
-        19,
-        0
-      ]
-    },
-    {
-      "id": "LiberationSerif_24_10_getbbox",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 10,
-      "char": "\n",
-      "operation": "getbbox",
-      "status": "active",
-      "ref_value": [
-        0,
-        22,
-        19,
-        22
-      ]
     }
   ],
   "summary": {
-    "total_rows": 1970,
-    "active_rows": 1970,
+    "total_rows": 1910,
+    "active_rows": 1910,
     "fonts": 2,
     "sizes": 5,
     "glyphs": 97

@@ -71,35 +71,83 @@ pub(crate) fn rasterize(glyph: &ScaledGlyph) -> RasterizedGlyph {
     let offset_x = glyph.xmin;
     let offset_y = glyph.ymin;
 
-    // Flatten each contour into line segments
+    // Step 0: expand implicit on-curve points for consecutive off-curve pairs.
+    // TrueType rule: two consecutive off-curve points have an implicit
+    // on-curve point at their midpoint.
+    let mut expanded_pts: Vec<(i32, i32)> = Vec::new();
+    let mut expanded_oc: Vec<bool> = Vec::new();
+    let mut expanded_end_pts: Vec<usize> = Vec::new();
+
     let mut pt_idx = 0usize;
     for &end_idx in &glyph.end_pts {
         let contour_start = pt_idx;
         let contour_end = end_idx as usize + 1;
+        let contour_len = contour_end - contour_start;
 
-        for i in contour_start..contour_end {
-            let next = if i + 1 < contour_end {
-                i + 1
+        for i in 0..contour_len {
+            let cur = glyph.points[contour_start + i];
+            let next_idx = if i + 1 < contour_len {
+                contour_start + i + 1
             } else {
                 contour_start
             };
+            let next = glyph.points[next_idx];
+            let oc_cur = glyph.on_curve[contour_start + i];
+            let oc_next = glyph.on_curve[next_idx];
 
-            let p0 = glyph.points[i];
-            let p1 = glyph.points[next];
-            let oc0 = glyph.on_curve[i];
-            let oc1 = glyph.on_curve[next];
+            expanded_pts.push(cur);
+            expanded_oc.push(oc_cur);
 
-            if !oc0 && !oc1 {
-                // Two consecutive off-curve points: insert implicit on-curve midpoint
-                let mid = ((p0.0 + p1.0) / 2, (p0.1 + p1.1) / 2);
-                flatten_quadratic_bezier(p0, mid, &mut crossings);
-                flatten_quadratic_bezier(mid, p1, &mut crossings);
-            } else if !oc1 {
-                // Off-curve control point → quadratic Bezier
-                flatten_quadratic_bezier(p0, p1, &mut crossings);
-            } else {
-                // Both on-curve → straight line
+            if !oc_cur && !oc_next {
+                // Insert implicit on-curve midpoint
+                let mid = ((cur.0 + next.0) / 2, (cur.1 + next.1) / 2);
+                expanded_pts.push(mid);
+                expanded_oc.push(true);
+            }
+        }
+        expanded_end_pts.push(expanded_pts.len() - 1);
+        pt_idx = contour_end;
+    }
+
+    // Step 1: flatten each contour using the expanded point list
+    pt_idx = 0usize;
+    for &end_idx in &expanded_end_pts {
+        let contour_start = pt_idx;
+        let contour_end = end_idx + 1;
+        let contour_len = contour_end - contour_start;
+
+        let mut i = 0usize;
+        while i < contour_len {
+            let idx = contour_start + i;
+            let p0 = expanded_pts[idx];
+            let oc0 = expanded_oc[idx];
+
+            if !oc0 {
+                // off-curve start — should not happen after expansion
+                i += 1;
+                continue;
+            }
+
+            // Look ahead to determine: line, bezier, or skip
+            let next_i = if i + 1 < contour_len { i + 1 } else { 0 };
+            let next_idx = contour_start + next_i;
+            let p1 = expanded_pts[next_idx];
+            let oc1 = expanded_oc[next_idx];
+
+            if oc1 {
+                // On-curve → on-curve: straight line
                 add_line_crossings(p0, p1, &mut crossings);
+                i += 1;
+            } else {
+                // On-curve → off-curve: quadratic bezier
+                // Find the end point (must be on-curve after expansion)
+                let end_i = if i + 2 < contour_len { i + 2 } else { 0 };
+                let end_idx2 = contour_start + end_i;
+                let p2 = expanded_pts[end_idx2];
+                debug_assert!(expanded_oc[end_idx2], "bezier end must be on-curve");
+
+                flatten_quadratic_bezier(p0, p1, p2, &mut crossings);
+                i += 2; // consumed start and control; end is start of next segment
             }
         }
         pt_idx = contour_end;
@@ -196,47 +244,78 @@ pub(crate) fn rasterize(glyph: &ScaledGlyph) -> RasterizedGlyph {
 
 /// Flatten a quadratic Bézier curve into line segments via recursive subdivision.
 ///
-/// p0 is the start point (on-curve), p1 is the control point (off-curve).
-/// The end point is the next on-curve point (p1 in the caller), but we use
-/// TrueType convention: the "end point" is implicit; we only pass two points:
-/// start and control. The actual end point is the NEXT on-curve segment.
+/// Takes all three points of a TrueType quadratic Bézier:
+/// - `p0`: start (on-curve)
+/// - `p1`: control (off-curve)
+/// - `p2`: end (on-curve)
 ///
-/// In TrueType, a quadratic Bézier has three points: on, off, on.
-/// We pass (start_on_curve, off_curve). The subdivision splits the curve
-/// where the flatness is within tolerance.
-fn flatten_quadratic_bezier(p0: (i32, i32), p1: (i32, i32), crossings: &mut Vec<EdgeCrossing>) {
-    // For TrueType outlines, a quadratic Bézier is defined by:
-    //   start (on-curve), control (off-curve), end (on-curve)
-    // This function receives (start, control). The end is attached to p1
-    // from the viewpoint of the contour walk.
-    //
-    // For subdivision, we need all three points. Since we walk the contour
-    // sequentially, p1 in this function is an off-curve control point,
-    // and the end on-curve point is implicit from the path walk.
-    //
-    // For simplicity: if the distance from p1 to the line p0-p2 is small
-    // enough, just use p0-p2 as a straight line. Otherwise, subdivide.
-    // Since we don't have p2 here, we check if p0 and p1 are close in 26.6.
-    let dx = (p1.0 - p0.0).abs();
-    let dy = (p1.1 - p0.1).abs();
-    let dist = dx.max(dy);
+/// Uses de Casteljau subdivision: subdivide at the parametric midpoint
+/// until the curve is flat enough to approximate as a straight line.
+fn flatten_quadratic_bezier(
+    p0: (i32, i32),
+    p1: (i32, i32),
+    p2: (i32, i32),
+    crossings: &mut Vec<EdgeCrossing>,
+) {
+    // Test flatness: maximum distance from control point to chord p0→p2.
+    // For a quadratic Bézier, the curve lies entirely within the convex hull
+    // of its three control points. The distance from p1 to the line p0→p2
+    // measures how much the curve deviates from a straight line.
+    let flatness = point_to_line_dist_sq(p0, p1, p2);
 
-    // Flatness tolerance: 1/8 pixel in 26.6 = 8 units
-    if dist <= 8 {
-        // Flat enough — just use as line
-        add_line_crossings(p0, p1, &mut *crossings);
+    // Flatness tolerance: (1/4 pixel in 26.6)² = 16² = 256
+    // 1/4 pixel is tight enough that further subdivision won't visibly
+    // change the rasterized output.
+    const FLATNESS_SQ: i64 = 256;
+
+    if flatness <= FLATNESS_SQ {
+        // Flat enough — approximate as straight line from p0 to p2
+        add_line_crossings(p0, p2, crossings);
     } else {
-        // Subdivide at midpoint
-        // For a quadratic bezier with control point p1, to find a good
-        // midpoint we need the end on-curve point. Since we don't have it,
-        // use p0 and p1 as the subdivision endpoints.
-        // This approximation works because in TrueType, consecutive off-curve
-        // points have an implicit on-curve midpoint already handled by the caller.
-        // Here p0 is on-curve, p1 is off-curve. We subdivide toward the next point.
-        let mid = ((p0.0 + p1.0) / 2, (p0.1 + p1.1) / 2);
-        flatten_quadratic_bezier(p0, mid, crossings);
-        flatten_quadratic_bezier(mid, p1, crossings);
+        // Subdivide at t = 0.5 using de Casteljau:
+        //   m01 = (p0 + p1) / 2
+        //   m12 = (p1 + p2) / 2
+        //   mid  = (m01 + m12) / 2  ← point on curve at t=0.5
+        // Result: left curve (p0, m01, mid), right curve (mid, m12, p2)
+        let m01 = ((p0.0 + p1.0) / 2, (p0.1 + p1.1) / 2);
+        let m12 = ((p1.0 + p2.0) / 2, (p1.1 + p2.1) / 2);
+        let mid = ((m01.0 + m12.0) / 2, (m01.1 + m12.1) / 2);
+
+        flatten_quadratic_bezier(p0, m01, mid, crossings);
+        flatten_quadratic_bezier(mid, m12, p2, crossings);
     }
+}
+
+/// Squared distance from point `p` to the line through `a` and `b`.
+/// Used as a flatness metric for Bézier subdivision.
+/// All coordinates are in 26.6 fixed-point.
+fn point_to_line_dist_sq(
+    a: (i32, i32),
+    p: (i32, i32),
+    b: (i32, i32),
+) -> i64 {
+    let ab_x = (b.0 - a.0) as i64;
+    let ab_y = (b.1 - a.1) as i64;
+    let ap_x = (p.0 - a.0) as i64;
+    let ap_y = (p.1 - a.1) as i64;
+
+    // Cross product: |AB × AP| = |ab_x * ap_y - ab_y * ap_x|
+    let cross = (ab_x * ap_y - ab_y * ap_x).abs();
+
+    // Squared distance = cross² / |AB|²
+    // To avoid division, compare: cross² <= flatness² * |AB|²
+    let ab_len_sq = ab_x * ab_x + ab_y * ab_y;
+    if ab_len_sq == 0 {
+        // Degenerate: a == b, use distance from p to a
+        return ap_x * ap_x + ap_y * ap_y;
+    }
+
+    // Return cross² / |AB|²  (scaled to the same units as our flatness threshold)
+    // Actually, for the flatness comparison we want: cross² / |AB|² <= FLATNESS_SQ
+    // i.e. cross² <= FLATNESS_SQ * |AB|²
+    // But our caller compares flatness <= FLATNESS_SQ.
+    // So return the actual squared distance: cross² / |AB|²
+    cross * cross / ab_len_sq
 }
 
 /// Fill a horizontal span from x_start (26.6, inclusive) to x_end (26.6, exclusive).

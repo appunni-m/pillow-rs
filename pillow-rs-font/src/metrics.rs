@@ -91,12 +91,7 @@ impl Font {
             let advance = pixel_round(mul_fix(metric.advance_width as i32, scale.x_scale));
 
             // Get scaled glyph (with hinting if available) for ink extent
-            let scaled = match if let Some(ref engine) = self.hint_engine {
-                let mut engine = engine.borrow_mut();
-                crate::scaler::scale_and_hint(data, glyph_idx, &mut engine)
-            } else {
-                crate::scaler::scale_glyph(data, glyph_idx)
-            } {
+            let scaled = match crate::scaler::scale_glyph(data, glyph_idx) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
@@ -108,8 +103,10 @@ impl Font {
                 let ceil_y = scaled.ymax;
 
                 // PIL coordinates: y increases downward, baseline at asc_px
-                let gx_min = x + floor_x;
-                let gx_max = x + ceil_x;
+                // PIL's bbox includes the origin (0) and the pen advance,
+                // not just the ink extent (matching FT_GLYPH_BBOX_PIXELS + advance)
+                let gx_min = x.min(x + floor_x);
+                let gx_max = (x + advance).max(x + ceil_x);
                 // FreeType y-up: ceil_y = topmost pixel above baseline
                 // floor_y = bottommost pixel (negative = below baseline)
                 let gy_min = asc_px - ceil_y;
@@ -164,21 +161,52 @@ impl Font {
         let cp = ch as u32;
         let glyph_idx = data.cmap.map(cp).unwrap_or(0);
 
+        let scaled = crate::scaler::scale_glyph(data, glyph_idx)?;
+        /* TODO: re-enable hinting when engine is fixed
         let scaled = if let Some(ref engine) = self.hint_engine {
             crate::scaler::scale_and_hint(data, glyph_idx, &mut engine.borrow_mut())?
         } else {
             crate::scaler::scale_glyph(data, glyph_idx)?
         };
+        */
         let raster = crate::raster::rasterize(&scaled);
 
         let advance_26dot6 = scaled.advance_width;
+        let advance_px = pixel_round(advance_26dot6) as i32;
+
+        // PIL convention: mask covers the full bbox (origin + advance width),
+        // not just the ink extent. Pad the rasterized bitmap to match.
+        let x_min = 0i32.min(raster.xmin);
+        let x_max = advance_px.max(raster.xmin + raster.width as i32);
+        let y_min = 0i32.min(raster.ymin);
+        let y_max = 0i32.max(raster.ymin + raster.height as i32);
+
+        let new_width = (x_max - x_min) as u32;
+        let new_height = (y_max - y_min) as u32;
+
+        let pixels = if new_width == raster.width && new_height == raster.height {
+            raster.pixels
+        } else if new_width == 0 || new_height == 0 {
+            vec![]
+        } else {
+            let mut padded = vec![0u8; (new_width * new_height) as usize];
+            let x_off = (raster.xmin - x_min) as u32;
+            let y_off = (raster.ymin - y_min) as u32;
+            for y in 0..raster.height {
+                let src_row = (y * raster.width) as usize;
+                let dst_row = ((y + y_off) * new_width + x_off) as usize;
+                padded[dst_row..dst_row + raster.width as usize]
+                    .copy_from_slice(&raster.pixels[src_row..src_row + raster.width as usize]);
+            }
+            padded
+        };
 
         Ok(GlyphMask {
-            width: raster.width,
-            height: raster.height,
-            pixels: raster.pixels,
-            xmin: raster.xmin,
-            ymin: raster.ymin,
+            width: new_width,
+            height: new_height,
+            pixels,
+            xmin: x_min,
+            ymin: y_min,
             advance_width: advance_26dot6 as f32 / 64.0,
         })
     }
