@@ -7,6 +7,8 @@
 #![deny(unsafe_code)]
 // Allow during active development — several fields are API-surface for future use
 #![allow(dead_code)]
+// serde/serde_json/sha2 are dev-dependencies used by tests and examples
+#![allow(unused_crate_dependencies)]
 
 pub mod error;
 mod hinting;

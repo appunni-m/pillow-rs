@@ -375,14 +375,14 @@ mod tests {
         ctx.push(20);
         ctx.opcode = 0x50; // LT
         ctx.handle_40_5f().unwrap();
-        assert_eq!(ctx.pop(), 1); // 20 < 10? false -> 0
+        assert_eq!(ctx.pop(), 1); // 10 < 20? true -> 1
 
         // GT
         ctx.push(10);
         ctx.push(20);
         ctx.opcode = 0x52;
         ctx.handle_40_5f().unwrap();
-        assert_eq!(ctx.pop(), 0); // 20 > 10? true -> 1
+        assert_eq!(ctx.pop(), 0); // 10 > 20? false -> 0
 
         ctx.push(10);
         ctx.push(20);

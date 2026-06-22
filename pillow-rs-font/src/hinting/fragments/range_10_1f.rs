@@ -189,9 +189,18 @@ mod tests {
     #[test]
     fn test_jmpr() {
         let mut ctx = make_ctx();
-        ctx.push(5);
-        ctx.top = 0; // ip advance
+        // JMPR with offset=0: no jump, consume only the opcode byte
+        ctx.push(0);
         ctx.opcode = 0x1C;
-        ctx.handle_10_1f().unwrap();
+        let len = ctx.handle_10_1f().unwrap();
+        assert_eq!(len, 1, "JMPR 0 should consume only the opcode");
+
+        // JMPR with offset=5: advance ip by 5
+        ctx.ip = 0;
+        ctx.push(5);
+        ctx.opcode = 0x1C;
+        let len = ctx.handle_10_1f().unwrap();
+        assert_eq!(len, 0, "JMPR should consume 0 bytes on jump");
+        assert_eq!(ctx.ip, 5, "IP should advance by the popped offset");
     }
 }
