@@ -5,15 +5,10 @@
 //! `src/base/ftglyph.c` (`FT_Glyph_Get_CBox` with `FT_GLYPH_BBOX_PIXELS`).
 
 use crate::error::FontError;
-use crate::fixed::{ft_ceil_fix, ft_floor_fix, ft_mul_fix, ft_pix_ceil, ft_pix_floor};
+use crate::fixed::{ft_mul_fix};
 use crate::outline::{Outline, OutlinePoint};
 use crate::tt::glyf::{load_glyph, GlyphOutline};
 use crate::tables::FontData;
-
-// ft_ceil_fix/ft_floor_fix retained for completeness; the 26.6 pixel ops below
-// are what the scaler actually uses.
-#[allow(unused_imports)]
-use crate::fixed::ft_round_fix;
 
 /// Fixed-point scale factors derived from point size and units-per-em.
 ///
@@ -146,9 +141,9 @@ pub fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, Fon
     let px_x_max = (ft_pix_ceil(x_max)) >> 6;
     let px_y_max = (ft_pix_ceil(y_max)) >> 6;
 
-    // Translate outline so bbox bottom-left is at origin (0,0) in 26.6.
-    // ftsmooth renders into a bitmap of size (x_max-x_min, y_max-y_min), with
-    // outline coordinates shifted by -x_min/-y_min.
+    // Translate outline so its pixel bbox sits at (0,0).
+    // The translation preserves subpixel fractional parts (only clears the
+    // integer-pixel portion via ft_pix_floor), so anti-aliasing is preserved.
     let off_x = ft_pix_floor(x_min);
     let off_y = ft_pix_floor(y_min);
     for p in &mut scaled {

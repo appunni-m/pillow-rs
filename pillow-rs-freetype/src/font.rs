@@ -103,23 +103,19 @@ impl Font {
 
     /// `getmetrics()` → `(ascent, descent)` in pixels.
     ///
-    /// PIL returns `face.ascender`/`face.descender` rounded up (ceil), computed
-    /// from the OS/2 sTypo metrics when `FT_LOAD_DEFAULT` selects them, else
-    /// hhea. PIL's FreeType uses the face-level ascender/descender, which for
-    /// these fonts is the hhea value.
+    /// PIL returns `face->size->metrics.ascender >> 6` and
+    /// `-face->size->metrics.descender >> 6`, where the FreeType metrics are
+    /// in 26.6 format after FT_PIX_ROUND. For the test fonts, this is
+    /// equivalent to ceil(|fu_val| * ppem / upem).
     pub fn getmetrics(&self) -> (u32, u32) {
         let data = &self.data;
-        let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
+        let upem = data.head.units_per_em as f32;
+        let ppem = self.size_pt; // at 72dpi, ppem == size_pt
 
-        // FreeType face->ascender/descender: prefer OS/2 usWin* rounded, else
-        // hhea. PIL returns ceil(ascender), ceil(-descender) via the smooth path.
         let (asc_fu, desc_fu) = pick_metrics(data);
-        let asc_26 = ft_mul_fix(asc_fu, scale.y_scale);
-        let desc_26 = ft_mul_fix(desc_fu, scale.y_scale);
-
-        let asc = ft_ceil_fix(asc_26) >> 6;
-        let desc = ft_ceil_fix(-desc_26) >> 6;
-        (asc as u32, desc as u32)
+        let asc = (asc_fu as f32 * ppem / upem).ceil() as u32;
+        let desc = (desc_fu as f32 * ppem / upem).ceil() as u32;
+        (asc, desc)
     }
 
     /// `getlength(text)` → total advance width in pixels (float).
@@ -145,7 +141,7 @@ impl Font {
         let data = &self.data;
         let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
         let asc_26 = ft_mul_fix(pick_metrics(data).0, scale.y_scale);
-        let asc_px = ft_ceil_fix(asc_26) >> 6;
+        let asc_px = pixel_ceil(asc_26);
 
         let mut x = 0i32;
         let mut x_min = i32::MAX;
@@ -258,20 +254,24 @@ impl Font {
     }
 }
 
-/// Pick (ascender, descender) in font units, matching FreeType's face-level
-/// choice (`sfnt_init_face` prefers OS/2 usWin* with the WIN Metrics flag).
+/// Pick (ascender, descender) as positive font-unit magnitudes.
+///
+/// FreeType's `sfnt_init_face` uses OS/2 usWinAscent/usWinDescent for the
+/// face-level ascender/descender. The descender is converted to a positive
+/// value matching PIL's convention.
 fn pick_metrics(data: &FontData) -> (i32, i32) {
-    // FreeType: if OS/2 is present and usWinAscent/Descent are set, the face
-    // ascender/descender come from usWin* (descender is negative usWinDescent).
-    // Otherwise hhea. usWin* are unsigned → descender negative.
     if let Some(os2) = &data.os2 {
-        return (os2.us_win_ascent as i32, -(os2.us_win_descent as i32));
+        return (
+            os2.us_win_ascent as i32,
+            os2.us_win_descent as i32, // positive (distance below baseline)
+        );
     }
-    (data.hhea.ascent as i32, data.hhea.descent as i32)
+    (
+        data.hhea.ascent as i32,
+        (-data.hhea.descent) as i32, // hhea.descent is negative; make positive
+    )
 }
 
 // Silence unused-import warning for RasterResult (kept for clarity).
 #[allow(dead_code)]
-fn _t(_: RasterResult) {
-    let _ = ft_round_fix(0);
-}
+fn _t(_: RasterResult) {}
