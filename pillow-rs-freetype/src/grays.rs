@@ -108,13 +108,13 @@ struct Worker {
     flags: u32,
 }
 
-pub(crate) struct RasterResult {
+pub struct RasterResult {
     pub width: usize,
     pub height: usize,
     pub pixels: Vec<u8>,
 }
 
-pub(crate) fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
+pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
     if outline.points.is_empty() || outline.n_contours == 0 {
         return Ok(RasterResult {
             width: 0,
@@ -699,7 +699,7 @@ impl Worker {
                     let coverage = fill_rule(area, fill);
                     let off = dst_row * self.width + cell.x as usize;
                     if let Some(slot) = self.target.get_mut(off) {
-                        *slot = coverage.clamp(0, 255) as u8;
+                        *slot = coverage as u8;
                     }
                 }
 
@@ -754,7 +754,7 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32) {
     if count <= 0 {
         return;
     }
-    let s = s.clamp(0, 255) as u8;
+    let s = s as u8;
     for i in 0..count as usize {
         if let Some(slot) = buf.get_mut(off + i) {
             *slot = s;

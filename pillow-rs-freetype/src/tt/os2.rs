@@ -15,6 +15,16 @@ pub struct Os2Table {
     pub us_win_ascent: u16,
     /// Windows descender (font units, positive = down).
     pub us_win_descent: u16,
+    /// fsSelection flags (byte 62-63).
+    fs_selection: u16,
+}
+
+impl Os2Table {
+    /// True when `fsSelection` bit 7 (USE_TYPO_METRICS) is set, matching
+    /// FreeType's ascender selection in `sfnt_init_face`.
+    pub fn use_typo_metrics(&self) -> bool {
+        self.fs_selection & 128 != 0
+    }
 }
 
 /// Parse the 'OS/2' table (minimum 78 bytes for the fields we use).
@@ -28,5 +38,6 @@ pub fn parse_os2(data: &[u8]) -> Option<Os2Table> {
         s_typo_line_gap: i16::from_be_bytes([data[72], data[73]]),
         us_win_ascent: u16::from_be_bytes([data[74], data[75]]),
         us_win_descent: u16::from_be_bytes([data[76], data[77]]),
+        fs_selection: u16::from_be_bytes([data[62], data[63]]),
     })
 }

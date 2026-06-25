@@ -18,6 +18,7 @@
 // unit tests; keep them during the port.
 #![allow(dead_code)]
 
+pub mod autohint;
 pub mod error;
 pub mod fixed;
 pub mod font;
