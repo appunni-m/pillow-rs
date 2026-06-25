@@ -1,0 +1,230 @@
+//! Glyph scaler — font units → 26.6 outline, matching FreeType's
+//! `FT_Outline` post-scaling state and `FT_Outline_Get_CBox`.
+//!
+//! Reference: `src/base/ftoutln.c` (`FT_Outline_Transform` via `FT_MulFix`),
+//! `src/base/ftglyph.c` (`FT_Glyph_Get_CBox` with `FT_GLYPH_BBOX_PIXELS`).
+
+use crate::error::FontError;
+use crate::fixed::{ft_ceil_fix, ft_floor_fix, ft_mul_fix, ft_pix_ceil, ft_pix_floor};
+use crate::outline::{Outline, OutlinePoint};
+use crate::tt::glyf::{load_glyph, GlyphOutline};
+use crate::tables::FontData;
+
+// ft_ceil_fix/ft_floor_fix retained for completeness; the 26.6 pixel ops below
+// are what the scaler actually uses.
+#[allow(unused_imports)]
+use crate::fixed::ft_round_fix;
+
+/// Fixed-point scale factors derived from point size and units-per-em.
+///
+/// These are the 16.16 multipliers FreeType applies to font-unit coordinates
+/// (via `FT_MulFix`) to get 26.6 outline coordinates.
+#[derive(Debug, Clone, Copy)]
+pub struct ScaleMetrics {
+    pub x_scale: i32, // 16.16
+    pub y_scale: i32, // 16.16
+    pub ppem: i32,
+}
+
+impl ScaleMetrics {
+    /// Compute scale metrics from point size (72 DPI) and units_per_em.
+    ///
+    /// FreeType derives `ppem` from the request and computes
+    /// `x_scale = FT_DivFix( ppem << 6, units_per_em )` in `tt_size_reset`.
+    pub fn new(size_pt: f32, units_per_em: u16) -> Self {
+        // PIL requests a size in points; FreeType rounds ppem via the request
+        // machinery. For 72 DPI, ppem == round(size_pt). We match PIL/FreeType's
+        // `FT_MulFix(ppem<<6, 64)/upem`-equivalent by using the rounded ppem.
+        let ppem = ppem_from_size(size_pt);
+        let ppem_26dot6 = ppem << 6;
+        let scale = ft_div_fix_local(ppem_26dot6, units_per_em as i32);
+        ScaleMetrics {
+            x_scale: scale,
+            y_scale: scale,
+            ppem,
+        }
+    }
+
+    /// Scale a font-unit coordinate to 26.6.
+    #[inline]
+    pub fn scale_x(&self, fu: i32) -> i32 {
+        ft_mul_fix(fu, self.x_scale)
+    }
+
+    #[inline]
+    pub fn scale_y(&self, fu: i32) -> i32 {
+        ft_mul_fix(fu, self.y_scale)
+    }
+}
+
+/// FT_DivFix in 16.16 (local alias to avoid importing the whole fixed module).
+#[inline]
+fn ft_div_fix_local(a: i32, b: i32) -> i32 {
+    crate::fixed::ft_div_fix(a, b)
+}
+
+/// PIL/FreeType ppem computation from a point size at 72 DPI.
+///
+/// FreeType's default request (`FT_Request_Size`) rounds ppem via
+/// `FT_PIX_ROUND( size * 64 ) >> 6`, which for integral/half sizes matches
+/// `(size + 0.5).floor()`. We mirror that.
+fn ppem_from_size(size_pt: f32) -> i32 {
+    // ppem = FT_PIX_ROUND( size << 6 ) >> 6  (size already in pixels at 72dpi).
+    let size_26dot6 = (size_pt * 64.0).round() as i32;
+    // FT_PIX_ROUND(x) = (x + 32) & ~63  on a 26.6 value.
+    ((size_26dot6 + 32) & !63) >> 6
+}
+
+/// A glyph scaled and positioned for rasterization, plus its metrics.
+pub struct ScaledGlyph {
+    /// Outline in 26.6, with origin at the glyph's pixel bbox bottom-left.
+    pub outline: Outline,
+    pub advance_width: i32, // 26.6
+    pub lsb: i32,           // 26.6
+    /// Pixel CBox (FT_GLYPH_BBOX_PIXELS): x/yMin floored, x/yMax ceiled.
+    pub bbox_x_min: i32,
+    pub bbox_y_min: i32,
+    pub bbox_x_max: i32,
+    pub bbox_y_max: i32,
+}
+
+/// Scale a glyph's outline to 26.6 and translate it so its pixel bbox's
+/// bottom-left corner sits at (0,0) — the convention `ftsmooth`/`ft_bitmap`
+/// use when rendering into a sized bitmap.
+pub fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, FontError> {
+    let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
+
+    let h_metric = data.hmtx.get(glyph_index);
+    let advance_width = scale.scale_x(h_metric.advance_width as i32);
+    let lsb = scale.scale_x(h_metric.lsb as i32);
+
+    let outline_raw = load_glyph(
+        &data.glyf_data,
+        &data.loca_data,
+        data.head.index_to_loc_format,
+        glyph_index,
+    )?;
+
+    if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
+        return Ok(ScaledGlyph {
+            outline: Outline::default(),
+            advance_width,
+            lsb,
+            bbox_x_min: 0,
+            bbox_y_min: 0,
+            bbox_x_max: 0,
+            bbox_y_max: 0,
+        });
+    }
+
+    // Scale all points to 26.6.
+    let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
+    for p in &outline_raw.points {
+        scaled.push(OutlinePoint {
+            x: scale.scale_x(p.x),
+            y: scale.scale_y(p.y),
+            on_curve: p.on_curve,
+        });
+    }
+
+    // FT_Outline_Get_CBox: raw 26.6 min/max of the (scaled) points.
+    let mut x_min = scaled[0].x;
+    let mut y_min = scaled[0].y;
+    let mut x_max = scaled[0].x;
+    let mut y_max = scaled[0].y;
+    for p in &scaled {
+        x_min = x_min.min(p.x);
+        y_min = y_min.min(p.y);
+        x_max = x_max.max(p.x);
+        y_max = y_max.max(p.y);
+    }
+
+    // FT_GLYPH_BBOX_PIXELS: floor the min, ceil the max (FT_PIX_FLOOR/CEIL on 26.6),
+    // then convert to integer pixels.
+    let px_x_min = (ft_pix_floor(x_min)) >> 6;
+    let px_y_min = (ft_pix_floor(y_min)) >> 6;
+    let px_x_max = (ft_pix_ceil(x_max)) >> 6;
+    let px_y_max = (ft_pix_ceil(y_max)) >> 6;
+
+    // Translate outline so bbox bottom-left is at origin (0,0) in 26.6.
+    // ftsmooth renders into a bitmap of size (x_max-x_min, y_max-y_min), with
+    // outline coordinates shifted by -x_min/-y_min.
+    let off_x = ft_pix_floor(x_min);
+    let off_y = ft_pix_floor(y_min);
+    for p in &mut scaled {
+        p.x -= off_x;
+        p.y -= off_y;
+    }
+
+    let outline = Outline {
+        n_contours: outline_raw.num_contours as i32,
+        contours: outline_raw
+            .end_pts_of_contours
+            .iter()
+            .map(|&e| e as i16)
+            .collect(),
+        points: scaled,
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: px_x_max - px_x_min,
+        cbox_y_max: px_y_max - px_y_min,
+    };
+
+    Ok(ScaledGlyph {
+        outline,
+        advance_width,
+        lsb,
+        bbox_x_min: px_x_min,
+        bbox_y_min: px_y_min,
+        bbox_x_max: px_x_max,
+        bbox_y_max: px_y_max,
+    })
+}
+
+/// `FT_PIX_ROUND(x)` on a 26.6 value → rounded pixel (in 26.6, subpixel cleared).
+#[inline]
+pub fn ft_pix_round(x: i32) -> i32 {
+    (x + 32) & !63
+}
+
+/// `FT_PIX_FLOOR(x)` on a 26.6 value.
+#[inline]
+pub fn ft_pix_floor(x: i32) -> i32 {
+    x & !63
+}
+
+/// `FT_PIX_CEIL(x)` on a 26.6 value.
+#[inline]
+pub fn ft_pix_ceil(x: i32) -> i32 {
+    (x + 63) & !63
+}
+
+/// Convert a 26.6 value to an integer pixel (truncate subpixel). Used after a
+/// FT_PIX_* snap, or for raw floor.
+#[inline]
+pub fn to_pixel(x: i32) -> i32 {
+    x >> 6
+}
+
+/// Round 26.6 to nearest pixel (FT_PIX_ROUND → int).
+#[inline]
+pub fn pixel_round(x: i32) -> i32 {
+    ft_pix_round(x) >> 6
+}
+
+/// Floor 26.6 to integer pixel.
+#[inline]
+pub fn pixel_floor(x: i32) -> i32 {
+    ft_pix_floor(x) >> 6
+}
+
+/// Ceil 26.6 to integer pixel.
+#[inline]
+pub fn pixel_ceil(x: i32) -> i32 {
+    ft_pix_ceil(x) >> 6
+}
+
+// Suppress unused-import warning for GlyphOutline (kept for clarity).
+#[allow(dead_code)]
+fn _t(_: GlyphOutline) {}

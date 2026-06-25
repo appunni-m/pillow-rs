@@ -28,7 +28,7 @@ ALL_CHARS = CHARS
 OPERATIONS = ["getmask", "getbbox", "getmetrics", "getname", "getlength", "font_variant"]
 
 # Set to "fonts_nohint" to use fonts with stripped bytecode programs
-FONT_SUBDIR = "fonts"  # change to "fonts_nohint" for unhinted references
+FONT_SUBDIR = "fonts_nohint"  # change to "fonts" for hinted references
 
 
 def sha256_hex(data: bytes) -> str:
@@ -40,7 +40,7 @@ def generate() -> int:
     generated = 0
 
     for font_name, font_file in FONTS.items():
-        font_path = INPUT_FONTS / FONT_SUBDIR / font_file
+        font_path = INPUT_FONTS.parent / FONT_SUBDIR / font_file
         if not font_path.exists():
             print(f"  SKIP {font_name}: font file not found at {font_path}", file=sys.stderr)
             continue

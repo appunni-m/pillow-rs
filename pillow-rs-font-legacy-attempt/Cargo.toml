@@ -1,0 +1,18 @@
+[package]
+name = "pillow-rs-font"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure-Rust FreeType 2.6.x compatible font renderer — pixel-identical to PIL"
+
+[dependencies]
+log = "0.4"
+thiserror = "2"
+
+[dev-dependencies]
+sha2 = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true
