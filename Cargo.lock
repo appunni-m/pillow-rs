@@ -877,6 +877,13 @@ dependencies = [
 name = "pillow-rs-font"
 version = "0.1.0"
 dependencies = [
+ "pillow-rs-freetype",
+]
+
+[[package]]
+name = "pillow-rs-freetype"
+version = "0.1.0"
+dependencies = [
  "log",
  "serde",
  "serde_json",

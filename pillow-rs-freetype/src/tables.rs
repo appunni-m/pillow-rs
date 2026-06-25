@@ -1,0 +1,24 @@
+//! Parsed font tables held together for glyph rendering.
+
+use crate::tt::cmap::CmapTable;
+use crate::tt::head::HeadTable;
+use crate::tt::hhea::HheaTable;
+use crate::tt::hmtx::HmtxTable;
+use crate::tt::maxp::MaxpTable;
+use crate::tt::name::NameTable;
+use crate::tt::os2::Os2Table;
+
+/// All parsed font tables for one face, plus the requested point size.
+#[derive(Debug)]
+pub struct FontData {
+    pub cmap: CmapTable,
+    pub head: HeadTable,
+    pub hhea: HheaTable,
+    pub hmtx: HmtxTable,
+    pub maxp: MaxpTable,
+    pub name: NameTable,
+    pub os2: Option<Os2Table>,
+    pub loca_data: Vec<u8>,
+    pub glyf_data: Vec<u8>,
+    pub size_pt: f32,
+}
