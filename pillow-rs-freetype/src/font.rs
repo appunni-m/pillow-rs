@@ -260,16 +260,23 @@ impl Font {
 /// face-level ascender/descender. The descender is converted to a positive
 /// value matching PIL's convention.
 fn pick_metrics(data: &FontData) -> (i32, i32) {
+    // FreeType priority (sfobjs.c:1380-1413):
+    // 1. OS/2 with USE_TYPO_METRICS → sTypo*,  2. hhea,  3. OS/2 sTypo*/usWin*
     if let Some(os2) = &data.os2 {
-        return (
-            os2.us_win_ascent as i32,
-            os2.us_win_descent as i32, // positive (distance below baseline)
-        );
+        if os2.use_typo_metrics() {
+            return (os2.s_typo_ascender as i32, (-os2.s_typo_descender) as i32);
+        }
     }
-    (
-        data.hhea.ascent as i32,
-        (-data.hhea.descent) as i32, // hhea.descent is negative; make positive
-    )
+    let asc = data.hhea.ascent as i32;
+    let desc = -data.hhea.descent as i32;
+    if asc != 0 || desc != 0 { return (asc, desc); }
+    if let Some(os2) = &data.os2 {
+        let ta = os2.s_typo_ascender as i32;
+        let td = -os2.s_typo_descender as i32;
+        if ta != 0 || td != 0 { return (ta, td); }
+        return (os2.us_win_ascent as i32, os2.us_win_descent as i32);
+    }
+    (asc, desc)
 }
 
 // Silence unused-import warning for RasterResult (kept for clarity).

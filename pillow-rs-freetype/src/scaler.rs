@@ -122,7 +122,12 @@ pub fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, Fon
         });
     }
 
-    // FT_Outline_Get_CBox: raw 26.6 min/max of the (scaled) points.
+    // Apply auto-hinting: snap edges to pixel grid, then interpolate.
+    // This modifies the 26.6 coordinates in-place to align with pixel
+    // boundaries, matching FreeType's autofit module for Latin script.
+    autohint_glyph(&mut scaled, &outline_raw, &scale);
+
+    // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
     let mut y_min = scaled[0].y;
     let mut x_max = scaled[0].x;
@@ -218,6 +223,56 @@ pub fn pixel_floor(x: i32) -> i32 {
 #[inline]
 pub fn pixel_ceil(x: i32) -> i32 {
     ft_pix_ceil(x) >> 6
+}
+
+// ── Auto-hinting bridge ───────────────────────────────────────────────────
+
+/// Apply auto-hinting to scaled glyph coordinates.
+///
+/// Builds a temporary Outline structure, invokes the Latin auto-hinter
+/// (`autohint::apply_hints`) which grid-fits edge positions and interpolates
+/// the remaining points, then reads the results back from the outline.
+fn autohint_glyph(
+    scaled: &mut [OutlinePoint],
+    raw_outline: &GlyphOutline,
+    scale: &ScaleMetrics,
+) {
+    use crate::outline::Outline;
+
+    let num_contours = raw_outline.num_contours as i32;
+    if num_contours == 0 {
+        return;
+    }
+
+    // Build a temporary Outline with scaled 26.6 coords.
+    let mut outline = Outline {
+        n_contours: num_contours,
+        contours: raw_outline.end_pts_of_contours.iter().map(|&e| e as i16).collect(),
+        points: scaled.to_vec(),
+        flags: 0,
+        cbox_x_min: 0,
+        cbox_y_min: 0,
+        cbox_x_max: 1,
+        cbox_y_max: 1,
+    };
+
+    // Run the auto-hinter.  `apply_hints` modifies `outline.points` in-place.
+    crate::autohint::apply_hints(
+        &mut outline,
+        raw_outline,
+        scale.x_scale,
+        scale.y_scale,
+        0, // x_delta
+        0, // y_delta
+    );
+
+    // Write hinted coordinates back.
+    for (i, p) in outline.points.iter().enumerate() {
+        if let Some(s) = scaled.get_mut(i) {
+            s.x = p.x;
+            s.y = p.y;
+        }
+    }
 }
 
 // Suppress unused-import warning for GlyphOutline (kept for clarity).
