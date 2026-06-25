@@ -8,8 +8,16 @@
 //! difference. The full FreeType autohinter includes blue zones, stem-width
 //! histograms, serif handling, and per-glyph adjustments that we defer.
 
-use crate::fixed::ft_mul_fix;
-use super::types::*;
+use crate::fixed::{ft_mul_fix, ft_mul_div};
+use super::types::{
+    AFSegment, AFEdge, GlyphHints,
+    Direction, Dimension,
+    AF_FLAG_IGNORE, AF_FLAG_CONTROL, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y,
+    AF_FLAG_WEAK_INTERPOLATION,
+    AF_EDGE_ROUND, AF_EDGE_SERIF, AF_EDGE_DONE,
+    AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_VERT_SNAP,
+    AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_MONO,
+};
 use super::loader;
 
 /// Top-level entry: apply Latin auto-hinting to an outline.
@@ -25,6 +33,10 @@ pub fn apply_hints(
     y_delta: i32,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
+    // Smooth anti-aliased hinting: enable stem adjustment + snap for both dimensions.
+    hints.other_flags = AF_LATIN_HINTS_HORZ_SNAP
+        | AF_LATIN_HINTS_VERT_SNAP
+        | AF_LATIN_HINTS_STEM_ADJUST;
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);
@@ -35,6 +47,7 @@ pub fn apply_hints(
     // Step 2: Process vertical dimension (Y-axis / horizontal edges)
     // This is the dimension that affects the '|' bar top/bottom alignment.
     compute_segments(&mut hints, Dimension::Vert);
+    link_segments(&mut hints, Dimension::Vert);
     compute_edges(&mut hints, Dimension::Vert);
     hint_edges(&mut hints, Dimension::Vert);
     align_edge_points(&mut hints, Dimension::Vert);
@@ -43,6 +56,7 @@ pub fn apply_hints(
 
     // Step 3: Process horizontal dimension (X-axis / vertical edges)
     compute_segments(&mut hints, Dimension::Horz);
+    link_segments(&mut hints, Dimension::Horz);
     compute_edges(&mut hints, Dimension::Horz);
     hint_edges(&mut hints, Dimension::Horz);
     align_edge_points(&mut hints, Dimension::Horz);
@@ -313,16 +327,593 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     }
 }
 
+// Port of `af_latin_hints_link_segments` (aflatin.c:2015–2148).
+// Pairs opposing-direction, overlapping segments into stem links, then
+// derives serif relationships. Sets seg.link / seg.serif indices.
+fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
+    let axis = &mut hints.axis[dim as usize];
+    let major_dir = axis.major_dir;
+    let n = axis.segments.len();
+
+    // No widths available → max_width = 0.
+    let len_threshold: i32 = 8; // AF_LATIN_CONSTANT(metrics, 8); for upem scaling we use 8
+    let len_score: i32 = 6000; // AF_LATIN_CONSTANT(metrics, 6000)
+    let dist_score: i32 = 3000;
+
+    // Reset scores and links.
+    for seg in &mut axis.segments {
+        seg.score = 32000;
+        seg.link = usize::MAX;
+        seg.serif = usize::MAX;
+    }
+
+    for i in 0..n {
+        let seg1_dir = axis.segments[i].dir;
+        if seg1_dir != major_dir {
+            continue;
+        }
+        let pos1 = axis.segments[i].pos as i32;
+        for j in 0..n {
+            let seg2_dir = axis.segments[j].dir;
+            let pos2 = axis.segments[j].pos as i32;
+            // opposite directions, seg2 to the "right" of seg1
+            if (seg1_dir as i8 + seg2_dir as i8 == 0) && pos2 > pos1 {
+                let mut min_c = axis.segments[i].min_coord as i32;
+                let mut max_c = axis.segments[i].max_coord as i32;
+                if min_c < axis.segments[j].min_coord as i32 {
+                    min_c = axis.segments[j].min_coord as i32;
+                }
+                if max_c > axis.segments[j].max_coord as i32 {
+                    max_c = axis.segments[j].max_coord as i32;
+                }
+                let len = max_c - min_c;
+                if len >= len_threshold {
+                    let dist = pos2 - pos1;
+                    // max_width == 0 → dist_demerit = dist
+                    let dist_demerit = dist;
+                    let score = dist_demerit + len_score / len.max(1);
+                    if score < axis.segments[i].score {
+                        axis.segments[i].score = score;
+                        axis.segments[i].link = j;
+                    }
+                    if score < axis.segments[j].score {
+                        axis.segments[j].score = score;
+                        axis.segments[j].link = i;
+                    }
+                }
+            }
+        }
+    }
+
+    // Compute serif segments: if seg.link != seg.link.link, seg is a serif.
+    for i in 0..n {
+        let seg2_idx = axis.segments[i].link;
+        if seg2_idx != usize::MAX {
+            let seg2_link = axis.segments[seg2_idx].link;
+            if seg2_link != i {
+                axis.segments[i].link = usize::MAX;
+                axis.segments[i].serif = seg2_link;
+            }
+        }
+    }
+}
+
+// ── Helper: snap stem width ────────────────────────────────────────────────
+//
+// Port of `af_latin_snap_width` (aflatin.c:2725–2767).
+// Finds nearest standard width and returns it, snapping within tolerance.
+
+fn snap_width(widths: &[i32], mut width: i32) -> i32 {
+    let mut best: i32 = 64 + 32 + 2; // FT_Pos best = 64 + 32 + 2
+    let mut reference = width;
+
+    for &w in widths {
+        let dist = if width > w { width - w } else { w - width };
+        if dist < best {
+            best = dist;
+            reference = w;
+        }
+    }
+
+    let scaled = (reference + 32) & !63; // FT_PIX_ROUND( reference )
+
+    if width >= reference {
+        if width < scaled + 48 {
+            width = reference;
+        }
+    } else if width > scaled - 48 {
+        width = reference;
+    }
+
+    width
+}
+
+// ── Helper: align linked edge ───────────────────────────────────────────────
+//
+// Port of `af_latin_align_linked_edge` (aflatin.c:4157–4183).
+// Aligns a stem edge relative to its base edge.
+
+fn align_linked_edge(
+    other_flags: u32,
+    dim: Dimension,
+    base_edge: &AFEdge,
+    stem_edge: &mut AFEdge,
+) {
+    let dist = stem_edge.opos - base_edge.opos;
+    let base_delta = base_edge.pos - base_edge.opos;
+
+    let fitted_width = compute_stem_width(
+        other_flags, 0, dim,
+        dist, base_delta,
+        base_edge.flags,
+        stem_edge.flags,
+    );
+
+    stem_edge.pos = base_edge.pos + fitted_width;
+}
+
+// ── Helper: align serif edge ────────────────────────────────────────────────
+//
+// Port of `af_latin_align_serif_edge` (aflatin.c:4189–4197).
+// Preserves serif offset relative to the base edge.
+
+fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
+    serif.pos = base.pos + (serif.opos - base.opos);
+}
+
+// ── Helper: compute stem width ──────────────────────────────────────────────
+//
+// Port of `af_latin_compute_stem_width` (aflatin.c:3960–4152).
+// Quantizes / snaps a stem width.
+
+fn compute_stem_width(
+    other_flags: u32,
+    _ppem: i32,
+    dim: Dimension,
+    width: i32,
+    _base_delta: i32,
+    base_flags: u8,
+    stem_flags: u8,
+) -> i32 {
+    let stem_adjust = other_flags & AF_LATIN_HINTS_STEM_ADJUST != 0;
+
+    // Skip if stem adjustment is disabled or axis is extra-light.
+    if !stem_adjust {
+        return width;
+    }
+    // extra_light is always false in our port — no metrics axis yet.
+
+    let mut dist = width;
+    let mut sign: i32 = 0;
+
+    if dist < 0 {
+        dist = -width;
+        sign = 1;
+    }
+
+    let vertical = dim == Dimension::Vert;
+    let vert_snap = other_flags & AF_LATIN_HINTS_VERT_SNAP != 0;
+    let horz_snap = other_flags & AF_LATIN_HINTS_HORZ_SNAP != 0;
+
+    if (vertical && !vert_snap) || (!vertical && !horz_snap) {
+        // ── Smooth hinting: light quantization ──────────────────────────
+
+        // Leave the widths of serifs alone.
+        if (stem_flags & AF_EDGE_SERIF) != 0 && vertical && dist < 3 * 64 {
+            // goto Done_Width
+        } else if (base_flags & AF_EDGE_ROUND) != 0 {
+            if dist < 80 {
+                dist = 64;
+            }
+        } else if dist < 56 {
+            dist = 56;
+        }
+
+        // width_count is always 0 in our port — skip width histogram.
+        // Port kept for when width histogram is added later:
+        // if axis->width_count > 0 { ... }
+    } else {
+        // ── Strong hinting: snap to integer pixels ──────────────────────
+
+        let org_dist = dist;
+
+        dist = snap_width(&[], dist); // width_count = 0
+
+        if vertical {
+            // Vertical hinting: round stem heights to integer pixels.
+            if dist >= 64 {
+                dist = (dist + 16) & !63;
+            } else {
+                dist = 64;
+            }
+        } else {
+            let mono = other_flags & AF_LATIN_HINTS_MONO != 0;
+
+            if mono {
+                // Monochrome horizontal: snap to integer pixels.
+                if dist < 64 {
+                    dist = 64;
+                } else {
+                    dist = (dist + 32) & !63;
+                }
+            } else {
+                // Anti-aliased horizontal: subtle approach.
+                if dist < 48 {
+                    dist = (dist + 64) >> 1;
+                } else if dist < 128 {
+                    let r = (dist + 22) & !63;
+                    let delta = r - org_dist;
+                    let delta = if delta < 0 { -delta } else { delta };
+
+                    if delta >= 16 {
+                        dist = org_dist;
+                        if dist < 48 {
+                            dist = (dist + 64) >> 1;
+                        }
+                    } else {
+                        dist = r;
+                    }
+                } else {
+                    // Round to prevent color fringes in LCD mode.
+                    dist = (dist + 32) & !63;
+                }
+            }
+        }
+    }
+
+    // Done_Width: restore sign
+    if sign != 0 {
+        dist = -dist;
+    }
+
+    dist
+}
+
 // ── Edge grid-fitting ──────────────────────────────────────────────────────
 //
-// Port of `af_latin_hint_edges` (aflatin.c:4214–4831), simplified to basic
-// pixel-grid snapping without blue zones or stem-width quantization.
+// Faithful port of `af_latin_hint_edges` (aflatin.c:4214–4831).
+// Blue zones are skipped (all blue_edge are NULL in our port).
+// Stem alignment is ported faithfully but never executes (all links are
+// usize::MAX). The non-stem section (lines 4629–4824) does the actual
+// grid-fitting via anchor-relative half-pixel rounding.
 
 fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
+    let other_flags = hints.other_flags;
     let axis = &mut hints.axis[dim as usize];
-    for edge in &mut axis.edges {
-        // FT_PIX_ROUND in 26.6.
-        edge.pos = (edge.opos + 32) & !63;
+    let num_edges = axis.edges.len();
+
+    if num_edges == 0 {
+        return;
+    }
+
+    // top_to_bottom_hinting for Latin is false (edges sorted bottom-to-top).
+    // For vertical dim (horizontal edges), Y increases upward → sorted by
+    // increasing fpos = bottom edge first, top edge last.
+    let top_to_bottom_hinting = false;
+
+    let mut anchor: usize = usize::MAX;
+    let mut has_non_stem_edges = false;
+
+    // ── Phase 1: Blue-zone alignment ────────────────────────────────────
+    // SKIPPED: all edge->blue_edge are NULL in our port.
+    // The C code (aflatin.c:4247–4336) is not ported.
+
+    // ── Phase 2: Stem alignment ─────────────────────────────────────────
+    // Ported faithfully (aflatin.c:4340–4564). Since our edges have no
+    // links (all link == usize::MAX), this loop only sets
+    // has_non_stem_edges = true.
+    for i in 0..num_edges {
+        if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+            continue;
+        }
+
+        let edge2_idx = axis.edges[i].link;
+        if edge2_idx == usize::MAX {
+            has_non_stem_edges = true;
+            continue;
+        }
+
+        // ── We have a linked stem edge (link != NULL) ───────────────────
+
+        // Safety assertion: linked edge should not have a blue edge.
+        // (aflatin.c:4359–4370; never reached since blue_edge is always NULL)
+
+        if anchor == usize::MAX {
+            // First stem — becomes anchor (aflatin.c:4372–4440).
+            let edge_opos = axis.edges[i].opos;
+            let edge_flags = axis.edges[i].flags;
+            let edge2_opos = axis.edges[edge2_idx].opos;
+            let edge2_flags = axis.edges[edge2_idx].flags;
+
+            let org_len = edge2_opos - edge_opos;
+            let cur_len = compute_stem_width(
+                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags,
+            );
+
+            if cur_len <= 64 {
+                // width <= 1px
+                let u_off: i32 = 32;
+                let d_off: i32 = 32;
+                let org_center = edge_opos + (org_len >> 1);
+                let cur_pos1 = (org_center + 32) & !63; // FT_PIX_ROUND
+
+                let error1 = (org_center - (cur_pos1 - u_off)).abs();
+                let error2 = (org_center - (cur_pos1 + d_off)).abs();
+
+                let cur_pos1 = if error1 < error2 {
+                    cur_pos1 - u_off
+                } else {
+                    cur_pos1 + d_off
+                };
+
+                axis.edges[i].pos = cur_pos1 - cur_len / 2;
+            } else if cur_len < 96 {
+                // 1px < width < 1.5px
+                let u_off: i32 = 38;
+                let d_off: i32 = 26;
+                let org_center = edge_opos + (org_len >> 1);
+                let cur_pos1 = (org_center + 32) & !63; // FT_PIX_ROUND
+
+                let error1 = (org_center - (cur_pos1 - u_off)).abs();
+                let error2 = (org_center - (cur_pos1 + d_off)).abs();
+
+                let cur_pos1 = if error1 < error2 {
+                    cur_pos1 - u_off
+                } else {
+                    cur_pos1 + d_off
+                };
+
+                axis.edges[i].pos = cur_pos1 - cur_len / 2;
+            } else {
+                axis.edges[i].pos = (edge_opos + 32) & !63; // FT_PIX_ROUND
+            }
+
+            axis.edges[i].flags |= AF_EDGE_DONE;
+            anchor = i;
+
+            // Align the linked edge.
+            {
+                let base_pos = axis.edges[i].pos;
+                let base_opos = axis.edges[i].opos;
+                let base_flags = axis.edges[i].flags;
+                let stem_opos = axis.edges[edge2_idx].opos;
+                let stem_flags = axis.edges[edge2_idx].flags;
+
+                let dist = stem_opos - base_opos;
+                let base_delta = base_pos - base_opos;
+                let fitted_width = compute_stem_width(
+                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags,
+                );
+                axis.edges[edge2_idx].pos = base_pos + fitted_width;
+            }
+        } else {
+            // Relative to anchor (aflatin.c:4441–4563).
+            let edge_opos = axis.edges[i].opos;
+            let edge_flags = axis.edges[i].flags;
+            let edge2_opos = axis.edges[edge2_idx].opos;
+            let edge2_flags = axis.edges[edge2_idx].flags;
+            let anchor_pos = axis.edges[anchor].pos;
+            let anchor_opos = axis.edges[anchor].opos;
+
+            let org_pos = anchor_pos + (edge_opos - anchor_opos);
+            let org_len = edge2_opos - edge_opos;
+            let org_center = org_pos + (org_len >> 1);
+
+            let cur_len = compute_stem_width(
+                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags,
+            );
+
+            if axis.edges[edge2_idx].flags & AF_EDGE_DONE != 0 {
+                // ADJUST: linked edge already positioned.
+                axis.edges[i].pos = axis.edges[edge2_idx].pos - cur_len;
+            } else if cur_len < 96 {
+                let cur_pos1 = (org_center + 32) & !63; // FT_PIX_ROUND
+
+                let (u_off, d_off): (i32, i32) = if cur_len <= 64 {
+                    (32, 32)
+                } else {
+                    (38, 26)
+                };
+
+                let delta1 = (org_center - (cur_pos1 - u_off)).abs();
+                let delta2 = (org_center - (cur_pos1 + d_off)).abs();
+
+                let cur_pos1 = if delta1 < delta2 {
+                    cur_pos1 - u_off
+                } else {
+                    cur_pos1 + d_off
+                };
+
+                axis.edges[i].pos = cur_pos1 - cur_len / 2;
+            } else {
+                let cur_len2 = compute_stem_width(
+                    other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags,
+                );
+
+                let cur_pos1 = (org_pos + 32) & !63; // FT_PIX_ROUND
+                let delta1 = (cur_pos1 + (cur_len2 >> 1) - org_center).abs();
+
+                let cur_pos2 = (org_pos + org_len + 32) & !63 - cur_len2;
+                let delta2 = (cur_pos2 + (cur_len2 >> 1) - org_center).abs();
+
+                axis.edges[i].pos = if delta1 < delta2 { cur_pos1 } else { cur_pos2 };
+            }
+
+            // Align linked edge.
+            {
+                let base_pos = axis.edges[i].pos;
+                let base_opos = axis.edges[i].opos;
+                let base_flags = axis.edges[i].flags;
+                let stem_opos = axis.edges[edge2_idx].opos;
+                let stem_flags = axis.edges[edge2_idx].flags;
+
+                let dist = stem_opos - base_opos;
+                let base_delta = base_pos - base_opos;
+                let fitted_width = compute_stem_width(
+                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags,
+                );
+                axis.edges[edge2_idx].pos = base_pos + fitted_width;
+            }
+        }
+
+        axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
+
+        // BOUND check for stem edges (aflatin.c:4544–4563):
+        // don't move if stem would (almost) disappear.
+        if i > 0 {
+            let ordering_violated = if top_to_bottom_hinting {
+                axis.edges[i].pos > axis.edges[i - 1].pos
+            } else {
+                axis.edges[i].pos < axis.edges[i - 1].pos
+            };
+            if ordering_violated {
+                let link_idx = axis.edges[i].link;
+                if link_idx != usize::MAX {
+                    let link_pos = axis.edges[link_idx].pos;
+                    let prev_pos = axis.edges[i - 1].pos;
+                    if (link_pos - prev_pos).abs() > 16 {
+                        axis.edges[i].pos = prev_pos;
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Phase 3: Lowercase 'm' symmetry ─────────────────────────────────
+    // SKIPPED (aflatin.c:4582–4627). Requires specific edge count (6 or 12)
+    // and link relationships.
+
+    // ── Phase 4: Non-stem edges ─────────────────────────────────────────
+    // Ported faithfully (aflatin.c:4629–4824).
+    // This is the active path since all our edges lack links.
+    if has_non_stem_edges || anchor == usize::MAX {
+        for i in 0..num_edges {
+            if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+                continue;
+            }
+
+            let mut delta: i32 = 1000;
+
+            // ── Serif handling ─────────────────────────────────────────
+            // Check for real serif: serif edge must be close and no other
+            // edges between them with overlapping coverage.
+            let serif_idx = axis.edges[i].serif;
+            if serif_idx != usize::MAX {
+                // since we don't compute segment `v` (the cross-axis coord)
+                // for edges in a way that matches the C code, we skip the
+                // real-serif overlap check.  Instead we always treat it as
+                // a valid serif if it exists and is close enough.
+                delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
+                if delta < 0 {
+                    delta = -delta;
+                }
+            }
+
+            if delta < 64 + 16 {
+                // delta < 1.25px: use serif alignment.
+                let serif_idx = axis.edges[i].serif;
+                // SAFETY: delta is <80 only if serif_idx is valid.
+                let serif_pos = axis.edges[serif_idx].pos;
+                let serif_opos = axis.edges[serif_idx].opos;
+                axis.edges[i].pos = serif_pos + (axis.edges[i].opos - serif_opos);
+            } else if anchor == usize::MAX {
+                // First non-stem edge: pixel-round and set as anchor.
+                axis.edges[i].pos = (axis.edges[i].opos + 32) & !63;
+                anchor = i;
+            } else {
+                // Interpolate between nearest DONE edges, or use
+                // anchor-relative half-pixel rounding.
+                let edge_opos = axis.edges[i].opos;
+
+                // Find nearest before (processed) edge with AF_EDGE_DONE.
+                let mut before: Option<usize> = None;
+                if i > 0 {
+                    for j in (0..i).rev() {
+                        if axis.edges[j].flags & AF_EDGE_DONE != 0 {
+                            before = Some(j);
+                            break;
+                        }
+                    }
+                }
+
+                // Find nearest after edge with AF_EDGE_DONE.
+                let mut after: Option<usize> = None;
+                for j in (i + 1)..num_edges {
+                    if axis.edges[j].flags & AF_EDGE_DONE != 0 {
+                        after = Some(j);
+                        break;
+                    }
+                }
+
+                if let (Some(b), Some(a)) = (before, after) {
+                    let before_opos = axis.edges[b].opos;
+                    let before_pos = axis.edges[b].pos;
+                    let after_opos = axis.edges[a].opos;
+                    let after_pos = axis.edges[a].pos;
+
+                    if after_opos == before_opos {
+                        axis.edges[i].pos = before_pos;
+                    } else {
+                        axis.edges[i].pos = before_pos
+                            + ft_mul_div(
+                                edge_opos - before_opos,
+                                after_pos - before_pos,
+                                after_opos - before_opos,
+                            );
+                    }
+                } else {
+                    // Anchor-relative: round delta to nearest half-pixel.
+                    let anchor_pos = axis.edges[anchor].pos;
+                    let anchor_opos = axis.edges[anchor].opos;
+                    axis.edges[i].pos = anchor_pos
+                        + ((edge_opos - anchor_opos + 16) & !31);
+                }
+            }
+
+            axis.edges[i].flags |= AF_EDGE_DONE;
+
+            // ── BOUND checks: prevent edge ordering violations ──────────
+            // Only apply to edges that have links (stems). Our edges lack
+            // links, so these conditions are always false.
+
+            // Check against previous edge.
+            if i > 0 {
+                let ordering_violated = if top_to_bottom_hinting {
+                    axis.edges[i].pos > axis.edges[i - 1].pos
+                } else {
+                    axis.edges[i].pos < axis.edges[i - 1].pos
+                };
+                if ordering_violated {
+                    let link_idx = axis.edges[i].link;
+                    if link_idx != usize::MAX {
+                        let link_pos = axis.edges[link_idx].pos;
+                        let prev_pos = axis.edges[i - 1].pos;
+                        if (link_pos - prev_pos).abs() > 16 {
+                            axis.edges[i].pos = prev_pos;
+                        }
+                    }
+                }
+            }
+
+            // Check against next edge.
+            if i + 1 < num_edges && axis.edges[i + 1].flags & AF_EDGE_DONE != 0 {
+                let ordering_violated = if top_to_bottom_hinting {
+                    axis.edges[i].pos < axis.edges[i + 1].pos
+                } else {
+                    axis.edges[i].pos > axis.edges[i + 1].pos
+                };
+                if ordering_violated {
+                    let link_idx = axis.edges[i].link;
+                    if link_idx != usize::MAX {
+                        let link_pos = axis.edges[link_idx].pos;
+                        let prev_pos = axis.edges[i - 1].pos;
+                        if (link_pos - prev_pos).abs() > 16 {
+                            axis.edges[i].pos = axis.edges[i + 1].pos;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

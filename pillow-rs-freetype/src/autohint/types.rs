@@ -50,6 +50,13 @@ pub enum Dimension {
     Vert = 1, // Y-axis → horizontal stems/edges
 }
 
+// ── Hinting flags (aflatin.h:152–156) ──────────────────────────────────────
+
+pub const AF_LATIN_HINTS_HORZ_SNAP: u32 = 1 << 0;
+pub const AF_LATIN_HINTS_VERT_SNAP: u32 = 1 << 1;
+pub const AF_LATIN_HINTS_STEM_ADJUST: u32 = 1 << 2;
+pub const AF_LATIN_HINTS_MONO: u32 = 1 << 3;
+
 // ── Point flags (afhints.h:208–226) ────────────────────────────────────────
 
 pub const AF_FLAG_CONIC: u16 = 1 << 0;
@@ -190,6 +197,9 @@ pub struct GlyphHints {
 
     /// Points-per-em for debug
     pub ppem: i32,
+
+    /// Hinting control flags (aflatin.h:152-156).
+    pub other_flags: u32,
 }
 
 impl GlyphHints {
@@ -205,6 +215,7 @@ impl GlyphHints {
             contour_y_maxima: Vec::new(),
             axis: [AxisHints::new(), AxisHints::new()],
             ppem: 0,
+            other_flags: 0,
         }
     }
 
