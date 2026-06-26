@@ -60,9 +60,13 @@ fn sha256_hex(data: &[u8]) -> String {
 }
 
 fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
-    // The coverage matrix SHA-256 references were generated from the *unhinted*
-    // font files (bytecode programs stripped). Load those for byte-perfect
-    // comparison against PIL's unhinted FreeType output.
+    // The coverage matrix SHA-256 references were generated from the
+    // `fonts_nohint` files: original fonts whose TrueType bytecode hint
+    // programs were stripped. With bytecode gone, FreeType falls back to its
+    // *autohinter* — so the references are AUTOHINTED output (PIL's
+    // `ImageFont.getmask()` uses `FT_LOAD_DEFAULT`, which triggers the
+    // autohinter). These fonts are the right inputs; they are NOT rendered
+    // without hinting.
     let font_dir = manifest_dir
         .join("tests")
         .join("fixtures")

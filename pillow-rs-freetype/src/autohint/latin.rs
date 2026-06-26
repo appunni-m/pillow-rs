@@ -47,7 +47,8 @@ pub fn apply_hints(
     // Step 2: Process vertical dimension (Y-axis / horizontal edges)
     // This is the dimension that affects the '|' bar top/bottom alignment.
     compute_segments(&mut hints, Dimension::Vert);
-    link_segments(&mut hints, Dimension::Vert);
+    // link_segments disabled: produces wrong stem pairs (see TODO in fn).
+    // link_segments(&mut hints, Dimension::Vert);
     compute_edges(&mut hints, Dimension::Vert);
     hint_edges(&mut hints, Dimension::Vert);
     align_edge_points(&mut hints, Dimension::Vert);
@@ -56,7 +57,8 @@ pub fn apply_hints(
 
     // Step 3: Process horizontal dimension (X-axis / vertical edges)
     compute_segments(&mut hints, Dimension::Horz);
-    link_segments(&mut hints, Dimension::Horz);
+    // link_segments disabled: produces wrong stem pairs.
+    // link_segments(&mut hints, Dimension::Horz);
     compute_edges(&mut hints, Dimension::Horz);
     hint_edges(&mut hints, Dimension::Horz);
     align_edge_points(&mut hints, Dimension::Horz);
@@ -174,9 +176,11 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         {
                             flags |= AF_EDGE_ROUND;
                         }
+                        let h = max_coord - min_coord;
                         axis.segments.push(AFSegment {
                             flags, dir: segment_dir, pos, delta,
                             min_coord: min_coord as i16, max_coord: max_coord as i16,
+                            height: h as i16,
                             first: seg_first, last: point,
                             edge: usize::MAX, edge_next: usize::MAX,
                             link: usize::MAX, serif: usize::MAX, score: 32000,
@@ -188,10 +192,12 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         prev_min_flags = min_flags; let _ = &mut _prev_max_flags;
                         let _ = &mut _prev_min_on_coord; let _ = &mut _prev_max_on_coord;
                     } else {
-                        // Merge with previous segment (same start point). Simplified:
-                        // unify bounds if directions match, else keep longer segment.
-                        let prev_dir = axis.segments[prev_seg.unwrap()].dir;
-                        if prev_dir == segment_dir {
+                        // Merge with previous segment (same start point). Port of aflatin.c:1741-1851.
+                        // Compare in_dir at the join point (aflatin.c:1746).
+                        let prev_last_idx = axis.segments[prev_seg.unwrap()].last;
+                        let prev_last_in = points[prev_last_idx].in_dir;
+                        let curr_in = points[point].in_dir;
+                        if prev_last_in == curr_in {
                             min_pos = min_pos.min(prev_min_pos); max_pos = max_pos.max(prev_max_pos);
                             min_coord = min_coord.min(prev_min_coord); max_coord = max_coord.max(prev_max_coord);
                             let pos = ((min_pos + max_pos) >> 1) as i16;
@@ -325,6 +331,82 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             axis.segments[seg_idx].edge = found_edge;
         }
     }
+
+    // ── Edge link/serif propagation (aflatin.c:2384–2495) ──────────────────
+    // For each edge, walk its segments and propagate segment links/serifs to
+    // the edge level. Also compute AF_EDGE_ROUND vs AF_EDGE_NORMAL.
+    for e_idx in 0..axis.edges.len() {
+        let mut is_round = 0i32;
+        let mut is_straight = 0i32;
+
+        let first_seg = axis.edges[e_idx].first;
+        if first_seg == usize::MAX { continue; }
+        let mut seg_idx = first_seg;
+        loop {
+            let seg = &axis.segments[seg_idx];
+
+            // Track round/straight counts (aflatin.c:2393-2395).
+            if seg.flags & AF_EDGE_ROUND != 0 { is_round += 1; }
+            else { is_straight += 1; }
+
+            // Check for serif (aflatin.c:2397-2400).
+            let mut is_serif = false;
+            if seg.serif != usize::MAX {
+                let serif_edge = axis.segments[seg.serif].edge;
+                if serif_edge != usize::MAX && serif_edge != e_idx {
+                    is_serif = true;
+                }
+            }
+
+            // Determine link/serif target edge (aflatin.c:2402-2460).
+            if (seg.link != usize::MAX && axis.segments[seg.link].edge != usize::MAX) || is_serif {
+                let mut edge2_idx = axis.edges[e_idx].link; // prior link from another segment
+                let linked_seg = if is_serif {
+                    edge2_idx = axis.edges[e_idx].serif;
+                    seg.serif
+                } else {
+                    seg.link
+                };
+
+                // Compare segment gap vs edge gap (aflatin.c:2416-2430).
+                if edge2_idx != usize::MAX {
+                    let edge_delta = (axis.edges[e_idx].fpos as i32
+                        - axis.edges[edge2_idx].fpos as i32).abs();
+                    let seg_delta = (seg.pos as i32
+                        - axis.segments[linked_seg].pos as i32).abs();
+                    if seg_delta < edge_delta {
+                        // Segment pair is closer → trust the segment's edge.
+                        edge2_idx = axis.segments[linked_seg].edge;
+                    }
+                } else {
+                    // No prior link → use segment's parent edge.
+                    edge2_idx = axis.segments[linked_seg].edge;
+                }
+
+                if edge2_idx != usize::MAX && edge2_idx != e_idx {
+                    if is_serif {
+                        axis.edges[e_idx].serif = edge2_idx;
+                        axis.edges[edge2_idx].flags |= AF_EDGE_SERIF;
+                    } else {
+                        axis.edges[e_idx].link = edge2_idx;
+                    }
+                }
+            }
+
+            if seg_idx == axis.edges[e_idx].last { break; }
+            seg_idx = axis.segments[seg_idx].edge_next;
+        }
+
+        // Set round flag (aflatin.c:2470-2473).
+        if is_round > 0 && is_round >= is_straight {
+            axis.edges[e_idx].flags |= AF_EDGE_ROUND;
+        }
+
+        // Conflict resolution: serif + link → drop serif (aflatin.c:2493).
+        if axis.edges[e_idx].serif != usize::MAX && axis.edges[e_idx].link != usize::MAX {
+            axis.edges[e_idx].serif = usize::MAX;
+        }
+    }
 }
 
 // Port of `af_latin_hints_link_segments` (aflatin.c:2015–2148).
@@ -338,7 +420,7 @@ fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
     // No widths available → max_width = 0.
     let len_threshold: i32 = 8; // AF_LATIN_CONSTANT(metrics, 8); for upem scaling we use 8
     let len_score: i32 = 6000; // AF_LATIN_CONSTANT(metrics, 6000)
-    let dist_score: i32 = 3000;
+    let _dist_score: i32 = 3000;
 
     // Reset scores and links.
     for seg in &mut axis.segments {
@@ -367,9 +449,16 @@ fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
                     max_c = axis.segments[j].max_coord as i32;
                 }
                 let len = max_c - min_c;
-                if len >= len_threshold {
-                    let dist = pos2 - pos1;
-                    // max_width == 0 → dist_demerit = dist
+                // Require actual overlap on the cross-axis.
+                let overlap = (axis.segments[i].max_coord as i32).min(axis.segments[j].max_coord as i32)
+                            - (axis.segments[i].min_coord as i32).max(axis.segments[j].min_coord as i32);
+                let dist = pos2 - pos1;
+                // Require substantial overlap: at least 50% of the total span
+                // must overlap, AND distance must be reasonable (≤ 500 fu ≈ 2.5px).
+                if len >= len_threshold && overlap * 4 >= len * 3 && dist < 300 {
+                    // max_width == 0 → dist_demerit = dist.
+                    // Cap distance at 1000 fu (~5px at upem=2048 ppem=10) to prevent
+                    // far-apart segments from being linked as stems.
                     let dist_demerit = dist;
                     let score = dist_demerit + len_score / len.max(1);
                     if score < axis.segments[i].score {

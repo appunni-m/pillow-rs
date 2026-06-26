@@ -2,7 +2,8 @@
 """Systematic analysis of getmask gap between pillow-rs-freetype (Rust) and PIL reference.
 
 Compares our Rust output (via dump_mask_compare example) with freetype-py
-FT_LOAD_NO_HINTING output for a set of representative glyphs.
+FT_LOAD_DEFAULT|RENDER output — the autohinted path PIL's getmask takes on
+the bytecode-stripped `fonts_nohint` inputs.
 Categorizes each failure type.
 """
 
@@ -18,10 +19,10 @@ ROOT = Path(__file__).parent.parent
 MANIFEST_DIR = ROOT
 FIXTURES = ROOT / "tests" / "fixtures"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
-FONTS_DIR = FIXTURES / "input" / "fonts"         # Original fonts (ref gen used these)
-FONTS_NOHINT_DIR = FIXTURES / "input" / "fonts_nohint"  # Nohint fonts (test uses these)
+FONTS_DIR = FIXTURES / "input" / "fonts"         # Original fonts (with bytecode)
+FONTS_NOHINT_DIR = FIXTURES / "input" / "fonts_nohint"  # Bytecode-stripped (autohinted at render)
 
-LOAD_FLAGS = 0x2 | 0x4  # FT_LOAD_NO_HINTING | FT_LOAD_RENDER
+LOAD_FLAGS = 0x4  # FT_LOAD_RENDER; FT_LOAD_DEFAULT triggers the autohinter
 
 # ── Representative glyphs to analyze ──
 # Picked to cover different glyph types: simple, curved, diagonal, wide, narrow
@@ -49,7 +50,7 @@ def sha256_hex(data: bytes) -> str:
 
 
 def render_freetype_py(font_path: Path, size_pt: float, ch: str):
-    """Render with freetype-py using FT_LOAD_NO_HINTING (matches ref generator)."""
+    """Render with freetype-py using FT_LOAD_DEFAULT|RENDER (matches PIL getmask)."""
     face = freetype.Face(str(font_path))
     face.set_char_size(int(size_pt * 64))  # 26.6 format
     face.load_char(ch, LOAD_FLAGS)
@@ -258,7 +259,8 @@ def main():
             exp_sha = exp_data["matrix"]["ref_sha256"][:16] if exp_data["matrix"] else "N/A"
             exp_w, exp_h = exp_size if exp_size else (0, 0)
 
-            # Check: does Rust match freetype-py NO_HINTING?
+            # Check: does Rust match freetype-py (FT_LOAD_DEFAULT, autohinted)?
+            # `ft_nohint` here = the bytecode-stripped `fonts_nohint` font (autohinted).
             rust_size_str = f"{rust_w}x{rust_h}"
             ft_orig_size = f"{ft_orig['width']}x{ft_orig['height']}"
             ft_nohint_size = f"{ft_nohint['width']}x{ft_nohint['height']}"

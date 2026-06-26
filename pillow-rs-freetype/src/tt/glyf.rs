@@ -184,7 +184,7 @@ fn transform_point(
     let (dx, dy) = if comp.args_are_xy {
         (comp.arg1, comp.arg2)
     } else {
-        (0, 0) // point-matching args are ignored for unhinted rendering.
+        (0, 0) // point-matching variant is unsupported; component uses no offset.
     };
     OutlinePoint {
         x: x + dx,

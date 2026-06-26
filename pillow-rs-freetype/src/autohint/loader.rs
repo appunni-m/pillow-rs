@@ -10,9 +10,9 @@ pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ax = dx.abs();
     let ay = dy.abs();
 
-    if ax * 12 < ay {
+    if ax * 14 < ay {
         if dy > 0 { Direction::Up } else { Direction::Down }
-    } else if ay * 12 < ax {
+    } else if ay * 14 < ax {
         if dx > 0 { Direction::Right } else { Direction::Left }
     } else {
         Direction::None

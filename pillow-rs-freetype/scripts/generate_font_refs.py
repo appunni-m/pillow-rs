@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate font coverage matrix + reference dumps using FreeType with
-FT_LOAD_NO_HINTING.  The reference output matches pure-scaled outlines
-with no bytecode or auto hinting applied — byte-perfect with the pure-Rust
-pillow-rs-freetype port that rasterizes unscaled glyph outlines directly.
+FT_LOAD_DEFAULT.  The `fonts_nohint` inputs have their TrueType bytecode
+stripped, so FreeType falls back to its *autohinter* under
+FT_LOAD_DEFAULT — matching the output PIL's `ImageFont.getmask()` produces
+(the public API our Rust port must reproduce).
 
 Usage:
     python scripts/generate_font_refs.py
@@ -32,8 +33,10 @@ FONTS = {
 SIZES = [10, 12, 16, 20, 24]
 CHARS = [chr(c) for c in range(33, 127)]  # printable ASCII
 
-# FT_LOAD_NO_HINTING = 0x2, FT_LOAD_RENDER = 0x4
-LOAD_FLAGS = 0x2 | 0x4
+# FT_LOAD_RENDER = 0x4.  No FT_LOAD_NO_HINTING: we want FreeType's
+# autohinter (the default path PIL's getmask takes) on the bytecode-stripped
+# `fonts_nohint` inputs.
+LOAD_FLAGS = 0x4
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +47,7 @@ def sha256_hex(data: bytes) -> str:
 
 
 def render_glyph(face: freetype.Face, ch: str):
-    """Render a single glyph with FT_LOAD_NO_HINTING (pure scaling, no hinting)."""
+    """Render a single glyph with FT_LOAD_DEFAULT|RENDER (autohinted, as PIL does)."""
     face.load_char(ch, LOAD_FLAGS)
     glyph = face.glyph
     bmp = glyph.bitmap
@@ -163,7 +166,7 @@ def generate() -> int:
 
     matrix = {
         "version": "0.2.0",
-        "hinting": "off",
+        "hinting": "autohint",
         "rows": rows,
         "summary": {
             "total_rows": len(rows),
@@ -171,7 +174,7 @@ def generate() -> int:
             "fonts": len(FONTS),
             "sizes": len(SIZES),
             "glyphs": len(CHARS),
-            "mode": "FT_LOAD_NO_HINTING",
+            "mode": "FT_LOAD_DEFAULT|RENDER",
         },
     }
     MATRIX_PATH.parent.mkdir(parents=True, exist_ok=True)
