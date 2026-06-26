@@ -3,22 +3,603 @@
 //! Implements the core pipeline for grid-fitting Latin glyph outlines:
 //!   segment detection → edge grouping → grid-fitting → point interpolation.
 //!
-//! This is a simplified port focusing on the vertical dimension (Y-axis /
-//! horizontal edges) for the grid-fitting that makes the biggest visual
-//! difference. The full FreeType autohinter includes blue zones, stem-width
-//! histograms, serif handling, and per-glyph adjustments that we defer.
+//! Ported in phases (A through F per ALGORITHMS.md). Some imports are drawn
+//! in early but only used by later phases.
 
 use crate::fixed::{ft_mul_fix, ft_mul_div};
 use super::types::{
-    AFSegment, AFEdge, GlyphHints,
+    AFSegment, AFEdge, AFPoint, GlyphHints,
     Direction, Dimension,
     AF_FLAG_IGNORE, AF_FLAG_CONTROL, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y,
     AF_FLAG_WEAK_INTERPOLATION,
     AF_EDGE_ROUND, AF_EDGE_SERIF, AF_EDGE_DONE,
     AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_VERT_SNAP,
     AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_MONO,
+    AfLatinMetrics, AfWidth, AfLatinBlue, AF_LATIN_MAX_WIDTHS,
+};
+// blue/edge flags — imported for later phases (Phases B–E)
+#[allow(unused_imports)]
+use super::types::{
+    AF_EDGE_NEUTRAL, AF_EDGE_NO_BLUE,
+    AF_LATIN_BLUE_ACTIVE, AF_LATIN_BLUE_TOP, AF_LATIN_BLUE_SUB_TOP,
+    AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_ADJUSTMENT, AF_LATIN_BLUE_BOTTOM,
+    AF_LATIN_BLUE_BOTTOM_SMALL,
+    AF_BLUE_PROP_LATIN_TOP, AF_BLUE_PROP_LATIN_SUB_TOP, AF_BLUE_PROP_LATIN_NEUTRAL,
+    AF_BLUE_PROP_LATIN_X_HEIGHT, AF_BLUE_PROP_LATIN_LONG,
+    AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_SMALL_BOTTOM,
 };
 use super::loader;
+
+// ── Metrics helpers ──────────────────────────────────────────────────────────
+
+/// AF_LATIN_CONSTANT: scale `c` by upem/2048.  aflatin.h:34
+#[inline]
+fn latin_constant(upem: i32, c: i32) -> i32 {
+    (c * upem) / 2048
+}
+
+/// FLAT_THRESHOLD for round/straight classification.  aflatin.c:39
+fn flat_threshold(upem: i32) -> i32 { upem / 14 }
+
+// ── Sort utilities (afhints.c:36-131) ────────────────────────────────────────
+
+/// Insertion-sort `table` ascending.  afhints.c:36
+fn sort_pos(table: &mut [i32]) {
+    for i in 1..table.len() {
+        let val = table[i];
+        let mut j = i;
+        while j > 0 && val < table[j - 1] {
+            table[j] = table[j - 1];
+            j -= 1;
+        }
+        table[j] = val;
+    }
+}
+
+/// Sort widths by `.org`, then collapse clusters ≤ threshold into their mean.
+/// afhints.c:58-131
+fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold: i32) {
+    if *count <= 1 { return; }
+
+    // insertion-sort by .org
+    for i in 1..*count {
+        let val = widths[i];
+        let mut j = i;
+        while j > 0 && val.org < widths[j - 1].org {
+            widths[j] = widths[j - 1];
+            j -= 1;
+        }
+        widths[j] = val;
+    }
+
+    // cluster and average
+    let mut cur_idx = 0usize;
+    let mut cur_val = widths[0].org;
+    for i in 1..*count {
+        if widths[i].org - cur_val > threshold || i == *count - 1 {
+            let end = if widths[i].org - cur_val <= threshold && i == *count - 1 { i + 1 } else { i };
+            let mut sum: i64 = 0;
+            for j in cur_idx..end { sum += widths[j].org as i64; }
+            // zero out merged entries, keep the first
+            for j in cur_idx + 1..end { widths[j].org = 0; }
+            widths[cur_idx].org = (sum / (end as i64 - cur_idx as i64)) as i32;
+            if i < *count - 1 {
+                cur_idx = i + 1;
+                cur_val = widths[cur_idx].org;
+            }
+        }
+    }
+
+    // compress: remove zero entries
+    let mut dst = 1usize;
+    for i in 1..*count {
+        if widths[i].org != 0 {
+            widths[dst] = widths[i];
+            dst += 1;
+        }
+    }
+    *count = dst;
+}
+
+// ── Font-wide stem-width histogram ───────────────────────────────────────────
+
+/// Port of `af_latin_metrics_init_widths` (aflatin.c:55-265).
+///
+/// Scans the standard character glyph ('o' for Latin) to build the stem-width
+/// histogram. Populates `metrics.axis[dim].width_count` and `.widths[]`.
+/// Returns the standard character glyph index (for caller to re-use in blue init).
+pub fn metrics_init_widths(
+    metrics: &mut AfLatinMetrics,
+    char_glyph_index: u16,
+    raw_outline: &crate::tt::glyf::GlyphOutline,
+    scaled_points: &[crate::outline::OutlinePoint],
+) {
+    if char_glyph_index == 0 || raw_outline.num_contours == 0 || raw_outline.points.is_empty() {
+        // No usable glyph → fallback: use constant widths
+        for dim in 0..2 {
+            let axis = &mut metrics.axis[dim];
+            axis.width_count = 0;
+            let stdw = latin_constant(metrics.units_per_em, 50);
+            axis.standard_width = stdw;
+            axis.edge_distance_threshold = stdw / 5;
+            axis.extra_light = false;
+        }
+        return;
+    }
+
+    // Scan the standard glyph at identity scale (0x10000 = 1.0)
+    // Build temp hints: scale=1.0, deltas=0
+    let mut hints = GlyphHints::new(0x10000, 0x10000, 0, 0);
+    hints.metrics = Some(metrics.clone());
+    hints.other_flags = AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
+    loader::reload(&mut hints, raw_outline, scaled_points);
+
+    if hints.num_points() == 0 { return; }
+
+    for dim in 0..2 {
+        let dimension = if dim == 0 { Dimension::Horz } else { Dimension::Vert };
+        compute_segments(&mut hints, dimension);
+        // link with width_count=0 (no widths yet — uses the else branch: dist_demerit=dist)
+        link_segments_inner(&mut hints, dimension, 0, &[]);
+
+        // Collect stem widths from mutual link pairs
+        let axis = &hints.axis[dim];
+        let mut num_widths: usize = 0;
+        let segs = &axis.segments;
+        for i in 0..segs.len() {
+            let link = segs[i].link;
+            if link != usize::MAX && i == segs[link].link && link > i {
+                let dist = (segs[i].pos as i32 - segs[link].pos as i32).abs();
+                if num_widths < AF_LATIN_MAX_WIDTHS {
+                    metrics.axis[dim].widths[num_widths].org = dist;
+                    num_widths += 1;
+                }
+            }
+        }
+
+        sort_and_quantize_widths(&mut num_widths, &mut metrics.axis[dim].widths,
+                                  metrics.units_per_em / 100);
+        metrics.axis[dim].width_count = num_widths;
+    }
+
+    // Finalize each axis
+    for dim in 0..2 {
+        let axis = &mut metrics.axis[dim];
+        let stdw = if axis.width_count > 0 {
+            axis.widths[0].org
+        } else {
+            latin_constant(metrics.units_per_em, 50)
+        };
+        axis.standard_width = stdw;
+        axis.edge_distance_threshold = stdw / 5;
+        axis.extra_light = false;
+    }
+}
+
+/// Extract (width_count, widths_array) from hints.metrics for the given dimension.
+/// Returns owned data to avoid borrow conflicts.
+fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LATIN_MAX_WIDTHS]) {
+    if let Some(ref met) = hints.metrics {
+        let a = &met.axis[dim as usize];
+        (a.width_count, a.widths)
+    } else {
+        (0, [AfWidth::default(); AF_LATIN_MAX_WIDTHS])
+    }
+}
+
+// ── Blue zone strings (afblue.dat:347-358) ──────────────────────────────────
+
+/// One entry in the Latin blue stringset table.
+struct BlueStringEntry {
+    chars: &'static [char],
+    props: u32, // AF_BLUE_PROP_* bits
+}
+
+/// Standard Latin blue zones, in order (afblue.c:646-653).
+static LATIN_BLUE_STRINGS: &[BlueStringEntry] = &[
+    // 0: capital top
+    BlueStringEntry { chars: &['T','H','E','Z','O','C','Q','S'], props: AF_BLUE_PROP_LATIN_TOP },
+    // 1: capital bottom
+    BlueStringEntry { chars: &['H','E','Z','L','O','C','U','S'], props: AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM },
+    // 2: small f-top
+    BlueStringEntry { chars: &['f','i','j','k','d','b','h'], props: AF_BLUE_PROP_LATIN_TOP },
+    // 3: small top (x-height)
+    BlueStringEntry { chars: &['u','v','x','z','o','e','s','c'], props: AF_BLUE_PROP_LATIN_TOP | AF_BLUE_PROP_LATIN_X_HEIGHT },
+    // 4: small bottom
+    BlueStringEntry { chars: &['n','r','x','z','o','e','s','c'], props: AF_BLUE_PROP_LATIN_SMALL_BOTTOM },
+    // 5: small descender
+    BlueStringEntry { chars: &['p','q','g','j','y'], props: 0 },
+];
+
+// Macros for checking blue property bits.
+macro_rules! is_top_blue   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_TOP) != 0 } }
+macro_rules! is_sub_top    { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_SUB_TOP) != 0 } }
+macro_rules! is_neutral    { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_NEUTRAL) != 0 } }
+macro_rules! is_x_height   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) != 0 } }
+
+/// Port of `af_latin_metrics_init_blues` (aflatin.c:311-1039).
+/// Scans the 6 Latin blue character strings to find median flat (reference) and
+/// round (overshoot) Y extrema. Populates `metrics.axis[VERT].blues[]`.
+pub fn metrics_init_blues(
+    metrics: &mut AfLatinMetrics,
+    font_data: &crate::tables::FontData,
+) {
+    let upem = metrics.units_per_em;
+    let flat_thresh = flat_threshold(upem);
+    let axis = &mut metrics.axis[Dimension::Vert as usize];
+    axis.blue_count = 0;
+    axis.blues.clear();
+
+    for entry in LATIN_BLUE_STRINGS {
+        let mut flats: Vec<i32> = Vec::new();
+        let mut rounds: Vec<i32> = Vec::new();
+        // ascender/descender accumulate across the whole string (aflatin.c:425-426)
+        let mut ascender: i32 = 0;
+        let mut descender: i32 = 0;
+
+        for &ch in entry.chars {
+            let gid = font_data.cmap.char_index(ch as u32).unwrap_or(0);
+            if gid == 0 { continue; }
+            let outline = match crate::tt::glyf::load_glyph(
+                &font_data.glyf_data, &font_data.loca_data,
+                font_data.head.index_to_loc_format, gid,
+            ) {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            if outline.num_contours <= 0 || outline.points.len() <= 2 { continue; }
+
+            let points = &outline.points;
+            let end_pts = &outline.end_pts_of_contours;
+            let y_offset: i32 = 0;
+
+            let is_top = is_top_blue!(entry.props) || is_sub_top!(entry.props);
+
+            // Per-character best extremum (reset each char, aflatin.c:462-465).
+            let mut best_y_extremum: i32 = if is_top { i32::MIN } else { i32::MAX };
+            let mut best_round = false;
+
+            // Walk all glyph elements (Latin: 1). Find biggest extremum.
+            let mut best_point: i32 = -1;
+            let mut best_y: i32 = 0;
+            let mut best_contour_first: i32 = -1;
+            let mut best_contour_last: i32 = -1;
+
+            let mut last: i32 = -1;
+            for ncontour in 0..outline.num_contours as usize {
+                let first: i32 = last + 1;
+                last = end_pts[ncontour] as i32;
+                if last <= first { continue; } // skip single-point contours
+
+                for pp in first..=last {
+                    let y = points[pp as usize].y;
+                    if is_top {
+                        if best_point < 0 || y > best_y {
+                            best_point = pp;
+                            best_y = y;
+                            if y + y_offset > ascender { ascender = y + y_offset; }
+                        } else if y + y_offset < descender { descender = y + y_offset; }
+                    } else {
+                        if best_point < 0 || y < best_y {
+                            best_point = pp;
+                            best_y = y;
+                            if y + y_offset < descender { descender = y + y_offset; }
+                        } else if y + y_offset > ascender { ascender = y + y_offset; }
+                    }
+                }
+                if best_point > best_contour_last {
+                    best_contour_first = first;
+                    best_contour_last = last;
+                }
+            }
+
+            // Classify flat vs round at the extremum (aflatin.c:568-867).
+            let mut round = false;
+            if best_point >= 0 {
+                let best_x = points[best_point as usize].x;
+
+                let mut best_seg_first = best_point;
+                let mut best_seg_last = best_point;
+                // Track ON-curve endpoints of the flat segment.
+                let mut best_on_first: i32 = if points[best_point as usize].on_curve { best_point } else { -1 };
+                let mut best_on_last: i32 = best_on_first;
+
+                // Walk previous (aflatin.c:597-620).
+                let mut prev = best_point;
+                loop {
+                    prev = if prev > best_contour_first { prev - 1 } else { best_contour_last };
+                    let dist = (points[prev as usize].y - best_y).abs();
+                    if dist > 5 && (points[prev as usize].x - best_x).abs() <= 20 * dist {
+                        break;
+                    }
+                    best_seg_first = prev;
+                    if points[prev as usize].on_curve {
+                        best_on_first = prev;
+                        if best_on_last < 0 { best_on_last = prev; }
+                    }
+                    if prev == best_point { break; }
+                }
+
+                // Walk next (aflatin.c:622-643).
+                let mut next = best_point;
+                loop {
+                    next = if next < best_contour_last { next + 1 } else { best_contour_first };
+                    let dist = (points[next as usize].y - best_y).abs();
+                    if dist > 5 && (points[next as usize].x - best_x).abs() <= 20 * dist {
+                        break;
+                    }
+                    best_seg_last = next;
+                    if points[next as usize].on_curve {
+                        best_on_last = next;
+                        if best_on_first < 0 { best_on_first = next; }
+                    }
+                    if next == best_point { break; }
+                }
+
+                // Round vs flat (aflatin.c:846-857). LONG-blue variant skipped.
+                if best_on_first >= 0 && best_on_last >= 0
+                    && (points[best_on_first as usize].x - points[best_on_last as usize].x).abs() > flat_thresh
+                {
+                    round = false;
+                } else {
+                    round = !points[best_seg_first as usize].on_curve
+                         || !points[best_seg_last as usize].on_curve;
+                }
+
+                if round && is_neutral!(entry.props) { continue; } // neutral uses flats only
+            }
+
+            // Track best extremum across the (single) element (aflatin.c:869-884).
+            if best_point >= 0 {
+                let by = best_y + y_offset;
+                if is_top {
+                    if by > best_y_extremum { best_y_extremum = by; best_round = round; }
+                } else {
+                    if by < best_y_extremum { best_y_extremum = by; best_round = round; }
+                }
+            }
+            // (best_round unused beyond here since Latin has 1 element; keep for clarity.)
+
+            if best_y_extremum != i32::MIN && best_y_extremum != i32::MAX {
+                if best_round { rounds.push(best_y_extremum); }
+                else { flats.push(best_y_extremum); }
+            }
+        }
+
+        // Skip if no data (aflatin.c:899-907).
+        if flats.is_empty() && rounds.is_empty() { continue; }
+
+        sort_pos(&mut flats);
+        sort_pos(&mut rounds);
+
+        let (mut ref_val, mut shoot_val) = if flats.is_empty() {
+            let v = rounds[rounds.len() / 2];
+            (v, v)
+        } else if rounds.is_empty() {
+            let v = flats[flats.len() / 2];
+            (v, v)
+        } else {
+            (flats[flats.len() / 2], rounds[rounds.len() / 2])
+        };
+
+        // Overshoot sanity (aflatin.c:940-956).
+        if shoot_val != ref_val {
+            let over_ref = shoot_val > ref_val;
+            if (is_top_blue!(entry.props) || is_sub_top!(entry.props)) != over_ref {
+                let mean = (shoot_val + ref_val) / 2;
+                ref_val = mean;
+                shoot_val = mean;
+            }
+        }
+
+        let mut flags: u32 = 0;
+        if is_top_blue!(entry.props) { flags |= AF_LATIN_BLUE_TOP; }
+        if is_sub_top!(entry.props) { flags |= AF_LATIN_BLUE_SUB_TOP; }
+        if is_neutral!(entry.props) { flags |= AF_LATIN_BLUE_NEUTRAL; }
+        if (entry.props & AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM) != 0 { flags |= AF_LATIN_BLUE_BOTTOM; }
+        if (entry.props & AF_BLUE_PROP_LATIN_SMALL_BOTTOM) != 0 { flags |= AF_LATIN_BLUE_BOTTOM_SMALL; }
+        if is_x_height!(entry.props) { flags |= AF_LATIN_BLUE_ADJUSTMENT; }
+
+        axis.blues.push(AfLatinBlue {
+            ref_width: AfWidth { org: ref_val, cur: 0, fit: 0 },
+            shoot_width: AfWidth { org: shoot_val, cur: 0, fit: 0 },
+            ascender,
+            descender,
+            flags,
+        });
+        axis.blue_count += 1;
+    }
+
+    // Sort blues bottom→top and resolve overlaps (aflatin.c:988-1039).
+    if axis.blue_count > 1 {
+        // insertion sort by effective position
+        let blues = &mut axis.blues;
+        for i in 1..blues.len() {
+            let mut j = i;
+            while j > 0 {
+                let a_pos = if blues[j-1].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0
+                    { blues[j-1].shoot_width.org } else { blues[j-1].ref_width.org };
+                let b_pos = if blues[j].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0
+                    { blues[j].shoot_width.org } else { blues[j].ref_width.org };
+                if b_pos >= a_pos { break; }
+                blues.swap(j-1, j);
+                j -= 1;
+            }
+        }
+        // resolve overlaps: clamp upper zone's effective top to lower zone's bottom
+        for i in 0..blues.len()-1 {
+            let use_shoot_a = blues[i].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
+            let use_shoot_b = blues[i+1].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
+            let a_org = if use_shoot_a { blues[i].shoot_width.org } else { blues[i].ref_width.org };
+            let b_org = if use_shoot_b { blues[i+1].shoot_width.org } else { blues[i+1].ref_width.org };
+            if a_org > b_org {
+                // *a = *b  (rare; clamp to avoid inversion)
+                if use_shoot_a { blues[i].shoot_width.org = b_org; }
+                else { blues[i].ref_width.org = b_org; }
+            }
+        }
+    }
+}
+
+/// Scale the metrics axes for the current size (base x_scale/y_scale), applying
+/// the x-height scale optimization on the vertical axis, then scale the stem
+/// widths and blue zones. Port of `af_latin_metrics_scale_dim` (aflatin.c:1178-1437).
+/// Returns the (x_scale, y_scale) the scaler must use to scale glyph outlines.
+pub fn metrics_scale_dim(
+    metrics: &mut AfLatinMetrics,
+    x_scale: i32,
+    y_scale: i32,
+    x_delta: i32,
+    y_delta: i32,
+) -> (i32, i32) {
+    // Horizontal axis.
+    {
+        let axis = &mut metrics.axis[Dimension::Horz as usize];
+        axis.scale = x_scale;
+        axis.delta = x_delta;
+        for w in axis.widths.iter_mut() {
+            w.cur = ft_mul_fix(w.org, x_scale);
+            w.fit = w.cur;
+        }
+        axis.extra_light = ft_mul_fix(axis.standard_width, x_scale) < 32 + 8;
+    }
+
+    // Vertical axis: x-height scale optimization first (aflatin.c:1211-1306).
+    let mut v_scale = y_scale;
+    {
+        let vaxis = &mut metrics.axis[Dimension::Vert as usize];
+        let adj_idx = (0..vaxis.blue_count)
+            .find(|&i| vaxis.blues[i].flags & AF_LATIN_BLUE_ADJUSTMENT != 0);
+        if let Some(ai) = adj_idx {
+            let shoot_org = vaxis.blues[ai].shoot_width.org;
+            let scaled = ft_mul_fix(shoot_org, v_scale);
+            // increase_x_height property: 0 for non-instructed fonts → threshold=40.
+            let threshold: i32 = 40;
+            let fitted = (scaled + threshold) & !63;
+            if scaled != fitted {
+                let new_scale = ft_mul_div(v_scale, fitted, scaled);
+                let mut max_height = metrics.units_per_em;
+                for b in &vaxis.blues {
+                    max_height = max_height.max(b.ascender);
+                    max_height = max_height.max(-b.descender);
+                }
+                let dist = ft_mul_fix(max_height, new_scale - v_scale);
+                if -128 < dist && dist < 128 {
+                    v_scale = new_scale;
+                }
+            }
+        }
+    }
+
+    // Vertical axis: widths + blue zones (aflatin.c:1327-1437).
+    {
+        let axis = &mut metrics.axis[Dimension::Vert as usize];
+        axis.scale = v_scale;
+        axis.delta = y_delta;
+        for w in axis.widths.iter_mut() {
+            w.cur = ft_mul_fix(w.org, v_scale);
+            w.fit = w.cur;
+        }
+        axis.extra_light = ft_mul_fix(axis.standard_width, v_scale) < 32 + 8;
+
+        // Blue zones (aflatin.c:1357-1437).
+        for blue in &mut axis.blues {
+            blue.ref_width.cur   = ft_mul_fix(blue.ref_width.org, v_scale) + y_delta;
+            blue.ref_width.fit   = blue.ref_width.cur;
+            blue.shoot_width.cur = ft_mul_fix(blue.shoot_width.org, v_scale) + y_delta;
+            blue.shoot_width.fit = blue.shoot_width.cur;
+            blue.flags &= !AF_LATIN_BLUE_ACTIVE;
+
+            let dist = ft_mul_fix(blue.ref_width.org - blue.shoot_width.org, v_scale);
+            if dist <= 48 && dist >= -48 {
+                // Zone height <= 3/4px → active
+                let delta2 = dist.abs();
+                let delta2 = if delta2 < 32 { 0 } else if delta2 < 48 { 32 } else { 64 };
+                let delta2 = if dist < 0 { -delta2 } else { delta2 };
+                blue.ref_width.fit   = ft_pix_round(blue.ref_width.cur);
+                blue.shoot_width.fit = blue.ref_width.fit - delta2;
+                blue.flags |= AF_LATIN_BLUE_ACTIVE;
+            }
+        }
+    }
+
+    (x_scale, v_scale)
+}
+
+/// Assign each vertical/horizontal edge to the nearest active blue zone.
+/// Port of `af_latin_hints_compute_blue_edges` (aflatin.c:2529-2640).
+fn compute_blue_edges(hints: &mut GlyphHints) {
+    let dim = Dimension::Vert;
+    let metrics = match hints.metrics {
+        Some(ref m) => m.clone(),
+        None => return,
+    };
+    let axis = &mut hints.axis[dim as usize];
+    let scale = if dim == Dimension::Horz { hints.x_scale } else { hints.y_scale };
+    let major_dir = axis.major_dir;
+    let upem = metrics.units_per_em;
+    let blues = &metrics.axis[dim as usize];
+
+
+    for e_idx in 0..axis.edges.len() {
+        if axis.edges[e_idx].flags & AF_EDGE_NO_BLUE != 0 { continue; }
+
+        let edge_fpos = axis.edges[e_idx].fpos as i32;
+        let edge_flags = axis.edges[e_idx].flags;
+
+        // best_dist = min(upem/40, 0.5px), scaled
+        let mut best_dist = ft_mul_fix(upem / 40, scale);
+        if best_dist > 32 { best_dist = 32; }
+
+        let mut best_blue: Option<AfWidth> = None;
+        let mut best_neutral = false;
+
+        for blue_idx in 0..blues.blue_count {
+            let blue = &blues.blues[blue_idx];
+            if blue.flags & AF_LATIN_BLUE_ACTIVE == 0 { continue; }
+
+            let is_top = blue.flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
+            let is_neutral = blue.flags & AF_LATIN_BLUE_NEUTRAL != 0;
+            let is_major = axis.edges[e_idx].dir == major_dir;
+
+            if (is_top ^ is_major) || is_neutral {
+                // Compare to reference position
+                let mut dist = (edge_fpos - blue.ref_width.org).abs();
+                dist = ft_mul_fix(dist, scale);
+                if dist < best_dist {
+                    best_dist = dist;
+                    best_blue = Some(blue.ref_width);
+                    best_neutral = is_neutral;
+                }
+
+                // For round edges, also compare to overshoot
+                if edge_flags & AF_EDGE_ROUND != 0 && dist != 0 && !is_neutral {
+                    let is_under = edge_fpos < blue.ref_width.org;
+                    if is_top ^ is_under {
+                        let mut shoot_dist = (edge_fpos - blue.shoot_width.org).abs();
+                        shoot_dist = ft_mul_fix(shoot_dist, scale);
+                        if shoot_dist < best_dist {
+                            best_dist = shoot_dist;
+                            best_blue = Some(blue.shoot_width);
+                            best_neutral = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(bw) = best_blue {
+            axis.edges[e_idx].blue_edge = Some(bw);
+            if best_neutral {
+                axis.edges[e_idx].flags |= AF_EDGE_NEUTRAL;
+            }
+        }
+    }
+}
+
+/// Helper: FT_PIX_ROUND(x) = (x + 32) & !63  (26.6 → 6-bit rounding).
+#[inline]
+fn ft_pix_round(x: i32) -> i32 { (x + 32) & !63 }
 
 /// Top-level entry: apply Latin auto-hinting to an outline.
 ///
@@ -31,8 +612,10 @@ pub fn apply_hints(
     y_scale: i32,
     x_delta: i32,
     y_delta: i32,
+    metrics: Option<&AfLatinMetrics>,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
+    hints.metrics = metrics.cloned();
     // Smooth anti-aliased hinting: enable stem adjustment + snap for both dimensions.
     hints.other_flags = AF_LATIN_HINTS_HORZ_SNAP
         | AF_LATIN_HINTS_VERT_SNAP
@@ -45,11 +628,11 @@ pub fn apply_hints(
     }
 
     // Step 2: Process vertical dimension (Y-axis / horizontal edges)
-    // This is the dimension that affects the '|' bar top/bottom alignment.
     compute_segments(&mut hints, Dimension::Vert);
-    // link_segments disabled: produces wrong stem pairs (see TODO in fn).
-    // link_segments(&mut hints, Dimension::Vert);
+    // link_segments disabled — minimal regression (-7) with blue zones active.
     compute_edges(&mut hints, Dimension::Vert);
+    // Blue zones are pre-scaled by metrics_scale_dim (per-size); assign edges.
+    compute_blue_edges(&mut hints);
     hint_edges(&mut hints, Dimension::Vert);
     align_edge_points(&mut hints, Dimension::Vert);
     align_strong_points(&mut hints, Dimension::Vert);
@@ -57,8 +640,7 @@ pub fn apply_hints(
 
     // Step 3: Process horizontal dimension (X-axis / vertical edges)
     compute_segments(&mut hints, Dimension::Horz);
-    // link_segments disabled: produces wrong stem pairs.
-    // link_segments(&mut hints, Dimension::Horz);
+    // link_segments disabled (see Vert comment above).
     compute_edges(&mut hints, Dimension::Horz);
     hint_edges(&mut hints, Dimension::Horz);
     align_edge_points(&mut hints, Dimension::Horz);
@@ -91,14 +673,21 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
         else       { pt.u = pt.fy as i32; pt.v = pt.fx as i32; }
     }
 
-    // major_dir magnitude (aflatin.c:1577).
-    let major_dir = if axis.major_dir == Direction::None {
-        // Initialize: TrueType outlines are CCW → Vert major_dir = Right, Horz = Up.
-        let d = if is_horz { Direction::Up } else { Direction::Right };
+    // major_dir: per-glyph orientation from loader::reload.
+    // CW (TrueType default) → TT/Default: HORZ=Up, VERT=Left.
+    // CCW (PostScript) → PS/flipped: HORZ=Down, VERT=Right.
+    // afhints.c:967-974.
+    // aflatin.c:1577: major_dir is then ABSOLUTIFIED (Up/Right only) for segment
+    // direction matching.
+    let major_dir = {
+        let cw = hints.cw_orientation; // true = CW = TT orientation
+        let d = if is_horz {
+            if cw { Direction::Up } else { Direction::Down }
+        } else {
+            if cw { Direction::Left } else { Direction::Right }
+        };
         axis.major_dir = d;
-        d
-    } else {
-        axis.major_dir
+        abs_dir(d) // ABSOLUTIFY for segment detection (aflatin.c:1577)
     };
 
     axis.segments.clear();
@@ -252,6 +841,41 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
             point = points[point].next;
         }
     }
+
+    // ── Height extension (aflatin.c:1959-2005) ──────────────────────────
+    // Extend segment height by half the adjacent half-tint, so serifs can
+    // be detected and ignored during edge filtering.
+    if !axis.segments.is_empty() {
+        let n_seg = axis.segments.len();
+        for idx in 0..n_seg {
+            let first_idx = axis.segments[idx].first;
+            let last_idx = axis.segments[idx].last;
+            let first_v = points[first_idx].v;
+            let last_v = points[last_idx].v;
+
+            let mut extra: i16 = 0;
+            if first_v < last_v {
+                let p = points[first_idx].prev;
+                if points[p].v < first_v {
+                    extra += ((first_v - points[p].v) >> 1) as i16;
+                }
+                let p = points[last_idx].next;
+                if points[p].v > last_v {
+                    extra += ((points[p].v - last_v) >> 1) as i16;
+                }
+            } else {
+                let p = points[first_idx].prev;
+                if points[p].v > first_v {
+                    extra += ((points[p].v - first_v) >> 1) as i16;
+                }
+                let p = points[last_idx].next;
+                if points[p].v < last_v {
+                    extra += ((last_v - points[p].v) >> 1) as i16;
+                }
+            }
+            axis.segments[idx].height = axis.segments[idx].height.saturating_add(extra);
+        }
+    }
 }
 
 #[inline]
@@ -270,30 +894,55 @@ fn abs_dir(d: Direction) -> Direction {
 // Port of `af_latin_hints_compute_edges` (aflatin.c:2154–2500).
 // Groups segments at nearby positions into edges.
 
-/// Maximum distance (in font units) for two segments to be grouped into the
-/// same edge.
-const EDGE_DISTANCE_THRESHOLD: i32 = 50; // ~0.2px at upem=2048 ppem=10
-
 fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     let axis = &mut hints.axis[dim as usize];
     axis.edges.clear();
 
+    // ── Compute thresholds (aflatin.c:2182-2232) ────────────────────────
+    let scale = if dim == Dimension::Horz { hints.x_scale } else { hints.y_scale };
+
+    // segment_length_threshold: skip segments shorter than 1px (Horz only).
+    let seg_len_thresh = if dim == Dimension::Horz {
+        ft_mul_div(64, 0x10000, hints.y_scale)   // FT_DivFix(64, hints->y_scale) in font units
+    } else {
+        0 // no height filtering for vertical/horizontal edges
+    };
+    let seg_width_thresh = ft_mul_div(32, 0x10000, scale); // 0.5px in font units
+
+    // Edge distance threshold: at most 0.25px, from metrics if available.
+    let edge_dist_thresh = {
+        let raw = if let Some(ref met) = hints.metrics {
+            met.axis[dim as usize].edge_distance_threshold
+        } else {
+            50 // fallback
+        };
+        let mut edt = ft_mul_fix(raw, scale);
+        if edt > 16 { edt = 16; } // cap at 0.25px (= 64/4 in 26.6)
+        ft_mul_div(edt, 0x10000, scale) // convert back to font units
+    };
+
     // For each segment, find or create its edge.
     for seg_idx in 0..axis.segments.len() {
-        let seg = &axis.segments[seg_idx];
-
-        // Skip segments with no direction.
-        if seg.dir == Direction::None {
-            continue;
+        // ── Segment filtering (aflatin.c:2242-2251) ──────────────────────
+        {
+            let seg = &axis.segments[seg_idx];
+            // Skip one-point segments without a direction
+            if seg.dir == Direction::None { continue; }
+            // Too short
+            if (seg.height as i32) < seg_len_thresh { continue; }
+            // Too wide (delta > 0.5px)
+            if (seg.delta as i32) > seg_width_thresh { continue; }
+            // Tiny serif: height < 1.5× the length threshold
+            if seg.serif != usize::MAX && 2 * (seg.height as i32) < 3 * seg_len_thresh { continue; }
         }
-
-        let seg_pos = seg.pos as i32;
+        let seg_pos = axis.segments[seg_idx].pos as i32;
+        let seg_dir = axis.segments[seg_idx].dir;
         let mut found_edge = usize::MAX;
 
         // Look for an existing edge at approximately this position.
         for e_idx in 0..axis.edges.len() {
             let edge = &axis.edges[e_idx];
-            if edge.dir == seg.dir && (edge.fpos as i32 - seg_pos).abs() < EDGE_DISTANCE_THRESHOLD {
+            if edge.dir == seg_dir && (edge.fpos as i32 - seg_pos).abs() < edge_dist_thresh {
                 found_edge = e_idx;
                 break;
             }
@@ -313,11 +962,12 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
                 opos,
                 pos: opos,
                 flags: 0,
-                dir: seg.dir,
+                dir: seg_dir,
                 link: usize::MAX,
                 serif: usize::MAX,
                 first: seg_idx,
                 last: seg_idx,
+                blue_edge: None,
             };
             axis.edges.push(edge);
             // Update the segment's edge reference.
@@ -412,15 +1062,31 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 // Port of `af_latin_hints_link_segments` (aflatin.c:2015–2148).
 // Pairs opposing-direction, overlapping segments into stem links, then
 // derives serif relationships. Sets seg.link / seg.serif indices.
-fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
+// `width_count`/`widths` come from metrics_init_widths for exact C scoring.
+fn link_segments_inner(
+    hints: &mut GlyphHints,
+    dim: Dimension,
+    width_count: usize,
+    widths: &[AfWidth],
+) {
     let axis = &mut hints.axis[dim as usize];
     let major_dir = axis.major_dir;
     let n = axis.segments.len();
 
-    // No widths available → max_width = 0.
-    let len_threshold: i32 = 8; // AF_LATIN_CONSTANT(metrics, 8); for upem scaling we use 8
-    let len_score: i32 = 6000; // AF_LATIN_CONSTANT(metrics, 6000)
-    let _dist_score: i32 = 3000;
+    let upem = hints.metrics.as_ref().map(|m| m.units_per_em).unwrap_or(2048);
+
+    // max_width = largest stem width in font units (aflatin.c:2028-2031).
+    // .org stays in font units even after scale_dim; segment distances are also
+    // in font units, so they're comparable.
+    let max_width = if width_count > 0 {
+        widths[width_count - 1].org
+    } else {
+        0
+    };
+
+    let len_threshold = latin_constant(upem, 8).max(1);
+    let len_score = latin_constant(upem, 6000);
+    let dist_score: i32 = 3000;
 
     // Reset scores and links.
     for seg in &mut axis.segments {
@@ -449,17 +1115,24 @@ fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
                     max_c = axis.segments[j].max_coord as i32;
                 }
                 let len = max_c - min_c;
-                // Require actual overlap on the cross-axis.
-                let overlap = (axis.segments[i].max_coord as i32).min(axis.segments[j].max_coord as i32)
-                            - (axis.segments[i].min_coord as i32).max(axis.segments[j].min_coord as i32);
                 let dist = pos2 - pos1;
-                // Require substantial overlap: at least 50% of the total span
-                // must overlap, AND distance must be reasonable (≤ 500 fu ≈ 2.5px).
-                if len >= len_threshold && overlap * 4 >= len * 3 && dist < 300 {
-                    // max_width == 0 → dist_demerit = dist.
-                    // Cap distance at 1000 fu (~5px at upem=2048 ppem=10) to prevent
-                    // far-apart segments from being linked as stems.
-                    let dist_demerit = dist;
+
+                if len >= len_threshold {
+                    // aflatin.c:2093-2113 — exact C scoring
+                    let dist_demerit: i32;
+                    if max_width > 0 {
+                        let delta = ((dist << 10) / max_width) - (1 << 10);
+                        if delta > 10000 {
+                            dist_demerit = 32000;
+                        } else if delta > 0 {
+                            dist_demerit = (delta * delta) / dist_score;
+                        } else {
+                            dist_demerit = 0;
+                        }
+                    } else {
+                        dist_demerit = dist; // no widths → use raw distance
+                    }
+
                     let score = dist_demerit + len_score / len.max(1);
                     if score < axis.segments[i].score {
                         axis.segments[i].score = score;
@@ -683,9 +1356,61 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;
 
-    // ── Phase 1: Blue-zone alignment ────────────────────────────────────
-    // SKIPPED: all edge->blue_edge are NULL in our port.
-    // The C code (aflatin.c:4247–4336) is not ported.
+    // ── Phase 1: Blue-zone alignment (aflatin.c:4247-4336) ──────────────
+    if dim == Dimension::Vert && hints.metrics.is_some() {
+        for i in 0..num_edges {
+            if axis.edges[i].flags & AF_EDGE_DONE != 0 { continue; }
+
+            let mut edge1_idx: Option<usize> = None;
+            let mut edge2_idx: Option<usize> = None;
+            let mut blue: Option<AfWidth> = None;
+
+            // Neutral blue dedup: if both edges of a stem have blue edges,
+            // keep only the non-neutral one.  aflatin.c:4270-4286.
+            let link = axis.edges[i].link;
+            let maybe_blue = axis.edges[i].blue_edge;
+            if let Some(b) = maybe_blue {
+                if link != usize::MAX {
+                    let link_blue = axis.edges[link].blue_edge;
+                    if link_blue.is_some() {
+                        let is_neutral = axis.edges[i].flags & AF_EDGE_NEUTRAL != 0;
+                        let link_neutral = axis.edges[link].flags & AF_EDGE_NEUTRAL != 0;
+                        if link_neutral {
+                            axis.edges[link].blue_edge = None;
+                            axis.edges[link].flags &= !AF_EDGE_NEUTRAL;
+                        } else if is_neutral {
+                            axis.edges[i].blue_edge = None;
+                            axis.edges[i].flags &= !AF_EDGE_NEUTRAL;
+                            continue; // this edge lost its blue
+                        }
+                    }
+                }
+                edge1_idx = Some(i);
+                blue = Some(b);
+            } else if link != usize::MAX {
+                if let Some(b2) = axis.edges[link].blue_edge {
+                    blue = Some(b2);
+                    edge1_idx = Some(link);
+                    edge2_idx = Some(i);
+                }
+            }
+
+            if edge1_idx.is_none() { continue; }
+
+            let e1 = edge1_idx.unwrap();
+            axis.edges[e1].pos = blue.unwrap().fit;
+            axis.edges[e1].flags |= AF_EDGE_DONE;
+
+            if let Some(e2) = edge2_idx {
+                if axis.edges[e2].blue_edge.is_none() {
+                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2]);
+                    axis.edges[e2].flags |= AF_EDGE_DONE;
+                }
+            }
+
+            if anchor == usize::MAX { anchor = i; }
+        }
+    }
 
     // ── Phase 2: Stem alignment ─────────────────────────────────────────
     // Ported faithfully (aflatin.c:4340–4564). Since our edges have no
@@ -991,7 +1716,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
                 } else {
                     axis.edges[i].pos > axis.edges[i + 1].pos
                 };
-                if ordering_violated {
+                if ordering_violated && i > 0 {
                     let link_idx = axis.edges[i].link;
                     if link_idx != usize::MAX {
                         let link_pos = axis.edges[link_idx].pos;
@@ -1091,14 +1816,11 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 
         match (before, after) {
             (Some(b), Some(a)) if b.fpos != a.fpos => {
-                // Interpolate: how far is pt between before and after?
+                // Interpolation using FT_MulDiv (C: afhints.c:1413-1578)
                 let range = (a.fpos - b.fpos) as i32;
-                let pos = (a.pos - b.pos) as i32;
-                let offset = (pt_fpos - b.fpos as i32) as i64;
-                // Linear interpolation in 26.6.
-                let interpolated = b.pos as i64
-                    + (offset * pos as i64) / range as i64;
-                let val = interpolated as i32;
+                let pos_span = (a.pos - b.pos) as i32;
+                let offset = (pt_fpos - b.fpos as i32) as i32;
+                let val = b.pos + ft_mul_div(offset, pos_span, range);
                 if is_vert {
                     hints.points[i].y = val;
                     hints.points[i].flags |= AF_FLAG_TOUCH_Y;
@@ -1134,109 +1856,136 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
     }
 }
 
+// ── IUP helpers (afhints.c:1592-1681) ────────────────────────────────────────
+
+/// Apply a uniform delta from `ref_pt` to all points in index range [p1..p2].
+/// af_iup_shift(afhints.c:1592)
+fn iup_shift(points: &mut [AFPoint], p1: usize, p2: usize, ref_idx: usize) {
+    let delta = points[ref_idx].u - points[ref_idx].v;
+    if delta == 0 { return; }
+    for i in p1..=p2 {
+        if i != ref_idx {
+            points[i].u = points[i].v + delta;
+        }
+    }
+}
+
+/// Interpolate between two touched reference points.
+/// af_iup_interp(afhints.c:1619)
+fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: usize) {
+    if p1 > p2 { return; }
+
+    let (ref1, ref2) = if points[ref1].v > points[ref2].v {
+        (ref2, ref1)
+    } else {
+        (ref1, ref2)
+    };
+
+    let v1 = points[ref1].v;
+    let v2 = points[ref2].v;
+    let u1 = points[ref1].u;
+    let u2 = points[ref2].u;
+    let d1 = u1 - v1;
+    let d2 = u2 - v2;
+
+    if u1 == u2 || v1 == v2 {
+        for i in p1..=p2 {
+            let u = points[i].v;
+            if u <= v1 { points[i].u = u + d1; }
+            else if u >= v2 { points[i].u = u + d2; }
+            else { points[i].u = u1; }
+        }
+    } else {
+        let scale = ft_mul_div(u2 - u1, 0x10000, v2 - v1); // FT_DivFix
+        for i in p1..=p2 {
+            let u = points[i].v;
+            if u <= v1 { points[i].u = u + d1; }
+            else if u >= v2 { points[i].u = u + d2; }
+            else { points[i].u = u1 + ft_mul_fix(u - v1, scale); }
+        }
+    }
+}
+
 // ── Weak-point alignment (IUP) ─────────────────────────────────────────────
 //
 // Port of `af_glyph_hints_align_weak_points` (afhints.c:1687–1808).
 // Weak points (control points, straight-run points) are interpolated between
-// the nearest touched points in the same contour.
+// the nearest touched points in the same contour, in storage order.
 
 fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     let is_vert = dim == Dimension::Vert;
+    let touch_flag = if is_vert { AF_FLAG_TOUCH_Y } else { AF_FLAG_TOUCH_X };
 
-    for &c_start in &hints.contours.clone() {
-        // Phase 1: Set u = hinted, v = original. Find touched points.
-        let mut idx = c_start;
-        loop {
-            let pt = &mut hints.points[idx];
-            if is_vert {
-                pt.u = pt.y; // hinted so far
-                pt.v = pt.oy; // original scaled
-            } else {
-                pt.u = pt.x;
-                pt.v = pt.ox;
-            }
-            let next = pt.next;
-            if next == c_start { break; }
-            idx = next;
+    // PASS 1: Set u = hinted (current x/y), v = original (ox/oy)
+    for pt in &mut hints.points {
+        if is_vert {
+            pt.u = pt.y;
+            pt.v = pt.oy;
+        } else {
+            pt.u = pt.x;
+            pt.v = pt.ox;
         }
+    }
 
-        // Phase 2: Find runs of untouched points and interpolate between
-        // the enclosing touched points.
-        let mut touched_prev: Option<(usize, i32, i32)> = None; // (idx, u, v)
+    // PASS 2: Iterate contours in storage order (points are contiguous per-contour)
+    let contours_snapshot = hints.contours.clone();
+    for &c_start in &contours_snapshot {
+        let end_idx = hints.points[c_start].prev; // last point index of this contour
 
-        idx = c_start;
+        // Find first touched point
+        let mut idx = c_start;
+        let first_touched: usize = loop {
+            if idx > end_idx { break usize::MAX; } // no touched point in contour
+            if hints.points[idx].flags & touch_flag != 0 { break idx; }
+            idx += 1;
+        };
+        if first_touched == usize::MAX { continue; }
+
+        let mut last_touched = first_touched;
+
         loop {
-            let pt = &hints.points[idx];
-            let is_touched = if is_vert {
-                pt.flags & AF_FLAG_TOUCH_Y != 0
-            } else {
-                pt.flags & AF_FLAG_TOUCH_X != 0
+            // skip consecutive touched points
+            while last_touched < end_idx && hints.points[last_touched + 1].flags & touch_flag != 0 {
+                last_touched += 1;
+            }
+
+            // Find next touched point
+            let mut next = last_touched + 1;
+            let next_touched: Option<usize> = loop {
+                if next > end_idx { break None; }
+                if hints.points[next].flags & touch_flag != 0 { break Some(next); }
+                next += 1;
             };
 
-            if is_touched {
-                touched_prev = Some((idx, pt.u, pt.v));
-            } else if let Some((prev_idx, prev_u, prev_v)) = touched_prev {
-                // Find the next touched point (or use this as the end).
-                let mut next_touched: Option<(usize, i32, i32)> = None;
-                let mut scan = pt.next;
-                while scan != c_start {
-                    let st = &hints.points[scan];
-                    let st_touched = if is_vert {
-                        st.flags & AF_FLAG_TOUCH_Y != 0
-                    } else {
-                        st.flags & AF_FLAG_TOUCH_X != 0
-                    };
-                    if st_touched {
-                        next_touched = Some((scan, st.u, st.v));
-                        break;
-                    }
-                    scan = hints.points[scan].next;
-                }
-
-                if let Some((next_idx, next_u, next_v)) = next_touched {
-                    // Interpolate all points between prev and next.
-                    let mut interp = hints.points[prev_idx].next;
-                    while interp != next_idx {
-                        let ipt = &hints.points[interp];
-                        // Linear interpolation in original space (v).
-                        let total_v_range = next_v - prev_v;
-                        let pt_offset = ipt.v - prev_v;
-                        if total_v_range != 0 {
-                            let fraction = pt_offset as i64;
-                            let total = total_v_range as i64;
-                            let new_u = prev_u as i64
-                                + (fraction * (next_u - prev_u) as i64) / total;
-                            if is_vert {
-                                hints.points[interp].y = new_u as i32;
-                            } else {
-                                hints.points[interp].x = new_u as i32;
-                            }
-                        } else {
-                            // Degenerate: just copy prev_u.
-                            if is_vert {
-                                hints.points[interp].y = prev_u;
-                            } else {
-                                hints.points[interp].x = prev_u;
-                            }
-                        }
-                        interp = hints.points[interp].next;
-                    }
+            if let Some(nt) = next_touched {
+                // Interpolate between last_touched and next_touched
+                iup_interp(&mut hints.points, last_touched + 1, nt - 1, last_touched, nt);
+                last_touched = nt;
+            } else {
+                // End of contour
+                if last_touched == first_touched {
+                    // Only one touched point: uniform shift
+                    iup_shift(&mut hints.points, c_start, end_idx, first_touched);
                 } else {
-                    // No next touched point in contour (shouldn't happen,
-                    // since the first/last point of each edge segment is
-                    // touched): apply uniform shift from prev.
-                    let delta = prev_u - prev_v;
-                    if is_vert {
-                        hints.points[idx].y = hints.points[idx].oy + delta;
-                    } else {
-                        hints.points[idx].x = hints.points[idx].ox + delta;
+                    // Interpolate tail segments
+                    if last_touched < end_idx {
+                        iup_interp(&mut hints.points, last_touched + 1, end_idx, last_touched, first_touched);
+                    }
+                    if first_touched > c_start {
+                        iup_interp(&mut hints.points, c_start, first_touched - 1, last_touched, first_touched);
                     }
                 }
+                break;
             }
+        }
+    }
 
-            let next = hints.points[idx].next;
-            if next == c_start { break; }
-            idx = next;
+    // PASS 3: Write u back to x/y
+    for pt in &mut hints.points {
+        if is_vert {
+            pt.y = pt.u;
+        } else {
+            pt.x = pt.u;
         }
     }
 }

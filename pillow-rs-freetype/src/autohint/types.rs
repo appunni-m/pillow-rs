@@ -68,6 +68,76 @@ pub const AF_FLAG_WEAK_INTERPOLATION: u16 = 1 << 4;
 pub const AF_FLAG_NEAR: u16 = 1 << 5;
 pub const AF_FLAG_IGNORE: u16 = 1 << 6;
 
+// ── Font-wide metrics structures ─────────────────────────────────────────────
+// Mirrors FreeType's AF_WidthRec, AF_LatinBlueRec, AF_LatinAxisRec, AF_LatinMetricsRec.
+
+/// Simple (org, cur, fit) triple.  aflatin.h AF_WidthRec.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AfWidth {
+    pub org: i32, // original (font units)
+    pub cur: i32, // current (scaled 26.6)
+    pub fit: i32, // fitted  (grid-aligned 26.6)
+}
+
+/// Blue zone descriptor for one vertical position (top/bottom).  aflatin.h:86
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AfLatinBlue {
+    pub ref_width:   AfWidth, // flat-segment reference
+    pub shoot_width: AfWidth, // round-segment overshoot
+    pub ascender:    i32,
+    pub descender:   i32,
+    pub flags:       u32,     // AF_LATIN_BLUE_* bits
+}
+
+/// Per-axis (Horz or Vert) font-wide metrics.  aflatin.h:97
+#[derive(Debug, Clone)]
+pub struct AfLatinAxisMetrics {
+    pub scale: i32,               // 16.16
+    pub delta: i32,               // 26.6
+    pub width_count: usize,
+    pub widths: [AfWidth; AF_LATIN_MAX_WIDTHS],
+    pub edge_distance_threshold: i32, // font units
+    pub standard_width: i32,
+    pub extra_light: bool,
+    // Vert axis only:
+    pub blue_count: usize,
+    pub blues: Vec<AfLatinBlue>,
+    pub org_scale: i32,
+    pub org_delta: i32,
+}
+
+impl AfLatinAxisMetrics {
+    pub fn new() -> Self {
+        AfLatinAxisMetrics {
+            scale: 0, delta: 0,
+            width_count: 0,
+            widths: [AfWidth::default(); AF_LATIN_MAX_WIDTHS],
+            edge_distance_threshold: 0,
+            standard_width: 0,
+            extra_light: false,
+            blue_count: 0,
+            blues: Vec::new(),
+            org_scale: 0, org_delta: 0,
+        }
+    }
+}
+
+/// Font-wide Latin autohinter metrics.  aflatin.h:118
+#[derive(Debug, Clone)]
+pub struct AfLatinMetrics {
+    pub units_per_em: i32,
+    pub axis: [AfLatinAxisMetrics; 2], // [Horz, Vert]
+}
+
+impl AfLatinMetrics {
+    pub fn new(upem: i32) -> Self {
+        AfLatinMetrics {
+            units_per_em: upem,
+            axis: [AfLatinAxisMetrics::new(), AfLatinAxisMetrics::new()],
+        }
+    }
+}
+
 /// An outline point — mirrors `AF_PointRec` (afhints.h:243–263).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AFPoint {
@@ -97,6 +167,29 @@ pub struct AFPoint {
 pub const AF_EDGE_ROUND: u8 = 1 << 0;
 pub const AF_EDGE_SERIF: u8 = 1 << 1;
 pub const AF_EDGE_DONE: u8 = 1 << 2;
+pub const AF_EDGE_NEUTRAL: u8 = 1 << 3;
+pub const AF_EDGE_NO_BLUE: u8 = 1 << 4;
+
+/// Maximum number of stem widths per axis.
+pub const AF_LATIN_MAX_WIDTHS: usize = 16;
+
+/// Blue zone property flags (from the blue stringset table).
+pub const AF_BLUE_PROP_LATIN_TOP:            u32 = 1 << 0;
+pub const AF_BLUE_PROP_LATIN_SUB_TOP:        u32 = 1 << 1;
+pub const AF_BLUE_PROP_LATIN_NEUTRAL:        u32 = 1 << 2;
+pub const AF_BLUE_PROP_LATIN_X_HEIGHT:       u32 = 1 << 3;
+pub const AF_BLUE_PROP_LATIN_LONG:           u32 = 1 << 4;
+pub const AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM: u32 = 1 << 5;
+pub const AF_BLUE_PROP_LATIN_SMALL_BOTTOM:   u32 = 1 << 6;
+
+/// Blue zone flags (runtime, stored on AF_LatinBlue.flags).
+pub const AF_LATIN_BLUE_ACTIVE:       u32 = 1 << 0;
+pub const AF_LATIN_BLUE_TOP:          u32 = 1 << 1;
+pub const AF_LATIN_BLUE_SUB_TOP:      u32 = 1 << 2;
+pub const AF_LATIN_BLUE_NEUTRAL:      u32 = 1 << 3;
+pub const AF_LATIN_BLUE_ADJUSTMENT:   u32 = 1 << 4;
+pub const AF_LATIN_BLUE_BOTTOM:       u32 = 1 << 5;
+pub const AF_LATIN_BLUE_BOTTOM_SMALL: u32 = 1 << 6;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AFSegment {
@@ -147,6 +240,8 @@ pub struct AFEdge {
     pub first: usize,
     /// Last segment in this edge.
     pub last: usize,
+    /// Blue zone reference (fitted position to snap to), if any.
+    pub blue_edge: Option<AfWidth>,
 }
 
 impl Default for AFEdge {
@@ -156,6 +251,7 @@ impl Default for AFEdge {
             flags: 0, dir: Direction::None,
             link: usize::MAX, serif: usize::MAX,
             first: usize::MAX, last: usize::MAX,
+            blue_edge: None,
         }
     }
 }
@@ -202,6 +298,12 @@ pub struct GlyphHints {
 
     /// Hinting control flags (aflatin.h:152-156).
     pub other_flags: u32,
+
+    /// Font-wide Latin metrics (stem widths, blue zones).  Owned clone.
+    pub metrics: Option<AfLatinMetrics>,
+
+    /// Glyph outline orientation: true = clockwise (PostScript).
+    pub cw_orientation: bool,
 }
 
 impl GlyphHints {
@@ -218,6 +320,8 @@ impl GlyphHints {
             axis: [AxisHints::new(), AxisHints::new()],
             ppem: 0,
             other_flags: 0,
+            metrics: None,
+            cw_orientation: false,
         }
     }
 

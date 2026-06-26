@@ -17,6 +17,8 @@ use std::sync::Arc;
 pub struct Font {
     data: Arc<FontData>,
     pub size_pt: f32,
+    /// Pre-computed Latin autohinter metrics (stem widths, blue zones).
+    pub latin_metrics: Option<crate::autohint::AfLatinMetrics>,
 }
 
 /// A rendered glyph alpha mask.
@@ -79,20 +81,81 @@ impl Font {
             .ok_or_else(|| FontError::InvalidFont("missing 'glyf' table".into()))?
             .to_vec();
 
-        Ok(Font {
-            data: Arc::new(FontData {
-                cmap,
-                head,
-                hhea,
-                hmtx,
-                maxp,
-                name,
-                os2,
-                loca_data,
-                glyf_data,
-                size_pt,
-            }),
+        // Build FontData first, then compute Latin autohinter metrics.
+        let font_data = Arc::new(FontData {
+            cmap,
+            head,
+            hhea,
+            hmtx,
+            maxp,
+            name,
+            os2,
+            loca_data,
+            glyf_data,
             size_pt,
+        });
+
+        let upem = font_data.head.units_per_em as i32;
+        let mut latin_metrics = crate::autohint::AfLatinMetrics::new(upem);
+
+        // Find the standard character glyph ('o' for Latin)
+        let char_glyph = font_data.cmap.char_index('o' as u32).unwrap_or(0);
+        if char_glyph > 0 {
+            if let Ok(outline_raw) = crate::tt::glyf::load_glyph(
+                &font_data.glyf_data,
+                &font_data.loca_data,
+                font_data.head.index_to_loc_format,
+                char_glyph,
+            ) {
+                // Build outline in font units (identity scale = 1.0 for metrics)
+                let scaled_points: Vec<crate::outline::OutlinePoint> = outline_raw
+                    .points
+                    .iter()
+                    .map(|p| crate::outline::OutlinePoint {
+                        x: p.x,
+                        y: p.y,
+                        on_curve: p.on_curve,
+                    })
+                    .collect();
+
+                crate::autohint::latin::metrics_init_widths(
+                    &mut latin_metrics,
+                    char_glyph,
+                    &outline_raw,
+                    &scaled_points,
+                );
+            }
+        } else {
+            // No 'o' glyph: use fallback constant widths
+            for dim in 0..2 {
+                let axis = &mut latin_metrics.axis[dim];
+                let stdw = (50 * upem) / 2048;
+                axis.standard_width = stdw;
+                axis.edge_distance_threshold = stdw / 5;
+            }
+        }
+
+        // Compute blue zones
+        crate::autohint::latin::metrics_init_blues(&mut latin_metrics, &font_data);
+
+        // Scale the metrics axes for the actual size (applies x-height scale
+        // optimization + scales widths/blue zones). This yields the adjusted
+        // vertical scale the scaler must use for outline scaling.
+        let base_scale = crate::scaler::ScaleMetrics::new(size_pt, font_data.head.units_per_em);
+        let (_x_scale_adj, y_scale_adj) = crate::autohint::latin::metrics_scale_dim(
+            &mut latin_metrics,
+            base_scale.x_scale,
+            base_scale.y_scale,
+            0,
+            0,
+        );
+        // Store the adjusted vertical scale for the scaler to use.
+        latin_metrics.axis[1].org_scale = y_scale_adj;
+
+        Ok(Font {
+            data: font_data,
+            size_pt,
+            latin_metrics: Some(latin_metrics),
         })
     }
 
@@ -154,7 +217,7 @@ impl Font {
             let m = data.hmtx.get(glyph);
             let advance = pixel_round(ft_mul_fix(m.advance_width as i32, scale.x_scale));
 
-            match scaler::scale_glyph(data, glyph) {
+            match scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref()) {
                 Ok(g) if g.outline.n_contours > 0 => {
                     // Ink bbox in glyph-local pixel coords: (0,0)..(w,h) after
                     // the scaler's translate, plus the glyph's pixel origin.
@@ -203,7 +266,7 @@ impl Font {
 
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-        let scaled = scaler::scale_glyph(data, glyph)?;
+        let scaled = scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref())?;
 
         if scaled.outline.n_contours == 0 {
             // No outline → empty mask (but PIL still returns the advance-sized

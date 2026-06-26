@@ -12,4 +12,7 @@ pub mod loader;
 pub mod latin;
 
 pub use latin::apply_hints;
-pub use types::{GlyphHints, AxisHints, AFPoint, AFSegment, AFEdge, Direction, Dimension};
+pub use types::{GlyphHints, AxisHints, AFPoint, AFSegment, AFEdge, Direction, Dimension,
+    AfWidth, AfLatinBlue, AfLatinAxisMetrics, AfLatinMetrics,
+    AF_LATIN_MAX_WIDTHS,
+};
