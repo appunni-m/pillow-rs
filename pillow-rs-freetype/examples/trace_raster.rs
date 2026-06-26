@@ -35,7 +35,7 @@ fn main() {
         points: pts.clone(),
         flags: 0, cbox_x_min: 0, cbox_y_min: 0, cbox_x_max: 1, cbox_y_max: 1,
     };
-    autohint::apply_hints(&mut outline, scale.x_scale, scale.y_scale, 0, 0);
+    autohint::apply_hints(&mut outline, &raw, scale.x_scale, scale.y_scale, 0, 0, None);
 
     println!("\nafter autohint (26.6):");
     for (i, p) in outline.points.iter().enumerate() {

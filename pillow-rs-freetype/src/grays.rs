@@ -42,20 +42,24 @@ fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
 }
 
 /// FT_UDIVPREP: reciprocal for fast division, or 0 when the condition is false.
-/// Computes `0xFFFFFFFF / |b|` so FT_UDIV uses the magnitude.
+/// Computes `(FT_Int64)0xFFFFFFFF / b` with the actual sign of `b`, matching
+/// FreeType's signed-int64 division. The result may be negative.
 #[inline]
-fn ft_udivprep(c: bool, b: i64) -> u64 {
+fn ft_udivprep(c: bool, b: i64) -> i64 {
     if c {
-        0xFFFF_FFFFu64 / (b.unsigned_abs())
+        0xFFFF_FFFFi64 / b
     } else {
         0
     }
 }
 
-/// FT_UDIV: fast unsigned division via reciprocal. `(a as u64 * r) >> 32`.
+/// FT_UDIV: fast division via reciprocal.
+/// FreeType: `(TCoord)( ((FT_UInt64)(a) * (FT_UInt64)(b_r)) >> 32 )`
+/// The reciprocal `r` is signed (may be negative); casting to u64 gives the
+/// correct unsigned multiplication value.
 #[inline]
-fn ft_udiv(a: i64, r: u64) -> i32 {
-    (((a as u64).wrapping_mul(r)) >> 32) as i32
+fn ft_udiv(a: i64, r: i64) -> i32 {
+    (((a as u64).wrapping_mul(r as u64)) >> 32) as i32
 }
 
 /// FT_FILL_RULE: convert area to coverage, apply non-zero/even-odd fill.
@@ -297,10 +301,13 @@ impl Worker {
         let dy = to_y - self.y;
 
         if ex1 == ex2 && ey1 == ey2 {
-            // inside one cell — nothing to do
+            // inside one cell — nothing to do; fall through to trailing integrate
         } else if dy == 0 {
-            /* ex1 != ex2 */
+            /* ex1 != ex2 — horizontal line, goto End (skip trailing integrate) */
             self.set_cell(ex2, ey2);
+            self.x = to_x;
+            self.y = to_y;
+            return;
         } else if dx == 0 {
             let two_fx = fx1 << 1;
             if dy > 0 {
@@ -335,8 +342,9 @@ impl Worker {
             loop {
                 if prod - dx * ONE_PIXEL > 0 && prod <= 0 {
                     // left
+                    // FT_UDIV(-prod, -dx) → uses -dx_r
                     let fx2 = 0;
-                    let fy2 = ft_udiv(-prod, dx_r);
+                    let fy2 = ft_udiv(-prod, -dx_r);
                     prod -= dy * ONE_PIXEL;
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = ONE_PIXEL as i32;
@@ -366,7 +374,8 @@ impl Worker {
                     ex1 += 1;
                 } else {
                     // down
-                    let fx2 = ft_udiv(prod, dy_r);
+                    // FT_UDIV(prod, -dy) → uses -dy_r
+                    let fx2 = ft_udiv(prod, -dy_r);
                     let fy2 = 0;
                     prod += dx * ONE_PIXEL;
                     self.integrate(fy2 - fy1, fx1 + fx2);

@@ -339,7 +339,7 @@ fn main() {
 
     // Step 11: Full scaler path
     println!("\n--- Step 11: Full scale_glyph result ---");
-    let scaled = scaler::scale_glyph(&font_data, gid).unwrap();
+    let scaled = scaler::scale_glyph(&font_data, gid, None).unwrap();
     println!(
         "  bbox: ({}, {}, {}, {})",
         scaled.bbox_x_min, scaled.bbox_y_min, scaled.bbox_x_max, scaled.bbox_y_max
