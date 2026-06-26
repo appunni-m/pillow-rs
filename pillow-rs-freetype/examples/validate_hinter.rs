@@ -85,7 +85,28 @@ fn main() {
         flags: 0,
         cbox_x_min: 0, cbox_y_min: 0, cbox_x_max: 1, cbox_y_max: 1,
     };
-    autohint::apply_hints(&mut outline, &raw, scale.x_scale, scale.y_scale, 0, 0);
+    // Build font-wide metrics (mirrors Font::truetype).
+    let mut lm = pillow_rs_freetype::autohint::AfLatinMetrics::new(upem as i32);
+    let char_glyph = font_data.cmap.char_index('o' as u32).unwrap_or(0);
+    if char_glyph > 0 {
+        if let Ok(o2) = pillow_rs_freetype::tt::glyf::load_glyph(
+            &font_data.glyf_data, &font_data.loca_data,
+            font_data.head.index_to_loc_format, char_glyph,
+        ) {
+            let sp: Vec<OutlinePoint> = o2.points.iter().map(|p| OutlinePoint {
+                x: p.x, y: p.y, on_curve: p.on_curve,
+            }).collect();
+            pillow_rs_freetype::autohint::latin::metrics_init_widths(&mut lm, char_glyph, &o2, &sp);
+        }
+    }
+    pillow_rs_freetype::autohint::latin::metrics_init_blues(&mut lm, &font_data);
+    let (_xs, ys) = pillow_rs_freetype::autohint::latin::metrics_scale_dim(
+        &mut lm, scale.x_scale, scale.y_scale, 0, 0);
+    // Re-scale pts Y with adjusted scale before hinting.
+    for p in outline.points.iter_mut() {
+        p.y = pillow_rs_freetype::fixed::ft_mul_fix(p.y, ys);
+    }
+    autohint::apply_hints(&mut outline, &raw, scale.x_scale, ys, 0, 0, Some(&lm));
 
     println!("\n=== After autohint (hinted 26.6) ===");
     let hx_min = outline.points.iter().map(|p| p.x).min().unwrap();

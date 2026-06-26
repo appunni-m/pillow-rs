@@ -86,7 +86,11 @@ pub struct ScaledGlyph {
 /// Scale a glyph's outline to 26.6 and translate it so its pixel bbox's
 /// bottom-left corner sits at (0,0) — the convention `ftsmooth`/`ft_bitmap`
 /// use when rendering into a sized bitmap.
-pub fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, FontError> {
+pub fn scale_glyph(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
     let h_metric = data.hmtx.get(glyph_index);
@@ -112,12 +116,17 @@ pub fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, Fon
         });
     }
 
-    // Scale all points to 26.6.
+    // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
+    // vertical scale (x-height optimization) from latin_metrics if available.
+    let y_adj = latin_metrics.and_then(|m| {
+        let s = m.axis[1].scale;
+        if s != 0 { Some(s) } else { None }
+    }).unwrap_or(scale.y_scale);
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
     for p in &outline_raw.points {
         scaled.push(OutlinePoint {
             x: scale.scale_x(p.x),
-            y: scale.scale_y(p.y),
+            y: ft_mul_fix(p.y, y_adj),
             on_curve: p.on_curve,
         });
     }
@@ -125,7 +134,7 @@ pub fn scale_glyph(data: &FontData, glyph_index: u16) -> Result<ScaledGlyph, Fon
     // Apply auto-hinting: snap edges to pixel grid, then interpolate.
     // This modifies the 26.6 coordinates in-place to align with pixel
     // boundaries, matching FreeType's autofit module for Latin script.
-    autohint_glyph(&mut scaled, &outline_raw, &scale);
+    autohint_glyph(&mut scaled, &outline_raw, &scale, latin_metrics);
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
@@ -236,6 +245,7 @@ fn autohint_glyph(
     scaled: &mut [OutlinePoint],
     raw_outline: &GlyphOutline,
     scale: &ScaleMetrics,
+    metrics: Option<&crate::autohint::AfLatinMetrics>,
 ) {
     use crate::outline::Outline;
 
@@ -257,13 +267,19 @@ fn autohint_glyph(
     };
 
     // Run the auto-hinter.  `apply_hints` modifies `outline.points` in-place.
+    // Use the adjusted vertical scale if the autohinter computed one.
+    let y_adj = metrics.and_then(|m| {
+        let s = m.axis[1].scale;
+        if s != 0 { Some(s) } else { None }
+    }).unwrap_or(scale.y_scale);
     crate::autohint::apply_hints(
         &mut outline,
         raw_outline,
         scale.x_scale,
-        scale.y_scale,
+        y_adj,
         0, // x_delta
         0, // y_delta
+        metrics,
     );
 
     // Write hinted coordinates back.

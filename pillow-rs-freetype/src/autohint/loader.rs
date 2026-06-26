@@ -79,6 +79,23 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         start = end + 1;
     }
 
+    // ── Compute outline orientation (afhints.c:960-974) ──────────────────
+    hints.cw_orientation = {
+        let mut area: i64 = 0;
+        for &c_start in &hints.contours {
+            let mut idx = c_start;
+            loop {
+                let p0 = &hints.points[idx];
+                let p1 = &hints.points[p0.next];
+                area += (p0.fx as i64) * (p1.fy as i64) - (p1.fx as i64) * (p0.fy as i64);
+                let next = p0.next;
+                if next == c_start { break; }
+                idx = next;
+            }
+        }
+        area < 0 // clockwise = PostScript
+    };
+
     // ── Compute minima/maxima per contour ──
     hints.contour_y_minima.clear();
     hints.contour_y_maxima.clear();
