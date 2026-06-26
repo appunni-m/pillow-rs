@@ -1327,9 +1327,11 @@ fn compute_stem_width(
             dist = 56;
         }
 
-        // width_count is always 0 in our port — skip width histogram.
-        // Port kept for when width histogram is added later:
-        // if axis->width_count > 0 { ... }
+        // Width histogram quantization — called in BOTH smooth and strong
+        // branches (aflatin.c:4100-4115 in smooth, 4071 in strong).
+        if !std_widths.is_empty() {
+            dist = snap_width(std_widths, dist);
+        }
     } else {
         // ── Strong hinting: snap to integer pixels ──────────────────────
 
@@ -1649,9 +1651,39 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
         }
     }
 
-    // ── Phase 3: Lowercase 'm' symmetry ─────────────────────────────────
-    // SKIPPED (aflatin.c:4582–4627). Requires specific edge count (6 or 12)
-    // and link relationships.
+    // ── Phase 3: Lowercase 'm' symmetry (aflatin.c:4582-4627) ────────────
+    // If a glyph has 3 stems (6 edges) or 3 stems with serifs (12 edges),
+    // make the outer stems symmetric around the middle stem.
+    if dim == Dimension::Horz && (num_edges == 6 || num_edges == 12) {
+        let (e1_idx, e2_idx, e3_idx) = if num_edges == 6 {
+            (0, 2, 4)
+        } else {
+            (1, 5, 9)
+        };
+        let e1_opos = axis.edges[e1_idx].opos;
+        let e2_opos = axis.edges[e2_idx].opos;
+        let e3_opos = axis.edges[e3_idx].opos;
+        let dist1 = e2_opos - e1_opos;
+        let dist2 = e3_opos - e2_opos;
+        let mut span = dist1 - dist2;
+        if span < 0 { span = -span; }
+        if span < 8 {
+            let delta = axis.edges[e3_idx].pos
+                - (2 * axis.edges[e2_idx].pos - axis.edges[e1_idx].pos);
+            axis.edges[e3_idx].pos -= delta;
+            axis.edges[e3_idx].flags |= AF_EDGE_DONE;
+            let link = axis.edges[e3_idx].link;
+            if link != usize::MAX {
+                axis.edges[link].pos -= delta;
+                axis.edges[link].flags |= AF_EDGE_DONE;
+            }
+            // Move serifs along with the stem (12-edge case).
+            if num_edges == 12 {
+                axis.edges[8].pos -= delta;
+                axis.edges[11].pos -= delta;
+            }
+        }
+    }
 
     // ── Phase 4: Non-stem edges ─────────────────────────────────────────
     // Ported faithfully (aflatin.c:4629–4824).
