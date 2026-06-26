@@ -15,6 +15,7 @@ Baseline: **943/1910 (49.4%)** passed, **967 failed**.
 | 7 | Edge sorting + width data + SNAP removal | +38 | 836 | Stem infrastructure |
 | 8 | **snap_width in smooth branch** | **+106** | **942** | Stem-width quantization |
 | 9 | Phase 3 'm' symmetry | +1 | 943 | Lowercase 'm' centering |
+| 10 | Directionless segments 2nd pass | +3 | 946 | Edge completeness |
 
 ## Current status
 
