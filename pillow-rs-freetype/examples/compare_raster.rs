@@ -81,7 +81,7 @@ fn main() {
         }
     };
 
-    let scaled = scaler::scale_glyph(&parsed, gid).unwrap();
+    let scaled = scaler::scale_glyph(&parsed, gid, None).unwrap();
     let raster = grays::rasterize(scaled.outline).unwrap();
 
     println!("\n=== Raw raster ({}x{}) ===", raster.width, raster.height);

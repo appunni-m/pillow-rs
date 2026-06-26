@@ -617,9 +617,9 @@ pub fn apply_hints(
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
     // Smooth anti-aliased hinting: enable stem adjustment + snap for both dimensions.
-    hints.other_flags = AF_LATIN_HINTS_HORZ_SNAP
-        | AF_LATIN_HINTS_VERT_SNAP
-        | AF_LATIN_HINTS_STEM_ADJUST;
+    hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
+    // FreeType disables HORZ_SNAP and VERT_SNAP for anti-aliased rendering
+    // (aflatin.c:347-349). Smooth hinting gives subpixel stem positions.
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);
@@ -629,20 +629,30 @@ pub fn apply_hints(
 
     // Step 2: Process vertical dimension (Y-axis / horizontal edges)
     compute_segments(&mut hints, Dimension::Vert);
-    // link_segments disabled — minimal regression (-7) with blue zones active.
+    let vert_widths_26_6: Vec<i32>; // scaled widths for snapping
+    {
+        let (wc, widths) = extract_widths(&hints, Dimension::Vert);
+        vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+        link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
+    }
     compute_edges(&mut hints, Dimension::Vert);
     // Blue zones are pre-scaled by metrics_scale_dim (per-size); assign edges.
     compute_blue_edges(&mut hints);
-    hint_edges(&mut hints, Dimension::Vert);
+    hint_edges(&mut hints, Dimension::Vert, &vert_widths_26_6);
     align_edge_points(&mut hints, Dimension::Vert);
     align_strong_points(&mut hints, Dimension::Vert);
     align_weak_points(&mut hints, Dimension::Vert);
 
     // Step 3: Process horizontal dimension (X-axis / vertical edges)
     compute_segments(&mut hints, Dimension::Horz);
-    // link_segments disabled (see Vert comment above).
+    let horz_widths_26_6: Vec<i32>;
+    {
+        let (wc, widths) = extract_widths(&hints, Dimension::Horz);
+        horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+        link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+    }
     compute_edges(&mut hints, Dimension::Horz);
-    hint_edges(&mut hints, Dimension::Horz);
+    hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6);
     align_edge_points(&mut hints, Dimension::Horz);
     align_strong_points(&mut hints, Dimension::Horz);
     align_weak_points(&mut hints, Dimension::Horz);
@@ -1057,6 +1067,48 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             axis.edges[e_idx].serif = usize::MAX;
         }
     }
+
+    // ── Sort edges by fpos (ascending) — matches FreeType's insertion order ───
+    // FreeType inserts edges in fpos-sorted order during creation via
+    // af_axis_hints_new_edge. We sort post-creation and remap all indices.
+    if axis.edges.len() > 1 {
+        // Build sort permutation: old_idx -> new position
+        let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
+        indices.sort_by_key(|&i| axis.edges[i].fpos);
+        // Build reverse map: new_pos -> old_idx
+        let mut old_from_new: Vec<usize> = vec![0; axis.edges.len()];
+        for (new_idx, &old_idx) in indices.iter().enumerate() {
+            old_from_new[new_idx] = old_idx;
+        }
+        // Build map: old_idx -> new_idx
+        let mut new_from_old: Vec<usize> = vec![0; axis.edges.len()];
+        for (new_idx, &old_idx) in indices.iter().enumerate() {
+            new_from_old[old_idx] = new_idx;
+        }
+
+        // Sort edges
+        let old_edges: Vec<AFEdge> = axis.edges.drain(..).collect();
+        for &old_idx in &indices {
+            axis.edges.push(old_edges[old_idx].clone());
+        }
+
+        // Remap segment.edge references
+        for seg in &mut axis.segments {
+            if seg.edge != usize::MAX {
+                seg.edge = new_from_old[seg.edge];
+            }
+        }
+
+        // Remap edge.link and edge.serif within sorted edges
+        for edge in &mut axis.edges {
+            if edge.link != usize::MAX {
+                edge.link = new_from_old[edge.link];
+            }
+            if edge.serif != usize::MAX {
+                edge.serif = new_from_old[edge.serif];
+            }
+        }
+    }
 }
 
 // Port of `af_latin_hints_link_segments` (aflatin.c:2015–2148).
@@ -1158,6 +1210,7 @@ fn link_segments_inner(
             }
         }
     }
+
 }
 
 // ── Helper: snap stem width ────────────────────────────────────────────────
@@ -1200,6 +1253,7 @@ fn align_linked_edge(
     dim: Dimension,
     base_edge: &AFEdge,
     stem_edge: &mut AFEdge,
+    std_widths: &[i32],
 ) {
     let dist = stem_edge.opos - base_edge.opos;
     let base_delta = base_edge.pos - base_edge.opos;
@@ -1209,6 +1263,7 @@ fn align_linked_edge(
         dist, base_delta,
         base_edge.flags,
         stem_edge.flags,
+        std_widths,
     );
 
     stem_edge.pos = base_edge.pos + fitted_width;
@@ -1236,6 +1291,7 @@ fn compute_stem_width(
     _base_delta: i32,
     base_flags: u8,
     stem_flags: u8,
+    std_widths: &[i32],  // standard widths in 26.6 (from metrics .cur)
 ) -> i32 {
     let stem_adjust = other_flags & AF_LATIN_HINTS_STEM_ADJUST != 0;
 
@@ -1279,7 +1335,7 @@ fn compute_stem_width(
 
         let org_dist = dist;
 
-        dist = snap_width(&[], dist); // width_count = 0
+        dist = snap_width(std_widths, dist);
 
         if vertical {
             // Vertical hinting: round stem heights to integer pixels.
@@ -1339,7 +1395,7 @@ fn compute_stem_width(
 // usize::MAX). The non-stem section (lines 4629–4824) does the actual
 // grid-fitting via anchor-relative half-pixel rounding.
 
-fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
+fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
     let other_flags = hints.other_flags;
     let axis = &mut hints.axis[dim as usize];
     let num_edges = axis.edges.len();
@@ -1403,7 +1459,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
 
             if let Some(e2) = edge2_idx {
                 if axis.edges[e2].blue_edge.is_none() {
-                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2]);
+                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2], std_widths);
                     axis.edges[e2].flags |= AF_EDGE_DONE;
                 }
             }
@@ -1441,7 +1497,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
 
             let org_len = edge2_opos - edge_opos;
             let cur_len = compute_stem_width(
-                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags,
+                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
             );
 
             if cur_len <= 64 {
@@ -1496,7 +1552,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
                 let dist = stem_opos - base_opos;
                 let base_delta = base_pos - base_opos;
                 let fitted_width = compute_stem_width(
-                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags,
+                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags, std_widths,
                 );
                 axis.edges[edge2_idx].pos = base_pos + fitted_width;
             }
@@ -1514,7 +1570,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
             let org_center = org_pos + (org_len >> 1);
 
             let cur_len = compute_stem_width(
-                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags,
+                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
             );
 
             if axis.edges[edge2_idx].flags & AF_EDGE_DONE != 0 {
@@ -1541,7 +1597,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
                 axis.edges[i].pos = cur_pos1 - cur_len / 2;
             } else {
                 let cur_len2 = compute_stem_width(
-                    other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags,
+                    other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
                 );
 
                 let cur_pos1 = (org_pos + 32) & !63; // FT_PIX_ROUND
@@ -1564,7 +1620,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension) {
                 let dist = stem_opos - base_opos;
                 let base_delta = base_pos - base_opos;
                 let fitted_width = compute_stem_width(
-                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags,
+                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags, std_widths,
                 );
                 axis.edges[edge2_idx].pos = base_pos + fitted_width;
             }
