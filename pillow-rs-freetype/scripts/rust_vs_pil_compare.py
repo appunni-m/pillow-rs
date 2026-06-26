@@ -299,7 +299,7 @@ def main():
     print(f"  3. BBOX/SIZE GAP (different mask dimensions):")
     print(f"     {diff_size} tests — bbox computation gives different result.")
     print(f"     Root cause: compute_cbox() or translation offset in scaler, ")
-    print(f"     or PIL uses hinted outlines (even for nohint fonts via autohinter)")
+    print(f"     or autohinter grid-fitting differs from FreeType's.")
     print()
 
     if len(cat_a) > 0:
@@ -308,17 +308,14 @@ def main():
             print(f"     - {tid}")
 
     print()
-    print("CRITICAL INSIGHT: PIL's getmask ALWAYS uses some form of hinting.")
-    print("Even with bytecode stripped (nohint font), PIL's FreeType falls back")
+    print("CRITICAL INSIGHT: PIL's getmask uses FT_LOAD_DEFAULT.")
+    print("On the bytecode-stripped `fonts_nohint` inputs, FreeType falls back")
     print("to the autohinter, which grid-fits outlines before rasterization.")
-    print("Our pure-Rust renderer uses NO hinting at all (unscaled outlines).")
-    print("Therefore, the reference fixtures generated with PIL contain AUTOHINTED")
-    print("output, while our Rust code produces UNHINTED output.")
+    print("The reference fixtures are therefore AUTOHINTED. Our Rust port must")
+    print("implement the autohinter to reproduce them.")
     print()
-    print("To achieve 100% getmask parity, we MUST either:")
-    print("  (a) Implement the autohinter, OR")
-    print("  (b) Regenerate fixtures with truly unhinted rendering (raw freetype-py")
-    print("      with FT_LOAD_NO_HINTING, no FT_LOAD_RENDER) and compare at outline/sha level")
+    print("To achieve 100% getmask parity: implement the FreeType autohinter")
+    print("(src/autohint/) so our hinted output matches PIL's FT_LOAD_DEFAULT path.")
 
 
 if __name__ == "__main__":

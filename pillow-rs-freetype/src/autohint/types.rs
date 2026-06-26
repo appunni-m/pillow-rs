@@ -110,6 +110,8 @@ pub struct AFSegment {
     pub min_coord: i16,
     /// Max coordinate on the cross-axis.
     pub max_coord: i16,
+    /// Segment height (max_coord - min_coord), used for edge filtering.
+    pub height: i16,
     /// First point index.
     pub first: usize,
     /// Last point index.
