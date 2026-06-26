@@ -605,6 +605,8 @@ fn ft_pix_round(x: i32) -> i32 { (x + 32) & !63 }
 ///
 /// Port of `af_latin_hints_apply` — the coordination function that calls
 /// reload → detect_features → hint_edges → align_points → save.
+/// Returns the horizontal LSB delta (26.6) from the post-hint advance adjustment
+/// (afloader.c:422-464). Callers should add this to the glyph's lsb.
 pub fn apply_hints(
     outline: &mut crate::outline::Outline,
     raw_outline: &crate::tt::glyf::GlyphOutline,
@@ -613,7 +615,7 @@ pub fn apply_hints(
     x_delta: i32,
     y_delta: i32,
     metrics: Option<&AfLatinMetrics>,
-) {
+) -> i32 {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
     // Smooth anti-aliased hinting: enable stem adjustment + snap for both dimensions.
@@ -624,7 +626,7 @@ pub fn apply_hints(
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);
     if hints.num_points() == 0 {
-        return;
+        return 0;
     }
 
     // Step 2: Process vertical dimension (Y-axis / horizontal edges)
@@ -657,8 +659,24 @@ pub fn apply_hints(
     align_strong_points(&mut hints, Dimension::Horz);
     align_weak_points(&mut hints, Dimension::Horz);
 
-    // Step 4: Write back
+    // Step 4: Post-hint advance width / LSB adjustment (afloader.c:422-464).
+    let lsb_delta = if hints.axis[Dimension::Horz as usize].edges.len() > 1 {
+        let haxis = &hints.axis[Dimension::Horz as usize];
+        let edge1 = &haxis.edges[0];                          // leftmost
+        let old_lsb = edge1.opos;
+        let new_lsb = edge1.pos;
+        let pp1x_uh = new_lsb - old_lsb;                      // LSB change (26.6)
+        let mut pp1x = (pp1x_uh + 32) & !63;                  // FT_PIX_ROUND
+        if pp1x >= new_lsb && old_lsb > 0 { pp1x -= 64; }
+        pp1x - pp1x_uh
+    } else {
+        0
+    };
+
+    // Step 5: Write back
     hints.save_to_outline(outline);
+
+    lsb_delta
 }
 
 // ── Segment detection ─────────────────────────────────────────────────────
@@ -989,6 +1007,30 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             axis.segments[prev_last].edge_next = seg_idx;
             e.last = seg_idx;
             axis.segments[seg_idx].edge = found_edge;
+        }
+    }
+
+    // ── Second pass: catch directionless segments (aflatin.c:2306-2342) ──
+    for seg_idx in 0..axis.segments.len() {
+        if axis.segments[seg_idx].dir != Direction::None {
+            continue;
+        }
+        let seg_pos = axis.segments[seg_idx].pos as i32;
+        // Look for an existing edge at this position.
+        let mut found: Option<usize> = None;
+        for e_idx in 0..axis.edges.len() {
+            let dist = (axis.edges[e_idx].fpos as i32 - seg_pos).abs();
+            if dist < edge_dist_thresh {
+                found = Some(e_idx);
+                break;
+            }
+        }
+        if let Some(e_idx) = found {
+            // Append to existing edge (like the main loop does).
+            let prev_last = axis.edges[e_idx].last;
+            axis.segments[prev_last].edge_next = seg_idx;
+            axis.edges[e_idx].last = seg_idx;
+            axis.segments[seg_idx].edge = e_idx;
         }
     }
 
