@@ -1727,6 +1727,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
         }
 
         axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
+        axis.edges[i].flags |= AF_EDGE_DONE;
 
         // BOUND check for stem edges (aflatin.c:4544–4563):
         // don't move if stem would (almost) disappear.
