@@ -657,6 +657,46 @@ pub fn apply_hints(
     align_strong_points(&mut hints, Dimension::Horz);
     align_weak_points(&mut hints, Dimension::Horz);
 
+    // ── Post-hinting phantom-point adjustment (afloader.c:419-530) ──────
+    // After hint_edges grid-fits the leftmost/rightmost edges, we compute
+    // a pixel-rounded translation (pp1.x) that aligns the LSB to the pixel
+    // grid, matching C's af_loader_load_glyph post-processing.
+    {
+        let haxis = &hints.axis[Dimension::Horz as usize];
+        let num_horz_edges = haxis.edges.len();
+        if num_horz_edges > 1 {
+            let edge1 = &haxis.edges[0];                    // leftmost
+            let edge2 = &haxis.edges[num_horz_edges - 1];   // rightmost
+
+            let old_lsb = edge1.opos;   // original scaled LSB (pp1.x = 0)
+            let new_lsb = edge1.pos;    // hinted LSB
+
+            let mut pp1x_uh = new_lsb - old_lsb;
+
+            // Small-size pad: prefer too much space over too little.
+            if old_lsb < 24 {
+                pp1x_uh -= 8;
+            }
+
+            let mut pp1x = (pp1x_uh + 32) & !63; // FT_PIX_ROUND
+
+            // Don't move if we'd lose the stem.
+            if pp1x >= new_lsb && old_lsb > 0 {
+                pp1x -= 64;
+            }
+
+            if pp1x != 0 {
+                // Translate all points' x by -pp1x.
+                for pt in hints.points.iter_mut() {
+                    pt.x -= pp1x;
+                }
+            }
+            // Note: pp2.x (right side bearing adjustment) is not implemented.
+            // It affects advance width (getlength) but not the rendered glyph.
+            let _ = edge2; // used for pp2x computation which we skip
+        }
+    }
+
     // Step 4: Write back
     hints.save_to_outline(outline);
 }
