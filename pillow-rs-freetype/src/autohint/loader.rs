@@ -3,6 +3,29 @@
 
 use super::types::*;
 
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+/// Port of `FT_HYPOT` (ftobjs.h:80-85) — approximate hypotenuse.
+/// Returns max(|x|,|y|) + 3*min(|x|,|y|)/8.
+fn ft_hypot(x: i32, y: i32) -> i32 {
+    let ax = x.abs();
+    let ay = y.abs();
+    if ax > ay { ax + (3 * ay >> 3) } else { ay + (3 * ax >> 3) }
+}
+
+/// Port of `ft_corner_is_flat` (ftcalc.c:1006-1042).
+/// Returns true if the corner formed by in/out vectors is "flat" —
+/// i.e., one vector is much more dominant than the other.
+/// Test: d_in + d_out < (17/16) * d_hypot.
+fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
+    let d_in = ft_hypot(in_x, in_y);
+    let d_out = ft_hypot(out_x, out_y);
+    let d_hypot = ft_hypot(in_x + out_x, in_y + out_y);
+    (d_in + d_out - d_hypot) < (d_hypot >> 4)
+}
+
+// ── Direction computation ─────────────────────────────────────────────────
+
 /// Port of `af_direction_compute` (afhints.c:750–796).
 /// Determines the major direction of a vector from (dx, dy).
 /// The threshold: the longer arm must be > 14× the shorter arm (~4.1°).
@@ -148,27 +171,33 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
     // straight runs (in_dir==out_dir!=NONE) → weak.  Opposite directions
     // with NEAR flag → weak.  Everything else → STRONG.
     for i in 0..hints.points.len() {
-        let pt = &mut hints.points[i];
-        let in_dir = pt.in_dir;
-        let out_dir = pt.out_dir;
+        let in_dir = hints.points[i].in_dir;
+        let out_dir = hints.points[i].out_dir;
+        let flags = hints.points[i].flags;
 
-        let is_weak = if pt.flags & AF_FLAG_CONTROL != 0 {
-            true  // control points are always weak (C: goto Is_Weak_Point)
+        let is_weak = if flags & AF_FLAG_CONTROL != 0 {
+            true
         } else if in_dir == out_dir && in_dir != Direction::None {
-            true  // on a horizontal or vertical segment but not at endpoint (C:1266)
+            true
         } else if in_dir == out_dir {
-            // both None: C checks ft_corner_is_flat. We skip — keep strong
-            false
+            // both None: C checks ft_corner_is_flat (afhints.c:1270-1284)
+            let prev = &hints.points[hints.points[i].prev];
+            let next = &hints.points[hints.points[i].next];
+            let pt = &hints.points[i];
+            corner_is_flat(
+                pt.fx as i32 - prev.fx as i32,
+                pt.fy as i32 - prev.fy as i32,
+                next.fx as i32 - pt.fx as i32,
+                next.fy as i32 - pt.fy as i32,
+            )
         } else if in_dir == out_dir.opposite() {
-            // Spike: weak if near, strong if not (C:1284-1290)
-            pt.flags & AF_FLAG_NEAR != 0
+            flags & AF_FLAG_NEAR != 0
         } else {
-            // Corner with different non-opposite directions → STRONG (C: implicit)
             false
         };
 
         if is_weak {
-            pt.flags |= AF_FLAG_WEAK_INTERPOLATION;
+            hints.points[i].flags |= AF_FLAG_WEAK_INTERPOLATION;
         }
     }
 }
