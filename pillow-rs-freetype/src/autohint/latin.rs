@@ -1962,7 +1962,6 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 
         match (before, after) {
             (Some(b), Some(a)) if b.fpos != a.fpos => {
-                // Interpolation using FT_MulDiv (C: afhints.c:1413-1578)
                 let range = (a.fpos - b.fpos) as i32;
                 let pos_span = (a.pos - b.pos) as i32;
                 let offset = (pt_fpos - b.fpos as i32) as i32;
