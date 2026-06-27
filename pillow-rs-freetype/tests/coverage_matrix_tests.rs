@@ -61,7 +61,7 @@ fn sha256_hex(data: &[u8]) -> String {
 
 fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
     // The coverage matrix SHA-256 references were generated from the
-    // `fonts_nohint` files: original fonts whose TrueType bytecode hint
+    // `fonts_autohint` files: original fonts whose TrueType bytecode hint
     // programs were stripped. With bytecode gone, FreeType falls back to its
     // *autohinter* — so the references are AUTOHINTED output (PIL's
     // `ImageFont.getmask()` uses `FT_LOAD_DEFAULT`, which triggers the
@@ -71,7 +71,7 @@ fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
         .join("tests")
         .join("fixtures")
         .join("input")
-        .join("fonts_nohint");
+        .join("fonts_autohint");
     let path = font_dir.join(format!("{}.ttf", name));
     fs::read(&path).unwrap_or_else(|_| panic!("font file not found: {:?}", path))
 }

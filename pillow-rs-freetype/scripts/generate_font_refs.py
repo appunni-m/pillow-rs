@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate font coverage matrix + reference dumps using FreeType with
-FT_LOAD_DEFAULT.  The `fonts_nohint` inputs have their TrueType bytecode
-stripped, so FreeType falls back to its *autohinter* under
-FT_LOAD_DEFAULT — matching the output PIL's `ImageFont.getmask()` produces
-(the public API our Rust port must reproduce).
+"""Generate font coverage matrix + reference dumps using FreeType's autohinter.
+
+The `fonts_autohint` inputs have their TrueType bytecode stripped, so FreeType
+falls back to its autohinter under FT_LOAD_RENDER. These references match what
+pillow-rs-freetype's PureRust autohinter port produces.
 
 Usage:
     python scripts/generate_font_refs.py
@@ -19,9 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
-# FIXME: should be fonts_nohint to match what tests load.
-# Regenerating references requires re-running all tests against new SHAs.
-INPUT_FONTS = FIXTURES / "input" / "fonts"
+INPUT_FONTS = FIXTURES / "input" / "fonts_autohint"
 OUTPUT_RAWS = FIXTURES / "outputs" / "raws"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
 
@@ -167,8 +165,10 @@ def generate() -> int:
                 })
 
     matrix = {
-        "version": "0.2.0",
+        "version": "0.3.0",
+        "font_source": "fonts_autohint",
         "hinting": "autohint",
+        "generator": f"freetype-py (system FreeType)",
         "rows": rows,
         "summary": {
             "total_rows": len(rows),
@@ -176,7 +176,7 @@ def generate() -> int:
             "fonts": len(FONTS),
             "sizes": len(SIZES),
             "glyphs": len(CHARS),
-            "mode": "FT_LOAD_DEFAULT|RENDER",
+            "mode": "FT_LOAD_RENDER (0x4)",
         },
     }
     MATRIX_PATH.parent.mkdir(parents=True, exist_ok=True)

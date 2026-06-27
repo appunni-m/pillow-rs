@@ -4,7 +4,7 @@ use pillow_rs_freetype::autohint::latin;
 
 fn main() {
     let dir = env!("CARGO_MANIFEST_DIR");
-    let font_path = format!("{}/tests/fixtures/input/fonts_nohint/DejaVuSans.ttf", dir);
+    let font_path = format!("{}/tests/fixtures/input/fonts_autohint/DejaVuSans.ttf", dir);
     let data = std::fs::read(&font_path).unwrap();
 
     // Mirror Font::truetype metrics computation.
