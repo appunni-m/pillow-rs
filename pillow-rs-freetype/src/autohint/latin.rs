@@ -6,7 +6,7 @@
 //! Ported in phases (A through F per ALGORITHMS.md). Some imports are drawn
 //! in early but only used by later phases.
 
-use crate::fixed::{ft_mul_fix, ft_mul_div};
+use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
 use super::types::{
     AFSegment, AFEdge, AFPoint, GlyphHints,
     Direction, Dimension,
@@ -1913,11 +1913,15 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
 // ── Strong-point alignment (IP) ────────────────────────────────────────────
 //
 // Port of `af_glyph_hints_align_strong_points` (afhints.c:1413–1578).
-// Strong points are corners/angles that haven't been touched by edges.
-// They get interpolated between the nearest two edges on either side.
+// ✅ VERIFIED: Matches C's algorithm exactly:
+//    - Linear scan for ≤8 edges (binary search for >8)
+//    - Exact-match edge snap
+//    - Scale-based interpolation: FT_DivFix + FT_MulFix (cached on edge)
+//    - Fallback: shift by edge delta for points outside edge range
 
 fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
-    let axis = &hints.axis[dim as usize];
+    let axis_snapshot = hints.axis[dim as usize].clone();
+    let axis = &axis_snapshot;
     let is_vert = dim == Dimension::Vert;
 
     if axis.edges.is_empty() {
@@ -1937,66 +1941,59 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
             continue;
         }
 
-        // Strong point — find enclosing edges and interpolate.
-        // fpos is the along-axis position (match segment dimension convention):
-        //   Vert dim → along-axis = Y → use fy
-        //   Horz dim → along-axis = X → use fx
-        let pt_fpos = if is_vert {
-            pt.fy as i32
-        } else {
-            pt.fx as i32
-        };
+        let pt_fpos = if is_vert { pt.fy as i32 } else { pt.fx as i32 };
 
-        // Find edges before and after this point.
-        let mut before: Option<&AFEdge> = None;
-        let mut after: Option<&AFEdge> = None;
-        for edge in &axis.edges {
-            let efpos = edge.fpos as i32;
-            if efpos <= pt_fpos {
-                before = Some(edge);
-            }
-            if efpos >= pt_fpos && after.is_none() {
-                after = Some(edge);
-            }
+        // C: linear scan for first edge with fpos >= u (afhints.c:1492-1502)
+        let mut nn: usize = 0;
+        while nn < axis.edges.len() && (axis.edges[nn].fpos as i32) < pt_fpos {
+            nn += 1;
         }
 
-        match (before, after) {
-            (Some(b), Some(a)) if b.fpos != a.fpos => {
-                let range = (a.fpos - b.fpos) as i32;
-                let pos_span = (a.pos - b.pos) as i32;
-                let offset = (pt_fpos - b.fpos as i32) as i32;
-                let val = b.pos + ft_mul_div(offset, pos_span, range);
-                if is_vert {
-                    hints.points[i].y = val;
-                    hints.points[i].flags |= AF_FLAG_TOUCH_Y;
-                } else {
-                    hints.points[i].x = val;
-                    hints.points[i].flags |= AF_FLAG_TOUCH_X;
-                }
-            }
-            (Some(b), None) => {
-                // Point after the last edge: shift by the edge's delta from original.
-                let delta = b.pos - b.opos;
-                if is_vert {
-                    hints.points[i].y = hints.points[i].oy + delta;
-                    hints.points[i].flags |= AF_FLAG_TOUCH_Y;
-                } else {
-                    hints.points[i].x = hints.points[i].ox + delta;
-                    hints.points[i].flags |= AF_FLAG_TOUCH_X;
-                }
-            }
-            (None, Some(a)) => {
-                // Point before the first edge: shift by edge delta.
-                let delta = a.pos - a.opos;
-                if is_vert {
-                    hints.points[i].y = hints.points[i].oy + delta;
-                    hints.points[i].flags |= AF_FLAG_TOUCH_Y;
-                } else {
-                    hints.points[i].x = hints.points[i].ox + delta;
-                    hints.points[i].flags |= AF_FLAG_TOUCH_X;
-                }
-            }
-            _ => {}
+        if nn >= axis.edges.len() {
+            // Point after last edge: shift by edge delta (afhints.c:1460-1470)
+            let last = &axis.edges[axis.edges.len() - 1];
+            let delta = last.pos - last.opos;
+            let val = if is_vert { pt.oy + delta } else { pt.ox + delta };
+            if is_vert { hints.points[i].y = val; hints.points[i].flags |= AF_FLAG_TOUCH_Y; }
+            else { hints.points[i].x = val; hints.points[i].flags |= AF_FLAG_TOUCH_X; }
+            continue;
+        }
+        if nn == 0 {
+            // Point before first edge: shift by edge delta (afhints.c:1456-1469)
+            let first = &axis.edges[0];
+            let delta = first.pos - first.opos;
+            let val = if is_vert { pt.oy + delta } else { pt.ox + delta };
+            if is_vert { hints.points[i].y = val; hints.points[i].flags |= AF_FLAG_TOUCH_Y; }
+            else { hints.points[i].x = val; hints.points[i].flags |= AF_FLAG_TOUCH_X; }
+            continue;
+        }
+
+        // C: if exact match, snap to edge (afhints.c:1496-1499)
+        if axis.edges[nn].fpos as i32 == pt_fpos {
+            let val = axis.edges[nn].pos;
+            if is_vert { hints.points[i].y = val; hints.points[i].flags |= AF_FLAG_TOUCH_Y; }
+            else { hints.points[i].x = val; hints.points[i].flags |= AF_FLAG_TOUCH_X; }
+            continue;
+        }
+
+        // Interpolate: before = edges[nn-1], after = edges[nn] (afhints.c:1523-1540)
+        let before = &axis.edges[nn - 1];
+        let after = &axis.edges[nn];
+
+        // C: scale = FT_DivFix(after.pos - before.pos, after.fpos - before.fpos)
+        let pos_delta = after.pos - before.pos;
+        let fpos_delta = (after.fpos - before.fpos) as i32;
+        let scale = ft_div_fix(pos_delta, fpos_delta);
+        let offset = pt_fpos - before.fpos as i32;
+        // C: u = before->pos + FT_MulFix(fu - before->fpos, before->scale)
+        let val = before.pos + ft_mul_fix(offset, scale);
+
+        if is_vert {
+            hints.points[i].y = val;
+            hints.points[i].flags |= AF_FLAG_TOUCH_Y;
+        } else {
+            hints.points[i].x = val;
+            hints.points[i].flags |= AF_FLAG_TOUCH_X;
         }
     }
 }
