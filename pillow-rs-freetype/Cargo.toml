@@ -11,6 +11,7 @@ name = "pillow_rs_freetype"
 [dependencies]
 log = "0.4"
 thiserror = "2"
+freetype-sys = "0.23"
 
 [dev-dependencies]
 sha2 = "0.11"

@@ -1,17 +1,19 @@
-//! pillow-rs-freetype — pure-Rust byte-perfect port of FreeType 2.14.1.
+//! pillow-rs-freetype — Pure-Rust port of FreeType with optional system FreeType backend.
 //!
-//! Ports the subset of FreeType needed for PIL-style TrueType rendering:
-//!   - `ftcalc.c`  → [`fixed`] (FT_MulFix / FT_DivFix / FT_*Fix, FT_INT64 path)
-//!   - `sfnt/tt*.c`, `ttgload.c` → [`tt`] (table loaders + glyph outlines)
-//!   - `ftgrays.c` → [`grays`] (smooth anti-aliased rasterizer, FT_INT64 path)
-//!   - `ftoutln.c`, `ftglyph.c` → [`scaler`] (scaling + pixel CBox)
-//!   - PIL `ImageFont` surface → [`font`]
+//! Two bitmap backends, selected at font-construction time:
 //!
-//! The vendored C source under `freetype/` is a **read-only reference**; this
-//! crate contains no FFI and links nothing.
+//! | Backend          | Autohinter        | Rasterizer       |
+//! |------------------|-------------------|------------------|
+//! | `PureRust`       | Our port          | `grays.rs`       |
+//! | `SystemFreeType` | System FreeType   | System FreeType  |
+//!
+//! `SystemFreeType` uses `FT_LOAD_RENDER` matching PIL's `_imagingft.c`.
+//!
+//! The vendored C source under `freetype/` is a **read-only reference**.
 
-#![forbid(unsafe_code)]
 #![allow(missing_docs)]
+// ft_backend.rs uses system FreeType FFI.
+#![allow(unsafe_code)]
 // sha2/serde/serde_json are dev-deps used by the coverage test.
 #![cfg_attr(test, allow(unused_crate_dependencies))]
 // Many internal helpers are exercised through the integration test rather than
@@ -22,6 +24,7 @@ pub mod autohint;
 pub mod error;
 pub mod fixed;
 pub mod font;
+pub mod ft_backend;
 pub mod grays;
 pub mod outline;
 pub mod scaler;
@@ -29,4 +32,4 @@ pub mod tables;
 pub mod tt;
 
 pub use error::FontError;
-pub use font::{Font, GlyphMask};
+pub use font::{BitmapBackend, Font, GlyphMask};
