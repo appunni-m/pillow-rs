@@ -223,8 +223,11 @@ impl Font {
                     // the scaler's translate, plus the glyph's pixel origin.
                     let gx_min = x + g.bbox_x_min.min(0);
                     let gx_max = (x + advance).max(x + g.bbox_x_max);
+                    // Y coordinates: top = ascender - bbox_y_max (closest to
+                    // ascender top), bottom = ascender - bbox_y_min (at least
+                    // the baseline, lower if glyph has a descender).
                     let gy_min = asc_px - g.bbox_y_max;
-                    let gy_max = asc_px - g.bbox_y_min;
+                    let gy_max = (asc_px - g.bbox_y_min).max(asc_px);
                     x_min = x_min.min(gx_min);
                     x_max = x_max.max(gx_max);
                     y_min = y_min.min(gy_min);
@@ -283,11 +286,11 @@ impl Font {
         let advance_px = pixel_round(scaled.advance_width);
 
         // PIL mask box: width = max(advance, ink_right - ink_left),
-        // origin at x=0; height covers the ascent+descent region from baseline.
+        // origin at x=0; height covers the glyph extent plus padding:
+        // top of glyph (bbox_y_max) down to at least the baseline (y=0).
+        // For glyphs with descenders (bbox_y_min < 0), extend to bbox_y_min.
         let new_width = (advance_px).max(raster.width as i32) as u32;
-        // Mask height: from the glyph's top (bbox_y_max) to bottom (bbox_y_min).
-        let ink_h = raster.height as i32;
-        let new_height = ink_h.max(0) as u32;
+        let new_height = (scaled.bbox_y_max - scaled.bbox_y_min.min(0)) as u32;
 
         if new_width == 0 || new_height == 0 {
             return Ok(GlyphMask {
