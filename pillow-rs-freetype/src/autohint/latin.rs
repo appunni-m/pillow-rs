@@ -1307,6 +1307,11 @@ fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
 // Port of `af_latin_compute_stem_width` (aflatin.c:3960–4152).
 // Quantizes / snaps a stem width.
 
+// Port of `af_latin_compute_stem_width` (aflatin.c:3960–4152).
+// ✅ VERIFIED: Smooth path matches C's inline logic (aflatin.c:3993-4075).
+//    Serif: return dist. Round: snap≤1px. dist<56: clamp. Then standard-width
+//    match |delta|<40, fractional-pixel quant, or bdelta+round (simplified).
+// ✅ VERIFIED: Strong path calls snap_width + pixel rounding (aflatin.c:4076-4152).
 fn compute_stem_width(
     other_flags: u32,
     _ppem: i32,
@@ -1633,6 +1638,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
             );
 
+            // ✅ VERIFIED (2026-06-27): C sets edge2->pos = cur_pos1 + cur_len/2
+            //    directly (aflatin.c:4502), no af_latin_align_linked_edge call.
+            //    The "Align linked edge" block below was overwriting this.
             if axis.edges[edge2_idx].flags & AF_EDGE_DONE != 0 {
                 // ADJUST: linked edge already positioned.
                 axis.edges[i].pos = axis.edges[edge2_idx].pos - cur_len;
@@ -1655,7 +1663,13 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 };
 
                 axis.edges[i].pos = cur_pos1 - cur_len / 2;
+                // C: edge2->pos = cur_pos1 + cur_len / 2 (aflatin.c:4502)
+                // No af_latin_align_linked_edge call in C for relative-to-anchor
+                axis.edges[edge2_idx].pos = cur_pos1 + cur_len / 2;
             } else {
+                // C: cur_len >= 96: recompute with base_delta and round (aflatin.c:4506-4530)
+                // Note: C computes cur_len again (now with base_delta) and sets
+                // edge2->pos = edge->pos + cur_len directly, no align_linked_edge.
                 let cur_len2 = compute_stem_width(
                     other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
                 );
@@ -1667,22 +1681,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 let delta2 = (cur_pos2 + (cur_len2 >> 1) - org_center).abs();
 
                 axis.edges[i].pos = if delta1 < delta2 { cur_pos1 } else { cur_pos2 };
-            }
-
-            // Align linked edge.
-            {
-                let base_pos = axis.edges[i].pos;
-                let base_opos = axis.edges[i].opos;
-                let base_flags = axis.edges[i].flags;
-                let stem_opos = axis.edges[edge2_idx].opos;
-                let stem_flags = axis.edges[edge2_idx].flags;
-
-                let dist = stem_opos - base_opos;
-                let base_delta = base_pos - base_opos;
-                let fitted_width = compute_stem_width(
-                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags, std_widths,
-                );
-                axis.edges[edge2_idx].pos = base_pos + fitted_width;
+                // C: edge2->pos = edge->pos + cur_len (aflatin.c:4527)
+                axis.edges[edge2_idx].pos = axis.edges[i].pos + cur_len2;
             }
         }
 

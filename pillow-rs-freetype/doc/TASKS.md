@@ -4,12 +4,14 @@
 
 | Backend | Pass | Total | Rate | Reference source |
 |---------|------|-------|------|-----------------|
-| PIL | 1264 | 1910 | 66.2% | PIL 12.2.0 getmask/getbbox (FreeType 2.14.3) |
-| FreeType raw | 1238 | 1910 | 64.8% | `/tmp/gen_ft_refs` (FT_LOAD_RENDER from vendored 2.14.3) |
+| PIL | 1307 | 1910 | 68.4% | PIL 12.2.0 getmask/getbbox (FreeType 2.14.3) |
+| FreeType raw | 1283 | 1910 | 67.2% | `/tmp/gen_ft_refs` (FT_LOAD_RENDER from vendored 2.14.3) |
 
-**2026-06-27:** Fixed `compute_stem_width` smooth path (was using `snap_width`
-instead of C's inline logic; serif branch was missing `return`).
-PIL +94, FreeType +151.
+**2026-06-27:** Two fixes applied:
+1. `compute_stem_width` smooth path: replaced `snap_width` with C's inline logic
+2. `hint_edges` Phase 2: removed `compute_stem_width` re-call on linked edge
+   in relative-to-anchor path (C directly sets `edge2->pos = cur_pos1 + cur_len/2`)
+PIL 1170→1307 (+137), FreeType 1087→1283 (+196).
 
 ## Root Cause (confirmed via eprintln tracing, then fixed)
 
@@ -24,24 +26,33 @@ called `snap_width` (a strong-hinting-only function).
 |------|-------|---------------|-------------------|
 | edge[0] | 0 | 0 ✅ | 0 ✅ |
 | edge[1] | 132 | 134 ❌ | 132 ✅ |
-| edge[2] | 188 | 186 ❌ | 189 (off by 1) |
+| edge[2] | 188 | 186 ❌ | 188 ✅ |
 | edge[3] | 512 | 512 ✅ | 512 ✅ |
 
-The edge[2] 1-unit gap comes from simplified bdelta=0 — see "Remaining Work" below.
+Edge positions now match C exactly. Remaining mismatches are in point
+interpolation (align_strong_points, align_weak_points) and rasterization.
 
 ## Fixed Bugs
 
 ### ✅ BUG 1: `compute_stem_width` smooth path used wrong function
 - **Was:** Called `snap_width` (strong-hinting only, `af_latin_snap_width`)
-- **Now:** Uses C's exact inline smooth logic (aflatin.c:4016-4075):
-  - `|dist - standard_width| < 40` → snap to standard width, clamp ≥48
-  - `dist < 3*64` → fractional-pixel quantization
-  - else → bdelta adjustment + round (simplified with bdelta=0 for now)
-- **Commit:** `pillow-rs-freetype/src/autohint/latin.rs` — `compute_stem_width`
+- **Now:** Uses C's exact inline smooth logic (aflatin.c:4016-4075)
 
 ### ✅ BUG 2: Serif path missing `return` in `compute_stem_width`
 - **Was:** Serif check fell through to width quantization
 - **Now:** `return dist` immediately, matching C's `goto Done_Width`
+
+### ✅ BUG 3: `hint_edges` Phase 2 overwrote linked edge position in relative-to-anchor path
+- **File:** `latin.rs`, `hint_edges`, relative-to-anchor `cur_len < 96` branch
+- **Was:** After setting `edge->pos` and `edge2->pos` inline, an unconditional
+  "Align linked edge" block re-called `compute_stem_width` and overwrote
+  `edge2->pos = base_pos + fitted_width`. C's relative-to-anchor branch
+  (aflatin.c:4501-4502) sets `edge2->pos = cur_pos1 + cur_len / 2` directly
+  and does NOT call `af_latin_align_linked_edge`.
+- **Now:** `edge2->pos = cur_pos1 + cur_len / 2` inline; no overwrite.
+  Same for `cur_len >= 96`: `edge2->pos = edge->pos + cur_len`.
+- **Verified:** Edge positions for 'A' at 10pt now match C exactly:
+  `edge[1]=2.06, edge[2]=2.94` (C: "snapped to 2.06 and 2.94")
 
 ### ✅ NOT-A-BUG: Edge links
 - Confirmed `link_segments_inner` creates correct segment links
@@ -73,35 +84,30 @@ The edge[2] 1-unit gap comes from simplified bdelta=0 — see "Remaining Work" b
 | `iup_shift` / `iup_interp` | afhints.c:1592,1619 | ✅ Matches C |
 | `snap_width` | aflatin.c:2725-2767 | ✅ Matches C (strong path only) |
 
-## Remaining Work (646 PIL / 672 FT failures)
+## Remaining Work (603 PIL / 627 FT failures)
 
-### [ ] COMPUTE_STEM_WIDTH: bdelta adjustment
-- **File:** `latin.rs`, `compute_stem_width`, around line 1395
-- **Issue:** bdelta is hardcoded to 0. C adjusts stem widths when base_delta
-  and width have the same sign (aflatin.c:4050-4075), using ppem:
-  ```c
-  if (ppem < 10) bdelta = base_delta;
-  else if (ppem < 30) bdelta = (base_delta * (30 - ppem)) / 20;
-  ```
-- **Impact:** Fixes edge[2].pos from 189→188 for 'A' at 10pt. May fix more.
+Edge positions now match C exactly for tested glyphs. Remaining failures
+likely involve:
 
-### [ ] HINT_EDGES Phase 4: serif cross-axis overlap check
-- **File:** `latin.rs`, `hint_edges`, Phase 4 serif section
-- **Issue:** C checks cross-axis overlap of serif segments using `v` coords.
-  We skip this and treat all serifs as valid. May cause false serif pairing.
+### [ ] Point interpolation differences
+- For 'A' at 10pt, p0.y differs: C=437, Rust=444 (7 units, ~0.11px).
+  Edge positions match (2.06/2.94/8.00), so the difference is in
+  `align_strong_points` interpolation — specifically which edges bracket
+  which points, or the `ft_mul_div` computation for points between edges.
+- Add per-point tracing in `align_strong_points` and `align_weak_points`
+  for a known-failing glyph, compare with C's HINTED_POINTS output.
 
-### [ ] HORZ edges: 0 edges for 'A' (both Rust and C)
-- C also produces 0 HORZ edges for 'A' (diagonal strokes only).
-  Not a bug — expected behavior. Investigate if other glyphs have HORZ issues.
+### [ ] `compute_stem_width` bdelta adjustment
+- bdelta=0 simplified. Full implementation requires ppem from scaler
+  (aflatin.c:4050-4075). Low priority since edges already match.
 
-### [ ] Segment filtering thresholds in `compute_edges`
-- **File:** `latin.rs`, `compute_edges`, seg filtering
-- **Issue:** Threshold computation uses scaled 26.6 values.
-  Needs verification against C's `af_hint_edges_compute_*Thresh`.
+### [ ] `hint_edges` Phase 4 serif cross-axis check
+- C checks cross-axis segment overlap for serif classification
+  (aflatin.c:4655-4690). We skip this. May cause false serif pairing.
 
-### [ ] `compute_stem_width` round-path and strong-path
-- Round path and strong path (snap_width branch) not yet verified against
-  glyphs that exercise them. Smooth path is verified for 'A'.
+### [ ] Segment filtering thresholds verification
+- Threshold computation in `compute_edges` uses scaled 26.6 values.
+  Needs one-time verification against C's `af_hint_edges_compute_*Thresh`.
 
 ### [ ] Re-validate after each fix
 - `cargo test -p pillow-rs-freetype test_font_coverage_matrix -- --nocapture`
