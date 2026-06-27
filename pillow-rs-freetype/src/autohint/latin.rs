@@ -1010,7 +1010,10 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             let edge = AFEdge {
                 fpos,
                 opos,
-                pos: opos,
+                pos: 0,  // zero-initialized like C (FT_ZERO). Not set to opos —
+                         // hint_edges fills this in. Using opos as initial pos
+                         // causes the BOUND check (aflatin.c:4544-4563) to
+                         // incorrectly overwrite correctly-computed stem positions.
                 flags: 0,
                 dir: seg_dir,
                 link: usize::MAX,
