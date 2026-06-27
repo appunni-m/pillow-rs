@@ -1,174 +1,106 @@
 #!/usr/bin/env python3
-"""Generate font coverage matrix + reference dumps using FreeType's autohinter.
+"""Generate font coverage matrix + reference dumps using PIL's own rendering.
 
-The `fonts_autohint` inputs have their TrueType bytecode stripped, so FreeType
-falls back to its autohinter under FT_LOAD_RENDER. These references match what
-pillow-rs-freetype's PureRust autohinter port produces.
+PIL 12.2.0 bundles FreeType 2.14.3.  These references capture the exact
+output pillow-rs-freetype's PureRust backend must match byte-for-byte.
 
 Usage:
     python scripts/generate_font_refs.py
 
-Requires: freetype-py  (pip install freetype-py)
+Requires: Pillow >= 12.2.0
 """
 
-import freetype
-import json
 import hashlib
+import json
 import sys
 from pathlib import Path
+
+from PIL import ImageFont
 
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 INPUT_FONTS = FIXTURES / "input" / "fonts_autohint"
-OUTPUT_RAWS = FIXTURES / "outputs" / "raws"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 FONTS = {
     "DejaVuSans": "DejaVuSans.ttf",
     "LiberationSerif": "LiberationSerif-Regular.ttf",
 }
+FONT_NAMES = {
+    "DejaVuSans": ("DejaVu Sans", "Book"),
+    "LiberationSerif": ("Liberation Serif", "Regular"),
+}
 SIZES = [10, 12, 16, 20, 24]
 CHARS = [chr(c) for c in range(33, 127)]  # printable ASCII
 
-# FT_LOAD_RENDER = 0x4.  No FT_LOAD_NO_HINTING: we want FreeType's
-# autohinter (the default path PIL's getmask takes) on the bytecode-stripped
-# `fonts_nohint` inputs.
-LOAD_FLAGS = 0x4
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def render_glyph(face: freetype.Face, ch: str):
-    """Render a single glyph with FT_LOAD_DEFAULT|RENDER (autohinted, as PIL does)."""
-    face.load_char(ch, LOAD_FLAGS)
-    glyph = face.glyph
-    bmp = glyph.bitmap
-
-    width = bmp.width
-    rows = bmp.rows
-    if width <= 0 or rows <= 0:
-        return b"", 0, 0, 0.0
-
-    # bitmap.buffer is already a list of row-major bytes (width × rows)
-    raw = bytes(bmp.buffer) if isinstance(bmp.buffer, bytearray) else bytes(bmp.buffer)
-    advance = glyph.advance.x / 64.0
-    return raw, width, rows, advance
-
-
-def get_metrics(face: freetype.Face) -> list:
-    """(ascent, descent) in integer pixels from the size metrics."""
-    sz = face.size
-    return [sz.ascender >> 6, -sz.descender >> 6]
-
-
-def get_bbox(face: freetype.Face, ch: str) -> list:
-    """(xMin, yMin, xMax, yMax) in pixels.  y=0 is the baseline, y positive UP."""
-    face.load_char(ch, LOAD_FLAGS)
-    glyph = face.glyph
-    bmp = glyph.bitmap
-    if bmp.width == 0 or bmp.rows == 0:
-        return [0, 0, 0, 0]
-    left = glyph.bitmap_left
-    top = glyph.bitmap_top
-    return [left, top - bmp.rows, left + bmp.width, top]
-
-
-def get_name(face: freetype.Face) -> list:
-    return [
-        face.family_name.decode("utf-8", errors="replace"),
-        face.style_name.decode("utf-8", errors="replace"),
-    ]
-
-
-def get_length(face: freetype.Face, text: str) -> float:
-    total = 0.0
-    for ch in text:
-        face.load_char(ch, LOAD_FLAGS)
-        total += face.glyph.advance.x / 64.0
-    return total
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 def generate() -> int:
     rows = []
-    generated = 0
-    OUTPUT_RAWS.mkdir(parents=True, exist_ok=True)
-
     for font_name, font_file in FONTS.items():
         font_path = INPUT_FONTS / font_file
         if not font_path.exists():
             print(f"  SKIP {font_name}: font file not found at {font_path}", file=sys.stderr)
             continue
 
-        face = freetype.Face(str(font_path))
         for size in SIZES:
-            face.set_char_size(size << 6)  # size in 26.6 units
+            font = ImageFont.truetype(str(font_path), size)
+            asc, desc = font.getmetrics()
 
-            # ── Font-wide metrics ──
             rows.append({
                 "id": f"{font_name}_{size}_getmetrics",
                 "font": font_name, "size_pt": size,
                 "codepoint": 0, "char": "",
                 "operation": "getmetrics", "status": "active",
-                "ref_value": get_metrics(face),
+                "ref_value": [asc, desc],
             })
             rows.append({
                 "id": f"{font_name}_{size}_getname",
                 "font": font_name, "size_pt": size,
                 "codepoint": 0, "char": "",
                 "operation": "getname", "status": "active",
-                "ref_value": get_name(face),
+                "ref_value": list(FONT_NAMES[font_name]),
             })
             rows.append({
                 "id": f"{font_name}_{size}_getlength_hello",
                 "font": font_name, "size_pt": size,
                 "codepoint": 0, "char": "Hello",
                 "operation": "getlength", "status": "active",
-                "ref_value": get_length(face, "Hello"),
+                "ref_value": font.getlength("Hello"),
             })
 
-            # ── Per-glyph: getmask + getbbox ──
             for ch in CHARS:
                 cp = ord(ch)
+                mask = font.getmask(ch)
+                pixels = bytes(mask)
+                sha = sha256_hex(pixels) if pixels else sha256_hex(b"\x00")
 
-                # getmask
-                raw, w, h, _adv = render_glyph(face, ch)
-                sha = sha256_hex(raw)
-                dump_name = f"{font_name}_{size}_{cp}_getmask.bin"
-                (OUTPUT_RAWS / dump_name).write_bytes(raw)
                 rows.append({
                     "id": f"{font_name}_{size}_{cp}_getmask",
                     "font": font_name, "size_pt": size,
                     "codepoint": cp, "char": ch,
                     "operation": "getmask", "status": "active",
-                    "ref_sha256": sha, "ref_size": [w, h],
+                    "ref_sha256": sha,
+                    "ref_size": list(mask.size),
                 })
-                generated += 1
 
-                # getbbox
+                bbox = font.getbbox(ch)
                 rows.append({
                     "id": f"{font_name}_{size}_{cp}_getbbox",
                     "font": font_name, "size_pt": size,
                     "codepoint": cp, "char": ch,
                     "operation": "getbbox", "status": "active",
-                    "ref_value": get_bbox(face, ch),
+                    "ref_value": list(bbox),
                 })
 
     matrix = {
-        "version": "0.3.0",
+        "version": "0.4.0",
         "font_source": "fonts_autohint",
         "hinting": "autohint",
-        "generator": f"freetype-py (system FreeType)",
+        "generator": "PIL 12.2.0 (FreeType 2.14.3)",
         "rows": rows,
         "summary": {
             "total_rows": len(rows),
@@ -176,12 +108,11 @@ def generate() -> int:
             "fonts": len(FONTS),
             "sizes": len(SIZES),
             "glyphs": len(CHARS),
-            "mode": "FT_LOAD_RENDER (0x4)",
         },
     }
     MATRIX_PATH.parent.mkdir(parents=True, exist_ok=True)
     MATRIX_PATH.write_text(json.dumps(matrix, indent=2) + "\n")
-    print(f"Generated {generated} mask references, {len(rows)} matrix rows")
+    print(f"Generated {len(rows)} matrix rows (PIL 12.2.0 FreeType 2.14.3)")
     print(f"Written: {MATRIX_PATH}")
     return 0
 
