@@ -144,7 +144,7 @@ fn main() {
     println!("Unique X after hinting: {:?}", x_vals);
 
     // Check: what would the autohinted getmask produce?
-    let font = pillow_rs_freetype::Font::truetype(&std::fs::read(&font_path).unwrap(), 10.0).unwrap();
+    let font = pillow_rs_freetype::Font::truetype(&std::fs::read(&font_path).unwrap(), 10.0, Default::default()).unwrap();
     match font.getmask("|") {
         Ok(m) => {
             println!("\n=== getmask from Font ===");

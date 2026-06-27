@@ -17,7 +17,7 @@ fn main() {
     let font_path = &args[1];
     let size_pt: f32 = args[2].parse().expect("invalid size_pt");
     let font_data = std::fs::read(font_path).unwrap();
-    let font = Font::truetype(&font_data, size_pt).unwrap();
+    let font = Font::truetype(&font_data, size_pt, Default::default()).unwrap();
 
     // Test a range of glyphs: 33 ('!') through 126 ('~')
     for cp in 33u32..=126 {

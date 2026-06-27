@@ -8,7 +8,7 @@ fn main() {
     let mut stdout = std::io::stdout();
 
     eprintln!("loading font...");
-    let font = Font::truetype(&data, 10.0).unwrap();
+    let font = Font::truetype(&data, 10.0, Default::default()).unwrap();
 
     eprintln!("metrics: {:?}", font.getmetrics());
 

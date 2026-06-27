@@ -11,7 +11,7 @@ fn main() {
         dir
     );
     let data = std::fs::read(&font_path).unwrap();
-    let font = Font::truetype(&data, 10.0).unwrap();
+    let font = Font::truetype(&data, 10.0, Default::default()).unwrap();
 
     // Get the mask through the full pipeline
     let mask = font.getmask("|").unwrap();

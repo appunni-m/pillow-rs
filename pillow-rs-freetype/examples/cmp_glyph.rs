@@ -10,7 +10,7 @@ fn main() {
     let path = format!("{}/tests/fixtures/input/fonts_nohint/{}.ttf", dir,
         if font == "LiberationSerif" { "LiberationSerif-Regular" } else { &font });
     let data = std::fs::read(&path).unwrap();
-    let f = Font::truetype(&data, size).unwrap();
+    let f = Font::truetype(&data, size, Default::default()).unwrap();
     let m = f.getmask(&ch).unwrap();
     println!("Rust {} '{}' {}x{}:", font, ch, m.width, m.height);
     for r in 0..m.height {

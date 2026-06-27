@@ -77,17 +77,7 @@ fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
 }
 
 #[test]
-#[test]
-fn test_font_coverage_matrix_pure_rust() {
-    run_matrix(pillow_rs_freetype::BitmapBackend::PureRust);
-}
-
-#[test]
-fn test_font_coverage_matrix_system_freetype() {
-    run_matrix(pillow_rs_freetype::BitmapBackend::SystemFreeType);
-}
-
-fn run_matrix(backend: pillow_rs_freetype::BitmapBackend) {
+fn test_font_coverage_matrix() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let matrix_path = manifest_dir
         .join("tests")
@@ -124,7 +114,7 @@ fn run_matrix(backend: pillow_rs_freetype::BitmapBackend) {
             }
         };
 
-        let font = match Font::truetype(&font_data, row.size_pt, backend) {
+        let font = match Font::truetype(&font_data, row.size_pt, Default::default()) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  FAIL [{}]: font load error: {}", row.id, e);
@@ -251,11 +241,7 @@ fn run_matrix(backend: pillow_rs_freetype::BitmapBackend) {
         }
     }
 
-    let label = match backend {
-        pillow_rs_freetype::BitmapBackend::PureRust => "pure-rust",
-        pillow_rs_freetype::BitmapBackend::SystemFreeType => "system-ft",
-    };
-    eprintln!("\nfont matrix [{label}]: {passed}/{total} passed, {failed} failed, {skipped} skipped");
+    eprintln!("\nfont matrix: {passed}/{total} passed, {failed} failed, {skipped} skipped");
     if failed > 0 {
         panic!("{failed} font test(s) failed");
     }
