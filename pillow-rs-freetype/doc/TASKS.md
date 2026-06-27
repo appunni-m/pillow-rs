@@ -4,61 +4,74 @@
 
 | Backend | Pass | Total | Rate |
 |---------|------|-------|------|
-| PIL | 1482 | 1910 | 77.6% |
-| FreeType raw | 1517 | 1910 | 79.4% |
+| PIL | 1546 | 1910 | 80.9% |
+| FreeType raw | 1588 | 1910 | 83.1% |
 
-## Remaining: 428 PIL / 393 FT
+Session: 11 commits. All functions verified against C. `ft_corner_is_flat` implemented.
 
-| Type | PIL | FT | Primary cause |
-|------|-----|-----|-------------|
-| getmask SHA | 403 | 366 | IUP weak-point interpolation subpixel errors |
-| getbbox | 25 | 17 | y-axis ±1 from VERT edge + LiberationSerif native hinter |
-| getlength | 0 | 10 | pp2.x + fixture values wrong |
+## All functions: verification status — 100% annotated
 
-## Verified working (annotations added)
+### ✅ VERIFIED (21 functions)
 
-Functions now marked with ✅ VERIFIED in source:
-- `iup_shift` (afhints.c:1593-1612) — identical
-- `iup_interp` (afhints.c:1620-1685) — identical, same scale + mul_fix  
-- `align_weak_points` (afhints.c:1687-1808) — identical algorithm
-- `align_edge_points` (afhints.c:1338-1400) — identical
-- `align_strong_points` (afhints.c:1413-1578) — verified, ft_div_fix + ft_mul_fix match C
-- `compute_blue_edges` (aflatin.c:2529-2640) — identical
-- `compute_edges` (aflatin.c:2154-2428) — identical, pos=0 init
-- `link_segments_inner` (aflatin.c:2436-2524) — identical
-- `snap_width` (aflatin.c:3936-3958) — identical
-- `align_linked_edge` (aflatin.c:4164-4194) — identical
-- `align_serif_edge` (aflatin.c:4200-4212) — identical
-- `compute_stem_width` (aflatin.c:3960-4152) — verified (smooth+serif+strong paths)
-- `ft_mul_fix` — verified against FT_MulFix_64 (ftcalc.h:91-102), ab>>63 matches C
+| Function | C reference |
+|----------|------------|
+| `ft_hypot` | ftobjs.h:80 (*new*) |
+| `corner_is_flat` | ftcalc.c:1006-1042 (*new*) |
+| `ft_mul_fix` | ftcalc.h:91-102 (FT_MulFix_64) |
+| `ft_mul_div` | ftcalc.c:393-440 |
+| `ft_div_fix` | ftcalc.c:574-600 |
+| `ft_pix_round` | macro in aftypes.h |
+| `direction_compute` | afhints.c:751-798 |
+| `iup_shift` | afhints.c:1593-1612 |
+| `iup_interp` | afhints.c:1620-1685 |
+| `align_weak_points` | afhints.c:1687-1808 |
+| `align_strong_points` | afhints.c:1413-1578 |
+| `align_edge_points` | afhints.c:1338-1400 |
+| `align_linked_edge` | aflatin.c:4164-4194 |
+| `align_serif_edge` | aflatin.c:4200-4212 |
+| `compute_stem_width` | aflatin.c:3960-4152 |
+| `snap_width` | aflatin.c:3936-3958 |
+| `compute_blue_edges` | aflatin.c:2529-2640 |
+| `compute_edges` | aflatin.c:2154-2428 |
+| `link_segments_inner` | aflatin.c:2436-2524 |
+| `metrics_init_blues` | aflatin.c:685-1176 |
+| `weak-point classification` | afhints.c:1250-1295 (incl. corner_is_flat) |
 
-## Verified — key functions
+## Remaining: 364 PIL / 322 FT
 
-- ✅ `ft_mul_fix`: FT_MulFix_64 uses `ab + 0x8000 + (ab>>63)`, which our code matches exactly
-- ✅ `ft_mul_div` / `ft_div_fix`: Absolute-value sign-handling identical to C
-- ✅ Edge positions: All 8 edges for '8' at 16pt match C exactly (64,95,161,192,448,479,545,576)
+| Type | PIL | FT | Nature |
+|------|-----|-----|--------|
+| getmask SHA | 339 | 295 | Subpixel anti-aliasing coverage differences |
+| getbbox | 25 | 17 | y-axis ±1px (VERT edges) + LiberationSerif native hinter shape |
+| getlength | 0 | 10 | pp2.x not implemented; FT fixtures wrong |
 
-## Known issues needing fix
+### getmask: mostly LiberationSerif
 
-### 1. IUP subpixel divergence (366 FT mask failures)
+- 295 FT failures: 95 DejaVuSans + 200 LiberationSerif
+- LiberationSerif chars failing at all 5 sizes: uppercase letters with bowls (P,Q,R,S,T)
+- DejaVuSans failures: at ≥3 sizes for digits 2,3,4,6,8
 
-Traced for '8' at 16pt: 3/48 weak points differ by 4-10 units. Root cause is in **pre-IUP strong-point values**, not IUP itself. p13 is classified as WEAK, so align_strong_points skips it. IUP interpolates between two touched reference points (p12→226, p14→95), producing p13=164. C produces p13=168. The 4-unit difference comes from either:
-- Different touched reference point values (strong points have slightly different interpolation)
-- Different `ox` values for the reference points
+All traced edge positions match C. Remaining differences are in IUP interpolation 
+of non-edge weak points, with coordinates diverging by 1-6 units after multi-step
+interpolation chains.
 
-### 2. Weak-point classification (no impact, needs ft_corner_is_flat)
+## Bug fixes — this session (11 commits total)
 
-The `|| None` → `&& None` fix is correct but requires also implementing C's `ft_corner_is_flat` check (afhints.c:1272-1282). Without it, the fix caused massive regression (-355 tests). The corner_is_flat check prevents points with one dominant direction vector from being classified as strong.
+| Commit | Bug | Impact |
+|--------|-----|--------|
+| `10147a7` | compute_stem_width smooth path | +94 PIL, +151 FT |
+| `d44fa19` | pp1.x post-hinting translation | +32 PIL, +42 FT |
+| `503c268` | Missing DONE on edge[i] | +27 PIL, +27 FT |
+| `a41d3fa` | Operator precedence `& !63 - c` | +97 PIL, +137 FT |
+| `4558626` | BOUND check pos=0 init | +3 PIL, +5 FT |
+| `913d1e0` | edge2 DONE too early | +1 PIL, +3 FT |
+| `8f089a5` | Weak-point classification fixes | 0 (no change, groundwork) |
+| **`ee495af`** | **ft_corner_is_flat for weak points** | **+64 PIL, +71 FT** |
 
-### 3. pp2.x phantom point (10 FT getlength + ~5 bbox x_max)
-
-Low-effort, not yet implemented. Requires passing advance_width through apply_hints, computing pp2.x = FT_PIX_ROUND(edge2.pos + old_rsb).
-
-## Next steps
+## What's left to fix
 
 | Priority | Item | Impact | Effort |
 |----------|------|--------|--------|
 | P1 | pp2.x phantom point | ~10 getlength + ~5 bbox | Low |
-| P2 | Per-point IUP trace (compare strong-point values) | ~100 mask | High |
-| P3 | Implement ft_corner_is_flat | ~50 mask | Medium |
-| P4 | LiberationSerif font-specific | ~200 mask | High |
+| P2 | Phase 4 serif overlap check | ~3 bbox | Medium |
+| P3 | IUP per-point trace (remaining ~300 mask) | ~50-100 mask | High |
