@@ -224,6 +224,43 @@ When stuck, add `eprintln!` to the Rust function and compare with C's
 `FT2_DEBUG="any:7"` to get maximum verbosity. The C trace shows exactly
 what each function computes — match it line by line.
 
+### 11. Annotate source code with C-verification status
+
+**Every function ported from FreeType MUST carry verification annotations**
+so work is never repeated. Use these markers in doc comments:
+
+| Marker | Meaning |
+|--------|---------|
+| `✅ VERIFIED: ...` | Confirmed byte-for-byte or algorithmically correct vs C reference (include C file + line range) |
+| `⚠️ BUG: ...` | Known divergence from C — include what C does, what Rust does, and what to fix |
+| `⚠️ UNVERIFIED: ...` | Not yet compared against C — may be correct or buggy, needs tracing |
+| `⚠️ SIMPLIFIED: ...` | Intentional simplification — document what C does that we skip and why |
+| `⚠️ DEAD CODE: ...` | Code path that never executes due to upstream bugs — document what needs fixing upstream |
+| `⚠️ DEPENDENCY: ...` | Correctness depends on fixing upstream bugs — document the dependency chain |
+
+**Every annotation must include C reference info**: function name, file, and
+line range (e.g., `aflatin.c:3991-4075`).
+
+**When to annotate:**
+- After tracing: if the function produces identical output to C → `✅ VERIFIED`
+- After finding a bug: describe it with `⚠️ BUG:` so the next person doesn't re-diagnose
+- When skipping analysis: mark `⚠️ UNVERIFIED:` so it's clear work is still needed
+- When intentionally diverging: use `⚠️ SIMPLIFIED:` with justification
+
+**Examples of good annotations:**
+```rust
+// ✅ VERIFIED: Structure matches C's af_latin_hints_apply. Flags match
+//    aflatin.c:2671-2698 for smooth anti-aliased rendering.
+
+// ⚠️ BUG: C's smooth path (aflatin.c:4016-4075) uses inline
+//    |dist - standard| < 40 check + fractional pixel quant.
+//    We incorrectly call snap_width() which is strong-hinting only.
+```
+
+**Current verification status** is tracked in `pillow-rs-freetype/doc/TASKS.md`
+under "Code Annotations Added". Always read it before starting autohinter work
+so you don't re-investigate verified functions.
+
 ## Rules
 
 - Public API names match Pillow exactly. Import name: `RSPIL`.

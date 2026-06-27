@@ -1338,23 +1338,57 @@ fn compute_stem_width(
     let horz_snap = other_flags & AF_LATIN_HINTS_HORZ_SNAP != 0;
 
     if (vertical && !vert_snap) || (!vertical && !horz_snap) {
-        // ── Smooth hinting: light quantization ──────────────────────────
+        // ── Smooth hinting: light quantization (aflatin.c:3993-4075) ────
+        // Port of C's inline logic. Uses widths[0].cur directly, NOT snap_width.
 
-        // Leave the widths of serifs alone.
+        // Step 1: Leave serif widths alone (aflatin.c:3998-4001).
         if (stem_flags & AF_EDGE_SERIF) != 0 && vertical && dist < 3 * 64 {
-            // goto Done_Width
-        } else if (base_flags & AF_EDGE_ROUND) != 0 {
+            // goto Done_Width → return immediately, no quantization
+            if sign != 0 { dist = -dist; }
+            return dist;
+        }
+
+        // Step 2: Round-edge stem → snap to 1px (aflatin.c:4003-4006).
+        if (base_flags & AF_EDGE_ROUND) != 0 {
             if dist < 80 {
                 dist = 64;
             }
         } else if dist < 56 {
+            // Step 3: Very thin stems → clamp to 56 (aflatin.c:4007-4008).
             dist = 56;
         }
 
-        // Width histogram quantization — called in BOTH smooth and strong
-        // branches (aflatin.c:4100-4115 in smooth, 4071 in strong).
+        // Step 4: Standard-width matching + fractional pixel quantization
+        // (aflatin.c:4016-4075).
         if !std_widths.is_empty() {
-            dist = snap_width(std_widths, dist);
+            let stdw = std_widths[0]; // axis->widths[0].cur
+            let mut delta = dist - stdw;
+            if delta < 0 { delta = -delta; }
+
+            if delta < 40 {
+                // Within tolerance of standard width → snap to it, clamp min.
+                dist = stdw;
+                if dist < 48 { dist = 48; }
+                // goto Done_Width
+                if sign != 0 { dist = -dist; }
+                return dist;
+            }
+
+            if dist < 3 * 64 {
+                // Fractional-pixel quantization (aflatin.c:4035-4047).
+                delta = dist & 63;
+                dist &= -64; // truncate to integer pixel
+
+                if delta < 10 { dist += delta; }
+                else if delta < 32 { dist += 10; }
+                else if delta < 54 { dist += 54; }
+                else { dist += delta; }
+            } else {
+                // bdelta adjustment + round (aflatin.c:4050-4075).
+                // TODO: implement full bdelta when ppem is available.
+                let bdelta: i32 = 0; // simplified
+                dist = (dist - bdelta + 32) & !63;
+            }
         }
     } else {
         // ── Strong hinting: snap to integer pixels ──────────────────────
