@@ -297,16 +297,20 @@ impl Font {
             });
         }
 
-        // Place the raster (origin at glyph bbox bottom-left) into the mask
-        // box. The mask's rows run top-down (PIL convention). The raster is
-        // already bottom-up-flipped to top-down by grays::rasterize.
+        // Place the raster into the mask at the glyph's bbox offset.
+        // The raster's origin (0,0) corresponds to bbox pixel (bbox_x_min, bbox_y_min)
+        // in the mask coordinate system. The mask is width new_width, height new_height.
+        let x_offs = (scaled.bbox_x_min).max(0) as usize;
+        let y_offs = 0usize; // raster y=0 maps to mask row 0
         let mut pixels = vec![0u8; (new_width * new_height) as usize];
         let rw = raster.width;
         for y in 0..raster.height {
             let src = y * rw;
-            let dst = y * new_width as usize;
-            let copy = rw.min(new_width as usize);
-            pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
+            let dst = y_offs + y as usize * new_width as usize + x_offs;
+            if dst + rw <= pixels.len() && x_offs + rw <= new_width as usize {
+                let copy = rw.min((new_width as usize).saturating_sub(x_offs));
+                pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
+            }
         }
 
         Ok(GlyphMask {
