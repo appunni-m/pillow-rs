@@ -19,6 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
+# FIXME: should be fonts_nohint to match what tests load.
+# Regenerating references requires re-running all tests against new SHAs.
 INPUT_FONTS = FIXTURES / "input" / "fonts"
 OUTPUT_RAWS = FIXTURES / "outputs" / "raws"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
