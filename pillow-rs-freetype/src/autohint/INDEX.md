@@ -21,8 +21,9 @@ Target: PIL 12.2.0 `ImageFont.getmask()` = `FT_LOAD_DEFAULT|RENDER` on bytecode-
 | 9 | Phase 3 'm' symmetry | 943 | +1 | Equalize outer stems around middle for 3-stem glyphs |
 | 10 | Directionless segments 2nd pass | 946 | +3 | Catch segments without direction, attach to existing edges |
 | 11 | **Mask positioning at `bbox_x_min`** | 1051 | +105 | Raster was placed at column 0; must offset by `scaled.bbox_x_min` to match PIL's bitmap_left positioning |
+| 12 | **getbbox/getmask bottom padding** | 1170 | +119 | Extend bbox bottom to baseline for glyphs above it; mask height from font bbox extent |
 
-**Net gain: 405 → 1051 (+646, +159%)**
+**Net gain: 405 → 1170 (+765, +189%)**
 
 ---
 
@@ -34,6 +35,31 @@ Target: PIL 12.2.0 `ImageFont.getmask()` = `FT_LOAD_DEFAULT|RENDER` on bytecode-
 | `link_segments` with all fixes but early | 746→739(-7) | Minor regression; eventually works with edge sorting |
 | LSB delta applied to outline points via += | 946→825(-121) | Wrong sign; should be -= not += |
 | LSB delta applied via -= | 825 | same | Fundamental approach wrong — should be mask-level, not outline-level |
+| Phantom-point advance adjustment | 1170→990(-180) | Our autohinter edges don't match FreeType's; phantom adjustment overfits wrong data |
+
+---
+
+## Fix #12: getbbox/getmask bottom padding
+
+**Symptom:** Hyphen `-`, period `.`, equals `=`, caret `^` and other glyphs fully above
+the baseline got too-tight bbox bottoms (`-`: bottom=8, height=8-7=1) when PIL
+pads these to the baseline (`-`: bottom=10, height=10-7=3). Mask height was also
+wrong (4×1 vs PIL's 4×3).
+
+**Root cause:** `getbbox` computed bbox Y from ink-only coordinates
+(`asc_px - bbox_y_max` to `asc_px - bbox_y_min`). For glyphs where
+`bbox_y_min > 0` (entirely above baseline), bottom didn't extend to the
+baseline. Similarly, `getmask` computed height from the raster pixel count
+only, missing vertical padding.
+
+**Fix:**
+- `getbbox`: `gy_max = (asc_px - g.bbox_y_min).max(asc_px)` — extends bottom
+to at least the baseline
+- `getmask`: `new_height = scaled.bbox_y_max - scaled.bbox_y_min.min(0)` —
+height from font bbox extent, not just raster
+
+**Result:** +119 passes (1051→1170). Hyphen, period, equals, caret, grave,
+underscore (top-clamp) all fixed.
 
 ---
 
@@ -95,20 +121,20 @@ The 1px shift in our output wasn't an autohinter edge error — it was the mask 
 
 ---
 
-## Current State (1051/1910, 55.0%)
+## Current State (1170/1910, 61.3%)
 
 | Dimension | Pass | Total | Rate |
 |-----------|------|-------|------|
 | Non-glyph (metrics/name/length) | 30 | 30 | 100% |
-| getbbox | 778 | 940 | 82.8% |
-| getmask | 243 | 940 | 25.9% |
+| getbbox | 863 | 940 | 91.8% |
+| getmask | 277 | 940 | 29.5% |
 
-### Remaining failures (859)
+### Remaining failures (740)
 
 | Type | Count | Primary cause |
 |------|-------|---------------|
-| SHA-only (bbox correct) | ~697 | Stem quantization produces slightly different subpixel widths |
-| Bbox + SHA | ~162 | Edge miscounting/collapsing for small glyphs and serif fonts |
+| SHA-only (bbox correct) | ~663 | Stem quantization produces slightly different subpixel widths |
+| Bbox + SHA | ~77 | Autohinter edge placement differs from FreeType by ±1px; rasterizer differences |
 
 ### Characters passing all getmask tests (both fonts, all sizes)
 `/`, `\`, `I`, `l`, `(` — 5 straight-line glyphs
