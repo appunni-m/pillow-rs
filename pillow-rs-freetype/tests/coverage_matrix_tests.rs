@@ -1,6 +1,12 @@
-//! Coverage matrix tests -- driven by tests/fixtures/coverage_matrix.json.
-//! Each row is one assertion. Compares pixel SHA-256 or JSON values
-//! against PIL FreeType pre-computed references.
+//! Coverage matrix tests — one per backend.
+//!
+//! `test_font_coverage_matrix_pil` — compares against PIL 12.2.0 references
+//!   (`coverage_matrix.json`).  Uses `BitmapBackend::PIL` — padded mask,
+//!   ascender-relative bbox.
+//!
+//! `test_font_coverage_matrix_freetype` — compares against raw FreeType
+//!   2.14.3 references (`coverage_matrix_ft.json`).  Uses
+//!   `BitmapBackend::FreeType` — raw bitmap, FreeType bbox coords.
 
 // Tests may unwrap/expect.
 #![allow(clippy::unwrap_used)]
@@ -13,7 +19,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use pillow_rs_freetype::Font;
+use pillow_rs_freetype::{BitmapBackend, Font};
 
 #[derive(Debug, Deserialize)]
 struct CoverageMatrix {
@@ -60,13 +66,6 @@ fn sha256_hex(data: &[u8]) -> String {
 }
 
 fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
-    // The coverage matrix SHA-256 references were generated from the
-    // `fonts_autohint` files: original fonts whose TrueType bytecode hint
-    // programs were stripped. With bytecode gone, FreeType falls back to its
-    // *autohinter* — so the references are AUTOHINTED output (PIL's
-    // `ImageFont.getmask()` uses `FT_LOAD_DEFAULT`, which triggers the
-    // autohinter). These fonts are the right inputs; they are NOT rendered
-    // without hinting.
     let font_dir = manifest_dir
         .join("tests")
         .join("fixtures")
@@ -76,18 +75,36 @@ fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
     fs::read(&path).unwrap_or_else(|_| panic!("font file not found: {:?}", path))
 }
 
+// ── Test entry points ─────────────────────────────────────────────────────
+
 #[test]
-fn test_font_coverage_matrix() {
+fn test_font_coverage_matrix_pil() {
+    run_matrix(BitmapBackend::PIL, "coverage_matrix.json");
+}
+
+#[test]
+fn test_font_coverage_matrix_freetype() {
+    run_matrix(BitmapBackend::FreeType, "coverage_matrix_ft.json");
+}
+
+// ── Shared runner ─────────────────────────────────────────────────────────
+
+fn run_matrix(backend: BitmapBackend, matrix_file: &str) {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let matrix_path = manifest_dir
         .join("tests")
         .join("fixtures")
-        .join("coverage_matrix.json");
+        .join(matrix_file);
+
+    let label = match backend {
+        BitmapBackend::PIL => "PIL",
+        BitmapBackend::FreeType => "FreeType",
+    };
 
     let matrix: CoverageMatrix = if matrix_path.exists() {
         serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap()
     } else {
-        eprintln!("SKIP: coverage_matrix.json not found. Run scripts/generate_font_refs.py");
+        eprintln!("SKIP [{label}]: {matrix_file} not found. Run scripts/generate_font_refs.py");
         return;
     };
 
@@ -104,7 +121,6 @@ fn test_font_coverage_matrix() {
         }
         total += 1;
 
-        // Load font (with caching)
         let font_data = match font_cache.entry(row.font.clone()) {
             std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
             std::collections::hash_map::Entry::Vacant(e) => {
@@ -114,7 +130,7 @@ fn test_font_coverage_matrix() {
             }
         };
 
-        let font = match Font::truetype(&font_data, row.size_pt, Default::default()) {
+        let font = match Font::truetype(&font_data, row.size_pt, backend) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  FAIL [{}]: font load error: {}", row.id, e);
@@ -241,7 +257,7 @@ fn test_font_coverage_matrix() {
         }
     }
 
-    eprintln!("\nfont matrix: {passed}/{total} passed, {failed} failed, {skipped} skipped");
+    eprintln!("\nfont matrix [{label}]: {passed}/{total} passed, {failed} failed, {skipped} skipped");
     if failed > 0 {
         panic!("{failed} font test(s) failed");
     }
