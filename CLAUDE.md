@@ -97,6 +97,133 @@ Trust-based binary: function is TRUSTED if ≥1 PIL parity test passes.
 - Report: `python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json`
 - Tests that only verify signatures/stubs don't count — must be PIL parity
 
+## Debugging Protocol for Porting Crates (especially `pillow-rs-freetype`)
+
+When porting a C library (FreeType, etc.) to Rust, follow this protocol.
+Mistakes here waste hours. Each step builds on the previous one — skip none.
+
+### 1. Establish a single source of truth for references
+
+Every test fixture (JSON, binary, SHA) MUST be generated from the EXACT
+external reference implementation, version-matched. Document:
+
+- **What** generated it (PIL? raw C library? our own code?)
+- **Which version** (PIL 12.2.0 bundles FreeType 2.14.3 — use THAT version)
+- **How to regenerate** (one script, reproducible from a clean checkout)
+
+If references are regenerated from the code under test, tests are meaningless.
+Self-referential fixtures pass 100% and prove nothing.
+
+### 2. Version-lock ALL reference generators
+
+Before writing a single line of comparison code, verify every reference source
+uses the same upstream version:
+
+```
+Reference matrix generator → FreeType 2.14.3?
+PIL (if used for refs)     → bundles FreeType 2.14.3?
+System C library           → FreeType 2.14.3?  (often 2.13.x)
+Vendored C source          → FreeType 2.14.3?
+Your Rust port baseline    → FreeType 2.14.x?
+```
+
+A 1-patch-version mismatch (2.13.2 vs 2.14.3) can flip 850 tests from pass
+ to fail because the autohinter changed. **Always check this first.**
+
+### 3. Compare C-vs-Rust at the boundary, not the output
+
+When pixels differ, do NOT iterate on `getmask()`/`getbbox()` hoping to
+stumble on the bug. Instead:
+
+1. Pick ONE failing glyph (start simple: `A`, `|`, `-`).
+2. Dump its 26.6 outline coordinates from BOTH C and Rust **before** any
+   autohinting. They must match. If not — scaler bug. Fix scaler first.
+3. Dump edge positions (`fpos`, `opos`, `pos`) from BOTH after hinting.
+4. Dump final hinted 26.6 point coordinates from BOTH.
+5. Find the FIRST point that diverges. Everything downstream of that point
+   is a consequence, not a cause.
+
+**Binary search the divergence.** If point N is the first mismatch, the bug
+is in whatever function touched point N: `align_strong_points`,
+`align_weak_points`, `align_edge_points`, etc.
+
+### 4. Build the C reference WITH instrumentation
+
+Do not try to access FreeType internals via Python ctypes — the struct
+offsets are fragile. Instead:
+
+```bash
+# Build FreeType from vendored source with debug tracing
+cd pillow-rs-freetype/freetype && mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug \
+  -DFT_DEBUG_LEVEL_TRACE=ON \
+  -DCMAKE_INSTALL_PREFIX=$HOME/.local
+```
+
+Then use `FT_Set_Debug_Hook` or environment variable `FT2_DEBUG` to enable
+per-module trace output. Compare C's `af_latin_hints_align_edge_points`
+trace with our Rust equivalent.
+
+### 5. Fix root cause, not symptoms
+
+Common anti-patterns to avoid:
+
+- **Clamping outputs to match expected values.** If `getbbox` returns (0,7,4,8)
+  and PIL expects (0,7,4,10), the fix is NOT `gy_max.max(10)`. The fix is
+  finding why `bbox_y_min` differs by 2px.
+
+- **Enabling code paths that amplify bugs.** Phantom-point advance
+  adjustment needs correct edge positions first. Enabling it with wrong edges
+  made PIL score DROP from 1170 to 1140.
+
+- **Adding special cases per glyph.** Each special case is a future bug.
+  Find the algorithmic root cause and fix it once.
+
+- **Renaming files/directories mid-debug.** `fonts_nohint` → `fonts_autohint`
+  is fine ONCE, but churn obscures real diffs. Settle names early.
+
+### 6. Categorize failures before fixing
+
+Before touching code, classify every failure:
+
+```
+SHA-only (bbox correct):     subpixel coverage difference
+Bbox wrong:                  edge position difference
+Size wrong:                  advance or metrics difference
+Empty/zero output:           pipeline broken entirely
+```
+
+Each category has a different root cause. Mixing them wastes time.
+
+### 7. Commit working state before experimenting
+
+Always commit (with permission) before a risky change. If the experiment
+fails, `git checkout -- <file>` is one keystroke. Without the commit, you
+lose the working baseline.
+
+### 8. Document the divergence, not just the fix
+
+When you find a bug, write in the commit message:
+- What C produces (exact value)
+- What Rust produces (exact value)
+- Which C function/line the Rust code diverges from
+- Why it diverges (off-by-one? wrong sign? missing case?)
+
+This lets the next person verify the fix without re-deriving the diagnosis.
+
+### 9. Never claim "algorithmically complete" without pixel parity
+
+A diff that shows "only overflow macros changed" between C versions does NOT
+mean the port is algorithmically correct. The port can have bugs in any
+function. Pixel parity (byte-identical SHA-256) is the only proof.
+
+### 10. Use C trace output as the oracle
+
+When stuck, add `eprintln!` to the Rust function and compare with C's
+`FT_TRACE` output. Build C with `-DFT_DEBUG_LEVEL_TRACE` and set
+`FT2_DEBUG="any:7"` to get maximum verbosity. The C trace shows exactly
+what each function computes — match it line by line.
+
 ## Rules
 
 - Public API names match Pillow exactly. Import name: `RSPIL`.
