@@ -143,27 +143,27 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         }
     }
 
-    // ── Classify strong vs weak ──
-    // FreeType's heuristic: points on straight runs, control points,
-    // spikes, and points where in/out point in the same quadrant are WEAK.
-    // Everything else is STRONG (needs explicit interpolation).
+    // ── Classify strong vs weak ─
+    // Port of afhints.c:1250-1295.  Control points → weak.  Points on
+    // straight runs (in_dir==out_dir!=NONE) → weak.  Opposite directions
+    // with NEAR flag → weak.  Everything else → STRONG.
     for i in 0..hints.points.len() {
         let pt = &mut hints.points[i];
         let in_dir = pt.in_dir;
         let out_dir = pt.out_dir;
 
         let is_weak = if pt.flags & AF_FLAG_CONTROL != 0 {
-            true // control points are always weak
-        } else if in_dir == Direction::None || out_dir == Direction::None {
-            false // direction changes → strong
+            true  // control points are always weak (C: goto Is_Weak_Point)
+        } else if in_dir == out_dir && in_dir != Direction::None {
+            true  // on a horizontal or vertical segment but not at endpoint (C:1266)
         } else if in_dir == out_dir {
-            // Same in and out direction: on a straight run → weak
-            true
+            // both None: C checks ft_corner_is_flat. We skip — keep strong
+            false
         } else if in_dir == out_dir.opposite() {
-            // Spike: in and out are opposite → strong if not near
-            !(pt.flags & AF_FLAG_NEAR != 0)
+            // Spike: weak if near, strong if not (C:1284-1290)
+            pt.flags & AF_FLAG_NEAR != 0
         } else {
-            // Corner (90° turn) → strong
+            // Corner with different non-opposite directions → STRONG (C: implicit)
             false
         };
 

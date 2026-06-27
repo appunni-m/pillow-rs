@@ -66,10 +66,15 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
 /// Reference: `ftcalc.c:211`. This is the hot scaling multiply.
 /// `ab >> 63` is the arithmetic sign extension (−1 for negative, 0 otherwise),
 /// which makes the `>> 16` round correctly for negative products.
+/// FT_MulFix — `(a * b + 0x8000 + sign_adj) >> 16` with symmetric rounding.
+///
+/// Reference: `ftcalc.h:91-102` (FT_MulFix_64 inline).  The 64-bit path
+/// computes `ab + 0x8000 + (ab >> 63)` where ab >> 63 is -1 for negative
+/// products and 0 for positive — giving rounded-toward--infinity for both
+/// sign cases.  Matches C exactly.
 #[inline]
 pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
     let ab = (a as i64).wrapping_mul(b as i64);
-    // (ab + 0x8000 + (ab >> 63)) >> 16  — arithmetic right shift of a signed value.
     let rounded = ab.wrapping_add(0x8000).wrapping_add(ab >> 63);
     (rounded >> 16) as i32
 }
