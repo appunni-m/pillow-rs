@@ -1717,7 +1717,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 let cur_pos1 = (org_pos + 32) & !63; // FT_PIX_ROUND
                 let delta1 = (cur_pos1 + (cur_len2 >> 1) - org_center).abs();
 
-                let cur_pos2 = (org_pos + org_len + 32) & !63 - cur_len2;
+                let cur_pos2 = ((org_pos + org_len + 32) & !63) - cur_len2;
                 let delta2 = (cur_pos2 + (cur_len2 >> 1) - org_center).abs();
 
                 axis.edges[i].pos = if delta1 < delta2 { cur_pos1 } else { cur_pos2 };
