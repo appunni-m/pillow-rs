@@ -4,8 +4,43 @@
 
 | Backend | Pass | Total | Rate | Reference generator |
 |---------|------|-------|------|---------------------|
-| PIL | 1170 | 1910 | 61.3% | PIL 12.2.0 `getmask`/`getbbox` |
+| PIL | 1170 | 1910 | 61.3% | PIL 12.0 `getmask`/`getbbox` |
 | FreeType | 1087 | 1910 | 56.9% | `/tmp/gen_ft_refs` (FT_LOAD_RENDER from vendored 2.14.3) |
+
+## Edge-Level Diagnostics (2026-06-27)
+
+Traced 'A' (DejaVuSans 10pt, 2 contours, 11 points) through our autohinter:
+
+**VERT edges (horizontal stems):**
+```
+edge[0]: fpos=0   opos=0   pos=0    flags=DONE   ← baseline
+edge[1]: fpos=383 opos=128 pos=134  link=2       ← lower x-height  
+edge[2]: fpos=551 opos=185 pos=186  link=1       ← upper x-height
+edge[3]: fpos=1493 opos=500 pos=512  flags=DONE   ← top
+```
+
+**HORZ edges (vertical stems): 0 segments → 0 edges**
+'A' has no horizontal flat segments — purely diagonal strokes.
+FreeType also produces 0 HORZ edges for this glyph profile.
+
+**Pixel comparison:**
+```
+  row0: OUR=00 00 51 ff 28 00 00  PIL=00 00 51 ff 28 00 00  MATCH
+  row1: OUR=00 00 aa b7 80 00 00  PIL=00 00 aa c3 80 00 00  DIFF
+  row2: OUR=00 0c e3 21 d8 00 00  PIL=00 0c e5 26 d8 00 00  DIFF
+```
+
+**Finding:** Edge positions (128→134, 185→186, 500→512) are in the right
+range. Row 0 matches perfectly, but intermediate rows differ. This means
+the problem is in **subpixel point interpolation** (align_strong_points,
+align_weak_points) AFTER edges are fixed. The stem at 134→186 (52 units =
+0.8px) produces different coverage because the intermediate point positions
+between edges are interpolated differently than FreeType does.
+
+**Root cause location:** `align_strong_points` and `align_weak_points`
+functions. These interpolate non-edge points based on edge positions. Our
+interpolation produces slightly different subpixel positions, which the
+rasterizer (`grays.rs`) renders with different coverage values.
 
 ## Version Audit
 
