@@ -9,7 +9,7 @@ fn main() {
     let data = std::fs::read(format!(
         "{}/tests/fixtures/input/fonts_nohint/DejaVuSans.ttf", dir
     )).unwrap();
-    let font = pillow_rs_freetype::Font::truetype(&data, 10.0).unwrap();
+    let font = pillow_rs_freetype::Font::truetype(&data, 10.0, Default::default()).unwrap();
     let gid = font.data.cmap.char_index('|' as u32).unwrap_or(0);
     let scale = ScaleMetrics::new(font.size_pt, font.data.head.units_per_em);
 

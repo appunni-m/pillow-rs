@@ -20,7 +20,7 @@ fn main() {
     let ch = char::from_u32(codepoint).unwrap_or('?');
 
     let font_data = std::fs::read(font_path).unwrap();
-    let font = Font::truetype(&font_data, size_pt).unwrap();
+    let font = Font::truetype(&font_data, size_pt, Default::default()).unwrap();
 
     let text = ch.to_string();
     let mask = font.getmask(&text).unwrap();

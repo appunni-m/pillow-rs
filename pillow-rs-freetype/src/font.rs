@@ -2,7 +2,6 @@
 //!
 //! Mirrors the subset of PIL's `FreeTypeFont` API used by the coverage matrix:
 //! `truetype`, `getmask`, `getbbox`, `getmetrics`, `getname`, `getlength`.
-//! The exact byte contract is defined by `pillow-rs-font-legacy-attempt`.
 
 use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
@@ -10,40 +9,26 @@ use crate::grays::{self, RasterResult};
 use crate::scaler::{self, pixel_ceil, pixel_round, ScaleMetrics};
 use crate::tables::FontData;
 use crate::tt::{self, tag};
-use crate::ft_backend::FtHandle;
-use std::cell::RefCell;
 use std::sync::Arc;
 
-/// Selects the rendering pipeline for `getmask` / `getbbox`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Selects the rendering pipeline — forward-looking, currently only PureRust
+/// is implemented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BitmapBackend {
-    /// Our pure-Rust autohinter + `grays.rs` rasterizer.
+    /// Our pure-Rust autohinter + `grays.rs` rasterizer (always available).
+    #[default]
     PureRust,
-    /// System FreeType via FFI — byte-identical to PIL.
-    SystemFreeType,
 }
 
 /// A loaded TrueType font at a given point size.
+#[derive(Clone)]
 pub struct Font {
     data: Arc<FontData>,
-    raw_bytes: Arc<Vec<u8>>,
     pub size_pt: f32,
+    /// Selected rendering backend.
     pub backend: BitmapBackend,
+    /// Pre-computed Latin autohinter metrics (stem widths, blue zones).
     pub latin_metrics: Option<crate::autohint::AfLatinMetrics>,
-    ft_handle: RefCell<Option<FtHandle>>,
-}
-
-impl Clone for Font {
-    fn clone(&self) -> Self {
-        Self {
-            data: Arc::clone(&self.data),
-            raw_bytes: Arc::clone(&self.raw_bytes),
-            size_pt: self.size_pt,
-            backend: self.backend,
-            latin_metrics: self.latin_metrics.clone(),
-            ft_handle: RefCell::new(None),
-        }
-    }
 }
 
 /// A rendered glyph alpha mask.
@@ -57,9 +42,8 @@ pub struct GlyphMask {
 impl Font {
     /// Load a TrueType/OpenType font from raw bytes at a given point size.
     ///
-    /// `backend` selects the rendering pipeline:
-    /// - `PureRust`: our autohinter + `grays.rs` rasterizer
-    /// - `SystemFreeType`: system FreeType (byte-identical to PIL)
+    /// Parses all required tables eagerly. Matches `FT_New_Memory_Face` +
+    /// `FT_Set_Char_Size` for the table subset PIL touches.
     pub fn truetype(data: &[u8], size_pt: f32, backend: BitmapBackend) -> Result<Self, FontError> {
         let dir = tt::parse_table_directory(data)?;
 
@@ -180,32 +164,15 @@ impl Font {
 
         Ok(Font {
             data: font_data,
-            raw_bytes: Arc::new(data.to_vec()),
             size_pt,
             backend,
             latin_metrics: Some(latin_metrics),
-            ft_handle: RefCell::new(None),
         })
     }
 
     /// `getname()` → `(family, style)`.
     pub fn getname(&self) -> (&str, &str) {
         (&self.data.name.family, &self.data.name.subfamily)
-    }
-
-    /// Lazy-init the system FreeType handle.
-    fn ft_ensure(&self) -> Result<(), FontError> {
-        if self.ft_handle.borrow().is_none() {
-            let handle = FtHandle::new(&self.raw_bytes, self.size_pt)?;
-            *self.ft_handle.borrow_mut() = Some(handle);
-        }
-        Ok(())
-    }
-
-    fn with_ft<T>(&self, f: impl FnOnce(&FtHandle) -> T) -> Result<T, FontError> {
-        self.ft_ensure()?;
-        let handle = self.ft_handle.borrow();
-        Ok(f(handle.as_ref().unwrap()))
     }
 
     /// `getmetrics()` → `(ascent, descent)` in pixels.
@@ -215,12 +182,9 @@ impl Font {
     /// in 26.6 format after FT_PIX_ROUND. For the test fonts, this is
     /// equivalent to ceil(|fu_val| * ppem / upem).
     pub fn getmetrics(&self) -> (u32, u32) {
-        if self.backend == BitmapBackend::SystemFreeType {
-            return self.with_ft(|ft| ft.getmetrics()).unwrap_or((0, 0));
-        }
         let data = &self.data;
         let upem = data.head.units_per_em as f32;
-        let ppem = self.size_pt;
+        let ppem = self.size_pt; // at 72dpi, ppem == size_pt
 
         let (asc_fu, desc_fu) = pick_metrics(data);
         let asc = (asc_fu as f32 * ppem / upem).ceil() as u32;
@@ -230,9 +194,6 @@ impl Font {
 
     /// `getlength(text)` → total advance width in pixels (float).
     pub fn getlength(&self, text: &str) -> f32 {
-        if self.backend == BitmapBackend::SystemFreeType {
-            return self.with_ft(|ft| ft.getlength(text)).unwrap_or(0.0);
-        }
         let data = &self.data;
         let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
         let mut total: f32 = 0.0;
@@ -251,16 +212,6 @@ impl Font {
         if text.is_empty() {
             return (0, 0, 0, 0);
         }
-
-        if self.backend == BitmapBackend::SystemFreeType {
-            let ch = text.chars().next().unwrap_or('\0');
-            return self.with_ft(|ft| {
-                let (asc, _) = ft.getmetrics();
-                ft.getbbox(ch as u32, asc as i32)
-            }).unwrap_or((0, 0, 0, 0));
-        }
-
-        // ── PureRust backend ────────────────────────────────────────────
         let data = &self.data;
         let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
         let asc_26 = ft_mul_fix(pick_metrics(data).0, scale.y_scale);
@@ -318,20 +269,14 @@ impl Font {
     /// `getmask(char)` → 8-bit alpha bitmap sized to the glyph's full mask
     /// box (origin + advance), matching PIL's `getmask` on an `L` image.
     pub fn getmask(&self, text: &str) -> Result<GlyphMask, FontError> {
-        if text.is_empty() {
-            return Ok(GlyphMask { width: 0, height: 0, pixels: Vec::new() });
-        }
-
-        if self.backend == BitmapBackend::SystemFreeType {
-            let ch_code = text.chars().next().unwrap_or('\0') as u32;
-            return self.with_ft(|ft| {
-                let (asc, _) = ft.getmetrics();
-                ft.getmask(ch_code, asc as i32)
-            }).unwrap_or_else(|_| Ok(GlyphMask { width: 0, height: 0, pixels: Vec::new() }));
-        }
-
-        // ── PureRust backend ────────────────────────────────────────────
         let data = &self.data;
+        if text.is_empty() {
+            return Ok(GlyphMask {
+                width: 0,
+                height: 0,
+                pixels: Vec::new(),
+            });
+        }
 
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
