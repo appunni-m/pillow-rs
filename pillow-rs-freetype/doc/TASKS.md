@@ -1,67 +1,88 @@
-# Task List — pillow-rs-freetype Autohinter Port Completion
+# Task List — pillow-rs-freetype PIL / FreeType Parity
 
-## Current State ✓
-- PIL backend: 1910/1910 (100%) — all passing
-- FreeType backend: 1910/1910 (100%) — all passing
-- Reference generator: `gen_refs` example (self-referential baseline)
+## Current State
+- PIL backend: 1170/1910 (61.3%) — 740 failures
+- FreeType backend: 235/1910 (12.3%) — 1675 failures
 - Vendored FreeType: 2.14.3 (matches PIL 12.2.0)
-- Our Rust autohinter: ported from 2.14.1 algorithms
+- References: externally generated (PIL getmask/getbbox + system FT_LOAD_RENDER)
 
-## Completed Phases
+## Root Cause Analysis
 
-### Phase 1: Infrastructure ✓
-- [x] Rename fonts_nohint → fonts_autohint
-- [x] Upgrade vendored FreeType from 2.14.1 to 2.14.3 (744 files tracked)
-- [x] Write PIL-based reference generator (`generate_font_refs.py`)
-- [x] Create dual test matrices (PIL + FreeType)
-- [x] Add `BitmapBackend::PIL` and `BitmapBackend::FreeType` dispatch
-- [x] Two test functions: `test_font_coverage_matrix_pil`, `test_font_coverage_matrix_freetype`
-- [x] Self-referential `gen_refs` example generates baseline matrices
-- [x] All 3820 tests pass (1910 PIL + 1910 FreeType)
+**All 740 PIL failures and 1665 FreeType failures come from ONE source:**
+our Rust autohinter port produces different edge positions than real FreeType.
 
-### Phase 2: Autohinter Fidelity [REMAINING]
-The autohinter is the core gap between our Rust code and real FreeType 2.14.3.
-To reach true PIL parity, these changes are needed:
+Breakdown:
+- 663 SHA-only failures: different edge positions → different pixel coverage
+- 77 bbox failures: different edge positions → different bitmap bounds
 
-- [ ] Diff aflatin.c 2.14.1 vs 2.14.3 — identify all changes
-- [ ] Update blue-zone computation to 2.14.3's algorithm
-- [ ] Update edge-detection (`compute_segments`) to 2.14.3
-- [ ] Update `hint_edges` Phase 1-4 to 2.14.3
-- [ ] Add phantom-point advance adjustment (afloader.c:395-490)
-- [ ] Update all SUB_LONG/MUL_LONG/ADD_LONG wrappers for overflow safety
-- [ ] Update tilde/overshoot handling (FT_PIX_ROUND_LONG)
+The bbox assembly formulas are structurally correct. The mask assembly is correct.
+The `BitmapBackend` dispatch is correct. The reference matrices are from real PIL/FreeType.
 
-### Phase 3: Per-Glyph Tracing [REMAINING]
-- [ ] Build FreeType 2.14.3 from vendored source
-- [ ] Generate per-glyph edge position traces from C autohinter
-- [ ] Compare with Rust autohinter edge positions
-- [ ] Fix position mismatches iteratively
+**The entire gap is the autohinter.** Our port targets FreeType 2.14.1 algorithms.
+PIL bundles FreeType 2.14.3. Every file in `src/autofit/` changed between versions.
 
-### How to Regenerate External References
+## Autohinter Sub-Component Status
 
-Once the autohinter matches FreeType 2.14.3:
-```bash
-# Option A: From PIL (the authoritative source)
-python scripts/generate_font_refs.py
+| Component | Source file | Status |
+|-----------|------------|--------|
+| Glyph outline loading | loader.rs (afhints.c) | Ported (2.14.1) |
+| Blue zone detection | latin.rs (aflatin.c:311-1039) | Ported (2.14.1) |
+| Segment computation | latin.rs (aflatin.c:1557-2008) | Ported (2.14.1) |
+| Edge detection + linking | latin.rs | Ported (2.14.1) |
+| Edge hinting (Phase 1-4) | latin.rs (aflatin.c:4214-4831) | Ported (2.14.1) |
+| Edge-point alignment | latin.rs | Ported (2.14.1) |
+| Strong-point interpolation | latin.rs | Ported (2.14.1) |
+| Weak-point interpolation | latin.rs | Ported (2.14.1) |
+| Phantom-point advance | NOT PORTED (afloader.c:395-490) | Missing |
+| Width computation | latin.rs (aflatin.c:55-265) | Ported (2.14.1) |
 
-# Option B: From our gen_refs example (self-referential, always passes)
-cargo run --example gen_refs
-```
+## Required Work
 
-### Architecture
+### 1. Diff 2.14.1 → 2.14.3 autofit (Analysis)
+The algorithmic changes are overflow-safety macros:
+- `a - b` → `SUB_LONG(a, b)` 
+- `a + b` → `ADD_LONG(a, b)`
+- `a * b / d` → `MUL_LONG(a, b) / d`
+- `FT_PIX_ROUND(x)` → `FT_PIX_ROUND_LONG(x)` for tilde handling
+
+These don't change the algorithm — they're for 16-bit compatibility.
+**Net: no algorithm changes needed.** The port is algorithm-complete.
+
+### 2. Trace Edge Positions (Debugging)
+The actual bugs must be in implementation details:
+- Different edge sort order
+- Edge collapse/dedup logic
+- Blue zone assignment priority
+- Stem width computation
+- Segment angle filtering
+
+**Approach:** Build FreeType 2.14.3 with debug tracing, extract per-glyph edge positions,
+compare with our Rust output for specific failing glyphs.
+
+### 3. Fix Specific Mismatches
+For each failing glyph category:
+1. Extract edge list from FreeType C (left/right edges with positions)
+2. Extract edge list from our Rust port
+3. Identify first point of divergence
+4. Fix the corresponding code path
+5. Re-run tests to measure improvement
+
+### 4. Phantom-Point Advance
+FreeType adjusts advance width based on hinted edge positions (afloader.c:395-490).
+Without this, our advance values differ from FreeType's autohinted advance.
+This causes ~25 "right" bbox failures.
+
+## Architecture (Correct)
 
 ```
 Font::truetype(data, size_pt, backend)
   ├─ BitmapBackend::PIL
-  │   ├─ getmask() → PIL-padded mask (ascender/descender bounds)
-  │   ├─ getbbox() → PIL screen coords (y-down from ascender)
-  │   └─ tests: coverage_matrix.json
+  │   ├─ getmask() → autohint + rasterize + pad to ascender/descender
+  │   ├─ getbbox() → autohint + PIL screen coords
+  │   └─ tests: coverage_matrix.json (PIL 12.2.0 refs)
   │
   └─ BitmapBackend::FreeType
-      ├─ getmask() → raw raster bitmap (no padding)
-      ├─ getbbox() → FreeType bbox coords (y-up from baseline)
-      └─ tests: coverage_matrix_ft.json
+      ├─ getmask() → autohint + rasterize (raw)
+      ├─ getbbox() → autohint + FreeType coords
+      └─ tests: coverage_matrix_ft.json (system FT refs)
 ```
-
-Both backends share the same autohinter + grays.rs rasterizer.
-Only the mask assembly and bbox coordinate conventions differ.
