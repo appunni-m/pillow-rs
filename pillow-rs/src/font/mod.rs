@@ -29,7 +29,7 @@ pub struct TrueTypeFont {
 impl Font {
     /// Load a TrueType font from raw bytes at a given point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
-        let inner = pillow_rs_font::Font::truetype(&data, size)
+        let inner = pillow_rs_font::Font::truetype(&data, size, pillow_rs_font::BitmapBackend::PIL)
             .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
         Ok(Font::TrueType(TrueTypeFont {
             inner: Arc::new(inner),
@@ -80,7 +80,7 @@ impl Font {
                     // Render each character individually to build the composite canvas
                     match ttf.inner.getmask(&ch.to_string()) {
                         Ok(mask) => {
-                            total_w += mask.advance_width;
+                            total_w += mask.advance_width as f32;
                             total_h = total_h.max(mask.height);
                             glyphs.push(mask);
                         }
@@ -166,7 +166,7 @@ impl Font {
                 for ch in text.chars() {
                     match ttf.inner.getmask(&ch.to_string()) {
                         Ok(mask) => {
-                            total_w += mask.advance_width;
+                            total_w += mask.advance_width as f32;
                             total_h = total_h.max(mask.height);
                             glyphs.push(mask);
                         }

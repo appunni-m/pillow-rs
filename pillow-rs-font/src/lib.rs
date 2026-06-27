@@ -8,3 +8,4 @@
 #![allow(missing_docs)]
 
 pub use pillow_rs_freetype::{Font, FontError, GlyphMask};
+pub use pillow_rs_freetype::font::BitmapBackend;

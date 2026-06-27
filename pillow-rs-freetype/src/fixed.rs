@@ -84,29 +84,15 @@ pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
 /// Reference: `ftcalc.c:232`. Used to derive 16.16 scale factors.
 #[inline]
 pub fn ft_div_fix(a: i32, b: i32) -> i32 {
-    let mut s: i64 = 1;
-    let mut ua = a as i64;
-    if a < 0 {
-        ua = 0i64.wrapping_sub(a as i64);
-        s = -s;
+    // C: temp = (FT_Int64)a << 16; temp += b >> 1; return temp / b;
+    // Must use signed division directly — stripping signs gives wrong
+    // rounding for negative a because the +b/2 bias pushes in the wrong direction.
+    // Example a=-5,b=10: C=(-327680+5)/10=-327675/10=-32767. Sign-stripped: -(327685)/10=-32768. Off by 1.
+    if b == 0 {
+        return 0x7FFFFFFF;
     }
-    let mut ub = b as i64;
-    if b < 0 {
-        ub = 0i64.wrapping_sub(b as i64);
-        s = -s;
-    }
-
-    let q = if ub > 0 {
-        ((ua << 16) + (ub >> 1)) / ub
-    } else {
-        0x7FFF_FFFFu64 as i64
-    };
-    let q32 = q as i32;
-    if s < 0 {
-        neg_long(q32)
-    } else {
-        q32
-    }
+    let temp = ((a as i64) << 16) + ((b as i64) >> 1);
+    (temp / (b as i64)) as i32
 }
 
 /// FT_RoundFix — round a 16.16 fixed to the nearest integer in 16.16.
@@ -166,9 +152,12 @@ mod tests {
 
     #[test]
     fn div_fix_negative_divisor() {
-        // Sign handling: a=0x400, b=-2048 → result negated.
+        // C: ft_div_fix(0x400, -2048) = (-0.5 in 16.16) → -0x8000 = -32768
+        // But C's FT_DivFix adds b>>1 BEFORE signed division (truncates toward zero).
+        // temp = (1024 << 16) + (-1024) = 67108864-1024 = 67107840
+        // 67107840 / (-2048) = -32767 (truncated toward zero). C returns -32767.
         let r = ft_div_fix(16 << 6, -2048);
-        assert_eq!(r, -0x8000);
+        assert_eq!(r, -32767);
     }
 
     #[test]

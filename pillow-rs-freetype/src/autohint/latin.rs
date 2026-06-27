@@ -730,7 +730,13 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     // aflatin.c:1577: major_dir is then ABSOLUTIFIED (Up/Right only) for segment
     // direction matching.
     let major_dir = {
-        let cw = hints.cw_orientation; // true = CW = TT orientation
+        let cw = hints.cw_orientation; // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
+        // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
+        // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
+        // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
+        // CW→TrueType→no flip: HORZ=UP, VERT=LEFT
+        // CCW→PostScript→flip: HORZ=DOWN, VERT=RIGHT
+        // Our cw_orientation=true means CW (=TrueType), so NO flip.
         let d = if is_horz {
             if cw { Direction::Up } else { Direction::Down }
         } else {
