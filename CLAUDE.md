@@ -261,6 +261,65 @@ line range (e.g., `aflatin.c:3991-4075`).
 under "Code Annotations Added". Always read it before starting autohinter work
 so you don't re-investigate verified functions.
 
+### 12. Systematic debugging loop (per-pass trace → first divergence → fix)
+
+When iterating on autohinter bugs, this loop finds real bugs within minutes:
+
+**Step A — Dump per-pass intermediate coordinates.**  Add temporary
+`eprintln!` traces that dump ALL point coordinates after each hinting pass:
+
+```rust
+// After hint_edges → dump edge positions + point x values
+// After align_edge_points → dump point x values + which got touched (T/.)
+// After align_strong_points → dump point x values + touch flags
+// After IUP → dump point x values
+```
+
+This isolates WHICH function produces the first divergent value.
+
+**Step B — Binary search on point index.**  Once you know point N is the
+first mismatch, grep C's source for the function that touches point N:
+- If p5 diverges after `align_edge_points` → check segment→edge chain and
+  compare edge positions between C and Rust.
+- If p5 diverges after `align_strong_points` → the bug is in the
+  interpolation formula or the edge that got assigned.
+- If p5 diverges after `align_weak_points` (IUP) → the bug is in
+  reference-point values fed into IUP, not IUP itself.
+
+**Step C — Compare edge data structures at every stage.**  Before each
+phase, dump `fpos`, `opos`, `pos`, `link`, `serif`, `flags` (especially
+`AF_EDGE_DONE`) for every edge.  Compare with C's `FT2_DEBUG="aflatin:7"`
+trace which emits `ANCHOR`, `STEM`, `LINK`, `SERIF_LINK2`, `ADJUST` lines.
+A single missing DONE flag or wrong link index cascades to everything
+in the next phase.
+
+**Step D — Always check C's internal helper functions.**  When our code has
+`// We skip…` or `// Simplified…`, grep the C source for the function
+behind the simplification.  For example:
+- "We don't compute edge v coordinates" → check C's `afhints.c` for how
+  `edge->first->first->v` is used in the serif overlap check.
+- "in_dir==out_dir==NONE: we skip" → C has `ft_corner_is_flat()`.
+- "all blue_edge are NULL" → C assigns them in `compute_blue_edges`.
+
+Every simplification is a potential bug.  Implementing the missing function
+has been the source of the three largest fixes (+137, +71, +27 tests).
+
+**Step E — Audit operator precedence in bitwise expressions.**  Rust's
+`&` binds LOOSER than binary `-` and `+`.  C's `&` binds TIGHTER than `-`.
+Every expression of the form `(expr) & !N - val` is WRONG in Rust.
+Must be `((expr) & !N) - val`.  Same for `(expr) & !N + val`.
+
+Checklist when facing unknown divergence:
+```
+[ ] Point coordinates match C before hinting? → scaler is correct
+[ ] Edge fpos/opos match C before hint_edges? → segment/edge detection correct
+[ ] Edge pos match C after hint_edges? → Phase 1-4 correct
+[ ] Touch flags match C after align_edge? → segment-chain correct
+[ ] Strong-point positions match C? → scale interpolation correct
+[ ] IUP positions match C? → weak-point classification + IUP correct
+[] If all of the above match but SHA differs → rasterizer or outline→bitmap path
+```
+
 ## Rules
 
 - Public API names match Pillow exactly. Import name: `RSPIL`.
