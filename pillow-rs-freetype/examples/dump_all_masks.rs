@@ -1,8 +1,8 @@
 /// Dump multiple glyph masks for comparison with PIL.
-/// Usage: cargo run --example dump_all_masks -- <font_file> <size_pt>
+/// Usage: cargo run --example dump_all_masks -- <font_file> <size_pt> [pil|ft]
 /// Outputs NDJSON with one JSON object per glyph.
 
-use pillow_rs_freetype::font::Font;
+use pillow_rs_freetype::{BitmapBackend, font::Font};
 use sha2::{Digest, Sha256};
 use std::env;
 use std::process;
@@ -10,14 +10,18 @@ use std::process;
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: dump_all_masks <font_file> <size_pt>");
+        eprintln!("Usage: dump_all_masks <font_file> <size_pt> [pil|ft]");
         process::exit(1);
     }
 
     let font_path = &args[1];
     let size_pt: f32 = args[2].parse().expect("invalid size_pt");
+    let backend = match args.get(3).map(|s| s.as_str()) {
+        Some("ft") | Some("freetype") => BitmapBackend::FreeType,
+        _ => BitmapBackend::PIL,
+    };
     let font_data = std::fs::read(font_path).unwrap();
-    let font = Font::truetype(&font_data, size_pt, Default::default()).unwrap();
+    let font = Font::truetype(&font_data, size_pt, backend).unwrap();
 
     // Test a range of glyphs: 33 ('!') through 126 ('~')
     for cp in 33u32..=126 {
