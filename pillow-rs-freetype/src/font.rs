@@ -11,13 +11,15 @@ use crate::tables::FontData;
 use crate::tt::{self, tag};
 use std::sync::Arc;
 
-/// Selects the rendering pipeline — forward-looking, currently only PureRust
-/// is implemented.
+/// Selects the rendering pipeline for `getmask` / `getbbox`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BitmapBackend {
-    /// Our pure-Rust autohinter + `grays.rs` rasterizer (always available).
+    /// PIL-style mask: padded to ascender/descender, advance-based width.
+    /// bbox uses ascender-relative screen coords.
     #[default]
-    PureRust,
+    PIL,
+    /// Raw FreeType output: bitmap as-is, no padding, FreeType bbox coords.
+    FreeType,
 }
 
 /// A loaded TrueType font at a given point size.
@@ -206,8 +208,10 @@ impl Font {
         total
     }
 
-    /// `getbbox(text)` → `(left, top, right, bottom)` in pixels (PIL coords,
-    /// y-down from the ascent).
+    /// `getbbox(text)` → `(left, top, right, bottom)` in pixels.
+    ///
+    /// `BitmapBackend::PIL`: PIL coords, y-down from ascender with baseline padding.
+    /// `BitmapBackend::FreeType`: raw FreeType bbox, y-up from baseline.
     pub fn getbbox(&self, text: &str) -> (i32, i32, i32, i32) {
         if text.is_empty() {
             return (0, 0, 0, 0);
@@ -217,52 +221,35 @@ impl Font {
         let asc_26 = ft_mul_fix(pick_metrics(data).0, scale.y_scale);
         let asc_px = pixel_ceil(asc_26);
 
-        let mut x = 0i32;
-        let mut x_min = i32::MAX;
-        let mut y_min = i32::MAX;
-        let mut x_max = i32::MIN;
-        let mut y_max = i32::MIN;
+        let ch = text.chars().next().unwrap_or('\0');
+        let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
+        let advance = pixel_round(ft_mul_fix(
+            data.hmtx.get(glyph).advance_width as i32, scale.x_scale));
 
-        for ch in text.chars() {
-            let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-            let m = data.hmtx.get(glyph);
-            let advance = pixel_round(ft_mul_fix(m.advance_width as i32, scale.x_scale));
-
-            match scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref()) {
-                Ok(g) if g.outline.n_contours > 0 => {
-                    // Ink bbox in glyph-local pixel coords: (0,0)..(w,h) after
-                    // the scaler's translate, plus the glyph's pixel origin.
-                    let gx_min = x + g.bbox_x_min.min(0);
-                    let gx_max = (x + advance).max(x + g.bbox_x_max);
-                    // Y coordinates: top = ascender - bbox_y_max (closest to
-                    // ascender top), bottom = ascender - bbox_y_min (at least
-                    // the baseline, lower if glyph has a descender).
-                    let gy_min = asc_px - g.bbox_y_max;
-                    let gy_max = (asc_px - g.bbox_y_min).max(asc_px);
-                    x_min = x_min.min(gx_min);
-                    x_max = x_max.max(gx_max);
-                    y_min = y_min.min(gy_min);
-                    y_max = y_max.max(gy_max);
-                }
-                _ => {
-                    // Empty glyph (space): advance-only on x, baseline on y.
-                    let gx_min = x;
-                    let gx_max = x + advance;
-                    x_min = x_min.min(gx_min);
-                    x_max = x_max.max(gx_max);
-                    if y_min == i32::MAX {
-                        y_min = asc_px;
-                        y_max = asc_px;
+        match scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref()) {
+            Ok(g) if g.outline.n_contours > 0 => {
+                match self.backend {
+                    BitmapBackend::PIL => {
+                        let gx_min = 0_i32.min(g.bbox_x_min);
+                        let gx_max = advance.max(g.bbox_x_max);
+                        let gy_min = asc_px - g.bbox_y_max;
+                        let gy_max = (asc_px - g.bbox_y_min).max(asc_px);
+                        (gx_min, gy_min, gx_max, gy_max)
+                    }
+                    BitmapBackend::FreeType => {
+                        // Raw FreeType bbox: pixel coords from outline,
+                        // y-up from baseline.
+                        (g.bbox_x_min, g.bbox_y_min, g.bbox_x_max, g.bbox_y_max)
                     }
                 }
             }
-            x += advance;
-        }
-
-        if x_min == i32::MAX {
-            (0, 0, 0, 0)
-        } else {
-            (x_min, y_min, x_max, y_max)
+            _ => {
+                if self.backend == BitmapBackend::PIL {
+                    (0, asc_px, advance, asc_px)
+                } else {
+                    (0, 0, 0, 0)
+                }
+            }
         }
     }
 
@@ -296,42 +283,38 @@ impl Font {
         let raster = grays::rasterize(scaled.outline)?;
         let advance_px = pixel_round(scaled.advance_width);
 
-        // PIL mask box: width = max(advance, ink_right - ink_left),
-        // origin at x=0; height covers the glyph extent plus padding:
-        // top of glyph (bbox_y_max) down to at least the baseline (y=0).
-        // For glyphs with descenders (bbox_y_min < 0), extend to bbox_y_min.
-        let new_width = (advance_px).max(raster.width as i32) as u32;
-        let new_height = (scaled.bbox_y_max - scaled.bbox_y_min.min(0)) as u32;
+        match self.backend {
+            BitmapBackend::PIL => {
+                // PIL mask: padded to ascender/descender extent.
+                let new_width = advance_px.max(raster.width as i32) as u32;
+                let new_height = (scaled.bbox_y_max - scaled.bbox_y_min.min(0)) as u32;
 
-        if new_width == 0 || new_height == 0 {
-            return Ok(GlyphMask {
-                width: new_width,
-                height: new_height,
-                pixels: Vec::new(),
-            });
-        }
+                if new_width == 0 || new_height == 0 {
+                    return Ok(GlyphMask { width: new_width, height: new_height, pixels: Vec::new() });
+                }
 
-        // Place the raster into the mask at the glyph's bbox offset.
-        // The raster's origin (0,0) corresponds to bbox pixel (bbox_x_min, bbox_y_min)
-        // in the mask coordinate system. The mask is width new_width, height new_height.
-        let x_offs = (scaled.bbox_x_min).max(0) as usize;
-        let y_offs = 0usize; // raster y=0 maps to mask row 0
-        let mut pixels = vec![0u8; (new_width * new_height) as usize];
-        let rw = raster.width;
-        for y in 0..raster.height {
-            let src = y * rw;
-            let dst = y_offs + y as usize * new_width as usize + x_offs;
-            if dst + rw <= pixels.len() && x_offs + rw <= new_width as usize {
-                let copy = rw.min((new_width as usize).saturating_sub(x_offs));
-                pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
+                let x_offs = (scaled.bbox_x_min).max(0) as usize;
+                let y_offs = 0usize;
+                let mut pixels = vec![0u8; (new_width * new_height) as usize];
+                let rw = raster.width;
+                for y in 0..raster.height {
+                    let src = y * rw;
+                    let dst = y_offs + y as usize * new_width as usize + x_offs;
+                    if dst + rw <= pixels.len() && x_offs + rw <= new_width as usize {
+                        let copy = rw.min((new_width as usize).saturating_sub(x_offs));
+                        pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
+                    }
+                }
+
+                Ok(GlyphMask { width: new_width, height: new_height, pixels })
+            }
+            BitmapBackend::FreeType => {
+                // Raw FreeType: raster as-is, no padding.
+                let w = raster.width as u32;
+                let h = raster.height as u32;
+                Ok(GlyphMask { width: w, height: h, pixels: raster.pixels })
             }
         }
-
-        Ok(GlyphMask {
-            width: new_width,
-            height: new_height,
-            pixels,
-        })
     }
 }
 
