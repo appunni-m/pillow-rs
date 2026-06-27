@@ -272,7 +272,7 @@ fn autohint_glyph(
         let s = m.axis[1].scale;
         if s != 0 { Some(s) } else { None }
     }).unwrap_or(scale.y_scale);
-    let _lsb_delta = crate::autohint::apply_hints(
+    crate::autohint::apply_hints(
         &mut outline,
         raw_outline,
         scale.x_scale,
