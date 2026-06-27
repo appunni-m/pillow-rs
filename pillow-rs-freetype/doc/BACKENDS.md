@@ -90,3 +90,15 @@ BitmapBackend::PureRust → test against references from our autohinter port
 BitmapBackend::FreeType → test against references from system FreeType 2.14.1
 BitmapBackend::PIL      → test against references from PIL's bundled FreeType
 ```
+
+## TODO: Upgrade vendored FreeType to 2.14.3
+
+pillow-rs-freetype/freetype/ contains FreeType 2.14.1. PIL 12.2.0 bundles 2.14.3.
+The autofit directory changed between these versions — every file in `src/autofit/`
+differs. This is the primary reason our autohinter output doesn't match PIL's.
+
+**Step 1:** Replace vendored FreeType C source with VER-2-14-3 tag
+**Step 2:** Re-port the autohinter changes from updated `src/autofit/aflatin.c`, etc.
+**Step 3:** Regenerate references via PIL's `getmask()`/`getbbox()` (uses PIL's
+bundled 2.14.3) rather than system freetype-py (2.13.2)
+**Step 4:** Run the coverage matrix — should approach 100% for the matching backend
