@@ -4,63 +4,55 @@
 
 | Backend | Pass | Total | Rate | Reference source |
 |---------|------|-------|------|-----------------|
-| PIL | 1322 | 1910 | 69.2% | PIL 12.2.0 getmask/getbbox (FreeType 2.14.3) |
-| FreeType raw | 1303 | 1910 | 68.2% | `/tmp/gen_ft_refs` (FT_LOAD_RENDER from vendored 2.14.3) |
+| PIL | 1354 | 1910 | 70.9% | PIL 12.2.0 getmask/getbbox |
+| FreeType raw | 1345 | 1910 | 70.4% | `/tmp/gen_ft_refs` (FT_LOAD_FORCE_AUTOHINT+FT_LOAD_RENDER) |
 
-**2026-06-27:** Four commits applied. **PIL +152, FT +216 from baseline (1170/1087).**
+**2026-06-27:** Five commits. **PIL +184, FT +258 from baseline (1170/1087).**
 
 ## Fixed
 
-| Bug | Root cause | Impact |
-|-----|-----------|--------|
-| `compute_stem_width` smooth path | Used `snap_width` (strong-hinting) instead of C's inline logic (aflatin.c:4016-4075) | +94 PIL, +151 FT |
-| Serif path missing `return` | C `goto Done_Width` returns immediately; Rust fell through to snap_width | Part of above |
-| Linked-edge overwrite | Relative-to-anchor in `hint_edges` re-called compute_stem_width, overwriting edge2->pos | +43 PIL, +45 FT |
-| `align_strong_points` algorithm | Rewrote to C's linear-scan + FT_DivFix/FT_MulFix (afhints.c:1492-1540) | +15 PIL, +20 FT |
+| Commit | Bug | Root cause | Impact |
+|--------|-----|-----------|--------|
+| `10147a7` | compute_stem_width wrong | Called snap_width (strong-only) instead of C inline logic | +94 PIL, +151 FT |
+| `9c7d126` | Linked edge overwritten | Relative-to-anchor re-called compute_stem_width | Part of above |
+| `69d93c1` | align_strong_points stale | Rewrote to C's linear-scan + FT_DivFix/FT_MulFix | +15 PIL, +20 FT |
+| `dfd49a6` | Missing annotations | Added ✅ VERIFIED markers + CLAUDE.md rule 11 | — |
+| `d44fa19` | Post-hinting translation missing | C's afloader.c:419-530 computes pp1.x and translates by -pp1.x | +32 PIL, +42 FT |
 
-## Remaining Failures: 588 PIL / 607 FT
+## Remaining Failures: 556 PIL / 565 FT
 
-### Failure categories
+| Type | Count | Change | Likely cause |
+|------|-------|--------|-------------|
+| getmask SHA mismatch | ~1004 | -9 | Subpixel anti-aliasing coverage differences |
+| getbbox mismatch | ~107 | -65 | Remaining HORZ edge + pp2.x advance issues |
+| getlength mismatch | ~10 | — | Advance width (pp2.x phantom point) |
 
-| Type | Count (both matrices) | Likely cause |
-|------|----------------------|-------------|
-| getmask SHA mismatch | ~1013 | Subpixel raster/hinting differences |
-| getbbox mismatch | ~172 | HORZ edge position offsets (1-2px shifts) |
-| getlength mismatch | ~10 | Advance width computation |
+### getbbox remaining issues
 
-### Bbox offsets — HORZ edge position discrepancy
+- **pp2.x (right phantom point)** not implemented — affects advance width and some bbox right-edge positions
+- **Serif overlap check** in Phase 4 (aflatin.c:4655-4690) is simplified — currently treats all serifs as valid
+- LiberationSerif shows different bbox pattern from DejaVuSans
 
-**Example:** '!' at DejaVuSans 10pt (`DejaVuSans_10_33`):
-- C produces HORZ edge positions: 66 and 127 (26.6), PIL bbox x_min=0
-- Rust produces HORZ edge positions: 130 and 191 (26.6), Rust bbox x_min=2
-- Manual calculation of anchor path in Phase 2 gives 130 (matches Rust)
-- C gets 66 somehow — **root cause NOT yet identified**
-- Same x_scale (0x5000), same standard width (61), same compute_stem_width logic
+### getmask SHA mismatches
 
-**Investigation needed:** Build C-level trace that dumps every intermediate value
-in `af_latin_hint_edges` Phase 2 for '!' at 10pt. Compare edge->opos, cur_len,
-org_center, cur_pos1, error1/error2, and final pos values between C and Rust.
-
-### SHA mismatches
-
-Most SHA failures are subpixel-level differences. Given that edge positions
-are verified identical for 'A' at 10pt, the remaining SHA mismatches likely come from:
+Most are subpixel coverage differences. Likely root causes:
 - Point interpolation producing slightly different 26.6 coordinates
-- Rasterizer producing slightly different coverage values
+- Rasterizer detail (fractional pixel coverage)
 
-### getlength failures
+### getlength
 
-Advance width computation likely differs from PIL's. Not autohinter-related.
+Advance width from pp2.x phantom point not yet implemented.
 
 ## Verified working
 
-- ✅ Edge links: `link_segments_inner` + `compute_edges` ✅
-- ✅ `major_dir`: Non-absoluted value matches C ✅
-- ✅ Blue zones: `metrics_init_blues` + `metrics_scale_dim` ✅
-- ✅ Edge grid-fitting: `hint_edges` Phases 1-4 (V+H) ✅
-- ✅ Point interpolation: `align_strong_points`, `align_edge_points` ✅
-- ✅ Weak point IUP: `align_weak_points`, `iup_shift`, `iup_interp` ✅
-- ✅ Fixed-point math: `ft_mul_div`, `ft_mul_fix`, `ft_div_fix` ✅
+- ✅ Edge links: link_segments + compute_edges
+- ✅ major_dir: Non-absoluted value matches C
+- ✅ Blue zones: metrics_init_blues + metrics_scale_dim
+- ✅ Edge grid-fitting: hint_edges Phases 1-4 (V+H)
+- ✅ Point interpolation: align_strong_points, align_edge_points
+- ✅ Weak point IUP: align_weak_points, iup_shift, iup_interp
+- ✅ Fixed-point math: ft_mul_div, ft_mul_fix, ft_div_fix
+- ✅ Post-hinting LSB translation: pp1.x = FT_PIX_ROUND(edge.pos - edge.opos)
 
 ## Debugging tools
 
@@ -68,5 +60,20 @@ Advance width computation likely differs from PIL's. Not autohinter-related.
 |------|---------|
 | `cargo run --example cmp_glyph -- DejaVuSans 10 A` | Quick single-glyph test |
 | `cargo test -p pillow-rs-freetype test_font_coverage_matrix -- --nocapture` | Full matrix |
-| `LD_LIBRARY_PATH=~/.local/lib /tmp/trace_ft_debug <font> <size> <char>` | C hinted points |
+| `LD_LIBRARY_PATH=~/.local/lib /tmp/trace_ft_debug <font> <size> <char>` | C native hinter |
+| `/tmp/verify_ft_ref2` | Dump autohinted x/y coords from C FreeType |
 | C test programs in `/tmp/` | Various single-use C traces |
+
+## Key learnings
+
+1. **FT_LOAD_RENDER ≠ autohinter**: C's trace_ft_debug used FT_LOAD_RENDER
+   (native TrueType hinter), not FT_LOAD_FORCE_AUTOHINT. Outputs differ.
+
+2. **Post-hinting translation is critical**: C's afloader.c translates the
+   outline by -FT_PIX_ROUND(edge.pos - edge.opos) after hinting, aligning
+   the LSB to the pixel grid. Without this, bbox is off by 1-2px.
+
+3. **PIL uses native hinter**: PIL's ImageFont uses FreeType's default
+   (native) hinter for TrueType fonts. Our PIL parity tests compare
+   autohinter output against native hinter output — they WILL differ for
+   glyphs where native and auto hinting disagree.
