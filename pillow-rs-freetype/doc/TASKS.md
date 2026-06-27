@@ -1,88 +1,130 @@
-# Task List — pillow-rs-freetype PIL / FreeType Parity
+# Task List — pillow-rs-freetype PIL / FreeType 2.14.3 Parity
 
-## Current State
-- PIL backend: 1170/1910 (61.3%) — 740 failures
-- FreeType backend: 235/1910 (12.3%) — 1675 failures
-- Vendored FreeType: 2.14.3 (matches PIL 12.2.0)
-- References: externally generated (PIL getmask/getbbox + system FT_LOAD_RENDER)
+## Current State (all references use FreeType 2.14.3)
 
-## Root Cause Analysis
+| Backend | Pass | Total | Rate | Reference generator |
+|---------|------|-------|------|---------------------|
+| PIL | 1170 | 1910 | 61.3% | PIL 12.2.0 `getmask`/`getbbox` |
+| FreeType | 1087 | 1910 | 56.9% | `/tmp/gen_ft_refs` (FT_LOAD_RENDER from vendored 2.14.3) |
 
-**All 740 PIL failures and 1665 FreeType failures come from ONE source:**
-our Rust autohinter port produces different edge positions than real FreeType.
+## Version Audit
 
-Breakdown:
-- 663 SHA-only failures: different edge positions → different pixel coverage
-- 77 bbox failures: different edge positions → different bitmap bounds
+All three reference sources use FreeType 2.14.3:
 
-The bbox assembly formulas are structurally correct. The mask assembly is correct.
-The `BitmapBackend` dispatch is correct. The reference matrices are from real PIL/FreeType.
+| Component | FreeType | How to verify |
+|-----------|----------|---------------|
+| PIL 12.2.0 (bundled) | 2.14.3 | `python3 -c 'from PIL import _imagingft; print(_imagingft.freetype2_version)'` |
+| Local C build | 2.14.3 | Built from `pillow-rs-freetype/freetype/` via cmake, installed to `~/.local` |
+| Vendored C source | 2.14.3 | `head -3 pillow-rs-freetype/freetype/README` |
+| Our Rust port | 2.14.1 | Algorithm baseline from VER-2-14-1 tag |
 
-**The entire gap is the autohinter.** Our port targets FreeType 2.14.1 algorithms.
-PIL bundles FreeType 2.14.3. Every file in `src/autofit/` changed between versions.
+## Key Finding: No Algorithm Changes in autofit
 
-## Autohinter Sub-Component Status
+Diff between FreeType 2.14.1 and 2.14.3 `src/autofit/aflatin.c`:
+- Zero algorithm changes
+- Only overflow-safety macros: `SUB_LONG`, `ADD_LONG`, `MUL_LONG`, `FT_PIX_ROUND_LONG`
+- These don't affect i32 arithmetic — they're for 16-bit `FT_Pos` compatibility
 
-| Component | Source file | Status |
-|-----------|------------|--------|
-| Glyph outline loading | loader.rs (afhints.c) | Ported (2.14.1) |
-| Blue zone detection | latin.rs (aflatin.c:311-1039) | Ported (2.14.1) |
-| Segment computation | latin.rs (aflatin.c:1557-2008) | Ported (2.14.1) |
-| Edge detection + linking | latin.rs | Ported (2.14.1) |
-| Edge hinting (Phase 1-4) | latin.rs (aflatin.c:4214-4831) | Ported (2.14.1) |
-| Edge-point alignment | latin.rs | Ported (2.14.1) |
-| Strong-point interpolation | latin.rs | Ported (2.14.1) |
-| Weak-point interpolation | latin.rs | Ported (2.14.1) |
-| Phantom-point advance | NOT PORTED (afloader.c:395-490) | Missing |
-| Width computation | latin.rs (aflatin.c:55-265) | Ported (2.14.1) |
+→ Bugs are in our port's implementation details, not version differences.
 
-## Required Work
+## Reference Regeneration
 
-### 1. Diff 2.14.1 → 2.14.3 autofit (Analysis)
-The algorithmic changes are overflow-safety macros:
-- `a - b` → `SUB_LONG(a, b)` 
-- `a + b` → `ADD_LONG(a, b)`
-- `a * b / d` → `MUL_LONG(a, b) / d`
-- `FT_PIX_ROUND(x)` → `FT_PIX_ROUND_LONG(x)` for tilde handling
+### PIL references (`coverage_matrix.json`)
 
-These don't change the algorithm — they're for 16-bit compatibility.
-**Net: no algorithm changes needed.** The port is algorithm-complete.
-
-### 2. Trace Edge Positions (Debugging)
-The actual bugs must be in implementation details:
-- Different edge sort order
-- Edge collapse/dedup logic
-- Blue zone assignment priority
-- Stem width computation
-- Segment angle filtering
-
-**Approach:** Build FreeType 2.14.3 with debug tracing, extract per-glyph edge positions,
-compare with our Rust output for specific failing glyphs.
-
-### 3. Fix Specific Mismatches
-For each failing glyph category:
-1. Extract edge list from FreeType C (left/right edges with positions)
-2. Extract edge list from our Rust port
-3. Identify first point of divergence
-4. Fix the corresponding code path
-5. Re-run tests to measure improvement
-
-### 4. Phantom-Point Advance
-FreeType adjusts advance width based on hinted edge positions (afloader.c:395-490).
-Without this, our advance values differ from FreeType's autohinted advance.
-This causes ~25 "right" bbox failures.
-
-## Architecture (Correct)
-
+```bash
+python pillow-rs-freetype/scripts/generate_font_refs.py
 ```
-Font::truetype(data, size_pt, backend)
-  ├─ BitmapBackend::PIL
-  │   ├─ getmask() → autohint + rasterize + pad to ascender/descender
-  │   ├─ getbbox() → autohint + PIL screen coords
-  │   └─ tests: coverage_matrix.json (PIL 12.2.0 refs)
-  │
-  └─ BitmapBackend::FreeType
-      ├─ getmask() → autohint + rasterize (raw)
-      ├─ getbbox() → autohint + FreeType coords
-      └─ tests: coverage_matrix_ft.json (system FT refs)
+
+Uses PIL 12.2.0's `getmask()`/`getbbox()` directly. Output: 1910 rows.
+Requires: `pip install Pillow>=12.2.0`.
+
+### FreeType raw references (`coverage_matrix_ft.json`)
+
+```bash
+# Step 1: Build FreeType 2.14.3 from vendored source
+cd pillow-rs-freetype/freetype && mkdir -p build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX="$HOME/.local" -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_SHARED_LIBS=ON -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_PNG=ON \
+  -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_BROTLI=ON -DFT_DISABLE_HARFBUZZ=ON
+cmake --build . -j$(nproc) && cmake --install .
+
+# Step 2: Build the reference generator binary
+gcc -o /tmp/gen_ft_refs /path/to/gen_ft_refs.c \
+  -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype \
+  -Wl,-rpath,$HOME/.local/lib
+
+# Step 3: Run the generator (Python wrapper calls /tmp/gen_ft_refs)
+python pillow-rs-freetype/scripts/gen_ft_matrix.py
 ```
+
+`/tmp/gen_ft_refs` is compiled from `pillow-rs-freetype/scripts/gen_ft_refs.c`.
+It calls `FT_Load_Glyph(face, idx, FT_LOAD_RENDER)` and outputs per-glyph
+bitmap pixels, metrics, and bbox.
+
+## Trace Tools
+
+### C trace tool (`/tmp/trace_edges`)
+
+```bash
+gcc -o /tmp/trace_edges pillow-rs-freetype/scripts/trace_edges.c \
+  -I pillow-rs-freetype/freetype/include \
+  -I pillow-rs-freetype/freetype/src/autofit \
+  -L $HOME/.local/lib -lfreetype -Wl,-rpath,$HOME/.local/lib
+
+# Trace a specific glyph
+/tmp/trace_edges <font.ttf> <size_pt> <char>
+```
+
+Outputs: glyph index, point count, bitmap dimensions, all pixel bytes,
+outline coordinates (26.6 format), contour ends.
+
+### Rust trace tools
+
+```bash
+# Dump all glyphs (with bitmaps)
+cargo run --example dump_all_masks -- <font.ttf> <size> [pil|ft]
+
+# Trace raster coordinates
+cargo run --example trace_raster -- <font.ttf> <size> <char>
+
+# Dump outline before autohinter
+cargo run --example dump_outline -- <font.ttf> <size> <char>
+```
+
+## Task Breakdown
+
+### 1. Trace Outline Coordinates (Pre-Autohinter)
+
+- [ ] Modify `dump_outline` to print 26.6 coordinates in same format as C trace
+- [ ] Compare outline coordinates for 'A' at DejaVuSans 10pt (both should match)
+- [ ] If outlines differ, fix the scaler (FT_MulFix, y_scale adjustment)
+
+### 2. Trace Edge Positions (Post-Autohinter)
+
+- [ ] Add edge-position dump to C trace tool (requires including `afhints.h` internals)
+- [ ] Add edge debug logging to Rust `hint_edges` function
+- [ ] Compare edge `fpos`, `opos`, `pos` for Horz dim (vertical edges) of 'A'
+- [ ] Find first edge position mismatch
+
+### 3. Fix Edge Computation
+
+- [ ] `compute_segments(Horz)` — check segment direction detection vs C
+- [ ] `extract_widths(Horz)` — verify standard width computation
+- [ ] `compute_edges(Horz)` — verify edge assembly from segments
+- [ ] `hint_edges(Horz)` — verify edge grid-fitting
+- [ ] `snap_width` — verify width snapping to standard widths
+
+### 4. Fix Vertical Dimension (Blue Zones)
+
+- [ ] `compute_blue_edges` — verify blue zone assignment
+- [ ] `hint_edges(Vert)` — verify Phase 1 blue alignment
+
+### 5. Fix Advance Width
+
+- [ ] Phantom-point advance adjustment (afloader.c:395-490)
+- [ ] Fixes ~30 right-edge bbox failures
+
+### 6. Validation
+
+- [ ] All 1910 PIL tests pass
+- [ ] All 1910 FreeType tests pass
