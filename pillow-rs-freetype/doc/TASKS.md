@@ -4,10 +4,10 @@
 
 | Backend | Pass | Total | Rate | Reference source |
 |---------|------|-------|------|-----------------|
-| PIL | 1354 | 1910 | 70.9% | PIL 12.2.0 getmask/getbbox |
-| FreeType raw | 1345 | 1910 | 70.4% | `/tmp/gen_ft_refs` (FT_LOAD_FORCE_AUTOHINT+FT_LOAD_RENDER) |
+| PIL | 1381 | 1910 | 72.3% | PIL 12.2.0 getmask/getbbox |
+| FreeType raw | 1372 | 1910 | 71.8% | `/tmp/gen_ft_refs` (FT_LOAD_FORCE_AUTOHINT+FT_LOAD_RENDER) |
 
-**2026-06-27:** Five commits. **PIL +184, FT +258 from baseline (1170/1087).**
+**2026-06-27:** Six commits. **PIL +211, FT +285 from baseline (1170/1087).**
 
 ## Fixed
 
@@ -17,63 +17,58 @@
 | `9c7d126` | Linked edge overwritten | Relative-to-anchor re-called compute_stem_width | Part of above |
 | `69d93c1` | align_strong_points stale | Rewrote to C's linear-scan + FT_DivFix/FT_MulFix | +15 PIL, +20 FT |
 | `dfd49a6` | Missing annotations | Added ✅ VERIFIED markers + CLAUDE.md rule 11 | — |
-| `d44fa19` | Post-hinting translation missing | C's afloader.c:419-530 computes pp1.x and translates by -pp1.x | +32 PIL, +42 FT |
+| `d44fa19` | Post-hinting LSB translation | C's afloader.c:419-530 computes pp1.x translation | +32 PIL, +42 FT |
+| `503c268` | Missing DONE on edge[i] | Phase 2 relative-to-anchor only set DONE on edge2 | +27 PIL, +27 FT |
 
-## Remaining Failures: 556 PIL / 565 FT
+## Remaining Failures: 529 PIL / 538 FT
 
-| Type | Count | Change | Likely cause |
-|------|-------|--------|-------------|
-| getmask SHA mismatch | ~1004 | -9 | Subpixel anti-aliasing coverage differences |
-| getbbox mismatch | ~107 | -65 | Remaining HORZ edge + pp2.x advance issues |
-| getlength mismatch | ~10 | — | Advance width (pp2.x phantom point) |
+| Type | Count | Nature |
+|------|-------|--------|
+| getmask SHA mismatch | ~963 | Subpixel anti-aliasing coverage differences between our autohinter and C's |
+| getbbox mismatch | ~107 | HORZ edge positions + PIL y-coordinate convention (native vs autohinter) |
+| getlength mismatch | ~10 | Advance width; FT fixture values suspect (0.56px for "hello") |
 
-### getbbox remaining issues
+### getmask — subpixel parity
 
-- **pp2.x (right phantom point)** not implemented — affects advance width and some bbox right-edge positions
-- **Serif overlap check** in Phase 4 (aflatin.c:4655-4690) is simplified — currently treats all serifs as valid
-- LiberationSerif shows different bbox pattern from DejaVuSans
+- 'A' at DejaVuSans 10pt: edges verified identical. p0.y=444 (ours) vs 437 (C). 
+  Difference 7/64=0.11px causes ~10 pixel value differences in rows 1-4.
+- Root cause: VERT edge interpolation gives slightly different values.
+  Same edges produce different scales due to FT_DivFix/FT_MulFix rounding.
 
-### getmask SHA mismatches
+### getbbox — autohinter vs native hinter
 
-Most are subpixel coverage differences. Likely root causes:
-- Point interpolation producing slightly different 26.6 coordinates
-- Rasterizer detail (fractional pixel coverage)
+- **Y-axis (PIL coords)**: PIL uses native TrueType hinter. Our autohinter produces
+  different glyph shapes. Char '_' at 10pt: ours 7×1px, PIL 1×8px. Not fixable.
+- **X-axis (FT coords)**: 40 DejaVuSans getbbox failures show 1px x_max differences.
+  Likely pp2.x rounding not implemented.
 
 ### getlength
 
-Advance width from pp2.x phantom point not yet implemented.
+- PIL fixture: 25.36px → matches ours. FT fixture: 0.56px → clearly wrong.
+  pp2.x would only change by ~0.5px. Fixture generation bug.
+
+## What's left to fix (actionable)
+
+| Priority | Item | Est. Impact | Effort |
+|----------|------|-------------|--------|
+| P1 | pp2.x phantom point (advance width) | ~10 getlength + ~5 bbox | Low |
+| P2 | Per-point coordinate trace for one VERT glyph | Unknown cascade | High |
+| P3 | HORZ stem edge tracing for one bbox failure | ~5-10 bbox | Medium |
+| P4 | LiberationSerif font-specific edge/segment issues | ~38 PIL mask | High |
+
+## Next recommended step
+
+**pp2.x** is the lowest-hanging fruit: modifies `apply_hints` to return (pp1x, pp2x),
+compute `hinted_advance = FT_PIX_ROUND(pp2x - pp1x)`, propagate through
+`ScaledGlyph.advance_width`, and use in `getbbox`/`getlength`.
 
 ## Verified working
 
 - ✅ Edge links: link_segments + compute_edges
 - ✅ major_dir: Non-absoluted value matches C
 - ✅ Blue zones: metrics_init_blues + metrics_scale_dim
-- ✅ Edge grid-fitting: hint_edges Phases 1-4 (V+H)
+- ✅ Edge grid-fitting: hint_edges Phases 1-4 (V+H) — ⚠️ edge[i] DONE bug fixed
 - ✅ Point interpolation: align_strong_points, align_edge_points
 - ✅ Weak point IUP: align_weak_points, iup_shift, iup_interp
 - ✅ Fixed-point math: ft_mul_div, ft_mul_fix, ft_div_fix
 - ✅ Post-hinting LSB translation: pp1.x = FT_PIX_ROUND(edge.pos - edge.opos)
-
-## Debugging tools
-
-| Tool | Purpose |
-|------|---------|
-| `cargo run --example cmp_glyph -- DejaVuSans 10 A` | Quick single-glyph test |
-| `cargo test -p pillow-rs-freetype test_font_coverage_matrix -- --nocapture` | Full matrix |
-| `LD_LIBRARY_PATH=~/.local/lib /tmp/trace_ft_debug <font> <size> <char>` | C native hinter |
-| `/tmp/verify_ft_ref2` | Dump autohinted x/y coords from C FreeType |
-| C test programs in `/tmp/` | Various single-use C traces |
-
-## Key learnings
-
-1. **FT_LOAD_RENDER ≠ autohinter**: C's trace_ft_debug used FT_LOAD_RENDER
-   (native TrueType hinter), not FT_LOAD_FORCE_AUTOHINT. Outputs differ.
-
-2. **Post-hinting translation is critical**: C's afloader.c translates the
-   outline by -FT_PIX_ROUND(edge.pos - edge.opos) after hinting, aligning
-   the LSB to the pixel grid. Without this, bbox is off by 1-2px.
-
-3. **PIL uses native hinter**: PIL's ImageFont uses FreeType's default
-   (native) hinter for TrueType fonts. Our PIL parity tests compare
-   autohinter output against native hinter output — they WILL differ for
-   glyphs where native and auto hinting disagree.
