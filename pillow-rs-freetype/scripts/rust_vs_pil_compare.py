@@ -10,7 +10,7 @@ from collections import defaultdict, Counter
 ROOT = Path(__file__).parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
-FONTS_NOHINT_DIR = FIXTURES / "input" / "fonts_nohint"
+FONTS_NOHINT_DIR = FIXTURES / "input" / "fonts_autohint"
 FONTS_DIR = FIXTURES / "input" / "fonts"
 
 from PIL import ImageFont, Image
@@ -309,7 +309,7 @@ def main():
 
     print()
     print("CRITICAL INSIGHT: PIL's getmask uses FT_LOAD_DEFAULT.")
-    print("On the bytecode-stripped `fonts_nohint` inputs, FreeType falls back")
+    print("On the bytecode-stripped `fonts_autohint` inputs, FreeType falls back")
     print("to the autohinter, which grid-fits outlines before rasterization.")
     print("The reference fixtures are therefore AUTOHINTED. Our Rust port must")
     print("implement the autohinter to reproduce them.")

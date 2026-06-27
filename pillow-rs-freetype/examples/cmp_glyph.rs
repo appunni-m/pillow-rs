@@ -7,7 +7,7 @@ fn main() {
     let font = args.get(1).cloned().unwrap_or("DejaVuSans".into());
     let size: f32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(10.0);
     let ch = args.get(3).cloned().unwrap_or("|".into());
-    let path = format!("{}/tests/fixtures/input/fonts_nohint/{}.ttf", dir,
+    let path = format!("{}/tests/fixtures/input/fonts_autohint/{}.ttf", dir,
         if font == "LiberationSerif" { "LiberationSerif-Regular" } else { &font });
     let data = std::fs::read(&path).unwrap();
     let f = Font::truetype(&data, size, Default::default()).unwrap();

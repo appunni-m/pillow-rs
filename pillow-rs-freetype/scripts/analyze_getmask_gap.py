@@ -3,7 +3,7 @@
 
 Compares our Rust output (via dump_mask_compare example) with freetype-py
 FT_LOAD_DEFAULT|RENDER output — the autohinted path PIL's getmask takes on
-the bytecode-stripped `fonts_nohint` inputs.
+the bytecode-stripped `fonts_autohint` inputs.
 Categorizes each failure type.
 """
 
@@ -20,7 +20,7 @@ MANIFEST_DIR = ROOT
 FIXTURES = ROOT / "tests" / "fixtures"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
 FONTS_DIR = FIXTURES / "input" / "fonts"         # Original fonts (with bytecode)
-FONTS_NOHINT_DIR = FIXTURES / "input" / "fonts_nohint"  # Bytecode-stripped (autohinted at render)
+FONTS_NOHINT_DIR = FIXTURES / "input" / "fonts_autohint"  # Bytecode-stripped (autohinted at render)
 
 LOAD_FLAGS = 0x4  # FT_LOAD_RENDER; FT_LOAD_DEFAULT triggers the autohinter
 
@@ -260,7 +260,7 @@ def main():
             exp_w, exp_h = exp_size if exp_size else (0, 0)
 
             # Check: does Rust match freetype-py (FT_LOAD_DEFAULT, autohinted)?
-            # `ft_nohint` here = the bytecode-stripped `fonts_nohint` font (autohinted).
+            # `ft_nohint` here = the bytecode-stripped `fonts_autohint` font (autohinted).
             rust_size_str = f"{rust_w}x{rust_h}"
             ft_orig_size = f"{ft_orig['width']}x{ft_orig['height']}"
             ft_nohint_size = f"{ft_nohint['width']}x{ft_nohint['height']}"

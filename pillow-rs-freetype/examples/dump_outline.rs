@@ -12,7 +12,7 @@ use pillow_rs_freetype::tt;
 fn main() {
     let dir = env!("CARGO_MANIFEST_DIR");
     let font_path = format!(
-        "{}/tests/fixtures/input/fonts_nohint/DejaVuSans.ttf",
+        "{}/tests/fixtures/input/fonts_autohint/DejaVuSans.ttf",
         dir
     );
     let data = std::fs::read(&font_path).unwrap();

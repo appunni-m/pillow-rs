@@ -5,7 +5,7 @@ afhints.c, afblue.c). This is the **spec** to port against. All coordinates are
 26.6 fixed unless noted; `FT_Pos` ≡ `i32`. Line numbers reference the vendored C.
 
 Reference provenance: fixtures are **PIL `getmask` = `FT_LOAD_DEFAULT|RENDER`**
-on bytecode-stripped `fonts_nohint/` → **AUTOHINTED**. The autohinter must run.
+on bytecode-stripped `fonts_autohint/` → **AUTOHINTED**. The autohinter must run.
 
 Citation key:
 - `aflatin.c:N` — `pillow-rs-freetype/freetype/src/autofit/aflatin.c`

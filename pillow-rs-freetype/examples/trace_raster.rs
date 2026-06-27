@@ -7,7 +7,7 @@ use pillow_rs_freetype::scaler::ScaleMetrics;
 fn main() {
     let dir = env!("CARGO_MANIFEST_DIR");
     let data = std::fs::read(format!(
-        "{}/tests/fixtures/input/fonts_nohint/DejaVuSans.ttf", dir
+        "{}/tests/fixtures/input/fonts_autohint/DejaVuSans.ttf", dir
     )).unwrap();
     let font = pillow_rs_freetype::Font::truetype(&data, 10.0, Default::default()).unwrap();
     let gid = font.data.cmap.char_index('|' as u32).unwrap_or(0);
