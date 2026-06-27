@@ -1707,12 +1707,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
 
                 axis.edges[i].pos = cur_pos1 - cur_len / 2;
                 // C: edge2->pos = cur_pos1 + cur_len / 2 (aflatin.c:4502)
-                // No af_latin_align_linked_edge call in C for relative-to-anchor
                 axis.edges[edge2_idx].pos = cur_pos1 + cur_len / 2;
+                axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
             } else {
-                // C: cur_len >= 96: recompute with base_delta and round (aflatin.c:4506-4530)
-                // Note: C computes cur_len again (now with base_delta) and sets
-                // edge2->pos = edge->pos + cur_len directly, no align_linked_edge.
                 let cur_len2 = compute_stem_width(
                     other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
                 );
@@ -1726,10 +1723,10 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 axis.edges[i].pos = if delta1 < delta2 { cur_pos1 } else { cur_pos2 };
                 // C: edge2->pos = edge->pos + cur_len (aflatin.c:4527)
                 axis.edges[edge2_idx].pos = axis.edges[i].pos + cur_len2;
+                axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
             }
         }
 
-        axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
         axis.edges[i].flags |= AF_EDGE_DONE;
 
         // BOUND check for stem edges (aflatin.c:4544–4563):
