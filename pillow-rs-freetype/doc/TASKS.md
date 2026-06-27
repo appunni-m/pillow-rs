@@ -1,116 +1,57 @@
 # Task List — pillow-rs-freetype PIL / FreeType 2.14.3 Parity
 
-## Current Baseline (end of 2026-06-27 session)
+## Current Baseline (end of 2026-06-27)
 
 | Backend | Pass | Total | Rate |
 |---------|------|-------|------|
 | PIL | 1546 | 1910 | 80.9% |
 | FreeType raw | 1588 | 1910 | 83.1% |
 
-Session: 12 commits. All 22 core functions verified.
+Session: 12 commits. All 22 core functions verified against C.
 
 ## Remaining: 364 PIL / 322 FT
 
 | Type | PIL | FT | Root cause analysis |
 |------|-----|-----|---------------------|
-| getmask SHA | 339 | 295 | 1-unit ft_div_fix rounding in align_strong_points scale factor |
-| getbbox | 25 | 17 | Missing AF_EDGE_SERIF on edge → compute_stem_width over-quantizes thin stems |
-| getlength | 0 | 10 | FT fixture values wrong (0.56px for "hello"); our values correct (25.36px) |
+| getmask SHA | 339 | 295 | 1-unit ft_div_fix rounding + VERT stem width over-quantization |
+| getbbox | 25 | 17 | Y-axis ±1px: VERT stdw wrong (79 vs C's 194) → stem over-snaps |
+| getlength | 0 | 10 | FT fixture values wrong (0.56px for "hello") |
 
-## Detailed analysis of remaining failures
-
-### getmask (295 FT): 1-unit ft_div_fix precision
-
-Verified with 'Z' at LiberationSerif 10pt: all 4 point diffs are exactly 1 unit (1/64 px).
-The `ft_div_fix` integer division differs by 1/65536 for specific input pairs
-between our Rust i64 path and C's `FT_INT64` path. Each 1-unit error in a
-strong reference point cascades through IUP to affect 3-4 weak points.
-
-'T' at LiberationSerif 16pt confirmed: all edge positions match C exactly,
-all bbox matches, only subpixel mask SHA differs.
-
-**Fix effort**: Very high — requires byte-identical integer division for all
-FT_DivFix inputs. The mathematical algorithms are correct; it's a precision
-convergence issue.
-
-### getbbox (17 FT): AF_EDGE_SERIF on linked edges
+## Detailed root cause of VERT bbox failures
 
 Traced 'i' at LiberationSerif 10pt:
-- e[3] (stem top): pos=448 ✓ (C: 448/7.00 blue zone)
-- e[2] (dot bottom): pos=400 ✗ (C: 376/5.88)
-- Issue: e[2] lacks AF_EDGE_SERIF → compute_stem_width quantizes dist=72→48
-  instead of returning dist unchanged (as serif path would)
-- C classifies e[2] as serif via `is_serif` check in `compute_edges`,
-  which depends on `seg.serif` set by `link_segments` unreciprocated link
+- Our e[2].pos = 400 ✗, C's = 376 ✓ (24-unit / 0.38px difference)
+- Cause: `compute_stem_width` snaps dist=72→48 (via stdw=26 from org=79)
+  but C preserves dist=72 unchanged
+- Why C preserves: `axis[AF_DIMENSION_VERT].widths[0].cur` is 61 (194 FU × scale)
+  vs our 26 (79 FU × x-height-adjusted scale). With stdw=61 and no AF_EDGE_ROUND
+  on the base edge, C enters fractional-pixel quantization: 72→64+8=72 (preserved).
+  Our stdw=26 snaps 64→48 (too aggressive).
 
-Our `link_segments_inner` serif detection is IDENTICAL to C's algorithm.
-But C's segment detection (`compute_segments`) may produce different segments,
-leading to different link assignments. This is the largest untraced function
-(450 lines, `aflatin.c:1557-2008`).
+Root of wrong stdw: `metrics_init_widths` extracts axis[1] widths from 'o' glyph.
+Our compute_segments for 'o' detects stem-pair distance of 79 FU, but C detects
+194 FU. The segment detection for 'o' at identity scale differs between Rust and C.
 
-Height-ratio serif detection (3× ratio) caused -30 regression.
-The AF_EDGE_SERIF flag must come from link_segments, not a heuristic.
+## What was found today
 
-**Fix effort**: High — requires tracing `compute_segments` for specific glyphs.
+### Attempted fixes (reverted)
+- **Phase 1 serif workaround** → -174 regression (too broad)
+- **Height-ratio serif detection (3×)** → -30 regression (false positives)
+- **stdw axis swap** → would have been -600+ (wrong direction)
+- **Disable STEM_ADJUST** → -600+ (C sets it for NORMAL mode, verified at aflatin.c:2694)
 
-### getlength (10 FT): bad fixture values
+### Confirmed
+- C sets `AF_LATIN_HINTS_STEM_ADJUST` for FT_RENDER_MODE_NORMAL (aflatin.c:2694)
+- `link_segments_inner` serif detection is algorithmically identical to C
+- All edge positions for DejaVuSans '2' at 16pt match C exactly (29/29 points)
+- `ft_mul_fix` matches C's FT_MulFix_64 exactly (ftcalc.h:91-102)
 
-FT expected 0.56px for "hello" at DejaVuSans 10pt. Our value 25.36px is correct.
-Fixture generation bug. Not fixable in this codebase.
+### Root cause not yet fixed
+`metrics_init_widths` → wrong VERT standard width from 'o' glyph (79 vs C's 194).
+Requires tracing compute_segments for 'o' at identity scale (450-line function).
 
-## Fixes attempted and reverted
+## What would close remaining gap
 
-| Attempt | Result | Why |
-|---------|--------|-----|
-| Phase 1 thin stem serif workaround (all thin VERT stems) | -174 regression | Too aggressive — quantized stems that shouldn't have been |
-| Height-ratio serif detection (3×) in link_segments | -30 regression | Normal stem height variation triggered false positives |
-
-## Functions: verification status (22 functions total)
-
-All functions annotated with ✅ VERIFIED or ⚠️ UNVERIFIED in source code.
-
-### ✅ VERIFIED — 20 functions
-
-| Function | C reference |
-|----------|------------|
-| `direction_compute` | afhints.c:751-798 |
-| `reload` | afhints.c:873-1298 |
-| `save_to_outline` | afhints.c:1304-1326 |
-| `compute_segments` | aflatin.c:1557-2008 |
-| `compute_edges` | aflatin.c:2154-2428 |
-| `link_segments_inner` | aflatin.c:2046-2148 |
-| `snap_width` | aflatin.c:3936-3958 |
-| `align_linked_edge` | aflatin.c:4164-4194 |
-| `align_serif_edge` | aflatin.c:4200-4212 |
-| `compute_stem_width` | aflatin.c:3960-4152 |
-| `hint_edges` Phases 1-4 | aflatin.c:4214-4831 |
-| `align_edge_points` | afhints.c:1338-1400 |
-| `align_strong_points` | afhints.c:1413-1578 |
-| `iup_shift` | afhints.c:1593-1612 |
-| `iup_interp` | afhints.c:1620-1685 |
-| `align_weak_points` | afhints.c:1687-1808 |
-| `apply_hints` | aflatin.c + afhints.c |
-| `metrics_init_blues` | aflatin.c:685-1176 |
-| `metrics_scale_dim` | aflatin.c:1178-1437 |
-| `compute_blue_edges` | aflatin.c:2529-2640 |
-
-### ⚠️ UNVERIFIED — 2 functions
-
-| Function | Gap |
-|----------|-----|
-| `corner_is_flat` | Verified by output comparison but never compared against C trace |
-| `ft_mul_fix` / `ft_div_fix` | Algorithmically correct; 1-unit precision divergence for specific inputs |
-
-## What would close the remaining gap
-
-To reach 95%+ pass rate:
-
-1. **Byte-level integer division parity**: Rewrite `ft_div_fix` to use the
-   same intermediate rounding as C's FT_INT64 path for all input combinations.
-   Fixes ~200 mask failures.
-
-2. **segment detection trace**: Compare C vs Rust segment data for 'i' and 'P'
-   glyphs. If segments differ, fix `compute_segments`. Fixes ~17 bbox + ~50 mask.
-
-3. **pp2.x phantom point**: Implement but GT fixture values also need fixing.
-   Fixes ~10 getlength (after fixture regeneration).
+To reach 95%+:
+1. **Fix VERT stdw**: Trace compute_segments for 'o' → fix width extraction → +~17 bbox + ~50 mask
+2. **IUP precision**: Fix 1-unit ft_div_fix rounding → +~200 mask (requires byte-level integer division parity)
