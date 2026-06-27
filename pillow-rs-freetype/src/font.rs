@@ -39,6 +39,14 @@ pub struct GlyphMask {
     pub width: u32,
     pub height: u32,
     pub pixels: Vec<u8>,
+    /// Left bearing offset in pixels (bbox xmin, may be negative).
+    /// Used by the compositor to place the glyph horizontally.
+    pub xmin: i32,
+    /// Top bearing offset in pixels (bbox ymin — used for vertical placement).
+    /// PIL convention: positive = above baseline.
+    pub ymin: i32,
+    /// Advance width in 26.6 fixed-point format.
+    pub advance_width: i32,
 }
 
 impl Font {
@@ -262,6 +270,9 @@ impl Font {
                 width: 0,
                 height: 0,
                 pixels: Vec::new(),
+                xmin: 0,
+                ymin: 0,
+                advance_width: 0,
             });
         }
 
@@ -277,6 +288,9 @@ impl Font {
                 width: 0,
                 height: 0,
                 pixels: Vec::new(),
+                xmin: 0,
+                ymin: 0,
+                advance_width: 0,
             });
         }
 
@@ -290,7 +304,14 @@ impl Font {
                 let new_height = (scaled.bbox_y_max - scaled.bbox_y_min.min(0)) as u32;
 
                 if new_width == 0 || new_height == 0 {
-                    return Ok(GlyphMask { width: new_width, height: new_height, pixels: Vec::new() });
+                    return Ok(GlyphMask {
+                        width: new_width,
+                        height: new_height,
+                        pixels: Vec::new(),
+                        xmin: scaled.bbox_x_min,
+                        ymin: scaled.bbox_y_min,
+                        advance_width: advance_px,
+                    });
                 }
 
                 let x_offs = (scaled.bbox_x_min).max(0) as usize;
@@ -306,13 +327,27 @@ impl Font {
                     }
                 }
 
-                Ok(GlyphMask { width: new_width, height: new_height, pixels })
+                Ok(GlyphMask {
+                    width: new_width,
+                    height: new_height,
+                    pixels,
+                    xmin: scaled.bbox_x_min,
+                    ymin: scaled.bbox_y_min,
+                    advance_width: advance_px,
+                })
             }
             BitmapBackend::FreeType => {
                 // Raw FreeType: raster as-is, no padding.
                 let w = raster.width as u32;
                 let h = raster.height as u32;
-                Ok(GlyphMask { width: w, height: h, pixels: raster.pixels })
+                Ok(GlyphMask {
+                    width: w,
+                    height: h,
+                    pixels: raster.pixels,
+                    xmin: scaled.bbox_x_min,
+                    ymin: scaled.bbox_y_min,
+                    advance_width: advance_px,
+                })
             }
         }
     }
