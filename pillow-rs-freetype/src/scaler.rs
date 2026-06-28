@@ -63,6 +63,8 @@ fn ft_div_fix_local(a: i32, b: i32) -> i32 {
 /// FreeType's default request (`FT_Request_Size`) rounds ppem via
 /// `FT_PIX_ROUND( size * 64 ) >> 6`, which for integral/half sizes matches
 /// `(size + 0.5).floor()`. We mirror that.
+/// ✅ VERIFIED: matches C's FT_PIX_ROUND( size << 6 ) >> 6 (tt_size_reset).
+/// Verified via getlength tests (all advance widths match C).
 fn ppem_from_size(size_pt: f32) -> i32 {
     // ppem = FT_PIX_ROUND( size << 6 ) >> 6  (size already in pixels at 72dpi).
     let size_26dot6 = (size_pt * 64.0).round() as i32;
