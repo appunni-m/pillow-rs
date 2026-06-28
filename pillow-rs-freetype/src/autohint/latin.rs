@@ -1395,11 +1395,10 @@ fn compute_stem_width(
 ) -> i32 {
     let stem_adjust = other_flags & AF_LATIN_HINTS_STEM_ADJUST != 0;
 
-    // Skip if stem adjustment is disabled or axis is extra-light.
-    if !stem_adjust {
-        return width;
-    }
-    // extra_light is always false in our port — no metrics axis yet.
+    // C: if !AF_LATIN_HINTS_DO_STEM_ADJUST || axis->extra_light → return width
+    // extra_light = ft_mul_fix(stdw, scale) < 40. std_widths[0].cur IS that value.
+    if !stem_adjust { return width; }
+    if !std_widths.is_empty() && std_widths[0] < 40 { return width; }
 
     let mut dist = width;
     let mut sign: i32 = 0;
