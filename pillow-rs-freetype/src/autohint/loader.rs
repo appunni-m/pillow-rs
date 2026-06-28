@@ -209,9 +209,28 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         }
     }
 
-    // ── Classify strong vs weak ────────────────────────────────────────
-    // Port of afhints.c:1210-1295. Uses direction chain u/v pointers
-    // for corner_is_flat and the XOR quadrant check.
+    // ── Simplify topology (C: afhints.c:1205-1255) ────────────────────
+    // Merge same-quadrant consecutive None/None vectors — update u/v to
+    // skip merged points, mark them WEAK.
+    for i in 0..hints.points.len() {
+        if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 { continue; }
+        if hints.points[i].in_dir != Direction::None { continue; }
+        if hints.points[i].out_dir != Direction::None { continue; }
+        let pt = &hints.points[i];
+        let nu = if pt.u != 0 { (i as i32 + pt.u) as usize } else { i };
+        let pv = if pt.v != 0 { (i as i32 + pt.v) as usize } else { i };
+        let in_x = pt.fx as i32 - hints.points[pv].fx as i32;
+        let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
+        let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
+        let out_y = hints.points[nu].fy as i32 - pt.fy as i32;
+        if (in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0 {
+            hints.points[i].flags |= AF_FLAG_WEAK_INTERPOLATION;
+            hints.points[pv].u = nu as i32 - pv as i32;
+            hints.points[nu].v = -(hints.points[pv].u);
+        }
+    }
+
+    // ── Classify strong vs weak (C: afhints.c:1257-1298) ──────────────
     for i in 0..hints.points.len() {
         let in_dir = hints.points[i].in_dir;
         let out_dir = hints.points[i].out_dir;
