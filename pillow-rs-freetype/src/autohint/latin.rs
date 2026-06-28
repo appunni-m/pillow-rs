@@ -616,10 +616,9 @@ pub fn apply_hints(
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
-    // Smooth anti-aliased hinting: enable stem adjustment + snap for both dimensions.
+    // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
+    // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
     hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
-    // FreeType disables HORZ_SNAP and VERT_SNAP for anti-aliased rendering
-    // (aflatin.c:347-349). Smooth hinting gives subpixel stem positions.
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);

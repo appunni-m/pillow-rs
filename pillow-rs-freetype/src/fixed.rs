@@ -25,40 +25,21 @@ fn neg_long(a: i32) -> i32 {
 
 /// FT_MulDiv — `(a * b + c/2) / c` as a signed long, with `FT_INT64` path.
 ///
-/// Reference: `ftcalc.c:161`. Returns 0x7FFFFFFF on overflow / zero divisor.
+/// Reference: `ftcalc.c:162`. Returns 0x7FFFFFFF on overflow / zero divisor.
+/// Signed sign-stripping: converts to unsigned magnitudes, does unsigned
+/// multiply + add half-divisor + divide, then restores sign. Matches C exactly.
 #[inline]
 pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
-    let mut s: i64 = 1;
-    // FT_MOVE_SIGN: move sign out of a, b, c into `s`, leaving unsigned magnitudes.
-    let mut ua = a as i64;
-    if a < 0 {
-        ua = 0i64.wrapping_sub(a as i64);
-        s = -s;
+    if c == 0 {
+        return 0x7FFFFFFF;
     }
-    let mut ub = b as i64;
-    if b < 0 {
-        ub = 0i64.wrapping_sub(b as i64);
-        s = -s;
-    }
-    let mut uc = c as i64;
-    if c < 0 {
-        uc = 0i64.wrapping_sub(c as i64);
-        s = -s;
-    }
-
-    let d = if uc > 0 {
-        (ua.wrapping_mul(ub) + (uc >> 1)) / uc
-    } else {
-        0x7FFF_FFFFu64 as i64
-    };
-
-    // FT casts d to FT_Long (32-bit) before negation.
+    let ua: u64 = (a as i64).unsigned_abs();
+    let ub: u64 = (b as i64).unsigned_abs();
+    let uc: u64 = (c as i64).unsigned_abs();
+    let d = (ua.wrapping_mul(ub) + (uc >> 1)) / uc;
     let d32 = d as i32;
-    if s < 0 {
-        neg_long(d32)
-    } else {
-        d32
-    }
+    let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
+    if negate { 0i32.wrapping_sub(d32) } else { d32 }
 }
 
 /// FT_MulFix — `(a * b + 0x8000) >> 16` with signed rounding (FT_INT64 path).
@@ -84,15 +65,22 @@ pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
 /// Reference: `ftcalc.c:232`. Used to derive 16.16 scale factors.
 #[inline]
 pub fn ft_div_fix(a: i32, b: i32) -> i32 {
-    // C: temp = (FT_Int64)a << 16; temp += b >> 1; return temp / b;
-    // Must use signed division directly — stripping signs gives wrong
-    // rounding for negative a because the +b/2 bias pushes in the wrong direction.
-    // Example a=-5,b=10: C=(-327680+5)/10=-327675/10=-32767. Sign-stripped: -(327685)/10=-32768. Off by 1.
+    // C's FT_DivFix (ftcalc.c:233, INT64 path) uses sign-stripping:
+    //   FT_MOVE_SIGN(a) → ua, s; FT_MOVE_SIGN(b) → ub, s;
+    //   q = ((ua << 16) + (ub >> 1)) / ub (unsigned division);
+    //   return s < 0 ? -q : q;
+    // This is NOT the same as signed ((a<<16)+(b>>1))/b because
+    // signed division truncates toward zero vs floor behavior of
+    // the sign-stripped unsigned path.
     if b == 0 {
         return 0x7FFFFFFF;
     }
-    let temp = ((a as i64) << 16) + ((b as i64) >> 1);
-    (temp / (b as i64)) as i32
+    let ua: u64 = (a as i64).unsigned_abs();
+    let ub: u64 = (b as i64).unsigned_abs();
+    let q = ((ua << 16) + (ub >> 1)) / ub;
+    let q32 = q as i32;
+    let negate = (a < 0) ^ (b < 0);
+    if negate { 0i32.wrapping_sub(q32) } else { q32 }
 }
 
 /// FT_RoundFix — round a 16.16 fixed to the nearest integer in 16.16.
@@ -152,12 +140,10 @@ mod tests {
 
     #[test]
     fn div_fix_negative_divisor() {
-        // C: ft_div_fix(0x400, -2048) = (-0.5 in 16.16) → -0x8000 = -32768
-        // But C's FT_DivFix adds b>>1 BEFORE signed division (truncates toward zero).
-        // temp = (1024 << 16) + (-1024) = 67108864-1024 = 67107840
-        // 67107840 / (-2048) = -32767 (truncated toward zero). C returns -32767.
+        // C's FT_DivFix sign-stripping: (|1024|<<16 + |2048|>>1) / |2048| = 32768
+        // negate (a,b signs differ) → -32768
         let r = ft_div_fix(16 << 6, -2048);
-        assert_eq!(r, -32767);
+        assert_eq!(r, -0x8000);
     }
 
     #[test]
@@ -180,6 +166,8 @@ mod tests {
 
     #[test]
     fn mul_div_negative() {
+        // C sign-stripping: (|3|*|5| + |2|>>1) / |2| = (15+1)/2 = 8
+        // negate((a<0)^(b<0)^(c<0)) = negate(true) = -8
         assert_eq!(ft_mul_div(-3, 5, 2), -8);
     }
 }
