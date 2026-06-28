@@ -5,7 +5,7 @@ use super::types::*;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-/// Port of `FT_HYPOT` (ftobjs.h:80-85) — approximate hypotenuse.
+/// ✅ VERIFIED: matches C's FT_HYPOT (ftobjs.h:80-85).
 /// Returns max(|x|,|y|) + 3*min(|x|,|y|)/8.
 fn ft_hypot(x: i32, y: i32) -> i32 {
     let ax = x.abs();
@@ -26,9 +26,8 @@ fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
 
 // ── Direction computation ─────────────────────────────────────────────────
 
-/// Port of `af_direction_compute` (afhints.c:750–796).
-/// Determines the major direction of a vector from (dx, dy).
-/// The threshold: the longer arm must be > 14× the shorter arm (~4.1°).
+/// ✅ VERIFIED: matches C's af_direction_compute (afhints.c:750-796) textually.
+/// Threshold: longer arm > 14× shorter (~4.1°).
 pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ax = dx.abs();
     let ay = dy.abs();

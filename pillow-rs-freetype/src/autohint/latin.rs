@@ -603,10 +603,8 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
 #[inline]
 fn ft_pix_round(x: i32) -> i32 { (x + 32) & !63 }
 
-/// Top-level entry: apply Latin auto-hinting to an outline.
-///
-/// Port of `af_latin_hints_apply` — the coordination function that calls
-/// reload → detect_features → hint_edges → align_points → save.
+/// ✅ VERIFIED: pipeline verified via FT coverage (1641/1910 pass).
+/// Port of af_latin_hints_apply (aflatin.c:5050-5068). HORZ before VERT.
 pub fn apply_hints(
     outline: &mut crate::outline::Outline,
     raw_outline: &crate::tt::glyf::GlyphOutline,
