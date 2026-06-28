@@ -205,6 +205,23 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             // Non-near neighbor — set chain pointers
             hints.points[curr].u = next as i32 - curr as i32;
             hints.points[next].v = -hints.points[curr].u;
+
+            // ⚠️ Override out_dir/in_dir for intermediate points (C: afhints.c:1179-1189)
+            // C accumulates vectors across all intermediate points (not just NEAR)
+            // and overrides their directions to the accumulated direction.
+            // This prevents compute_segments from starting segments at points
+            // whose per-point direction differs from the accumulated direction.
+            let chain_dir = direction_compute(out_x, out_y);
+            hints.points[curr].out_dir = chain_dir;
+            let mut mid = hints.points[curr].next;
+            while mid != next {
+                hints.points[mid].in_dir = chain_dir;
+                hints.points[mid].out_dir = chain_dir;
+                mid = hints.points[mid].next;
+            }
+            // C sets next->in_dir here; next->out_dir set when next becomes curr
+            hints.points[next].in_dir = chain_dir;
+
             // After setting u: point to first (C: afhints.c:1191)
             hints.points[next].u = first as i32 - next as i32;
             hints.points[first].v = -hints.points[next].u;
