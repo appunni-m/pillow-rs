@@ -26,7 +26,12 @@ MATRIX_PATH = FIXTURES / "coverage_matrix_ft.json"
 
 FONTS = {
     "DejaVuSans": ("DejaVuSans.ttf", "DejaVu Sans", "Book"),
+    "DejaVuSerif": ("DejaVuSerif.ttf", "DejaVu Serif", "Book"),
+    "DejaVuSansMono": ("DejaVuSansMono.ttf", "DejaVu Sans Mono", "Book"),
+    "LiberationSans": ("LiberationSans-Regular.ttf", "Liberation Sans", "Regular"),
     "LiberationSerif": ("LiberationSerif-Regular.ttf", "Liberation Serif", "Regular"),
+    "LiberationMono": ("LiberationMono-Regular.ttf", "Liberation Mono", "Regular"),
+    "NotoSans": ("NotoSans-Regular.ttf", "Noto Sans", "Regular"),
 }
 GEN_BINARY = "/tmp/gen_ft_refs"
 SHA = hashlib.sha256
@@ -93,7 +98,7 @@ for fn, (ff, fam, sty) in FONTS.items():
 matrix = {"version": "2.0.0", "font_source": "fonts_autohint", "hinting": "autohint",
           "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
           "mode": "FreeType-raw", "rows": rows,
-          "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": 2, "sizes": 5, "glyphs": 94}}
+          "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": 7, "sizes": 5, "glyphs": 94}}
 
 # getlength: add from PIL matrix (backend-independent, hmtx-based advance widths)
 pil_matrix = json.loads((FIXTURES / "coverage_matrix.json").read_text())
