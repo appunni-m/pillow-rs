@@ -24,11 +24,21 @@ MATRIX_PATH = FIXTURES / "coverage_matrix.json"
 
 FONTS = {
     "DejaVuSans": "DejaVuSans.ttf",
+    "DejaVuSerif": "DejaVuSerif.ttf",
+    "DejaVuSansMono": "DejaVuSansMono.ttf",
+    "LiberationSans": "LiberationSans-Regular.ttf",
     "LiberationSerif": "LiberationSerif-Regular.ttf",
+    "LiberationMono": "LiberationMono-Regular.ttf",
+    "NotoSans": "NotoSans-Regular.ttf",
 }
 FONT_NAMES = {
     "DejaVuSans": ("DejaVu Sans", "Book"),
+    "DejaVuSerif": ("DejaVu Serif", "Book"),
+    "DejaVuSansMono": ("DejaVu Sans Mono", "Book"),
+    "LiberationSans": ("Liberation Sans", "Regular"),
     "LiberationSerif": ("Liberation Serif", "Regular"),
+    "LiberationMono": ("Liberation Mono", "Regular"),
+    "NotoSans": ("Noto Sans", "Regular"),
 }
 SIZES = [10, 12, 16, 20, 24]
 CHARS = [chr(c) for c in range(33, 127)]  # printable ASCII
