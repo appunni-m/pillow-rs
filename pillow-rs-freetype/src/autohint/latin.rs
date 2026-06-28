@@ -12,7 +12,7 @@ use super::types::{
     Direction, Dimension,
     AF_FLAG_IGNORE, AF_FLAG_CONTROL, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y,
     AF_FLAG_WEAK_INTERPOLATION,
-    AF_EDGE_ROUND, AF_EDGE_SERIF, AF_EDGE_DONE,
+    AF_EDGE_ROUND, AF_EDGE_NORMAL, AF_EDGE_SERIF, AF_EDGE_DONE,
     AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_VERT_SNAP,
     AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_MONO,
     AfLatinMetrics, AfWidth, AfLatinBlue, AF_LATIN_MAX_WIDTHS,
@@ -621,6 +621,7 @@ pub fn apply_hints(
     y_scale: i32,
     x_delta: i32,
     y_delta: i32,
+    glyph_index: u16,
     metrics: Option<&AfLatinMetrics>,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
@@ -660,7 +661,15 @@ pub fn apply_hints(
     }
     compute_edges(&mut hints, Dimension::Vert);
     // Blue zones are pre-scaled by metrics_scale_dim (per-size); assign edges.
-    compute_blue_edges(&mut hints);
+    // ⚠️ MATCHES C: af_latin_hints_apply skips compute_blue_edges for non-base
+    //    glyphs (accents, diacritics, etc.) via ganglia->glyph_styles & AF_NONBASE.
+    let is_nonbase = hints.metrics.as_ref()
+        .map(|m| (glyph_index as usize) < m.non_base_glyphs.len()
+            && m.non_base_glyphs[glyph_index as usize])
+        .unwrap_or(false);
+    if !is_nonbase {
+        compute_blue_edges(&mut hints);
+    }
     hint_edges(&mut hints, Dimension::Vert, &vert_widths_26_6);
     align_edge_points(&mut hints, Dimension::Vert);
     align_strong_points(&mut hints, Dimension::Vert);
@@ -972,9 +981,9 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
     // segment_length_threshold: skip segments shorter than 1px (Horz only).
     let seg_len_thresh = if dim == Dimension::Horz {
-        ft_mul_div(64, 0x10000, hints.y_scale)   // FT_DivFix(64, hints->y_scale) in font units
+        ft_mul_div(64, 0x10000, hints.y_scale)
     } else {
-        0 // no height filtering for vertical/horizontal edges
+        0 // no height filtering for vertical/horizontal edges (C default)
     };
     let seg_width_thresh = ft_mul_div(32, 0x10000, scale); // 0.5px in font units
 
@@ -1079,6 +1088,28 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         }
     }
 
+    // ── Sort edges by fpos BEFORE propagation (matches C's fpos-sorted insertion) ──
+    // C processes edges in fpos-sorted order. The AF_EDGE_SERIF flag set by
+    // earlier edges is cleared when the target edge's own `flags=AF_EDGE_NORMAL`
+    // runs. Without sorting first, SERIF can persist on edges processed too early.
+    if axis.edges.len() > 1 {
+        let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
+        indices.sort_by_key(|&i| axis.edges[i].fpos);
+        let mut new_from_old: Vec<usize> = vec![0; axis.edges.len()];
+        for (new_idx, &old_idx) in indices.iter().enumerate() {
+            new_from_old[old_idx] = new_idx;
+        }
+        let old_edges: Vec<AFEdge> = axis.edges.drain(..).collect();
+        for &old_idx in &indices {
+            axis.edges.push(old_edges[old_idx].clone());
+        }
+        for seg in &mut axis.segments {
+            if seg.edge != usize::MAX {
+                seg.edge = new_from_old[seg.edge];
+            }
+        }
+    }
+
     // ── Edge link/serif propagation (aflatin.c:2384–2495) ──────────────────
     // For each edge, walk its segments and propagate segment links/serifs to
     // the edge level. Also compute AF_EDGE_ROUND vs AF_EDGE_NORMAL.
@@ -1145,6 +1176,10 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         }
 
         // Set round flag (aflatin.c:2470-2473).
+        // ⚠️ MATCHES C: edge->flags = AF_EDGE_NORMAL resets ALL flags
+        //    (including SERIF set by other edges' serif assignments),
+        //    then conditionally adds AF_EDGE_ROUND.
+        axis.edges[e_idx].flags = AF_EDGE_NORMAL;
         if is_round > 0 && is_round >= is_straight {
             axis.edges[e_idx].flags |= AF_EDGE_ROUND;
         }
@@ -1152,48 +1187,6 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         // Conflict resolution: serif + link → drop serif (aflatin.c:2493).
         if axis.edges[e_idx].serif != usize::MAX && axis.edges[e_idx].link != usize::MAX {
             axis.edges[e_idx].serif = usize::MAX;
-        }
-    }
-
-    // ── Sort edges by fpos (ascending) — matches FreeType's insertion order ───
-    // FreeType inserts edges in fpos-sorted order during creation via
-    // af_axis_hints_new_edge. We sort post-creation and remap all indices.
-    if axis.edges.len() > 1 {
-        // Build sort permutation: old_idx -> new position
-        let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
-        indices.sort_by_key(|&i| axis.edges[i].fpos);
-        // Build reverse map: new_pos -> old_idx
-        let mut old_from_new: Vec<usize> = vec![0; axis.edges.len()];
-        for (new_idx, &old_idx) in indices.iter().enumerate() {
-            old_from_new[new_idx] = old_idx;
-        }
-        // Build map: old_idx -> new_idx
-        let mut new_from_old: Vec<usize> = vec![0; axis.edges.len()];
-        for (new_idx, &old_idx) in indices.iter().enumerate() {
-            new_from_old[old_idx] = new_idx;
-        }
-
-        // Sort edges
-        let old_edges: Vec<AFEdge> = axis.edges.drain(..).collect();
-        for &old_idx in &indices {
-            axis.edges.push(old_edges[old_idx].clone());
-        }
-
-        // Remap segment.edge references
-        for seg in &mut axis.segments {
-            if seg.edge != usize::MAX {
-                seg.edge = new_from_old[seg.edge];
-            }
-        }
-
-        // Remap edge.link and edge.serif within sorted edges
-        for edge in &mut axis.edges {
-            if edge.link != usize::MAX {
-                edge.link = new_from_old[edge.link];
-            }
-            if edge.serif != usize::MAX {
-                edge.serif = new_from_old[edge.serif];
-            }
         }
     }
 }
@@ -1813,7 +1806,6 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
             }
         }
     }
-
     // ── Phase 4: Non-stem edges ─────────────────────────────────────────
     // Ported faithfully (aflatin.c:4629–4824).
     // This is the active path since all our edges lack links.

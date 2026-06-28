@@ -116,7 +116,45 @@ impl Font {
         });
 
         let upem = font_data.head.units_per_em as i32;
-        let mut latin_metrics = crate::autohint::AfLatinMetrics::new(upem);
+        let num_glyphs = font_data.maxp.num_glyphs as u16;
+        let mut latin_metrics = crate::autohint::AfLatinMetrics::new(upem, num_glyphs);
+
+        // Build non-base glyph table (mirrors C's af_global_metrics_init).
+        // Latin non-base Unicode ranges from afranges.c: af_latn_nonbase_uniranges[].
+        {
+            let nonbase_ranges: &[(u32, u32)] = &[
+                (0x005E, 0x0060),  // ^ _ `
+                (0x007E, 0x007E),  // ~
+                (0x00A8, 0x00A9),  // ¨ ©
+                (0x00AE, 0x00B0),  // ® °
+                (0x00B4, 0x00B4),  // ´
+                (0x00B8, 0x00B8),  // ¸
+                (0x00BC, 0x00BE),  // ¼ ½ ¾
+                (0x02B9, 0x02DF),  // modifier letters
+                (0x02E5, 0x02FF),  // modifier tone letters
+                (0x0300, 0x036F),  // combining diacritics
+                (0x1AB0, 0x1AEB),  // combining diacritics extended
+                (0x1DC0, 0x1DFF),  // combining diacritics supplement
+                (0x2017, 0x2017),  // ‗
+                (0x203E, 0x203E),  // ‾
+                (0xA788, 0xA788),  // ꞈ
+                (0xA7F8, 0xA7FA),  // modifier letters
+            ];
+            for &(first, last) in nonbase_ranges {
+                let mut ch = first;
+                loop {
+                    let gindex = font_data.cmap.char_index(ch);
+                    if let Some(gi) = gindex {
+                        let gi = gi as usize;
+                        if gi < num_glyphs as usize {
+                            latin_metrics.non_base_glyphs[gi] = true;
+                        }
+                    }
+                    if ch >= last { break; }
+                    ch += 1;
+                }
+            }
+        }
 
         // Find the standard character glyph ('o' for Latin)
         let char_glyph = font_data.cmap.char_index('o' as u32).unwrap_or(0);
