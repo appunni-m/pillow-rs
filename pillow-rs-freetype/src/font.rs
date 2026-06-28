@@ -235,6 +235,9 @@ impl Font {
         let ppem = self.size_pt; // at 72dpi, ppem == size_pt
 
         let (asc_fu, desc_fu) = pick_metrics(data);
+        // ceil(|fu| * ppem / upem). Known issue: f32 precision causes rare
+        // off-by-1 for values very near integers (e.g., LiberationMono
+        // desc=615*10/2048=3.0029, f32 gives 3.00293→ceil=4 instead of 3).
         let asc = (asc_fu as f32 * ppem / upem).ceil() as u32;
         let desc = (desc_fu as f32 * ppem / upem).ceil() as u32;
         (asc, desc)
