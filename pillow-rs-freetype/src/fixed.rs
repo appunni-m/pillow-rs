@@ -6,16 +6,13 @@
 //! Parity tests in `tests/fixed_parity.rs` exhaustively compare all functions
 //! against the C oracle across 2M+ test cases.
 
-/// FreeType's `ADD_LONG`: signed addition computed in unsigned to match the
-/// defined-overflow behaviour of the C `int` type. We saturate to `i32` range
-/// because Rust's wrapping is explicit only — FreeType relies on 2's-complement
-/// `int`, which for our value ranges never actually overflows.
+/// ✅ TRIVIAL: wrapping_add matching C's 2's-complement int.
 #[inline]
 fn add_long(a: i32, b: i32) -> i32 {
     a.wrapping_add(b)
 }
 
-/// FreeType's `NEG_LONG`: negate through unsigned arithmetic (safe for INT_MIN).
+/// ✅ TRIVIAL: wrapping_sub matching C's NEG_LONG.
 #[inline]
 fn neg_long(a: i32) -> i32 {
     0i32.wrapping_sub(a)
@@ -27,6 +24,7 @@ fn neg_long(a: i32) -> i32 {
 /// add half-divisor + divide, then restores sign with XOR of sign bits.
 /// Exhaustive parity: 0 diffs in 2M+ values (fixed_parity.rs).
 #[inline]
+// ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
 pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     if c == 0 {
         return 0x7FFFFFFF;
@@ -47,6 +45,7 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
 /// giving rounded-toward-infinity for both sign cases.
 /// Exhaustive parity: 0 diffs in 65K+ values (fixed_parity.rs).
 #[inline]
+// ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
 pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
     let ab = (a as i64).wrapping_mul(b as i64);
     let rounded = ab.wrapping_add(0x8000).wrapping_add(ab >> 63);
@@ -62,6 +61,7 @@ pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
 /// unsigned-floor-then-negate.
 /// Exhaustive parity: 0 diffs in 65K+ values (fixed_parity.rs).
 #[inline]
+// ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
 pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     // C's FT_DivFix (ftcalc.c:233, INT64 path) uses sign-stripping:
     //   FT_MOVE_SIGN(a) → ua, s; FT_MOVE_SIGN(b) → ub, s;
@@ -90,16 +90,14 @@ pub fn ft_round_fix(a: i32) -> i32 {
     add_long(a, bias) & !0xFFFFi32
 }
 
-/// FT_CeilFix — round a 16.16 fixed *up* to the next integer in 16.16.
-///
+/// FT_CeilFix — ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests).
 /// Reference: `ftcalc.c:84`. `ADD_LONG(a, 0xFFFFL) & ~0xFFFFL`.
 #[inline]
 pub fn ft_ceil_fix(a: i32) -> i32 {
     add_long(a, 0xFFFF) & !0xFFFFi32
 }
 
-/// FT_FloorFix — round a 16.16 fixed *down* to the integer in 16.16.
-///
+/// FT_FloorFix — ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests).
 /// Reference: `ftcalc.c:93`. `a & ~0xFFFFL`.
 #[inline]
 pub fn ft_floor_fix(a: i32) -> i32 {

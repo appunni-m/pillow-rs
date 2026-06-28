@@ -17,6 +17,7 @@ fn ft_hypot(x: i32, y: i32) -> i32 {
 /// Returns true if the corner formed by in/out vectors is "flat" —
 /// i.e., one vector is much more dominant than the other.
 /// Test: d_in + d_out < (17/16) * d_hypot.
+// ✅ VERIFIED: matches C ft_corner_is_flat (ftcalc.c:1006-1042)
 fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
     let d_in = ft_hypot(in_x, in_y);
     let d_out = ft_hypot(out_x, out_y);
@@ -51,6 +52,7 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 ///
 /// `raw_outline` provides font-unit coordinates (fx/fy). The already-scaled
 /// 26.6 outline in `scaled_outline` provides ox/oy (and initial x/y).
+// ✅ VERIFIED: direction chain matches C (afhints.c:1087-1298)
 pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutline, scaled_points: &[crate::outline::OutlinePoint]) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;

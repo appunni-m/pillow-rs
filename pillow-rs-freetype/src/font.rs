@@ -358,6 +358,7 @@ impl Font {
 /// FreeType's `sfnt_init_face` uses OS/2 usWinAscent/usWinDescent for the
 /// face-level ascender/descender. The descender is converted to a positive
 /// value matching PIL's convention.
+// ✅ VERIFIED: OS/2 priority lookup matches C (sfobjs.c).
 fn pick_metrics(data: &FontData) -> (i32, i32) {
     // FreeType priority (sfobjs.c:1380-1413):
     // 1. OS/2 with USE_TYPO_METRICS → sTypo*,  2. hhea,  3. OS/2 sTypo*/usWin*
