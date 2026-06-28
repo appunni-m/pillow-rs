@@ -19,3 +19,4 @@ venv/
 libnull.rlib
 pybak/
 pillow-rs-freetype/freetype/
+tests/fixtures/outputs/
