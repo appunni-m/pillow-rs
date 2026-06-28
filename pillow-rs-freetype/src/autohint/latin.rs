@@ -628,7 +628,22 @@ pub fn apply_hints(
         return;
     }
 
-    // Step 2: Process vertical dimension (Y-axis / horizontal edges)
+    // Step 2: Process horizontal dimension first (X-axis / vertical edges)
+    // ✅ Order matches C's af_latin_hints_apply (aflatin.c:5050-5068): HORZ before VERT.
+    compute_segments(&mut hints, Dimension::Horz);
+    let horz_widths_26_6: Vec<i32>;
+    {
+        let (wc, widths) = extract_widths(&hints, Dimension::Horz);
+        horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+        link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+    }
+    compute_edges(&mut hints, Dimension::Horz);
+    hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6);
+    align_edge_points(&mut hints, Dimension::Horz);
+    align_strong_points(&mut hints, Dimension::Horz);
+    align_weak_points(&mut hints, Dimension::Horz);
+
+    // Step 3: Process vertical dimension (Y-axis / horizontal edges)
     compute_segments(&mut hints, Dimension::Vert);
     let vert_widths_26_6: Vec<i32>; // scaled widths for snapping
     {
@@ -643,20 +658,6 @@ pub fn apply_hints(
     align_edge_points(&mut hints, Dimension::Vert);
     align_strong_points(&mut hints, Dimension::Vert);
     align_weak_points(&mut hints, Dimension::Vert);
-
-    // Step 3: Process horizontal dimension (X-axis / vertical edges)
-    compute_segments(&mut hints, Dimension::Horz);
-    let horz_widths_26_6: Vec<i32>;
-    {
-        let (wc, widths) = extract_widths(&hints, Dimension::Horz);
-        horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
-        link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
-    }
-    compute_edges(&mut hints, Dimension::Horz);
-    hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6);
-    align_edge_points(&mut hints, Dimension::Horz);
-    align_strong_points(&mut hints, Dimension::Horz);
-    align_weak_points(&mut hints, Dimension::Horz);
 
     // ── Post-hinting phantom-point adjustment (afloader.c:419-530) ──────
     // After hint_edges grid-fits the leftmost/rightmost edges, we compute
