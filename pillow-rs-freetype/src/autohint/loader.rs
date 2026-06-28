@@ -165,42 +165,47 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         }
     }
 
-    // ── Build direction chain (C: afhints.c:1100-1165) ────────────────
-    // u/v store index deltas to next/previous non-near on-curve point.
-    // Default: point to self (delta 0) — matches C when uninitialized.
-    for pt in &mut hints.points {
-        pt.u = 0;
-        pt.v = 0;
-    }
-    let near_limit2 = NEAR_THRESHOLD as i32 * 2;
+    // ── Build direction chain (C: afhints.c:1100-1200) ────────────────
+    // u/v store index deltas to next/previous NON-NEAR point.
+    // Accumulate per-segment taxicab distances; break at near_limit.
+    let near_limit_chain = if let Some(ref met) = hints.metrics {
+        (20 * met.units_per_em / 2048).max(1)
+    } else {
+        20
+    };
+    let near_limit2 = 2 * near_limit_chain - 1;
+    for pt in &mut hints.points { pt.u = 0; pt.v = 0; }
     for &c_start in &hints.contours {
-        // Walk backward from c_start to find first non-near point
         let mut point = c_start;
-        let mut pprev = hints.points[point].prev;
-        while pprev != c_start {
-            let out_x = hints.points[point].fx as i32 - hints.points[pprev].fx as i32;
-            let out_y = hints.points[point].fy as i32 - hints.points[pprev].fy as i32;
-            if out_x.abs() + out_y.abs() >= near_limit2 {
-                break;
-            }
-            point = pprev;
-            pprev = hints.points[pprev].prev;
+        let mut prev = hints.points[point].prev;
+        while prev != c_start {
+            let dx = hints.points[point].fx as i32 - hints.points[prev].fx as i32;
+            let dy = hints.points[point].fy as i32 - hints.points[prev].fy as i32;
+            if dx.abs() + dy.abs() >= near_limit2 { break; }
+            point = prev; prev = hints.points[prev].prev;
         }
         let first = point;
-
-        // u = forward to next non-near; v = backward to previous non-near
         let mut curr = first;
-        hints.points[curr].u = 0; // first points to self
-        hints.points[first].v = 0;
-
-        let mut next = hints.points[curr].next;
+        hints.points[curr].u = 0; hints.points[first].v = 0;
+        let mut out_x: i32 = 0; let mut out_y: i32 = 0;
+        let mut next = curr;
         loop {
+            point = next; next = hints.points[point].next;
+            out_x += hints.points[next].fx as i32 - hints.points[point].fx as i32;
+            out_y += hints.points[next].fy as i32 - hints.points[point].fy as i32;
+            if out_x.abs() + out_y.abs() < near_limit_chain {
+                hints.points[next].flags |= AF_FLAG_WEAK_INTERPOLATION;
+                if next == first { break; }
+                continue;
+            }
+            // Non-near neighbor — set chain pointers
             hints.points[curr].u = next as i32 - curr as i32;
             hints.points[next].v = -hints.points[curr].u;
-
+            // After setting u: point to first (C: afhints.c:1191)
+            hints.points[next].u = first as i32 - next as i32;
+            hints.points[first].v = -hints.points[next].u;
+            curr = next; out_x = 0; out_y = 0;
             if next == first { break; }
-            curr = next;
-            next = hints.points[curr].next;
         }
     }
 
