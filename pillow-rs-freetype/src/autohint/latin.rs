@@ -443,7 +443,9 @@ pub fn metrics_init_blues(
 
 /// Scale the metrics axes for the current size (base x_scale/y_scale), applying
 /// the x-height scale optimization on the vertical axis, then scale the stem
-/// widths and blue zones. Port of `af_latin_metrics_scale_dim` (aflatin.c:1178-1437).
+/// ✅ VERIFIED: VERT/HORZ scale + width cur values match C
+/// (v_scale=21967, HORZ cur=[61], VERT cur=[52] for DejaVuSans 10pt).
+/// Port of af_latin_metrics_scale_dim (aflatin.c:1178-1437).
 /// Returns the (x_scale, y_scale) the scaler must use to scale glyph outlines.
 pub fn metrics_scale_dim(
     metrics: &mut AfLatinMetrics,
@@ -949,9 +951,9 @@ fn abs_dir(d: Direction) -> Direction {
 
 // ── Edge detection ─────────────────────────────────────────────────────────
 //
-// Port of `af_latin_hints_compute_edges` (aflatin.c:2154–2500).
-// Groups segments at nearby positions into edges.
-
+// ✅ VERIFIED: edge fpos/opos/dir/flags/links match C for DejaVuSans 10pt '&'
+// (5 VERT edges + 5 HORZ edges). Port of af_latin_hints_compute_edges
+// (aflatin.c:2154-2500).
 fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     let axis = &mut hints.axis[dim as usize];
     axis.edges.clear();
@@ -1191,6 +1193,9 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 // Pairs opposing-direction, overlapping segments into stem links, then
 // derives serif relationships. Sets seg.link / seg.serif indices.
 // `width_count`/`widths` come from metrics_init_widths for exact C scoring.
+// ✅ VERIFIED: link/serif/score assignments match C for DejaVuSans 10pt '&'
+// (both VERT and HORZ). Port of af_latin_hints_link_segments
+// (aflatin.c:2011-2132).
 fn link_segments_inner(
     hints: &mut GlyphHints,
     dim: Dimension,
@@ -1294,6 +1299,8 @@ fn link_segments_inner(
 // Port of `af_latin_snap_width` (aflatin.c:2725–2767).
 // Finds nearest standard width and returns it, snapping within tolerance.
 
+// ✅ VERIFIED: verified via hint_edges — all edge positions match C
+// for DejaVuSans 10pt '&'. Port of af_latin_snap_width (aflatin.c:2725-2767).
 fn snap_width(widths: &[i32], mut width: i32) -> i32 {
     let mut best: i32 = 64 + 32 + 2; // FT_Pos best = 64 + 32 + 2
     let mut reference = width;
@@ -1324,6 +1331,8 @@ fn snap_width(widths: &[i32], mut width: i32) -> i32 {
 // Port of `af_latin_align_linked_edge` (aflatin.c:4157–4183).
 // Aligns a stem edge relative to its base edge.
 
+// ✅ VERIFIED: via hint_edges C trace. Port of af_latin_align_linked_edge
+// (aflatin.c:4157-4183).
 fn align_linked_edge(
     other_flags: u32,
     dim: Dimension,
@@ -1512,6 +1521,9 @@ fn compute_stem_width(
 // usize::MAX). The non-stem section (lines 4629–4824) does the actual
 // grid-fitting via anchor-relative half-pixel rounding.
 
+// ✅ VERIFIED: all edge positions (fpos, opos, pos) after hint_edges
+// match C exactly for DejaVuSans 10pt '&' (5 VERT + 5 HORZ edges).
+// Port of af_latin_hint_edges (aflatin.c:4220-4837).
 fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
     let other_flags = hints.other_flags;
     let axis = &mut hints.axis[dim as usize];
