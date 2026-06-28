@@ -1013,6 +1013,11 @@
           point->fy = (FT_Short)vec->y;
           point->ox = point->x = FT_MulFix( vec->x, x_scale ) + x_delta;
           point->oy = point->y = FT_MulFix( vec->y, y_scale ) + y_delta;
+          if ( point - hints->points < 5 ) {
+            fprintf(stderr, "[C reload] p%ld: fx=%d fy=%d ox=%ld oy=%ld\n",
+                    (long)(point - hints->points), (int)point->fx, (int)point->fy,
+                    (long)point->ox, (long)point->oy);
+          }
 
           end->fx = (FT_Short)outline->points[endpoint].x;
           end->fy = (FT_Short)outline->points[endpoint].y;
@@ -1414,6 +1419,7 @@
   af_glyph_hints_align_strong_points( AF_GlyphHints  hints,
                                       AF_Dimension   dim )
   {
+    fprintf(stderr, "[C align_strong] dim=%d n_points=%d\n", dim, hints->num_points);
     AF_Point      points      = hints->points;
     AF_Point      point_limit = points + hints->num_points;
     AF_AxisHints  axis        = &hints->axis[dim];
@@ -1438,6 +1444,10 @@
         FT_Pos  u, ou, fu;  /* point position */
         FT_Pos  delta;
 
+        if ( point - points < 5 )
+          fprintf(stderr, "[C strong_loop] p%ld dim=%d flags=0x%x touch=%d\n",
+                  (long)(point-points), dim, point->flags,
+                  (int)((point->flags & touch_flag) != 0));
 
         if ( point->flags & touch_flag )
           continue;
@@ -1562,11 +1572,19 @@
 
             u = before->pos + FT_MulFix( fu - before->fpos,
                                          before->scale );
+            if ( point - points < 5 )
+              fprintf(stderr, "[C strong_interp] p%ld dim=%d u=%ld fu=%ld bfpos=%ld bpos=%ld scale=%ld\n",
+                      (long)(point-points), dim, (long)u, (long)fu,
+                      (long)before->fpos, (long)before->pos, (long)before->scale);
           }
         }
 
       Store_Point:
         /* save the point position */
+        if ( point - points < 5 ) {
+          fprintf(stderr, "[C Store_Point] p%ld dim=%d u=%ld\n",
+                  (long)(point - points), dim, (long)u);
+        }
         if ( dim == AF_DIMENSION_HORZ )
           point->x = u;
         else
@@ -1686,8 +1704,9 @@
 
   FT_LOCAL_DEF( void )
   af_glyph_hints_align_weak_points( AF_GlyphHints  hints,
-                                    AF_Dimension   dim )
+                                     AF_Dimension   dim )
   {
+    fprintf(stderr, "[C align_weak/IUP] dim=%d n_points=%d\n", dim, hints->num_points);
     AF_Point   points        = hints->points;
     AF_Point   point_limit   = points + hints->num_points;
     AF_Point*  contour       = hints->contours;
