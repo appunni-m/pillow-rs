@@ -625,27 +625,9 @@ pub fn apply_hints(
     if hints.num_points() == 0 {
         return;
     }
-    if hints.num_points() == 49 {
-        eprintln!("RELOAD: scale_x={} scale_y={} n_points={}", hints.x_scale, hints.y_scale, hints.num_points());
-        for i in 0..hints.num_points() {
-            let p = &hints.points[i];
-            eprintln!("  p{}: fx={} fy={} ox={} oy={} flags=0x{:04x} weak={} dir_in={:?} dir_out={:?}",
-                i, p.fx, p.fy, p.ox, p.oy, p.flags,
-                p.flags & AF_FLAG_WEAK_INTERPOLATION != 0,
-                p.in_dir, p.out_dir);
-        }
-        return;
-    }
 
     // Step 2: Process vertical dimension (Y-axis / horizontal edges)
     compute_segments(&mut hints, Dimension::Vert);
-    if hints.num_points() == 49 {
-        eprintln!("VERT segments:");
-        for (i, seg) in hints.axis[Dimension::Vert as usize].segments.iter().enumerate() {
-            eprintln!("  seg[{}]: pos={} min={} max={} first={} last={} dir={:?}",
-                i, seg.pos, seg.min_coord, seg.max_coord, seg.first, seg.last, seg.dir);
-        }
-    }
     let vert_widths_26_6: Vec<i32>; // scaled widths for snapping
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Vert);
@@ -662,13 +644,6 @@ pub fn apply_hints(
 
     // Step 3: Process horizontal dimension (X-axis / vertical edges)
     compute_segments(&mut hints, Dimension::Horz);
-    if hints.num_points() == 49 {
-        eprintln!("HORZ segments:");
-        for (i, seg) in hints.axis[Dimension::Horz as usize].segments.iter().enumerate() {
-            eprintln!("  seg[{}]: pos={} min={} max={} first={} last={} dir={:?}",
-                i, seg.pos, seg.min_coord, seg.max_coord, seg.first, seg.last, seg.dir);
-        }
-    }
     let horz_widths_26_6: Vec<i32>;
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Horz);
@@ -1056,8 +1031,6 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             axis.edges.push(edge);
             // Update the segment's edge reference.
             axis.segments[seg_idx].edge = axis.edges.len() - 1;
-            eprintln!("[Rust compute_edges {:?}] NEW edge[{}] fpos={} seg_pos={}",
-                dim, axis.edges.len() - 1, fpos, seg_pos);
         } else {
             // Append segment to existing edge.
             let e = &mut axis.edges[found_edge];
@@ -2113,10 +2086,6 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
         }
     } else {
         let scale = ft_mul_div(u2 - u1, 0x10000, v2 - v1); // FT_DivFix
-        if p1 == 0 {
-            eprintln!("[IUP] p1={} p2={} ref1={} ref2={} u1={} u2={} v1={} v2={} d1={} d2={} scale={}",
-                p1, p2, ref1, ref2, u1, u2, v1, v2, d1, d2, scale);
-        }
         for i in p1..=p2 {
             let u = points[i].v;
             if u <= v1 { points[i].u = u + d1; }
