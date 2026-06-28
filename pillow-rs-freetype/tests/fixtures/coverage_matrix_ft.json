@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "font_source": "fonts_autohint",
   "hinting": "autohint",
-  "generator": "FreeType 2.14.3 autohinter raw",
+  "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
   "mode": "FreeType-raw",
   "rows": [
     {
@@ -27627,8 +27627,8 @@
     }
   ],
   "summary": {
-    "total_rows": 1910,
-    "active_rows": 1910,
+    "total_rows": 1900,
+    "active_rows": 1900,
     "fonts": 2,
     "sizes": 5,
     "glyphs": 94
