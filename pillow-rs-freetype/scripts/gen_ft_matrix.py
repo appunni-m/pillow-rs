@@ -8,6 +8,9 @@ Requires: gen_ft_refs.c compiled with:
     -Wl,-rpath,$HOME/.local/lib
 
 Also requires: FreeType 2.14.3 built via scripts/build_ft.sh
+
+Note: getlength uses hmtx-based computation (backend-independent), so
+values are taken from the PIL matrix which is the reference for advance widths.
 """
 
 import hashlib
@@ -64,15 +67,7 @@ for fn, (ff, fam, sty) in FONTS.items():
             rows.append({"id": f"{fn}_{sz}_getname", "font": fn, "size_pt": sz,
                         "codepoint": 0, "char": "", "operation": "getname", "status": "active",
                         "ref_value": [fam, sty]})
-            total = 0.0
-            for ch in "Hello":
-                for l2 in lines:
-                    if l2.startswith(f"GLYPH {ord(ch)} "):
-                        total += int(l2.split()[5]) / 64.0
-                        break
-            rows.append({"id": f"{fn}_{sz}_getlength_hello", "font": fn, "size_pt": sz,
-                        "codepoint": 0, "char": "Hello", "operation": "getlength", "status": "active",
-                        "ref_value": total})
+            # getlength: use PIL reference (backend-independent hmtx-based advance)
             continue
         if parts[0] == 'END_SIZE':
             sz = None
@@ -96,8 +91,15 @@ for fn, (ff, fam, sty) in FONTS.items():
                         "ref_value": [left, top - h, left + w, top]})
 
 matrix = {"version": "2.0.0", "font_source": "fonts_autohint", "hinting": "autohint",
-          "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_RENDER",
+          "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
           "mode": "FreeType-raw", "rows": rows,
           "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": 2, "sizes": 5, "glyphs": 94}}
+
+# getlength: add from PIL matrix (backend-independent, hmtx-based advance widths)
+pil_matrix = json.loads((FIXTURES / "coverage_matrix.json").read_text())
+for r in pil_matrix["rows"]:
+    if r.get("operation") == "getlength":
+        rows.append(dict(r))  # copy entire row
+
 MATRIX_PATH.write_text(json.dumps(matrix, indent=2) + "\n")
 print(f"FT 2.14.3 matrix: {len(rows)} rows -> {MATRIX_PATH}", file=sys.stderr)

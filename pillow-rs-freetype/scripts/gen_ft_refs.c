@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
         for(int c=33;c<127;c++) {
             FT_UInt idx = FT_Get_Char_Index(face,c);
             if(!idx) continue;
-            err = FT_Load_Glyph(face,idx,FT_LOAD_RENDER);
+            err = FT_Load_Glyph(face,idx,FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
             if(err) continue;
             
             FT_GlyphSlot slot = face->glyph;
