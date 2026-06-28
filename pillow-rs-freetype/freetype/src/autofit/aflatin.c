@@ -2539,17 +2539,25 @@
     AF_LatinAxis  latin      = &metrics->axis[AF_DIMENSION_VERT];
     FT_Fixed      scale      = latin->scale;
 
+    fprintf(stderr, "[C BLUE START] edges=%td blue_count=%u scale=%ld\n",
+            edge_limit - edge, (unsigned)latin->blue_count, (long)scale);
+
 
     /* compute which blue zones are active, i.e. have their scaled */
     /* size < 3/4 pixels                                           */
 
     /* for each horizontal edge search the blue zone which is closest */
+    fprintf(stderr, "[C bluStart] num_edges=%td blue_count=%u\n",
+            edge_limit - edge, latin->blue_count);
     for ( ; edge < edge_limit; edge++ )
     {
       FT_UInt   bb;
       AF_Width  best_blue            = NULL;
       FT_Bool   best_blue_is_neutral = 0;
       FT_Pos    best_dist;                 /* initial threshold */
+
+      fprintf(stderr, "[C bluEdge] edge[%td] fpos=%ld flags=0x%x\n",
+              edge - axis->edges, (long)edge->fpos, (int)edge->flags);
 
 
       if ( edge->flags & AF_EDGE_NO_BLUE )
@@ -2572,6 +2580,13 @@
         /* skip inactive blue zones (i.e., those that are too large) */
         if ( !( blue->flags & AF_LATIN_BLUE_ACTIVE ) )
           continue;
+
+        fprintf(stderr, "[C bluCheck] e[%td] f=%ld vs b[%u] ref=%ld shoot=%ld top=%d neut=%d e_dir=%d m_dir=%d\n",
+                edge - axis->edges, (long)edge->fpos, bb,
+                (long)blue->ref.org, (long)blue->shoot.org,
+                (int)((blue->flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP)) != 0),
+                (int)((blue->flags & AF_LATIN_BLUE_NEUTRAL) != 0),
+                (int)edge->dir, (int)axis->major_dir);
 
         /* if it is a top zone, check for right edges (against the major */
         /* direction); if it is a bottom zone, check for left edges (in  */
@@ -4251,6 +4266,24 @@
     if ( dim == AF_DIMENSION_VERT )
       top_to_bottom_hinting = script_class->top_to_bottom_hinting;
 
+    /* -------- HINT_EDGES TRACE: INITIAL STATE -------- */
+    {
+      FT_UInt  _ti;
+      FT_PtrDist  _tn = axis->num_edges;
+      fprintf(stderr, "[C TRACE INITIAL] dim=%s edges=%td\n",
+              dim == AF_DIMENSION_VERT ? "HORZ" : "VERT", _tn);
+      for ( _ti = 0; _ti < _tn; _ti++ )
+      {
+        fprintf(stderr, "  edge[%u] fpos=%ld opos=%ld pos=%ld flags=0x%02x link=%td serif=%td blue=%d\n",
+                _ti,
+                (long)edges[_ti].fpos, (long)edges[_ti].opos, (long)edges[_ti].pos,
+                edges[_ti].flags,
+                edges[_ti].link ? edges[_ti].link - edges : -1,
+                edges[_ti].serif ? edges[_ti].serif - edges : -1,
+                edges[_ti].blue_edge ? 1 : 0);
+      }
+    }
+
     /* we begin by aligning all stems relative to the blue zone */
     /* if needed -- that's only for horizontal edges            */
 
@@ -4342,6 +4375,24 @@
 
         if ( !anchor )
           anchor = edge;
+      }
+    }
+
+    /* -------- HINT_EDGES TRACE: AFTER PHASE 1 (blue zones) -------- */
+    {
+      FT_UInt  _ti;
+      FT_PtrDist  _tn = axis->num_edges;
+      fprintf(stderr, "[C TRACE PHASE1] dim=%s edges=%td\n",
+              dim == AF_DIMENSION_VERT ? "HORZ" : "VERT", _tn);
+      for ( _ti = 0; _ti < _tn; _ti++ )
+      {
+        fprintf(stderr, "  edge[%u] fpos=%ld opos=%ld pos=%ld flags=0x%02x link=%td serif=%td blue=%d\n",
+                _ti,
+                (long)edges[_ti].fpos, (long)edges[_ti].opos, (long)edges[_ti].pos,
+                edges[_ti].flags,
+                edges[_ti].link ? edges[_ti].link - edges : -1,
+                edges[_ti].serif ? edges[_ti].serif - edges : -1,
+                edges[_ti].blue_edge ? 1 : 0);
       }
     }
 
@@ -4574,6 +4625,24 @@
       }
     }
 
+    /* -------- HINT_EDGES TRACE: AFTER PHASE 2 (stems) -------- */
+    {
+      FT_UInt  _ti;
+      FT_PtrDist  _tn = axis->num_edges;
+      fprintf(stderr, "[C TRACE PHASE2] dim=%s edges=%td\n",
+              dim == AF_DIMENSION_VERT ? "HORZ" : "VERT", _tn);
+      for ( _ti = 0; _ti < _tn; _ti++ )
+      {
+        fprintf(stderr, "  edge[%u] fpos=%ld opos=%ld pos=%ld flags=0x%02x link=%td serif=%td blue=%d\n",
+                _ti,
+                (long)edges[_ti].fpos, (long)edges[_ti].opos, (long)edges[_ti].pos,
+                edges[_ti].flags,
+                edges[_ti].link ? edges[_ti].link - edges : -1,
+                edges[_ti].serif ? edges[_ti].serif - edges : -1,
+                edges[_ti].blue_edge ? 1 : 0);
+      }
+    }
+
     /* make sure that lowercase m's maintain their symmetry */
 
     /* In general, lowercase m's have six vertical edges if they are sans */
@@ -4633,6 +4702,24 @@
         edge3->flags |= AF_EDGE_DONE;
         if ( edge3->link )
           edge3->link->flags |= AF_EDGE_DONE;
+      }
+    }
+
+    /* -------- HINT_EDGES TRACE: AFTER PHASE 3 (m-symmetry) -------- */
+    {
+      FT_UInt  _ti;
+      FT_PtrDist  _tn = axis->num_edges;
+      fprintf(stderr, "[C TRACE PHASE3] dim=%s edges=%td\n",
+              dim == AF_DIMENSION_VERT ? "HORZ" : "VERT", _tn);
+      for ( _ti = 0; _ti < _tn; _ti++ )
+      {
+        fprintf(stderr, "  edge[%u] fpos=%ld opos=%ld pos=%ld flags=0x%02x link=%td serif=%td blue=%d\n",
+                _ti,
+                (long)edges[_ti].fpos, (long)edges[_ti].opos, (long)edges[_ti].pos,
+                edges[_ti].flags,
+                edges[_ti].link ? edges[_ti].link - edges : -1,
+                edges[_ti].serif ? edges[_ti].serif - edges : -1,
+                edges[_ti].blue_edge ? 1 : 0);
       }
     }
 
@@ -4830,6 +4917,24 @@
             edge->pos = edge[1].pos;
           }
         }
+      }
+    }
+
+    /* -------- HINT_EDGES TRACE: AFTER PHASE 4 (non-stem) -------- */
+    {
+      FT_UInt  _ti;
+      FT_PtrDist  _tn = axis->num_edges;
+      fprintf(stderr, "[C TRACE PHASE4] dim=%s edges=%td\n",
+              dim == AF_DIMENSION_VERT ? "HORZ" : "VERT", _tn);
+      for ( _ti = 0; _ti < _tn; _ti++ )
+      {
+        fprintf(stderr, "  edge[%u] fpos=%ld opos=%ld pos=%ld flags=0x%02x link=%td serif=%td blue=%d\n",
+                _ti,
+                (long)edges[_ti].fpos, (long)edges[_ti].opos, (long)edges[_ti].pos,
+                edges[_ti].flags,
+                edges[_ti].link ? edges[_ti].link - edges : -1,
+                edges[_ti].serif ? edges[_ti].serif - edges : -1,
+                edges[_ti].blue_edge ? 1 : 0);
       }
     }
 
@@ -5047,6 +5152,9 @@
         goto Exit;
 
       /* apply blue zones to base characters only */
+      fprintf(stderr, "[C baseCheck] idx=%u style=0x%x NONBASE=%d\n",
+              glyph_index, (int)metrics->root.globals->glyph_styles[glyph_index],
+              (int)(metrics->root.globals->glyph_styles[glyph_index] & AF_NONBASE) != 0);
       if ( !( metrics->root.globals->glyph_styles[glyph_index] & AF_NONBASE ) )
         af_latin_hints_compute_blue_edges( hints, metrics );
     }

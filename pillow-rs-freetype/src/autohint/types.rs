@@ -127,13 +127,17 @@ impl AfLatinAxisMetrics {
 pub struct AfLatinMetrics {
     pub units_per_em: i32,
     pub axis: [AfLatinAxisMetrics; 2], // [Horz, Vert]
+    /// glyph_index → is non-base (skip blue-zone alignment).
+    /// Mirrors C's globals->glyph_styles[gindex] & AF_NONBASE.
+    pub non_base_glyphs: Vec<bool>,
 }
 
 impl AfLatinMetrics {
-    pub fn new(upem: i32) -> Self {
+    pub fn new(upem: i32, num_glyphs: u16) -> Self {
         AfLatinMetrics {
             units_per_em: upem,
             axis: [AfLatinAxisMetrics::new(), AfLatinAxisMetrics::new()],
+            non_base_glyphs: vec![false; num_glyphs as usize],
         }
     }
 }
@@ -165,6 +169,7 @@ pub struct AFPoint {
 // ── Segment (afhints.h:266–287) ────────────────────────────────────────────
 
 pub const AF_EDGE_ROUND: u8 = 1 << 0;
+pub const AF_EDGE_NORMAL: u8 = 0;
 pub const AF_EDGE_SERIF: u8 = 1 << 1;
 pub const AF_EDGE_DONE: u8 = 1 << 2;
 pub const AF_EDGE_NEUTRAL: u8 = 1 << 3;
