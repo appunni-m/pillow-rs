@@ -59,6 +59,8 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
     hints.contours.clear();
     hints.contours.reserve(num_contours);
 
+    let _dump = num_points == 49;
+
     // ── Copy coordinates: fx/fy from raw font units, ox/oy from scaled 26.6 ──
     for (i, sp) in scaled_points.iter().enumerate() {
         let mut pt = AFPoint::default();
@@ -184,12 +186,24 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             let prev = &hints.points[hints.points[i].prev];
             let next = &hints.points[hints.points[i].next];
             let pt = &hints.points[i];
-            corner_is_flat(
+            let flat = corner_is_flat(
                 pt.fx as i32 - prev.fx as i32,
                 pt.fy as i32 - prev.fy as i32,
                 next.fx as i32 - pt.fx as i32,
                 next.fy as i32 - pt.fy as i32,
-            )
+            );
+            if num_points == 49 && i < 5 {
+                eprintln!("RELOAD flat p{}: prev_idx={} prev_fx={} prev_fy={} pt_fx={} pt_fy={} next_idx={} flat={}",
+                    i, hints.points[i].prev,
+                    hints.points[hints.points[i].prev].fx,
+                    hints.points[hints.points[i].prev].fy,
+                    pt.fx, pt.fy,
+                    hints.points[i].next, flat);
+                eprintln!("RELOAD flat p{}: fx_diff=({},{}) nx_diff=({},{}) flat={}",
+                    i, pt.fx as i32 - prev.fx as i32, pt.fy as i32 - prev.fy as i32,
+                    next.fx as i32 - pt.fx as i32, next.fy as i32 - pt.fy as i32, flat);
+            }
+            flat
         } else if in_dir == out_dir.opposite() {
             flags & AF_FLAG_NEAR != 0
         } else {

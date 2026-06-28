@@ -283,8 +283,10 @@ fn autohint_glyph(
     );
 
     // Write hinted coordinates back.
+    let first = outline.points.len() == 49;
     for (i, p) in outline.points.iter().enumerate() {
         if let Some(s) = scaled.get_mut(i) {
+            if first { eprintln!("p{}: x={} y={}", i, p.x, p.y); }
             s.x = p.x;
             s.y = p.y;
         }

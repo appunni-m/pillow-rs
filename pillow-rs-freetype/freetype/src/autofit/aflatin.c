@@ -2292,6 +2292,8 @@
         edge->opos     = FT_MulFix( seg->pos, scale );
         edge->pos      = edge->opos;
         seg->edge_next = seg;
+        fprintf(stderr, "[C compute_edges] NEW edge[%u] fpos=%ld seg_pos=%ld dir=%d\n",
+                axis->num_edges - 1, (long)edge->fpos, (long)seg->pos, (int)seg->dir);
       }
       else
       {
@@ -2300,6 +2302,8 @@
         seg->edge_next         = found->first;
         found->last->edge_next = seg;
         found->last            = seg;
+        fprintf(stderr, "[C compute_edges] seg_pos=%ld -> edge[%td] fpos=%ld\n",
+                (long)seg->pos, found - axis->edges, (long)found->fpos);
       }
     }
 
