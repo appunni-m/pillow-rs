@@ -59,8 +59,6 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
     hints.contours.clear();
     hints.contours.reserve(num_contours);
 
-    let _dump = num_points == 49;
-
     // ── Copy coordinates: fx/fy from raw font units, ox/oy from scaled 26.6 ──
     for (i, sp) in scaled_points.iter().enumerate() {
         let mut pt = AFPoint::default();
@@ -168,10 +166,48 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         }
     }
 
-    // ── Classify strong vs weak ─
-    // Port of afhints.c:1250-1295.  Control points → weak.  Points on
-    // straight runs (in_dir==out_dir!=NONE) → weak.  Opposite directions
-    // with NEAR flag → weak.  Everything else → STRONG.
+    // ── Build direction chain (C: afhints.c:1100-1165) ────────────────
+    // u/v store index deltas to next/previous non-near on-curve point.
+    // Default: point to self (delta 0) — matches C when uninitialized.
+    for pt in &mut hints.points {
+        pt.u = 0;
+        pt.v = 0;
+    }
+    let near_limit2 = NEAR_THRESHOLD as i32 * 2;
+    for &c_start in &hints.contours {
+        // Walk backward from c_start to find first non-near point
+        let mut point = c_start;
+        let mut pprev = hints.points[point].prev;
+        while pprev != c_start {
+            let out_x = hints.points[point].fx as i32 - hints.points[pprev].fx as i32;
+            let out_y = hints.points[point].fy as i32 - hints.points[pprev].fy as i32;
+            if out_x.abs() + out_y.abs() >= near_limit2 {
+                break;
+            }
+            point = pprev;
+            pprev = hints.points[pprev].prev;
+        }
+        let first = point;
+
+        // u = forward to next non-near; v = backward to previous non-near
+        let mut curr = first;
+        hints.points[curr].u = 0; // first points to self
+        hints.points[first].v = 0;
+
+        let mut next = hints.points[curr].next;
+        loop {
+            hints.points[curr].u = next as i32 - curr as i32;
+            hints.points[next].v = -hints.points[curr].u;
+
+            if next == first { break; }
+            curr = next;
+            next = hints.points[curr].next;
+        }
+    }
+
+    // ── Classify strong vs weak ────────────────────────────────────────
+    // Port of afhints.c:1210-1295. Uses direction chain u/v pointers
+    // for corner_is_flat and the XOR quadrant check.
     for i in 0..hints.points.len() {
         let in_dir = hints.points[i].in_dir;
         let out_dir = hints.points[i].out_dir;
@@ -182,28 +218,22 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         } else if in_dir == out_dir && in_dir != Direction::None {
             true
         } else if in_dir == out_dir {
-            // both None: C checks ft_corner_is_flat (afhints.c:1270-1284)
-            let prev = &hints.points[hints.points[i].prev];
-            let next = &hints.points[hints.points[i].next];
+            // both None: C has two checks (afhints.c:1221-1293)
+            // 1. XOR quadrant check using direction-chain u/v pointers
+            // 2. ft_corner_is_flat using same pointers
             let pt = &hints.points[i];
-            let flat = corner_is_flat(
-                pt.fx as i32 - prev.fx as i32,
-                pt.fy as i32 - prev.fy as i32,
-                next.fx as i32 - pt.fx as i32,
-                next.fy as i32 - pt.fy as i32,
-            );
-            if num_points == 49 && i < 5 {
-                eprintln!("RELOAD flat p{}: prev_idx={} prev_fx={} prev_fy={} pt_fx={} pt_fy={} next_idx={} flat={}",
-                    i, hints.points[i].prev,
-                    hints.points[hints.points[i].prev].fx,
-                    hints.points[hints.points[i].prev].fy,
-                    pt.fx, pt.fy,
-                    hints.points[i].next, flat);
-                eprintln!("RELOAD flat p{}: fx_diff=({},{}) nx_diff=({},{}) flat={}",
-                    i, pt.fx as i32 - prev.fx as i32, pt.fy as i32 - prev.fy as i32,
-                    next.fx as i32 - pt.fx as i32, next.fy as i32 - pt.fy as i32, flat);
-            }
-            flat
+            let nu_idx = (i as i32 + pt.u) as usize;
+            let pv_idx = (i as i32 + pt.v) as usize;
+            // Clamp to valid range (C: when u/v are 0, point to self)
+            let nu = nu_idx.min(hints.points.len() - 1);
+            let pv = pv_idx.min(hints.points.len() - 1);
+            let in_x = pt.fx as i32 - hints.points[pv].fx as i32;
+            let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
+            let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
+            let out_y = hints.points[nu].fy as i32 - pt.fy as i32;
+            // C's XOR quadrant check (afhints.c:1221-1245): same sign for both axes
+            ((in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0)
+                || corner_is_flat(in_x, in_y, out_x, out_y)
         } else if in_dir == out_dir.opposite() {
             flags & AF_FLAG_NEAR != 0
         } else {
