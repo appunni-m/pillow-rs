@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "font_source": "fonts_autohint",
   "hinting": "autohint",
-  "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_RENDER",
+  "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
   "mode": "FreeType-raw",
   "rows": [
     {
@@ -30,16 +30,6 @@
         "DejaVu Sans",
         "Book"
       ]
-    },
-    {
-      "id": "DejaVuSans_10_getlength_hello",
-      "font": "DejaVuSans",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.5625
     },
     {
       "id": "DejaVuSans_10_33_getmask",
@@ -2794,16 +2784,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_12_getlength_hello",
-      "font": "DejaVuSans",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.5625
-    },
-    {
       "id": "DejaVuSans_12_33_getmask",
       "font": "DejaVuSans",
       "size_pt": 12,
@@ -5554,16 +5534,6 @@
         "DejaVu Sans",
         "Book"
       ]
-    },
-    {
-      "id": "DejaVuSans_16_getlength_hello",
-      "font": "DejaVuSans",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.5625
     },
     {
       "id": "DejaVuSans_16_33_getmask",
@@ -8318,16 +8288,6 @@
       ]
     },
     {
-      "id": "DejaVuSans_20_getlength_hello",
-      "font": "DejaVuSans",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.5625
-    },
-    {
       "id": "DejaVuSans_20_33_getmask",
       "font": "DejaVuSans",
       "size_pt": 20,
@@ -11078,16 +11038,6 @@
         "DejaVu Sans",
         "Book"
       ]
-    },
-    {
-      "id": "DejaVuSans_24_getlength_hello",
-      "font": "DejaVuSans",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.5625
     },
     {
       "id": "DejaVuSans_24_33_getmask",
@@ -13842,16 +13792,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_10_getlength_hello",
-      "font": "LiberationSerif",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.484375
-    },
-    {
       "id": "LiberationSerif_10_33_getmask",
       "font": "LiberationSerif",
       "size_pt": 10,
@@ -16602,16 +16542,6 @@
         "Liberation Serif",
         "Regular"
       ]
-    },
-    {
-      "id": "LiberationSerif_12_getlength_hello",
-      "font": "LiberationSerif",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.484375
     },
     {
       "id": "LiberationSerif_12_33_getmask",
@@ -19366,16 +19296,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_16_getlength_hello",
-      "font": "LiberationSerif",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.484375
-    },
-    {
       "id": "LiberationSerif_16_33_getmask",
       "font": "LiberationSerif",
       "size_pt": 16,
@@ -22126,16 +22046,6 @@
         "Liberation Serif",
         "Regular"
       ]
-    },
-    {
-      "id": "LiberationSerif_20_getlength_hello",
-      "font": "LiberationSerif",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.484375
     },
     {
       "id": "LiberationSerif_20_33_getmask",
@@ -24890,16 +24800,6 @@
       ]
     },
     {
-      "id": "LiberationSerif_24_getlength_hello",
-      "font": "LiberationSerif",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "Hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 0.484375
-    },
-    {
       "id": "LiberationSerif_24_33_getmask",
       "font": "LiberationSerif",
       "size_pt": 24,
@@ -27624,11 +27524,111 @@
         13,
         10
       ]
+    },
+    {
+      "id": "DejaVuSans_10_getlength_hello",
+      "font": "DejaVuSans",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 25.359375
+    },
+    {
+      "id": "DejaVuSans_12_getlength_hello",
+      "font": "DejaVuSans",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.421875
+    },
+    {
+      "id": "DejaVuSans_16_getlength_hello",
+      "font": "DejaVuSans",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 40.578125
+    },
+    {
+      "id": "DejaVuSans_20_getlength_hello",
+      "font": "DejaVuSans",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 50.71875
+    },
+    {
+      "id": "DejaVuSans_24_getlength_hello",
+      "font": "DejaVuSans",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.84375
+    },
+    {
+      "id": "LiberationSerif_10_getlength_hello",
+      "font": "LiberationSerif",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 22.21875
+    },
+    {
+      "id": "LiberationSerif_12_getlength_hello",
+      "font": "LiberationSerif",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 26.65625
+    },
+    {
+      "id": "LiberationSerif_16_getlength_hello",
+      "font": "LiberationSerif",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 35.578125
+    },
+    {
+      "id": "LiberationSerif_20_getlength_hello",
+      "font": "LiberationSerif",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 44.4375
+    },
+    {
+      "id": "LiberationSerif_24_getlength_hello",
+      "font": "LiberationSerif",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "Hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 53.328125
     }
   ],
   "summary": {
-    "total_rows": 1910,
-    "active_rows": 1910,
+    "total_rows": 1900,
+    "active_rows": 1900,
     "fonts": 2,
     "sizes": 5,
     "glyphs": 94
