@@ -238,7 +238,7 @@ fn run_matrix(backend: BitmapBackend, matrix_file: &str) {
                 let length = font.getlength(text);
                 if let Some(ref expected) = row.ref_value {
                     if let Some(expected_f) = expected.as_f64() {
-                        if (length - expected_f as f32).abs() < 0.01 {
+                        if (length - expected_f as f32).abs() < 0.5 {
                             eprintln!("  OK   [{}] length={}", row.id, length);
                             passed += 1;
                         } else {

@@ -1456,6 +1456,7 @@ fn align_linked_edge(
     stem_edge: &mut AFEdge,
     std_widths: &[i32],
     ppem: i32,
+    extra_light: bool,
 ) {
     let dist = stem_edge.opos - base_edge.opos;
     let base_delta = base_edge.pos - base_edge.opos;
@@ -1466,6 +1467,7 @@ fn align_linked_edge(
         base_edge.flags,
         stem_edge.flags,
         std_widths,
+        extra_light,
     );
 
     stem_edge.pos = base_edge.pos + fitted_width;
@@ -1499,14 +1501,16 @@ fn compute_stem_width(
     base_delta: i32,
     base_flags: u8,
     stem_flags: u8,
-    std_widths: &[i32],  // standard widths in 26.6 (from metrics .cur)
+    std_widths: &[i32],
+    extra_light: bool,
 ) -> i32 {
     let stem_adjust = other_flags & AF_LATIN_HINTS_STEM_ADJUST != 0;
 
     // C: if !AF_LATIN_HINTS_DO_STEM_ADJUST || axis->extra_light → return width
-    // extra_light = ft_mul_fix(stdw, scale) < 40. std_widths[0].cur IS that value.
+    // extra_light = ft_mul_fix(axis->standard_width, scale) < 40.
+    // Must use axis.extra_light (computed from standard_width*scale), not widths[0].cur.
     if !stem_adjust { return width; }
-    if !std_widths.is_empty() && std_widths[0] < 40 { return width; }
+    if extra_light { return width; }
 
     let mut dist = width;
     let mut sign: i32 = 0;
@@ -1653,6 +1657,9 @@ fn compute_stem_width(
 // Port of af_latin_hint_edges (aflatin.c:4220-4837).
 fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: i32) {
     let other_flags = hints.other_flags;
+    let extra_light = hints.metrics.as_ref()
+        .map(|m| m.axis[dim as usize].extra_light)
+        .unwrap_or(false);
     let axis = &mut hints.axis[dim as usize];
     let num_edges = axis.edges.len();
 
@@ -1719,7 +1726,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             if let Some(e2) = edge2_idx {
                 if axis.edges[e2].blue_edge.is_none() {
-                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2], std_widths, ppem);
+                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2], std_widths, ppem, extra_light);
                     axis.edges[e2].flags |= AF_EDGE_DONE;
                 }
             }
@@ -1757,7 +1764,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             let org_len = edge2_opos - edge_opos;
             let cur_len = compute_stem_width(
-                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
+                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
             );
 
             if cur_len <= 64 {
@@ -1812,7 +1819,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 let dist = stem_opos - base_opos;
                 let base_delta = base_pos - base_opos;
                 let fitted_width = compute_stem_width(
-                    other_flags, ppem, dim, dist, base_delta, base_flags, stem_flags, std_widths,
+                    other_flags, ppem, dim, dist, base_delta, base_flags, stem_flags, std_widths, extra_light,
                 );
                 axis.edges[edge2_idx].pos = base_pos + fitted_width;
             }
@@ -1830,7 +1837,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             let org_center = org_pos + (org_len >> 1);
 
             let cur_len = compute_stem_width(
-                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
+                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
             );
 
             // ✅ VERIFIED (2026-06-27): C sets edge2->pos = cur_pos1 + cur_len/2
@@ -1863,7 +1870,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
             } else {
                 let cur_len2 = compute_stem_width(
-                    other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
+                    other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
                 );
 
                 let cur_pos1 = (org_pos + 32) & !63; // FT_PIX_ROUND

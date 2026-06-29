@@ -94,8 +94,11 @@ for fn, (ff, fam, sty) in FONTS.items():
             rows.append({"id": f"{fn}_{sz}_getname", "font": fn, "size_pt": sz,
                         "codepoint": 0, "char": "", "operation": "getname", "status": "active",
                         "ref_value": [fam, sty]})
-            # getlength: use PIL reference (backend-independent hmtx-based advance)
-            continue
+        if parts[0] == 'GETLENGTH' and sz:
+            glen_26dot6 = int(parts[1])
+            rows.append({"id": f"{fn}_{sz}_getlength_hello", "font": fn, "size_pt": sz,
+                        "codepoint": 0, "char": "hello", "operation": "getlength", "status": "active",
+                        "ref_value": glen_26dot6 / 64.0})
         if parts[0] == 'END_SIZE':
             sz = None
             continue
@@ -121,27 +124,6 @@ matrix = {"version": "2.0.0", "font_source": "fonts_autohint", "hinting": "autoh
           "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
           "mode": "FreeType-raw", "rows": rows,
           "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": len(FONTS), "sizes": 5, "glyphs": 94}}
-
-# getlength: add from PIL matrix (backend-independent, hmtx-based advance widths)
-# Remap old PIL font names to current fixture filenames
-PIL_FONT_REMAP = {
-    "DejaVuSans": "DejaVuSansMono",
-    "DejaVuSerif": "DejaVuSerif-Bold",
-    "DejaVuSansMono": "DejaVuSansMono",
-    "DejaVuSansCondensed": "DejaVuSerifCondensed-Bold",
-    "LiberationSerif": "LiberationSerif-Bold",
-    "NotoSans": "NotoSans-Bold",
-    "Ubuntu": "UbuntuMono[wght]",
-}
-pil_matrix = json.loads((FIXTURES / "coverage_matrix.json").read_text())
-for r in pil_matrix["rows"]:
-    if r.get("operation") == "getlength":
-        r = dict(r)  # copy
-        old_font = r.get("font", "")
-        if old_font in PIL_FONT_REMAP:
-            r["font"] = PIL_FONT_REMAP[old_font]
-            r["id"] = r["id"].replace(old_font, PIL_FONT_REMAP[old_font])
-        rows.append(r)
 
 MATRIX_PATH.write_text(json.dumps(matrix, indent=2) + "\n")
 print(f"FT 2.14.3 matrix: {len(rows)} rows -> {MATRIX_PATH}", file=sys.stderr)
