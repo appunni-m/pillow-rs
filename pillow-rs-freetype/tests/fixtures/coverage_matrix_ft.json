@@ -2758,16 +2758,6 @@
       ]
     },
     {
-      "id": "DejaVuMathTeXGyre_10_getlength_hello",
-      "font": "DejaVuMathTeXGyre",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.734375
-    },
-    {
       "id": "DejaVuMathTeXGyre_12_getmetrics",
       "font": "DejaVuMathTeXGyre",
       "size_pt": 12,
@@ -5518,16 +5508,6 @@
         9,
         5
       ]
-    },
-    {
-      "id": "DejaVuMathTeXGyre_12_getlength_hello",
-      "font": "DejaVuMathTeXGyre",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 29.703125
     },
     {
       "id": "DejaVuMathTeXGyre_16_getmetrics",
@@ -8282,16 +8262,6 @@
       ]
     },
     {
-      "id": "DejaVuMathTeXGyre_16_getlength_hello",
-      "font": "DejaVuMathTeXGyre",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 39.59375
-    },
-    {
       "id": "DejaVuMathTeXGyre_20_getmetrics",
       "font": "DejaVuMathTeXGyre",
       "size_pt": 20,
@@ -11042,16 +11012,6 @@
         15,
         9
       ]
-    },
-    {
-      "id": "DejaVuMathTeXGyre_20_getlength_hello",
-      "font": "DejaVuMathTeXGyre",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 49.484375
     },
     {
       "id": "DejaVuMathTeXGyre_24_getmetrics",
@@ -13806,16 +13766,6 @@
       ]
     },
     {
-      "id": "DejaVuMathTeXGyre_24_getlength_hello",
-      "font": "DejaVuMathTeXGyre",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 59.40625
-    },
-    {
       "id": "DejaVuSans-ExtraLight_10_getmetrics",
       "font": "DejaVuSans-ExtraLight",
       "size_pt": 10,
@@ -16566,16 +16516,6 @@
         8,
         5
       ]
-    },
-    {
-      "id": "DejaVuSans-ExtraLight_10_getlength_hello",
-      "font": "DejaVuSans-ExtraLight",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.1875
     },
     {
       "id": "DejaVuSans-ExtraLight_12_getmetrics",
@@ -19330,16 +19270,6 @@
       ]
     },
     {
-      "id": "DejaVuSans-ExtraLight_12_getlength_hello",
-      "font": "DejaVuSans-ExtraLight",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 29.0
-    },
-    {
       "id": "DejaVuSans-ExtraLight_16_getmetrics",
       "font": "DejaVuSans-ExtraLight",
       "size_pt": 16,
@@ -22090,16 +22020,6 @@
         12,
         7
       ]
-    },
-    {
-      "id": "DejaVuSans-ExtraLight_16_getlength_hello",
-      "font": "DejaVuSans-ExtraLight",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 38.6875
     },
     {
       "id": "DejaVuSans-ExtraLight_20_getmetrics",
@@ -24854,16 +24774,6 @@
       ]
     },
     {
-      "id": "DejaVuSans-ExtraLight_20_getlength_hello",
-      "font": "DejaVuSans-ExtraLight",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.34375
-    },
-    {
       "id": "DejaVuSans-ExtraLight_24_getmetrics",
       "font": "DejaVuSans-ExtraLight",
       "size_pt": 24,
@@ -27614,16 +27524,6 @@
         18,
         11
       ]
-    },
-    {
-      "id": "DejaVuSans-ExtraLight_24_getlength_hello",
-      "font": "DejaVuSans-ExtraLight",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 58.015625
     },
     {
       "id": "DejaVuSans-Oblique_10_getmetrics",
@@ -30378,16 +30278,6 @@
       ]
     },
     {
-      "id": "DejaVuSans-Oblique_10_getlength_hello",
-      "font": "DejaVuSans-Oblique",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.1875
-    },
-    {
       "id": "DejaVuSans-Oblique_12_getmetrics",
       "font": "DejaVuSans-Oblique",
       "size_pt": 12,
@@ -33138,16 +33028,6 @@
         9,
         6
       ]
-    },
-    {
-      "id": "DejaVuSans-Oblique_12_getlength_hello",
-      "font": "DejaVuSans-Oblique",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 29.0
     },
     {
       "id": "DejaVuSans-Oblique_16_getmetrics",
@@ -35902,16 +35782,6 @@
       ]
     },
     {
-      "id": "DejaVuSans-Oblique_16_getlength_hello",
-      "font": "DejaVuSans-Oblique",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 38.6875
-    },
-    {
       "id": "DejaVuSans-Oblique_20_getmetrics",
       "font": "DejaVuSans-Oblique",
       "size_pt": 20,
@@ -38662,16 +38532,6 @@
         15,
         9
       ]
-    },
-    {
-      "id": "DejaVuSans-Oblique_20_getlength_hello",
-      "font": "DejaVuSans-Oblique",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.34375
     },
     {
       "id": "DejaVuSans-Oblique_24_getmetrics",
@@ -41426,16 +41286,6 @@
       ]
     },
     {
-      "id": "DejaVuSans-Oblique_24_getlength_hello",
-      "font": "DejaVuSans-Oblique",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 58.015625
-    },
-    {
       "id": "DejaVuSansMono_10_getmetrics",
       "font": "DejaVuSansMono",
       "size_pt": 10,
@@ -44186,16 +44036,6 @@
         6,
         5
       ]
-    },
-    {
-      "id": "DejaVuSansMono_10_getlength_hello",
-      "font": "DejaVuSansMono",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.078125
     },
     {
       "id": "DejaVuSansMono_12_getmetrics",
@@ -46950,16 +46790,6 @@
       ]
     },
     {
-      "id": "DejaVuSansMono_12_getlength_hello",
-      "font": "DejaVuSansMono",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.09375
-    },
-    {
       "id": "DejaVuSansMono_16_getmetrics",
       "font": "DejaVuSansMono",
       "size_pt": 16,
@@ -49710,16 +49540,6 @@
         9,
         7
       ]
-    },
-    {
-      "id": "DejaVuSansMono_16_getlength_hello",
-      "font": "DejaVuSansMono",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.203125
     },
     {
       "id": "DejaVuSansMono_20_getmetrics",
@@ -52474,16 +52294,6 @@
       ]
     },
     {
-      "id": "DejaVuSansMono_20_getlength_hello",
-      "font": "DejaVuSansMono",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.234375
-    },
-    {
       "id": "DejaVuSansMono_24_getmetrics",
       "font": "DejaVuSansMono",
       "size_pt": 24,
@@ -55234,16 +55044,6 @@
         13,
         10
       ]
-    },
-    {
-      "id": "DejaVuSansMono_24_getlength_hello",
-      "font": "DejaVuSansMono",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 72.265625
     },
     {
       "id": "DejaVuSansMono-Oblique_10_getmetrics",
@@ -57998,16 +57798,6 @@
       ]
     },
     {
-      "id": "DejaVuSansMono-Oblique_10_getlength_hello",
-      "font": "DejaVuSansMono-Oblique",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.078125
-    },
-    {
       "id": "DejaVuSansMono-Oblique_12_getmetrics",
       "font": "DejaVuSansMono-Oblique",
       "size_pt": 12,
@@ -60758,16 +60548,6 @@
         7,
         5
       ]
-    },
-    {
-      "id": "DejaVuSansMono-Oblique_12_getlength_hello",
-      "font": "DejaVuSansMono-Oblique",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.09375
     },
     {
       "id": "DejaVuSansMono-Oblique_16_getmetrics",
@@ -63522,16 +63302,6 @@
       ]
     },
     {
-      "id": "DejaVuSansMono-Oblique_16_getlength_hello",
-      "font": "DejaVuSansMono-Oblique",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.203125
-    },
-    {
       "id": "DejaVuSansMono-Oblique_20_getmetrics",
       "font": "DejaVuSansMono-Oblique",
       "size_pt": 20,
@@ -66282,16 +66052,6 @@
         12,
         8
       ]
-    },
-    {
-      "id": "DejaVuSansMono-Oblique_20_getlength_hello",
-      "font": "DejaVuSansMono-Oblique",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.234375
     },
     {
       "id": "DejaVuSansMono-Oblique_24_getmetrics",
@@ -69046,16 +68806,6 @@
       ]
     },
     {
-      "id": "DejaVuSansMono-Oblique_24_getlength_hello",
-      "font": "DejaVuSansMono-Oblique",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 72.265625
-    },
-    {
       "id": "DejaVuSerif-Bold_10_getmetrics",
       "font": "DejaVuSerif-Bold",
       "size_pt": 10,
@@ -71806,16 +71556,6 @@
         7,
         4
       ]
-    },
-    {
-      "id": "DejaVuSerif-Bold_10_getlength_hello",
-      "font": "DejaVuSerif-Bold",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 27.890625
     },
     {
       "id": "DejaVuSerif-Bold_12_getmetrics",
@@ -74570,16 +74310,6 @@
       ]
     },
     {
-      "id": "DejaVuSerif-Bold_12_getlength_hello",
-      "font": "DejaVuSerif-Bold",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 33.484375
-    },
-    {
       "id": "DejaVuSerif-Bold_16_getmetrics",
       "font": "DejaVuSerif-Bold",
       "size_pt": 16,
@@ -77330,16 +77060,6 @@
         12,
         8
       ]
-    },
-    {
-      "id": "DejaVuSerif-Bold_16_getlength_hello",
-      "font": "DejaVuSerif-Bold",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 44.65625
     },
     {
       "id": "DejaVuSerif-Bold_20_getmetrics",
@@ -80094,16 +79814,6 @@
       ]
     },
     {
-      "id": "DejaVuSerif-Bold_20_getlength_hello",
-      "font": "DejaVuSerif-Bold",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 55.796875
-    },
-    {
       "id": "DejaVuSerif-Bold_24_getmetrics",
       "font": "DejaVuSerif-Bold",
       "size_pt": 24,
@@ -82854,16 +82564,6 @@
         18,
         10
       ]
-    },
-    {
-      "id": "DejaVuSerif-Bold_24_getlength_hello",
-      "font": "DejaVuSerif-Bold",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 66.984375
     },
     {
       "id": "DejaVuSerif-Italic_10_getmetrics",
@@ -85618,16 +85318,6 @@
       ]
     },
     {
-      "id": "DejaVuSerif-Italic_10_getlength_hello",
-      "font": "DejaVuSerif-Italic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.78125
-    },
-    {
       "id": "DejaVuSerif-Italic_12_getmetrics",
       "font": "DejaVuSerif-Italic",
       "size_pt": 12,
@@ -88378,16 +88068,6 @@
         9,
         5
       ]
-    },
-    {
-      "id": "DejaVuSerif-Italic_12_getlength_hello",
-      "font": "DejaVuSerif-Italic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 29.75
     },
     {
       "id": "DejaVuSerif-Italic_16_getmetrics",
@@ -91142,16 +90822,6 @@
       ]
     },
     {
-      "id": "DejaVuSerif-Italic_16_getlength_hello",
-      "font": "DejaVuSerif-Italic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 39.671875
-    },
-    {
       "id": "DejaVuSerif-Italic_20_getmetrics",
       "font": "DejaVuSerif-Italic",
       "size_pt": 20,
@@ -93902,16 +93572,6 @@
         15,
         9
       ]
-    },
-    {
-      "id": "DejaVuSerif-Italic_20_getlength_hello",
-      "font": "DejaVuSerif-Italic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 49.546875
     },
     {
       "id": "DejaVuSerif-Italic_24_getmetrics",
@@ -96666,16 +96326,6 @@
       ]
     },
     {
-      "id": "DejaVuSerif-Italic_24_getlength_hello",
-      "font": "DejaVuSerif-Italic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 59.453125
-    },
-    {
       "id": "DejaVuSerifCondensed-Bold_10_getmetrics",
       "font": "DejaVuSerifCondensed-Bold",
       "size_pt": 10,
@@ -99426,16 +99076,6 @@
         7,
         4
       ]
-    },
-    {
-      "id": "DejaVuSerifCondensed-Bold_10_getlength_hello",
-      "font": "DejaVuSerifCondensed-Bold",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 25.109375
     },
     {
       "id": "DejaVuSerifCondensed-Bold_12_getmetrics",
@@ -102190,16 +101830,6 @@
       ]
     },
     {
-      "id": "DejaVuSerifCondensed-Bold_12_getlength_hello",
-      "font": "DejaVuSerifCondensed-Bold",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.15625
-    },
-    {
       "id": "DejaVuSerifCondensed-Bold_16_getmetrics",
       "font": "DejaVuSerifCondensed-Bold",
       "size_pt": 16,
@@ -104950,16 +104580,6 @@
         11,
         8
       ]
-    },
-    {
-      "id": "DejaVuSerifCondensed-Bold_16_getlength_hello",
-      "font": "DejaVuSerifCondensed-Bold",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 40.171875
     },
     {
       "id": "DejaVuSerifCondensed-Bold_20_getmetrics",
@@ -107714,16 +107334,6 @@
       ]
     },
     {
-      "id": "DejaVuSerifCondensed-Bold_20_getlength_hello",
-      "font": "DejaVuSerifCondensed-Bold",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 50.234375
-    },
-    {
       "id": "DejaVuSerifCondensed-Bold_24_getmetrics",
       "font": "DejaVuSerifCondensed-Bold",
       "size_pt": 24,
@@ -110474,16 +110084,6 @@
         16,
         10
       ]
-    },
-    {
-      "id": "DejaVuSerifCondensed-Bold_24_getlength_hello",
-      "font": "DejaVuSerifCondensed-Bold",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.25
     },
     {
       "id": "DejaVuSerifCondensed-Italic_10_getmetrics",
@@ -113238,16 +112838,6 @@
       ]
     },
     {
-      "id": "DejaVuSerifCondensed-Italic_10_getlength_hello",
-      "font": "DejaVuSerifCondensed-Italic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 22.296875
-    },
-    {
       "id": "DejaVuSerifCondensed-Italic_12_getmetrics",
       "font": "DejaVuSerifCondensed-Italic",
       "size_pt": 12,
@@ -115998,16 +115588,6 @@
         8,
         5
       ]
-    },
-    {
-      "id": "DejaVuSerifCondensed-Italic_12_getlength_hello",
-      "font": "DejaVuSerifCondensed-Italic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 26.75
     },
     {
       "id": "DejaVuSerifCondensed-Italic_16_getmetrics",
@@ -118762,16 +118342,6 @@
       ]
     },
     {
-      "id": "DejaVuSerifCondensed-Italic_16_getlength_hello",
-      "font": "DejaVuSerifCondensed-Italic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 35.6875
-    },
-    {
       "id": "DejaVuSerifCondensed-Italic_20_getmetrics",
       "font": "DejaVuSerifCondensed-Italic",
       "size_pt": 20,
@@ -121522,16 +121092,6 @@
         14,
         9
       ]
-    },
-    {
-      "id": "DejaVuSerifCondensed-Italic_20_getlength_hello",
-      "font": "DejaVuSerifCondensed-Italic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 44.5625
     },
     {
       "id": "DejaVuSerifCondensed-Italic_24_getmetrics",
@@ -124286,16 +123846,6 @@
       ]
     },
     {
-      "id": "DejaVuSerifCondensed-Italic_24_getlength_hello",
-      "font": "DejaVuSerifCondensed-Italic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 53.5
-    },
-    {
       "id": "LiberationMono-Italic_10_getmetrics",
       "font": "LiberationMono-Italic",
       "size_pt": 10,
@@ -127046,16 +126596,6 @@
         6,
         5
       ]
-    },
-    {
-      "id": "LiberationMono-Italic_10_getlength_hello",
-      "font": "LiberationMono-Italic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.0
     },
     {
       "id": "LiberationMono-Italic_12_getmetrics",
@@ -129810,16 +129350,6 @@
       ]
     },
     {
-      "id": "LiberationMono-Italic_12_getlength_hello",
-      "font": "LiberationMono-Italic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.015625
-    },
-    {
       "id": "LiberationMono-Italic_16_getmetrics",
       "font": "LiberationMono-Italic",
       "size_pt": 16,
@@ -132570,16 +132100,6 @@
         10,
         7
       ]
-    },
-    {
-      "id": "LiberationMono-Italic_16_getlength_hello",
-      "font": "LiberationMono-Italic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.046875
     },
     {
       "id": "LiberationMono-Italic_20_getmetrics",
@@ -135334,16 +134854,6 @@
       ]
     },
     {
-      "id": "LiberationMono-Italic_20_getlength_hello",
-      "font": "LiberationMono-Italic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.0
-    },
-    {
       "id": "LiberationMono-Italic_24_getmetrics",
       "font": "LiberationMono-Italic",
       "size_pt": 24,
@@ -138094,16 +137604,6 @@
         14,
         10
       ]
-    },
-    {
-      "id": "LiberationMono-Italic_24_getlength_hello",
-      "font": "LiberationMono-Italic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 72.03125
     },
     {
       "id": "LiberationMono-Regular_10_getmetrics",
@@ -140858,16 +140358,6 @@
       ]
     },
     {
-      "id": "LiberationMono-Regular_10_getlength_hello",
-      "font": "LiberationMono-Regular",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.0
-    },
-    {
       "id": "LiberationMono-Regular_12_getmetrics",
       "font": "LiberationMono-Regular",
       "size_pt": 12,
@@ -143618,16 +143108,6 @@
         7,
         5
       ]
-    },
-    {
-      "id": "LiberationMono-Regular_12_getlength_hello",
-      "font": "LiberationMono-Regular",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.015625
     },
     {
       "id": "LiberationMono-Regular_16_getmetrics",
@@ -146382,16 +145862,6 @@
       ]
     },
     {
-      "id": "LiberationMono-Regular_16_getlength_hello",
-      "font": "LiberationMono-Regular",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.046875
-    },
-    {
       "id": "LiberationMono-Regular_20_getmetrics",
       "font": "LiberationMono-Regular",
       "size_pt": 20,
@@ -149142,16 +148612,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "LiberationMono-Regular_20_getlength_hello",
-      "font": "LiberationMono-Regular",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.0
     },
     {
       "id": "LiberationMono-Regular_24_getmetrics",
@@ -151906,16 +151366,6 @@
       ]
     },
     {
-      "id": "LiberationMono-Regular_24_getlength_hello",
-      "font": "LiberationMono-Regular",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 72.03125
-    },
-    {
       "id": "LiberationSans-BoldItalic_10_getmetrics",
       "font": "LiberationSans-BoldItalic",
       "size_pt": 10,
@@ -154666,16 +154116,6 @@
         6,
         5
       ]
-    },
-    {
-      "id": "LiberationSans-BoldItalic_10_getlength_hello",
-      "font": "LiberationSans-BoldItalic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 23.34375
     },
     {
       "id": "LiberationSans-BoldItalic_12_getmetrics",
@@ -157430,16 +156870,6 @@
       ]
     },
     {
-      "id": "LiberationSans-BoldItalic_12_getlength_hello",
-      "font": "LiberationSans-BoldItalic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 27.984375
-    },
-    {
       "id": "LiberationSans-BoldItalic_16_getmetrics",
       "font": "LiberationSans-BoldItalic",
       "size_pt": 16,
@@ -160190,16 +159620,6 @@
         10,
         7
       ]
-    },
-    {
-      "id": "LiberationSans-BoldItalic_16_getlength_hello",
-      "font": "LiberationSans-BoldItalic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 37.375
     },
     {
       "id": "LiberationSans-BoldItalic_20_getmetrics",
@@ -162954,16 +162374,6 @@
       ]
     },
     {
-      "id": "LiberationSans-BoldItalic_20_getlength_hello",
-      "font": "LiberationSans-BoldItalic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 46.6875
-    },
-    {
       "id": "LiberationSans-BoldItalic_24_getmetrics",
       "font": "LiberationSans-BoldItalic",
       "size_pt": 24,
@@ -165714,16 +165124,6 @@
         14,
         10
       ]
-    },
-    {
-      "id": "LiberationSans-BoldItalic_24_getlength_hello",
-      "font": "LiberationSans-BoldItalic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 56.0
     },
     {
       "id": "LiberationSans-Regular_10_getmetrics",
@@ -168478,16 +167878,6 @@
       ]
     },
     {
-      "id": "LiberationSans-Regular_10_getlength_hello",
-      "font": "LiberationSans-Regular",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 21.125
-    },
-    {
       "id": "LiberationSans-Regular_12_getmetrics",
       "font": "LiberationSans-Regular",
       "size_pt": 12,
@@ -171238,16 +170628,6 @@
         7,
         5
       ]
-    },
-    {
-      "id": "LiberationSans-Regular_12_getlength_hello",
-      "font": "LiberationSans-Regular",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 25.359375
     },
     {
       "id": "LiberationSans-Regular_16_getmetrics",
@@ -174002,16 +173382,6 @@
       ]
     },
     {
-      "id": "LiberationSans-Regular_16_getlength_hello",
-      "font": "LiberationSans-Regular",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 33.84375
-    },
-    {
       "id": "LiberationSans-Regular_20_getmetrics",
       "font": "LiberationSans-Regular",
       "size_pt": 20,
@@ -176762,16 +176132,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "LiberationSans-Regular_20_getlength_hello",
-      "font": "LiberationSans-Regular",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 42.25
     },
     {
       "id": "LiberationSans-Regular_24_getmetrics",
@@ -179526,16 +178886,6 @@
       ]
     },
     {
-      "id": "LiberationSans-Regular_24_getlength_hello",
-      "font": "LiberationSans-Regular",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 50.6875
-    },
-    {
       "id": "LiberationSansNarrow-Bold_10_getmetrics",
       "font": "LiberationSansNarrow-Bold",
       "size_pt": 10,
@@ -182286,16 +181636,6 @@
         5,
         5
       ]
-    },
-    {
-      "id": "LiberationSansNarrow-Bold_10_getlength_hello",
-      "font": "LiberationSansNarrow-Bold",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 19.15625
     },
     {
       "id": "LiberationSansNarrow-Bold_12_getmetrics",
@@ -185050,16 +184390,6 @@
       ]
     },
     {
-      "id": "LiberationSansNarrow-Bold_12_getlength_hello",
-      "font": "LiberationSansNarrow-Bold",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 22.96875
-    },
-    {
       "id": "LiberationSansNarrow-Bold_16_getmetrics",
       "font": "LiberationSansNarrow-Bold",
       "size_pt": 16,
@@ -187810,16 +187140,6 @@
         8,
         7
       ]
-    },
-    {
-      "id": "LiberationSansNarrow-Bold_16_getlength_hello",
-      "font": "LiberationSansNarrow-Bold",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.640625
     },
     {
       "id": "LiberationSansNarrow-Bold_20_getmetrics",
@@ -190574,16 +189894,6 @@
       ]
     },
     {
-      "id": "LiberationSansNarrow-Bold_20_getlength_hello",
-      "font": "LiberationSansNarrow-Bold",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 38.28125
-    },
-    {
       "id": "LiberationSansNarrow-Bold_24_getmetrics",
       "font": "LiberationSansNarrow-Bold",
       "size_pt": 24,
@@ -193334,16 +192644,6 @@
         11,
         10
       ]
-    },
-    {
-      "id": "LiberationSansNarrow-Bold_24_getlength_hello",
-      "font": "LiberationSansNarrow-Bold",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 45.953125
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_10_getmetrics",
@@ -196098,16 +195398,6 @@
       ]
     },
     {
-      "id": "LiberationSansNarrow-BoldItalic_10_getlength_hello",
-      "font": "LiberationSansNarrow-BoldItalic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 19.15625
-    },
-    {
       "id": "LiberationSansNarrow-BoldItalic_12_getmetrics",
       "font": "LiberationSansNarrow-BoldItalic",
       "size_pt": 12,
@@ -198858,16 +198148,6 @@
         6,
         7
       ]
-    },
-    {
-      "id": "LiberationSansNarrow-BoldItalic_12_getlength_hello",
-      "font": "LiberationSansNarrow-BoldItalic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 22.96875
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_16_getmetrics",
@@ -201622,16 +200902,6 @@
       ]
     },
     {
-      "id": "LiberationSansNarrow-BoldItalic_16_getlength_hello",
-      "font": "LiberationSansNarrow-BoldItalic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.640625
-    },
-    {
       "id": "LiberationSansNarrow-BoldItalic_20_getmetrics",
       "font": "LiberationSansNarrow-BoldItalic",
       "size_pt": 20,
@@ -204382,16 +203652,6 @@
         10,
         8
       ]
-    },
-    {
-      "id": "LiberationSansNarrow-BoldItalic_20_getlength_hello",
-      "font": "LiberationSansNarrow-BoldItalic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 38.28125
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_24_getmetrics",
@@ -207146,16 +206406,6 @@
       ]
     },
     {
-      "id": "LiberationSansNarrow-BoldItalic_24_getlength_hello",
-      "font": "LiberationSansNarrow-BoldItalic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 45.953125
-    },
-    {
       "id": "LiberationSerif-Bold_10_getmetrics",
       "font": "LiberationSerif-Bold",
       "size_pt": 10,
@@ -209906,16 +209156,6 @@
         6,
         4
       ]
-    },
-    {
-      "id": "LiberationSerif-Bold_10_getlength_hello",
-      "font": "LiberationSerif-Bold",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 20.5625
     },
     {
       "id": "LiberationSerif-Bold_12_getmetrics",
@@ -212670,16 +211910,6 @@
       ]
     },
     {
-      "id": "LiberationSerif-Bold_12_getlength_hello",
-      "font": "LiberationSerif-Bold",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.65625
-    },
-    {
       "id": "LiberationSerif-Bold_16_getmetrics",
       "font": "LiberationSerif-Bold",
       "size_pt": 16,
@@ -215430,16 +214660,6 @@
         9,
         7
       ]
-    },
-    {
-      "id": "LiberationSerif-Bold_16_getlength_hello",
-      "font": "LiberationSerif-Bold",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 32.921875
     },
     {
       "id": "LiberationSerif-Bold_20_getmetrics",
@@ -218194,16 +217414,6 @@
       ]
     },
     {
-      "id": "LiberationSerif-Bold_20_getlength_hello",
-      "font": "LiberationSerif-Bold",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 41.125
-    },
-    {
       "id": "LiberationSerif-Bold_24_getmetrics",
       "font": "LiberationSerif-Bold",
       "size_pt": 24,
@@ -220954,16 +220164,6 @@
         13,
         10
       ]
-    },
-    {
-      "id": "LiberationSerif-Bold_24_getlength_hello",
-      "font": "LiberationSerif-Bold",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 49.34375
     },
     {
       "id": "LiberationSerif-BoldItalic_10_getmetrics",
@@ -223718,16 +222918,6 @@
       ]
     },
     {
-      "id": "LiberationSerif-BoldItalic_10_getlength_hello",
-      "font": "LiberationSerif-BoldItalic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 20.5625
-    },
-    {
       "id": "LiberationSerif-BoldItalic_12_getmetrics",
       "font": "LiberationSerif-BoldItalic",
       "size_pt": 12,
@@ -226478,16 +225668,6 @@
         7,
         6
       ]
-    },
-    {
-      "id": "LiberationSerif-BoldItalic_12_getlength_hello",
-      "font": "LiberationSerif-BoldItalic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.65625
     },
     {
       "id": "LiberationSerif-BoldItalic_16_getmetrics",
@@ -229242,16 +228422,6 @@
       ]
     },
     {
-      "id": "LiberationSerif-BoldItalic_16_getlength_hello",
-      "font": "LiberationSerif-BoldItalic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 32.921875
-    },
-    {
       "id": "LiberationSerif-BoldItalic_20_getmetrics",
       "font": "LiberationSerif-BoldItalic",
       "size_pt": 20,
@@ -232002,16 +231172,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "LiberationSerif-BoldItalic_20_getlength_hello",
-      "font": "LiberationSerif-BoldItalic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 41.125
     },
     {
       "id": "LiberationSerif-BoldItalic_24_getmetrics",
@@ -234766,16 +233926,6 @@
       ]
     },
     {
-      "id": "LiberationSerif-BoldItalic_24_getlength_hello",
-      "font": "LiberationSerif-BoldItalic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 49.34375
-    },
-    {
       "id": "NotoMono-Regular_10_getmetrics",
       "font": "NotoMono-Regular",
       "size_pt": 10,
@@ -237526,16 +236676,6 @@
         6,
         5
       ]
-    },
-    {
-      "id": "NotoMono-Regular_10_getlength_hello",
-      "font": "NotoMono-Regular",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.0
     },
     {
       "id": "NotoMono-Regular_12_getmetrics",
@@ -240290,16 +239430,6 @@
       ]
     },
     {
-      "id": "NotoMono-Regular_12_getlength_hello",
-      "font": "NotoMono-Regular",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.015625
-    },
-    {
       "id": "NotoMono-Regular_16_getmetrics",
       "font": "NotoMono-Regular",
       "size_pt": 16,
@@ -243050,16 +242180,6 @@
         8,
         8
       ]
-    },
-    {
-      "id": "NotoMono-Regular_16_getlength_hello",
-      "font": "NotoMono-Regular",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 48.046875
     },
     {
       "id": "NotoMono-Regular_20_getmetrics",
@@ -245814,16 +244934,6 @@
       ]
     },
     {
-      "id": "NotoMono-Regular_20_getlength_hello",
-      "font": "NotoMono-Regular",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.0
-    },
-    {
       "id": "NotoMono-Regular_24_getmetrics",
       "font": "NotoMono-Regular",
       "size_pt": 24,
@@ -248574,16 +247684,6 @@
         13,
         11
       ]
-    },
-    {
-      "id": "NotoMono-Regular_24_getlength_hello",
-      "font": "NotoMono-Regular",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 72.03125
     },
     {
       "id": "NotoSans-Bold_10_getmetrics",
@@ -251338,16 +250438,6 @@
       ]
     },
     {
-      "id": "NotoSans-Bold_10_getlength_hello",
-      "font": "NotoSans-Bold",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 24.75
-    },
-    {
       "id": "NotoSans-Bold_12_getmetrics",
       "font": "NotoSans-Bold",
       "size_pt": 12,
@@ -254098,16 +253188,6 @@
         7,
         5
       ]
-    },
-    {
-      "id": "NotoSans-Bold_12_getlength_hello",
-      "font": "NotoSans-Bold",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 29.71875
     },
     {
       "id": "NotoSans-Bold_16_getmetrics",
@@ -256862,16 +255942,6 @@
       ]
     },
     {
-      "id": "NotoSans-Bold_16_getlength_hello",
-      "font": "NotoSans-Bold",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 39.625
-    },
-    {
       "id": "NotoSans-Bold_20_getmetrics",
       "font": "NotoSans-Bold",
       "size_pt": 20,
@@ -259622,16 +258692,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "NotoSans-Bold_20_getlength_hello",
-      "font": "NotoSans-Bold",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 49.515625
     },
     {
       "id": "NotoSans-Bold_24_getmetrics",
@@ -262386,16 +261446,6 @@
       ]
     },
     {
-      "id": "NotoSans-Bold_24_getlength_hello",
-      "font": "NotoSans-Bold",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 59.4375
-    },
-    {
       "id": "NotoSans-BoldItalic_10_getmetrics",
       "font": "NotoSans-BoldItalic",
       "size_pt": 10,
@@ -265146,16 +264196,6 @@
         6,
         6
       ]
-    },
-    {
-      "id": "NotoSans-BoldItalic_10_getlength_hello",
-      "font": "NotoSans-BoldItalic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 23.390625
     },
     {
       "id": "NotoSans-BoldItalic_12_getmetrics",
@@ -267910,16 +266950,6 @@
       ]
     },
     {
-      "id": "NotoSans-BoldItalic_12_getlength_hello",
-      "font": "NotoSans-BoldItalic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 28.078125
-    },
-    {
       "id": "NotoSans-BoldItalic_16_getmetrics",
       "font": "NotoSans-BoldItalic",
       "size_pt": 16,
@@ -270670,16 +269700,6 @@
         9,
         7
       ]
-    },
-    {
-      "id": "NotoSans-BoldItalic_16_getlength_hello",
-      "font": "NotoSans-BoldItalic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 37.421875
     },
     {
       "id": "NotoSans-BoldItalic_20_getmetrics",
@@ -273434,16 +272454,6 @@
       ]
     },
     {
-      "id": "NotoSans-BoldItalic_20_getlength_hello",
-      "font": "NotoSans-BoldItalic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 46.796875
-    },
-    {
       "id": "NotoSans-BoldItalic_24_getmetrics",
       "font": "NotoSans-BoldItalic",
       "size_pt": 24,
@@ -276194,16 +275204,6 @@
         13,
         11
       ]
-    },
-    {
-      "id": "NotoSans-BoldItalic_24_getlength_hello",
-      "font": "NotoSans-BoldItalic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 56.171875
     },
     {
       "id": "NotoSansMath-Regular_10_getmetrics",
@@ -278958,16 +277958,6 @@
       ]
     },
     {
-      "id": "NotoSansMath-Regular_10_getlength_hello",
-      "font": "NotoSansMath-Regular",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 23.03125
-    },
-    {
       "id": "NotoSansMath-Regular_12_getmetrics",
       "font": "NotoSansMath-Regular",
       "size_pt": 12,
@@ -281718,16 +280708,6 @@
         7,
         6
       ]
-    },
-    {
-      "id": "NotoSansMath-Regular_12_getlength_hello",
-      "font": "NotoSansMath-Regular",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 27.640625
     },
     {
       "id": "NotoSansMath-Regular_16_getmetrics",
@@ -284482,16 +283462,6 @@
       ]
     },
     {
-      "id": "NotoSansMath-Regular_16_getlength_hello",
-      "font": "NotoSansMath-Regular",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.859375
-    },
-    {
       "id": "NotoSansMath-Regular_20_getmetrics",
       "font": "NotoSansMath-Regular",
       "size_pt": 20,
@@ -287242,16 +286212,6 @@
         10,
         9
       ]
-    },
-    {
-      "id": "NotoSansMath-Regular_20_getlength_hello",
-      "font": "NotoSansMath-Regular",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 46.046875
     },
     {
       "id": "NotoSansMath-Regular_24_getmetrics",
@@ -290006,16 +288966,6 @@
       ]
     },
     {
-      "id": "NotoSansMath-Regular_24_getlength_hello",
-      "font": "NotoSansMath-Regular",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 55.25
-    },
-    {
       "id": "NotoSerif-Italic_10_getmetrics",
       "font": "NotoSerif-Italic",
       "size_pt": 10,
@@ -292766,16 +291716,6 @@
         6,
         5
       ]
-    },
-    {
-      "id": "NotoSerif-Italic_10_getlength_hello",
-      "font": "NotoSerif-Italic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 22.75
     },
     {
       "id": "NotoSerif-Italic_12_getmetrics",
@@ -295530,16 +294470,6 @@
       ]
     },
     {
-      "id": "NotoSerif-Italic_12_getlength_hello",
-      "font": "NotoSerif-Italic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 27.28125
-    },
-    {
       "id": "NotoSerif-Italic_16_getmetrics",
       "font": "NotoSerif-Italic",
       "size_pt": 16,
@@ -298290,16 +297220,6 @@
         9,
         7
       ]
-    },
-    {
-      "id": "NotoSerif-Italic_16_getlength_hello",
-      "font": "NotoSerif-Italic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 36.375
     },
     {
       "id": "NotoSerif-Italic_20_getmetrics",
@@ -301054,16 +299974,6 @@
       ]
     },
     {
-      "id": "NotoSerif-Italic_20_getlength_hello",
-      "font": "NotoSerif-Italic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 45.484375
-    },
-    {
       "id": "NotoSerif-Italic_24_getmetrics",
       "font": "NotoSerif-Italic",
       "size_pt": 24,
@@ -303814,16 +302724,6 @@
         13,
         12
       ]
-    },
-    {
-      "id": "NotoSerif-Italic_24_getlength_hello",
-      "font": "NotoSerif-Italic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 54.578125
     },
     {
       "id": "NotoSerif-Regular_10_getmetrics",
@@ -306578,16 +305478,6 @@
       ]
     },
     {
-      "id": "NotoSerif-Regular_10_getlength_hello",
-      "font": "NotoSerif-Regular",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 23.640625
-    },
-    {
       "id": "NotoSerif-Regular_12_getmetrics",
       "font": "NotoSerif-Regular",
       "size_pt": 12,
@@ -309338,16 +308228,6 @@
         7,
         5
       ]
-    },
-    {
-      "id": "NotoSerif-Regular_12_getlength_hello",
-      "font": "NotoSerif-Regular",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 28.40625
     },
     {
       "id": "NotoSerif-Regular_16_getmetrics",
@@ -312102,16 +310982,6 @@
       ]
     },
     {
-      "id": "NotoSerif-Regular_16_getlength_hello",
-      "font": "NotoSerif-Regular",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 37.859375
-    },
-    {
       "id": "NotoSerif-Regular_20_getmetrics",
       "font": "NotoSerif-Regular",
       "size_pt": 20,
@@ -314862,16 +313732,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "NotoSerif-Regular_20_getlength_hello",
-      "font": "NotoSerif-Regular",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 47.359375
     },
     {
       "id": "NotoSerif-Regular_24_getmetrics",
@@ -317626,16 +316486,6 @@
       ]
     },
     {
-      "id": "NotoSerif-Regular_24_getlength_hello",
-      "font": "NotoSerif-Regular",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 56.796875
-    },
-    {
       "id": "NotoSerifDisplay-Bold_10_getmetrics",
       "font": "NotoSerifDisplay-Bold",
       "size_pt": 10,
@@ -320386,16 +319236,6 @@
         5,
         6
       ]
-    },
-    {
-      "id": "NotoSerifDisplay-Bold_10_getlength_hello",
-      "font": "NotoSerifDisplay-Bold",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 25.53125
     },
     {
       "id": "NotoSerifDisplay-Bold_12_getmetrics",
@@ -323150,16 +321990,6 @@
       ]
     },
     {
-      "id": "NotoSerifDisplay-Bold_12_getlength_hello",
-      "font": "NotoSerifDisplay-Bold",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.65625
-    },
-    {
       "id": "NotoSerifDisplay-Bold_16_getmetrics",
       "font": "NotoSerifDisplay-Bold",
       "size_pt": 16,
@@ -325910,16 +324740,6 @@
         8,
         7
       ]
-    },
-    {
-      "id": "NotoSerifDisplay-Bold_16_getlength_hello",
-      "font": "NotoSerifDisplay-Bold",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 40.875
     },
     {
       "id": "NotoSerifDisplay-Bold_20_getmetrics",
@@ -328674,16 +327494,6 @@
       ]
     },
     {
-      "id": "NotoSerifDisplay-Bold_20_getlength_hello",
-      "font": "NotoSerifDisplay-Bold",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 51.125
-    },
-    {
       "id": "NotoSerifDisplay-Bold_24_getmetrics",
       "font": "NotoSerifDisplay-Bold",
       "size_pt": 24,
@@ -331434,16 +330244,6 @@
         12,
         10
       ]
-    },
-    {
-      "id": "NotoSerifDisplay-Bold_24_getlength_hello",
-      "font": "NotoSerifDisplay-Bold",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 61.34375
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_10_getmetrics",
@@ -334198,16 +332998,6 @@
       ]
     },
     {
-      "id": "NotoSerifDisplay-BoldItalic_10_getlength_hello",
-      "font": "NotoSerifDisplay-BoldItalic",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 25.078125
-    },
-    {
       "id": "NotoSerifDisplay-BoldItalic_12_getmetrics",
       "font": "NotoSerifDisplay-BoldItalic",
       "size_pt": 12,
@@ -336958,16 +335748,6 @@
         7,
         6
       ]
-    },
-    {
-      "id": "NotoSerifDisplay-BoldItalic_12_getlength_hello",
-      "font": "NotoSerifDisplay-BoldItalic",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 30.078125
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_16_getmetrics",
@@ -339722,16 +338502,6 @@
       ]
     },
     {
-      "id": "NotoSerifDisplay-BoldItalic_16_getlength_hello",
-      "font": "NotoSerifDisplay-BoldItalic",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 40.09375
-    },
-    {
       "id": "NotoSerifDisplay-BoldItalic_20_getmetrics",
       "font": "NotoSerifDisplay-BoldItalic",
       "size_pt": 20,
@@ -342482,16 +341252,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "NotoSerifDisplay-BoldItalic_20_getlength_hello",
-      "font": "NotoSerifDisplay-BoldItalic",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 50.140625
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_24_getmetrics",
@@ -345246,16 +344006,6 @@
       ]
     },
     {
-      "id": "NotoSerifDisplay-BoldItalic_24_getlength_hello",
-      "font": "NotoSerifDisplay-BoldItalic",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 60.171875
-    },
-    {
       "id": "Ubuntu-Italic[wdth,wght]_10_getmetrics",
       "font": "Ubuntu-Italic[wdth,wght]",
       "size_pt": 10,
@@ -348006,16 +346756,6 @@
         6,
         4
       ]
-    },
-    {
-      "id": "Ubuntu-Italic[wdth,wght]_10_getlength_hello",
-      "font": "Ubuntu-Italic[wdth,wght]",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 21.640625
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_12_getmetrics",
@@ -350770,16 +349510,6 @@
       ]
     },
     {
-      "id": "Ubuntu-Italic[wdth,wght]_12_getlength_hello",
-      "font": "Ubuntu-Italic[wdth,wght]",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 26.0
-    },
-    {
       "id": "Ubuntu-Italic[wdth,wght]_16_getmetrics",
       "font": "Ubuntu-Italic[wdth,wght]",
       "size_pt": 16,
@@ -353530,16 +352260,6 @@
         9,
         7
       ]
-    },
-    {
-      "id": "Ubuntu-Italic[wdth,wght]_16_getlength_hello",
-      "font": "Ubuntu-Italic[wdth,wght]",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 34.65625
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_20_getmetrics",
@@ -356294,16 +355014,6 @@
       ]
     },
     {
-      "id": "Ubuntu-Italic[wdth,wght]_20_getlength_hello",
-      "font": "Ubuntu-Italic[wdth,wght]",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 43.3125
-    },
-    {
       "id": "Ubuntu-Italic[wdth,wght]_24_getmetrics",
       "font": "Ubuntu-Italic[wdth,wght]",
       "size_pt": 24,
@@ -359054,16 +357764,6 @@
         13,
         9
       ]
-    },
-    {
-      "id": "Ubuntu-Italic[wdth,wght]_24_getlength_hello",
-      "font": "Ubuntu-Italic[wdth,wght]",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 51.984375
     },
     {
       "id": "UbuntuMono-Italic[wght]_10_getmetrics",
@@ -361818,16 +360518,6 @@
       ]
     },
     {
-      "id": "UbuntuMono-Italic[wght]_10_getlength_hello",
-      "font": "UbuntuMono-Italic[wght]",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 27.96875
-    },
-    {
       "id": "UbuntuMono-Italic[wght]_12_getmetrics",
       "font": "UbuntuMono-Italic[wght]",
       "size_pt": 12,
@@ -364578,16 +363268,6 @@
         7,
         4
       ]
-    },
-    {
-      "id": "UbuntuMono-Italic[wght]_12_getlength_hello",
-      "font": "UbuntuMono-Italic[wght]",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 33.59375
     },
     {
       "id": "UbuntuMono-Italic[wght]_16_getmetrics",
@@ -367342,16 +366022,6 @@
       ]
     },
     {
-      "id": "UbuntuMono-Italic[wght]_16_getlength_hello",
-      "font": "UbuntuMono-Italic[wght]",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 44.765625
-    },
-    {
       "id": "UbuntuMono-Italic[wght]_20_getmetrics",
       "font": "UbuntuMono-Italic[wght]",
       "size_pt": 20,
@@ -370102,16 +368772,6 @@
         12,
         9
       ]
-    },
-    {
-      "id": "UbuntuMono-Italic[wght]_20_getlength_hello",
-      "font": "UbuntuMono-Italic[wght]",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 56.015625
     },
     {
       "id": "UbuntuMono-Italic[wght]_24_getmetrics",
@@ -372866,16 +371526,6 @@
       ]
     },
     {
-      "id": "UbuntuMono-Italic[wght]_24_getlength_hello",
-      "font": "UbuntuMono-Italic[wght]",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 67.1875
-    },
-    {
       "id": "UbuntuMono[wght]_10_getmetrics",
       "font": "UbuntuMono[wght]",
       "size_pt": 10,
@@ -375626,16 +374276,6 @@
         6,
         4
       ]
-    },
-    {
-      "id": "UbuntuMono[wght]_10_getlength_hello",
-      "font": "UbuntuMono[wght]",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 27.96875
     },
     {
       "id": "UbuntuMono[wght]_12_getmetrics",
@@ -378390,16 +377030,6 @@
       ]
     },
     {
-      "id": "UbuntuMono[wght]_12_getlength_hello",
-      "font": "UbuntuMono[wght]",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 33.59375
-    },
-    {
       "id": "UbuntuMono[wght]_16_getmetrics",
       "font": "UbuntuMono[wght]",
       "size_pt": 16,
@@ -381150,16 +379780,6 @@
         9,
         6
       ]
-    },
-    {
-      "id": "UbuntuMono[wght]_16_getlength_hello",
-      "font": "UbuntuMono[wght]",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 44.765625
     },
     {
       "id": "UbuntuMono[wght]_20_getmetrics",
@@ -383914,16 +382534,6 @@
       ]
     },
     {
-      "id": "UbuntuMono[wght]_20_getlength_hello",
-      "font": "UbuntuMono[wght]",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 56.015625
-    },
-    {
       "id": "UbuntuMono[wght]_24_getmetrics",
       "font": "UbuntuMono[wght]",
       "size_pt": 24,
@@ -386674,16 +385284,6 @@
         13,
         9
       ]
-    },
-    {
-      "id": "UbuntuMono[wght]_24_getlength_hello",
-      "font": "UbuntuMono[wght]",
-      "size_pt": 24,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 67.1875
     },
     {
       "id": "UbuntuSans[wdth,wght]_10_getmetrics",
@@ -389438,16 +388038,6 @@
       ]
     },
     {
-      "id": "UbuntuSans[wdth,wght]_10_getlength_hello",
-      "font": "UbuntuSans[wdth,wght]",
-      "size_pt": 10,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 22.3125
-    },
-    {
       "id": "UbuntuSans[wdth,wght]_12_getmetrics",
       "font": "UbuntuSans[wdth,wght]",
       "size_pt": 12,
@@ -392198,16 +390788,6 @@
         7,
         4
       ]
-    },
-    {
-      "id": "UbuntuSans[wdth,wght]_12_getlength_hello",
-      "font": "UbuntuSans[wdth,wght]",
-      "size_pt": 12,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 26.78125
     },
     {
       "id": "UbuntuSans[wdth,wght]_16_getmetrics",
@@ -394962,16 +393542,6 @@
       ]
     },
     {
-      "id": "UbuntuSans[wdth,wght]_16_getlength_hello",
-      "font": "UbuntuSans[wdth,wght]",
-      "size_pt": 16,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 35.703125
-    },
-    {
       "id": "UbuntuSans[wdth,wght]_20_getmetrics",
       "font": "UbuntuSans[wdth,wght]",
       "size_pt": 20,
@@ -397722,16 +396292,6 @@
         11,
         9
       ]
-    },
-    {
-      "id": "UbuntuSans[wdth,wght]_20_getlength_hello",
-      "font": "UbuntuSans[wdth,wght]",
-      "size_pt": 20,
-      "codepoint": 0,
-      "char": "hello",
-      "operation": "getlength",
-      "status": "active",
-      "ref_value": 44.640625
     },
     {
       "id": "UbuntuSans[wdth,wght]_24_getmetrics",
@@ -400486,6 +399046,1446 @@
       ]
     },
     {
+      "id": "DejaVuMathTeXGyre_10_getlength_hello",
+      "font": "DejaVuMathTeXGyre",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.734375
+    },
+    {
+      "id": "DejaVuMathTeXGyre_12_getlength_hello",
+      "font": "DejaVuMathTeXGyre",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 29.703125
+    },
+    {
+      "id": "DejaVuMathTeXGyre_16_getlength_hello",
+      "font": "DejaVuMathTeXGyre",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 39.59375
+    },
+    {
+      "id": "DejaVuMathTeXGyre_20_getlength_hello",
+      "font": "DejaVuMathTeXGyre",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 49.484375
+    },
+    {
+      "id": "DejaVuMathTeXGyre_24_getlength_hello",
+      "font": "DejaVuMathTeXGyre",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 59.40625
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_getlength_hello",
+      "font": "DejaVuSans-ExtraLight",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.1875
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_12_getlength_hello",
+      "font": "DejaVuSans-ExtraLight",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 29.0
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_16_getlength_hello",
+      "font": "DejaVuSans-ExtraLight",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 38.6875
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_getlength_hello",
+      "font": "DejaVuSans-ExtraLight",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.34375
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_24_getlength_hello",
+      "font": "DejaVuSans-ExtraLight",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 58.015625
+    },
+    {
+      "id": "DejaVuSans-Oblique_10_getlength_hello",
+      "font": "DejaVuSans-Oblique",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.1875
+    },
+    {
+      "id": "DejaVuSans-Oblique_12_getlength_hello",
+      "font": "DejaVuSans-Oblique",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 29.0
+    },
+    {
+      "id": "DejaVuSans-Oblique_16_getlength_hello",
+      "font": "DejaVuSans-Oblique",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 38.6875
+    },
+    {
+      "id": "DejaVuSans-Oblique_20_getlength_hello",
+      "font": "DejaVuSans-Oblique",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.34375
+    },
+    {
+      "id": "DejaVuSans-Oblique_24_getlength_hello",
+      "font": "DejaVuSans-Oblique",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 58.015625
+    },
+    {
+      "id": "DejaVuSansMono_10_getlength_hello",
+      "font": "DejaVuSansMono",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.078125
+    },
+    {
+      "id": "DejaVuSansMono_12_getlength_hello",
+      "font": "DejaVuSansMono",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.09375
+    },
+    {
+      "id": "DejaVuSansMono_16_getlength_hello",
+      "font": "DejaVuSansMono",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.203125
+    },
+    {
+      "id": "DejaVuSansMono_20_getlength_hello",
+      "font": "DejaVuSansMono",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.234375
+    },
+    {
+      "id": "DejaVuSansMono_24_getlength_hello",
+      "font": "DejaVuSansMono",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 72.265625
+    },
+    {
+      "id": "DejaVuSansMono-Oblique_10_getlength_hello",
+      "font": "DejaVuSansMono-Oblique",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.078125
+    },
+    {
+      "id": "DejaVuSansMono-Oblique_12_getlength_hello",
+      "font": "DejaVuSansMono-Oblique",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.09375
+    },
+    {
+      "id": "DejaVuSansMono-Oblique_16_getlength_hello",
+      "font": "DejaVuSansMono-Oblique",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.203125
+    },
+    {
+      "id": "DejaVuSansMono-Oblique_20_getlength_hello",
+      "font": "DejaVuSansMono-Oblique",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.234375
+    },
+    {
+      "id": "DejaVuSansMono-Oblique_24_getlength_hello",
+      "font": "DejaVuSansMono-Oblique",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 72.265625
+    },
+    {
+      "id": "DejaVuSerif-Bold_10_getlength_hello",
+      "font": "DejaVuSerif-Bold",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 27.890625
+    },
+    {
+      "id": "DejaVuSerif-Bold_12_getlength_hello",
+      "font": "DejaVuSerif-Bold",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 33.484375
+    },
+    {
+      "id": "DejaVuSerif-Bold_16_getlength_hello",
+      "font": "DejaVuSerif-Bold",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 44.65625
+    },
+    {
+      "id": "DejaVuSerif-Bold_20_getlength_hello",
+      "font": "DejaVuSerif-Bold",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 55.796875
+    },
+    {
+      "id": "DejaVuSerif-Bold_24_getlength_hello",
+      "font": "DejaVuSerif-Bold",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 66.984375
+    },
+    {
+      "id": "DejaVuSerif-Italic_10_getlength_hello",
+      "font": "DejaVuSerif-Italic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.78125
+    },
+    {
+      "id": "DejaVuSerif-Italic_12_getlength_hello",
+      "font": "DejaVuSerif-Italic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 29.75
+    },
+    {
+      "id": "DejaVuSerif-Italic_16_getlength_hello",
+      "font": "DejaVuSerif-Italic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 39.671875
+    },
+    {
+      "id": "DejaVuSerif-Italic_20_getlength_hello",
+      "font": "DejaVuSerif-Italic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 49.546875
+    },
+    {
+      "id": "DejaVuSerif-Italic_24_getlength_hello",
+      "font": "DejaVuSerif-Italic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 59.453125
+    },
+    {
+      "id": "DejaVuSerifCondensed-Bold_10_getlength_hello",
+      "font": "DejaVuSerifCondensed-Bold",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 25.109375
+    },
+    {
+      "id": "DejaVuSerifCondensed-Bold_12_getlength_hello",
+      "font": "DejaVuSerifCondensed-Bold",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.15625
+    },
+    {
+      "id": "DejaVuSerifCondensed-Bold_16_getlength_hello",
+      "font": "DejaVuSerifCondensed-Bold",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 40.171875
+    },
+    {
+      "id": "DejaVuSerifCondensed-Bold_20_getlength_hello",
+      "font": "DejaVuSerifCondensed-Bold",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 50.234375
+    },
+    {
+      "id": "DejaVuSerifCondensed-Bold_24_getlength_hello",
+      "font": "DejaVuSerifCondensed-Bold",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.25
+    },
+    {
+      "id": "DejaVuSerifCondensed-Italic_10_getlength_hello",
+      "font": "DejaVuSerifCondensed-Italic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 22.296875
+    },
+    {
+      "id": "DejaVuSerifCondensed-Italic_12_getlength_hello",
+      "font": "DejaVuSerifCondensed-Italic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 26.75
+    },
+    {
+      "id": "DejaVuSerifCondensed-Italic_16_getlength_hello",
+      "font": "DejaVuSerifCondensed-Italic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 35.6875
+    },
+    {
+      "id": "DejaVuSerifCondensed-Italic_20_getlength_hello",
+      "font": "DejaVuSerifCondensed-Italic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 44.5625
+    },
+    {
+      "id": "DejaVuSerifCondensed-Italic_24_getlength_hello",
+      "font": "DejaVuSerifCondensed-Italic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 53.5
+    },
+    {
+      "id": "LiberationMono-Italic_10_getlength_hello",
+      "font": "LiberationMono-Italic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.0
+    },
+    {
+      "id": "LiberationMono-Italic_12_getlength_hello",
+      "font": "LiberationMono-Italic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.015625
+    },
+    {
+      "id": "LiberationMono-Italic_16_getlength_hello",
+      "font": "LiberationMono-Italic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.046875
+    },
+    {
+      "id": "LiberationMono-Italic_20_getlength_hello",
+      "font": "LiberationMono-Italic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.0
+    },
+    {
+      "id": "LiberationMono-Italic_24_getlength_hello",
+      "font": "LiberationMono-Italic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 72.03125
+    },
+    {
+      "id": "LiberationMono-Regular_10_getlength_hello",
+      "font": "LiberationMono-Regular",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.0
+    },
+    {
+      "id": "LiberationMono-Regular_12_getlength_hello",
+      "font": "LiberationMono-Regular",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.015625
+    },
+    {
+      "id": "LiberationMono-Regular_16_getlength_hello",
+      "font": "LiberationMono-Regular",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.046875
+    },
+    {
+      "id": "LiberationMono-Regular_20_getlength_hello",
+      "font": "LiberationMono-Regular",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.0
+    },
+    {
+      "id": "LiberationMono-Regular_24_getlength_hello",
+      "font": "LiberationMono-Regular",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 72.03125
+    },
+    {
+      "id": "LiberationSans-BoldItalic_10_getlength_hello",
+      "font": "LiberationSans-BoldItalic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 23.34375
+    },
+    {
+      "id": "LiberationSans-BoldItalic_12_getlength_hello",
+      "font": "LiberationSans-BoldItalic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 27.984375
+    },
+    {
+      "id": "LiberationSans-BoldItalic_16_getlength_hello",
+      "font": "LiberationSans-BoldItalic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 37.375
+    },
+    {
+      "id": "LiberationSans-BoldItalic_20_getlength_hello",
+      "font": "LiberationSans-BoldItalic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 46.6875
+    },
+    {
+      "id": "LiberationSans-BoldItalic_24_getlength_hello",
+      "font": "LiberationSans-BoldItalic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 56.0
+    },
+    {
+      "id": "LiberationSans-Regular_10_getlength_hello",
+      "font": "LiberationSans-Regular",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 21.125
+    },
+    {
+      "id": "LiberationSans-Regular_12_getlength_hello",
+      "font": "LiberationSans-Regular",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 25.359375
+    },
+    {
+      "id": "LiberationSans-Regular_16_getlength_hello",
+      "font": "LiberationSans-Regular",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 33.84375
+    },
+    {
+      "id": "LiberationSans-Regular_20_getlength_hello",
+      "font": "LiberationSans-Regular",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 42.25
+    },
+    {
+      "id": "LiberationSans-Regular_24_getlength_hello",
+      "font": "LiberationSans-Regular",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 50.6875
+    },
+    {
+      "id": "LiberationSansNarrow-Bold_10_getlength_hello",
+      "font": "LiberationSansNarrow-Bold",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 19.15625
+    },
+    {
+      "id": "LiberationSansNarrow-Bold_12_getlength_hello",
+      "font": "LiberationSansNarrow-Bold",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 22.96875
+    },
+    {
+      "id": "LiberationSansNarrow-Bold_16_getlength_hello",
+      "font": "LiberationSansNarrow-Bold",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.640625
+    },
+    {
+      "id": "LiberationSansNarrow-Bold_20_getlength_hello",
+      "font": "LiberationSansNarrow-Bold",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 38.28125
+    },
+    {
+      "id": "LiberationSansNarrow-Bold_24_getlength_hello",
+      "font": "LiberationSansNarrow-Bold",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 45.953125
+    },
+    {
+      "id": "LiberationSansNarrow-BoldItalic_10_getlength_hello",
+      "font": "LiberationSansNarrow-BoldItalic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 19.15625
+    },
+    {
+      "id": "LiberationSansNarrow-BoldItalic_12_getlength_hello",
+      "font": "LiberationSansNarrow-BoldItalic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 22.96875
+    },
+    {
+      "id": "LiberationSansNarrow-BoldItalic_16_getlength_hello",
+      "font": "LiberationSansNarrow-BoldItalic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.640625
+    },
+    {
+      "id": "LiberationSansNarrow-BoldItalic_20_getlength_hello",
+      "font": "LiberationSansNarrow-BoldItalic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 38.28125
+    },
+    {
+      "id": "LiberationSansNarrow-BoldItalic_24_getlength_hello",
+      "font": "LiberationSansNarrow-BoldItalic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 45.953125
+    },
+    {
+      "id": "LiberationSerif-Bold_10_getlength_hello",
+      "font": "LiberationSerif-Bold",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 20.5625
+    },
+    {
+      "id": "LiberationSerif-Bold_12_getlength_hello",
+      "font": "LiberationSerif-Bold",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.65625
+    },
+    {
+      "id": "LiberationSerif-Bold_16_getlength_hello",
+      "font": "LiberationSerif-Bold",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 32.921875
+    },
+    {
+      "id": "LiberationSerif-Bold_20_getlength_hello",
+      "font": "LiberationSerif-Bold",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 41.125
+    },
+    {
+      "id": "LiberationSerif-Bold_24_getlength_hello",
+      "font": "LiberationSerif-Bold",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 49.34375
+    },
+    {
+      "id": "LiberationSerif-BoldItalic_10_getlength_hello",
+      "font": "LiberationSerif-BoldItalic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 20.5625
+    },
+    {
+      "id": "LiberationSerif-BoldItalic_12_getlength_hello",
+      "font": "LiberationSerif-BoldItalic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.65625
+    },
+    {
+      "id": "LiberationSerif-BoldItalic_16_getlength_hello",
+      "font": "LiberationSerif-BoldItalic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 32.921875
+    },
+    {
+      "id": "LiberationSerif-BoldItalic_20_getlength_hello",
+      "font": "LiberationSerif-BoldItalic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 41.125
+    },
+    {
+      "id": "LiberationSerif-BoldItalic_24_getlength_hello",
+      "font": "LiberationSerif-BoldItalic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 49.34375
+    },
+    {
+      "id": "NotoMono-Regular_10_getlength_hello",
+      "font": "NotoMono-Regular",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.0
+    },
+    {
+      "id": "NotoMono-Regular_12_getlength_hello",
+      "font": "NotoMono-Regular",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.015625
+    },
+    {
+      "id": "NotoMono-Regular_16_getlength_hello",
+      "font": "NotoMono-Regular",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 48.046875
+    },
+    {
+      "id": "NotoMono-Regular_20_getlength_hello",
+      "font": "NotoMono-Regular",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.0
+    },
+    {
+      "id": "NotoMono-Regular_24_getlength_hello",
+      "font": "NotoMono-Regular",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 72.03125
+    },
+    {
+      "id": "NotoSans-Bold_10_getlength_hello",
+      "font": "NotoSans-Bold",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 24.75
+    },
+    {
+      "id": "NotoSans-Bold_12_getlength_hello",
+      "font": "NotoSans-Bold",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 29.71875
+    },
+    {
+      "id": "NotoSans-Bold_16_getlength_hello",
+      "font": "NotoSans-Bold",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 39.625
+    },
+    {
+      "id": "NotoSans-Bold_20_getlength_hello",
+      "font": "NotoSans-Bold",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 49.515625
+    },
+    {
+      "id": "NotoSans-Bold_24_getlength_hello",
+      "font": "NotoSans-Bold",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 59.4375
+    },
+    {
+      "id": "NotoSans-BoldItalic_10_getlength_hello",
+      "font": "NotoSans-BoldItalic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 23.390625
+    },
+    {
+      "id": "NotoSans-BoldItalic_12_getlength_hello",
+      "font": "NotoSans-BoldItalic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 28.078125
+    },
+    {
+      "id": "NotoSans-BoldItalic_16_getlength_hello",
+      "font": "NotoSans-BoldItalic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 37.421875
+    },
+    {
+      "id": "NotoSans-BoldItalic_20_getlength_hello",
+      "font": "NotoSans-BoldItalic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 46.796875
+    },
+    {
+      "id": "NotoSans-BoldItalic_24_getlength_hello",
+      "font": "NotoSans-BoldItalic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 56.171875
+    },
+    {
+      "id": "NotoSansMath-Regular_10_getlength_hello",
+      "font": "NotoSansMath-Regular",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 23.03125
+    },
+    {
+      "id": "NotoSansMath-Regular_12_getlength_hello",
+      "font": "NotoSansMath-Regular",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 27.640625
+    },
+    {
+      "id": "NotoSansMath-Regular_16_getlength_hello",
+      "font": "NotoSansMath-Regular",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.859375
+    },
+    {
+      "id": "NotoSansMath-Regular_20_getlength_hello",
+      "font": "NotoSansMath-Regular",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 46.046875
+    },
+    {
+      "id": "NotoSansMath-Regular_24_getlength_hello",
+      "font": "NotoSansMath-Regular",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 55.25
+    },
+    {
+      "id": "NotoSerif-Italic_10_getlength_hello",
+      "font": "NotoSerif-Italic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 22.75
+    },
+    {
+      "id": "NotoSerif-Italic_12_getlength_hello",
+      "font": "NotoSerif-Italic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 27.28125
+    },
+    {
+      "id": "NotoSerif-Italic_16_getlength_hello",
+      "font": "NotoSerif-Italic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 36.375
+    },
+    {
+      "id": "NotoSerif-Italic_20_getlength_hello",
+      "font": "NotoSerif-Italic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 45.484375
+    },
+    {
+      "id": "NotoSerif-Italic_24_getlength_hello",
+      "font": "NotoSerif-Italic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 54.578125
+    },
+    {
+      "id": "NotoSerif-Regular_10_getlength_hello",
+      "font": "NotoSerif-Regular",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 23.640625
+    },
+    {
+      "id": "NotoSerif-Regular_12_getlength_hello",
+      "font": "NotoSerif-Regular",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 28.40625
+    },
+    {
+      "id": "NotoSerif-Regular_16_getlength_hello",
+      "font": "NotoSerif-Regular",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 37.859375
+    },
+    {
+      "id": "NotoSerif-Regular_20_getlength_hello",
+      "font": "NotoSerif-Regular",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 47.359375
+    },
+    {
+      "id": "NotoSerif-Regular_24_getlength_hello",
+      "font": "NotoSerif-Regular",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 56.796875
+    },
+    {
+      "id": "NotoSerifDisplay-Bold_10_getlength_hello",
+      "font": "NotoSerifDisplay-Bold",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 25.53125
+    },
+    {
+      "id": "NotoSerifDisplay-Bold_12_getlength_hello",
+      "font": "NotoSerifDisplay-Bold",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.65625
+    },
+    {
+      "id": "NotoSerifDisplay-Bold_16_getlength_hello",
+      "font": "NotoSerifDisplay-Bold",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 40.875
+    },
+    {
+      "id": "NotoSerifDisplay-Bold_20_getlength_hello",
+      "font": "NotoSerifDisplay-Bold",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 51.125
+    },
+    {
+      "id": "NotoSerifDisplay-Bold_24_getlength_hello",
+      "font": "NotoSerifDisplay-Bold",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 61.34375
+    },
+    {
+      "id": "NotoSerifDisplay-BoldItalic_10_getlength_hello",
+      "font": "NotoSerifDisplay-BoldItalic",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 25.078125
+    },
+    {
+      "id": "NotoSerifDisplay-BoldItalic_12_getlength_hello",
+      "font": "NotoSerifDisplay-BoldItalic",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 30.078125
+    },
+    {
+      "id": "NotoSerifDisplay-BoldItalic_16_getlength_hello",
+      "font": "NotoSerifDisplay-BoldItalic",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 40.09375
+    },
+    {
+      "id": "NotoSerifDisplay-BoldItalic_20_getlength_hello",
+      "font": "NotoSerifDisplay-BoldItalic",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 50.140625
+    },
+    {
+      "id": "NotoSerifDisplay-BoldItalic_24_getlength_hello",
+      "font": "NotoSerifDisplay-BoldItalic",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 60.171875
+    },
+    {
+      "id": "Ubuntu-Italic[wdth,wght]_10_getlength_hello",
+      "font": "Ubuntu-Italic[wdth,wght]",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 21.640625
+    },
+    {
+      "id": "Ubuntu-Italic[wdth,wght]_12_getlength_hello",
+      "font": "Ubuntu-Italic[wdth,wght]",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 26.0
+    },
+    {
+      "id": "Ubuntu-Italic[wdth,wght]_16_getlength_hello",
+      "font": "Ubuntu-Italic[wdth,wght]",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 34.65625
+    },
+    {
+      "id": "Ubuntu-Italic[wdth,wght]_20_getlength_hello",
+      "font": "Ubuntu-Italic[wdth,wght]",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 43.3125
+    },
+    {
+      "id": "Ubuntu-Italic[wdth,wght]_24_getlength_hello",
+      "font": "Ubuntu-Italic[wdth,wght]",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 51.984375
+    },
+    {
+      "id": "UbuntuMono-Italic[wght]_10_getlength_hello",
+      "font": "UbuntuMono-Italic[wght]",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 27.96875
+    },
+    {
+      "id": "UbuntuMono-Italic[wght]_12_getlength_hello",
+      "font": "UbuntuMono-Italic[wght]",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 33.59375
+    },
+    {
+      "id": "UbuntuMono-Italic[wght]_16_getlength_hello",
+      "font": "UbuntuMono-Italic[wght]",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 44.765625
+    },
+    {
+      "id": "UbuntuMono-Italic[wght]_20_getlength_hello",
+      "font": "UbuntuMono-Italic[wght]",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 56.015625
+    },
+    {
+      "id": "UbuntuMono-Italic[wght]_24_getlength_hello",
+      "font": "UbuntuMono-Italic[wght]",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 67.1875
+    },
+    {
+      "id": "UbuntuMono[wght]_10_getlength_hello",
+      "font": "UbuntuMono[wght]",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 27.96875
+    },
+    {
+      "id": "UbuntuMono[wght]_12_getlength_hello",
+      "font": "UbuntuMono[wght]",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 33.59375
+    },
+    {
+      "id": "UbuntuMono[wght]_16_getlength_hello",
+      "font": "UbuntuMono[wght]",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 44.765625
+    },
+    {
+      "id": "UbuntuMono[wght]_20_getlength_hello",
+      "font": "UbuntuMono[wght]",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 56.015625
+    },
+    {
+      "id": "UbuntuMono[wght]_24_getlength_hello",
+      "font": "UbuntuMono[wght]",
+      "size_pt": 24,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 67.1875
+    },
+    {
+      "id": "UbuntuSans[wdth,wght]_10_getlength_hello",
+      "font": "UbuntuSans[wdth,wght]",
+      "size_pt": 10,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 22.3125
+    },
+    {
+      "id": "UbuntuSans[wdth,wght]_12_getlength_hello",
+      "font": "UbuntuSans[wdth,wght]",
+      "size_pt": 12,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 26.78125
+    },
+    {
+      "id": "UbuntuSans[wdth,wght]_16_getlength_hello",
+      "font": "UbuntuSans[wdth,wght]",
+      "size_pt": 16,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 35.703125
+    },
+    {
+      "id": "UbuntuSans[wdth,wght]_20_getlength_hello",
+      "font": "UbuntuSans[wdth,wght]",
+      "size_pt": 20,
+      "codepoint": 0,
+      "char": "hello",
+      "operation": "getlength",
+      "status": "active",
+      "ref_value": 44.640625
+    },
+    {
       "id": "UbuntuSans[wdth,wght]_24_getlength_hello",
       "font": "UbuntuSans[wdth,wght]",
       "size_pt": 24,
@@ -400497,8 +400497,8 @@
     }
   ],
   "summary": {
-    "total_rows": 27695,
-    "active_rows": 27695,
+    "total_rows": 27550,
+    "active_rows": 27550,
     "fonts": 29,
     "sizes": 5,
     "glyphs": 94
