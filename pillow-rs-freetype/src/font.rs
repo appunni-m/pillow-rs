@@ -25,7 +25,7 @@ pub enum BitmapBackend {
 /// A loaded TrueType font at a given point size.
 #[derive(Clone)]
 pub struct Font {
-    data: Arc<FontData>,
+    pub data: Arc<FontData>,
     pub size_pt: f32,
     /// Selected rendering backend.
     pub backend: BitmapBackend,
