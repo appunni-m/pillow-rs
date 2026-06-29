@@ -148,8 +148,12 @@ mod tests {
     }
 
     #[test]
-    fn ceil_fix_and_floor_fix() {
+    fn ceil_fix_rounds_near_zero_up() {
         assert_eq!(ft_ceil_fix(0x1), 0x1_0000);
+    }
+
+    #[test]
+    fn floor_fix_truncates_sub_pixel() {
         assert_eq!(ft_floor_fix(0x_FFFF), 0x0);
     }
 

@@ -24,3 +24,32 @@ pub enum FontError {
     #[error("Invalid glyph outline: {0}")]
     InvalidOutline(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_font_displays_message() {
+        let err = FontError::InvalidFont("bad table".into());
+        assert_eq!(err.to_string(), "Invalid TrueType font: bad table");
+    }
+
+    #[test]
+    fn unsupported_cmap_displays_format() {
+        let err = FontError::UnsupportedCmapFormat(42);
+        assert_eq!(err.to_string(), "Unsupported cmap table format: 42");
+    }
+
+    #[test]
+    fn raster_overflow_has_static_message() {
+        let err = FontError::RasterOverflow;
+        assert_eq!(err.to_string(), "Rasterizer buffer overflow");
+    }
+
+    #[test]
+    fn invalid_outline_displays_message() {
+        let err = FontError::InvalidOutline("bad contour".into());
+        assert_eq!(err.to_string(), "Invalid glyph outline: bad contour");
+    }
+}

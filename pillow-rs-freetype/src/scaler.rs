@@ -5,7 +5,7 @@
 //! `src/base/ftglyph.c` (`FT_Glyph_Get_CBox` with `FT_GLYPH_BBOX_PIXELS`).
 
 use crate::error::FontError;
-use crate::fixed::{ft_mul_fix};
+use crate::fixed::ft_mul_fix;
 use crate::outline::{Outline, OutlinePoint};
 use crate::tt::glyf::{load_glyph, GlyphOutline};
 use crate::tables::FontData;
