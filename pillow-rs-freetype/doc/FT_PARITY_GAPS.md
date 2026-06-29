@@ -1,9 +1,14 @@
 # FT Parity Gap Classification — 29-Font Minimal Set
 
 **Date:** 2026-06-29  
-**Status:** ACTIVE — grays.rs cursor-wrap fix applied (commit 1d791b0)  
-**P0 Bug found:** `walk_contour` skips entire contour when first point is at index 0 (cursor wraps to usize::MAX, while loop never executes). All '.' glyphs rendered empty. Fixed with cursor wrap logic.  
-**Current:** Fix applied; full test runs are slower (all glyphs now render). Need to verify FT parity count.
+**Status:** ACTIVE — walk_contour fix applied (commit abc2ec4)
+**Current:** 21,680/27,695 passed (78.3%), 6,015 failed
+**P0 Bug:** ✅ Fixed — `walk_contour` cursor wrap. Previously, all glyphs with
+first contour point at index 0 rendered as empty bitmaps. Now all glyphs
+actually rasterize.
+**Next:** Rasterizer (`grays.rs`) produces wrong alpha values for
+non-pixel-aligned outlines. All 6,015 remaining failures are getmask SHA
+mismatches where bbox is correct but pixel alpha values differ by 1-7 units.
 
 ---
 
