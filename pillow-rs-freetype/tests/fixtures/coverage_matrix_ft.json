@@ -2765,7 +2765,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 24.734375
     },
     {
       "id": "DejaVuMathTeXGyre_12_getmetrics",
@@ -5527,7 +5527,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 32.0
+      "ref_value": 29.703125
     },
     {
       "id": "DejaVuMathTeXGyre_16_getmetrics",
@@ -8289,7 +8289,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 42.0
+      "ref_value": 39.59375
     },
     {
       "id": "DejaVuMathTeXGyre_20_getmetrics",
@@ -11051,7 +11051,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 52.0
+      "ref_value": 49.484375
     },
     {
       "id": "DejaVuMathTeXGyre_24_getmetrics",
@@ -13813,7 +13813,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 60.0
+      "ref_value": 59.40625
     },
     {
       "id": "DejaVuSans-ExtraLight_10_getmetrics",
@@ -16575,7 +16575,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 24.1875
     },
     {
       "id": "DejaVuSans-ExtraLight_12_getmetrics",
@@ -19337,7 +19337,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 28.0
+      "ref_value": 29.0
     },
     {
       "id": "DejaVuSans-ExtraLight_16_getmetrics",
@@ -22099,7 +22099,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 38.0
+      "ref_value": 38.6875
     },
     {
       "id": "DejaVuSans-ExtraLight_20_getmetrics",
@@ -24861,7 +24861,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 49.0
+      "ref_value": 48.34375
     },
     {
       "id": "DejaVuSans-ExtraLight_24_getmetrics",
@@ -27623,7 +27623,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 59.0
+      "ref_value": 58.015625
     },
     {
       "id": "DejaVuSans-Oblique_10_getmetrics",
@@ -30385,7 +30385,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 24.1875
     },
     {
       "id": "DejaVuSans-Oblique_12_getmetrics",
@@ -33147,7 +33147,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 28.0
+      "ref_value": 29.0
     },
     {
       "id": "DejaVuSans-Oblique_16_getmetrics",
@@ -35909,7 +35909,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 38.0
+      "ref_value": 38.6875
     },
     {
       "id": "DejaVuSans-Oblique_20_getmetrics",
@@ -38671,7 +38671,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 49.0
+      "ref_value": 48.34375
     },
     {
       "id": "DejaVuSans-Oblique_24_getmetrics",
@@ -41433,7 +41433,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 59.0
+      "ref_value": 58.015625
     },
     {
       "id": "DejaVuSansMono_10_getmetrics",
@@ -44195,7 +44195,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 30.078125
     },
     {
       "id": "DejaVuSansMono_12_getmetrics",
@@ -46957,7 +46957,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 36.09375
     },
     {
       "id": "DejaVuSansMono_16_getmetrics",
@@ -49719,7 +49719,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 48.203125
     },
     {
       "id": "DejaVuSansMono_20_getmetrics",
@@ -52481,7 +52481,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 60.0
+      "ref_value": 60.234375
     },
     {
       "id": "DejaVuSansMono_24_getmetrics",
@@ -55243,7 +55243,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 70.0
+      "ref_value": 72.265625
     },
     {
       "id": "DejaVuSansMono-Oblique_10_getmetrics",
@@ -58005,7 +58005,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 30.078125
     },
     {
       "id": "DejaVuSansMono-Oblique_12_getmetrics",
@@ -60767,7 +60767,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 36.09375
     },
     {
       "id": "DejaVuSansMono-Oblique_16_getmetrics",
@@ -63529,7 +63529,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 48.203125
     },
     {
       "id": "DejaVuSansMono-Oblique_20_getmetrics",
@@ -66291,7 +66291,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 60.0
+      "ref_value": 60.234375
     },
     {
       "id": "DejaVuSansMono-Oblique_24_getmetrics",
@@ -69053,7 +69053,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 70.0
+      "ref_value": 72.265625
     },
     {
       "id": "DejaVuSerif-Bold_10_getmetrics",
@@ -71815,7 +71815,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 28.0
+      "ref_value": 27.890625
     },
     {
       "id": "DejaVuSerif-Bold_12_getmetrics",
@@ -74577,7 +74577,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 33.484375
     },
     {
       "id": "DejaVuSerif-Bold_16_getmetrics",
@@ -77339,7 +77339,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 44.65625
     },
     {
       "id": "DejaVuSerif-Bold_20_getmetrics",
@@ -80101,7 +80101,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 57.0
+      "ref_value": 55.796875
     },
     {
       "id": "DejaVuSerif-Bold_24_getmetrics",
@@ -82863,7 +82863,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 66.0
+      "ref_value": 66.984375
     },
     {
       "id": "DejaVuSerif-Italic_10_getmetrics",
@@ -85625,7 +85625,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 24.78125
     },
     {
       "id": "DejaVuSerif-Italic_12_getmetrics",
@@ -88387,7 +88387,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 29.75
     },
     {
       "id": "DejaVuSerif-Italic_16_getmetrics",
@@ -91149,7 +91149,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 39.0
+      "ref_value": 39.671875
     },
     {
       "id": "DejaVuSerif-Italic_20_getmetrics",
@@ -93911,7 +93911,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 49.0
+      "ref_value": 49.546875
     },
     {
       "id": "DejaVuSerif-Italic_24_getmetrics",
@@ -96673,7 +96673,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 59.0
+      "ref_value": 59.453125
     },
     {
       "id": "DejaVuSerifCondensed-Bold_10_getmetrics",
@@ -99435,7 +99435,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 25.0
+      "ref_value": 25.109375
     },
     {
       "id": "DejaVuSerifCondensed-Bold_12_getmetrics",
@@ -102197,7 +102197,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 30.15625
     },
     {
       "id": "DejaVuSerifCondensed-Bold_16_getmetrics",
@@ -104959,7 +104959,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 39.0
+      "ref_value": 40.171875
     },
     {
       "id": "DejaVuSerifCondensed-Bold_20_getmetrics",
@@ -107721,7 +107721,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 50.234375
     },
     {
       "id": "DejaVuSerifCondensed-Bold_24_getmetrics",
@@ -110483,7 +110483,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 60.0
+      "ref_value": 60.25
     },
     {
       "id": "DejaVuSerifCondensed-Italic_10_getmetrics",
@@ -113245,7 +113245,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 22.0
+      "ref_value": 22.296875
     },
     {
       "id": "DejaVuSerifCondensed-Italic_12_getmetrics",
@@ -116007,7 +116007,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 26.0
+      "ref_value": 26.75
     },
     {
       "id": "DejaVuSerifCondensed-Italic_16_getmetrics",
@@ -118769,7 +118769,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 37.0
+      "ref_value": 35.6875
     },
     {
       "id": "DejaVuSerifCondensed-Italic_20_getmetrics",
@@ -121531,7 +121531,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 46.0
+      "ref_value": 44.5625
     },
     {
       "id": "DejaVuSerifCondensed-Italic_24_getmetrics",
@@ -124293,7 +124293,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 54.0
+      "ref_value": 53.5
     },
     {
       "id": "LiberationMono-Italic_10_getmetrics",
@@ -129817,7 +129817,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 36.015625
     },
     {
       "id": "LiberationMono-Italic_16_getmetrics",
@@ -132579,7 +132579,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 48.046875
     },
     {
       "id": "LiberationMono-Italic_20_getmetrics",
@@ -138103,7 +138103,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 70.0
+      "ref_value": 72.03125
     },
     {
       "id": "LiberationMono-Regular_10_getmetrics",
@@ -143627,7 +143627,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 36.015625
     },
     {
       "id": "LiberationMono-Regular_16_getmetrics",
@@ -146389,7 +146389,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 48.046875
     },
     {
       "id": "LiberationMono-Regular_20_getmetrics",
@@ -151913,7 +151913,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 70.0
+      "ref_value": 72.03125
     },
     {
       "id": "LiberationSans-BoldItalic_10_getmetrics",
@@ -154675,7 +154675,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 23.34375
     },
     {
       "id": "LiberationSans-BoldItalic_12_getmetrics",
@@ -157437,7 +157437,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 27.0
+      "ref_value": 27.984375
     },
     {
       "id": "LiberationSans-BoldItalic_16_getmetrics",
@@ -160199,7 +160199,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 37.0
+      "ref_value": 37.375
     },
     {
       "id": "LiberationSans-BoldItalic_20_getmetrics",
@@ -162961,7 +162961,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 47.0
+      "ref_value": 46.6875
     },
     {
       "id": "LiberationSans-BoldItalic_24_getmetrics",
@@ -165723,7 +165723,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 57.0
+      "ref_value": 56.0
     },
     {
       "id": "LiberationSans-Regular_10_getmetrics",
@@ -168485,7 +168485,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 22.0
+      "ref_value": 21.125
     },
     {
       "id": "LiberationSans-Regular_12_getmetrics",
@@ -171247,7 +171247,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 27.0
+      "ref_value": 25.359375
     },
     {
       "id": "LiberationSans-Regular_16_getmetrics",
@@ -174009,7 +174009,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 33.84375
     },
     {
       "id": "LiberationSans-Regular_20_getmetrics",
@@ -176771,7 +176771,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 41.0
+      "ref_value": 42.25
     },
     {
       "id": "LiberationSans-Regular_24_getmetrics",
@@ -179533,7 +179533,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 49.0
+      "ref_value": 50.6875
     },
     {
       "id": "LiberationSansNarrow-Bold_10_getmetrics",
@@ -182295,7 +182295,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 19.0
+      "ref_value": 19.15625
     },
     {
       "id": "LiberationSansNarrow-Bold_12_getmetrics",
@@ -185057,7 +185057,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 23.0
+      "ref_value": 22.96875
     },
     {
       "id": "LiberationSansNarrow-Bold_16_getmetrics",
@@ -187819,7 +187819,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 31.0
+      "ref_value": 30.640625
     },
     {
       "id": "LiberationSansNarrow-Bold_20_getmetrics",
@@ -190581,7 +190581,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 39.0
+      "ref_value": 38.28125
     },
     {
       "id": "LiberationSansNarrow-Bold_24_getmetrics",
@@ -193343,7 +193343,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 45.953125
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_10_getmetrics",
@@ -196105,7 +196105,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 19.0
+      "ref_value": 19.15625
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_12_getmetrics",
@@ -198867,7 +198867,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 23.0
+      "ref_value": 22.96875
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_16_getmetrics",
@@ -201629,7 +201629,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 31.0
+      "ref_value": 30.640625
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_20_getmetrics",
@@ -204391,7 +204391,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 39.0
+      "ref_value": 38.28125
     },
     {
       "id": "LiberationSansNarrow-BoldItalic_24_getmetrics",
@@ -207153,7 +207153,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 45.953125
     },
     {
       "id": "LiberationSerif-Bold_10_getmetrics",
@@ -209915,7 +209915,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 21.0
+      "ref_value": 20.5625
     },
     {
       "id": "LiberationSerif-Bold_12_getmetrics",
@@ -212677,7 +212677,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 24.65625
     },
     {
       "id": "LiberationSerif-Bold_16_getmetrics",
@@ -215439,7 +215439,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 32.0
+      "ref_value": 32.921875
     },
     {
       "id": "LiberationSerif-Bold_20_getmetrics",
@@ -218201,7 +218201,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 42.0
+      "ref_value": 41.125
     },
     {
       "id": "LiberationSerif-Bold_24_getmetrics",
@@ -220963,7 +220963,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 49.34375
     },
     {
       "id": "LiberationSerif-BoldItalic_10_getmetrics",
@@ -223725,7 +223725,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 21.0
+      "ref_value": 20.5625
     },
     {
       "id": "LiberationSerif-BoldItalic_12_getmetrics",
@@ -226487,7 +226487,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 24.65625
     },
     {
       "id": "LiberationSerif-BoldItalic_16_getmetrics",
@@ -229249,7 +229249,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 32.0
+      "ref_value": 32.921875
     },
     {
       "id": "LiberationSerif-BoldItalic_20_getmetrics",
@@ -232011,7 +232011,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 42.0
+      "ref_value": 41.125
     },
     {
       "id": "LiberationSerif-BoldItalic_24_getmetrics",
@@ -234773,7 +234773,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 49.34375
     },
     {
       "id": "NotoMono-Regular_10_getmetrics",
@@ -240297,7 +240297,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 36.015625
     },
     {
       "id": "NotoMono-Regular_16_getmetrics",
@@ -243059,7 +243059,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 48.046875
     },
     {
       "id": "NotoMono-Regular_20_getmetrics",
@@ -248583,7 +248583,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 70.0
+      "ref_value": 72.03125
     },
     {
       "id": "NotoSans-Bold_10_getmetrics",
@@ -251345,7 +251345,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 25.0
+      "ref_value": 24.75
     },
     {
       "id": "NotoSans-Bold_12_getmetrics",
@@ -254107,7 +254107,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 29.71875
     },
     {
       "id": "NotoSans-Bold_16_getmetrics",
@@ -256869,7 +256869,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 40.0
+      "ref_value": 39.625
     },
     {
       "id": "NotoSans-Bold_20_getmetrics",
@@ -259631,7 +259631,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 49.0
+      "ref_value": 49.515625
     },
     {
       "id": "NotoSans-Bold_24_getmetrics",
@@ -262393,7 +262393,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 59.0
+      "ref_value": 59.4375
     },
     {
       "id": "NotoSans-BoldItalic_10_getmetrics",
@@ -265155,7 +265155,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 23.390625
     },
     {
       "id": "NotoSans-BoldItalic_12_getmetrics",
@@ -267917,7 +267917,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 29.0
+      "ref_value": 28.078125
     },
     {
       "id": "NotoSans-BoldItalic_16_getmetrics",
@@ -270679,7 +270679,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 38.0
+      "ref_value": 37.421875
     },
     {
       "id": "NotoSans-BoldItalic_20_getmetrics",
@@ -273441,7 +273441,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 47.0
+      "ref_value": 46.796875
     },
     {
       "id": "NotoSans-BoldItalic_24_getmetrics",
@@ -276203,7 +276203,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 56.0
+      "ref_value": 56.171875
     },
     {
       "id": "NotoSansMath-Regular_10_getmetrics",
@@ -278965,7 +278965,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 24.0
+      "ref_value": 23.03125
     },
     {
       "id": "NotoSansMath-Regular_12_getmetrics",
@@ -281727,7 +281727,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 27.0
+      "ref_value": 27.640625
     },
     {
       "id": "NotoSansMath-Regular_16_getmetrics",
@@ -284489,7 +284489,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 37.0
+      "ref_value": 36.859375
     },
     {
       "id": "NotoSansMath-Regular_20_getmetrics",
@@ -287251,7 +287251,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 46.046875
     },
     {
       "id": "NotoSansMath-Regular_24_getmetrics",
@@ -290013,7 +290013,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 56.0
+      "ref_value": 55.25
     },
     {
       "id": "NotoSerif-Italic_10_getmetrics",
@@ -292775,7 +292775,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 23.0
+      "ref_value": 22.75
     },
     {
       "id": "NotoSerif-Italic_12_getmetrics",
@@ -295537,7 +295537,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 28.0
+      "ref_value": 27.28125
     },
     {
       "id": "NotoSerif-Italic_16_getmetrics",
@@ -298299,7 +298299,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 37.0
+      "ref_value": 36.375
     },
     {
       "id": "NotoSerif-Italic_20_getmetrics",
@@ -301061,7 +301061,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 45.484375
     },
     {
       "id": "NotoSerif-Italic_24_getmetrics",
@@ -303823,7 +303823,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 54.0
+      "ref_value": 54.578125
     },
     {
       "id": "NotoSerif-Regular_10_getmetrics",
@@ -306585,7 +306585,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 23.0
+      "ref_value": 23.640625
     },
     {
       "id": "NotoSerif-Regular_12_getmetrics",
@@ -309347,7 +309347,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 29.0
+      "ref_value": 28.40625
     },
     {
       "id": "NotoSerif-Regular_16_getmetrics",
@@ -312109,7 +312109,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 38.0
+      "ref_value": 37.859375
     },
     {
       "id": "NotoSerif-Regular_20_getmetrics",
@@ -314871,7 +314871,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 48.0
+      "ref_value": 47.359375
     },
     {
       "id": "NotoSerif-Regular_24_getmetrics",
@@ -317633,7 +317633,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 56.0
+      "ref_value": 56.796875
     },
     {
       "id": "NotoSerifDisplay-Bold_10_getmetrics",
@@ -320395,7 +320395,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 27.0
+      "ref_value": 25.53125
     },
     {
       "id": "NotoSerifDisplay-Bold_12_getmetrics",
@@ -323157,7 +323157,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 30.65625
     },
     {
       "id": "NotoSerifDisplay-Bold_16_getmetrics",
@@ -325919,7 +325919,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 42.0
+      "ref_value": 40.875
     },
     {
       "id": "NotoSerifDisplay-Bold_20_getmetrics",
@@ -328681,7 +328681,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 50.0
+      "ref_value": 51.125
     },
     {
       "id": "NotoSerifDisplay-Bold_24_getmetrics",
@@ -331443,7 +331443,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 61.0
+      "ref_value": 61.34375
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_10_getmetrics",
@@ -334205,7 +334205,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 26.0
+      "ref_value": 25.078125
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_12_getmetrics",
@@ -336967,7 +336967,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 29.0
+      "ref_value": 30.078125
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_16_getmetrics",
@@ -339729,7 +339729,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 41.0
+      "ref_value": 40.09375
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_20_getmetrics",
@@ -342491,7 +342491,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 49.0
+      "ref_value": 50.140625
     },
     {
       "id": "NotoSerifDisplay-BoldItalic_24_getmetrics",
@@ -345253,7 +345253,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 61.0
+      "ref_value": 60.171875
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_10_getmetrics",
@@ -348015,7 +348015,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 22.0
+      "ref_value": 21.640625
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_12_getmetrics",
@@ -350777,7 +350777,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 25.0
+      "ref_value": 26.0
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_16_getmetrics",
@@ -353539,7 +353539,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 36.0
+      "ref_value": 34.65625
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_20_getmetrics",
@@ -356301,7 +356301,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 44.0
+      "ref_value": 43.3125
     },
     {
       "id": "Ubuntu-Italic[wdth,wght]_24_getmetrics",
@@ -359063,7 +359063,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 52.0
+      "ref_value": 51.984375
     },
     {
       "id": "UbuntuMono-Italic[wght]_10_getmetrics",
@@ -361825,7 +361825,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 27.96875
     },
     {
       "id": "UbuntuMono-Italic[wght]_12_getmetrics",
@@ -364587,7 +364587,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 33.59375
     },
     {
       "id": "UbuntuMono-Italic[wght]_16_getmetrics",
@@ -367349,7 +367349,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 44.765625
     },
     {
       "id": "UbuntuMono-Italic[wght]_20_getmetrics",
@@ -370111,7 +370111,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 55.0
+      "ref_value": 56.015625
     },
     {
       "id": "UbuntuMono-Italic[wght]_24_getmetrics",
@@ -372873,7 +372873,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 65.0
+      "ref_value": 67.1875
     },
     {
       "id": "UbuntuMono[wght]_10_getmetrics",
@@ -375635,7 +375635,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 30.0
+      "ref_value": 27.96875
     },
     {
       "id": "UbuntuMono[wght]_12_getmetrics",
@@ -378397,7 +378397,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 35.0
+      "ref_value": 33.59375
     },
     {
       "id": "UbuntuMono[wght]_16_getmetrics",
@@ -381159,7 +381159,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 45.0
+      "ref_value": 44.765625
     },
     {
       "id": "UbuntuMono[wght]_20_getmetrics",
@@ -383921,7 +383921,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 55.0
+      "ref_value": 56.015625
     },
     {
       "id": "UbuntuMono[wght]_24_getmetrics",
@@ -386683,7 +386683,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 65.0
+      "ref_value": 67.1875
     },
     {
       "id": "UbuntuSans[wdth,wght]_10_getmetrics",
@@ -389445,7 +389445,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 22.0
+      "ref_value": 22.3125
     },
     {
       "id": "UbuntuSans[wdth,wght]_12_getmetrics",
@@ -392207,7 +392207,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 28.0
+      "ref_value": 26.78125
     },
     {
       "id": "UbuntuSans[wdth,wght]_16_getmetrics",
@@ -394969,7 +394969,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 37.0
+      "ref_value": 35.703125
     },
     {
       "id": "UbuntuSans[wdth,wght]_20_getmetrics",
@@ -397731,7 +397731,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 47.0
+      "ref_value": 44.640625
     },
     {
       "id": "UbuntuSans[wdth,wght]_24_getmetrics",
@@ -400493,7 +400493,7 @@
       "char": "hello",
       "operation": "getlength",
       "status": "active",
-      "ref_value": 53.0
+      "ref_value": 53.5625
     }
   ],
   "summary": {
