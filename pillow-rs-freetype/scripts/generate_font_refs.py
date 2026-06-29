@@ -22,24 +22,17 @@ FIXTURES = ROOT / "tests" / "fixtures"
 INPUT_FONTS = FIXTURES / "input" / "fonts_autohint"
 MATRIX_PATH = FIXTURES / "coverage_matrix.json"
 
-FONTS = {
-    "DejaVuSans": "DejaVuSans.ttf",
-    "DejaVuSerif": "DejaVuSerif.ttf",
-    "DejaVuSansMono": "DejaVuSansMono.ttf",
-    "DejaVuSansCondensed": "DejaVuSansCondensed.ttf",
-    "LiberationSerif": "LiberationSerif-Regular.ttf",
-    "NotoSans": "NotoSans-Regular.ttf",
-    "Ubuntu": "Ubuntu-Regular.ttf",
-}
-FONT_NAMES = {
-    "DejaVuSans": ("DejaVu Sans", "Book"),
-    "DejaVuSerif": ("DejaVu Serif", "Book"),
-    "DejaVuSansMono": ("DejaVu Sans Mono", "Book"),
-    "DejaVuSansCondensed": ("DejaVu Sans", "Condensed"),
-    "LiberationSerif": ("Liberation Serif", "Regular"),
-    "NotoSans": ("Noto Sans", "Regular"),
-    "Ubuntu": ("Ubuntu", "Regular"),
-}
+def discover_fonts(font_dir: Path) -> dict[str, str]:
+    """Return {logical_name: filename} for every .ttf in font_dir."""
+    fonts = {}
+    for p in sorted(font_dir.glob("*.ttf")):
+        name = p.stem  # DejaVuSans, UbuntuSans[wdth,wght], etc.
+        fonts[name] = p.name
+    return fonts
+
+
+FONTS = discover_fonts(INPUT_FONTS)
+# FONT_NAMES are extracted from TTF metadata at generation time.
 SIZES = [10, 12, 16, 20, 24]
 CHARS = [chr(c) for c in range(33, 127)]  # printable ASCII
 
@@ -59,6 +52,7 @@ def generate() -> int:
         for size in SIZES:
             font = ImageFont.truetype(str(font_path), size)
             asc, desc = font.getmetrics()
+            font_family, font_style = font.getname()
 
             rows.append({
                 "id": f"{font_name}_{size}_getmetrics",
@@ -72,7 +66,7 @@ def generate() -> int:
                 "font": font_name, "size_pt": size,
                 "codepoint": 0, "char": "",
                 "operation": "getname", "status": "active",
-                "ref_value": list(FONT_NAMES[font_name]),
+                "ref_value": [font_family, font_style],
             })
             rows.append({
                 "id": f"{font_name}_{size}_getlength_hello",
