@@ -1,23 +1,51 @@
 # FT Parity Debugging — Complete Session Log
 
-**Date:** 2026-06-29  
-**Start:** 27,154/27,695 (541 failed)  
-**End:** 27,386/27,695 (309 failed)  
-**Net improvement:** -232 failures
+**Date:** 2026-06-29
+**Start:** 27,154/27,695 (541 failed)
+**End:** 27,677/27,695 (18 failed)
+**Net improvement:** -523 failures
 
 ---
 
-## Commits That Actually Fixed Something (3)
+## Commits That Actually Fixed Something (4)
 
 | Commit | Fix | Impact |
 |--------|-----|--------|
 | `cf19f9e` | getlength from Python hmtx, not C `FT_LOAD_DEFAULT` | **-98** |
 | `887070a` | walk_contour conic wrap: `line_to` → `render_conic` for `first==0` case | **-130** |
 | `cbbdcba` | getmetrics: `f32 * ppem / upem).ceil()` → `FT_MulFix + FT_PIX_CEIL` | **-4** |
+| pp1x fix | pp1.x phantom-point translation (glyf header xMin − lsb) | **-291** |
 
 ---
 
-## 309 Remaining: Exact Failure Distribution
+## pp1.x Translation Fix (2026-06-29)
+
+### Root Cause
+
+C's `TT_Load_Glyph` (ttgload.c:2582) applies `FT_Outline_Translate(−pp1.x, 0)`
+where `pp1.x = glyf_header.xMin − hmtx_lsb` (in font units). This shifts all
+contour X coordinates by ±1 FU BEFORE scaling to 26.6.
+
+For DejaVuSerif-Italic 'A' at 12pt: pp1.x = −158 − (−157) = −1 FU. After
+scaling by x_scale=24576, some 26.6 coordinates change by ±1 (e.g., pt[1]:
+344→345). This changes the DDA `render_line` prod initialization, producing
+different cell cover/area values and different pixel SHA-256.
+
+**Critical detail:** C reads xMin from the glyf HEADER (ttgload.c:324), NOT
+from the computed point minimum. These can differ by ±1 for some fonts.
+
+### Fix (scaler.rs:131-165)
+
+1. Compute `pp1x_fu = outline_raw.xmin − h_metric.lsb` (using header xMin)
+2. Shift raw coords before scaling: `scale.scale_x(p.x − pp1x_fu)`
+3. Create shifted copy of raw points for autohinter fx/fy edge detection
+4. Pass shifted raw outline to `autohint_glyph` instead of original
+
+### Result: 309 → 18 failures (−291, 94% reduction)
+
+---
+
+## 18 Remaining: Unrelated Failures (pp1x=0 fonts)
 
 **297 getmask SHA mismatches + 12 bbox x-off-by-1**
 
