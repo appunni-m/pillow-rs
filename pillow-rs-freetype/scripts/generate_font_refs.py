@@ -26,15 +26,19 @@ FONTS = {
     "DejaVuSans": "DejaVuSans.ttf",
     "DejaVuSerif": "DejaVuSerif.ttf",
     "DejaVuSansMono": "DejaVuSansMono.ttf",
+    "DejaVuSansCondensed": "DejaVuSansCondensed.ttf",
     "LiberationSerif": "LiberationSerif-Regular.ttf",
     "NotoSans": "NotoSans-Regular.ttf",
+    "Ubuntu": "Ubuntu-Regular.ttf",
 }
 FONT_NAMES = {
     "DejaVuSans": ("DejaVu Sans", "Book"),
     "DejaVuSerif": ("DejaVu Serif", "Book"),
     "DejaVuSansMono": ("DejaVu Sans Mono", "Book"),
+    "DejaVuSansCondensed": ("DejaVu Sans", "Condensed"),
     "LiberationSerif": ("Liberation Serif", "Regular"),
     "NotoSans": ("Noto Sans", "Regular"),
+    "Ubuntu": ("Ubuntu", "Regular"),
 }
 SIZES = [10, 12, 16, 20, 24]
 CHARS = [chr(c) for c in range(33, 127)]  # printable ASCII
