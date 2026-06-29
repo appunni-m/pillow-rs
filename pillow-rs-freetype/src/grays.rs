@@ -574,7 +574,6 @@ impl Worker {
                     "outline: contour starts with cubic".into(),
                 ));
             }
-            let mut cursor = first;
             if first_tag == CURVE_TAG_CONIC {
                 if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
                     v_start = v_last;
@@ -585,15 +584,15 @@ impl Worker {
                     v_start.x = (v_start.x + v_last.x) / 2;
                     v_start.y = (v_start.y + v_last.y) / 2;
                 }
-                // first.wrapping_sub(1) = usize::MAX when first==0.
-                // C composes: v_start=v_last, limit--, point=-1.
-                // cursor = limit_eff produces same as C (walk from limit_eff wraps to 0).
-                cursor = if first == 0 { limit_eff } else { first - 1 };
             }
 
             self.move_to(v_start.x as i64, v_start.y as i64);
-            let is_conic = first_tag == CURVE_TAG_CONIC;
-            self.walk_contour(pts, cursor, limit_eff, v_start, is_conic)?;
+            let start: i32 = if first_tag == CURVE_TAG_CONIC {
+                if first == 0 { -1 } else { first as i32 - 1 }
+            } else {
+                first as i32
+            };
+            self.walk_contour(pts, start, limit_eff as i32, v_start)?;
         }
         Ok(())
     }
@@ -602,40 +601,27 @@ impl Worker {
     fn walk_contour(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
-        mut cursor: usize,
-        limit: usize,
+        mut cursor: i32,
+        limit: i32,
         v_start: crate::outline::OutlinePoint,
-        first_is_conic: bool,
     ) -> Result<(), FontError> {
-        // When first==0 and conic start: cursor == limit_eff.
-        // C draws v_start→pts[0] as a conic, NOT a straight line.
-        // pts[0] is off-curve control; target is midpoint of pts[0] and pts[1].
-        if first_is_conic && cursor == limit && limit > 0 {
-            if curve_tag(pts[0].on_curve) == CURVE_TAG_ON {
-                self.line_to(pts[0].x as i64, pts[0].y as i64);
-            } else {
-                let nxt = if 1 <= limit { pts[1] } else { pts[0] };
-                let mx = (pts[0].x + nxt.x) / 2;
-                let my = (pts[0].y + nxt.y) / 2;
-                self.render_conic(pts[0].x as i64, pts[0].y as i64, mx as i64, my as i64);
-            }
-            cursor = 0;
-        }
         while cursor < limit {
             cursor += 1;
-            let tag = curve_tag(pts[cursor].on_curve);
+            let idx = cursor as usize;
+            let tag = curve_tag(pts[idx].on_curve);
             match tag {
                 CURVE_TAG_ON => {
-                    let vec = pts[cursor];
+                    let vec = pts[idx];
                     self.line_to(vec.x as i64, vec.y as i64);
                 }
                 CURVE_TAG_CONIC => {
-                    let mut v_control = pts[cursor];
+                    let mut v_control = pts[idx];
                     loop {
                         if cursor < limit {
                             cursor += 1;
-                            let vec = pts[cursor];
-                            let ntag = curve_tag(pts[cursor].on_curve);
+                            let idx2 = cursor as usize;
+                            let vec = pts[idx2];
+                            let ntag = curve_tag(pts[idx2].on_curve);
                             if ntag == CURVE_TAG_ON {
                                 self.render_conic(
                                     v_control.x as i64, v_control.y as i64,
@@ -666,17 +652,17 @@ impl Worker {
                 }
                 CURVE_TAG_CUBIC => {
                     if cursor + 2 > limit
-                        || curve_tag(pts[cursor + 1].on_curve) != CURVE_TAG_CUBIC
+                        || curve_tag(pts[(cursor + 1) as usize].on_curve) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
                             "outline: bad cubic tag sequence".into(),
                         ));
                     }
-                    let vec1 = pts[cursor];
-                    let vec2 = pts[cursor + 1];
+                    let vec1 = pts[idx];
+                    let vec2 = pts[(cursor + 1) as usize];
                     cursor += 2;
                     if cursor <= limit {
-                        let vec = pts[cursor];
+                        let vec = pts[cursor as usize];
                         self.render_cubic(
                             vec1.x as i64, vec1.y as i64,
                             vec2.x as i64, vec2.y as i64,
