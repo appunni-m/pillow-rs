@@ -576,11 +576,7 @@ impl Worker {
             }
             let mut cursor = first;
             if first_tag == CURVE_TAG_CONIC {
-                if first == 0 {
-                    // Avoid cursor-wrap: use midpoint for v_start and iterate all points.
-                    v_start.x = (v_start.x + v_last.x) / 2;
-                    v_start.y = (v_start.y + v_last.y) / 2;
-                } else if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
+                if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
                     v_start = v_last;
                     limit_eff = limit
                         .checked_sub(1)
@@ -589,14 +585,15 @@ impl Worker {
                     v_start.x = (v_start.x + v_last.x) / 2;
                     v_start.y = (v_start.y + v_last.y) / 2;
                 }
-                cursor = match first {
-                    0 => 0,
-                    _ => first - 1,
-                };
+                // first.wrapping_sub(1) = usize::MAX when first==0.
+                // C composes: v_start=v_last, limit--, point=-1.
+                // cursor = limit_eff produces same as C (walk from limit_eff wraps to 0).
+                cursor = if first == 0 { limit_eff } else { first - 1 };
             }
 
             self.move_to(v_start.x as i64, v_start.y as i64);
-            self.walk_contour(pts, cursor, limit_eff, v_start)?;
+            let is_conic = first_tag == CURVE_TAG_CONIC;
+            self.walk_contour(pts, cursor, limit_eff, v_start, is_conic)?;
         }
         Ok(())
     }
@@ -608,7 +605,14 @@ impl Worker {
         mut cursor: usize,
         limit: usize,
         v_start: crate::outline::OutlinePoint,
+        first_is_conic: bool,
     ) -> Result<(), FontError> {
+        // When first==0 and conic start: cursor == limit_eff.
+        // C draws v_start→pts[0] as first edge, then walks pts[1..limit_eff].
+        if first_is_conic && cursor == limit && limit > 0 {
+            self.line_to(pts[0].x as i64, pts[0].y as i64);
+            cursor = 0;
+        }
         while cursor < limit {
             cursor += 1;
             let tag = curve_tag(pts[cursor].on_curve);
