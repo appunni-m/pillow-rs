@@ -250,15 +250,19 @@ impl Font {
     /// equivalent to ceil(|fu_val| * ppem / upem).
     pub fn getmetrics(&self) -> (u32, u32) {
         let data = &self.data;
-        let upem = data.head.units_per_em as f32;
-        let ppem = self.size_pt; // at 72dpi, ppem == size_pt
+        let upem = data.head.units_per_em as i32;
+        let ppem = (self.size_pt + 0.5) as i32; // FT_PIX_ROUND(size_pt << 6) >> 6
 
         let (asc_fu, desc_fu) = pick_metrics(data);
-        // ceil(|fu| * ppem / upem). Known issue: f32 precision causes rare
-        // off-by-1 for values very near integers (e.g., LiberationMono
-        // desc=615*10/2048=3.0029, f32 gives 3.00293→ceil=4 instead of 3).
-        let asc = (asc_fu as f32 * ppem / upem).ceil() as u32;
-        let desc = (desc_fu as f32 * ppem / upem).ceil() as u32;
+        // Match C's FT_PIX_CEIL(FT_MulFix(fu_val, scale)) chain exactly.
+        // scale = FT_DivFix(ppem << 6, upem) in 16.16
+        // val_26dot6 = FT_MulFix(fu_val, scale)
+        // result = FT_PIX_CEIL(val_26dot6)
+        let scale: i64 = ((ppem as i64 * 64 * 65536) + (upem as i64 / 2)) / upem as i64;
+        let asc_26dot6 = (asc_fu as i64 * scale + 32768) >> 16;
+        let desc_26dot6 = (desc_fu as i64 * scale + 32768) >> 16;
+        let asc = ((asc_26dot6 + 63) >> 6) as u32;
+        let desc = ((desc_26dot6 + 63) >> 6) as u32;
         (asc, desc)
     }
 
