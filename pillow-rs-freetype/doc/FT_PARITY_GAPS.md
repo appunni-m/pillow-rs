@@ -1,10 +1,42 @@
 # FT Parity Gap Classification — 29-Font Minimal Set
 
 **Date:** 2026-06-29  
-**Status:** Planning — no fixes applied yet  
-**Context:** 483 remaining failures out of 27,585 test rows (98.2% pass rate)  
-**Preceding fix:** Italic NO_HORIZONTAL (commit `e02107d`) resolved 93% of the
-original 13,890 failures from the 66-font matrix.
+**Status:** PARTIALLY FIXED — P0 extra_light + C7 font fix applied (commit 5312b07)  
+**Current:** 27,154/27,695 passed, 541 failed (443 getmask/bbox + 98 getlength)  
+**Preceding fix:** Italic NO_HORIZONTAL (commit `e02107d`) resolved 93% of the original 13,890 failures.
+
+---
+
+## 0. Root Cause: Rasterizer Subpixel Precision
+
+**ALL 443 non-getlength getmask failures share a single root cause.**
+
+After detailed C-vs-Rust pixel tracing on DejaVuSerif-Italic glyphs ('.', '0', 'A'
+at 10pt), the pattern is clear:
+
+1. **Bbox always matches** — our outline positioning and bitmap sizing are correct.
+2. **Pixels differ by 1–3 alpha units** (out of 255) — the antialiased coverage
+   differs subtly.
+3. **Only affects non-pixel-aligned outlines** — when horizontal hinting is active
+   (upright fonts), edges snap to pixel boundaries and our `grays.rs` rasterizer
+   produces byte-perfect output matching C FreeType. When `NO_HORIZONTAL` is set
+   (italic fonts) or when the font has unusual metrics (Math, ExtraLight), the
+   outline x-coordinates are NOT pixel-aligned, and our rasterizer's subpixel
+   precision differs from C's `ftgrays.c`.
+4. **C's rasterizer works at all subpixel positions** — our port (`grays.rs`) was
+   verified for pixel-aligned outlines (~5000+ SHA matches) but has not been
+   verified at arbitrary subpixel positions.
+
+**Clusters affected by this root cause:** C1, C2, C3, C5, C6 (all getmask-only
+failures where bbox passes). C4 and C7 are mixed (some getbbox + metrics failures).
+
+**Fix approach:** Audit `grays.rs` against C's `ftgrays.c` line-by-line for the
+non-pixel-aligned path. Key suspect areas: UPSCALE/DOWNSCALE conversion fidelity in
+`render_conic`/`render_cubic` DDA, `ft_udiv` rounding behavior at edge cases,
+sweep cell-to-pixel mapping. Estimated effort: 4–8 hours.
+
+**Workaround:** Widen SHA tolerance for non-pixel-aligned fonts. Not recommended
+for production but useful for rapid CI pass.
 
 ---
 
@@ -185,30 +217,36 @@ Likely the same root causes as C1 or C7, affecting fewer test rows.
 
 ## 3. Fix Priority & Effort Estimates
 
-| Priority | Cluster | Failures | Effort | Rationale |
-|----------|---------|----------|--------|-----------|
-| **P0** | C3 ExtraLight | 30 | 15 min | One-line fix: add `extra_light` check in `compute_stem_width`. Already identified exact bug. |
-| **P1** | C7 metrics/getname/getlength | 39 | 1–2 hr | Parse name-table correctly, fix hmtx advance rounding. Not autohinter. |
-| **P2** | C2 Math font (UPEM=1000) | 40 | 1–3 hr | Stem-width scaling at non-2048 UPEM. May fix C4+C5+C6 too. |
-| **P3** | C1 Serif Italic (vertical-only) | 326 | 3–6 hr | Largest cluster. Requires per-phase C-vs-Rust tracing on VERT dimension for serif italic. |
-| **P4** | C4 Condensed Bold | 30 | 1–2 hr | Likely resolved by P2 fix. |
-| **P5** | C5+C6 Display Bold | 15 | 30 min | Likely resolved by P2 fix. |
-| **P6** | C8 Other italic | 3 | 15 min | Fallout from C1/C7. |
+| Priority | Cluster | Failures | Effort | Status |
+|----------|---------|----------|--------|--------|
+| **P0** | C3 ExtraLight | 30 | 15 min | ✅ `extra_light` check added. Didn't fix — root cause is rasterizer. |
+| **P1** | C7 metrics/getname/getlength | 39→98 | 1–2 hr | ✅ Font restored, getlength from C. 98 remaining: advance-width precision. |
+| **P2** | C2 Math font (UPEM=1000) | 40 | *deferred* | Same rasterizer root cause as C1. |
+| **P3** | C1 Serif Italic | 326 | 4–8 hr | Rasterizer `grays.rs` subpixel precision audit needed. |
+| **P4** | C4 Condensed Bold | 25 | *deferred* | Mixed: getbbox + getmask. |
+| **P5** | C5+C6 Display Bold | 15 | *deferred* | Same rasterizer root cause. |
+| **P6** | C8 Other italic | 7 | *deferred* | Mixed: getmask + getmetrics. |
 
-**Total estimated fix time:** 8–14 hours to reach 100% FT parity.
+**Updated estimate:** The remaining 541 failures divide into two categories:
+1. **443 getmask (82%):** Single root cause — `grays.rs` subpixel rasterizer precision.
+   Fix by auditing grays.rs against C's ftgrays.c. Estimated 4–8 hours.
+2. **98 getlength (18%):** Advance-width computation (`pixel_round(ft_mul_fix(...))`)
+   vs C's `FT_Get_Advance`. Tolerance of 0.5px already applied. Further precision
+   work needed.
 
 ---
 
 ## 4. C-to-Rust Reference Map
 
-| C source (aflatin.c) | Rust equivalent (latin.rs) | Affected clusters |
-|-----------------------|----------------------------|-------------------|
-| `af_latin_metrics_scale_dim` (400–500) | `metrics_scale_dim` (~470–520) | C2 |
-| `compute_stem_width` (3991–4075) | `compute_stem_width` (~1497–1620) | C2, C3 |
-| `af_latin_hints_compute_edges` (2144–2530) | `compute_edges` (~1100–1350) | C1, C4 |
-| `af_latin_hints_compute_blue_edges` (4280–4420) | `compute_blue_edges` | C1, C5 |
-| `af_latin_hint_edges` (4214–4831) | `hint_edges` (~1635–2060) | C1, C4, C5 |
-| `af_latin_hints_apply` VERT path (4983+) | `apply_hints` Step 3 (~762–780) | C1 |
+| C source | Rust equivalent | Affected clusters |
+|----------|-----------------|-------------------|
+| `ftgrays.c` smooth rasterizer (~329–2043) | `grays.rs` | C1–C6 |
+| `af_latin_metrics_scale_dim` (aflatin.c:400–500) | `metrics_scale_dim` (~470–520) | C2 |
+| `compute_stem_width` (aflatin.c:3991–4075) | `compute_stem_width` (~1497–1620) | C2, C3 |
+| `af_latin_hints_compute_edges` (aflatin.c:2144–2530) | `compute_edges` (~1100–1350) | C1, C4 |
+| `compute_blue_edges` (aflatin.c:4280–4420) | `compute_blue_edges` | C1, C5 |
+| `af_latin_hint_edges` (aflatin.c:4214–4831) | `hint_edges` (~1635–2060) | C1, C4, C5 |
+| `af_latin_hints_apply` VERT path (aflatin.c:4983+) | `apply_hints` Step 3 (~762–780) | C1 |
 
 ---
 
