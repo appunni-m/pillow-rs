@@ -1686,6 +1686,11 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 }
                 edge1_idx = Some(i);
                 blue = Some(b);
+                // C: edge2 is set to edge->link at loop start (aflatin.c:4291).
+                // If the blue edge has a linked partner, align it too.
+                if link != usize::MAX {
+                    edge2_idx = Some(link);
+                }
             } else if link != usize::MAX {
                 if let Some(b2) = axis.edges[link].blue_edge {
                     blue = Some(b2);
