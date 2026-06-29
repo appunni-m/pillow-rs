@@ -1140,10 +1140,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             let edge = AFEdge {
                 fpos,
                 opos,
-                pos: 0,  // zero-initialized like C (FT_ZERO). Not set to opos —
-                         // hint_edges fills this in. Using opos as initial pos
-                         // causes the BOUND check (aflatin.c:4544-4563) to
-                         // incorrectly overwrite correctly-computed stem positions.
+                pos: opos,  // ⚠️ C: edge->pos = edge->opos (aflatin.c:2293)
                 flags: 0,
                 dir: seg_dir,
                 link: usize::MAX,
@@ -1648,8 +1645,6 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     }
 
     // top_to_bottom_hinting for Latin is false (edges sorted bottom-to-top).
-    // For vertical dim (horizontal edges), Y increases upward → sorted by
-    // increasing fpos = bottom edge first, top edge last.
     let top_to_bottom_hinting = false;
 
     let mut anchor: usize = usize::MAX;
@@ -1865,29 +1860,32 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 axis.edges[edge2_idx].pos = axis.edges[i].pos + cur_len2;
                 axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
             }
-        }
 
-        axis.edges[i].flags |= AF_EDGE_DONE;
-
-        // BOUND check for stem edges (aflatin.c:4544–4563):
-        // don't move if stem would (almost) disappear.
-        if i > 0 {
-            let ordering_violated = if top_to_bottom_hinting {
-                axis.edges[i].pos > axis.edges[i - 1].pos
-            } else {
-                axis.edges[i].pos < axis.edges[i - 1].pos
-            };
-            if ordering_violated {
-                let link_idx = axis.edges[i].link;
-                if link_idx != usize::MAX {
-                    let link_pos = axis.edges[link_idx].pos;
-                    let prev_pos = axis.edges[i - 1].pos;
-                    if (link_pos - prev_pos).abs() > 16 {
-                        axis.edges[i].pos = prev_pos;
+            // ⚠️ C: BOUND check is inside the `else` (relative stem) block
+            //    only (aflatin.c:4606). It does NOT run for the anchor stem.
+            if i > 0 {
+                let ordering_violated = if top_to_bottom_hinting {
+                    axis.edges[i].pos > axis.edges[i - 1].pos
+                } else {
+                    axis.edges[i].pos < axis.edges[i - 1].pos
+                };
+                if ordering_violated {
+                    let link_idx = axis.edges[i].link;
+                    if link_idx != usize::MAX {
+                        let link_pos = axis.edges[link_idx].pos;
+                        let prev_pos = axis.edges[i - 1].pos;
+                        if (link_pos - prev_pos).abs() > 16 {
+                            axis.edges[i].pos = prev_pos;
+                        }
                     }
                 }
             }
         }
+
+        axis.edges[i].flags |= AF_EDGE_DONE;
+
+        // Phase 4 BOUND checks (aflatin.c:4870-4904) are handled
+        // separately in the Phase 4 loop below.
     }
 
     // ── Phase 3: Lowercase 'm' symmetry (aflatin.c:4582-4627) ────────────
