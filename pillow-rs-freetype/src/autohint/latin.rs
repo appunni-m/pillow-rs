@@ -718,6 +718,13 @@ pub fn apply_hints(
     // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
     hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
 
+    // Compute ppem for bdelta in compute_stem_width
+    // At 72dpi: x_scale = (ppem * 64 * 0x10000) / upem → ppem = x_scale * upem / 0x10000 / 64
+    let ppem = ((x_scale as i64).abs()
+        * metrics.map(|m| m.units_per_em as i64).unwrap_or(2048)
+        / 65536 / 64) as i32;
+    let ppem = ppem.max(1).min(100);
+
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);
     if hints.num_points() == 0 {
@@ -734,7 +741,7 @@ pub fn apply_hints(
         link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
     }
     compute_edges(&mut hints, Dimension::Horz);
-    hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6);
+    hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6, ppem);
     align_edge_points(&mut hints, Dimension::Horz);
     align_strong_points(&mut hints, Dimension::Horz);
     align_weak_points(&mut hints, Dimension::Horz);
@@ -758,7 +765,7 @@ pub fn apply_hints(
     if !is_nonbase {
         compute_blue_edges(&mut hints);
     }
-    hint_edges(&mut hints, Dimension::Vert, &vert_widths_26_6);
+    hint_edges(&mut hints, Dimension::Vert, &vert_widths_26_6, ppem);
     align_edge_points(&mut hints, Dimension::Vert);
     align_strong_points(&mut hints, Dimension::Vert);
     align_weak_points(&mut hints, Dimension::Vert);
@@ -1435,12 +1442,13 @@ fn align_linked_edge(
     base_edge: &AFEdge,
     stem_edge: &mut AFEdge,
     std_widths: &[i32],
+    ppem: i32,
 ) {
     let dist = stem_edge.opos - base_edge.opos;
     let base_delta = base_edge.pos - base_edge.opos;
 
     let fitted_width = compute_stem_width(
-        other_flags, 0, dim,
+        other_flags, ppem, dim,
         dist, base_delta,
         base_edge.flags,
         stem_edge.flags,
@@ -1472,10 +1480,10 @@ fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
 // ✅ VERIFIED: Strong path calls snap_width + pixel rounding (aflatin.c:4076-4152).
 fn compute_stem_width(
     other_flags: u32,
-    _ppem: i32,
+    ppem: i32,
     dim: Dimension,
     width: i32,
-    _base_delta: i32,
+    base_delta: i32,
     base_flags: u8,
     stem_flags: u8,
     std_widths: &[i32],  // standard widths in 26.6 (from metrics .cur)
@@ -1547,8 +1555,18 @@ fn compute_stem_width(
                 else { dist += delta; }
             } else {
                 // bdelta adjustment + round (aflatin.c:4050-4075).
-                // TODO: implement full bdelta when ppem is available.
-                let bdelta: i32 = 0; // simplified
+                // ⚠️ C compensates for double-rounding when base_delta and
+                //    width have the same sign, preventing outline collisions.
+                let mut bdelta: i32 = 0;
+                if (width > 0 && base_delta > 0) || (width < 0 && base_delta < 0) {
+                    let ppem = ppem.max(1);
+                    if ppem < 10 {
+                        bdelta = base_delta;
+                    } else if ppem < 30 {
+                        bdelta = (base_delta * (30 - ppem)) / 20;
+                    }
+                    if bdelta < 0 { bdelta = -bdelta; }
+                }
                 dist = (dist - bdelta + 32) & !63;
             }
         }
@@ -1620,7 +1638,7 @@ fn compute_stem_width(
 // ✅ VERIFIED: all edge positions (fpos, opos, pos) after hint_edges
 // match C exactly for DejaVuSans 10pt '&' (5 VERT + 5 HORZ edges).
 // Port of af_latin_hint_edges (aflatin.c:4220-4837).
-fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
+fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: i32) {
     let other_flags = hints.other_flags;
     let axis = &mut hints.axis[dim as usize];
     let num_edges = axis.edges.len();
@@ -1684,7 +1702,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
 
             if let Some(e2) = edge2_idx {
                 if axis.edges[e2].blue_edge.is_none() {
-                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2], std_widths);
+                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2], std_widths, ppem);
                     axis.edges[e2].flags |= AF_EDGE_DONE;
                 }
             }
@@ -1722,7 +1740,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
 
             let org_len = edge2_opos - edge_opos;
             let cur_len = compute_stem_width(
-                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
+                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
             );
 
             if cur_len <= 64 {
@@ -1777,7 +1795,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 let dist = stem_opos - base_opos;
                 let base_delta = base_pos - base_opos;
                 let fitted_width = compute_stem_width(
-                    other_flags, 0, dim, dist, base_delta, base_flags, stem_flags, std_widths,
+                    other_flags, ppem, dim, dist, base_delta, base_flags, stem_flags, std_widths,
                 );
                 axis.edges[edge2_idx].pos = base_pos + fitted_width;
             }
@@ -1795,7 +1813,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
             let org_center = org_pos + (org_len >> 1);
 
             let cur_len = compute_stem_width(
-                other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
+                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
             );
 
             // ✅ VERIFIED (2026-06-27): C sets edge2->pos = cur_pos1 + cur_len/2
@@ -1828,7 +1846,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
                 axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
             } else {
                 let cur_len2 = compute_stem_width(
-                    other_flags, 0, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
+                    other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths,
                 );
 
                 let cur_pos1 = (org_pos + 32) & !63; // FT_PIX_ROUND
