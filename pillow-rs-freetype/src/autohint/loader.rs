@@ -10,7 +10,7 @@ use super::types::*;
 fn ft_hypot(x: i32, y: i32) -> i32 {
     let ax = x.abs();
     let ay = y.abs();
-    if ax > ay { ax + (3 * ay >> 3) } else { ay + (3 * ax >> 3) }
+    if ax > ay { ax + ((3 * ay) >> 3) } else { ay + ((3 * ax) >> 3) }
 }
 
 /// Port of `ft_corner_is_flat` (ftcalc.c:1006-1042).
@@ -169,68 +169,10 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         }
     }
 
-    // ── Build direction chain (C: afhints.c:1100-1200) ────────────────
-    // u/v store index deltas to next/previous NON-NEAR point.
-    // Accumulate per-segment taxicab distances; break at near_limit.
-    let near_limit_chain = if let Some(ref met) = hints.metrics {
-        (20 * met.units_per_em / 2048).max(1)
-    } else {
-        20
-    };
-    let near_limit2 = 2 * near_limit_chain - 1;
-    for pt in &mut hints.points { pt.u = 0; pt.v = 0; }
-    for &c_start in &hints.contours {
-        let mut point = c_start;
-        let mut prev = hints.points[point].prev;
-        while prev != c_start {
-            let dx = hints.points[point].fx as i32 - hints.points[prev].fx as i32;
-            let dy = hints.points[point].fy as i32 - hints.points[prev].fy as i32;
-            if dx.abs() + dy.abs() >= near_limit2 { break; }
-            point = prev; prev = hints.points[prev].prev;
-        }
-        let first = point;
-        let mut curr = first;
-        hints.points[curr].u = 0; hints.points[first].v = 0;
-        let mut out_x: i32 = 0; let mut out_y: i32 = 0;
-        let mut next = curr;
-        loop {
-            point = next; next = hints.points[point].next;
-            out_x += hints.points[next].fx as i32 - hints.points[point].fx as i32;
-            out_y += hints.points[next].fy as i32 - hints.points[point].fy as i32;
-            if out_x.abs() + out_y.abs() < near_limit_chain {
-                hints.points[next].flags |= AF_FLAG_WEAK_INTERPOLATION;
-                if next == first { break; }
-                continue;
-            }
-            // Non-near neighbor — set chain pointers
-            hints.points[curr].u = next as i32 - curr as i32;
-            hints.points[next].v = -hints.points[curr].u;
+    // ── Build direction chain (C: afhints.c:1100-1200) ──
+    build_direction_chain(hints);
 
-            // ⚠️ Override out_dir/in_dir for intermediate points (C: afhints.c:1179-1189)
-            // C accumulates vectors across all intermediate points (not just NEAR)
-            // and overrides their directions to the accumulated direction.
-            // This prevents compute_segments from starting segments at points
-            // whose per-point direction differs from the accumulated direction.
-            let chain_dir = direction_compute(out_x, out_y);
-            hints.points[curr].out_dir = chain_dir;
-            let mut mid = hints.points[curr].next;
-            while mid != next {
-                hints.points[mid].in_dir = chain_dir;
-                hints.points[mid].out_dir = chain_dir;
-                mid = hints.points[mid].next;
-            }
-            // C sets next->in_dir here; next->out_dir set when next becomes curr
-            hints.points[next].in_dir = chain_dir;
-
-            // After setting u: point to first (C: afhints.c:1191)
-            hints.points[next].u = first as i32 - next as i32;
-            hints.points[first].v = -hints.points[next].u;
-            curr = next; out_x = 0; out_y = 0;
-            if next == first { break; }
-        }
-    }
-
-    // ── Simplify topology (C: afhints.c:1205-1255) ────────────────────
+    // ── Simplify topology (C: afhints.c:1205-1255) ───────────────────
     // Merge same-quadrant consecutive None/None vectors — update u/v to
     // skip merged points, mark them WEAK.
     for i in 0..hints.points.len() {
@@ -286,6 +228,84 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
 
         if is_weak {
             hints.points[i].flags |= AF_FLAG_WEAK_INTERPOLATION;
+        }
+    }
+}
+
+/// Build direction chain (C: afhints.c:1100-1200).
+///
+/// Traverses each contour accumulating taxicab distances to find non-near
+/// neighbor points. For each non-near segment, stores chain pointers (u/v)
+/// and overrides per-point directions with the accumulated segment direction.
+/// This prevents `compute_segments` from splitting a smooth curve into
+/// multiple short segments when per-point directions differ.
+// ✅ VERIFIED: direction chain matches C (afhints.c:1100-1200)
+fn build_direction_chain(hints: &mut GlyphHints) {
+    let near_limit_chain = if let Some(ref met) = hints.metrics {
+        (20 * met.units_per_em / 2048).max(1)
+    } else {
+        20
+    };
+    let near_limit2 = 2 * near_limit_chain - 1;
+    for pt in &mut hints.points {
+        pt.u = 0;
+        pt.v = 0;
+    }
+    for &c_start in &hints.contours {
+        let mut point = c_start;
+        let mut prev = hints.points[point].prev;
+        while prev != c_start {
+            let dx = hints.points[point].fx as i32 - hints.points[prev].fx as i32;
+            let dy = hints.points[point].fy as i32 - hints.points[prev].fy as i32;
+            if dx.abs() + dy.abs() >= near_limit2 {
+                break;
+            }
+            point = prev;
+            prev = hints.points[prev].prev;
+        }
+        let first = point;
+        let mut curr = first;
+        hints.points[curr].u = 0;
+        hints.points[first].v = 0;
+        let mut out_x: i32 = 0;
+        let mut out_y: i32 = 0;
+        let mut next = curr;
+        loop {
+            point = next;
+            next = hints.points[point].next;
+            out_x += hints.points[next].fx as i32 - hints.points[point].fx as i32;
+            out_y += hints.points[next].fy as i32 - hints.points[point].fy as i32;
+            if out_x.abs() + out_y.abs() < near_limit_chain {
+                hints.points[next].flags |= AF_FLAG_WEAK_INTERPOLATION;
+                if next == first {
+                    break;
+                }
+                continue;
+            }
+            // Non-near neighbor — set chain pointers
+            hints.points[curr].u = next as i32 - curr as i32;
+            hints.points[next].v = -hints.points[curr].u;
+
+            // Override out_dir/in_dir for intermediate points (C: afhints.c:1179-1189)
+            let chain_dir = direction_compute(out_x, out_y);
+            hints.points[curr].out_dir = chain_dir;
+            let mut mid = hints.points[curr].next;
+            while mid != next {
+                hints.points[mid].in_dir = chain_dir;
+                hints.points[mid].out_dir = chain_dir;
+                mid = hints.points[mid].next;
+            }
+            hints.points[next].in_dir = chain_dir;
+
+            // After setting u: point to first (C: afhints.c:1191)
+            hints.points[next].u = first as i32 - next as i32;
+            hints.points[first].v = -hints.points[next].u;
+            curr = next;
+            out_x = 0;
+            out_y = 0;
+            if next == first {
+                break;
+            }
         }
     }
 }

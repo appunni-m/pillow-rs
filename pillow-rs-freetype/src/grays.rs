@@ -554,9 +554,10 @@ impl Worker {
         n_contours: i32,
     ) -> Result<(), FontError> {
         let mut last: i64 = -1;
-        for n in 0..n_contours as usize {
+        for (n, &contour_end) in contours.iter().enumerate().take(n_contours as usize) {
             let first = (last + 1) as usize;
-            last = contours[n] as i64;
+            last = contour_end as i64;
+            let _ = n;
             if last < first as i64 {
                 return Err(FontError::InvalidOutline(
                     "outline: contour end before start".into(),

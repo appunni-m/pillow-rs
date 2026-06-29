@@ -56,6 +56,21 @@ impl Font {
     ///
     /// Parses all required tables eagerly. Matches `FT_New_Memory_Face` +
     /// `FT_Set_Char_Size` for the table subset PIL touches.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FontError::InvalidFont`] if the data is not a valid
+    /// TrueType/OpenType font, or if any required table is missing or
+    /// malformed.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use pillow_rs_freetype::{Font, BitmapBackend};
+    /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
+    /// let font = Font::truetype(&font_data, 10.0, BitmapBackend::PIL).unwrap();
+    /// assert_eq!(font.getname(), ("DejaVu Sans", "Book"));
+    /// ```
     pub fn truetype(data: &[u8], size_pt: f32, backend: BitmapBackend) -> Result<Self, FontError> {
         let dir = tt::parse_table_directory(data)?;
 
@@ -308,6 +323,22 @@ impl Font {
 
     /// `getmask(char)` → 8-bit alpha bitmap sized to the glyph's full mask
     /// box (origin + advance), matching PIL's `getmask` on an `L` image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FontError::InvalidFont`] if the glyph outline cannot be
+    /// loaded or scaled, or [`FontError::InvalidOutline`] if the outline
+    /// data is malformed.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use pillow_rs_freetype::{Font, BitmapBackend};
+    /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
+    /// let font = Font::truetype(&font_data, 10.0, BitmapBackend::PIL).unwrap();
+    /// let mask = font.getmask("A").unwrap();
+    /// assert!(mask.width > 0);
+    /// ```
     pub fn getmask(&self, text: &str) -> Result<GlyphMask, FontError> {
         let data = &self.data;
         if text.is_empty() {
@@ -347,8 +378,10 @@ impl Font {
                 // PIL mask: padded to ascender/descender extent.
                 let new_width = advance_px.max(raster.width as i32) as u32;
                 let new_height = (scaled.bbox_y_max - scaled.bbox_y_min.min(0)) as u32;
+                let nw = new_width as usize;
+                let nh = new_height as usize;
 
-                if new_width == 0 || new_height == 0 {
+                if nw == 0 || nh == 0 {
                     return Ok(GlyphMask {
                         width: new_width,
                         height: new_height,
@@ -359,15 +392,15 @@ impl Font {
                     });
                 }
 
+                let mut pixels = vec![0u8; nw * nh];
                 let x_offs = (scaled.bbox_x_min).max(0) as usize;
                 let y_offs = 0usize;
-                let mut pixels = vec![0u8; (new_width * new_height) as usize];
                 let rw = raster.width;
                 for y in 0..raster.height {
                     let src = y * rw;
-                    let dst = y_offs + y as usize * new_width as usize + x_offs;
-                    if dst + rw <= pixels.len() && x_offs + rw <= new_width as usize {
-                        let copy = rw.min((new_width as usize).saturating_sub(x_offs));
+                    let dst = y_offs + y * nw + x_offs;
+                    if dst + rw <= pixels.len() && x_offs + rw <= nw {
+                        let copy = rw.min(nw.saturating_sub(x_offs));
                         pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
                     }
                 }
@@ -405,23 +438,36 @@ impl Font {
 /// value matching PIL's convention.
 // ✅ VERIFIED: OS/2 priority lookup matches C (sfobjs.c).
 fn pick_metrics(data: &FontData) -> (i32, i32) {
-    // FreeType priority (sfobjs.c:1380-1413):
-    // 1. OS/2 with USE_TYPO_METRICS → sTypo*,  2. hhea,  3. OS/2 sTypo*/usWin*
-    if let Some(os2) = &data.os2 {
-        if os2.use_typo_metrics() {
-            return (os2.s_typo_ascender as i32, (-os2.s_typo_descender) as i32);
-        }
+    if let Some(pair) = pick_typo_metrics(data) {
+        return pair;
     }
     let asc = data.hhea.ascent as i32;
     let desc = -data.hhea.descent as i32;
-    if asc != 0 || desc != 0 { return (asc, desc); }
-    if let Some(os2) = &data.os2 {
-        let ta = os2.s_typo_ascender as i32;
-        let td = -os2.s_typo_descender as i32;
-        if ta != 0 || td != 0 { return (ta, td); }
-        return (os2.us_win_ascent as i32, os2.us_win_descent as i32);
+    if asc != 0 || desc != 0 {
+        return (asc, desc);
     }
-    (asc, desc)
+    pick_os2_metrics(data).unwrap_or((asc, desc))
+}
+
+/// Priority 1: OS/2 sTypoAscender / sTypoDescender when USE_TYPO_METRICS is set.
+fn pick_typo_metrics(data: &FontData) -> Option<(i32, i32)> {
+    let os2 = data.os2.as_ref()?;
+    if os2.use_typo_metrics() {
+        Some((os2.s_typo_ascender as i32, (-os2.s_typo_descender) as i32))
+    } else {
+        None
+    }
+}
+
+/// Priority 2-3: Try OS/2 typo, then usWin fallback (sfobjs.c:1395-1413).
+fn pick_os2_metrics(data: &FontData) -> Option<(i32, i32)> {
+    let os2 = data.os2.as_ref()?;
+    let ta = os2.s_typo_ascender as i32;
+    let td = -os2.s_typo_descender as i32;
+    if ta != 0 || td != 0 {
+        return Some((ta, td));
+    }
+    Some((os2.us_win_ascent as i32, os2.us_win_descent as i32))
 }
 
 // Silence unused-import warning for RasterResult (kept for clarity).

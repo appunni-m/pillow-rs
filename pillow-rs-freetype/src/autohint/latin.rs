@@ -84,9 +84,9 @@ fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold
         if widths[i].org - cur_val > threshold || i == *count - 1 {
             let end = if widths[i].org - cur_val <= threshold && i == *count - 1 { i + 1 } else { i };
             let mut sum: i64 = 0;
-            for j in cur_idx..end { sum += widths[j].org as i64; }
+            for w in &widths[cur_idx..end] { sum += w.org as i64; }
             // zero out merged entries, keep the first
-            for j in cur_idx + 1..end { widths[j].org = 0; }
+            for w in &mut widths[cur_idx + 1..end] { w.org = 0; }
             widths[cur_idx].org = (sum / (end as i64 - cur_idx as i64)) as i32;
             if i < *count - 1 {
                 cur_idx = i + 1;
@@ -255,7 +255,7 @@ pub fn metrics_init_blues(
                 Ok(o) => o,
                 Err(_) => continue,
             };
-            if outline.num_contours <= 0 || outline.points.len() <= 2 { continue; }
+            if outline.num_contours == 0 || outline.points.len() <= 2 { continue; }
 
             let points = &outline.points;
             let end_pts = &outline.end_pts_of_contours;
@@ -264,7 +264,7 @@ pub fn metrics_init_blues(
             let is_top = is_top_blue!(entry.props) || is_sub_top!(entry.props);
 
             // Per-character best extremum (reset each char, aflatin.c:462-465).
-            let mut best_y_extremum: i32 = if is_top { i32::MIN } else { i32::MAX };
+            let mut best_y_extremum: Option<i32> = None;
             let mut best_round = false;
 
             // Walk all glyph elements (Latin: 1). Find biggest extremum.
@@ -274,9 +274,10 @@ pub fn metrics_init_blues(
             let mut best_contour_last: i32 = -1;
 
             let mut last: i32 = -1;
-            for ncontour in 0..outline.num_contours as usize {
+            for (ncontour, &end_pt) in end_pts.iter().enumerate().take(outline.num_contours as usize) {
                 let first: i32 = last + 1;
-                last = end_pts[ncontour] as i32;
+                let _unused_ncontour = ncontour;
+                last = end_pt as i32;
                 if last <= first { continue; } // skip single-point contours
 
                 for pp in first..=last {
@@ -361,16 +362,16 @@ pub fn metrics_init_blues(
             if best_point >= 0 {
                 let by = best_y + y_offset;
                 if is_top {
-                    if by > best_y_extremum { best_y_extremum = by; best_round = round; }
+                    if best_y_extremum.map_or(true, |b| by > b) { best_y_extremum = Some(by); best_round = round; }
                 } else {
-                    if by < best_y_extremum { best_y_extremum = by; best_round = round; }
+                    if best_y_extremum.map_or(true, |b| by < b) { best_y_extremum = Some(by); best_round = round; }
                 }
             }
             // (best_round unused beyond here since Latin has 1 element; keep for clarity.)
 
-            if best_y_extremum != i32::MIN && best_y_extremum != i32::MAX {
-                if best_round { rounds.push(best_y_extremum); }
-                else { flats.push(best_y_extremum); }
+            if let Some(best_y_val) = best_y_extremum {
+                if best_round { rounds.push(best_y_val); }
+                else { flats.push(best_y_val); }
             }
         }
 
@@ -652,9 +653,9 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
     let high_contour = {
         let mut best = 0;
         let mut best_min = i32::MIN;
-        for ci in 0..hints.contours.len() {
-            if new_minima[ci] > best_min {
-                best_min = new_minima[ci];
+        for (ci, &min_val) in new_minima.iter().enumerate() {
+            if min_val > best_min {
+                best_min = min_val;
                 best = ci;
             }
         }
@@ -729,7 +730,7 @@ pub fn apply_hints(
     // Compute ppem for bdelta in compute_stem_width
     // At 72dpi: x_scale = (ppem * 64 * 0x10000) / upem → ppem = x_scale * upem / 0x10000 / 64
     let ppem = ((x_scale as i64).abs()
-        * metrics.map(|m| m.units_per_em as i64).unwrap_or(2048)
+        * metrics.map_or(2048, |m| m.units_per_em as i64)
         / 65536 / 64) as i32;
     let ppem = ppem.max(1).min(100);
 
@@ -772,9 +773,8 @@ pub fn apply_hints(
     // ⚠️ MATCHES C: af_latin_hints_apply skips compute_blue_edges for non-base
     //    glyphs (accents, diacritics, etc.) via ganglia->glyph_styles & AF_NONBASE.
     let is_nonbase = hints.metrics.as_ref()
-        .map(|m| (glyph_index as usize) < m.non_base_glyphs.len()
-            && m.non_base_glyphs[glyph_index as usize])
-        .unwrap_or(false);
+        .map_or(false, |m| (glyph_index as usize) < m.non_base_glyphs.len()
+            && m.non_base_glyphs[glyph_index as usize]);
     if !is_nonbase {
         compute_blue_edges(&mut hints);
     }
@@ -941,8 +941,10 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                     || point == last
                 {
                     // End of segment.
-                    let same_start_as_prev = prev_seg.is_some()
-                        && seg_first == axis.segments[prev_seg.unwrap()].last;
+                    let same_start_as_prev = match prev_seg {
+                        Some(v) => seg_first == axis.segments[v].last,
+                        None => false,
+                    };
                     let new_seg = p.flags & AF_FLAG_IGNORE != 0 || prev_seg.is_none()
                         || !same_start_as_prev;
 
@@ -974,7 +976,8 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                     } else {
                         // Merge with previous segment (same start point). Port of aflatin.c:1741-1851.
                         // Compare in_dir at the join point (aflatin.c:1746).
-                        let prev_last_idx = axis.segments[prev_seg.unwrap()].last;
+                        let prev = match prev_seg { Some(v) => v, None => unreachable!() };
+                        let prev_last_idx = axis.segments[prev].last;
                         let prev_last_in = points[prev_last_idx].in_dir;
                         let curr_in = points[point].in_dir;
                         if prev_last_in == curr_in {
@@ -982,18 +985,18 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             min_coord = min_coord.min(prev_min_coord); max_coord = max_coord.max(prev_max_coord);
                             let pos = ((min_pos + max_pos) >> 1) as i16;
                             let delta = ((max_pos - min_pos) >> 1) as i16;
-                            let s = &mut axis.segments[prev_seg.unwrap()];
+                            let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos; s.delta = delta;
                             s.min_coord = min_coord as i16; s.max_coord = max_coord as i16;
                         } else if (prev_max_coord - prev_min_coord).abs() > (max_coord - min_coord).abs() {
                             // discard current: extend prev's last only.
                             let pos = ((prev_min_pos.min(min_pos) + prev_max_pos.max(max_pos)) >> 1) as i16;
-                            let s = &mut axis.segments[prev_seg.unwrap()];
+                            let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
                         } else {
                             // discard prev: current replaces it.
                             let pos = ((min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1) as i16;
-                            let s = &mut axis.segments[prev_seg.unwrap()];
+                            let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
                             s.min_coord = min_coord as i16; s.max_coord = max_coord as i16;
                             s.dir = segment_dir;
@@ -1212,7 +1215,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         }
         let old_edges: Vec<AFEdge> = axis.edges.drain(..).collect();
         for &old_idx in &indices {
-            axis.edges.push(old_edges[old_idx].clone());
+            axis.edges.push(old_edges[old_idx]);
         }
         for seg in &mut axis.segments {
             if seg.edge != usize::MAX {
@@ -1319,7 +1322,7 @@ fn link_segments_inner(
     let major_dir = axis.major_dir;
     let n = axis.segments.len();
 
-    let upem = hints.metrics.as_ref().map(|m| m.units_per_em).unwrap_or(2048);
+    let upem = hints.metrics.as_ref().map_or(2048, |m| m.units_per_em);
 
     // max_width = largest stem width in font units (aflatin.c:2028-2031).
     // .org stays in font units even after scale_dim; segment distances are also
@@ -1709,8 +1712,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             if edge1_idx.is_none() { continue; }
 
-            let e1 = edge1_idx.unwrap();
-            axis.edges[e1].pos = blue.unwrap().fit;
+            let e1 = match edge1_idx { Some(v) => v, None => unreachable!() };
+            let blue = match blue { Some(b) => b, None => unreachable!() };
+            axis.edges[e1].pos = blue.fit;
             axis.edges[e1].flags |= AF_EDGE_DONE;
 
             if let Some(e2) = edge2_idx {
@@ -2198,9 +2202,9 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 fn iup_shift(points: &mut [AFPoint], p1: usize, p2: usize, ref_idx: usize) {
     let delta = points[ref_idx].u - points[ref_idx].v;
     if delta == 0 { return; }
-    for i in p1..=p2 {
-        if i != ref_idx {
-            points[i].u = points[i].v + delta;
+    for (j, pt) in points[p1..=p2].iter_mut().enumerate() {
+        if p1 + j != ref_idx {
+            pt.u = pt.v + delta;
         }
     }
 }
@@ -2224,19 +2228,19 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
     let d2 = u2 - v2;
 
     if u1 == u2 || v1 == v2 {
-        for i in p1..=p2 {
-            let u = points[i].v;
-            if u <= v1 { points[i].u = u + d1; }
-            else if u >= v2 { points[i].u = u + d2; }
-            else { points[i].u = u1; }
+        for p in points[p1..=p2].iter_mut() {
+            let u = p.v;
+            if u <= v1 { p.u = u + d1; }
+            else if u >= v2 { p.u = u + d2; }
+            else { p.u = u1; }
         }
     } else {
         let scale = ft_mul_div(u2 - u1, 0x10000, v2 - v1); // FT_DivFix
-        for i in p1..=p2 {
-            let u = points[i].v;
-            if u <= v1 { points[i].u = u + d1; }
-            else if u >= v2 { points[i].u = u + d2; }
-            else { points[i].u = u1 + ft_mul_fix(u - v1, scale); }
+        for p in points[p1..=p2].iter_mut() {
+            let u = p.v;
+            if u <= v1 { p.u = u + d1; }
+            else if u >= v2 { p.u = u + d2; }
+            else { p.u = u1 + ft_mul_fix(u - v1, scale); }
         }
     }
 }
