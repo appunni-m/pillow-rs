@@ -1,42 +1,31 @@
 # FT Parity Gap Classification — 29-Font Minimal Set
 
 **Date:** 2026-06-29  
-**Status:** PARTIALLY FIXED — P0 extra_light + C7 font fix applied (commit 5312b07)  
-**Current:** 27,154/27,695 passed, 541 failed (443 getmask/bbox + 98 getlength)  
-**Preceding fix:** Italic NO_HORIZONTAL (commit `e02107d`) resolved 93% of the original 13,890 failures.
+**Status:** ACTIVE — grays.rs cursor-wrap fix applied (commit 1d791b0)  
+**P0 Bug found:** `walk_contour` skips entire contour when first point is at index 0 (cursor wraps to usize::MAX, while loop never executes). All '.' glyphs rendered empty. Fixed with cursor wrap logic.  
+**Current:** Fix applied; full test runs are slower (all glyphs now render). Need to verify FT parity count.
 
 ---
 
-## 0. Root Cause: Rasterizer Subpixel Precision
+## 0. Root Cause: `walk_contour` cursor wrap (FIXED ✅)
 
-**ALL 443 non-getlength getmask failures share a single root cause.**
+**Found and fixed in commit `1d791b0`.**
 
-After detailed C-vs-Rust pixel tracing on DejaVuSerif-Italic glyphs ('.', '0', 'A'
-at 10pt), the pattern is clear:
+When a contour's first point is at index 0 and the contour has a conic start
+(common in TrueType outlines), `cursor = first.wrapping_sub(1)` produces
+`usize::MAX` (18446744073709551615). The while loop `while cursor < limit`
+is always false since `usize::MAX > limit`.
 
-1. **Bbox always matches** — our outline positioning and bitmap sizing are correct.
-2. **Pixels differ by 1–3 alpha units** (out of 255) — the antialiased coverage
-   differs subtly.
-3. **Only affects non-pixel-aligned outlines** — when horizontal hinting is active
-   (upright fonts), edges snap to pixel boundaries and our `grays.rs` rasterizer
-   produces byte-perfect output matching C FreeType. When `NO_HORIZONTAL` is set
-   (italic fonts) or when the font has unusual metrics (Math, ExtraLight), the
-   outline x-coordinates are NOT pixel-aligned, and our rasterizer's subpixel
-   precision differs from C's `ftgrays.c`.
-4. **C's rasterizer works at all subpixel positions** — our port (`grays.rs`) was
-   verified for pixel-aligned outlines (~5000+ SHA matches) but has not been
-   verified at arbitrary subpixel positions.
+Result: ALL glyphs whose first contour point is at index 0 rendered as
+EMPTY bitmaps (all zeros). This affected:
+- All '.' glyphs (small dot, only a single contour)
+- Many other small glyphs with single contours
 
-**Clusters affected by this root cause:** C1, C2, C3, C5, C6 (all getmask-only
-failures where bbox passes). C4 and C7 are mixed (some getbbox + metrics failures).
+**Fix:** `cursor = if first == 0 { limit_eff } else { first - 1 };`
+Then `walk_contour` wraps cursor from `limit` back to 0.
 
-**Fix approach:** Audit `grays.rs` against C's `ftgrays.c` line-by-line for the
-non-pixel-aligned path. Key suspect areas: UPSCALE/DOWNSCALE conversion fidelity in
-`render_conic`/`render_cubic` DDA, `ft_udiv` rounding behavior at edge cases,
-sweep cell-to-pixel mapping. Estimated effort: 4–8 hours.
-
-**Workaround:** Widen SHA tolerance for non-pixel-aligned fonts. Not recommended
-for production but useful for rapid CI pass.
+**Verification:** DejaVuSerif-Italic '.' at 10pt now produces non-zero pixels.
+Was: 3x2 all zeros. Now matches C output within alpha tolerance.
 
 ---
 
