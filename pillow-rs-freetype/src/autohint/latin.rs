@@ -826,6 +826,13 @@ pub fn apply_hints(
             // Note: pp2.x (right side bearing adjustment) is not implemented.
             // It affects advance width (getlength) but not the rendered glyph.
             let _ = edge2; // used for pp2x computation which we skip
+        } else {
+            // C's afloader.c:454-460: even without edges, phantom points
+            // are always adjusted.  pp1.x = FT_PIX_ROUND(0) = 0 is a no-op,
+            // but pp2.x rounding affects lsb_delta/rsb_delta which C stores
+            // on the glyph slot.  We don't replicate rsb_delta (it only
+            // affects advance widths), but we document the path for clarity.
+            // The x coordinates are unchanged from the raw scaled values.
         }
     }
 
