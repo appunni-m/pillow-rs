@@ -127,10 +127,25 @@ pub fn scale_glyph(
         let s = m.axis[1].scale;
         if s != 0 { Some(s) } else { None }
     }).unwrap_or(scale.y_scale);
+    // (ttgload.c:2582): pp1.x = glyf_header.xMin - hmtx_lsb.
+    // Shifts all contour X coords by -pp1.x in FU before scaling.
+    // CRITICAL: must shift BOTH scaled coords AND raw outline for autohinter.
+    let pp1x_fu = outline_raw.xmin - h_metric.lsb as i32;
+
+    // Shift raw outline for autohinter fx/fy edge detection
+    let shifted_raw = crate::tt::glyf::GlyphOutline {
+        num_contours: outline_raw.num_contours,
+        end_pts_of_contours: outline_raw.end_pts_of_contours.clone(),
+        points: outline_raw.points.iter()
+            .map(|p| crate::tt::glyf::OutlinePoint { x: p.x - pp1x_fu, ..*p })
+            .collect(),
+        xmin: 0, ymin: 0, xmax: 0, ymax: 0,
+    };
+
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
     for p in &outline_raw.points {
         scaled.push(OutlinePoint {
-            x: scale.scale_x(p.x),
+            x: scale.scale_x(p.x - pp1x_fu),
             y: ft_mul_fix(p.y, y_adj),
             on_curve: p.on_curve,
         });
@@ -139,7 +154,7 @@ pub fn scale_glyph(
     // Apply auto-hinting: snap edges to pixel grid, then interpolate.
     // This modifies the 26.6 coordinates in-place to align with pixel
     // boundaries, matching FreeType's autofit module for Latin script.
-    autohint_glyph(&mut scaled, &outline_raw, &scale, glyph_index, latin_metrics, is_italic);
+    autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic);
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
