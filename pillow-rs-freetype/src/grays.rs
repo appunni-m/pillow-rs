@@ -585,7 +585,7 @@ impl Worker {
                     v_start.x = (v_start.x + v_last.x) / 2;
                     v_start.y = (v_start.y + v_last.y) / 2;
                 }
-                cursor = if first == 0 { limit_eff } else { first - 1 };
+                cursor = first.wrapping_sub(1);
             }
 
             self.move_to(v_start.x as i64, v_start.y as i64);
@@ -602,9 +602,8 @@ impl Worker {
         limit: usize,
         v_start: crate::outline::OutlinePoint,
     ) -> Result<(), FontError> {
-        let n = limit + 1;
-        for _ in 0..n {
-            cursor = if cursor == limit { 0 } else { cursor + 1 };
+        while cursor < limit {
+            cursor += 1;
             let tag = curve_tag(pts[cursor].on_curve);
             match tag {
                 CURVE_TAG_ON => {
