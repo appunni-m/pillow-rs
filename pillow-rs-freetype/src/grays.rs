@@ -608,9 +608,17 @@ impl Worker {
         first_is_conic: bool,
     ) -> Result<(), FontError> {
         // When first==0 and conic start: cursor == limit_eff.
-        // C draws v_start→pts[0] as first edge, then walks pts[1..limit_eff].
+        // C draws v_start→pts[0] as a conic, NOT a straight line.
+        // pts[0] is off-curve control; target is midpoint of pts[0] and pts[1].
         if first_is_conic && cursor == limit && limit > 0 {
-            self.line_to(pts[0].x as i64, pts[0].y as i64);
+            if curve_tag(pts[0].on_curve) == CURVE_TAG_ON {
+                self.line_to(pts[0].x as i64, pts[0].y as i64);
+            } else {
+                let nxt = if 1 <= limit { pts[1] } else { pts[0] };
+                let mx = (pts[0].x + nxt.x) / 2;
+                let my = (pts[0].y + nxt.y) / 2;
+                self.render_conic(pts[0].x as i64, pts[0].y as i64, mx as i64, my as i64);
+            }
             cursor = 0;
         }
         while cursor < limit {
