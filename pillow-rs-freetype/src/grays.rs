@@ -576,7 +576,11 @@ impl Worker {
             }
             let mut cursor = first;
             if first_tag == CURVE_TAG_CONIC {
-                if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
+                if first == 0 {
+                    // Avoid cursor-wrap: use midpoint for v_start and iterate all points.
+                    v_start.x = (v_start.x + v_last.x) / 2;
+                    v_start.y = (v_start.y + v_last.y) / 2;
+                } else if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
                     v_start = v_last;
                     limit_eff = limit
                         .checked_sub(1)
@@ -585,7 +589,10 @@ impl Worker {
                     v_start.x = (v_start.x + v_last.x) / 2;
                     v_start.y = (v_start.y + v_last.y) / 2;
                 }
-                cursor = first.wrapping_sub(1);
+                cursor = match first {
+                    0 => 0,
+                    _ => first - 1,
+                };
             }
 
             self.move_to(v_start.x as i64, v_start.y as i64);
