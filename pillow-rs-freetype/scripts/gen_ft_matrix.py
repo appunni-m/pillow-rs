@@ -25,13 +25,72 @@ INPUT_FONTS = FIXTURES / "input" / "fonts_autohint"
 MATRIX_PATH = FIXTURES / "coverage_matrix_ft.json"
 
 FONTS = {
+    "DejaVuMathTeXGyre": ("DejaVuMathTeXGyre.ttf", "DejaVu Math TeX Gyre", "Regular"),
+    "DejaVuSans-Bold": ("DejaVuSans-Bold.ttf", "DejaVu Sans", "Bold"),
+    "DejaVuSans-BoldOblique": ("DejaVuSans-BoldOblique.ttf", "DejaVu Sans", "Bold Oblique"),
     "DejaVuSans": ("DejaVuSans.ttf", "DejaVu Sans", "Book"),
-    "DejaVuSerif": ("DejaVuSerif.ttf", "DejaVu Serif", "Book"),
-    "DejaVuSansMono": ("DejaVuSansMono.ttf", "DejaVu Sans Mono", "Book"),
+    "DejaVuSans-Oblique": ("DejaVuSans-Oblique.ttf", "DejaVu Sans", "Oblique"),
+    "DejaVuSansCondensed-Bold": ("DejaVuSansCondensed-Bold.ttf", "DejaVu Sans Condensed", "Bold"),
+    "DejaVuSansCondensed-BoldOblique": ("DejaVuSansCondensed-BoldOblique.ttf", "DejaVu Sans Condensed", "Bold Oblique"),
     "DejaVuSansCondensed": ("DejaVuSansCondensed.ttf", "DejaVu Sans Condensed", "Book"),
-    "LiberationSerif": ("LiberationSerif-Regular.ttf", "Liberation Serif", "Regular"),
-    "NotoSans": ("NotoSans-Regular.ttf", "Noto Sans", "Regular"),
-    "Ubuntu": ("Ubuntu-Regular.ttf", "Ubuntu", "Regular"),
+    "DejaVuSansCondensed-Oblique": ("DejaVuSansCondensed-Oblique.ttf", "DejaVu Sans Condensed", "Oblique"),
+    "DejaVuSans-ExtraLight": ("DejaVuSans-ExtraLight.ttf", "DejaVu Sans Light", "ExtraLight"),
+    "DejaVuSansMono-Bold": ("DejaVuSansMono-Bold.ttf", "DejaVu Sans Mono", "Bold"),
+    "DejaVuSansMono-BoldOblique": ("DejaVuSansMono-BoldOblique.ttf", "DejaVu Sans Mono", "Bold Oblique"),
+    "DejaVuSansMono": ("DejaVuSansMono.ttf", "DejaVu Sans Mono", "Book"),
+    "DejaVuSansMono-Oblique": ("DejaVuSansMono-Oblique.ttf", "DejaVu Sans Mono", "Oblique"),
+    "DejaVuSerif-Bold": ("DejaVuSerif-Bold.ttf", "DejaVu Serif", "Bold"),
+    "DejaVuSerif-BoldItalic": ("DejaVuSerif-BoldItalic.ttf", "DejaVu Serif", "Bold Italic"),
+    "DejaVuSerif": ("DejaVuSerif.ttf", "DejaVu Serif", "Book"),
+    "DejaVuSerif-Italic": ("DejaVuSerif-Italic.ttf", "DejaVu Serif", "Italic"),
+    "DejaVuSerifCondensed-Bold": ("DejaVuSerifCondensed-Bold.ttf", "DejaVu Serif Condensed", "Bold"),
+    "DejaVuSerifCondensed-BoldItalic": ("DejaVuSerifCondensed-BoldItalic.ttf", "DejaVu Serif Condensed", "Bold Italic"),
+    "DejaVuSerifCondensed": ("DejaVuSerifCondensed.ttf", "DejaVu Serif Condensed", "Book"),
+    "DejaVuSerifCondensed-Italic": ("DejaVuSerifCondensed-Italic.ttf", "DejaVu Serif Condensed", "Italic"),
+    "LiberationMono-Bold": ("LiberationMono-Bold.ttf", "Liberation Mono", "Bold"),
+    "LiberationMono-BoldItalic": ("LiberationMono-BoldItalic.ttf", "Liberation Mono", "Bold Italic"),
+    "LiberationMono-Italic": ("LiberationMono-Italic.ttf", "Liberation Mono", "Italic"),
+    "LiberationMono-Regular": ("LiberationMono-Regular.ttf", "Liberation Mono", "Regular"),
+    "LiberationSans-Bold": ("LiberationSans-Bold.ttf", "Liberation Sans", "Bold"),
+    "LiberationSans-BoldItalic": ("LiberationSans-BoldItalic.ttf", "Liberation Sans", "Bold Italic"),
+    "LiberationSans-Italic": ("LiberationSans-Italic.ttf", "Liberation Sans", "Italic"),
+    "LiberationSans-Regular": ("LiberationSans-Regular.ttf", "Liberation Sans", "Regular"),
+    "LiberationSansNarrow-Bold": ("LiberationSansNarrow-Bold.ttf", "Liberation Sans Narrow", "Bold"),
+    "LiberationSansNarrow-BoldItalic": ("LiberationSansNarrow-BoldItalic.ttf", "Liberation Sans Narrow", "Bold Italic"),
+    "LiberationSansNarrow-Italic": ("LiberationSansNarrow-Italic.ttf", "Liberation Sans Narrow", "Italic"),
+    "LiberationSansNarrow-Regular": ("LiberationSansNarrow-Regular.ttf", "Liberation Sans Narrow", "Regular"),
+    "LiberationSerif-Bold": ("LiberationSerif-Bold.ttf", "Liberation Serif", "Bold"),
+    "LiberationSerif-BoldItalic": ("LiberationSerif-BoldItalic.ttf", "Liberation Serif", "Bold Italic"),
+    "LiberationSerif-Italic": ("LiberationSerif-Italic.ttf", "Liberation Serif", "Italic"),
+    "LiberationSerif-Regular": ("LiberationSerif-Regular.ttf", "Liberation Serif", "Regular"),
+    "NotoMono-Regular": ("NotoMono-Regular.ttf", "Noto Mono", "Regular"),
+    "NotoSans-Bold": ("NotoSans-Bold.ttf", "Noto Sans", "Bold"),
+    "NotoSans-BoldItalic": ("NotoSans-BoldItalic.ttf", "Noto Sans", "Bold Italic"),
+    "NotoSans-Italic": ("NotoSans-Italic.ttf", "Noto Sans", "Italic"),
+    "NotoSans-Regular": ("NotoSans-Regular.ttf", "Noto Sans", "Regular"),
+    "NotoSansDisplay-Bold": ("NotoSansDisplay-Bold.ttf", "Noto Sans Display", "Bold"),
+    "NotoSansDisplay-BoldItalic": ("NotoSansDisplay-BoldItalic.ttf", "Noto Sans Display", "Bold Italic"),
+    "NotoSansDisplay-Italic": ("NotoSansDisplay-Italic.ttf", "Noto Sans Display", "Italic"),
+    "NotoSansDisplay-Regular": ("NotoSansDisplay-Regular.ttf", "Noto Sans Display", "Regular"),
+    "NotoSansMath-Regular": ("NotoSansMath-Regular.ttf", "Noto Sans Math", "Regular"),
+    "NotoSansMono-Bold": ("NotoSansMono-Bold.ttf", "Noto Sans Mono", "Bold"),
+    "NotoSansMono-Regular": ("NotoSansMono-Regular.ttf", "Noto Sans Mono", "Regular"),
+    "NotoSerif-Bold": ("NotoSerif-Bold.ttf", "Noto Serif", "Bold"),
+    "NotoSerif-BoldItalic": ("NotoSerif-BoldItalic.ttf", "Noto Serif", "Bold Italic"),
+    "NotoSerif-Italic": ("NotoSerif-Italic.ttf", "Noto Serif", "Italic"),
+    "NotoSerif-Regular": ("NotoSerif-Regular.ttf", "Noto Serif", "Regular"),
+    "NotoSerifDisplay-Bold": ("NotoSerifDisplay-Bold.ttf", "Noto Serif Display", "Bold"),
+    "NotoSerifDisplay-BoldItalic": ("NotoSerifDisplay-BoldItalic.ttf", "Noto Serif Display", "Bold Italic"),
+    "NotoSerifDisplay-Italic": ("NotoSerifDisplay-Italic.ttf", "Noto Serif Display", "Italic"),
+    "NotoSerifDisplay-Regular": ("NotoSerifDisplay-Regular.ttf", "Noto Serif Display", "Regular"),
+    "Ubuntu-Italic[wdth,wght]": ("Ubuntu-Italic[wdth,wght].ttf", "Ubuntu", "Italic"),
+    "Ubuntu[wdth,wght]": ("Ubuntu[wdth,wght].ttf", "Ubuntu", "Regular"),
+    "UbuntuMono-Italic[wght]": ("UbuntuMono-Italic[wght].ttf", "Ubuntu Mono", "Italic"),
+    "UbuntuMono[wght]": ("UbuntuMono[wght].ttf", "Ubuntu Mono", "Regular"),
+    "UbuntuSans-Italic[wdth,wght]": ("UbuntuSans-Italic[wdth,wght].ttf", "Ubuntu Sans", "Italic"),
+    "UbuntuSans[wdth,wght]": ("UbuntuSans[wdth,wght].ttf", "Ubuntu Sans", "Regular"),
+    "UbuntuSansMono-Italic[wght]": ("UbuntuSansMono-Italic[wght].ttf", "Ubuntu Sans Mono", "Italic"),
+    "UbuntuSansMono[wght]": ("UbuntuSansMono[wght].ttf", "Ubuntu Sans Mono", "Regular"),
 }
 GEN_BINARY = "/tmp/gen_ft_refs"
 SHA = hashlib.sha256
@@ -98,13 +157,28 @@ for fn, (ff, fam, sty) in FONTS.items():
 matrix = {"version": "2.0.0", "font_source": "fonts_autohint", "hinting": "autohint",
           "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
           "mode": "FreeType-raw", "rows": rows,
-          "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": 7, "sizes": 5, "glyphs": 94}}
+          "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": len(FONTS), "sizes": 5, "glyphs": 94}}
 
 # getlength: add from PIL matrix (backend-independent, hmtx-based advance widths)
+# Remap old PIL font names to current fixture filenames
+PIL_FONT_REMAP = {
+    "DejaVuSans": "DejaVuSans",
+    "DejaVuSerif": "DejaVuSerif",
+    "DejaVuSansMono": "DejaVuSansMono",
+    "DejaVuSansCondensed": "DejaVuSansCondensed",
+    "LiberationSerif": "LiberationSerif-Regular",
+    "NotoSans": "NotoSans-Regular",
+    "Ubuntu": "Ubuntu[wdth,wght]",
+}
 pil_matrix = json.loads((FIXTURES / "coverage_matrix.json").read_text())
 for r in pil_matrix["rows"]:
     if r.get("operation") == "getlength":
-        rows.append(dict(r))  # copy entire row
+        r = dict(r)  # copy
+        old_font = r.get("font", "")
+        if old_font in PIL_FONT_REMAP:
+            r["font"] = PIL_FONT_REMAP[old_font]
+            r["id"] = r["id"].replace(old_font, PIL_FONT_REMAP[old_font])
+        rows.append(r)
 
 MATRIX_PATH.write_text(json.dumps(matrix, indent=2) + "\n")
 print(f"FT 2.14.3 matrix: {len(rows)} rows -> {MATRIX_PATH}", file=sys.stderr)

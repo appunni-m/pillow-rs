@@ -31,6 +31,8 @@ pub struct Font {
     pub backend: BitmapBackend,
     /// Pre-computed Latin autohinter metrics (stem widths, blue zones).
     pub latin_metrics: Option<crate::autohint::AfLatinMetrics>,
+    /// Whether the font is italic/oblique (from head.mac_style bit 1).
+    pub is_italic: bool,
 }
 
 /// A rendered glyph alpha mask.
@@ -116,6 +118,7 @@ impl Font {
         });
 
         let upem = font_data.head.units_per_em as i32;
+        let is_italic = (font_data.head.mac_style & 2) != 0;
         let num_glyphs = font_data.maxp.num_glyphs as u16;
         let mut latin_metrics = crate::autohint::AfLatinMetrics::new(upem, num_glyphs);
 
@@ -215,6 +218,7 @@ impl Font {
             size_pt,
             backend,
             latin_metrics: Some(latin_metrics),
+            is_italic,
         })
     }
 
@@ -275,7 +279,7 @@ impl Font {
         let advance = pixel_round(ft_mul_fix(
             data.hmtx.get(glyph).advance_width as i32, scale.x_scale));
 
-        match scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref()) {
+        match scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref(), self.is_italic) {
             Ok(g) if g.outline.n_contours > 0 => {
                 match self.backend {
                     BitmapBackend::PIL => {
@@ -319,7 +323,7 @@ impl Font {
 
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-        let scaled = scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref())?;
+        let scaled = scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref(), self.is_italic)?;
 
         if scaled.outline.n_contours == 0 {
             // No outline → empty mask (but PIL still returns the advance-sized

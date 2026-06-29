@@ -8,6 +8,7 @@
 //! Reference: `freetype/src/autofit/` (VER-2-14-1).
 
 pub mod types;
+pub mod coverage;
 pub mod loader;
 pub mod latin;
 
