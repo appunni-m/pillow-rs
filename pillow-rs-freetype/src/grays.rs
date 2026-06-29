@@ -602,14 +602,9 @@ impl Worker {
         limit: usize,
         v_start: crate::outline::OutlinePoint,
     ) -> Result<(), FontError> {
-        let wraps = cursor == limit && limit > 0;
-        while wraps || cursor < limit {
-            if wraps {
-                cursor = if cursor == limit { 0 } else { cursor + 1 };
-            } else {
-                cursor += 1;
-            }
-            if cursor == limit { break; }
+        let n = limit + 1;
+        for _ in 0..n {
+            cursor = if cursor == limit { 0 } else { cursor + 1 };
             let tag = curve_tag(pts[cursor].on_curve);
             match tag {
                 CURVE_TAG_ON => {
