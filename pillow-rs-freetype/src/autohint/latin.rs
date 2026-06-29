@@ -15,6 +15,7 @@ use super::types::{
     AF_EDGE_ROUND, AF_EDGE_NORMAL, AF_EDGE_SERIF, AF_EDGE_DONE,
     AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_VERT_SNAP,
     AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_MONO,
+    AF_SCALER_FLAG_NO_HORIZONTAL,
     AfLatinMetrics, AfWidth, AfLatinBlue, AF_LATIN_MAX_WIDTHS,
 };
 // blue/edge flags — imported for later phases (Phases B–E)
@@ -711,12 +712,19 @@ pub fn apply_hints(
     y_delta: i32,
     glyph_index: u16,
     metrics: Option<&AfLatinMetrics>,
+    is_italic: bool,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
     // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
     // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
     hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
+
+    // Italic fonts: disable horizontal hinting (C: aflatin.c:2720-2726).
+    if is_italic {
+        hints.scaler_flags |= AF_SCALER_FLAG_NO_HORIZONTAL;
+        crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_NO_HORZ);
+    }
 
     // Compute ppem for bdelta in compute_stem_width
     // At 72dpi: x_scale = (ppem * 64 * 0x10000) / upem → ppem = x_scale * upem / 0x10000 / 64
@@ -733,18 +741,23 @@ pub fn apply_hints(
 
     // Step 2: Process horizontal dimension first (X-axis / vertical edges)
     // ✅ Order matches C's af_latin_hints_apply (aflatin.c:5050-5068): HORZ before VERT.
-    compute_segments(&mut hints, Dimension::Horz);
-    let horz_widths_26_6: Vec<i32>;
-    {
-        let (wc, widths) = extract_widths(&hints, Dimension::Horz);
-        horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
-        link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+    // ⚠️ C: AF_HINTS_DO_HORIZONTAL skips HORZ for italic fonts (aflatin.c:2720-2726).
+    if hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0 {
+        compute_segments(&mut hints, Dimension::Horz);
+        let horz_widths_26_6: Vec<i32>;
+        {
+            let (wc, widths) = extract_widths(&hints, Dimension::Horz);
+            horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
+            link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
+        }
+        compute_edges(&mut hints, Dimension::Horz);
+        hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6, ppem);
+        align_edge_points(&mut hints, Dimension::Horz);
+        align_strong_points(&mut hints, Dimension::Horz);
+        align_weak_points(&mut hints, Dimension::Horz);
+    } else {
+        crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_HORZ_SKIPPED);
     }
-    compute_edges(&mut hints, Dimension::Horz);
-    hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6, ppem);
-    align_edge_points(&mut hints, Dimension::Horz);
-    align_strong_points(&mut hints, Dimension::Horz);
-    align_weak_points(&mut hints, Dimension::Horz);
 
     // Step 3: Process vertical dimension (Y-axis / horizontal edges)
     compute_segments(&mut hints, Dimension::Vert);

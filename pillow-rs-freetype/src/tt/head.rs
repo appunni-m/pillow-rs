@@ -13,6 +13,8 @@ pub struct HeadTable {
     pub index_to_loc_format: i16,
     /// Font flags (bit 0 baseline-at-y0, etc.).
     pub flags: u16,
+    /// Macintosh style flags (bit 0=bold, bit 1=italic).
+    pub mac_style: u16,
     /// Lowest recPPEM (smallest size the font is designed for).
     pub lowest_rec_ppem: u16,
 }
@@ -26,6 +28,7 @@ pub fn parse_head(data: &[u8]) -> Result<HeadTable, FontError> {
     }
     let units_per_em = u16::from_be_bytes([data[18], data[19]]);
     let flags = u16::from_be_bytes([data[16], data[17]]);
+    let mac_style = u16::from_be_bytes([data[44], data[45]]);
     let lowest_rec_ppem = u16::from_be_bytes([data[46], data[47]]);
     let index_to_loc_format = i16::from_be_bytes([data[50], data[51]]);
 
@@ -37,6 +40,7 @@ pub fn parse_head(data: &[u8]) -> Result<HeadTable, FontError> {
         units_per_em,
         index_to_loc_format,
         flags,
+        mac_style,
         lowest_rec_ppem,
     })
 }
