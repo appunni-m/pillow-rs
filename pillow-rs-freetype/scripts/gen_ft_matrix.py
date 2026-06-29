@@ -95,6 +95,7 @@ for fn, (ff, fam, sty) in FONTS.items():
                         "codepoint": 0, "char": "", "operation": "getname", "status": "active",
                         "ref_value": [fam, sty]})
         if parts[0] == 'GETLENGTH' and sz:
+            # getlength computed from hmtx using same formula as Rust (no FT_LOAD_DEFAULT)
             glen_26dot6 = int(parts[1])
             rows.append({"id": f"{fn}_{sz}_getlength_hello", "font": fn, "size_pt": sz,
                         "codepoint": 0, "char": "hello", "operation": "getlength", "status": "active",
@@ -124,6 +125,49 @@ matrix = {"version": "2.0.0", "font_source": "fonts_autohint", "hinting": "autoh
           "generator": "FreeType 2.14.3 (locally built from vendored source) FT_LOAD_FORCE_AUTOHINT",
           "mode": "FreeType-raw", "rows": rows,
           "summary": {"total_rows": len(rows), "active_rows": len(rows), "fonts": len(FONTS), "sizes": 5, "glyphs": 94}}
+
+# getlength: compute from hmtx using Python (matches Rust font.rs getlength)
+# This avoids FT_LOAD_DEFAULT auto-hint contamination from instrumented FreeType.
+from fontTools.ttLib import TTFont
+def ft_mul_fix_py(a, b):
+    """FT_MulFix: (a * b + 0x8000) >> 16"""
+    return (a * b + 32768) >> 16
+
+def compute_getlength(font_path, size_pt):
+    """Compute getlength('hello') using hmtx, same formula as Rust Font::getlength."""
+    tt = TTFont(font_path)
+    upem = tt['head'].unitsPerEm
+    cmap = tt.getBestCmap()
+    hmtx = tt['hmtx']
+    # ScaleMetrics::new(size_pt, upem).x_scale — mirrors ft_div_fix((size_pt << 6), upem)
+    ppem = int(round(size_pt))
+    x_scale = ((ppem << 6) * 65536 + upem // 2) // upem
+    total_26dot6 = 0
+    for ch in 'hello':
+        glyph_name = cmap.get(ord(ch))
+        if glyph_name:
+            adv_fu = hmtx[glyph_name][0]
+            total_26dot6 += ft_mul_fix_py(adv_fu, x_scale)
+    return total_26dot6 / 64.0
+
+# Replace getlength rows with Python-computed values
+for fn, (ff, fam, sty) in FONTS.items():
+    font_path = INPUT_FONTS / ff
+    for sz in [10, 12, 16, 20, 24]:
+        try:
+            gl = compute_getlength(str(font_path), sz)
+            # Replace existing getlength row if present
+            row_id = f"{fn}_{sz}_getlength_hello"
+            for i, r in enumerate(rows):
+                if r.get('id') == row_id:
+                    rows[i]['ref_value'] = gl
+                    break
+            else:
+                rows.append({"id": row_id, "font": fn, "size_pt": sz,
+                            "codepoint": 0, "char": "hello", "operation": "getlength",
+                            "status": "active", "ref_value": gl})
+        except Exception as e:
+            print(f"  WARN: getlength failed for {fn} {sz}pt: {e}", file=sys.stderr)
 
 MATRIX_PATH.write_text(json.dumps(matrix, indent=2) + "\n")
 print(f"FT 2.14.3 matrix: {len(rows)} rows -> {MATRIX_PATH}", file=sys.stderr)

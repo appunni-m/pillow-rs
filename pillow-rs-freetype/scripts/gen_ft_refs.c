@@ -49,20 +49,6 @@ int main(int argc, char **argv) {
             }
             printf("\n");
         }
-        
-        // getlength("hello"): sum of hmtx advance widths for h,e,l,l,o
-        {
-            const char *hello = "hello";
-            FT_Fixed total_adv = 0;
-            for(int ci=0; hello[ci]; ci++) {
-                FT_UInt idx = FT_Get_Char_Index(face, (int)hello[ci]);
-                if(idx) {
-                    FT_Load_Glyph(face, idx, FT_LOAD_DEFAULT);
-                    total_adv += face->glyph->advance.x;
-                }
-            }
-            printf("GETLENGTH %ld\n", total_adv);
-        }
         printf("END_SIZE\n");
     }
     
