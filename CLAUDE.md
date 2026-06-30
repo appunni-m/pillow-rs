@@ -496,5 +496,4 @@ Same mechanism (WEAK classification), different glyph topologies:
 
 ### Documentation
 
-Complete function-level reference: `pillow-rs-freetype/doc/AUTOHINTER_NUANCES.md`
-FT debugging log: `pillow-rs-freetype/doc/FT_DEBUG_LOG.md`
+Complete function-level reference: `pillow-rs-freetype/src/autohint/INDEX.md`
