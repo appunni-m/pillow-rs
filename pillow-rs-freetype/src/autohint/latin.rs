@@ -704,6 +704,29 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
 
 /// ✅ VERIFIED: pipeline verified via FT coverage (1641/1910 pass).
 /// Port of af_latin_hints_apply (aflatin.c:5050-5068). HORZ before VERT.
+/// Apply Latin auto-hinting to a glyph outline.
+///
+/// This is the main entry point for the autohinter. It runs a fixed pipeline
+/// of stages, each building on the previous one's output. The order matters
+/// — you cannot snap edges before detecting them, and you cannot interpolate
+/// weak points before grid-fitting the strong anchors they reference.
+///
+/// Pipeline (each dimension processed separately):
+/// 1. **reload** — load coords, compute directions, build direction chain,
+///    classify points as WEAK or STRONG
+/// 2. **compute_segments** — find horizontal/vertical runs of consecutive points
+/// 3. **compute_edges** — merge overlapping segments into edges
+/// 4. **compute_blue_edges** — assign edges to blue zones (baseline etc)
+/// 5. **hint_edges** — 4-phase snapping: (1) stem pairs, (2) serifs,
+///    (3) blue zones, (4) anchor propagation
+/// 6. **align_edge_points** — snap contour points to hinted edges
+/// 7. **align_strong_points** — interpolate corner points between edges
+/// 8. **align_weak_points** (IUP) — interpolate smooth runs between
+///    strong-point anchors
+/// 9. **phantom adjustment** — shift to pixel grid using pp1.x
+///
+/// For italic fonts, the HORZ (X-axis) pipeline is skipped entirely — only
+/// VERT (Y-axis) features are hinted.
 pub fn apply_hints(
     outline: &mut crate::outline::Outline,
     raw_outline: &crate::tt::glyf::GlyphOutline,
@@ -2279,6 +2302,22 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
 // Port of `af_glyph_hints_align_weak_points` (afhints.c:1687–1808).
 // ✅ VERIFIED: IUP dispatch + direction chain now matches C for all 49 '&' points.
 // Port of af_glyph_hints_align_weak_points (afhints.c:1687-1808).
+/// Interpolate weak points between strong (touched) anchors (IUP).
+///
+/// This is the final position adjustment. It walks each contour, finds
+/// consecutive TOUCHED points, and linearly interpolates all weak points
+/// between them. The result depends critically on WHICH points are touched.
+///
+/// The touch chain starts from [`align_edge_points`] (which touches points
+/// belonging to hinted edges) and [`align_strong_points`] (which touches
+/// corner points it grid-fits). If a point C classifies as STRONG but we
+/// classify as WEAK, [`align_strong_points`] skips it → it stays untouched →
+/// IUP uses the next touched point instead → different reference pair →
+/// 1-2 unit coordinate drift across the entire contour section.
+///
+/// This is exactly what caused the 18 residual failures: pt[20] was WEAK
+/// in Rust but STRONG in C, so IUP used pt[21] instead of pt[20] as a
+/// reference anchor.
 fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     let is_vert = dim == Dimension::Vert;
     let touch_flag = if is_vert { AF_FLAG_TOUCH_Y } else { AF_FLAG_TOUCH_X };
