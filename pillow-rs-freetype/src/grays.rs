@@ -754,6 +754,7 @@ impl Worker {
     }
 
     // ── gray_convert_glyph (ftgrays.c:1861) ───────────────────────────────
+    #[allow(clippy::too_many_arguments)]
     fn convert_glyph(
         &mut self,
         pts: &[crate::outline::OutlinePoint],
