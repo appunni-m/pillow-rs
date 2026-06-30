@@ -12,9 +12,9 @@ fn main() {
         return;
     }
     let path = &args[1];
-    let size_pt: f32 = args[2].parse().unwrap();
-    let ch = args[3].chars().next().unwrap();
-    let data = fs::read(path).unwrap();
+    let _size_pt: f32 = args[2].parse().unwrap();
+    let _ch = args[3].chars().next().unwrap();
+    let _data = fs::read(path).unwrap();
     
     // This would need internal access. Skip for now.
     eprintln!("Need internal access to reload/compute_segments");
