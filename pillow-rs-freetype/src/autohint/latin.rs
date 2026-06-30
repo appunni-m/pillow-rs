@@ -1064,6 +1064,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         let prev_last_in = points[prev_last_idx].in_dir;
                         let curr_in = points[point].in_dir;
                         if prev_last_in == curr_in {
+                            // C: identical directions → unify (aflatin.c:1746-1791)
                             min_pos = min_pos.min(prev_min_pos); max_pos = max_pos.max(prev_max_pos);
                             min_coord = min_coord.min(prev_min_coord); max_coord = max_coord.max(prev_max_coord);
                             let pos = i16_from_i32((min_pos + max_pos) >> 1);
@@ -1083,6 +1084,11 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             s.last = point; s.pos = pos;
                             s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
                             s.dir = segment_dir;
+                            // ⚠️ C: *prev_segment = *segment copies `first` too (aflatin.c:1822).
+                            // Without this, the replaced segment inherits the discarded prev
+                            // segment's `first`, causing wrong point ranges → wrong edge
+                            // assignments → 6 of 9 failing tests.
+                            s.first = seg_first;
                         }
                     }
 
