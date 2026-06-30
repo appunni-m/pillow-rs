@@ -2,8 +2,11 @@
 name = "pillow-rs-freetype"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
-description = "Pure-Rust byte-perfect port of FreeType 2.14.1 (FT_INT64 path, smooth renderer, TrueType outlines)"
+license = "MIT"
+description = "Pure-Rust TrueType font renderer — auto-hinter, rasterizer, and table parsers"
+repository = "https://github.com/pillow-rs/pillow-rs"
+keywords = ["freetype", "truetype", "font", "rendering", "autohint"]
+categories = ["rendering", "text-processing"]
 
 [lib]
 name = "pillow_rs_freetype"

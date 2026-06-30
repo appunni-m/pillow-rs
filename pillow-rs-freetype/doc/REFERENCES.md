@@ -1,92 +1,56 @@
-# How to Regenerate References
+# References and Fixtures
 
-Two independent reference matrices, both pinned to FreeType 2.14.3:
+## FT Fixture Matrix
 
-| Matrix file | Generator | Output |
-|---|---|---|
-| `tests/fixtures/coverage_matrix.json` | PIL 12.2.0 | 1910 rows (PIL-padded mask + bbox) |
-| `tests/fixtures/coverage_matrix_ft.json` | FreeType C | 1910 rows (raw FT bitmap + bbox) |
+File: `tests/fixtures/coverage_matrix_ft.json`  
+Generator: `scripts/gen_ft_refs.c` → `scripts/gen_ft_matrix.py`  
+Reference: FreeType 2.14.3 C library, built from vendored source with `FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT`  
+Fonts: 29 fonts under `tests/fixtures/input/fonts_autohint/`  
+Current pass rate: 27,686/27,695 (99.97%)
 
-## Prerequisites
+## PIL Fixture Matrix
 
-FreeType 2.14.3 must be built from the vendored source and installed to `~/.local`.  
-This is a one-time setup:
+File: `tests/fixtures/coverage_matrix.json`  
+Generator: `scripts/generate_font_refs.py`  
+Reference: PIL 12.2.0 `ImageFont.getmask()`  
+
+## Running Tests
 
 ```bash
-cd pillow-rs-freetype
-bash scripts/build_ft.sh
+# FT fixtures (autohint comparison)
+cargo test -p pillow-rs-freetype test_font_coverage_matrix_freetype
+
+# PIL fixtures
+cargo test -p pillow-rs-freetype test_font_coverage_matrix_pil
 ```
 
-(Requires cmake, gcc, make. No other dependencies.)
+## Regenerating Fixtures
 
-## Regenerate PIL Matrix
+Build FreeType from vendored source (one-time):
+```bash
+cd pillow-rs-freetype && bash scripts/build_ft.sh
+```
 
+Regenerate FT matrix:
+```bash
+gcc -o /tmp/gen_ft_refs pillow-rs-freetype/scripts/gen_ft_refs.c \
+  -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype
+python pillow-rs-freetype/scripts/gen_ft_matrix.py
+```
+
+Regenerate PIL matrix:
 ```bash
 python pillow-rs-freetype/scripts/generate_font_refs.py
 ```
 
-Requires: `pip install Pillow>=12.2.0` (PIL bundles FreeType 2.14.3).  
-Input: `tests/fixtures/input/fonts_autohint/*.ttf`  
-Output: `tests/fixtures/coverage_matrix.json`
-
-## Regenerate FreeType Matrix
+## Tracing a Failing Glyph
 
 ```bash
-# Build the reference generator binary
-gcc -o /tmp/gen_ft_refs pillow-rs-freetype/scripts/gen_ft_refs.c \
-  -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype \
-  -Wl,-rpath,$HOME/.local/lib
+# C reference
+gcc -o /tmp/trace pillow-rs-freetype/scripts/trace_one_glyph.c \
+  -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype
+LD_LIBRARY_PATH=$HOME/.local/lib /tmp/trace <font.ttf> <size_pt> <codepoint>
 
-# Generate the matrix
-python pillow-rs-freetype/scripts/gen_ft_matrix.py
-```
-
-Input: `tests/fixtures/input/fonts_autohint/*.ttf`  
-Output: `tests/fixtures/coverage_matrix_ft.json`
-
-## Run Tests
-
-```bash
-cargo test -p pillow-rs-freetype test_font_coverage_matrix \
-  -- --nocapture
-```
-
-Two test functions run:
-- `test_font_coverage_matrix_pil` — `BitmapBackend::PIL` against `coverage_matrix.json`
-- `test_font_coverage_matrix_freetype` — `BitmapBackend::FreeType` against `coverage_matrix_ft.json`
-
-## Trace a Failing Glyph
-
-```bash
-# C reference (FreeType 2.14.3)
-gcc -o /tmp/trace_edges pillow-rs-freetype/scripts/trace_edges.c \
-  -I pillow-rs-freetype/freetype/include \
-  -I pillow-rs-freetype/freetype/src/autofit \
-  -L $HOME/.local/lib -lfreetype -Wl,-rpath,$HOME/.local/lib
-/tmp/trace_edges <font.ttf> <size_pt> <char>
-
-# Rust output (both backends)
-cargo run --example dump_all_masks -- <font.ttf> <size> pil
-cargo run --example dump_all_masks -- <font.ttf> <size> ft
-cargo run --example trace_raster -- <font.ttf> <size> <char>
-cargo run --example dump_outline -- <font.ttf> <size> <char>
-```
-
-## Version Audit
-
-```bash
-# PIL
-python3 -c 'from PIL import _imagingft; print(_imagingft.freetype2_version)'
-
-# Locally built FreeType
-LD_LIBRARY_PATH=$HOME/.local/lib python3 -c '
-import ctypes; l=ctypes.CDLL("libfreetype.so"); lib=ctypes.c_void_p()
-l.FT_Init_FreeType(ctypes.byref(lib))
-m,mi,p=ctypes.c_int(),ctypes.c_int(),ctypes.c_int()
-l.FT_Library_Version(lib,ctypes.byref(m),ctypes.byref(mi),ctypes.byref(p))
-print(f"{m.value}.{mi.value}.{p.value}")
-l.FT_Done_FreeType(lib)'
-
-# Vendored C source
-head -3 pillow-rs-freetype/freetype/README
+# Rust
+cargo run --example <name> --manifest-path pillow-rs-freetype/Cargo.toml
 ```
