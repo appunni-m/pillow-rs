@@ -334,3 +334,168 @@ Checklist when facing unknown divergence:
 - Write separate code paths per mode when needed
 - Don't give tasks back to user — do it all yourself
 - Add tasks to task list and don't stop until done
+
+## Parity Debugging Methodology (C → Rust Port)
+
+This section documents the exact process used to achieve 99.97% pixel parity
+with FreeType's autohinter. Follow these steps in order for any C→Rust port.
+
+### Step 1: One Glyph, One Size, Two Binaries
+
+**Never debug through test suites.** Test fixtures interleave traces from
+thousands of glyphs. Build standalone C and Rust binaries that load exactly
+one font, one glyph, one size:
+
+```rust
+// Rust: pillow-rs-freetype/examples/trace_one.rs
+fn main() {
+    let fp = "/absolute/path/to/font.ttf";
+    let data = std::fs::read(fp).unwrap();
+    let font = Font::truetype(&data, 12.0, BitmapBackend::FreeType).unwrap();
+    font.getmask("5").unwrap(); // ONE call, all traces from THIS glyph
+}
+```
+
+```c
+// C: compile with vendored FreeType
+int main() {
+    FT_New_Memory_Face(lib, buf, sz, 0, &face);
+    FT_Set_Char_Size(face, 12*64, 0, 72, 0);
+    FT_Load_Glyph(face, FT_Get_Char_Index(face, 0x35),
+                  FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+    return 0;
+}
+```
+
+### Step 2: Dump Every Pipeline Stage
+
+Instrument BOTH C and Rust with `fprintf(stderr, ...)` / `eprintln!()` at each stage:
+
+| Stage | C location | Rust location | What to dump |
+|-------|-----------|---------------|-------------|
+| reload | afhints.c:1014 | loader.rs:68 | ox[0..5], fx[0..5] |
+| compute_edges | aflatin.c:2310 | latin.rs:1099 | fpos, opos, pos for every edge |
+| hint_edges | aflatin.c:4244 | latin.rs:1665 | edges after each phase (1-4) |
+| align_edge_points | afhints.c:1369 | latin.rs:2112 | which points got TOUCH_X |
+| align_strong_points | afhints.c:1585 | latin.rs:2169 | x, ox, fx for all grid-fitted points |
+| IUP (align_weak) | afhints.c:1798 | latin.rs:2330 | reference pair (v1,u1,v2,u2) |
+| Save to outline | afhints.c:1320 | latin.rs:840 | final x, ox for all points |
+| Phantom adjust | afloader.c:518 | latin.rs:820 | pp1x value, shift applied |
+
+### Step 3: Find the First Diverging Point
+
+Compare C and Rust output stage by stage. The FIRST stage that differs is
+the bug location. Everything downstream is a consequence.
+
+**Example trace comparison (finding the WEAK_INTERPOLATION bug):**
+
+```
+Stage                    C                           Rust
+reload                   ox[0..5]=185,133,64,31,31   same           ✓
+compute_edges (HORZ)     5 edges: fpos=40,120,...     same           ✓
+hint_edges (phase 4)     pos=0,64,256,348,375         same           ✓
+align_edge_points        pt[20] not yet touched       same           ✓
+align_strong_points      pt[20] x=33, TOUCHED         pt[20] WEAK     ✗ ← BUG HERE
+IUP                      refs (pt[14], pt[20])        refs (pt[14], pt[21])
+Final                    pt[15]=201                   pt[15]=200     +1 diff
+```
+
+### Step 4: Trace the Diverged Function Internals
+
+Once you know WHICH function diverges, trace its internals. For `align_strong`,
+pt[20] was skipped because WEAK_INTERPOLATION was set. Tracing backward:
+
+```
+reload WEAK classification:  C flags=0x00 (STRONG)    Rust flags=0x10 (WEAK)
+  → both-None case:          C corner_is_flat=FALSE   Rust corner_is_flat=TRUE
+    → different inputs:       C in=(-103,-60)          Rust in=(-11,4)
+      → different u/v:        C v=-3 (pt[17])          Rust v=-1 (pt[19])
+        → direction chain     near_limit=9 affects     same near_limit but
+          different point merging at UPEM=1000          different first-point
+```
+
+### Step 5: Verify Against C Source Code
+
+Read the EXACT C function. Look for sequential checks that our code might
+have combined, or index-delta updates that our code might skip.
+
+**Key finding (afhints.c:1221-1290):** C checks XOR quadrant first, THEN
+`ft_corner_is_flat` separately. When corner_is_flat returns true, C updates
+`prev_v->u = next_u - prev_v` and `next_u->v = -prev_v->u`. These delta
+updates change the direction chain for DOWNSTREAM point classifications.
+Our Rust code had `xor || corner_is_flat(...)` as a single boolean — the
+short-circuit OR skipped the delta update when XOR already evaluated to true.
+
+### Step 6: Fix the Minimal Code
+
+Fix ONLY what differs. One function, minimal change. Run the full test suite.
+If other glyphs still fail, the same mechanism affects different contour
+topologies — the root cause is the same.
+
+## Case Study: The 2026-06-30 WEAK_INTERPOLATION Fix
+
+### Timeline
+
+| Phase | What | Result |
+|-------|------|--------|
+| Start | 541 failures | Baseline |
+| Fix 1 | walk_contour conic wrap (commit 887070a) | 411 failures |
+| Fix 2 | getlength from hmtx (commit cf19f9e) | 313 failures |
+| Fix 3 | getmetrics FT_PIX_CEIL (commit cbbdcba) | 309 failures |
+| Fix 4 | pp1.x phantom translation (commit 04975f8) | 18 failures |
+| Fix 5 | WEAK_INTERPOLATION classification (commit 1ecd364) | 9 failures |
+
+### What the fix changed (loader.rs:217-233)
+
+Before:
+```rust
+// C's XOR quadrant check (afhints.c:1221-1245): same sign for both axes
+((in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0)
+    || corner_is_flat(in_x, in_y, out_x, out_y)
+```
+
+After:
+```rust
+// C (afhints.c:1276-1290): XOR check, then corner_is_flat
+let xor_same = (in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0;
+if xor_same {
+    true
+} else if corner_is_flat(in_x, in_y, out_x, out_y) {
+    // Update index deltas (C: afhints.c:1286-1287)
+    hints.points[pv].u = nu as i32 - pv as i32;
+    hints.points[nu].v = -(hints.points[pv].u);
+    true
+} else {
+    false
+}
+```
+
+And the spike branch:
+```rust
+// Before: flags & AF_FLAG_NEAR != 0
+// After:  true  (C's afhints.c:1293 unconditionally marks spikes as WEAK)
+```
+
+### Why 12 lines fixed 9 tests
+
+The delta update (`pv->u`, `nu->v`) changes which neighbor points are
+consulted for subsequent point classifications. At UPEM=1000, `near_limit=9`
+FU creates a dense direction-chain network where a single delta change
+propagates through 5+ downstream points, flipping their WEAK/STRONG status.
+This changes IUP reference pairs, producing +1 unit coordinate differences
+that cascade through `render_conic` subdivision into pixel mismatch.
+
+### Remaining 9 failures
+
+Same mechanism (WEAK classification), different glyph topologies:
+- NSDB 'B' (gid=37): 3 contours, different u/v chain
+- NSDB 'g' (gid=74): descender contour, near_limit affects descending arc
+- LiberationSerif '$': UPEM=2048, bold stem-width thresholds
+- LiberationMono 'l': monospace, different standard_width
+- LiberationSansNarrow ';': narrow italic, NO_HORIZONTAL + narrow metrics
+
+### Documentation
+
+Complete function-level reference: `pillow-rs-freetype/doc/AUTOHINTER_REFERENCE.md`
+Root cause analysis: `pillow-rs-freetype/doc/FT_PROOF_FINAL.md`
+Pipeline audit: `pillow-rs-freetype/doc/FT_PIPELINE_AUDIT.md`
