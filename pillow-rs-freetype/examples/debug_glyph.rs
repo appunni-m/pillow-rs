@@ -9,6 +9,7 @@ fn sha256(data: &[u8]) -> String {
 }
 
 fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
         eprintln!("Usage: debug_glyph <font.ttf> <size_pt> <codepoint_hex>");
