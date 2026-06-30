@@ -42,6 +42,7 @@
 #![allow(dead_code)]
 
 pub mod autohint;
+pub mod casts;
 pub mod error;
 pub mod fixed;
 pub mod font;
