@@ -139,6 +139,9 @@ pub struct AfLatinMetrics {
     /// glyph_index → is non-base (skip blue-zone alignment).
     /// Mirrors C's globals->glyph_styles[gindex] & AF_NONBASE.
     pub non_base_glyphs: Vec<bool>,
+    /// TOP_TO_BOTTOM hinting for Indic scripts (beng, deva, guru, goth, mong).
+    /// Most scripts use bottom-to-top (false).
+    pub top_to_bottom_hinting: bool,
 }
 
 impl AfLatinMetrics {
@@ -147,6 +150,7 @@ impl AfLatinMetrics {
             units_per_em: upem,
             axis: [AfLatinAxisMetrics::new(), AfLatinAxisMetrics::new()],
             non_base_glyphs: vec![false; num_glyphs as usize],
+            top_to_bottom_hinting: false,
         }
     }
 }

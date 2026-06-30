@@ -114,6 +114,9 @@ impl FaceGlobals {
                 if nb { m.non_base_glyphs[i] = true; }
             }
 
+            // Set hinting direction from script tag
+            m.top_to_bottom_hinting = top_to_bottom_hinting(style.script_tag);
+
             // Stem widths from the script's standard character
             let std_char = super::globals_data::standard_char_for_script(style.script_tag);
             let char_glyph = self.font_data.cmap.char_index(std_char as u32).unwrap_or(0);
@@ -209,4 +212,11 @@ pub fn detect_script(cmap: &CmapTable) -> &'static [BlueStringEntry] {
         }
     }
     SCRIPT_LATN
+}
+
+/// Per-script hinting direction: TOP_TO_BOTTOM for Indic/Mongolian/Gothic.
+/// Matches afscript.h HINTING_TOP_TO_BOTTOM entries.
+/// All other scripts use bottom-to-top (Latin default).
+pub fn top_to_bottom_hinting(tag: &str) -> bool {
+    matches!(tag, "beng" | "deva" | "goth" | "guru" | "mong")
 }
