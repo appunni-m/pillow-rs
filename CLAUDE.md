@@ -49,6 +49,9 @@ Use `log` crate macros. NEVER `eprintln!` or `println!` in library code.
   wrapped in `#[cfg(debug_assertions)]` and `log::log_enabled!` guard.
   Enable via: `RUST_LOG=autohint::pipeline=trace`
   See `pillow-rs-freetype/src/autohint/latin.rs:apply_hints` for the template.
+- **Pipeline trace statements are permanent** -- never revert them.  They are
+  `#[cfg(debug_assertions)]`-gated with `log_enabled!` guard, so they compile
+  to zero instructions in release builds.  Commit them with the code.
 
 ## Rust Code Style
 
