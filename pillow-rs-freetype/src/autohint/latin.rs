@@ -265,7 +265,7 @@ pub fn metrics_init_blues_greek(
 }
 
 /// Core blue zone initialization, parameterized by script entries.
-fn metrics_init_blues_impl(
+pub fn metrics_init_blues_impl(
     metrics: &mut AfLatinMetrics,
     font_data: &crate::tables::FontData,
     script_strings: &[BlueStringEntry],
