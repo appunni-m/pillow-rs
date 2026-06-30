@@ -192,7 +192,6 @@ pub const AF_BLUE_PROP_LATIN_TOP:            u32 = 1 << 0;
 pub const AF_BLUE_PROP_LATIN_SUB_TOP:        u32 = 1 << 1;
 pub const AF_BLUE_PROP_LATIN_NEUTRAL:        u32 = 1 << 2;
 pub const AF_BLUE_PROP_LATIN_X_HEIGHT:       u32 = 1 << 3;
-pub const AF_BLUE_PROP_LATIN_LONG:           u32 = 1 << 4;
 pub const AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM: u32 = 1 << 5;
 pub const AF_BLUE_PROP_LATIN_SMALL_BOTTOM:   u32 = 1 << 6;
 
