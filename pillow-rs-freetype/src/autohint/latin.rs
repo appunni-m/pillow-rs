@@ -389,6 +389,10 @@ pub fn metrics_init_blues(
                     round = !points[usize_from_i32(best_seg_first)].on_curve
                          || !points[usize_from_i32(best_seg_last)].on_curve;
                 }
+                trace!(target: "autohint::pipeline", "[BLUE_ROUND] ch={ch} round={round} best_x={best_x} best_y={best_y} on_first={} on_last={} seg_first={} seg_last={} on_curve={}",
+                    points[usize_from_i32(best_on_first)].on_curve, points[usize_from_i32(best_on_last)].on_curve,
+                    best_seg_first, best_seg_last,
+                    points[usize_from_i32(best_seg_first)].on_curve);
 
                 if round && is_neutral!(entry.props) { continue; } // neutral uses flats only
             }
