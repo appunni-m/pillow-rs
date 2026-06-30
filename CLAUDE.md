@@ -45,6 +45,10 @@ Use `log` crate macros. NEVER `eprintln!` or `println!` in library code.
 - Core crates NEVER initialize a logger — bindings do that (`pyo3-log`, `console_log`)
 - Test files can use `eprintln!` for progress output
 - New core crates must add `log = "0.4"` to `Cargo.toml`
+- For pipeline trace debugging (C→Rust parity), use `trace!(target: "autohint::pipeline", ...)`
+  wrapped in `#[cfg(debug_assertions)]` and `log::log_enabled!` guard.
+  Enable via: `RUST_LOG=autohint::pipeline=trace`
+  See `pillow-rs-freetype/src/autohint/latin.rs:apply_hints` for the template.
 
 ## Rust Code Style
 
