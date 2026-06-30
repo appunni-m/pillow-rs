@@ -16,18 +16,17 @@ const UPSCALE: i64 = ONE_PIXEL >> 6; // 4 — multiply 26.6 by this → subpixel
 
 #[inline]
 // ✅ TRIVIAL: >> PIXEL_BITS.
-fn trunc(x: i64) -> i32 {
-    (x >> PIXEL_BITS) as i32
-}
+/// `(x >> 8)`: extract integer pixel coordinate from subpixel.
+fn trunc(x: i64) -> i32 { (x >> PIXEL_BITS) as i32 }
 
 #[inline]
 // ✅ TRIVIAL: & (ONE_PIXEL-1).
-fn fract(x: i64) -> i32 {
-    (x & (ONE_PIXEL - 1)) as i32
-}
+/// `(x & 255)`: extract subpixel fraction (0..255).
+fn fract(x: i64) -> i32 { (x & (ONE_PIXEL - 1)) as i32 }
 
 #[inline]
 // ✅ TRIVIAL: wrapping_add.
+/// C's `(int)((unsigned)a + (unsigned)b)`: wrapping add via u32.
 fn add_int(a: i32, b: i32) -> i32 {
     a.wrapping_add(b)
 }
@@ -35,6 +34,8 @@ fn add_int(a: i32, b: i32) -> i32 {
 // ✅ VERIFIED: via 1708 FT coverage tests passing (implicitly).
 // Port of FT_DIV_MOD (ftgrays.h:290-302). Signed division with non-negative remainder.
 #[inline]
+/// Euclidean division: quotient floored, remainder >= 0.
+/// Used by `render_scanline` for DDA step distribution.
 fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
     let mut quotient = (dividend / divisor) as i32;
     let mut remainder = (dividend % divisor) as i32;
@@ -49,6 +50,7 @@ fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
 /// Computes `(FT_Int64)0xFFFFFFFF / b` with the actual sign of `b`, matching
 /// FreeType's signed-int64 division. The result may be negative.
 #[inline]
+/// `FT_UDIVPREP`: precompute `0xFFFF_FFFF / b` reciprocal for fast division.
 fn ft_udivprep(c: bool, b: i64) -> i64 {
     if c {
         0xFFFF_FFFFi64 / b
@@ -62,12 +64,16 @@ fn ft_udivprep(c: bool, b: i64) -> i64 {
 /// The reciprocal `r` is signed (may be negative); casting to u64 gives the
 /// correct unsigned multiplication value.
 #[inline]
+/// `FT_UDIV`: `(a * reciprocal) >> 32`. Fast fixed-point division.
+/// Used in DDA stepping to compute subpixel exit coordinates.
 fn ft_udiv(a: i64, r: i64) -> i32 {
     (((a as u64).wrapping_mul(r as u64)) >> 32) as i32
 }
 
 // ✅ VERIFIED: via 1708 FT tests. Port of FT_FILL_RULE (ftgrays.h).
 #[inline]
+/// `FT_FILL_RULE`: `area >> 9` with even-odd / non-zero clamp.
+/// Converts accumulated cell area to 8-bit coverage value.
 fn fill_rule(area: i32, fill: i32) -> i32 {
     let mut coverage = area >> 9; // PIXEL_BITS * 2 + 1 - 8 = 9
     if (coverage & fill) != 0 {
@@ -123,6 +129,15 @@ pub struct RasterResult {
 }
 
 /// ✅ VERIFIED: via 1708 FT tests. Port of ftgrays.c gray_convert_glyph.
+/// Convert hinted outline to 8-bit alpha bitmap via DDA rasterization.
+///
+/// Pipeline: `convert_glyph` → `decompose` → `walk_contour` →
+/// `render_conic`/`render_cubic` → `render_line` (DDA) → `sweep`.
+///
+/// # Debug: pixel output differs but outline coords match C
+/// - [ ] `render_line` DDA `prod` init same as C?
+/// - [ ] `render_conic` subdivision endpoints match C?
+/// - [ ] Cell cover/area values after `decompose` match C?
 pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
     if outline.points.is_empty() || outline.n_contours == 0 {
         return Ok(RasterResult {
@@ -771,6 +786,8 @@ impl Worker {
 }
 
 // ✅ TRIVIAL: memcpy to target buffer.
+/// Fill `count` bytes with coverage value `s`, clamped to 0..255.
+/// Used by sweep for non-zero-winding span filling.
 fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32) {
     if count <= 0 {
         return;
@@ -786,6 +803,7 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32) {
 // Tag constants (ftimage.h).
 #[inline]
 // ✅ TRIVIAL: curve_tag(on_curve) → u8.
+/// TrueType curve tag: `1` for on-curve (line), `0` for off-curve (conic/cubic control).
 fn curve_tag(on_curve: bool) -> u8 {
     if on_curve {
         CURVE_TAG_ON

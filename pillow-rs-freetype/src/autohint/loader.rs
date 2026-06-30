@@ -7,6 +7,7 @@ use super::types::*;
 
 /// ✅ VERIFIED: matches C's FT_HYPOT (ftobjs.h:80-85).
 /// Returns max(|x|,|y|) + 3*min(|x|,|y|)/8.
+/// Taxicab hypot: `|x| + |y|` for direction-chain distance accumulation.
 fn ft_hypot(x: i32, y: i32) -> i32 {
     let ax = x.abs();
     let ay = y.abs();
@@ -18,6 +19,10 @@ fn ft_hypot(x: i32, y: i32) -> i32 {
 /// i.e., one vector is much more dominant than the other.
 /// Test: d_in + d_out < (17/16) * d_hypot.
 // ✅ VERIFIED: matches C ft_corner_is_flat (ftcalc.c:1006-1042)
+/// Test: is the corner formed by two direction vectors "flat enough"?
+/// True when one vector dominates the other. `d_in + d_out - d_hypot < d_hypot/16`.
+///
+/// Used by WEAK/STRONG classification: flat corners are WEAK (interpolated).
 fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
     let d_in = ft_hypot(in_x, in_y);
     let d_out = ft_hypot(out_x, out_y);
@@ -29,6 +34,8 @@ fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
 
 /// ✅ VERIFIED: matches C's af_direction_compute (afhints.c:750-796) textually.
 /// Threshold: longer arm > 14× shorter (~4.1°).
+/// 8-direction classification from (dx, dy).
+/// Threshold: longer arm > 14× shorter (~4.1°). Returns None if balanced.
 pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ax = dx.abs();
     let ay = dy.abs();
