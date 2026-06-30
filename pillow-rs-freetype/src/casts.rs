@@ -64,8 +64,9 @@ pub(crate) fn u64_from_i64(x: i64) -> u64 {
 
 /// Infallible: i64 → usize. Values from division results or shifted coords.
 #[inline(always)]
+#[allow(clippy::cast_sign_loss)]
 pub(crate) fn usize_from_i64(x: i64) -> usize {
-    debug_assert!(x >= 0 && x <= usize::MAX as i64);
+    debug_assert!(x >= 0 && (x as u64) <= usize::MAX as u64);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     { x as usize }
 }

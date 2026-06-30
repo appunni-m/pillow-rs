@@ -18,6 +18,8 @@ fn neg_long(a: i32) -> i32 {
     0i32.wrapping_sub(a)
 }
 
+use crate::casts::{i32_from_i64, i32_from_u64};
+
 /// FT_MulDiv — ✅ VERIFIED: matches C FT_MulDiv (ftcalc.c:162, INT64 path).
 ///
 /// Sign-stripping: converts to unsigned magnitudes, does unsigned multiply +
@@ -33,7 +35,7 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     let ub: u64 = (b as i64).unsigned_abs();
     let uc: u64 = (c as i64).unsigned_abs();
     let d = (ua.wrapping_mul(ub) + (uc >> 1)) / uc;
-    let d32 = d as i32;
+    let d32 = i32_from_u64(d);
     let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
     if negate { 0i32.wrapping_sub(d32) } else { d32 }
 }
@@ -49,7 +51,7 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
 pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
     let ab = (a as i64).wrapping_mul(b as i64);
     let rounded = ab.wrapping_add(0x8000).wrapping_add(ab >> 63);
-    (rounded >> 16) as i32
+    i32_from_i64(rounded >> 16)
 }
 
 /// FT_DivFix — ✅ VERIFIED: matches C FT_DivFix (ftcalc.c:233, INT64 path).
@@ -76,7 +78,7 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     let ua: u64 = (a as i64).unsigned_abs();
     let ub: u64 = (b as i64).unsigned_abs();
     let q = ((ua << 16) + (ub >> 1)) / ub;
-    let q32 = q as i32;
+    let q32 = i32_from_u64(q);
     let negate = (a < 0) ^ (b < 0);
     if negate { 0i32.wrapping_sub(q32) } else { q32 }
 }

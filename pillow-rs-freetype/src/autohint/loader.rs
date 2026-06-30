@@ -2,6 +2,7 @@
 //! `af_glyph_hints_save`, and `af_direction_compute` from `afhints.c`.
 
 use super::types::*;
+use crate::casts::{i16_from_i32, i32_from_usize, usize_from_i32};
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -103,8 +104,8 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
 
         // Unscaled font units (from glyf parser) — for fpos edge positions.
         if let Some(rp) = raw_outline.points.get(i) {
-            pt.fx = rp.x.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            pt.fy = rp.y.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+            pt.fx = i16_from_i32(rp.x.clamp(i16::MIN as i32, i16::MAX as i32));
+            pt.fy = i16_from_i32(rp.y.clamp(i16::MIN as i32, i16::MAX as i32));
         }
 
         // Scaled 26.6 (already computed by scaler).
@@ -215,15 +216,15 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         if hints.points[i].in_dir != Direction::None { continue; }
         if hints.points[i].out_dir != Direction::None { continue; }
         let pt = &hints.points[i];
-        let nu = if pt.u != 0 { (i as i32 + pt.u) as usize } else { i };
-        let pv = if pt.v != 0 { (i as i32 + pt.v) as usize } else { i };
+        let nu = if pt.u != 0 { usize_from_i32(i32_from_usize(i) + pt.u) } else { i };
+        let pv = if pt.v != 0 { usize_from_i32(i32_from_usize(i) + pt.v) } else { i };
         let in_x = pt.fx as i32 - hints.points[pv].fx as i32;
         let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
         let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
         let out_y = hints.points[nu].fy as i32 - pt.fy as i32;
         if (in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0 {
             hints.points[i].flags |= AF_FLAG_WEAK_INTERPOLATION;
-            hints.points[pv].u = nu as i32 - pv as i32;
+            hints.points[pv].u = i32_from_usize(nu) - i32_from_usize(pv);
             hints.points[nu].v = -(hints.points[pv].u);
         }
     }
@@ -253,8 +254,8 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             // 1. XOR quadrant check using direction-chain u/v pointers
             // 2. ft_corner_is_flat using same pointers
             let pt = &hints.points[i];
-            let nu_idx = (i as i32 + pt.u) as usize;
-            let pv_idx = (i as i32 + pt.v) as usize;
+            let nu_idx = usize_from_i32(i32_from_usize(i) + pt.u);
+            let pv_idx = usize_from_i32(i32_from_usize(i) + pt.v);
             // Clamp to valid range (C: when u/v are 0, point to self)
             let nu = nu_idx.min(hints.points.len() - 1);
             let pv = pv_idx.min(hints.points.len() - 1);
@@ -268,7 +269,7 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
                 true
             } else if corner_is_flat(in_x, in_y, out_x, out_y) {
                 // Update index deltas (C: afhints.c:1286-1287)
-                hints.points[pv].u = nu as i32 - pv as i32;
+                hints.points[pv].u = i32_from_usize(nu) - i32_from_usize(pv);
                 hints.points[nu].v = -(hints.points[pv].u);
                 true
             } else {
@@ -361,7 +362,7 @@ fn build_direction_chain(hints: &mut GlyphHints) {
                 continue;
             }
             // Non-near neighbor — set chain pointers
-            hints.points[curr].u = next as i32 - curr as i32;
+            hints.points[curr].u = i32_from_usize(next) - i32_from_usize(curr);
             hints.points[next].v = -hints.points[curr].u;
 
             // Override out_dir/in_dir for intermediate points (C: afhints.c:1179-1189)
@@ -376,7 +377,7 @@ fn build_direction_chain(hints: &mut GlyphHints) {
             hints.points[next].in_dir = chain_dir;
 
             // After setting u: point to first (C: afhints.c:1191)
-            hints.points[next].u = first as i32 - next as i32;
+            hints.points[next].u = i32_from_usize(first) - i32_from_usize(next);
             hints.points[first].v = -hints.points[next].u;
             curr = next;
             out_x = 0;

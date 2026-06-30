@@ -3,6 +3,8 @@
 //! Mirrors the subset of PIL's `FreeTypeFont` API used by the coverage matrix:
 //! `truetype`, `getmask`, `getbbox`, `getmetrics`, `getname`, `getlength`.
 
+use crate::casts::{i32_from_f32, i32_from_usize, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
+
 use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
 use crate::grays::{self, RasterResult};
@@ -251,7 +253,7 @@ impl Font {
     pub fn getmetrics(&self) -> (u32, u32) {
         let data = &self.data;
         let upem = data.head.units_per_em as i32;
-        let ppem = (self.size_pt + 0.5) as i32; // FT_PIX_ROUND(size_pt << 6) >> 6
+        let ppem = i32_from_f32(self.size_pt + 0.5); // FT_PIX_ROUND(size_pt << 6) >> 6
 
         let (asc_fu, desc_fu) = pick_metrics(data);
         // Match C's FT_PIX_CEIL(FT_MulFix(fu_val, scale)) chain exactly.
@@ -261,8 +263,8 @@ impl Font {
         let scale: i64 = ((ppem as i64 * 64 * 65536) + (upem as i64 / 2)) / upem as i64;
         let asc_26dot6 = (asc_fu as i64 * scale + 32768) >> 16;
         let desc_26dot6 = (desc_fu as i64 * scale + 32768) >> 16;
-        let asc = ((asc_26dot6 + 63) >> 6) as u32;
-        let desc = ((desc_26dot6 + 63) >> 6) as u32;
+        let asc = u32_from_i64((asc_26dot6 + 63) >> 6);
+        let desc = u32_from_i64((desc_26dot6 + 63) >> 6);
         (asc, desc)
     }
 
@@ -380,8 +382,8 @@ impl Font {
         match self.backend {
             BitmapBackend::PIL => {
                 // PIL mask: padded to ascender/descender extent.
-                let new_width = advance_px.max(raster.width as i32) as u32;
-                let new_height = (scaled.bbox_y_max - scaled.bbox_y_min.min(0)) as u32;
+                let new_width = u32_from_i32(advance_px.max(i32_from_usize(raster.width)));
+                let new_height = u32_from_i32(scaled.bbox_y_max - scaled.bbox_y_min.min(0));
                 let nw = new_width as usize;
                 let nh = new_height as usize;
 
@@ -397,7 +399,7 @@ impl Font {
                 }
 
                 let mut pixels = vec![0u8; nw * nh];
-                let x_offs = (scaled.bbox_x_min).max(0) as usize;
+                let x_offs = usize_from_i32((scaled.bbox_x_min).max(0));
                 let y_offs = 0usize;
                 let rw = raster.width;
                 for y in 0..raster.height {
@@ -420,8 +422,8 @@ impl Font {
             }
             BitmapBackend::FreeType => {
                 // Raw FreeType: raster as-is, no padding.
-                let w = raster.width as u32;
-                let h = raster.height as u32;
+                let w = u32_from_usize(raster.width);
+                let h = u32_from_usize(raster.height);
                 Ok(GlyphMask {
                     width: w,
                     height: h,
