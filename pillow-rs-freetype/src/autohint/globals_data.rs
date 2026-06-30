@@ -935,15 +935,15 @@ pub static STYLE_TABLE: &[StyleClass] = &[
     StyleClass { description: "Lao default style", script_tag: "lao",
         blue_entries: SCRIPT_LAO, uni_ranges: RANGES_LAO_UNI,
         non_base_ranges: RANGES_LAO_NONBASE },
+    StyleClass { description: "Latin subscript", script_tag: "latb",
+        blue_entries: SCRIPT_LATB, uni_ranges: RANGES_LATB_UNI,
+        non_base_ranges: RANGES_LATB_NONBASE },
+    StyleClass { description: "Latin superscript", script_tag: "latp",
+        blue_entries: SCRIPT_LATP, uni_ranges: RANGES_LATP_UNI,
+        non_base_ranges: RANGES_LATP_NONBASE },
     StyleClass { description: "Latin", script_tag: "latn",
         blue_entries: SCRIPT_LATN, uni_ranges: RANGES_LATN_UNI,
         non_base_ranges: RANGES_LATN_NONBASE },
-    StyleClass { description: "Latin subscript fallback default style", script_tag: "latb",
-        blue_entries: SCRIPT_LATB, uni_ranges: RANGES_LATB_UNI,
-        non_base_ranges: RANGES_LATB_NONBASE },
-    StyleClass { description: "Latin superscript fallback default style", script_tag: "latp",
-        blue_entries: SCRIPT_LATP, uni_ranges: RANGES_LATP_UNI,
-        non_base_ranges: RANGES_LATP_NONBASE },
     StyleClass { description: "Lisu default style", script_tag: "lisu",
         blue_entries: SCRIPT_LISU, uni_ranges: RANGES_LISU_UNI,
         non_base_ranges: RANGES_LISU_NONBASE },
@@ -1023,7 +1023,7 @@ pub static STYLE_TABLE: &[StyleClass] = &[
         blue_entries: SCRIPT_HANI, uni_ranges: RANGES_HANI_UNI,
         non_base_ranges: RANGES_HANI_NONBASE },
 ];
-pub const STYLE_FALLBACK: usize = 30;
+pub const STYLE_FALLBACK: usize = 32;
 pub const STYLE_UNASSIGNED: usize = usize::MAX;
 // ── Per-script standard characters (from afscript.h) ──────────
 
