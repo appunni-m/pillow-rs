@@ -911,6 +911,11 @@
       /* we simply take the median value after a simple sort               */
       af_sort_pos( num_rounds, rounds );
       af_sort_pos( num_flats,  flats );
+      fprintf(stderr, "[C BLUE_DATA] num_f=%d num_r=%d flats=[", (int)num_flats, (int)num_rounds);
+      { int _fi; for(_fi=0; _fi<(int)num_flats; _fi++) fprintf(stderr,"%ld,", (long)flats[_fi]); }
+      fprintf(stderr, "] rounds=[");
+      { int _ri; for(_ri=0; _ri<(int)num_rounds; _ri++) fprintf(stderr,"%ld,", (long)rounds[_ri]); }
+      fprintf(stderr, "]\n");
 
       blue       = &axis->blues[axis->blue_count];
       blue_ref   = &blue->ref.org;
