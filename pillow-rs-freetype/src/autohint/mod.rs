@@ -35,6 +35,7 @@ pub mod blue_strings;
 pub mod script;
 pub mod globals_data;
 pub mod globals;
+pub mod cjk;
 
 pub use latin::apply_hints;
 pub use latin::{metrics_init_blues, metrics_init_blues_greek, metrics_init_blues_impl, metrics_init_widths};

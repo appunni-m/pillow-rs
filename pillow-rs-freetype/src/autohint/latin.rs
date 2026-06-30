@@ -1426,9 +1426,16 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     // C processes edges in fpos-sorted order. The AF_EDGE_SERIF flag set by
     // earlier edges is cleared when the target edge's own `flags=AF_EDGE_NORMAL`
     // runs. Without sorting first, SERIF can persist on edges processed too early.
+    // For top_to_bottom scripts (Indic/Mongolian), sort descending.
     if axis.edges.len() > 1 {
+        let top_to_bottom = hints.metrics.as_ref()
+            .map_or(false, |m| m.top_to_bottom_hinting);
         let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
-        indices.sort_by_key(|&i| axis.edges[i].fpos);
+        indices.sort_by(|&a, &b| {
+            let fa = axis.edges[a].fpos;
+            let fb = axis.edges[b].fpos;
+            if top_to_bottom { fb.cmp(&fa) } else { fa.cmp(&fb) }
+        });
         let mut new_from_old: Vec<usize> = vec![0; axis.edges.len()];
         for (new_idx, &old_idx) in indices.iter().enumerate() {
             new_from_old[old_idx] = new_idx;
@@ -1919,13 +1926,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         return;
     }
 
-    // top_to_bottom_hinting for Latin is false (edges sorted bottom-to-top).
-    // ⚠️ UNVERIFIED: Indic scripts (beng, deva, guru, knda, goth, mong)
-    // need true from script_class->top_to_bottom_hinting (aflatin.c:2196).
-    // Simply enabling this breaks alignment because af_cjk_metrics_init_widths
-    // is also required for proper stem detection in these scripts.
-    // Full fix requires: afindic.c port + afcjk.c integration.
-    let top_to_bottom_hinting = false;
+    let top_to_bottom_hinting = hints.metrics.as_ref()
+        .map_or(false, |m| m.top_to_bottom_hinting);
 
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;
