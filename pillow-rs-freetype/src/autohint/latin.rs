@@ -614,6 +614,7 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
 
         let edge_fpos = axis.edges[e_idx].fpos as i32;
         let edge_flags = axis.edges[e_idx].flags;
+        if e_idx <= 3 { trace!(target: "autohint::pipeline", "[BLU_FLAGS] E{e_idx}: flags=0x{:02x} round={}", edge_flags, edge_flags & 0x01 != 0); }
 
         // best_dist = min(upem/40, 0.5px), scaled
         let mut best_dist = ft_mul_fix(upem / 40, scale);
@@ -629,8 +630,10 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
             let is_top = blue.flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
             let is_neutral = blue.flags & AF_LATIN_BLUE_NEUTRAL != 0;
             let is_major = axis.edges[e_idx].dir == major_dir;
+            let enter = (is_top ^ is_major) || is_neutral;
+            if e_idx == 2 { trace!(target: "autohint::pipeline", "[BLU2] E2 b{blue_idx}: flags=0x{:x} top={is_top} neut={is_neutral} major={is_major} enter={enter}", blue.flags); }
 
-            if (is_top ^ is_major) || is_neutral {
+            if enter {
                 // Compare to reference position
                 let mut dist = (edge_fpos - blue.ref_width.org).abs();
                 dist = ft_mul_fix(dist, scale);
