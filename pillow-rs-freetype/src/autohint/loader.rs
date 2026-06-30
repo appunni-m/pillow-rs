@@ -53,28 +53,34 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 /// `raw_outline` provides font-unit coordinates (fx/fy). The already-scaled
 /// 26.6 outline in `scaled_outline` provides ox/oy (and initial x/y).
 // ✅ VERIFIED: direction chain matches C (afhints.c:1087-1298)
-/// Load scaled outline points into the hint structure.
+/// Load outline → compute directions → classify WEAK/STRONG.
 ///
-/// This function does more than "load" — it computes direction vectors,
-/// builds the direction chain (which merges smooth curves into single
-/// segments), and classifies each point as WEAK (interpolated later by IUP)
-/// or STRONG (explicitly grid-fitted).
+/// # Classification rules (afhints.c:1257-1298)
 ///
-/// ## The WEAK/STRONG classification is the most subtle part of this port.
+/// | Case | Condition | Result |
+/// |------|-----------|--------|
+/// | CONTROL | control point flag set | WEAK |
+/// | Straight | `in_dir == out_dir != None` | WEAK |
+/// | Spike | `in_dir == -out_dir` | WEAK |
+/// | Both-None | `in_dir == out_dir == None` | see below |
 ///
-/// After the direction chain runs, each point falls into one of 4 cases:
-/// 1. CONTROL flag → always WEAK (Bézier control point)
-/// 2. in_dir == out_dir (non-None) → always WEAK (straight segment)
-/// 3. in_dir == out_dir == None → two sequential sub-tests:
-///    a. XOR quadrant: same sign on both axes? → WEAK
-///    b. corner_is_flat: one vector dominates? → WEAK **and** update
-///       direction-chain deltas (pv→u, nu→v) that affect downstream
-///       classifications. If this delta update is skipped (e.g. by OR-ing
-///       the two checks into one boolean), downstream points see old u/v
-///       values and get different WEAK flags.
-/// 4. in_dir == -out_dir (spike) → always WEAK (afhints.c:1293)
+/// ## Both-None case — two sub-tests, sequential, NOT OR'd
 ///
-/// Complete explanation: see `INDEX.md` in this directory.
+/// 1. XOR quadrant: same sign on X AND same sign on Y → WEAK
+/// 2. `corner_is_flat`: one vector dominates → WEAK **and** update
+///    `pv->u` / `nu->v` direction-chain deltas
+///
+/// ⚠️ If test 2's delta update is skipped, downstream points consult wrong
+/// neighbors → different WEAK flags → IUP uses wrong reference → +1 unit
+/// coordinate drift → pixel mismatch. Fixed in commit `1ecd364`.
+///
+/// # Debug checkpoints (when investigating a divergence)
+///
+/// - [ ] Edge fpos/opos/pos match C? → `compute_edges` + `hint_edges` OK
+/// - [ ] Touch flags after `align_edge` match C? → segment→edge assignment OK
+/// - [ ] WEAK flags after reload match C? → **classification diverged — check here**
+/// - [ ] `build_direction_chain` u/v pointers match C? → chain topology differs
+/// - [ ] `corner_is_flat` inputs same neighbors as C? → `near_limit` threshold issue
 pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutline, scaled_points: &[crate::outline::OutlinePoint]) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;
@@ -217,32 +223,15 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
 
     // ── Classify strong vs weak ─────────────────────────────────────────
     //
-    // Why this matters: The WEAK/STRONG classification determines which
-    // points get explicit grid-fitting (align_strong_points) and which
-    // get interpolated later (IUP). A wrong classification here cascades
-    // through the entire pipeline:
+    // Runs 4 sequential checks per point (afhints.c:1257-1298).
     //
-    //   wrong WEAK flag → align_strong skips point → IUP finds different
-    //   reference → 1-2 unit coordinate drift → render_conic subdivides
-    //   differently → DDA endpoints differ → pixel SHA mismatch
+    // Both-None case (in_dir==out_dir==None) — two sub-tests, NOT OR'd:
+    //   A. XOR quadrant: (in_x XOR out_x)>=0 AND (in_y XOR out_y)>=0 → WEAK
+    //   B. corner_is_flat → WEAK **and** update pv→u, nu→v deltas
     //
-    // The trickiest case is "both-None" (in_dir==out_dir==None). It runs
-    // two sequential tests from afhints.c:1221-1290:
-    //
-    //   Test A — XOR quadrant: same sign on X and same sign on Y? → WEAK
-    //   Test B — corner_is_flat: one vector dominates? → WEAK **and**
-    //            update direction-chain deltas (pv→u, nu→v).
-    //
-    // The delta update in Test B is the crucial piece. When corner_is_flat
-    // returns true, the code updates which neighbor points the direction
-    // chain points to. Downstream point classifications use these updated
-    // deltas. If the delta update is skipped (e.g. by OR-ing the two
-    // checks into one boolean), a point 5 indices away might consult the
-    // wrong neighbor and get the opposite WEAK/STRONG result.
-    //
-    // This exact bug caused 9 of 18 remaining failures on 2026-06-30.
-    // The fix: separate XOR from corner_is_flat so delta update always
-    // executes when corner_is_flat returns true.
+    // ⚠️ Delta update in B changes neighbor selection for downstream points.
+    //    If skipped, downstream gets wrong WEAK flag → IUP wrong ref → pixel diff.
+    //    Fixed: separated XOR from corner_is_flat so B always executes (1ecd364).
     for i in 0..hints.points.len() {
         let in_dir = hints.points[i].in_dir;
         let out_dir = hints.points[i].out_dir;
@@ -299,28 +288,29 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
 /// This prevents `compute_segments` from splitting a smooth curve into
 /// multiple short segments when per-point directions differ.
 // ✅ VERIFIED: direction chain matches C (afhints.c:1100-1200)
-/// Build per-point direction-chain pointers (u = forward, v = backward).
+/// Merge smooth curve points into unified direction segments.
 ///
-/// Without this, a smooth curve like 'O' gets fragmented: many contour
-/// points with slightly different per-point directions would each become
-/// a separate segment, each getting its own edge, each independently hinted
-/// — producing a jagged polygon instead of a smooth circle.
+/// Without this, a smooth 'O' fragments into many tiny segments → each gets
+/// its own edge → independent hinting → jagged output.
 ///
-/// The chain merges consecutive points by accumulating taxicab distance.
-/// When the total exceeds `near_limit` (20 * UPEM / 2048 FU), the points
-/// between are "non-near" and get unified direction overrides.
+/// Accumulates taxicab distance walking the contour. When total exceeds
+/// `near_limit`, points between are "non-near" — their directions get
+/// overridden to the accumulated direction.
 ///
-/// ## Why UPEM matters
+/// # Key constant
 ///
-/// `near_limit = 20 * upem / 2048` means:
-/// - UPEM=2048: near_limit = 20 FU → sparse chain, most points distinct
-/// - UPEM=1000: near_limit = 9 FU  → dense chain, more points merge
+/// ```text
+/// near_limit = 20 * UPEM / 2048
+///   UPEM=2048 → 20 FU (sparse chain)
+///   UPEM=1000 →  9 FU (dense chain, more points merge)
+/// ```
 ///
-/// At UPEM=1000 (NotoSerifDisplay), the tighter threshold creates a
-/// fundamentally different chain topology. Points that would be "non-near"
-/// at UPEM=2048 become "near" at UPEM=1000. This feeds into different
-/// WEAK/STRONG classifications downstream — the root cause of the 9
-/// remaining UPEM=1000 'B' and 'g' failures.
+/// # Debug checkpoints
+///
+/// - [ ] `near_limit` correct for this font's UPEM?
+/// - [ ] Backward walk `first` point matches C?
+/// - [ ] Accumulated taxicab distance matches C at each chain transition?
+/// - [ ] Final u/v pointers identical to C for the diverging point?
 fn build_direction_chain(hints: &mut GlyphHints) {
     let near_limit_chain = if let Some(ref met) = hints.metrics {
         (20 * met.units_per_em / 2048).max(1)

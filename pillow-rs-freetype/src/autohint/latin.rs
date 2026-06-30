@@ -704,29 +704,27 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
 
 /// ✅ VERIFIED: pipeline verified via FT coverage (1641/1910 pass).
 /// Port of af_latin_hints_apply (aflatin.c:5050-5068). HORZ before VERT.
-/// Apply Latin auto-hinting to a glyph outline.
+/// Main autohinter entry point. HORZ before VERT; italic skips HORZ.
 ///
-/// This is the main entry point for the autohinter. It runs a fixed pipeline
-/// of stages, each building on the previous one's output. The order matters
-/// — you cannot snap edges before detecting them, and you cannot interpolate
-/// weak points before grid-fitting the strong anchors they reference.
+/// # Pipeline (each dimension)
 ///
-/// Pipeline (each dimension processed separately):
-/// 1. **reload** — load coords, compute directions, build direction chain,
-///    classify points as WEAK or STRONG
-/// 2. **compute_segments** — find horizontal/vertical runs of consecutive points
-/// 3. **compute_edges** — merge overlapping segments into edges
-/// 4. **compute_blue_edges** — assign edges to blue zones (baseline etc)
-/// 5. **hint_edges** — 4-phase snapping: (1) stem pairs, (2) serifs,
-///    (3) blue zones, (4) anchor propagation
-/// 6. **align_edge_points** — snap contour points to hinted edges
-/// 7. **align_strong_points** — interpolate corner points between edges
-/// 8. **align_weak_points** (IUP) — interpolate smooth runs between
-///    strong-point anchors
-/// 9. **phantom adjustment** — shift to pixel grid using pp1.x
+/// 1. `reload`          — load coords + direction chain + WEAK/STRONG classify
+/// 2. `compute_segments` — find horizontal/vertical runs
+/// 3. `compute_edges`    — merge overlapping segments into edges
+/// 4. `blue_edges`       — assign edges to baseline/cap-height/x-height zones
+/// 5. `hint_edges`       — 4-phase snap: (1) stems (2) serifs (3) blues (4) anchors
+/// 6. `align_edge`       — snap contour points to hinted edge positions
+/// 7. `align_strong`     — grid-fit corner points between edges (skips WEAK)
+/// 8. `align_weak` (IUP) — interpolate smooth runs between strong anchors
+/// 9. phantom adjust     — pixel-grid shift via pp1.x
 ///
-/// For italic fonts, the HORZ (X-axis) pipeline is skipped entirely — only
-/// VERT (Y-axis) features are hinted.
+/// # Debug checkpoints
+///
+/// - [ ] Post-hint edge pos match C? → stages 2-5 OK
+/// - [ ] Touch flags after stage 6 match C? → segment→edge OK
+/// - [ ] x/ox after stage 7 match C? → strong interpolation OK
+/// - [ ] WEAK flags from stage 1 match C? → classification diverged
+/// - [ ] IUP ref indices match C? → touch chain differs
 pub fn apply_hints(
     outline: &mut crate::outline::Outline,
     raw_outline: &crate::tt::glyf::GlyphOutline,
@@ -2153,21 +2151,15 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
 //    - Fallback: shift by edge delta for points outside edge range
 
 // ✅ VERIFIED: scale + interpolation match C (T9 trace).
-/// Interpolate non-weak, non-touched points between hinted edges.
+/// Grid-fit corner points by interpolating between bracketing hinted edges.
 ///
-/// For each point: find the two edges that bracket its font-unit position,
-/// then linearly interpolate: `new_pos = before_edge.hinted_pos +
-/// scale * (point_fu - before_edge.fu)`.
+/// Skips points with WEAK_INTERPOLATION flag (they go to IUP instead).
+/// If classification is wrong → point skipped → IUP wrong ref → 1-2 unit drift.
 ///
-/// ## Why WEAK classification matters here
-///
-/// Points classified as WEAK skip this function entirely and go to IUP
-/// instead. If a point C classifies as STRONG but we classify as WEAK,
-/// it doesn't get grid-fitted → different starting value for IUP →
-/// IUP picks different reference anchors → cascade of coordinate
-/// differences across the entire contour section.
-///
-/// Complete explanation: see `INDEX.md` in this directory.
+/// # Debug: pt[N] diverges after this function
+/// - [ ] pt[N].flags has WEAK_INTERPOLATION? → check reload
+/// - [ ] Edge brackets (before/after fpos) same as C?
+/// - [ ] `scale = ft_div_fix(pos_delta, fpos_delta)` same as C?
 fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
     let axis_snapshot = hints.axis[dim as usize].clone();
     let axis = &axis_snapshot;
@@ -2302,22 +2294,15 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
 // Port of `af_glyph_hints_align_weak_points` (afhints.c:1687–1808).
 // ✅ VERIFIED: IUP dispatch + direction chain now matches C for all 49 '&' points.
 // Port of af_glyph_hints_align_weak_points (afhints.c:1687-1808).
-/// Interpolate weak points between strong (touched) anchors (IUP).
+/// Interpolate weak points between consecutive TOUCHED (strong) anchors.
 ///
-/// This is the final position adjustment. It walks each contour, finds
-/// consecutive TOUCHED points, and linearly interpolates all weak points
-/// between them. The result depends critically on WHICH points are touched.
+/// Walks contour, finds touched pairs, linearly interpolates between them.
+/// Result depends on WHICH points are touched — wrong touch flag → wrong ref.
 ///
-/// The touch chain starts from [`align_edge_points`] (which touches points
-/// belonging to hinted edges) and [`align_strong_points`] (which touches
-/// corner points it grid-fits). If a point C classifies as STRONG but we
-/// classify as WEAK, [`align_strong_points`] skips it → it stays untouched →
-/// IUP uses the next touched point instead → different reference pair →
-/// 1-2 unit coordinate drift across the entire contour section.
-///
-/// This is exactly what caused the 18 residual failures: pt[20] was WEAK
-/// in Rust but STRONG in C, so IUP used pt[21] instead of pt[20] as a
-/// reference anchor.
+/// # Debug: IUP output differs
+/// - [ ] ref1/ref2 indices same as C? → if not, touch chain diverged
+/// - [ ] ref1.v, ref1.u, ref2.v, ref2.u same as C? → if not, align_edge/strong diverged
+/// - [ ] scale computation same as C? → `ft_mul_div` verbose
 fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     let is_vert = dim == Dimension::Vert;
     let touch_flag = if is_vert { AF_FLAG_TOUCH_Y } else { AF_FLAG_TOUCH_X };
