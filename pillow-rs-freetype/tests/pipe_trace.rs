@@ -1,6 +1,10 @@
 //! Pipeline trace test: call autohinter stages directly for one glyph.
-//! Run: RUST_LOG=autohint::pipeline=trace cargo test -p pillow-rs-freetype --test pipe_trace -- --nocapture
-//! Args via env: PIPE_FONT=LiberationSerif-Bold PIPE_SIZE=10 PIPE_CHAR='$'
+//! Interactive debug only — ignored by default. Enable with --include-ignored.
+//! Run: PIPE_FONT=DejaVuSerif-Bold PIPE_SIZE=10 PIPE_CHAR='$' \
+//!   RUST_LOG=autohint::pipeline=trace \
+//!   cargo test -p pillow-rs-freetype --test pipe_trace -- --nocapture --include-ignored
+
+#![allow(unused_variables)]
 
 use pillow_rs_freetype::autohint::latin;
 use pillow_rs_freetype::{Font, BitmapBackend, tt, scaler};
@@ -11,8 +15,9 @@ fn sha256(data: &[u8]) -> String {
 }
 
 #[test]
+#[ignore = "interactive debug: requires env vars and specific font"]
 fn trace_one_glyph() {
-    let font_name = std::env::var("PIPE_FONT").unwrap_or("LiberationSerif-Bold".into());
+    let font_name = std::env::var("PIPE_FONT").unwrap_or("DejaVuSerif-Bold".into());
     let size_pt: f32 = std::env::var("PIPE_SIZE").unwrap_or("10".into()).parse().unwrap();
     let ch: char = std::env::var("PIPE_CHAR").unwrap_or("$".into()).chars().next().unwrap();
 
@@ -22,14 +27,11 @@ fn trace_one_glyph() {
     let fd = &font.data;
     let gid = fd.cmap.char_index(ch as u32).unwrap();
 
-    // Load unscaled outline
     let raw = tt::glyf::load_glyph(
         &fd.glyf_data, &fd.loca_data, fd.head.index_to_loc_format, gid
     ).unwrap();
 
     let base_scale = scaler::ScaleMetrics::new(size_pt, fd.head.units_per_em);
-
-    // Compute pp1x shift (matches scaler.rs)
     let pp1x_fu = raw.xmin - fd.hmtx.get(gid).lsb as i32;
     let shifted_raw = tt::glyf::GlyphOutline {
         num_contours: raw.num_contours,
@@ -40,7 +42,6 @@ fn trace_one_glyph() {
         xmin: 0, ymin: 0, xmax: 0, ymax: 0,
     };
 
-    // Get metrics and scale dimensions
     let metrics = font.face_globals.get_metrics(gid);
     let mut m_clone = metrics.clone();
     let (x_adj, y_adj_new) = if let Some(ref mut m) = m_clone {
@@ -57,13 +58,11 @@ fn trace_one_glyph() {
         gid as u16, metrics.as_ref(), is_italic,
     );
 
-    // Get the mask via normal path for pixel comparison
     let font2 = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
     let mask = font2.getmask(&ch.to_string()).unwrap();
 
     let sha = sha256(&mask.pixels);
     eprintln!("PIXEL_SHA: {sha}");
-
     print!("PIXELS:");
     for b in &mask.pixels { print!(" {:02x}", b); }
     println!();
