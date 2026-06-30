@@ -229,18 +229,27 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         }
     }
 
-    // ── Classify strong vs weak ─────────────────────────────────────────
+    // ── Classify strong vs weak (C: afhints.c PASS 2, lines 1245-1295) ──
     //
-    // Runs 4 sequential checks per point (afhints.c:1257-1298).
+    // C runs TWO passes.  Pass 1 (simplify-topology above, lines 1205-1233)
+    // handles XOR quadrant check for both-None points, marking them WEAK
+    // AND updating u/v deltas.  Pass 2 (HERE) handles remaining points.
     //
-    // Both-None case (in_dir==out_dir==None) — two sub-tests, NOT OR'd:
-    //   A. XOR quadrant: (in_x XOR out_x)>=0 AND (in_y XOR out_y)>=0 → WEAK
-    //   B. corner_is_flat → WEAK **and** update pv→u, nu→v deltas
+    // ⚠️  CRITICAL FIX 1: Pass 2 SKIPS already-WEAK points (C: afhints.c:1249
+    //    `if (point->flags & AF_FLAG_WEAK_INTERPOLATION) continue;`).
+    //    Without this, points marked by Pass 1 get re-processed with different
+    //    u/v pointers → double delta update → wrong neighbors → pixel drift.
     //
-    // ⚠️ Delta update in B changes neighbor selection for downstream points.
-    //    If skipped, downstream gets wrong WEAK flag → IUP wrong ref → pixel diff.
-    //    Fixed: separated XOR from corner_is_flat so B always executes (1ecd364).
+    // ⚠️  CRITICAL FIX 2: Pass 2 has NO XOR check for Both-None points.
+    //    C only calls `ft_corner_is_flat` (afhints.c:1276-1290).  The XOR
+    //    check lives EXCLUSIVELY in Pass 1 (simplify-topology above).
+    //    Having XOR here short-circuits corner_is_flat and SKIPS the delta
+    //    update — the root cause of the 9 remaining fixture failures
+    //    documented in CLAUDE.md case study.
     for i in 0..hints.points.len() {
+        // C (afhints.c:1249): skip already-WEAK points from Pass 1
+        if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 { continue; }
+
         let in_dir = hints.points[i].in_dir;
         let out_dir = hints.points[i].out_dir;
         let flags = hints.points[i].flags;
@@ -250,9 +259,8 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         } else if in_dir == out_dir && in_dir != Direction::None {
             true
         } else if in_dir == out_dir {
-            // both None: C has two checks (afhints.c:1221-1293)
-            // 1. XOR quadrant check using direction-chain u/v pointers
-            // 2. ft_corner_is_flat using same pointers
+            // Both-None: C ONLY calls corner_is_flat (afhints.c:1276-1290).
+            // The XOR quadrant check is in Pass 1 (simplify-topology above).
             let pt = &hints.points[i];
             let nu_idx = usize_from_i32(i32_from_usize(i) + pt.u);
             let pv_idx = usize_from_i32(i32_from_usize(i) + pt.v);
@@ -263,12 +271,8 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
             let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
             let out_y = hints.points[nu].fy as i32 - pt.fy as i32;
-            // C (afhints.c:1276-1290): XOR check, then corner_is_flat
-            let xor_same = (in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0;
-            if xor_same {
-                true
-            } else if corner_is_flat(in_x, in_y, out_x, out_y) {
-                // Update index deltas (C: afhints.c:1286-1287)
+            if corner_is_flat(in_x, in_y, out_x, out_y) {
+                // C (afhints.c:1286-1287): update index deltas
                 hints.points[pv].u = i32_from_usize(nu) - i32_from_usize(pv);
                 hints.points[nu].v = -(hints.points[pv].u);
                 true
@@ -276,7 +280,6 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
                 false
             }
         } else if in_dir == out_dir.opposite() {
-            // C (afhints.c:1293): any spike is always weak
             true
         } else {
             false

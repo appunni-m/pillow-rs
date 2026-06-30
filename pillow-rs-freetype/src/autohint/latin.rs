@@ -2162,18 +2162,58 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             let mut delta: i32 = 1000;
 
-            // ── Serif handling ─────────────────────────────────────────
-            // Check for real serif: serif edge must be close and no other
-            // edges between them with overlapping coverage.
+            // ── Serif handling (C: aflatin.c:4733-4813) ──────────────
+            // Real-serif overlap check using segment cross-axis extents.
+            // C only checks when |opos_delta| < 1.5px (64+32), then walks
+            // intermediate edges between serif and base. If any intermediate
+            // edge's cross-axis range overlaps the serif+base range, it's
+            // not a real serif → delta stays 1000 → edge is skipped,
+            // keeping its Phase 2 position.
             let serif_idx = axis.edges[i].serif;
             if serif_idx != usize::MAX {
-                // since we don't compute segment `v` (the cross-axis coord)
-                // for edges in a way that matches the C code, we skip the
-                // real-serif overlap check.  Instead we always treat it as
-                // a valid serif if it exists and is close enough.
                 delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
-                if delta < 0 {
-                    delta = -delta;
+                if delta < 0 { delta = -delta; }
+                // Only check overlap when delta < 1.5px (C: aflatin.c:4767)
+                if delta < 64 + 32 {
+                    // Compute v-extents for serif and base edges
+                    let s_first_i = axis.edges[i].first;
+                    let s_last_i = axis.edges[i].last;
+                    let s_first_s = axis.edges[serif_idx].first;
+                    let s_last_s = axis.edges[serif_idx].last;
+                    let v_i_min = i32::min(axis.segments[s_first_i].min_coord as i32,
+                                            axis.segments[s_last_i].min_coord as i32);
+                    let v_i_max = i32::max(axis.segments[s_first_i].max_coord as i32,
+                                            axis.segments[s_last_i].max_coord as i32);
+                    let v_s_min = i32::min(axis.segments[s_first_s].min_coord as i32,
+                                            axis.segments[s_last_s].min_coord as i32);
+                    let v_s_max = i32::max(axis.segments[s_first_s].max_coord as i32,
+                                            axis.segments[s_last_s].max_coord as i32);
+                    let v_min = v_i_min.min(v_s_min);
+                    let v_max = v_i_max.max(v_s_max);
+                    // Walk intermediate edges for v-overlap
+                    let lo = serif_idx.min(i);
+                    let hi = serif_idx.max(i);
+                    let mut overlap = false;
+                    for j in (lo + 1)..hi {
+                        if j == i || j == serif_idx { continue; }
+                        // C checks ALL intermediate edges, not just
+                        // non-DONE ones (aflatin.c:4793-4805)
+                        let sj_f = axis.edges[j].first;
+                        let sj_l = axis.edges[j].last;
+                        if sj_f == usize::MAX || sj_l == usize::MAX { continue; }
+                        let ej_min = i32::min(axis.segments[sj_f].min_coord as i32,
+                                               axis.segments[sj_l].min_coord as i32);
+                        let ej_max = i32::max(axis.segments[sj_f].max_coord as i32,
+                                               axis.segments[sj_l].max_coord as i32);
+                        if !((ej_min < v_min && ej_max < v_min) || (ej_min > v_max && ej_max > v_max)) {
+                            overlap = true;
+                            break;
+                        }
+                    }
+                    if overlap {
+                        // C (aflatin.c:4812): `if (delta == 1000) continue;`
+                        continue;
+                    }
                 }
             }
 
