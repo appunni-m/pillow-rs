@@ -154,10 +154,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                             counts.sha_ok += 1;
                             passed += 1;
                         } else {
-                            failures.push(format!(
-                                "  FAIL [{}]: SHA mismatch\nexpected {}...\n       got {}...\n       size {}x{}",
-                                row.id, &expected_sha[..32], &actual[..32],
-                                mask.width, mask.height));
+                            failures.push(row.id.clone());
                             counts.sha_fail += 1;
                             failed += 1;
                         }
@@ -168,9 +165,8 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                             if ref_size[0] == mask.width && ref_size[1] == mask.height {
                                 passed += 1;
                             } else {
-                                failures.push(format!(
-                                    "  FAIL [{}]: size mismatch {}x{} vs {}x{}",
-                                    row.id, mask.width, mask.height, ref_size[0], ref_size[1]));
+                                failures.push(row.id.clone());
+                                counts.sha_fail += 1;
                                 failed += 1;
                             }
                         }
@@ -191,24 +187,9 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                         counts.sha_ok += 1;
                         passed += 1;
                     } else {
-                        // Check how close it is for reporting
-                        let dx = (expect.0 - bbox.0).abs();
-                        let dy = (expect.1 - bbox.1).abs();
-                        let dw = (expect.2 - bbox.2).abs();
-                        let dh = (expect.3 - bbox.3).abs();
-                        if dx <= 2 && dy <= 2 && dw <= 2 && dh <= 2 {
-                            failures.push(format!(
-                                "  FAIL [{}]: bbox {:?} vs expected {:?} (off by {}/{}/{}/{})",
-                                row.id, bbox, expect, dx, dy, dw, dh));
-                            counts.sha_fail += 1;
-                            failed += 1;
-                        } else {
-                            failures.push(format!(
-                                "  FAIL [{}]: bbox WAY OFF {:?} vs expected {:?}",
-                                row.id, bbox, expect));
-                            counts.sha_fail += 1;
-                            failed += 1;
-                        }
+                        failures.push(row.id.clone());
+                        counts.sha_fail += 1;
+                        failed += 1;
                     }
                 }
             }
@@ -236,7 +217,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                     _ => false,
                 };
                 if ok { passed += 1; }
-                else { failed += 1; failures.push(format!("  FAIL [{}]: {} mismatch", row.id, row.operation)); }
+                else { failed += 1; failures.push(row.id.clone()); }
             }
 
             _ => {}
@@ -285,16 +266,20 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
         }
     }
 
-    // Print failure details
+    // Print failure IDs
     if failed > 0 {
         eprintln!("╠══════════════════════════════════════════════════════════════╣");
-        eprintln!("║  First {} of {failed} failures:", failures.len().min(20));
-        for f in failures.iter().take(20) {
-            eprintln!("║{f}");
+        eprintln!("║  Failure IDs (first 50 of {failed}):");
+        for f in failures.iter().take(50) {
+            eprintln!("║  {f}");
         }
-        if failures.len() > 20 {
-            eprintln!("║  ... and {} more", failures.len() - 20);
+        if failures.len() > 50 {
+            eprintln!("║  ... and {} more (see FAILURE_IDS for full list)", failures.len() - 50);
         }
+        // Write full failure list to file for analysis
+        let report_path = "/tmp/pillow_failure_ids.txt";
+        std::fs::write(report_path, failures.join("\n")).ok();
+        eprintln!("║  Full list: {report_path}");
     }
     eprintln!("╚══════════════════════════════════════════════════════════════╝");
 

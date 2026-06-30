@@ -1920,6 +1920,11 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     }
 
     // top_to_bottom_hinting for Latin is false (edges sorted bottom-to-top).
+    // ⚠️ UNVERIFIED: Indic scripts (beng, deva, guru, knda, goth, mong)
+    // need true from script_class->top_to_bottom_hinting (aflatin.c:2196).
+    // Simply enabling this breaks alignment because af_cjk_metrics_init_widths
+    // is also required for proper stem detection in these scripts.
+    // Full fix requires: afindic.c port + afcjk.c integration.
     let top_to_bottom_hinting = false;
 
     let mut anchor: usize = usize::MAX;
