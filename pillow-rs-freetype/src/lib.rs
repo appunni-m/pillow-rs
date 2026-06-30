@@ -24,15 +24,12 @@
 
 #![forbid(unsafe_code)]
 #![allow(missing_docs)]
-// TODO(#847): audit all 500+ fixed-point cast sites, remove these blanket allows.
-// Domain justification: all arithmetic is 26.6 fixed-point (i32), within
-// i16/i32 ranges for valid fonts. Fixing individually would require ~500
-// #[allow] annotations that add noise without value.
+// 26.6 fixed-point arithmetic uses infallible cast wrappers from casts.rs.
+// The single remaining allow (arithmetic_side_effects) covers 579 sites
+// of i32 +/×/- operations inherent to the 26.6 domain. See casts.rs for why
+// wrapping_add/saturating_add are incorrect alternatives.
 #![allow(
     clippy::arithmetic_side_effects,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
     clippy::if_same_then_else
 )]
 // sha2/serde/serde_json are dev-deps used by the coverage test.
