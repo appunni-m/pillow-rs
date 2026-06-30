@@ -61,3 +61,73 @@ pub(crate) fn u64_from_i64(x: i64) -> u64 {
     #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
     { x as u64 }
 }
+
+/// Infallible: i64 → usize. Values from division results or shifted coords.
+#[inline(always)]
+pub(crate) fn usize_from_i64(x: i64) -> usize {
+    debug_assert!(x >= 0 && x <= usize::MAX as i64);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    { x as usize }
+}
+
+/// Infallible: usize → u32. Table offsets and glyph counts.
+#[inline(always)]
+pub(crate) fn u32_from_usize(x: usize) -> u32 {
+    debug_assert!(x <= u32::MAX as usize);
+    #[allow(clippy::cast_possible_truncation)]
+    { x as u32 }
+}
+
+/// Infallible: u32 → u16. Table entry counts.
+#[inline(always)]
+pub(crate) fn u16_from_u32(x: u32) -> u16 {
+    debug_assert!(x <= u16::MAX as u32);
+    #[allow(clippy::cast_possible_truncation)]
+    { x as u16 }
+}
+
+/// Infallible: i32 → u32. Values guaranteed non-negative (glyph indices).
+#[inline(always)]
+pub(crate) fn u32_from_i32(x: i32) -> u32 {
+    debug_assert!(x >= 0);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    { x as u32 }
+}
+
+/// Infallible: i16 → u16. Font-unit absolute values.
+#[inline(always)]
+pub(crate) fn u16_from_i16(x: i16) -> u16 {
+    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    { x as u16 }
+}
+
+/// Infallible: u64 → i32. FT_UDIV result always within i32 range.
+#[inline(always)]
+pub(crate) fn i32_from_u64(x: u64) -> i32 {
+    debug_assert!(x <= i32::MAX as u64);
+    #[allow(clippy::cast_possible_truncation)]
+    { x as i32 }
+}
+
+/// Infallible: i64 → u32. Bit reinterpretation for 32-bit parts.
+#[inline(always)]
+pub(crate) fn u32_from_i64(x: i64) -> u32 {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+    { x as u32 }
+}
+
+/// Infallible: i32 → u8. Coverage values from sweep (0-255 range).
+#[inline(always)]
+pub(crate) fn u8_from_i32(x: i32) -> u8 {
+    debug_assert!((0..=255).contains(&x));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    { x as u8 }
+}
+
+/// Lossy: f32 → i32. Size computation, inherently approximate.
+/// Kept as explicit function to document the intentional precision loss.
+#[inline(always)]
+pub(crate) fn i32_from_f32(x: f32) -> i32 {
+    #[allow(clippy::cast_possible_truncation)]
+    { x as i32 }
+}

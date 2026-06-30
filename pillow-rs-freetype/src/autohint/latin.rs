@@ -6,6 +6,7 @@
 //! Ported in phases (A through F per ALGORITHMS.md). Some imports are drawn
 //! in early but only used by later phases.
 
+use crate::casts::i16_from_i32;
 use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
 use super::types::{
     AFSegment, AFEdge, AFPoint, GlyphHints,
@@ -1237,7 +1238,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
         if found_edge == usize::MAX {
             // Create a new edge.
-            let fpos = seg_pos.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+            let fpos = i16_from_i32(seg_pos);
             let scale = if dim == Dimension::Vert {
                 hints.y_scale
             } else {
