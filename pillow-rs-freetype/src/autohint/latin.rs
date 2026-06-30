@@ -6,8 +6,9 @@
 //! Ported in phases (A through F per ALGORITHMS.md). Some imports are drawn
 //! in early but only used by later phases.
 
-use crate::casts::i16_from_i32;
+use crate::casts::{i16_from_i32, i32_from_i64, usize_from_i32};
 use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
+
 use super::types::{
     AFSegment, AFEdge, AFPoint, GlyphHints,
     Direction, Dimension,
@@ -91,7 +92,7 @@ fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold
             for w in &widths[cur_idx..end] { sum += w.org as i64; }
             // zero out merged entries, keep the first
             for w in &mut widths[cur_idx + 1..end] { w.org = 0; }
-            widths[cur_idx].org = (sum / (end as i64 - cur_idx as i64)) as i32;
+            widths[cur_idx].org = i32_from_i64(sum / (end as i64 - cur_idx as i64));
             if i < *count - 1 {
                 cur_idx = i + 1;
                 cur_val = widths[cur_idx].org;
@@ -304,7 +305,7 @@ pub fn metrics_init_blues(
                 if last <= first { continue; } // skip single-point contours
 
                 for pp in first..=last {
-                    let y = points[pp as usize].y;
+                    let y = points[usize_from_i32(pp)].y;
                     if is_top {
                         if best_point < 0 || y > best_y {
                             best_point = pp;
@@ -326,24 +327,24 @@ pub fn metrics_init_blues(
             // Classify flat vs round at the extremum (aflatin.c:568-867).
             let mut round = false;
             if best_point >= 0 {
-                let best_x = points[best_point as usize].x;
+                let best_x = points[usize_from_i32(best_point)].x;
 
                 let mut best_seg_first = best_point;
                 let mut best_seg_last = best_point;
                 // Track ON-curve endpoints of the flat segment.
-                let mut best_on_first: i32 = if points[best_point as usize].on_curve { best_point } else { -1 };
+                let mut best_on_first: i32 = if points[usize_from_i32(best_point)].on_curve { best_point } else { -1 };
                 let mut best_on_last: i32 = best_on_first;
 
                 // Walk previous (aflatin.c:597-620).
                 let mut prev = best_point;
                 loop {
                     prev = if prev > best_contour_first { prev - 1 } else { best_contour_last };
-                    let dist = (points[prev as usize].y - best_y).abs();
-                    if dist > 5 && (points[prev as usize].x - best_x).abs() <= 20 * dist {
+                    let dist = (points[usize_from_i32(prev)].y - best_y).abs();
+                    if dist > 5 && (points[usize_from_i32(prev)].x - best_x).abs() <= 20 * dist {
                         break;
                     }
                     best_seg_first = prev;
-                    if points[prev as usize].on_curve {
+                    if points[usize_from_i32(prev)].on_curve {
                         best_on_first = prev;
                         if best_on_last < 0 { best_on_last = prev; }
                     }
@@ -354,12 +355,12 @@ pub fn metrics_init_blues(
                 let mut next = best_point;
                 loop {
                     next = if next < best_contour_last { next + 1 } else { best_contour_first };
-                    let dist = (points[next as usize].y - best_y).abs();
-                    if dist > 5 && (points[next as usize].x - best_x).abs() <= 20 * dist {
+                    let dist = (points[usize_from_i32(next)].y - best_y).abs();
+                    if dist > 5 && (points[usize_from_i32(next)].x - best_x).abs() <= 20 * dist {
                         break;
                     }
                     best_seg_last = next;
-                    if points[next as usize].on_curve {
+                    if points[usize_from_i32(next)].on_curve {
                         best_on_last = next;
                         if best_on_first < 0 { best_on_first = next; }
                     }
@@ -368,12 +369,12 @@ pub fn metrics_init_blues(
 
                 // Round vs flat (aflatin.c:846-857). LONG-blue variant skipped.
                 if best_on_first >= 0 && best_on_last >= 0
-                    && (points[best_on_first as usize].x - points[best_on_last as usize].x).abs() > flat_thresh
+                    && (points[usize_from_i32(best_on_first)].x - points[usize_from_i32(best_on_last)].x).abs() > flat_thresh
                 {
                     round = false;
                 } else {
-                    round = !points[best_seg_first as usize].on_curve
-                         || !points[best_seg_last as usize].on_curve;
+                    round = !points[usize_from_i32(best_seg_first)].on_curve
+                         || !points[usize_from_i32(best_seg_last)].on_curve;
                 }
 
                 if round && is_neutral!(entry.props) { continue; } // neutral uses flats only
@@ -796,9 +797,9 @@ pub fn apply_hints(
 
     // Compute ppem for bdelta in compute_stem_width
     // At 72dpi: x_scale = (ppem * 64 * 0x10000) / upem → ppem = x_scale * upem / 0x10000 / 64
-    let ppem = ((x_scale as i64).abs()
+    let ppem = i32_from_i64((x_scale as i64).abs()
         * metrics.map_or(2048, |m| m.units_per_em as i64)
-        / 65536 / 64) as i32;
+        / 65536 / 64);
     let ppem = ppem.clamp(1, 100);
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
@@ -1032,8 +1033,8 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
 
                     if new_seg {
                         // Record a new segment.
-                        let pos = ((min_pos + max_pos) >> 1) as i16;
-                        let delta = ((max_pos - min_pos) >> 1) as i16;
+                        let pos = i16_from_i32((min_pos + max_pos) >> 1);
+                        let delta = i16_from_i32((max_pos - min_pos) >> 1);
                         let mut flags = 0u8;
                         if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
                             && (max_on_coord - min_on_coord) < FLAT_THRESHOLD
@@ -1043,8 +1044,8 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         let h = max_coord - min_coord;
                         axis.segments.push(AFSegment {
                             flags, dir: segment_dir, pos, delta,
-                            min_coord: min_coord as i16, max_coord: max_coord as i16,
-                            height: h as i16,
+                            min_coord: i16_from_i32(min_coord), max_coord: i16_from_i32(max_coord),
+                            height: i16_from_i32(h),
                             first: seg_first, last: point,
                             edge: usize::MAX, edge_next: usize::MAX,
                             link: usize::MAX, serif: usize::MAX, score: 32000,
@@ -1065,22 +1066,22 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         if prev_last_in == curr_in {
                             min_pos = min_pos.min(prev_min_pos); max_pos = max_pos.max(prev_max_pos);
                             min_coord = min_coord.min(prev_min_coord); max_coord = max_coord.max(prev_max_coord);
-                            let pos = ((min_pos + max_pos) >> 1) as i16;
-                            let delta = ((max_pos - min_pos) >> 1) as i16;
+                            let pos = i16_from_i32((min_pos + max_pos) >> 1);
+                            let delta = i16_from_i32((max_pos - min_pos) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos; s.delta = delta;
-                            s.min_coord = min_coord as i16; s.max_coord = max_coord as i16;
+                            s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
                         } else if (prev_max_coord - prev_min_coord).abs() > (max_coord - min_coord).abs() {
                             // discard current: extend prev's last only.
-                            let pos = ((prev_min_pos.min(min_pos) + prev_max_pos.max(max_pos)) >> 1) as i16;
+                            let pos = i16_from_i32((prev_min_pos.min(min_pos) + prev_max_pos.max(max_pos)) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
                         } else {
                             // discard prev: current replaces it.
-                            let pos = ((min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1) as i16;
+                            let pos = i16_from_i32((min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
-                            s.min_coord = min_coord as i16; s.max_coord = max_coord as i16;
+                            s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
                             s.dir = segment_dir;
                         }
                     }
@@ -1133,20 +1134,20 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
             if first_v < last_v {
                 let p = points[first_idx].prev;
                 if points[p].v < first_v {
-                    extra += ((first_v - points[p].v) >> 1) as i16;
+                    extra += i16_from_i32((first_v - points[p].v) >> 1);
                 }
                 let p = points[last_idx].next;
                 if points[p].v > last_v {
-                    extra += ((points[p].v - last_v) >> 1) as i16;
+                    extra += i16_from_i32((points[p].v - last_v) >> 1);
                 }
             } else {
                 let p = points[first_idx].prev;
                 if points[p].v > first_v {
-                    extra += ((points[p].v - first_v) >> 1) as i16;
+                    extra += i16_from_i32((points[p].v - first_v) >> 1);
                 }
                 let p = points[last_idx].next;
                 if points[p].v < last_v {
-                    extra += ((last_v - points[p].v) >> 1) as i16;
+                    extra += i16_from_i32((last_v - points[p].v) >> 1);
                 }
             }
             axis.segments[idx].height = axis.segments[idx].height.saturating_add(extra);

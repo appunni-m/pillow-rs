@@ -4,6 +4,8 @@
 //! decoders (the Unicode subtables PIL/DejaVu/Liberation use). The
 //! `char_index` lookup reproduces `tt_cmap4_char_index` / `tt_cmap12_char_index`.
 
+use crate::casts::{u16_from_i16, u16_from_u32};
+
 use crate::error::FontError;
 use log::warn;
 
@@ -52,7 +54,7 @@ impl CmapTable {
         }
         if codepoint <= 0xFFFF {
             for sub in &self.format4 {
-                if let Some(g) = sub.char_index(codepoint as u16) {
+                if let Some(g) = sub.char_index(u16_from_u32(codepoint)) {
                     return Some(g);
                 }
             }
@@ -68,7 +70,7 @@ impl Format12Subtable {
                 break;
             }
             if codepoint <= self.end_codes[i] {
-                return Some((self.start_glyph_ids[i] + (codepoint - self.start_codes[i])) as u16);
+                return Some(u16_from_u32(self.start_glyph_ids[i] + (codepoint - self.start_codes[i])));
             }
         }
         None
@@ -88,7 +90,7 @@ impl Format4Subtable {
             }
             if self.id_range_offsets[seg] == 0 {
                 // glyph = (charCode + delta) mod 65536
-                return Some(char_code.wrapping_add(self.id_deltas[seg] as u16));
+                return Some(char_code.wrapping_add(u16_from_i16(self.id_deltas[seg])));
             }
             // idRangeOffset semantics: the offset is *relative to the address of
             // this very idRangeOffset entry*. C does `glyph_id_array[
@@ -103,7 +105,7 @@ impl Format4Subtable {
                 if raw == 0 {
                     return None;
                 }
-                return Some(raw.wrapping_add(self.id_deltas[seg] as u16));
+                return Some(raw.wrapping_add(u16_from_i16(self.id_deltas[seg])));
             }
             return None;
         }

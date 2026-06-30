@@ -6,6 +6,7 @@
 //!
 //! Reference: `freetype/src/smooth/ftgrays.c` (lines ~329–2043).
 
+use crate::casts::{i32_from_i64, i32_from_u64, i32_from_usize, u32_from_i32, u64_from_i64, u8_from_i32, usize_from_i32, usize_from_i64};
 use crate::error::FontError;
 use crate::outline::Outline;
 
@@ -17,12 +18,12 @@ const UPSCALE: i64 = ONE_PIXEL >> 6; // 4 — multiply 26.6 by this → subpixel
 #[inline]
 // ✅ TRIVIAL: >> PIXEL_BITS.
 /// `(x >> 8)`: extract integer pixel coordinate from subpixel.
-fn trunc(x: i64) -> i32 { (x >> PIXEL_BITS) as i32 }
+fn trunc(x: i64) -> i32 { i32_from_i64(x >> PIXEL_BITS) }
 
 #[inline]
 // ✅ TRIVIAL: & (ONE_PIXEL-1).
 /// `(x & 255)`: extract subpixel fraction (0..255).
-fn fract(x: i64) -> i32 { (x & (ONE_PIXEL - 1)) as i32 }
+fn fract(x: i64) -> i32 { i32_from_i64(x & (ONE_PIXEL - 1)) }
 
 #[inline]
 // ✅ TRIVIAL: wrapping_add.
@@ -37,11 +38,11 @@ fn add_int(a: i32, b: i32) -> i32 {
 /// Euclidean division: quotient floored, remainder >= 0.
 /// Used by `render_scanline` for DDA step distribution.
 fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
-    let mut quotient = (dividend / divisor) as i32;
-    let mut remainder = (dividend % divisor) as i32;
+    let mut quotient = i32_from_i64(dividend / divisor);
+    let mut remainder = i32_from_i64(dividend % divisor);
     if remainder < 0 {
         quotient -= 1;
-        remainder += divisor as i32;
+        remainder += i32_from_i64(divisor);
     }
     (quotient, remainder)
 }
@@ -67,7 +68,7 @@ fn ft_udivprep(c: bool, b: i64) -> i64 {
 /// `FT_UDIV`: `(a * reciprocal) >> 32`. Fast fixed-point division.
 /// Used in DDA stepping to compute subpixel exit coordinates.
 fn ft_udiv(a: i64, r: i64) -> i32 {
-    (((a as u64).wrapping_mul(r as u64)) >> 32) as i32
+    i32_from_u64((u64_from_i64(a).wrapping_mul(u64_from_i64(r))) >> 32)
 }
 
 // ✅ VERIFIED: via 1708 FT tests. Port of FT_FILL_RULE (ftgrays.h).
@@ -146,8 +147,8 @@ pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
             pixels: Vec::new(),
         });
     }
-    let width = (outline.cbox_x_max - outline.cbox_x_min) as usize;
-    let height = (outline.cbox_y_max - outline.cbox_y_min) as usize;
+    let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min);
+    let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min);
     if width == 0 || height == 0 {
         return Ok(RasterResult {
             width: 0,
@@ -212,7 +213,7 @@ impl Worker {
             return;
         }
         let ex = ex.max(self.min_ex - 1);
-        let ey_u = ey_index as usize;
+        let ey_u = usize_from_i32(ey_index);
         self.current_ey = ey;
         self.current_scanline = ey_u;
 
@@ -260,7 +261,7 @@ impl Worker {
         let (p, first, incr);
         if dx > 0 {
             p = (ONE_PIXEL - fx1 as i64) * dy;
-            first = ONE_PIXEL as i32;
+            first = i32_from_i64(ONE_PIXEL);
             incr = 1;
         } else {
             p = fx1 as i64 * dy;
@@ -281,11 +282,11 @@ impl Worker {
             loop {
                 delta = lift;
                 mod_ += rem;
-                if mod_ >= dx as i32 {
-                    mod_ -= dx as i32;
+                if mod_ >= i32_from_i64(dx) {
+                    mod_ -= i32_from_i64(dx);
                     delta += 1;
                 }
-                self.integrate(delta, ONE_PIXEL as i32);
+                self.integrate(delta, i32_from_i64(ONE_PIXEL));
                 y1 += delta;
                 ex1 += incr;
                 self.set_cell(ex1, ey);
@@ -295,7 +296,7 @@ impl Worker {
             }
         }
 
-        let fx1 = ONE_PIXEL as i32 - first;
+        let fx1 = i32_from_i64(ONE_PIXEL) - first;
         self.integrate(y2 - y1, fx1 + fx2);
     }
 
@@ -332,7 +333,7 @@ impl Worker {
             let two_fx = fx1 << 1;
             if dy > 0 {
                 loop {
-                    let fy2 = ONE_PIXEL as i32;
+                    let fy2 = i32_from_i64(ONE_PIXEL);
                     self.integrate(fy2 - fy1, two_fx);
                     fy1 = 0;
                     ey1 += 1;
@@ -345,7 +346,7 @@ impl Worker {
                 loop {
                     let fy2 = 0;
                     self.integrate(fy2 - fy1, two_fx);
-                    fy1 = ONE_PIXEL as i32;
+                    fy1 = i32_from_i64(ONE_PIXEL);
                     ey1 -= 1;
                     self.set_cell(ex1, ey1);
                     if ey1 == ey2 {
@@ -367,7 +368,7 @@ impl Worker {
                     let fy2 = ft_udiv(-prod, -dx_r);
                     prod -= dy * ONE_PIXEL;
                     self.integrate(fy2 - fy1, fx1 + fx2);
-                    fx1 = ONE_PIXEL as i32;
+                    fx1 = i32_from_i64(ONE_PIXEL);
                     fy1 = fy2;
                     ex1 -= 1;
                 } else if prod - dx * ONE_PIXEL + dy * ONE_PIXEL > 0
@@ -376,7 +377,7 @@ impl Worker {
                     // up
                     prod -= dx * ONE_PIXEL;
                     let fx2 = ft_udiv(-prod, dy_r);
-                    let fy2 = ONE_PIXEL as i32;
+                    let fy2 = i32_from_i64(ONE_PIXEL);
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = fx2;
                     fy1 = 0;
@@ -386,7 +387,7 @@ impl Worker {
                 {
                     // right
                     prod += dy * ONE_PIXEL;
-                    let fx2 = ONE_PIXEL as i32;
+                    let fx2 = i32_from_i64(ONE_PIXEL);
                     let fy2 = ft_udiv(prod, dx_r);
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = 0;
@@ -400,7 +401,7 @@ impl Worker {
                     prod += dx * ONE_PIXEL;
                     self.integrate(fy2 - fy1, fx1 + fx2);
                     fx1 = fx2;
-                    fy1 = ONE_PIXEL as i32;
+                    fy1 = i32_from_i64(ONE_PIXEL);
                     ey1 -= 1;
                 }
                 self.set_cell(ex1, ey1);
@@ -465,7 +466,7 @@ impl Worker {
         }
         let count = 0x10000u32 >> shift;
 
-        let left_shift = |a: i64, b: i32| -> i64 { (a as u64).wrapping_shl(b as u32) as i64 };
+        let left_shift = |a: i64, b: i32| -> i64 { u64_from_i64(a).wrapping_shl(u32_from_i32(b)) as i64 };
         let rx = left_shift(ax, shift + shift);
         let ry = left_shift(ay, shift + shift);
         let mut qx = left_shift(bx, shift + 17) + rx;
@@ -569,8 +570,8 @@ impl Worker {
         n_contours: i32,
     ) -> Result<(), FontError> {
         let mut last: i64 = -1;
-        for (n, &contour_end) in contours.iter().enumerate().take(n_contours as usize) {
-            let first = (last + 1) as usize;
+        for (n, &contour_end) in contours.iter().enumerate().take(usize_from_i32(n_contours)) {
+            let first = usize_from_i64(last + 1);
             last = contour_end as i64;
             let _ = n;
             if last < first as i64 {
@@ -578,7 +579,7 @@ impl Worker {
                     "outline: contour end before start".into(),
                 ));
             }
-            let limit = last as usize;
+            let limit = usize_from_i64(last);
             let mut v_start = pts[first];
             let v_last = pts[limit];
             let mut limit_eff = limit;
@@ -603,11 +604,11 @@ impl Worker {
 
             self.move_to(v_start.x as i64, v_start.y as i64);
             let start: i32 = if first_tag == CURVE_TAG_CONIC {
-                if first == 0 { -1 } else { first as i32 - 1 }
+                if first == 0 { -1 } else { i32_from_usize(first) - 1 }
             } else {
-                first as i32
+                i32_from_usize(first)
             };
-            self.walk_contour(pts, start, limit_eff as i32, v_start)?;
+            self.walk_contour(pts, start, i32_from_usize(limit_eff), v_start)?;
         }
         Ok(())
     }
@@ -622,7 +623,7 @@ impl Worker {
     ) -> Result<(), FontError> {
         while cursor < limit {
             cursor += 1;
-            let idx = cursor as usize;
+            let idx = usize_from_i32(cursor);
             let tag = curve_tag(pts[idx].on_curve);
             match tag {
                 CURVE_TAG_ON => {
@@ -634,7 +635,7 @@ impl Worker {
                     loop {
                         if cursor < limit {
                             cursor += 1;
-                            let idx2 = cursor as usize;
+                            let idx2 = usize_from_i32(cursor);
                             let vec = pts[idx2];
                             let ntag = curve_tag(pts[idx2].on_curve);
                             if ntag == CURVE_TAG_ON {
@@ -667,17 +668,17 @@ impl Worker {
                 }
                 CURVE_TAG_CUBIC => {
                     if cursor + 2 > limit
-                        || curve_tag(pts[(cursor + 1) as usize].on_curve) != CURVE_TAG_CUBIC
+                        || curve_tag(pts[usize_from_i32(cursor + 1)].on_curve) != CURVE_TAG_CUBIC
                     {
                         return Err(FontError::InvalidOutline(
                             "outline: bad cubic tag sequence".into(),
                         ));
                     }
                     let vec1 = pts[idx];
-                    let vec2 = pts[(cursor + 1) as usize];
+                    let vec2 = pts[usize_from_i32(cursor + 1)];
                     cursor += 2;
                     if cursor <= limit {
-                        let vec = pts[cursor as usize];
+                        let vec = pts[usize_from_i32(cursor)];
                         self.render_cubic(
                             vec1.x as i64, vec1.y as i64,
                             vec2.x as i64, vec2.y as i64,
@@ -708,11 +709,11 @@ impl Worker {
         };
 
         for y in self.min_ey..self.max_ey {
-            let yi = (y - self.min_ey) as usize;
+            let yi = usize_from_i32(y - self.min_ey);
             let scanline = &self.scanlines[yi];
             // FT sweep: `line = origin - pitch * y`, bottom-up convention.
             // With pitch positive: row = height-1-y for top-down buffer.
-            let dst_row = (self.height as i32 - 1 - y) as usize;
+            let dst_row = usize_from_i32(i32_from_usize(self.height) - 1 - y);
             let mut x = self.min_ex;
             let mut cover: i32 = 0;
 
@@ -721,20 +722,20 @@ impl Worker {
                     let coverage = fill_rule(cover, fill);
                     write_span(
                         &mut self.target,
-                        dst_row * self.width + x as usize,
+                        dst_row * self.width + usize_from_i32(x),
                         coverage,
                         cell.x - x,
                     );
                 }
 
-                cover = add_int(cover, cell.cover.wrapping_mul((ONE_PIXEL * 2) as i32));
+                cover = add_int(cover, cell.cover.wrapping_mul(i32_from_i64(ONE_PIXEL * 2)));
                 let area = add_int(cover, -cell.area);
 
                 if area != 0 && cell.x >= self.min_ex {
                     let coverage = fill_rule(area, fill);
-                    let off = dst_row * self.width + cell.x as usize;
+                    let off = dst_row * self.width + usize_from_i32(cell.x);
                     if let Some(slot) = self.target.get_mut(off) {
-                        *slot = coverage as u8;
+                        *slot = u8_from_i32(coverage);
                     }
                 }
 
@@ -745,7 +746,7 @@ impl Worker {
                 let coverage = fill_rule(cover, fill);
                 write_span(
                     &mut self.target,
-                    dst_row * self.width + x as usize,
+                    dst_row * self.width + usize_from_i32(x),
                     coverage,
                     self.max_ex - x,
                 );
@@ -770,7 +771,7 @@ impl Worker {
         self.min_ey = cbox_y_min;
         self.max_ey = cbox_y_max;
 
-        let band_height = (self.max_ey - self.min_ey) as usize;
+        let band_height = usize_from_i32(self.max_ey - self.min_ey);
         self.scanlines.clear();
         for _ in 0..band_height {
             self.scanlines.push(Vec::new());
@@ -793,8 +794,8 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32) {
     if count <= 0 {
         return;
     }
-    let s = s as u8;
-    for i in 0..count as usize {
+    let s = u8_from_i32(s);
+    for i in 0..usize_from_i32(count) {
         if let Some(slot) = buf.get_mut(off + i) {
             *slot = s;
         }

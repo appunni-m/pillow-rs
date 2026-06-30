@@ -4,6 +4,8 @@
 //! Reference: `src/base/ftoutln.c` (`FT_Outline_Transform` via `FT_MulFix`),
 //! `src/base/ftglyph.c` (`FT_Glyph_Get_CBox` with `FT_GLYPH_BBOX_PIXELS`).
 
+use crate::casts::i32_from_f32;
+
 use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
 use crate::outline::{Outline, OutlinePoint};
@@ -69,7 +71,7 @@ fn ft_div_fix_local(a: i32, b: i32) -> i32 {
 /// pixels-per-em: `FT_PIX_ROUND(size << 6) >> 6`. Round to nearest integer ppem.
 fn ppem_from_size(size_pt: f32) -> i32 {
     // ppem = FT_PIX_ROUND( size << 6 ) >> 6  (size already in pixels at 72dpi).
-    let size_26dot6 = (size_pt * 64.0).round() as i32;
+    let size_26dot6 = i32_from_f32((size_pt * 64.0).round());
     // FT_PIX_ROUND(x) = (x + 32) & ~63  on a 26.6 value.
     ((size_26dot6 + 32) & !63) >> 6
 }

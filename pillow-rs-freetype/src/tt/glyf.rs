@@ -5,6 +5,8 @@
 //! component loop (`TT_Load_Composite_Glyph`). Output is a flattened list of
 //! contours with on/off-curve tags, in font design units.
 
+use crate::casts::{u16_from_i16, u16_from_u32, u32_from_usize};
+
 use crate::error::FontError;
 use crate::tt::loca::{get_glyph_location, GlyphLocation};
 
@@ -125,7 +127,7 @@ fn load_glyph_inner(
 
     if num_contours >= 0 {
         // Simple glyph.
-        let mut outline = parse_simple_glyph(bytes, num_contours as u16)?;
+        let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))?;
         outline.xmin = xmin;
         outline.ymin = ymin;
         outline.xmax = xmax;
@@ -147,7 +149,7 @@ fn load_glyph_inner(
                 points.push(transform_point(*pt, &comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax));
             }
             for &ep in &sub.end_pts_of_contours {
-                end_pts.push((base as u32 + ep as u32) as u16);
+                end_pts.push(u16_from_u32(u32_from_usize(base) + ep as u32));
             }
             num_contours_total =
                 num_contours_total.saturating_add(sub.num_contours);
