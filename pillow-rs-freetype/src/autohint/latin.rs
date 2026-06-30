@@ -5,9 +5,22 @@
 //!
 //! Ported in phases (A through F per ALGORITHMS.md). Some imports are drawn
 //! in early but only used by later phases.
+//!
+//! # Pipeline tracing
+//!
+//! Enable per-stage trace dumps for C→Rust parity debugging:
+//! ```text
+//! RUST_LOG=pillow_rs_freetype::autohint::pipeline=trace
+//! ```
+//! Each pipeline stage emits structured trace lines at `trace!` level:
+//!   `[PIPE] reload N pt: fx=X fy=Y in=DIR out=DIR u=N v=N`
+//!   `[PIPE] segs N: S0: pA..pB dir=DIR pos=X`
+//!   `[PIPE] edges N: E0: fpos=X opos=X pos=X link=N serif=N`
+//!   `[PIPE] final: pN: y=X`
 
 use crate::casts::{i16_from_i32, i32_from_i64, usize_from_i32};
 use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
+use log::trace;
 
 use super::types::{
     AFSegment, AFEdge, AFPoint, GlyphHints,
@@ -905,6 +918,30 @@ pub fn apply_hints(
     }
 
     // Step 4: Write back
+    // Pipeline trace: dump at `trace!` level.
+    // Enable with: RUST_LOG=autohint::pipeline=trace
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        trace!(target: "autohint::pipeline", "[PIPE] reload {} pts", hints.num_points());
+        for (i, pt) in hints.points.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[PIPE] p{i}: fx={} fy={} in={:?} out={:?} u={} v={}",
+                pt.fx, pt.fy, pt.in_dir, pt.out_dir, pt.u, pt.v);
+        }
+        let va = &hints.axis[Dimension::Vert as usize];
+        trace!(target: "autohint::pipeline", "[PIPE] segs {}", va.segments.len());
+        for (si, s) in va.segments.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[PIPE] S{si}: p{}..p{} dir={:?} pos={}",
+                s.first, s.last, s.dir, s.pos);
+        }
+        trace!(target: "autohint::pipeline", "[PIPE] edges {}", va.edges.len());
+        for (ei, e) in va.edges.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[PIPE] E{ei}: fpos={} opos={} pos={} link={} serif={}",
+                e.fpos, e.opos, e.pos, e.link, e.serif);
+        }
+        trace!(target: "autohint::pipeline", "[PIPE] final");
+        for (i, pt) in hints.points.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[PIPE] p{i}: y={}", pt.y);
+        }
+    }
     hints.save_to_outline(outline);
 }
 

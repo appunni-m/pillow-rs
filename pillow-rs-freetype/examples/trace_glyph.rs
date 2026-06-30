@@ -1,15 +1,15 @@
 //! Trace single glyph through autohinter — dump reload coords, edges, hinted output.
-//! Usage: cargo run --example trace_glyph -- <font.ttf> <size_pt> <char>
+//! Usage: RUST_LOG=autohint::pipeline=trace cargo run --example trace_glyph -- <font.ttf> <size_pt> <char>
 
 use std::env;
 use std::fs;
-use std::process;
 
 fn main() {
+    env_logger::init();
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 {
         eprintln!("Usage: trace_glyph <font.ttf> <size_pt> <char>");
-        process::exit(1);
+        return;
     }
     let font_path = &args[1];
     let size_pt: f32 = args[2].parse().expect("size_pt");
