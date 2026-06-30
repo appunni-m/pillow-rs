@@ -105,7 +105,7 @@ fn decode_utf16be(data: &[u8], base: usize, r: &NameRecord) -> Result<String, Fo
     let bytes = data
         .get(start..end)
         .ok_or_else(|| FontError::InvalidFont("name: string offset out of range".into()))?;
-    if r.length % 2 != 0 {
+    if !r.length.is_multiple_of(2) {
         return Err(FontError::InvalidFont(
             "name: UTF-16BE string has odd length".into(),
         ));

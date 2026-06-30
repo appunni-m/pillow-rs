@@ -312,13 +312,11 @@ pub fn metrics_init_blues(
                             best_y = y;
                             if y + y_offset > ascender { ascender = y + y_offset; }
                         } else if y + y_offset < descender { descender = y + y_offset; }
-                    } else {
-                        if best_point < 0 || y < best_y {
-                            best_point = pp;
-                            best_y = y;
-                            if y + y_offset < descender { descender = y + y_offset; }
-                        } else if y + y_offset > ascender { ascender = y + y_offset; }
-                    }
+                    } else if best_point < 0 || y < best_y {
+                        best_point = pp;
+                        best_y = y;
+                        if y + y_offset < descender { descender = y + y_offset; }
+                    } else if y + y_offset > ascender { ascender = y + y_offset; }
                 }
                 if best_point > best_contour_last {
                     best_contour_first = first;
@@ -386,10 +384,8 @@ pub fn metrics_init_blues(
             if best_point >= 0 {
                 let by = best_y + y_offset;
                 if is_top {
-                    if best_y_extremum.map_or(true, |b| by > b) { best_y_extremum = Some(by); best_round = round; }
-                } else {
-                    if best_y_extremum.map_or(true, |b| by < b) { best_y_extremum = Some(by); best_round = round; }
-                }
+                    if best_y_extremum.is_none_or(|b| by > b) { best_y_extremum = Some(by); best_round = round; }
+                } else if best_y_extremum.is_none_or(|b| by < b) { best_y_extremum = Some(by); best_round = round; }
             }
             // (best_round unused beyond here since Latin has 1 element; keep for clarity.)
 
@@ -559,7 +555,7 @@ pub fn metrics_scale_dim(
             blue.flags &= !AF_LATIN_BLUE_ACTIVE;
 
             let dist = ft_mul_fix(blue.ref_width.org - blue.shoot_width.org, v_scale);
-            if dist <= 48 && dist >= -48 {
+            if (-48..=48).contains(&dist) {
                 // Zone height <= 3/4px → active
                 let delta2 = dist.abs();
                 let delta2 = if delta2 < 32 { 0 } else if delta2 < 48 { 32 } else { 64 };
@@ -729,7 +725,7 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
     }
 
     // Only adjust if gap is small (< 1px = 64 26.6 units)
-    if min_distance < 0 || min_distance >= 64 { return; }
+    if !(0..64).contains(&min_distance) { return; }
 
     let adjustment = 64 - min_distance;
     if adjustment <= 0 || adjustment > 128 { return; }
@@ -775,6 +771,7 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
 /// - [ ] x/ox after stage 7 match C? → strong interpolation OK
 /// - [ ] WEAK flags from stage 1 match C? → classification diverged
 /// - [ ] IUP ref indices match C? → touch chain differs
+#[allow(clippy::too_many_arguments)]
 pub fn apply_hints(
     outline: &mut crate::outline::Outline,
     raw_outline: &crate::tt::glyf::GlyphOutline,
@@ -803,7 +800,7 @@ pub fn apply_hints(
     let ppem = ((x_scale as i64).abs()
         * metrics.map_or(2048, |m| m.units_per_em as i64)
         / 65536 / 64) as i32;
-    let ppem = ppem.max(1).min(100);
+    let ppem = ppem.clamp(1, 100);
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);
@@ -844,7 +841,7 @@ pub fn apply_hints(
     // ⚠️ MATCHES C: af_latin_hints_apply skips compute_blue_edges for non-base
     //    glyphs (accents, diacritics, etc.) via ganglia->glyph_styles & AF_NONBASE.
     let is_nonbase = hints.metrics.as_ref()
-        .map_or(false, |m| (glyph_index as usize) < m.non_base_glyphs.len()
+        .is_some_and(|m| (glyph_index as usize) < m.non_base_glyphs.len()
             && m.non_base_glyphs[glyph_index as usize]);
     if !is_nonbase {
         compute_blue_edges(&mut hints);
@@ -962,9 +959,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
         // Our cw_orientation=true means CW (=TrueType), so NO flip.
         let d = if is_horz {
             if cw { Direction::Up } else { Direction::Down }
-        } else {
-            if cw { Direction::Left } else { Direction::Right }
-        };
+        } else if cw { Direction::Left } else { Direction::Right };
         axis.major_dir = d;
         abs_dir(d) // ABSOLUTIFY for segment detection (aflatin.c:1577)
     };
@@ -1612,6 +1607,7 @@ fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
 /// - [ ] `extra_light` check correct (`ft_mul_fix(std_width, scale) < 40`)?
 /// - [ ] `snap_width(std_widths, dist)` output same as C?
 /// - [ ] Fractional pixel quantization (dist < 56 → dist=56) matches C?
+#[allow(clippy::too_many_arguments)]
 fn compute_stem_width(
     other_flags: u32,
     ppem: i32,
@@ -1788,8 +1784,7 @@ fn compute_stem_width(
 fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: i32) {
     let other_flags = hints.other_flags;
     let extra_light = hints.metrics.as_ref()
-        .map(|m| m.axis[dim as usize].extra_light)
-        .unwrap_or(false);
+        .is_some_and(|m| m.axis[dim as usize].extra_light);
     let axis = &mut hints.axis[dim as usize];
     let num_edges = axis.edges.len();
 

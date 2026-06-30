@@ -23,7 +23,15 @@
 //! | [`fixed`] | Fixed-point math: `ft_mul_fix`, `ft_div_fix`, `ft_ceil_fix`, etc. |
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![allow(missing_docs)]
+// TODO(#847): fix clippy arithmetic/cast lints and remove these allows.
+#![allow(
+    clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::if_same_then_else
+)]
 // sha2/serde/serde_json are dev-deps used by the coverage test.
 #![cfg_attr(test, allow(unused_crate_dependencies))]
 // Many internal helpers are exercised through the integration test rather than

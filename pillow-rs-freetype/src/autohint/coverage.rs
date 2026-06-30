@@ -12,7 +12,7 @@ use std::cell::RefCell;
 
 thread_local! {
     /// Accumulated coverage bits for the glyph currently being processed.
-    static COVERAGE_MASK: RefCell<u64> = RefCell::new(0);
+    static COVERAGE_MASK: RefCell<u64> = const { RefCell::new(0) };
 }
 
 /// Macro to record a code-path hit at the call site.

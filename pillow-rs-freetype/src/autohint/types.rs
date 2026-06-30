@@ -109,6 +109,12 @@ pub struct AfLatinAxisMetrics {
     pub org_delta: i32,
 }
 
+impl Default for AfLatinAxisMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AfLatinAxisMetrics {
     pub fn new() -> Self {
         AfLatinAxisMetrics {
@@ -272,6 +278,12 @@ pub struct AxisHints {
     pub segments: Vec<AFSegment>,
     pub edges: Vec<AFEdge>,
     pub major_dir: Direction,
+}
+
+impl Default for AxisHints {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AxisHints {
