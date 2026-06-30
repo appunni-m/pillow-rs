@@ -65,7 +65,7 @@
 //! | Liberation bold/mono/narrow | 20 FU | Different stem-width thresholds affect edge grouping |
 //!
 //! Reference: `freetype/src/autofit/` (VER-2-14-1).
-//! Algorithm details: `INDEX.md` and `ALGORITHMS.md` in this directory.
+//! Algorithm reference: `ALGORITHMS.md` in this directory.
 
 pub mod types;
 pub mod coverage;
