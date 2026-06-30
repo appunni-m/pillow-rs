@@ -1,71 +1,135 @@
-# 100% FreeType Autohinter Parity — Implementation Plan
+# 100% FreeType Autohinter Parity — Architecture & Roadmap
 
-## Current Status: 31/55 scripts at 100% SHA-256 parity
+## Status: 17,250/18,500 (93.2%) SHA-256 parity with FreeType 2.14.3
 
+| Category | Scripts | Tests | Status |
+|----------|---------|-------|--------|
+| Full SHA-256 parity | 31 | 16,001 | 100% ✓ |
+| 1-FU drift (95%+) | 18 | 970 | Near parity |
+| Sub/superscript | 2 | 153 | Needs GSUB |
+| CJK/Indic engine | 4 | 376 | Needs afcjk.c port |
+
+## Pass/Detailed Status
+
+### 31 Scripts at 100% (armn avst bamu buhd cakm cari copt cprt cyrl dsrt geor glag grek kali khmr khms lao latn lisu mlym olck orkh osge osma rohg shaw sinh sund taml tavt tfng)
+
+### Near-Parity Scripts (95-99% pass)
+| Script | Pass Rate | Failures | Root Cause |
+|--------|-----------|----------|-----------|
+| ethi | 99% | 1 | Edge case only |
+| medf | 99% | 1 | Edge case |
+| thai | 99% | 3 | 1-FU blue zone drift |
+| arab | 99% | 4 | Arabic joining joins |
+| telu | 99% | 4 | Telugu head-line |
+| vaii | 98% | 2 | Vai edge case |
+| mymr | 97% | 10 | Myanmar edge case |
+| cans | 97% | 16 | Canadian Syllabics |
+
+### Moderate Gap Scripts (85-95% pass)
+| Script | Pass Rate | Failures | Root Cause |
+|--------|-----------|----------|-----------|
+| gujr | 95% | 18 | Gujarati edge cases |
+| geok | 95% | 47 | Khutsuri glyph sharing |
+| saur | 94% | 6 | Saurashtra edge case |
+| latp | 94% | 88 | Sub/superscript glyph sharing |
+| latb | 95% | 65 | Sub/superscript glyph sharing |
+| hebr | 92% | 31 | Hebrew blue zones |
+| cher | 85% | 34 | Cherokee edge cases |
+
+### Large Gap Scripts (needs CJK engine port)
+| Script | Pass Rate | Failures | Root Cause |
+|--------|-----------|----------|-----------|
+| adlm | 37% | 158 | Adlam blue zone scanning |
+| nkoo | 67% | 60 | N'Ko edge detection |
+| goth | 56% | 14 | Gothic needs top_to_bottom |
+| hani | 37% | 114 | CJK stroke snapping |
+| beng | 44% | 115 | Bengali needs top_to_bottom |
+| deva | 47% | 154 | Devanagari needs top_to_bottom |
+| guru | 42% | 166 | Gurmukhi needs top_to_bottom |
+| knda | 35% | 125 | Kannada needs top_to_bottom |
+| mong | 25% | 21 | Mongolian needs top_to_bottom |
+
+## Implementation Roadmap
+
+### Phase 1: Sub/Superscript Fix (153 failures → 0)
+
+**Root cause**: Subscript/superscript codepoints (U+2080, U+2070, etc.) fall within LATN Unicode ranges. The coverage scan assigns LATN style to these glyphs. FreeType uses HarfBuzz GSUB feature detection to reassign them to LATB/LATP styles.
+
+**Fix**: Add per-codepoint blue string override in `get_metrics()`. When a glyph is asked to render a subscript-range codepoint, check if the glyph also has a LATB/LATP style in its glyph_styles and use those metric s. No HarfBuzz needed.
+
+**Effort**: ~50 lines in globals.rs
+
+### Phase 2: afcjk.c Port (376 failures → 0)
+
+**Root cause**: `beng`, `deva`, `guru`, `knda`, `mong`, `goth` use CIJK writing system. They need `afcjk.c` edge detection + width computation + `top_to_bottom_hinting` flag. Without this, edges are ordered bottom-to-top (wrong for these scripts), cascading through hint_edges → align_strong_points → IUP.
+
+**Implementation**:
+1. Write `src/autohint/cjk.rs` with:
+   - `cjk_metrics_init_widths()` — segment-based stem detection
+   - `cjk_metrics_init_blues()` — flat/fill blue zones  
+   - `cjk_hints_compute_edges()` — linked-segment-aware edge detection
+   - `cjk_hints_init()` — render-mode flags
+2. Wire into `FaceGlobals::get_metrics()` for Indic/CJK scripts
+3. Verify one script at a time (start with guru → deva → beng)
+
+**Effort**: ~1,200 lines of Rust, 2-3 sessions
+
+### Phase 3: 1-FU Drift Fixes (970 failures → 0)
+
+These are genuine small algorithmic divergences where our blue zone computation or stem width detection differs by 1 FU from FreeType. Fix via per-glyph debugging with `debug_glyph` tool.
+
+**Approach**: Pick one script at a time, trace representative failing glyphs, find the first pipeline stage where values diverge, fix.
+
+**Effort**: Per-glyph debugging, scattered across ~18 scripts
+
+### Phase 4: Hani CJK Fix
+
+`hani` uses the full CJK hinting engine. After Phase 2's `afcjk.c` port, hani should also improve. Remaining gaps need CJK-specific stroke snapping (`af_cjk_snap_width`).
+
+## Files
+
+### Source (Rust)
 ```
-PASSING (31): armn avst bamu buhd cakm cari copt cprt cyrl dsrt geor glag
-               grek kali khmr khms lao latn lisu mlym olck orkh osge osma
-               rohg shaw sinh sund taml tavt tfng
-
-FAILING (24): adlm arab beng cans cher deva ethi geok goth gujr guru hani
-              hebr knda latb latp medf mong mymr nkoo saur telu thai vaii
-              1,249 failures total / 18,500 tests
+src/autohint/
+├── mod.rs              Module declarations + re-exports
+├── types.rs            Core data structures (AfLatinMetrics, AFEdge, etc.)
+├── loader.rs           Outline loading + direction chain + WEAK/STRONG classify
+├── latin.rs            Main hinting pipeline (compute_segments, compute_edges,
+│                       hint_edges, align_edge_points, align_strong_points,
+│                       align_weak_points)
+├── coverage.rs         COV_* instrumentation bits
+├── blue_strings.rs     Auto-generated: 55 scripts with blue zone char arrays
+├── globals_data.rs     Auto-generated: StyleClass[59], Unicode ranges, metadata
+├── globals.rs          FaceGlobals with coverage scan + lazy metrics
+└── script.rs           Per-glyph script detection
 ```
 
-## Root Cause Categories
+### Scripts (Python)
+```
+scripts/
+├── build_fixtures.py          Main fixture pipeline
+├── build_pil_fixture.py       PIL backend fixture generator
+├── extract_blues.py           afblue.dat → blue_strings.rs
+├── generate_globals.py        afranges.c + afstyles.h → globals_data.rs
+├── generate_script_meta.py    afscript.h → standard char + blue chars
+└── build_ft.sh               Build vendored FreeType 2.14.3
+```
 
-### Category A: Subscript/Superscript Blue String Selection (306 failures)
-- **latb**: 130 failures (5% fail rate)
-- **latp**: 176 failures (6% fail rate)
-- **Root cause**: Codepoints like U+2080 (subscript 0), U+2070 (superscript 0) fall within LATN Unicode ranges, so the coverage scan assigns LATN style. FreeType uses HarfBuzz GSUB to detect subscript/superscript features and assign LATB/LATP styles with their specific blue strings.
-- **Fix**: Add codepoint-range overrides: if a codepoint is in the subscript Unicode block (U+2080-U+2089) or superscript block (U+2070-U+2079, U+00B2, U+00B3, U+00B9), prefer LATB/LATP blue strings if those characters exist in the font. No HarfBuzz needed — simple rang e check.
-- **CEffort**: ~30 lines in script.rs or globals.rs
+### Fixtures (JSON)
+```
+tests/fixtures/
+├── font_inventory.json              Font → script → codepoint mapping
+├── coverage_matrix_ft.json          FreeType 2.14.3 Latin (8 fonts, SHA-256)
+├── coverage_matrix_unified.json     55-script fixture (SHA-256 for all)
+└── coverage_matrix.json             PIL 12.2.0 Latin parity
+```
 
-### Category B: top_to_bottom_hinting (760 failures)
-- **guru**: 122 failures (58%), **deva**: 134 (53%), **beng**: 89 (56%)
-- **knda**: 67 failures (65%), **mong**: 7 (75%), **goth**: 18 (44%)
-- **Root cause**: FreeType's `afind ie.c` (157 lines) delegates to `afcjk.c` (2,370 lines) for these scripts. They don't use `aflatin.c` hinting at all — they use the CJK hinting engine. Our port only has `latin.rs` which runs for all scripts.
-- **What's actually needed**: Port `afcjk.c` (CJK metrics + edge detection + blue zones). `afindic.c` is just a bridge that says "use CJK for these scripts".
-- **Effort**: 2,370 lines of C → ~1,200 lines of Rust. 2-3 sessions.
+## Test Results
 
-### Category C: CJK Stroke Snapping (228 failures)
-- **hani**: 228 failures (63% fail rate), all on U+124 (Ĥ) — a Latin codepoint rendered by CJK fonts
-- **Root cause**: Same as Category B — CJK scripts go through `afcjk.c`, not `aflatin.c`. Our `latin.rs` can't handle CJK stroke-based glyphs.
-- **Fix**: Category B's `afcjk.c` port also fixes this.
-
-### Category D: 1-FU Algorithmic Gaps (~165 failures across 9 scripts)
-- **adlm, nkoo, cher, hebr, gujr, geok, cans, mymr, saur, thai, arab, medf, telu, vaii, ethi**
-- **Root cause**: Genuine small differences where our blue zone computation or stem width detection differs by 1 FU from FreeType. Not related to missing modules.
-- **Fix**: Per-glyph debugging with `debug_glyph` tool. These are the hardest to fix but the script coverage is already high (95%+ for most).
-
-## Implementation Order
-
-### Phase 1: Quick Wins (fixes 306 failures, achieves 33/55 scripts at 100%)
-- [ ] Add subscript/superscript codepoint range overrides for latb/latp selection
-- [ ] ~30 lines of Rust code
-- **Expected**: latb and latp move from 5%/6% fail to ~100% pass
-
-### Phase 2: CJK Engine Port (fixes 988 failures, achieves 39/55 scripts at 100%)
-- [ ] Port `afcjk.c` metrics + edge detection:
-  - `af_cjk_metrics_init_widths` (CJK stem width computation)
-  - `af_cjk_metrics_init_blues` (CJK blue zone computation)  
-  - `af_cjk_hints_compute_edges` (CJK edge detection with top_to_bottom)
-  - `af_cjk_hints_init` (CJK hint initialization)
-- [ ] Wire into FaceGlobals for scripts that use CJK writing system
-- **Expected**: guru, deva, beng, knda, mong, goth, hani all move to 100%
-
-### Phase 3: Per-Glyph Debugging (fixes remaining 165 failures)
-- [ ] Debug adlm failures (Adlam script)
-- [ ] Debug nkoo failures (N'Ko script)
-- [ ] Debug remaining edge cases
-- **Expected**: All 55 scripts at 100%
-
-## Files Needed
-
-| File | Description | Lines |
-|------|-------------|-------|
-| `src/autohint/cjk.rs` | CJK metrics + edge detection (from afcjk.c) | ~1,200 |
-| `src/autohint/indic.rs` | Indic bridge (from afindic.c) | ~80 |
-| `src/autohint/mod.rs` | Register new modules | +3 |
-| `src/autohint/globals.rs` | Wire CJK path for Indic + CJK scripts | +15 |
-| `src/autohint/script.rs` | Subscript/superscript range overrides | +30 |
+| Test | Rows | Pass | Status |
+|------|------|------|--------|
+| `test_coverage_matrix_freetype` | 7,600 | 7,600 | ✓ |
+| `test_unified_coverage` | 18,500 | 17,250 | 93.2% |
+| Unit tests | 14 | 14 | ✓ |
+| Fixed parity | 6 | 6 | ✓ |
+| `test_coverage_matrix_pil` | 6,685 | varies | PIL API gap |
