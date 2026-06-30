@@ -127,9 +127,18 @@ pub fn scale_glyph(
         let s = m.axis[1].scale;
         if s != 0 { Some(s) } else { None }
     }).unwrap_or(scale.y_scale);
-    // (ttgload.c:2582): pp1.x = glyf_header.xMin - hmtx_lsb.
-    // Shifts all contour X coords by -pp1.x in FU before scaling.
-    // CRITICAL: must shift BOTH scaled coords AND raw outline for autohinter.
+    // pp1.x origin shift (ttgload.c:2582).
+    // C's TT_Load_Glyph translates the unscaled outline by -pp1.x FU
+    // where pp1.x = glyf_header.xMin - hmtx_lsb. This aligns the glyph
+    // origin for the TrueType loader. Without it, italic fonts in
+    // particular produce 26.6 coordinates that differ from C by 1 unit
+    // (e.g. pt[1]: 344→345), changing the DDA `render_line` prod init
+    // and producing different cell cover/area → pixel SHA mismatch.
+    //
+    // Must shift BOTH the raw outline (for autohinter fx/fy edge detection)
+    // AND the scaled 26.6 coordinates (for autohinter ox/oy positioning).
+    // Using the glyf HEADER xMin is critical — it can differ from the
+    // computed point minimum by ±1 FU.
     let pp1x_fu = outline_raw.xmin - h_metric.lsb as i32;
 
     // Shift raw outline for autohinter fx/fy edge detection

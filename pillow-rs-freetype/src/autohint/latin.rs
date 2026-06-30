@@ -2130,6 +2130,21 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
 //    - Fallback: shift by edge delta for points outside edge range
 
 // ✅ VERIFIED: scale + interpolation match C (T9 trace).
+/// Interpolate non-weak, non-touched points between hinted edges.
+///
+/// For each point: find the two edges that bracket its font-unit position,
+/// then linearly interpolate: `new_pos = before_edge.hinted_pos +
+/// scale * (point_fu - before_edge.fu)`.
+///
+/// ## Why WEAK classification matters here
+///
+/// Points classified as WEAK skip this function entirely and go to IUP
+/// instead. If a point C classifies as STRONG but we classify as WEAK,
+/// it doesn't get grid-fitted → different starting value for IUP →
+/// IUP picks different reference anchors → cascade of coordinate
+/// differences across the entire contour section.
+///
+/// Complete explanation: see `INDEX.md` in this directory.
 fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
     let axis_snapshot = hints.axis[dim as usize].clone();
     let axis = &axis_snapshot;

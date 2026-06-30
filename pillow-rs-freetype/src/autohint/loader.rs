@@ -53,6 +53,28 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 /// `raw_outline` provides font-unit coordinates (fx/fy). The already-scaled
 /// 26.6 outline in `scaled_outline` provides ox/oy (and initial x/y).
 // ✅ VERIFIED: direction chain matches C (afhints.c:1087-1298)
+/// Load scaled outline points into the hint structure.
+///
+/// This function does more than "load" — it computes direction vectors,
+/// builds the direction chain (which merges smooth curves into single
+/// segments), and classifies each point as WEAK (interpolated later by IUP)
+/// or STRONG (explicitly grid-fitted).
+///
+/// ## The WEAK/STRONG classification is the most subtle part of this port.
+///
+/// After the direction chain runs, each point falls into one of 4 cases:
+/// 1. CONTROL flag → always WEAK (Bézier control point)
+/// 2. in_dir == out_dir (non-None) → always WEAK (straight segment)
+/// 3. in_dir == out_dir == None → two sequential sub-tests:
+///    a. XOR quadrant: same sign on both axes? → WEAK
+///    b. corner_is_flat: one vector dominates? → WEAK **and** update
+///       direction-chain deltas (pv→u, nu→v) that affect downstream
+///       classifications. If this delta update is skipped (e.g. by OR-ing
+///       the two checks into one boolean), downstream points see old u/v
+///       values and get different WEAK flags.
+/// 4. in_dir == -out_dir (spike) → always WEAK (afhints.c:1293)
+///
+/// Complete explanation: see `INDEX.md` in this directory.
 pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutline, scaled_points: &[crate::outline::OutlinePoint]) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;

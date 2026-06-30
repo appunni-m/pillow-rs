@@ -1,192 +1,238 @@
-# Autohinter Port — Complete History & Architecture
+# Autohinter — Why Everything Works The Way It Does
 
-Pillow-rs FreeType autohinter (Latin script). Port of FreeType 2.14.1 `src/autofit/`.
-Target: PIL 12.2.0 `ImageFont.getmask()` = `FT_LOAD_DEFAULT|RENDER` on bytecode-stripped fonts.
-
----
-
-## Progress Timeline
-
-| # | Milestone | Passes | Δ | Key Discovery |
-|---|-----------|--------|---|---------------|
-| 0 | Initial baseline | 405 | — | Bare pipeline: segments→edges→hint→points |
-| 1 | Segment filtering (Phase C) | 416 | +11 | Height/delta thresholds reduce edge noise |
-| 2 | `ft_mul_div` in strong-IP | 421 | +5 | Bit-exact interpolation |
-| 3 | x-height scale adjustment | 489 | +68 | Nudge y_scale so x-height blue aligns to pixel grid |
-| 4 | Per-glyph orientation + `abs(major_dir)` | 470 | +23 | Outline area → CW/CCW → major_dir; must ABS(major_dir) for segment matching |
-| 5 | **Phase 1 blue alignment actually applied** | 746 | +279 | `blue` variable was never set for non-linked edges — blues never snapped |
-| 6 | Link_segments cleanup | 798 | +52 | Disabled broken stem pairs; noise reduction |
-| 7 | Edge sorting + width data + SNAP removal | 836 | +38 | Edges must be sorted by fpos; `other_flags=STEM_ADJUST` only for smooth subpixel |
-| 8 | **snap_width in smooth branch** | 942 | +106 | FreeType calls `snap_width` in BOTH smooth and strong — we skipped it in smooth |
-| 9 | Phase 3 'm' symmetry | 943 | +1 | Equalize outer stems around middle for 3-stem glyphs |
-| 10 | Directionless segments 2nd pass | 946 | +3 | Catch segments without direction, attach to existing edges |
-| 11 | **Mask positioning at `bbox_x_min`** | 1051 | +105 | Raster was placed at column 0; must offset by `scaled.bbox_x_min` to match PIL's bitmap_left positioning |
-| 12 | **getbbox/getmask bottom padding** | 1170 | +119 | Extend bbox bottom to baseline for glyphs above it; mask height from font bbox extent |
-
-**Net gain: 405 → 1170 (+765, +189%)**
+This document explains **why** each component exists, **what problem** it solves,
+and the **subtle interactions** between components. Read this when debugging a
+parity difference: you know WHAT diverges, you need to understand WHY that matters.
 
 ---
 
-## Failed experiments & reversions
-
-| Attempt | Effect | Why it failed |
-|---------|--------|---------------|
-| `link_segments` enabled without width scaling | 405→283(-122) | max_width in font units vs per-glyph distances mismatch |
-| `link_segments` with all fixes but early | 746→739(-7) | Minor regression; eventually works with edge sorting |
-| LSB delta applied to outline points via += | 946→825(-121) | Wrong sign; should be -= not += |
-| LSB delta applied via -= | 825 | same | Fundamental approach wrong — should be mask-level, not outline-level |
-| Phantom-point advance adjustment | 1170→990(-180) | Our autohinter edges don't match FreeType's; phantom adjustment overfits wrong data |
-
----
-
-## Fix #12: getbbox/getmask bottom padding
-
-**Symptom:** Hyphen `-`, period `.`, equals `=`, caret `^` and other glyphs fully above
-the baseline got too-tight bbox bottoms (`-`: bottom=8, height=8-7=1) when PIL
-pads these to the baseline (`-`: bottom=10, height=10-7=3). Mask height was also
-wrong (4×1 vs PIL's 4×3).
-
-**Root cause:** `getbbox` computed bbox Y from ink-only coordinates
-(`asc_px - bbox_y_max` to `asc_px - bbox_y_min`). For glyphs where
-`bbox_y_min > 0` (entirely above baseline), bottom didn't extend to the
-baseline. Similarly, `getmask` computed height from the raster pixel count
-only, missing vertical padding.
-
-**Fix:**
-- `getbbox`: `gy_max = (asc_px - g.bbox_y_min).max(asc_px)` — extends bottom
-to at least the baseline
-- `getmask`: `new_height = scaled.bbox_y_max - scaled.bbox_y_min.min(0)` —
-height from font bbox extent, not just raster
-
-**Result:** +119 passes (1051→1170). Hyphen, period, equals, caret, grave,
-underscore (top-clamp) all fixed.
-
----
-
-## Critical Bug: `major_dir` not absolutified
-
-**Symptom:** All glyphs pass at ~470 with hardcoded `major_dir=Right` for VERT, but regression to 251 when computing per-glyph orientation.
-
-**Root cause (aflatin.c:1577):** `major_dir = (AF_Direction)FT_ABS(axis->major_dir)` — the segment direction matching in `compute_segments` uses the **absolute** major_dir (Up/Right), not the raw direction (Left/Down). Our code compared `abs_dir(out_dir)` with raw `major_dir` instead of `abs_dir(major_dir)`.
-
-**Fix:** `let major_dir = abs_dir(raw_major_dir)` in compute_segments.
-
-**Verification:** The raw orientation (CW=TT=Left, CCW=PS=Right) is stored in `axis.major_dir` for `link_segments` and `compute_blue_edges` (which compare raw edge.dir with raw major_dir). The absolutified version is only for segment detection.
-
----
-
-## Critical Bug: Phase 1 blue never applied
-
-**Symptom:** Blue zones computed correctly (verified against FreeType trace), `compute_blue_edges` assigns correct `blue_edge.fit`, but hint_edges never snaps to it.
-
-**Root cause:** In `hint_edges` Phase 1, the `blue` variable was initialized to `None` and only set inside the `if link != usize::MAX` neutral-dedup block. For edges without stem links (most edges), `blue` stayed `None`, and the condition `if edge1_idx.is_none() { continue }` skipped the blue alignment.
-
-**Fix:** Moved `edge1_idx = Some(i); blue = Some(b)` OUTSIDE the link-dedup block, so non-linked edges also get their blue applied.
-
----
-
-## Critical Bug: `snap_width` missing in smooth branch
-
-**Symptom:** `|` glyph X stem width = 56 instead of FreeType's 61. The width wasn't being snapped to the standard width (60).
-
-**Root cause:** `compute_stem_width` smooth branch (no SNAP flags) had `dist < 56 → dist = 56` but then skipped `snap_width(std_widths, dist)`. The C code calls `snap_width` in BOTH smooth and strong branches.
-
-**Fix:** Added `if !std_widths.is_empty() { dist = snap_width(std_widths, dist); }` after the smooth-branch quantization checks.
-
----
-
-## Critical Bug: Mask positioning at wrong offset
-
-**Symptom:** All glyphs shifted 1px left vs PIL reference. `|` coverage values matched FreeType (244) but bar was at column 0 instead of column 1.
-
-**Root cause:** The scaler translates the hinted outline by `off_x = FT_PIX_FLOOR(x_min)`, producing coordinates relative to pixel boundary. The outline's `bbox_x_min` correctly reports the pixel offset (e.g., 1 for `|`). But `getmask` placed the raster at column 0 regardless of `bbox_x_min`.
-
-**Fix:** In `getmask`, offset the raster placement by `scaled.bbox_x_min` pixels: `dst = y * new_width + bbox_x_min`. This matches PIL's convention where glyph content starts at `bitmap_left` rather than at mask column 0.
-
----
-
-## Key architectural facts discovered
-
-### PIL does NOT use FreeType's bitmap rasterizer
-PIL's `getmask` output is significantly different from `FT_LOAD_RENDER` bitmap. PIL renders the outline through `_imagingft.c`'s own scan converter, not FreeType's `ftgrays.c`. The reference fixtures are **PIL getmask output**, not raw FreeType bitmap.
-
-### Our rasterizer IS byte-accurate to FreeType
-Verified by comparing pixel-by-pixel output for the `|` glyph with identical outline coordinates. Our `grays.rs` matches `ftgrays.c`. Coverage differences come from subpixel edge positions, not rasterizer bugs.
-
-### The standard width collection was correct
-Our `metrics_init_widths` produces `horizontal widths: 194` and `vertical widths: 156` matching FreeType's trace exactly. Earlier confusion (864) was from looking at an old code version.
-
-### PIL adds left padding equal to `bitmap_left`
-The 1px shift in our output wasn't an autohinter edge error — it was the mask assembly placing the raster at the wrong horizontal offset. PIL's mask width = `max(advance, ink_right - bitmap_left)` and content is offset by `bitmap_left`.
-
----
-
-## Current State (1170/1910, 61.3%)
-
-| Dimension | Pass | Total | Rate |
-|-----------|------|-------|------|
-| Non-glyph (metrics/name/length) | 30 | 30 | 100% |
-| getbbox | 863 | 940 | 91.8% |
-| getmask | 277 | 940 | 29.5% |
-
-### Remaining failures (740)
-
-| Type | Count | Primary cause |
-|------|-------|---------------|
-| SHA-only (bbox correct) | ~663 | Stem quantization produces slightly different subpixel widths |
-| Bbox + SHA | ~77 | Autohinter edge placement differs from FreeType by ±1px; rasterizer differences |
-
-### Characters passing all getmask tests (both fonts, all sizes)
-`/`, `\`, `I`, `l`, `(` — 5 straight-line glyphs
-
-### Characters failing all getmask tests
-37 characters — includes most curved letters (`A`, `G`, `Q`, `R`, `S`, `a`, `g`, `m`, `n`, `s`, etc.) and digits 2-9.
-
----
-
-## Pipeline Architecture
+## Pipeline Overview
 
 ```
-Font::truetype()  [once per font+size]
-├─ metrics_init_widths()     — scan 'o' glyph → axis[].widths[] (font units)
-├─ metrics_init_blues()      — scan 6 Latin char strings → axis[].blues[]
-└─ metrics_scale_dim()       — x-height scale opt + scale widths/blues → 26.6
-
-scale_glyph()  [per glyph]
-├─ Scale font units → 26.6 using adjusted y_scale
-├─ apply_hints():
-│   ├─ reload(outline)      — load into hints, compute directions, orientation
-│   ├─ For VERT dim (Y-axis / horizontal edges):
-│   │   ├─ compute_segments()  — segment detection with height extension
-│   │   ├─ link_segments()     — stem pairing with C-exact scoring
-│   │   ├─ compute_edges()     — edge grouping with dynamic thresholds + 2nd pass
-│   │   ├─ compute_blue_edges()— assign edges to nearest active blue zone
-│   │   ├─ hint_edges()        — Phase 1(blues)+Phase 2(stems)+Phase 3(m)+Phase 4(non-stem)
-│   │   ├─ align_edge_points() — snap edge points to edge positions
-│   │   ├─ align_strong_points()— IP (interpolate points between edges)
-│   │   └─ align_weak_points() — IUP (interpolate untouched points in storage order)
-│   ├─ For HORZ dim (X-axis / vertical edges): same minus blue edges
-│   └─ save_to_outline()
-├─ Compute CBox → pixel bbox
-└─ Translate outline to pixel-bbox origin
-
-Font::getmask()  [per glyph text]
-├─ scale_glyph() → ScaledGlyph
-├─ grays::rasterize(outline) → raster at subpixel positions
-└─ Assemble mask: offset raster by bbox_x_min/bbox_y_min, pad to advance width
+RAW OUTLINE (FU)
+      │
+      ▼
+  ┌──────────┐
+  │  SCALER  │  Scale FU→26.6, apply pp1.x origin shift.
+  │          │  Why pp1.x? TrueType defines glyphs relative to (0,0) at
+  │          │  the left bearing. Without this shift, the outline is offset,
+  │          │  producing different sub-pixel rasterization for italic fonts.
+  └────┬─────┘
+       │
+       ▼
+  ┌──────────┐
+  │  RELOAD  │  Load coords, compute direction vectors.
+  │          │  Build DIRECTION CHAIN: smooth curves made of many small
+  │          │  edges should be treated as ONE smooth segment. Without this,
+  │          │  a circle becomes many tiny segments, each getting its own
+  │          │  edge, and hinting produces a jagged polygon.
+  │          │  Classify WEAK vs STRONG: weak points lie on straight runs
+  │          │  and get interpolated later; strong points are corners and
+  │          │  get explicit grid-fitting. Wrong classification here causes
+  │          │  IUP to pick wrong reference points (+1-2 unit drift).
+  └────┬─────┘
+       │
+       ▼
+  ┌───────────┐
+  │  SEGMENTS │  Find horizontal/vertical runs of consecutive points.
+  └────┬──────┘
+       │
+       ▼
+  ┌─────────┐
+  │  EDGES  │  Merge overlapping segments into edges.
+  │         │  Why merge? Left side of 'H' = serif + stem + serif = 3
+  │         │  segments but 1 edge → must snap to 1 pixel column.
+  └────┬────┘
+       │
+       ▼
+  ┌──────────────┐
+  │  HINT EDGES  │  4-phase snapping:
+  │              │  P1: Snap stem PAIRS to integer pixels (preserving width)
+  │              │  P2: Snap serifs to linked stems
+  │              │  P3: Snap to blue zones (baseline, cap-height, x-height)
+  │              │  P4: Propagate alignment via anchor chains
+  └────┬─────────┘
+       │
+       ▼
+  ┌──────────────────────────────────────────┐
+  │  ALIGN EDGE → STRONG → WEAK (IUP)        │
+  │  Edge: snap points belonging to an edge  │
+  │  Strong: interpolate corners between edges│
+  │  IUP: interpolate weak points between     │
+  │        strong anchors                     │
+  │  Nuance: IUP result depends on which      │
+  │  points were classified STRONG vs WEAK    │
+  └──────────────────────────────────────────┘
+       │
+       ▼
+  ┌──────────────────┐
+  │  PHANTOM ADJUST  │  Shift glyph to pixel grid via pp1.x
+  └──────────────────┘
+       │
+       ▼
+  ┌────────────┐
+  │  RASTERIZE │  DDA → cell cover/area → sweep → bitmap
+  └────────────┘
 ```
 
-## Key Files
+---
 
-| File | Purpose |
-|------|---------|
-| `src/autohint/latin.rs` | Main autohinter (~2400 lines, Phases A–F + all fixes) |
-| `src/autohint/types.rs` | Data structures (GlyphHints, AFEdge, AfLatinMetrics, etc.) |
-| `src/autohint/loader.rs` | `reload()` — outline loading + direction computation + orientation |
-| `src/autohint/mod.rs` | Module exports |
-| `src/scaler.rs` | `scale_glyph()` + `autohint_glyph()` + CBox/bbox computation |
-| `src/font.rs` | `Font::truetype()` (metric init) + `getmask()`/`getbbox()` |
-| `src/grays.rs` | Smooth rasterizer (byte-accurate to ftgrays.c) |
-| `freetype/src/autofit/aflatin.c` | FreeType 2.14.1 reference (vendored) |
-| `freetype/src/autofit/afhints.c` | FreeType 2.14.1 glyph hints reference |
-| `freetype/src/autofit/afloader.c` | FreeType 2.14.1 loader reference |
+## `build_direction_chain` — Preventing Curve Fragmentation
+
+**Problem:** A smooth curve like 'O' has many contour points with slightly
+different per-point directions. If `compute_segments` sees these raw directions,
+it splits the curve into dozens of tiny segments → each gets its own edge →
+each edge independently hinted → jagged circle, not a smooth one.
+
+**Solution:** Walk the contour accumulating taxicab distance. When accumulated
+distance exceeds `near_limit` (20 * UPEM / 2048 FU), the points between are
+"non-near" — they form a single smooth run. Override all their in_dir/out_dir
+to the accumulated direction. Now `compute_segments` sees one long segment
+instead of many short ones.
+
+**Critical nuance — UPEM dependency:** `near_limit = 20 * upem / 2048`.
+- UPEM=2048: near_limit = 20 FU → sparse chain network
+- UPEM=1000: near_limit = 9 FU → dense chain network (more points merge)
+
+At UPEM=1000, MORE points get merged into chains because small coordinate
+deltas quickly exceed 9 FU. This creates a fundamentally different direction-chain
+topology, which feeds into different WEAK/STRONG classifications downstream.
+
+---
+
+## Strong-vs-Weak Classification — The Heart of IUP Accuracy
+
+**Problem:** Which points need explicit grid-fitting (STRONG) and which can
+be interpolated (WEAK)? Get this wrong and IUP picks different reference
+anchors, shifting entire contour sections.
+
+**Decision tree for each point:**
+
+### Case 1: CONTROL flag set → always WEAK
+Bézier control point. Position determined by on-curve endpoints.
+
+### Case 2: in_dir == out_dir (both non-None) → always WEAK
+Point lies on a straight segment, not a corner.
+
+### Case 3: in_dir == out_dir == None ("both-None") — the tricky case
+
+Two sequential sub-tests:
+
+**Test A — XOR quadrant (afhints.c:1221-1245):**
+If in-vector and out-vector share the same sign on both axes → WEAK.
+The point is effectively on a straight run.
+
+**Test B — corner_is_flat (afhints.c:1276-1290):**
+Measures whether one vector dominates the other. If "flat enough" → WEAK.
+**AND critically: updates direction-chain deltas** (`pv→u`, `nu→v`).
+
+**The delta update is the key nuance.** When corner_is_flat returns true,
+the code sets `pv->u = next_u - prev_v` and `next_u->v = -pv->u`. These
+deltas change which neighbor points get consulted for DOWNSTREAM point
+classifications. A point 5 indices away might see a different neighbor
+because of a delta update on pt[20].
+
+**Our bug (fixed in commit `1ecd364`):** The old code OR'd the two tests:
+`xor || corner_is_flat(...)`. When XOR was true, the short-circuit OR
+skipped `corner_is_flat` and its delta update. A downstream point saw an
+old u/v value instead of the updated one → different WEAK classification
+→ different IUP reference → +1 unit output → pixel mismatch.
+
+### Case 4: in_dir == -out_dir (spike) → always WEAK
+Direction reverses — sharp corner. Better interpolated than grid-fitted.
+
+---
+
+## The 12-Step Cascade — From Code to Pixel
+
+This is the complete chain that caused the 18→9 reduction:
+
+```
+Step 1:  build_direction_chain sets u/v pointers on each point.
+         At UPEM=1000, near_limit=9 FU → dense chain network.
+
+Step 2:  u/v pointers determine neighbor points consulted in "both-None" case.
+
+Step 3:  "both-None" runs XOR quadrant check → fails → corner_is_flat.
+
+Step 4:  corner_is_flat returns true → C updates pv→u, nu→v deltas.
+         Old Rust code OR'd the checks, skipping this update.
+
+Step 5:  Downstream point classification sees stale u/v → different WEAK result.
+
+Step 6:  pt[20] classified WEAK in Rust (was STRONG in C).
+
+Step 7:  align_strong_points skips WEAK points → pt[20] stays at ox=62.
+
+Step 8:  IUP walks contour looking for TOUCHED points.
+         C finds pt[20] (touched). Rust skips to pt[21] (touched).
+
+Step 9:  IUP reference pair differs:
+         C: (pt[20]=62→33, pt[14]=271→256) → scale=69926
+         R: (pt[21]=88→59,  pt[14]=271→256) → scale=70550
+
+Step 10: Different scale → pt[15] = 201 (C) vs 200 (R). +1 unit in 26.6.
+
+Step 11: +1 unit → render_conic subdivides differently.
+
+Step 12: render_line DDA endpoints differ by 3 subpixel units →
+         cell cover/area differs by 1 alpha unit → SHA mismatch.
+```
+
+A missing delta update on point 20 changes IUP output for point 15, which
+changes pixel alpha at coordinate (2,5) by 1 unit out of 255. That 0.4%
+alpha difference fails the SHA-256 test.
+
+---
+
+## Font Category Behavior
+
+### Upright Serif (UPEM=2048)
+```
+near_limit: 20 FU → sparse direction chain
+Most points get distinct u/v neighbors.
+WEAK/STRONG classification is straightforward.
+corner_is_flat rarely triggers → delta update issue doesn't surface.
+Result: ALL PASS.
+```
+
+### Italic (UPEM=2048)  
+```
+NO_HORIZONTAL flag set → X-axis hinting skipped entirely.
+pp1.x = -1 → shifts all contour X by +1 FU → different 26.6 coords.
+Result: PASS (after pp1.x fix).
+```
+
+### UPEM=1000 Bold (NotoSerifDisplay)
+```
+near_limit: 9 FU → dense direction chain.
+Many small coordinate deltas exceed 9 FU quickly → points merge into chains.
+Dense network means delta updates propagate through more downstream points.
+Result: '5' FIXED (9/9), 'B' and 'g' still fail (different contour topologies).
+```
+
+### Liberation Bold/Mono/NarrowItalic (UPEM=2048)
+```
+Bold: wider standard_width → larger edge_distance_threshold.
+Mono: uniform advance widths → 'l' has only one real edge → IUP fragile.
+Narrow italic: NO_HORIZONTAL + compressed metrics → dense point spacing.
+Result: 3 still failing.
+```
+
+---
+
+## Debugging Checklist
+
+When a specific point diverges between C and Rust:
+
+```
+□ Run standalone binary for ONE glyph (not test suite) → unambiguous traces
+□ Compare edge fpos/opos/pos after hint_edges → edges OK?
+□ Compare touch flags after align_edge_points → segment assignment OK?
+□ Compare WEAK flags from reload → classification matches C?
+□ If WEAK differs: trace direction-chain u/v for that point
+□ If u/v differs: compare corner_is_flat inputs (same neighbors?)
+□ If neighbors differ: trace build_direction_chain backward walk
+□ Compare IUP reference indices in iup_interp → same ref pair?
+□ Compare final pixel hex dump → byte-identical to C?
+```
