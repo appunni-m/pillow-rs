@@ -33,6 +33,13 @@ pub struct Font {
     pub backend: BitmapBackend,
     /// Pre-computed Latin autohinter metrics (stem widths, blue zones).
     pub latin_metrics: Option<crate::autohint::AfLatinMetrics>,
+    /// Pre-computed Greek autohinter metrics. Only populated when font
+    /// has Greek Unicode coverage AND shares glyphs between Latin/Greek.
+    pub greek_metrics: Option<crate::autohint::AfLatinMetrics>,
+    /// Glyph→script preference: true = use Greek metrics for this glyph.
+    /// Matches FreeType's af_face_globals_compute_style_coverage where
+    /// Greek ranges are scanned first, so shared glyphs get Greek style.
+    pub glyph_is_greek: Vec<bool>,
     /// Whether the font is italic/oblique (from head.mac_style bit 1).
     pub is_italic: bool,
 }
@@ -230,13 +237,82 @@ impl Font {
         // Store the adjusted vertical scale for the scaler to use.
         latin_metrics.axis[1].org_scale = y_scale_adj;
 
+        // Build glyph→script mapping matching FreeType's coverage scan.
+        // Greek ranges are scanned first → shared glyphs get Greek style.
+        let glyph_is_greek = crate::autohint::script::build_glyph_script_map(
+            &font_data.cmap,
+            num_glyphs as usize,
+        );
+
+        // Compute Greek metrics if font has Greek coverage.
+        let greek_metrics = if glyph_is_greek.iter().any(|&g| g) {
+            let mut greek = crate::autohint::AfLatinMetrics::new(upem, num_glyphs);
+            // Copy non-base glyph flags from Latin
+            for (i, &nb) in latin_metrics.non_base_glyphs.iter().enumerate() {
+                greek.non_base_glyphs[i] = nb;
+            }
+            // Compute widths using 'o' glyph (same as Latin)
+            if char_glyph > 0 {
+                if let Ok(outline_raw) = crate::tt::glyf::load_glyph(
+                    &font_data.glyf_data,
+                    &font_data.loca_data,
+                    font_data.head.index_to_loc_format,
+                    char_glyph,
+                ) {
+                    let scaled_points: Vec<crate::outline::OutlinePoint> = outline_raw
+                        .points.iter()
+                        .map(|p| crate::outline::OutlinePoint {
+                            x: p.x, y: p.y, on_curve: p.on_curve,
+                        })
+                        .collect();
+                    crate::autohint::latin::metrics_init_widths(
+                        &mut greek, char_glyph, &outline_raw, &scaled_points,
+                    );
+                }
+            } else {
+                for dim in 0..2 {
+                    let axis = &mut greek.axis[dim];
+                    let stdw = (50 * upem) / 2048;
+                    axis.standard_width = stdw;
+                    axis.edge_distance_threshold = stdw / 5;
+                }
+            }
+            // Compute Greek blue zones (uses SCRIPT_GREK with Greek chars)
+            crate::autohint::latin::metrics_init_blues_greek(&mut greek, &font_data);
+            // Scale Greek metrics
+            let (_x_adj, y_adj) = crate::autohint::latin::metrics_scale_dim(
+                &mut greek, base_scale.x_scale, base_scale.y_scale, 0, 0,
+            );
+            greek.axis[1].org_scale = y_adj;
+            Some(greek)
+        } else {
+            None
+        };
+
         Ok(Font {
             data: font_data,
             size_pt,
             backend,
             latin_metrics: Some(latin_metrics),
+            greek_metrics,
+            glyph_is_greek,
             is_italic,
         })
+    }
+
+    /// Select the autohinter metrics for a specific codepoint.
+    /// For codepoints whose glyphs are shared with Greek (e.g., ';'
+    /// sharing glyph with Greek Question Mark U+037E), returns Greek
+    /// metrics matching FreeType's coverage-based script assignment.
+    fn metrics_for(&self, ch: char) -> Option<&crate::autohint::AfLatinMetrics> {
+        let cp = ch as u32;
+        let glyph = self.data.cmap.char_index(cp).unwrap_or(0);
+        let gi = glyph as usize;
+        if gi < self.glyph_is_greek.len() && self.glyph_is_greek[gi] {
+            self.greek_metrics.as_ref().or(self.latin_metrics.as_ref())
+        } else {
+            self.latin_metrics.as_ref()
+        }
     }
 
     /// `getname()` → `(family, style)`.
@@ -299,8 +375,8 @@ impl Font {
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
         let advance = pixel_round(ft_mul_fix(
             data.hmtx.get(glyph).advance_width as i32, scale.x_scale));
-
-        match scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref(), self.is_italic) {
+        let metrics = self.metrics_for(ch);
+        match scaler::scale_glyph(data, glyph, metrics, self.is_italic) {
             Ok(g) if g.outline.n_contours > 0 => {
                 match self.backend {
                     BitmapBackend::PIL => {
@@ -360,7 +436,8 @@ impl Font {
 
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-        let scaled = scaler::scale_glyph(data, glyph, self.latin_metrics.as_ref(), self.is_italic)?;
+        let metrics = self.metrics_for(ch);
+        let scaled = scaler::scale_glyph(data, glyph, metrics, self.is_italic)?;
 
         if scaled.outline.n_contours == 0 {
             // No outline → empty mask (but PIL still returns the advance-sized

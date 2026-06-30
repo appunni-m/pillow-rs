@@ -31,8 +31,13 @@ pub mod types;
 pub mod coverage;
 pub mod loader;
 pub mod latin;
+pub mod blue_strings;
+pub mod script;
 
 pub use latin::apply_hints;
+pub use latin::{metrics_init_blues, metrics_init_blues_greek};
+pub use script::detect_script;
+pub use script::build_glyph_script_map;
 pub use types::{GlyphHints, AxisHints, AFPoint, AFSegment, AFEdge, Direction, Dimension,
     AfWidth, AfLatinBlue, AfLatinAxisMetrics, AfLatinMetrics,
     AF_LATIN_MAX_WIDTHS,
