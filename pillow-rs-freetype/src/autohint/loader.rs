@@ -88,7 +88,6 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 /// - [ ] WEAK flags after reload match C? → **classification diverged — check here**
 /// - [ ] `build_direction_chain` u/v pointers match C? → chain topology differs
 /// - [ ] `corner_is_flat` inputs same neighbors as C? → `near_limit` threshold issue
-#[allow(clippy::branches_sharing_code)]
 pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutline, scaled_points: &[crate::outline::OutlinePoint]) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;

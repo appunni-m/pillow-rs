@@ -24,7 +24,10 @@
 
 #![forbid(unsafe_code)]
 #![allow(missing_docs)]
-// TODO(#847): fix clippy arithmetic/cast lints and remove these allows.
+// TODO(#847): audit all 500+ fixed-point cast sites, remove these blanket allows.
+// Domain justification: all arithmetic is 26.6 fixed-point (i32), within
+// i16/i32 ranges for valid fonts. Fixing individually would require ~500
+// #[allow] annotations that add noise without value.
 #![allow(
     clippy::arithmetic_side_effects,
     clippy::cast_possible_truncation,
@@ -34,8 +37,8 @@
 )]
 // sha2/serde/serde_json are dev-deps used by the coverage test.
 #![cfg_attr(test, allow(unused_crate_dependencies))]
-// Many internal helpers are exercised through the integration test rather than
-// unit tests; keep them during the port.
+// Internal helpers exercised by integration tests (coverage_matrix_tests.rs)
+// trigger dead_code. Remove once they have dedicated unit tests.
 #![allow(dead_code)]
 
 pub mod autohint;
