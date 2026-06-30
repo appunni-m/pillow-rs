@@ -405,6 +405,7 @@ pub fn metrics_init_blues(
             if let Some(best_y_val) = best_y_extremum {
                 if best_round { rounds.push(best_y_val); }
                 else { flats.push(best_y_val); }
+                trace!(target: "autohint::pipeline", "[BLUE_METRIC] ch={ch} round={best_round} y={best_y_val}", ch = entry.chars[0]);
             }
         }
 
@@ -423,6 +424,8 @@ pub fn metrics_init_blues(
         } else {
             (flats[flats.len() / 2], rounds[rounds.len() / 2])
         };
+        trace!(target: "autohint::pipeline", "[BLUE_FINAL] entry={} flats={:?} rounds={:?} ref_idx={} shoot_idx={} ref={ref_val} shoot={shoot_val}",
+            entry.chars[0], flats.len(), rounds.len(), flats.len()/2, rounds.len()/2);
 
         // Overshoot sanity (aflatin.c:940-956).
         if shoot_val != ref_val {
