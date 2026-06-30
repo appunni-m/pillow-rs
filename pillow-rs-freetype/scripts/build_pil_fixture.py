@@ -21,16 +21,17 @@ FONT_DIR = 'pillow-rs-freetype/tests/fixtures/input/fonts_autohint'
 SIZES = [10, 12, 16, 20, 24]
 CODEPOINTS = list(range(33, 127))  # printable ASCII
 
-# PIL fixture uses 7 specific font names from the original test set.
-# These map DejaVu family names to the actual .ttf files in our font dir.
+# Same 8 Latin fonts as the FT Latin matrix (font-reduction-research.md)
+# Both PIL and FreeType tests use identical font files.
 FONT_MAP = {
-    'DejaVuSans':           'DejaVuSans.ttf',
-    'DejaVuSansCondensed':  'DejaVuSansCondensed.ttf',
-    'DejaVuSansMono':       'DejaVuSansMono.ttf',
-    'DejaVuSerif':          'DejaVuSerif.ttf',
-    'LiberationSerif':      'LiberationSerif.ttf',
-    'NotoSans':             'NotoSans.ttf',
-    'Ubuntu':               'Ubuntu.ttf',
+    'DejaVuSans-ExtraLight':     'DejaVuSans-ExtraLight.ttf',
+    'DejaVuSans-Oblique':        'DejaVuSans-Oblique.ttf',
+    'DejaVuSansMono':            'DejaVuSansMono.ttf',
+    'DejaVuSerif-Bold':          'DejaVuSerif-Bold.ttf',
+    'DejaVuSerif-Italic':        'DejaVuSerif-Italic.ttf',
+    'LiberationSans-Regular':    'LiberationSans-Regular.ttf',
+    'LiberationSansNarrow-Bold': 'LiberationSansNarrow-Bold.ttf',
+    'NotoSans-Bold':             'NotoSans-Bold.ttf',
 }
 
 def main():
