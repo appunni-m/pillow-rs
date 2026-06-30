@@ -20,6 +20,7 @@
 
 use crate::casts::{i16_from_i32, i32_from_i64, usize_from_i32};
 use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
+#[cfg(debug_assertions)]
 use log::trace;
 
 use super::types::{
@@ -918,8 +919,9 @@ pub fn apply_hints(
     }
 
     // Step 4: Write back
-    // Pipeline trace: dump at `trace!` level.
+    // Pipeline trace: dump at `trace!` level.  Compiled out in release builds.
     // Enable with: RUST_LOG=autohint::pipeline=trace
+    #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
         trace!(target: "autohint::pipeline", "[PIPE] reload {} pts", hints.num_points());
         for (i, pt) in hints.points.iter().enumerate() {
