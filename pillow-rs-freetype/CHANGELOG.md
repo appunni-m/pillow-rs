@@ -1,0 +1,23 @@
+# Changelog
+
+## 0.1.0 (unreleased)
+
+### Added
+- Initial crate: pure-Rust FreeType 2.14.1 port
+- TrueType table parsers: cmap, glyf, head, hhea, hmtx, maxp, name, OS/2, loca
+- Latin script auto-hinter: reload, segment detection, edge grouping, 4-phase hinting, IUP
+- Smooth anti-aliased rasterizer (FT_INT64 DDA path from ftgrays.c)
+- `BitmapBackend::FreeType` and `BitmapBackend::PIL` backends
+- FT fixture test matrix: 27,686/27,695 pass (99.97%)
+
+### Fixed
+- `1ecd364`: WEAK_INTERPOLATION classification — 18→9 failures. The "both-None" case
+  XOR check and `corner_is_flat` must run sequentially (not OR'd) because
+  `corner_is_flat` updates direction-chain deltas that downstream classifications
+  depend on. Spike detection must be unconditional (not gated on `AF_FLAG_NEAR`).
+- `04975f8`: pp1.x phantom-point translation — 309→18 failures. C's TT_Load_Glyph
+  shifts contour X coords by `pp1.x = glyf_header.xMin - hmtx_lsb`. Must use glyf
+  HEADER xMin (not computed min) and shift both raw outline AND scaled coords.
+- `cbbdcba`: getmetrics `f32` precision → `FT_MulFix + FT_PIX_CEIL`
+- `cf19f9e`: getlength from Python hmtx instead of C `FT_LOAD_DEFAULT`
+- `887070a`: walk_contour conic wrap when `first==0`

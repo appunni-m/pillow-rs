@@ -1,4 +1,7 @@
-//! Parsed font tables held together for glyph rendering.
+//! Parsed font tables: holds all TrueType table data for glyph rendering.
+//!
+//! [`FontData`] is constructed by [`crate::font::Font::truetype`] and
+//! holds the parsed results of all required TrueType tables.
 
 use crate::tt::cmap::CmapTable;
 use crate::tt::head::HeadTable;
