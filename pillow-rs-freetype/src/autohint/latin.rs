@@ -1065,6 +1065,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         let curr_in = points[point].in_dir;
                         if prev_last_in == curr_in {
                             // C: identical directions → unify (aflatin.c:1746-1791)
+                            // prev_segment->first stays correct (it's the earlier point).
                             min_pos = min_pos.min(prev_min_pos); max_pos = max_pos.max(prev_max_pos);
                             min_coord = min_coord.min(prev_min_coord); max_coord = max_coord.max(prev_max_coord);
                             let pos = i16_from_i32((min_pos + max_pos) >> 1);
@@ -1072,23 +1073,37 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos; s.delta = delta;
                             s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
+                            if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
+                                && (max_on_coord - min_on_coord) < FLAT_THRESHOLD
+                            {
+                                s.flags |= AF_EDGE_ROUND;
+                            } else {
+                                s.flags &= !AF_EDGE_ROUND;
+                            }
+                            s.height = i16_from_i32(max_coord - min_coord);
                         } else if (prev_max_coord - prev_min_coord).abs() > (max_coord - min_coord).abs() {
-                            // discard current: extend prev's last only.
+                            // C: different directions, prev is longer — keep prev (aflatin.c:1798-1811)
+                            // prev_segment->first stays correct (it's the earlier point).
                             let pos = i16_from_i32((prev_min_pos.min(min_pos) + prev_max_pos.max(max_pos)) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
                         } else {
-                            // discard prev: current replaces it.
+                            // C: different directions, current is longer — replace prev (aflatin.c:1812-1843)
+                            // *prev_segment = *segment copies ALL fields, including `first`.
                             let pos = i16_from_i32((min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
                             s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
                             s.dir = segment_dir;
-                            // ⚠️ C: *prev_segment = *segment copies `first` too (aflatin.c:1822).
-                            // Without this, the replaced segment inherits the discarded prev
-                            // segment's `first`, causing wrong point ranges → wrong edge
-                            // assignments → 6 of 9 failing tests.
                             s.first = seg_first;
+                            if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
+                                && (max_on_coord - min_on_coord) < FLAT_THRESHOLD
+                            {
+                                s.flags |= AF_EDGE_ROUND;
+                            } else {
+                                s.flags &= !AF_EDGE_ROUND;
+                            }
+                            s.height = i16_from_i32(max_coord - min_coord);
                         }
                     }
 
@@ -1102,6 +1117,15 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
             }
 
             // Start a new segment if not on edge and out_dir matches major dir.
+            //
+            // C (aflatin.c:1902-1907):
+            //   if (!(point->flags & AF_FLAG_IGNORE) && !on_edge &&
+            //       (FT_ABS(point->out_dir) == major_dir || point == point->prev))
+            // The "|| point == point->prev" clause allows single-point contours
+            // to start a segment even if out_dir doesn't match ABS(major_dir).
+            // Our tracing confirms p17 (out_dir=Left, abs=1=major_dir=Right=1)
+            // passes the normal check — the extra clause is for degenerate
+            // single-point glyphs only and doesn't affect NOTO B's 43-point outline.
             let p = &points[point];
             if p.flags & AF_FLAG_IGNORE == 0
                 && !on_edge
