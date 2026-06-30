@@ -217,11 +217,21 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
             let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
             let out_y = hints.points[nu].fy as i32 - pt.fy as i32;
-            // C's XOR quadrant check (afhints.c:1221-1245): same sign for both axes
-            ((in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0)
-                || corner_is_flat(in_x, in_y, out_x, out_y)
+            // C (afhints.c:1276-1290): XOR check, then corner_is_flat
+            let xor_same = (in_x ^ out_x) >= 0 && (in_y ^ out_y) >= 0;
+            if xor_same {
+                true
+            } else if corner_is_flat(in_x, in_y, out_x, out_y) {
+                // Update index deltas (C: afhints.c:1286-1287)
+                hints.points[pv].u = nu as i32 - pv as i32;
+                hints.points[nu].v = -(hints.points[pv].u);
+                true
+            } else {
+                false
+            }
         } else if in_dir == out_dir.opposite() {
-            flags & AF_FLAG_NEAR != 0
+            // C (afhints.c:1293): any spike is always weak
+            true
         } else {
             false
         };
