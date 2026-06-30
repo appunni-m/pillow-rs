@@ -937,9 +937,17 @@ pub fn apply_hints(
             trace!(target: "autohint::pipeline", "[PIPE] E{ei}: fpos={} opos={} pos={} link={} serif={}",
                 e.fpos, e.opos, e.pos, e.link, e.serif);
         }
+        // Also dump HORZ edges
+        let ha = &hints.axis[Dimension::Horz as usize];
+        let el_horz = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
+        trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light={el_horz}", ha.edges.len());
+        for (ei, e) in ha.edges.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[PIPE] HE{ei}: fpos={} opos={} pos={} link={} serif={}",
+                e.fpos, e.opos, e.pos, e.link, e.serif);
+        }
         trace!(target: "autohint::pipeline", "[PIPE] final");
         for (i, pt) in hints.points.iter().enumerate() {
-            trace!(target: "autohint::pipeline", "[PIPE] p{i}: y={}", pt.y);
+            trace!(target: "autohint::pipeline", "[PIPE] p{i}: x={x} y={y}", x = pt.x, y = pt.y);
         }
     }
     hints.save_to_outline(outline);

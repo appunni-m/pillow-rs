@@ -3,7 +3,7 @@
 //! Args via env: PIPE_FONT=LiberationSerif-Bold PIPE_SIZE=10 PIPE_CHAR='$'
 
 use pillow_rs_freetype::autohint::types::*;
-use pillow_rs_freetype::autohint::{loader, latin};
+use pillow_rs_freetype::autohint::{latin};
 use pillow_rs_freetype::{Font, BitmapBackend, outline::OutlinePoint, fixed, tt, scaler};
 
 fn sha256(data: &[u8]) -> String {
