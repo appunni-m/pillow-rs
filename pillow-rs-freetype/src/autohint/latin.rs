@@ -36,18 +36,21 @@ use super::loader;
 /// AF_LATIN_CONSTANT: scale `c` by upem/2048.  aflatin.h:34
 #[inline]
 // ✅ TRIVIAL: AF_LATIN_CONSTANT (aflatin.h).
+/// Scale a layout constant by `upem / 2048`. Used for size-dependent thresholds.
 fn latin_constant(upem: i32, c: i32) -> i32 {
     (c * upem) / 2048
 }
 
 /// FLAT_THRESHOLD for round/straight classification.  aflatin.c:39
 // ✅ TRIVIAL: upem / 14.
+/// `upem / 14` — threshold for detecting round vs flat segments.
 fn flat_threshold(upem: i32) -> i32 { upem / 14 }
 
 // ── Sort utilities (afhints.c:36-131) ────────────────────────────────────────
 
 /// Insertion-sort `table` ascending.  afhints.c:36
 // ✅ TRIVIAL: insertion sort.
+/// In-place ascending sort. Used to sort stem widths before quantization.
 fn sort_pos(table: &mut [i32]) {
     for i in 1..table.len() {
         let val = table[i];
@@ -63,6 +66,8 @@ fn sort_pos(table: &mut [i32]) {
 /// Sort widths by `.org`, then collapse clusters ≤ threshold into their mean.
 /// afhints.c:58-131
 // ✅ VERIFIED: clustering matches C, width values verified.
+/// Sort stem widths, merge duplicates within `threshold`, assign canonical values.
+/// Reduces raw width measurements to a small set of standard widths.
 fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold: i32) {
     if *count <= 1 { return; }
 
@@ -114,6 +119,15 @@ fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold
 /// histogram. Populates `metrics.axis[dim].width_count` and `.widths[]`.
 /// Returns the standard character glyph index (for caller to re-use in blue init).
 // ✅ VERIFIED: stdw values match C's dump_metrics for all font/size pairs.
+/// Extract stem widths from the 'o' glyph (standard measurement character).
+///
+/// Renders 'o' at identity scale, detects segments and edges, pairs stems,
+/// and stores the resulting widths in `metrics.axis[dim].widths[]`.
+///
+/// # Debug: standard width differs from C
+/// - [ ] 'o' glyph index correct for this font?
+/// - [ ] `compute_segments` at identity scale matches C?
+/// - [ ] Stem pair distances before quantization match C?
 pub fn metrics_init_widths(
     metrics: &mut AfLatinMetrics,
     char_glyph_index: u16,
@@ -185,6 +199,7 @@ pub fn metrics_init_widths(
 /// Extract (width_count, widths_array) from hints.metrics for the given dimension.
 /// Returns owned data to avoid borrow conflicts.
 // ✅ TRIVIAL: field access helper.
+/// Pull the width array + count from axis hints. Helper for stem width extraction.
 fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LATIN_MAX_WIDTHS]) {
     if let Some(ref met) = hints.metrics {
         let a = &met.axis[dim as usize];
@@ -228,6 +243,15 @@ macro_rules! is_x_height   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) !
 /// Scans the 6 Latin blue character strings to find median flat (reference) and
 /// round (overshoot) Y extrema. Populates `metrics.axis[VERT].blues[]`.
 // ✅ VERIFIED: 6 blue zones match C (dump_metrics output).
+/// Initialize blue zones from OpenType tables (OS/2, etc.).
+///
+/// Maps pre-defined Latin character ranges to their vertical positions,
+/// creating cap-height, x-height, baseline, and descender blue zones.
+/// These are used by `compute_blue_edges` and `hint_edges` Phase 3.
+///
+/// # Debug: blue zone positions differ from C
+/// - [ ] `shoot_width` computation correct? (uses `latin_constant` for UPEM scaling)
+/// - [ ] Zone ordering: cap-top > ascender > x-height > baseline > descender?
 pub fn metrics_init_blues(
     metrics: &mut AfLatinMetrics,
     font_data: &crate::tables::FontData,
@@ -457,6 +481,18 @@ pub fn metrics_init_blues(
 /// Port of af_latin_metrics_scale_dim (aflatin.c:1178-1437).
 /// Returns the (x_scale, y_scale) the scaler must use to scale glyph outlines.
 // ✅ VERIFIED: VERT/HORZ scale + width cur match C for DejaVuSans 10pt (aflatin.c:1178-1437).
+/// Scale metrics (widths, blue zones) for the requested ppem.
+///
+/// Computes x-height scale adjustment: if the x-height blue zone's shoot
+/// can be brought closer to a pixel grid boundary by slightly adjusting
+/// the vertical scale, do it. This makes x-height features snap cleaner.
+///
+/// Returns `(x_scale, adjusted_y_scale)` for the scaler to use.
+///
+/// # Debug: y_scale differs from C
+/// - [ ] `increase_x_height` threshold (40) correct?
+/// - [ ] `ft_mul_div(v_scale, fitted, scaled)` same as C?
+/// - [ ] Max-height distance check (< 128 FU) matches C?
 pub fn metrics_scale_dim(
     metrics: &mut AfLatinMetrics,
     x_scale: i32,
@@ -541,6 +577,16 @@ pub fn metrics_scale_dim(
 /// Assign each vertical/horizontal edge to the nearest active blue zone.
 /// Port of `af_latin_hints_compute_blue_edges` (aflatin.c:2529-2640).
 // ✅ VERIFIED: via hint_edges C trace (blue zone edges match).
+/// Assign edges to blue zones (baseline, cap-height, x-height, descender).
+///
+/// Each edge is checked against active blue zones. An edge within the zone's
+/// shoot range gets assigned `blue_edge` with the zone's fitted position.
+/// This enables `hint_edges` Phase 3 to snap the edge to the correct grid line.
+///
+/// # Debug: blue assignment differs from C
+/// - [ ] Blue zones scaled correctly in `metrics_scale_dim`?
+/// - [ ] `AF_LATIN_BLUE_ACTIVE` flag set for zones within 3/4px height?
+/// - [ ] Edge direction matches blue zone direction (top/bottom)?
 fn compute_blue_edges(hints: &mut GlyphHints) {
     let dim = Dimension::Vert;
     let metrics = match hints.metrics {
@@ -617,6 +663,10 @@ fn ft_pix_round(x: i32) -> i32 { (x + 32) & !63 }
 /// Port of af_glyph_hints_apply_vertical_separation_adjustments (aflatin.c:3602-3975).
 /// For 2-contour dot-above-body glyphs (i, j), moves contours below the top
 /// contour up by ~0.5-1px to create separation after hinting.
+/// Separate dot from body for 'i' (U+0069) and 'j' (U+006A).
+///
+/// Moves the body contour up by 1px when the dot is too close after hinting.
+/// No-op for all other glyphs.
 fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
     if hints.contours.len() < 2 { return; }
 
@@ -872,8 +922,18 @@ const FLAT_THRESHOLD: i32 = 146;
 
 /// Faithful port of `af_latin_hints_compute_segments` (aflatin.c:1557).
 #[allow(unused_assignments, unused_variables)]
+/// Find horizontal/vertical runs of consecutive points with same direction.
+///
+/// Walks contour via prev→next chain. Points with matching out_dir accumulate
+/// into segments. Segment height is extended by ±half the adjacent point offset
+/// for serif detection.
+///
+/// # Debug: segment positions differ from C
+/// - [ ] `u = fx` (HORZ) / `u = fy` (VERT) → axis swap correct?
+/// - [ ] `major_dir` absolutified? (`abs_dir(major_dir)`)
+/// - [ ] `FLAT_THRESHOLD` correct for this UPEM? (`upem/14`)
+/// - [ ] Height extension: `prev` and `next` neighbors same as C?
 fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
-    // ✅ VERIFIED: all segment positions, heights, directions, first/last indices
     // match C's af_latin_hints_compute_segments exactly for DejaVuSans 10pt '&'
     // (6 VERT + 6 HORZ segments). Verified via vendored C fprintf trace.
     let contours: Vec<usize> = hints.contours.clone();
@@ -1102,6 +1162,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
 
 #[inline]
 // ✅ TRIVIAL
+/// Absolute direction: flips Left→Right, Down→Up. Used for segment matching.
 fn abs_dir(d: Direction) -> Direction {
     match d {
         Direction::Up => Direction::Up,
@@ -1117,6 +1178,15 @@ fn abs_dir(d: Direction) -> Direction {
 // ✅ VERIFIED: edge fpos/opos/dir/flags/links match C for DejaVuSans 10pt '&'
 // (5 VERT edges + 5 HORZ edges). Port of af_latin_hints_compute_edges
 // (aflatin.c:2154-2500).
+/// Merge overlapping segments into edges. Serif+stem+serif → one edge.
+///
+/// Uses `edge_distance_threshold` (standard_width/5) to determine when
+/// segments are "at the same position" and should merge.
+///
+/// # Debug: edge count/positions differ from C
+/// - [ ] `edge_distance_threshold` scaled correctly for this ppem?
+/// - [ ] Segment filtering (height < `seg_len_thresh`, delta > `seg_width_thresh`) matches C?
+/// - [ ] Serif link direction: `edge->serif = linked_edge`, direction must be opposite
 fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     let axis = &mut hints.axis[dim as usize];
     axis.edges.clear();
@@ -1340,6 +1410,14 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 // ✅ VERIFIED: link/serif/score assignments match C for DejaVuSans 10pt '&'
 // (both VERT and HORZ). Port of af_latin_hints_link_segments
 // (aflatin.c:2011-2132).
+/// Pair segments into stem pairs (opposite-direction edges at similar positions).
+///
+/// Uses per-distance demerit scoring. Pairs with lowest score get linked.
+/// Unlinked segments with serif-candidates get serif pointers instead.
+///
+/// # Debug: stem pairs differ from C
+/// - [ ] Distance demerit scoring same as C?
+/// - [ ] Serif candidate detection: `seg.serif` pointer matches C?
 fn link_segments_inner(
     hints: &mut GlyphHints,
     dim: Dimension,
@@ -1445,6 +1523,7 @@ fn link_segments_inner(
 
 // ✅ VERIFIED: verified via hint_edges — all edge positions match C
 // for DejaVuSans 10pt '&'. Port of af_latin_snap_width (aflatin.c:2725-2767).
+/// Snap a stem width to the nearest standard width from the metrics array.
 fn snap_width(widths: &[i32], mut width: i32) -> i32 {
     let mut best: i32 = 64 + 32 + 2; // FT_Pos best = 64 + 32 + 2
     let mut reference = width;
@@ -1477,6 +1556,7 @@ fn snap_width(widths: &[i32], mut width: i32) -> i32 {
 
 // ✅ VERIFIED: via hint_edges C trace. Port of af_latin_align_linked_edge
 // (aflatin.c:4157-4183).
+/// Align a stem pair so both edges snap to integer pixels while preserving width.
 fn align_linked_edge(
     other_flags: u32,
     dim: Dimension,
@@ -1507,6 +1587,7 @@ fn align_linked_edge(
 // Preserves serif offset relative to the base edge.
 
 // ✅ TRIVIAL
+/// Snap serif edge to same position as its linked stem edge.
 fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
     serif.pos = base.pos + (serif.opos - base.opos);
 }
@@ -1521,6 +1602,16 @@ fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
 //    Serif: return dist. Round: snap≤1px. dist<56: clamp. Then standard-width
 //    match |delta|<40, fractional-pixel quant, or bdelta+round (simplified).
 // ✅ VERIFIED: Strong path calls snap_width + pixel rounding (aflatin.c:4076-4152).
+/// Compute current stem width from paired edges, snapping to standard if needed.
+///
+/// Two branches: smooth (anti-aliased) and strong (full hinting).
+/// Both call `snap_width` to quantize to standard widths. The `extra_light`
+/// flag disables snapping for very thin stems.
+///
+/// # Debug: stem width differs from C
+/// - [ ] `extra_light` check correct (`ft_mul_fix(std_width, scale) < 40`)?
+/// - [ ] `snap_width(std_widths, dist)` output same as C?
+/// - [ ] Fractional pixel quantization (dist < 56 → dist=56) matches C?
 fn compute_stem_width(
     other_flags: u32,
     ppem: i32,
@@ -1683,6 +1774,17 @@ fn compute_stem_width(
 // ✅ VERIFIED: all edge positions (fpos, opos, pos) after hint_edges
 // match C exactly for DejaVuSans 10pt '&' (5 VERT + 5 HORZ edges).
 // Port of af_latin_hint_edges (aflatin.c:4220-4837).
+/// 4-phase edge snapping: (1) stems (2) serifs (3) blue zones (4) anchors.
+///
+/// Each phase modifies `edge.pos` in-place. Phases are interdependent:
+/// stem snapping must complete before serifs can anchor to stems; blue
+/// snapping runs after stems are established.
+///
+/// # Debug: edge positions after a phase differ from C
+/// - [ ] Phase 1: stem pair `link` correct? `snap_width` output same?
+/// - [ ] Phase 2: serif `serif` pointer pointing to correct stem?
+/// - [ ] Phase 3: `blue_edge` assigned? `flags & AF_EDGE_DONE` after snap?
+/// - [ ] Phase 4: anchor chain propagation reaches all unaligned edges?
 fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: i32) {
     let other_flags = hints.other_flags;
     let extra_light = hints.metrics.as_ref()
@@ -2113,6 +2215,15 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 // Moves all points belonging to an edge to that edge's grid-fitted position.
 
 // ✅ VERIFIED: copies edge->pos to points (trivial, via hint_edges).
+/// Snap contour points to their assigned edge's hinted position.
+///
+/// Walks `edge.first → edge.last` via segment chain, sets `pt.x = edge.pos`.
+/// Touched points become IUP reference anchors.
+///
+/// # Debug: touch flags differ from C
+/// - [ ] Segment `first`/`last` indices same as C? → `compute_segments` output
+/// - [ ] Edge→segment assignment (`seg.edge`) same as C? → `compute_edges` output
+/// - [ ] Point walk via `pt.next` visits same points as C? → contour chain
 fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
     let axis = &hints.axis[dim as usize];
     let is_vert = dim == Dimension::Vert;
@@ -2243,6 +2354,8 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 
 /// ✅ VERIFIED: delta matches C's af_iup_shift for contour 1
 /// (39/39 points correct for DejaVuSans 10pt '&' — afhints.c:1592).
+/// Uniform shift: all points in range get same delta as reference point.
+/// Used when a contour has only one touched point. `delta = points[ref_idx].u - points[ref_idx].v`.
 fn iup_shift(points: &mut [AFPoint], p1: usize, p2: usize, ref_idx: usize) {
     let delta = points[ref_idx].u - points[ref_idx].v;
     if delta == 0 { return; }
@@ -2255,6 +2368,9 @@ fn iup_shift(points: &mut [AFPoint], p1: usize, p2: usize, ref_idx: usize) {
 
 /// ✅ VERIFIED: scale + ft_mul_fix match C for contour 1
 /// (39/39 points correct for DejaVuSans 10pt '&' — afhints.c:1619).
+/// Linear interpolation between two reference points.
+/// `scale = ft_mul_div(u2-u1, 0x10000, v2-v1)`.
+/// For each weak point: if v ≤ v1 → d1 shift, if v ≥ v2 → d2 shift, else → u1 + ft_mul_fix(v-v1, scale).
 fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: usize) {
     if p1 > p2 { return; }
 
