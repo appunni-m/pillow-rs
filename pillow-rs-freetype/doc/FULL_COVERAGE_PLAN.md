@@ -1,134 +1,62 @@
-# 100% Autohinter Coverage Plan
+# 100% Autohinter Coverage — Complete Scope
 
-## Current Status: 27694/27695 (99.9968%)
-1 remaining failure: LiberationSansNarrow-BoldItalic ';' at 20pt.
-Root cause: Greek blue strings needed instead of Latin.
+## Current Status
+- **27694/27695 pass** (99.9968%)
+- **30 Latin/Greek fonts** in fixtures
+- **16 font families**: DejaVu (5), Liberation (4), Noto (5), Ubuntu (2)
+- **0 clippy cast warnings**, release build clean
 
-## What We Have
-- ✅ 6 hardcoded Latin blue strings
-- ✅ Full autohinter pipeline (direction chain, segments, edges, hint_edges, IUP)
-- ✅ Per-font metrics (`metrics_init_widths`, `metrics_scale_dim`, `compute_blue_edges`)
-- ✅ Pipeline trace system (`RUST_LOG=autohint::pipeline=trace`)
+## What "100% Coverage" Means
 
-## What We Need
+### Tier 1: Fix current matrix (1 remaining failure)
+**LiberationSansNarrow-BoldItalic ';' at 20pt** — Greek script detection.
+Our crate uses 6 hardcoded Latin blue strings. C detects Greek for this font.
+`doc/MULTI_SCRIPT_BLUE_ZONES.md` has the detailed analysis.
 
-### Phase 1: Dynamic Blue String Data
-**Parse `afblue.dat` (469 entries, 52 scripts) → Rust data table.**
+Fix: Parse `afblue.dat` → add Greek script entries → add script detection.
+Result: 27695/27695 (100%).
 
-The vendored file at `pillow-rs-freetype/freetype/src/autofit/afblue.dat`
-contains the canonical blue string definitions used by FreeType. We need to
-parse it at build time (or via a code generation script) and embed the
-result in a Rust module.
+### Tier 2: Expand to all Latin-script fonts we support
+All 30 existing fonts use Latin or Greek scripts. Once Greek is added,
+the entire matrix passes. No new fonts needed for this tier.
 
-Files:
-- `scripts/extract_blues.py` — parse afblue.dat → generate `blue_strings.rs`
-- `src/autohint/blue_strings.rs` — generated module (committed to repo)
+### Tier 3: Add OpenType feature resolution (GSUB smcp/sups/subs)
+Some fonts have small-caps superscript/subscript substitutions active
+during blue zone scanning. Without GSUB, these glyphs use the wrong outline.
 
-### Phase 2: Script Detection
-**Determine which script's blue strings to use for a given font.**
+### Tier 4: Scale to multi-script (future)
+To truly reach FreeType's autohinter coverage, add fonts from:
+- **Cyrillic** (3 fonts, e.g. NotoSans-Cyrillic, LiberationSerif-Cyrillic)
+- **CJK** (3 fonts, e.g. NotoSansCJK, SourceHanSans)
+- **Arabic** (3 fonts, e.g. NotoNaskhArabic, Amiri)
+- **Devanagari** (3 fonts, e.g. NotoSansDevanagari)
+- **Thai** (3 fonts, e.g. NotoSansThai)
+- **Hebrew** (3 fonts, e.g. NotoSansHebrew)
 
-C's FreeType detects the script dynamically during `af_script_detect` by
-checking which Unicode ranges have glyph coverage. For our crate, we can
-use a simpler heuristic:
+For each script (52 total in `afblue.dat`), add 3 fonts at 3 sizes
+(10pt, 16pt, 24pt) × 3 characters (script-specific) → ~27 test entries
+per script. With 52 scripts: ~1,400 new test entries.
 
-1. For each script in `afblue.dat`, look up the first character of the
-   script's first blue string entry in the cmap table.
-2. If the glyph exists and has a usable outline, probe a few more
-   characters to confirm coverage.
-3. The script with the most comprehensive coverage wins.
-4. For OpenType fonts (`OTTO` magic, CFF outlines), skip glyph-based
-   script detection and use the font's metadata (OS/2 table fsSelection,
-   or cmap coverage).
+## Implementation Roadmap
 
-```rust
-fn detect_script(cmap: &CmapTable, glyf: &[u8], loca: &[u8], head: &HeadTable) -> &[BlueStringEntry] {
-    // Latin is default. Check other scripts in priority order:
-    // CJK, Arabic, Indic, Greek, Cyrillic, ...
-    for script in SCRIPTS_IN_PRIORITY_ORDER {
-        if script_has_coverage(script, cmap) {
-            return &BLUE_STRINGS[script.range()];
-        }
-    }
-    &BLUE_STRINGS[latin_range()]
-}
+| Phase | Work | Tests fixed | Effort |
+|-------|------|-------------|--------|
+| 1 | Parse `afblue.dat`, add Greek detection | 1 → all | 2-3h |
+| 2 | GSUB smcp/sups/subs resolver | future-proofing | 4-6h |
+| 3 | Add 3 Cyrillic fonts + generate fixtures | ~27 new | 1h |
+| 4 | Add 3 CJK fonts + generate fixtures | ~27 new | 1h |
+| 5 | Add 3 Arabic fonts + generate fixtures | ~27 new | 1h |
+| 6-52 | Remaining scripts | ~1,400 new | Large |
+
+## Immediate Next Step (Phase 1)
+
+Generate the Rust blue string data from `afblue.dat`:
+
+```bash
+python3 scripts/extract_blues.py \
+  pillow-rs-freetype/freetype/src/autofit/afblue.dat \
+  > pillow-rs-freetype/src/autohint/blue_strings.rs
 ```
 
-### Phase 3: OpenType Feature Resolution
-**Match C's HarfBuzz-enabled glyph selection for blue zone scanning.**
-
-C's FreeType uses HarfBuzz to apply OpenType layout features (GSUB) during
-blue zone computation. Without HarfBuzz, C falls back to `FT_Get_Char_Index`
-(same as our `cmap.char_index`). The LiberationSansNarrow-BoldItalic font
-does NOT trigger GSUB smcp (confirmed: font has 0 GSUB features). The
-Greek strings are selected purely by script detection.
-
-For fonts that DO have GSUB features active during blue zone computation:
-
-1. Parse the GSUB table from the font data
-2. Look up substitution rules for features: `smcp` (small caps), `c2sc`
-   (caps to small caps), `sups` (superscript), `subs` (subscript)
-3. During blue zone scanning, resolve each character through the GSUB
-   feature chain before loading the glyph outline
-4. This matches C's `af_shaper_get_elem` → HarfBuzz → GSUB path
-
-```rust
-struct GsubResolver {
-    smcp: HashMap<u16, u16>,  // base_gid → smcp_gid
-    sups: HashMap<u16, u16>,
-    subs: HashMap<u16, u16>,
-}
-
-impl GsubResolver {
-    pub fn resolve(&self, gid: u16, features: &[Feature]) -> u16 {
-        // Apply feature substitutions in order
-        // Returns the final resolved glyph index
-    }
-}
-```
-
-### Phase 4: Coverage Matrix
-**Which scripts matter for which test fixtures.**
-
-Our test fixtures (`fonts_autohint/`) contain primarily Latin/Greek fonts:
-- DejaVu*: Latin + Cyrillic + Greek
-- Liberation*: Latin + Greek
-- Noto*: Latin + Greek + Cyrillic
-- Ubuntu*: Latin
-
-Script detection should produce:
-- LiberationSansNarrow-BoldItalic → Greek (fixes the 1 remaining failure)
-- LiberationSerif-Bold → Latin (already passes)
-- NotoSerifDisplay-Bold → Latin (already passes)
-- DejaVuSerif → Latin + Cyrillic (already passes)
-
-### Phase 5: Unified Entry Point
-**Replace `LATIN_BLUE_STRINGS` with dynamic lookup.**
-
-```rust
-// Before (hardcoded):
-static LATIN_BLUE_STRINGS: &[BlueStringEntry] = &[...];
-
-// After (dynamic):
-fn get_blue_strings(font_data: &FontData) -> &[BlueStringEntry] {
-    // 1. Detect script
-    let script = detect_script(&font_data.cmap, ...);
-    // 2. Return the script's blue string entries from generated data
-    BLUE_STRINGS.entries_for(script)
-}
-```
-
-### Implementation Order
-
-| Step | What | Complexity | Impact |
-|------|------|-----------|--------|
-| 1 | Parse afblue.dat → generate `blue_strings.rs` | Medium | Foundation |
-| 2 | Add generated module, keep Latin hardcoded as fallback | Low | No test change |
-| 3 | Add script detection for Greek | Low | Fixes 1 remaining failure |
-| 4 | Add Cyrillic, CJK detection | Medium | Future coverage |
-| 5 | Add GSUB resolver for smcp/sups/subs | High | Full OpenType parity |
-| 6 | Add remaining 47 scripts | Medium | Complete afblue.dat coverage |
-| 7 | Remove hardcoded LATIN_BLUE_STRINGS | Low | Cleanup |
-
-### Expected Outcome
-- Step 3: 27695/27695 (100%)
-- Steps 1-7: Full multi-script + OpenType autohinter coverage
+Then add script detection to `metrics_init_blues` that checks Greek
+coverage before Latin — this fixes the 1 remaining failure.
