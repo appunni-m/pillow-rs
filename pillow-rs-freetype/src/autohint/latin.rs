@@ -20,7 +20,6 @@
 
 use crate::casts::{i16_from_i32, i32_from_i64, usize_from_i32};
 use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
-#[cfg(debug_assertions)]
 use log::trace;
 
 use super::types::{
@@ -635,6 +634,9 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
                 // Compare to reference position
                 let mut dist = (edge_fpos - blue.ref_width.org).abs();
                 dist = ft_mul_fix(dist, scale);
+                if e_idx <= 3 {
+                    trace!(target: "autohint::pipeline", "[BLU] E{e_idx} b{blue_idx}: f={edge_fpos} ref={} dist={dist} best={best_dist}", blue.ref_width.org);
+                }
                 if dist < best_dist {
                     best_dist = dist;
                     best_blue = Some(blue.ref_width);
@@ -657,6 +659,7 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
             }
         }
 
+        trace!(target: "autohint::pipeline", "[BLU] E{e_idx}: assigned={} org={}", best_blue.is_some(), best_blue.as_ref().map_or(0, |b| b.org));
         if let Some(bw) = best_blue {
             axis.edges[e_idx].blue_edge = Some(bw);
             if best_neutral {
@@ -1941,6 +1944,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             let e1 = match edge1_idx { Some(v) => v, None => unreachable!() };
             let blue = match blue { Some(b) => b, None => unreachable!() };
+            trace!(target: "autohint::pipeline", "[P1] E{e1}: snap to blue.fit={}", blue.fit);
             axis.edges[e1].pos = blue.fit;
             axis.edges[e1].flags |= AF_EDGE_DONE;
 
@@ -1961,6 +1965,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     // has_non_stem_edges = true.
     for i in 0..num_edges {
         if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+            if dim == Dimension::Vert { trace!(target: "autohint::pipeline", "[P2] E{i} dim=Vert: DONE → skip"); }
             continue;
         }
 
@@ -2055,6 +2060,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             let org_pos = anchor_pos + (edge_opos - anchor_opos);
             let org_len = edge2_opos - edge_opos;
             let org_center = org_pos + (org_len >> 1);
+            trace!(target: "autohint::pipeline", "[P2_REL] E{i}↔E{edge2_idx} dim={dim:?}: anchor={anchor} org_pos={org_pos} org_len={org_len} el={extra_light}");
 
             let cur_len = compute_stem_width(
                 other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
