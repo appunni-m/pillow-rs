@@ -33,11 +33,14 @@ pub mod loader;
 pub mod latin;
 pub mod blue_strings;
 pub mod script;
+pub mod globals_data;
+pub mod globals;
 
 pub use latin::apply_hints;
-pub use latin::{metrics_init_blues, metrics_init_blues_greek};
+pub use latin::{metrics_init_blues, metrics_init_blues_greek, metrics_init_blues_impl, metrics_init_widths};
 pub use script::detect_script;
-pub use script::build_glyph_script_map;
+pub use globals_data::{StyleClass, UniRange, STYLE_TABLE, STYLE_FALLBACK, STYLE_UNASSIGNED};
+pub use globals::FaceGlobals;
 pub use types::{GlyphHints, AxisHints, AFPoint, AFSegment, AFEdge, Direction, Dimension,
     AfWidth, AfLatinBlue, AfLatinAxisMetrics, AfLatinMetrics,
     AF_LATIN_MAX_WIDTHS,
