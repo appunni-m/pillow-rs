@@ -1428,14 +1428,8 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     // runs. Without sorting first, SERIF can persist on edges processed too early.
     // For top_to_bottom scripts (Indic/Mongolian), sort descending.
     if axis.edges.len() > 1 {
-        let top_to_bottom = hints.metrics.as_ref()
-            .map_or(false, |m| m.top_to_bottom_hinting);
         let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
-        indices.sort_by(|&a, &b| {
-            let fa = axis.edges[a].fpos;
-            let fb = axis.edges[b].fpos;
-            if top_to_bottom { fb.cmp(&fa) } else { fa.cmp(&fb) }
-        });
+        indices.sort_by_key(|&i| axis.edges[i].fpos);
         let mut new_from_old: Vec<usize> = vec![0; axis.edges.len()];
         for (new_idx, &old_idx) in indices.iter().enumerate() {
             new_from_old[old_idx] = new_idx;
@@ -1926,8 +1920,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         return;
     }
 
-    let top_to_bottom_hinting = hints.metrics.as_ref()
-        .map_or(false, |m| m.top_to_bottom_hinting);
+    let top_to_bottom_hinting = false;
 
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;
