@@ -54,7 +54,7 @@ fn latin_constant(upem: i32, c: i32) -> i32 {
     (c * upem) / 2048
 }
 
-/// FLAT_THRESHOLD for round/straight classification.  aflatin.c:39
+/// flat_threshold for round/straight classification.  aflatin.c:39
 // ✅ TRIVIAL: upem / 14.
 /// `upem / 14` — threshold for detecting round vs flat segments.
 fn flat_threshold(upem: i32) -> i32 { upem / 14 }
@@ -981,9 +981,7 @@ pub fn apply_hints(
 
 /// Threshold for considering a run of points as "flat" — used to decide
 /// whether an edge should be rounded.  `units_per_em / 14` is the FreeType
-/// default; we hard-code 146 (~2048/14).
-const FLAT_THRESHOLD: i32 = 146;
-
+/// default (aflatin.c:39).  Computed dynamically from metrics if available.
 /// Faithful port of `af_latin_hints_compute_segments` (aflatin.c:1557).
 #[allow(unused_assignments, unused_variables)]
 /// Find horizontal/vertical runs of consecutive points with same direction.
@@ -995,9 +993,10 @@ const FLAT_THRESHOLD: i32 = 146;
 /// # Debug: segment positions differ from C
 /// - [ ] `u = fx` (HORZ) / `u = fy` (VERT) → axis swap correct?
 /// - [ ] `major_dir` absolutified? (`abs_dir(major_dir)`)
-/// - [ ] `FLAT_THRESHOLD` correct for this UPEM? (`upem/14`)
+/// - [ ] `flat_threshold` correct for this UPEM? (`upem/14`)
 /// - [ ] Height extension: `prev` and `next` neighbors same as C?
 fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
+    let flat_threshold = hints.metrics.as_ref().map_or(146, |m| m.units_per_em / 14);
     // match C's af_latin_hints_compute_segments exactly for DejaVuSans 10pt '&'
     // (6 VERT + 6 HORZ segments). Verified via vendored C fprintf trace.
     let contours: Vec<usize> = hints.contours.clone();
@@ -1104,7 +1103,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         let delta = i16_from_i32((max_pos - min_pos) >> 1);
                         let mut flags = 0u8;
                         if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
-                            && (max_on_coord - min_on_coord) < FLAT_THRESHOLD
+                            && (max_on_coord - min_on_coord) < flat_threshold
                         {
                             flags |= AF_EDGE_ROUND;
                         }
@@ -1141,7 +1140,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             s.last = point; s.pos = pos; s.delta = delta;
                             s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
                             if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
-                                && (max_on_coord - min_on_coord) < FLAT_THRESHOLD
+                                && (max_on_coord - min_on_coord) < flat_threshold
                             {
                                 s.flags |= AF_EDGE_ROUND;
                             } else {
@@ -1168,7 +1167,7 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             s.dir = segment_dir;
                             s.first = seg_first;
                             if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
-                                && (max_on_coord - min_on_coord) < FLAT_THRESHOLD
+                                && (max_on_coord - min_on_coord) < flat_threshold
                             {
                                 s.flags |= AF_EDGE_ROUND;
                             } else {
