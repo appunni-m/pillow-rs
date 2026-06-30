@@ -353,9 +353,17 @@ pub fn metrics_init_blues(
                 loop {
                     prev = if prev > best_contour_first { prev - 1 } else { best_contour_last };
                     let dist = (points[usize_from_i32(prev)].y - best_y).abs();
-                    if dist > 5 && (points[usize_from_i32(prev)].x - best_x).abs() <= 20 * dist {
-                        break;
+                    let x_diff = (points[usize_from_i32(prev)].x - best_x).abs();
+                    let stop = dist > 5 && x_diff <= 20 * dist;
+                    if ch == 'e' && best_y > 1000 {
+                        trace!(target: "autohint::pipeline", "[BLUE_WALK] ch=e prev={prev} x={} y={} dist={dist} x_diff={x_diff} stop={stop}",
+                            points[usize_from_i32(prev)].x, points[usize_from_i32(prev)].y);
                     }
+                    if ch == 'c' && best_y > 1000 {
+                        trace!(target: "autohint::pipeline", "[BLUE_WALK] ch=c prev={prev} x={} y={} dist={dist} x_diff={x_diff} stop={stop}",
+                            points[usize_from_i32(prev)].x, points[usize_from_i32(prev)].y);
+                    }
+                    if stop { break; }
                     best_seg_first = prev;
                     if points[usize_from_i32(prev)].on_curve {
                         best_on_first = prev;
@@ -369,9 +377,17 @@ pub fn metrics_init_blues(
                 loop {
                     next = if next < best_contour_last { next + 1 } else { best_contour_first };
                     let dist = (points[usize_from_i32(next)].y - best_y).abs();
-                    if dist > 5 && (points[usize_from_i32(next)].x - best_x).abs() <= 20 * dist {
-                        break;
+                    let x_diff = (points[usize_from_i32(next)].x - best_x).abs();
+                    let stop = dist > 5 && x_diff <= 20 * dist;
+                    if ch == 'e' && best_y > 1000 {
+                        trace!(target: "autohint::pipeline", "[BLUE_WALK] ch=e next={next} x={} y={} dist={dist} x_diff={x_diff} stop={stop}",
+                            points[usize_from_i32(next)].x, points[usize_from_i32(next)].y);
                     }
+                    if ch == 'c' && best_y > 1000 {
+                        trace!(target: "autohint::pipeline", "[BLUE_WALK] ch=c next={next} x={} y={} dist={dist} x_diff={x_diff} stop={stop}",
+                            points[usize_from_i32(next)].x, points[usize_from_i32(next)].y);
+                    }
+                    if stop { break; }
                     best_seg_last = next;
                     if points[usize_from_i32(next)].on_curve {
                         best_on_last = next;
