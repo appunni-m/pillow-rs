@@ -533,6 +533,7 @@ pub fn metrics_scale_dim(
             // increase_x_height property: 0 for non-instructed fonts → threshold=40.
             let threshold: i32 = 40;
             let fitted = (scaled + threshold) & !63;
+            trace!(target: "autohint::pipeline", "[XHT] ai={ai} shoot_org={shoot_org} scaled={scaled} threshold={threshold} fitted={fitted} v_scale={v_scale}");
             if scaled != fitted {
                 let new_scale = ft_mul_div(v_scale, fitted, scaled);
                 let mut max_height = metrics.units_per_em;
@@ -547,6 +548,7 @@ pub fn metrics_scale_dim(
             }
         }
     }
+    trace!(target: "autohint::pipeline", "[XHT] VERT v_scale={v_scale} base_y={y_scale}");
 
     // Vertical axis: widths + blue zones (aflatin.c:1327-1437).
     {
