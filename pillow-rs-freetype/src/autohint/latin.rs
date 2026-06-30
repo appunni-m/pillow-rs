@@ -1083,8 +1083,12 @@ fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                             s.height = i16_from_i32(max_coord - min_coord);
                         } else if (prev_max_coord - prev_min_coord).abs() > (max_coord - min_coord).abs() {
                             // C: different directions, prev is longer — keep prev (aflatin.c:1798-1811)
-                            // prev_segment->first stays correct (it's the earlier point).
-                            let pos = i16_from_i32((prev_min_pos.min(min_pos) + prev_max_pos.max(max_pos)) >> 1);
+                            // ⚠️ C copies the discarded current segment's min/max_pos into
+                            // prev_min_pos/prev_max_pos (aflatin.c:1803-1804). Without this,
+                            // subsequent 3+ segment merges use stale boundaries.
+                            if min_pos < prev_min_pos { prev_min_pos = min_pos; }
+                            if max_pos > prev_max_pos { prev_max_pos = max_pos; }
+                            let pos = i16_from_i32((prev_min_pos + prev_max_pos) >> 1);
                             let s = &mut axis.segments[prev];
                             s.last = point; s.pos = pos;
                         } else {
