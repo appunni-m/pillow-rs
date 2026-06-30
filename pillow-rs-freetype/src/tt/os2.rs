@@ -17,7 +17,15 @@ pub struct Os2Table {
     pub us_win_descent: u16,
     /// fsSelection flags (byte 62-63).
     fs_selection: u16,
+    /// ulUnicodeRange1 (bytes 42-45), bits 0-31 of Unicode character ranges.
+    pub ul_unicode_range1: u32,
+    /// ulUnicodeRange2 (bytes 46-49), bits 32-63.
+    pub ul_unicode_range2: u32,
 }
+
+/// Unicode range bits (ulUnicodeRange1).
+/// Bit 7 = Greek and Coptic.
+pub const UNICODE_RANGE_GREEK: u32 = 1 << 7;
 
 impl Os2Table {
     /// True when `fsSelection` bit 7 (USE_TYPO_METRICS) is set, matching
@@ -39,5 +47,7 @@ pub fn parse_os2(data: &[u8]) -> Option<Os2Table> {
         us_win_ascent: u16::from_be_bytes([data[74], data[75]]),
         us_win_descent: u16::from_be_bytes([data[76], data[77]]),
         fs_selection: u16::from_be_bytes([data[62], data[63]]),
+        ul_unicode_range1: u32::from_be_bytes([data[42], data[43], data[44], data[45]]),
+        ul_unicode_range2: u32::from_be_bytes([data[46], data[47], data[48], data[49]]),
     })
 }

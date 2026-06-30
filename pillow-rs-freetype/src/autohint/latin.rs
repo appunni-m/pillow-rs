@@ -222,29 +222,11 @@ fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LA
     }
 }
 
-// ── Blue zone strings (afblue.dat:347-358) ──────────────────────────────────
+// ── Blue zone strings — dynamically selected from afblue.dat ───────────────
 
-/// One entry in the Latin blue stringset table.
-struct BlueStringEntry {
-    chars: &'static [char],
-    props: u32, // AF_BLUE_PROP_* bits
-}
-
-/// Standard Latin blue zones, in order (afblue.c:646-653).
-static LATIN_BLUE_STRINGS: &[BlueStringEntry] = &[
-    // 0: capital top
-    BlueStringEntry { chars: &['T','H','E','Z','O','C','Q','S'], props: AF_BLUE_PROP_LATIN_TOP },
-    // 1: capital bottom
-    BlueStringEntry { chars: &['H','E','Z','L','O','C','U','S'], props: AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM },
-    // 2: small f-top
-    BlueStringEntry { chars: &['f','i','j','k','d','b','h'], props: AF_BLUE_PROP_LATIN_TOP },
-    // 3: small top (x-height)
-    BlueStringEntry { chars: &['u','v','x','z','o','e','s','c'], props: AF_BLUE_PROP_LATIN_TOP | AF_BLUE_PROP_LATIN_X_HEIGHT },
-    // 4: small bottom
-    BlueStringEntry { chars: &['n','r','x','z','o','e','s','c'], props: AF_BLUE_PROP_LATIN_SMALL_BOTTOM },
-    // 5: small descender
-    BlueStringEntry { chars: &['p','q','g','j','y'], props: 0 },
-];
+use super::script::detect_script;
+use super::blue_strings::SCRIPT_GREK;
+use super::blue_strings::BlueStringEntry;
 
 // Macros for checking blue property bits.
 macro_rules! is_top_blue   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_TOP) != 0 } }
@@ -269,13 +251,32 @@ pub fn metrics_init_blues(
     metrics: &mut AfLatinMetrics,
     font_data: &crate::tables::FontData,
 ) {
+    let script_strings = detect_script(&font_data.cmap);
+    metrics_init_blues_impl(metrics, font_data, script_strings);
+}
+
+/// Initialize blue zones using SCRIPT_GREK entries.
+/// Used for fonts where Latin characters share glyphs with Greek codepoints.
+pub fn metrics_init_blues_greek(
+    metrics: &mut AfLatinMetrics,
+    font_data: &crate::tables::FontData,
+) {
+    metrics_init_blues_impl(metrics, font_data, SCRIPT_GREK);
+}
+
+/// Core blue zone initialization, parameterized by script entries.
+fn metrics_init_blues_impl(
+    metrics: &mut AfLatinMetrics,
+    font_data: &crate::tables::FontData,
+    script_strings: &[BlueStringEntry],
+) {
     let upem = metrics.units_per_em;
     let flat_thresh = flat_threshold(upem);
     let axis = &mut metrics.axis[Dimension::Vert as usize];
     axis.blue_count = 0;
     axis.blues.clear();
 
-    for entry in LATIN_BLUE_STRINGS {
+    for entry in script_strings {
         let mut flats: Vec<i32> = Vec::new();
         let mut rounds: Vec<i32> = Vec::new();
         // ascender/descender accumulate across the whole string (aflatin.c:425-426)
@@ -505,6 +506,7 @@ pub fn metrics_init_blues(
         }
     }
 }
+
 
 /// Scale the metrics axes for the current size (base x_scale/y_scale), applying
 /// the x-height scale optimization on the vertical axis, then scale the stem
