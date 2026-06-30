@@ -924,6 +924,19 @@ pub fn apply_hints(
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
         trace!(target: "autohint::pipeline", "[PIPE] reload {} pts", hints.num_points());
+        if let Some(metrics_data) = &hints.metrics {
+            let verge = &metrics_data.axis[Dimension::Vert as usize];
+            trace!(target: "autohint::pipeline", "[PIPE] blue_count={}", verge.blue_count);
+            for bi in 0..verge.blue_count {
+                let bz = &verge.blues[bi];
+                trace!(target: "autohint::pipeline", "[PIPE] blue{bi}: ref={} shoot={} top={} neut={} active={}",
+                    bz.ref_width.org, bz.shoot_width.org,
+                    (bz.flags & 0x02 != 0) || (bz.flags & 0x01 != 0),
+                    bz.flags & 0x04 != 0,
+                    bz.flags & 0x08 != 0);
+            }
+        }
+        trace!(target: "autohint::pipeline", "[PIPE] blue_dump_done");
         for (i, pt) in hints.points.iter().enumerate() {
             trace!(target: "autohint::pipeline", "[PIPE] p{i}: fx={} fy={} in={:?} out={:?} u={} v={}",
                 pt.fx, pt.fy, pt.in_dir, pt.out_dir, pt.u, pt.v);
@@ -942,7 +955,8 @@ pub fn apply_hints(
         // Also dump HORZ edges
         let ha = &hints.axis[Dimension::Horz as usize];
         let el_horz = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
-        trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light={el_horz}", ha.edges.len());
+        let el_vert = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Vert as usize].extra_light);
+        trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light_h={el_horz} extra_light_v={el_vert}", ha.edges.len());
         for (ei, e) in ha.edges.iter().enumerate() {
             trace!(target: "autohint::pipeline", "[PIPE] HE{ei}: fpos={} opos={} pos={} link={} serif={}",
                 e.fpos, e.opos, e.pos, e.link, e.serif);
