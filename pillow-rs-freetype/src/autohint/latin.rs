@@ -901,11 +901,14 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
         }
     }
 
-    // Only adjust if gap is small (< 1px = 64 26.6 units)
-    if !(0..64).contains(&min_distance) { return; }
+    // Only adjust if gap is small (< 1px = 64 26.6 units).
+    // C uses `if (min_distance < 64)` which allows negative values
+    // (occurs when a contour slightly overlaps another).
+    if min_distance >= 64 { return; }
 
     let adjustment = 64 - min_distance;
-    if adjustment <= 0 || adjustment > 128 { return; }
+    // For negative min_distance, adjustment exceeds 64 which is valid.
+    if adjustment > 128 { return; }
 
     // C: af_move_contours_up(hints, limit, delta)
     // Moves ENTIRE CONTOURS where y_min > limit, i.e. contours above limit
