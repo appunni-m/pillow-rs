@@ -857,9 +857,10 @@ pub fn apply_hints(
     hints.metrics = metrics.cloned();
 
     // C: when no blue zones can be built for a style (all blue-zone
-    // characters missing from font), hinting is disabled for that style
-    // (aflatin.c:1061-1062). C uses AF_STYLE_NONE_DFLT which effectively
-    // renders without autohinting. Match this by skipping hinting when
+    // characters missing from font), C remaps the style to NONE_DFLT
+    // and runs the hinting pipeline without blue zone alignment.
+    // Our pipeline with blue_count==0 produces different results than
+    // C's NONE_DFLT path. Match C by skipping hinting entirely when
     // the VERT axis has no blue zones.
     if metrics.map_or(true, |m| m.axis[1].blue_count == 0) {
         return;
