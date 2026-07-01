@@ -89,7 +89,23 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 | **Total** | | **-817** | **44 scripts at 100%** |
 
 ### Remaining: 36 failures (9 scripts, each <5% fail rate)
-All confirmed rasterizer-level — outline coordinates and edge positions match C exactly.
+
+Categorized by root cause (verified via cell-dump comparison):
+- **5 composite glyph size deltas**: BoldItalic/ExtraLight at 20pt, composite
+  subscript glyphs. Bbox height differs by 2-4px. Root cause: composite glyph
+  offset handling at large sizes in `glyf.rs::transform_point`.
+- **~5 edge link mismatches**: Oblique/italic fonts (geok, latp). `compute_edges`
+  merging or `link_segments_inner` scoring produces different stem pairs than
+  C, shifting edge positions by 2-15 FU (0.03-0.23px). Root cause: italic
+  NO_HORIZONTAL flag affects standard width computation used in scoring.
+- **~26 pixel-level only**: Cells (cover, area) match C identically for traced
+  glyphs. Bbox and edge positions match. Pixel diffs of 1-3 coverage units
+  originate in sweep `fill_rule` or `FT_GRAY_SET` span writing logic.
+
+### Debug infrastructure
+- `GRAYS_DUMP_CELLS=1` env var dumps cell (x, cover, area) before sweep
+- C equivalent: `if (1)` guard in `ftgrays.c:gray_dump_cells` (uncomment to enable)
+- Compare with: `diff <(C output) <(RUST output)`
 
 ### All fix sites documented in source code
 `latin.rs` (top), `globals.rs` (top), `grays.rs` (top) contain fix logs
