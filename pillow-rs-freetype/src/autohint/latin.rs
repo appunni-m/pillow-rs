@@ -855,6 +855,15 @@ pub fn apply_hints(
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
+
+    // C: when no blue zones can be built for a style (all blue-zone
+    // characters missing from font), hinting is disabled for that style
+    // (aflatin.c:1061-1062). C uses AF_STYLE_NONE_DFLT which effectively
+    // renders without autohinting. Match this by skipping hinting when
+    // the VERT axis has no blue zones.
+    if metrics.map_or(true, |m| m.axis[1].blue_count == 0) {
+        return;
+    }
     // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
     // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
     hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
