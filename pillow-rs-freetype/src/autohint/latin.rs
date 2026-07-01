@@ -227,6 +227,11 @@ pub fn metrics_init_widths(
     raw_outline: &crate::tt::glyf::GlyphOutline,
     scaled_points: &[crate::outline::OutlinePoint],
 ) {
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        log::trace!(target: "autohint::pipeline", "[METRICS_INIT] gi={char_glyph_index} nc={} pts={}",
+            raw_outline.num_contours, raw_outline.points.len());
+    }
     if char_glyph_index == 0 || raw_outline.num_contours == 0 || raw_outline.points.is_empty() {
         // No usable glyph → fallback: use constant widths
         for dim in 0..2 {
@@ -273,6 +278,11 @@ pub fn metrics_init_widths(
         sort_and_quantize_widths(&mut num_widths, &mut metrics.axis[dim].widths,
                                   metrics.units_per_em / 100);
         metrics.axis[dim].width_count = num_widths;
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+            log::trace!(target: "autohint::pipeline", "[MET_DIM] dim={dim} wc={num_widths} w[0].org={}",
+                metrics.axis[dim].widths[0].org);
+        }
     }
 
     // Finalize each axis
@@ -677,6 +687,11 @@ pub fn metrics_scale_dim(
             w.fit = w.cur;
         }
         axis.extra_light = ft_mul_fix(axis.standard_width, x_scale) < 32 + 8;
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        log::trace!(target: "autohint::pipeline", "[EL] dim=HORZ std_width={} scale={} ft_mul={} wc={} extra_light={}",
+            axis.standard_width, x_scale, ft_mul_fix(axis.standard_width, x_scale), axis.width_count, axis.extra_light);
+    }
     }
 
     // Vertical axis: x-height scale optimization first (aflatin.c:1211-1306).
@@ -2005,8 +2020,20 @@ fn compute_stem_width(
     // C: if !AF_LATIN_HINTS_DO_STEM_ADJUST || axis->extra_light → return width
     // extra_light = ft_mul_fix(axis->standard_width, scale) < 40.
     // Must use axis.extra_light (computed from standard_width*scale), not widths[0].cur.
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        log::trace!(target: "autohint::pipeline",
+            "[CSW] dim={:?} width={width} base_delta={base_delta} el={extra_light} stem_adj={stem_adjust} bf=0x{base_flags:x} sf=0x{stem_flags:x}",
+            dim);
+    }
     if !stem_adjust { return width; }
-    if extra_light { return width; }
+    if extra_light {
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+            log::trace!(target: "autohint::pipeline", "[CSW_RET] el/sa skip → return {width}");
+        }
+        return width;
+    }
 
     let mut dist = width;
     let mut sign: i32 = 0;
