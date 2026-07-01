@@ -221,15 +221,6 @@ fn compute_style_coverage(
                     }
                 }
                 cp += 1;
-                // Skip optimization: jump ahead through unmapped regions
-                if cp > range.last { break; }
-                if cp.saturating_sub(range.first) > 256 && cmap.char_index(cp).is_none() {
-                    let mut skip = cp + 64;
-                    while skip <= range.last && cmap.char_index(skip).is_none() {
-                        skip += 64;
-                    }
-                    cp = if skip > range.last { range.last + 1 } else { skip.saturating_sub(64) };
-                }
             }
         }
     }
