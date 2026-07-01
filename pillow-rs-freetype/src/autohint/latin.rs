@@ -1932,7 +1932,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         return;
     }
 
-    let top_to_bottom_hinting = hints.metrics.as_ref()
+    // C: top_to_bottom_hinting only applies to VERT dimension (aflatin.c:4271-4273).
+    // For HORZ dimension, always use bottom-to-top ordering.
+    let top_to_bottom_hinting = dim == Dimension::Vert && hints.metrics.as_ref()
         .map_or(false, |m| m.top_to_bottom_hinting);
 
     let mut anchor: usize = usize::MAX;
