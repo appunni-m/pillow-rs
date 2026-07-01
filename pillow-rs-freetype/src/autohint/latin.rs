@@ -545,14 +545,15 @@ pub fn metrics_init_blues_impl(
     // Sort blues bottom→top and resolve overlaps (aflatin.c:988-1039).
     if axis.blue_count > 1 {
         // insertion sort by effective position
+        // C: for TOP zones compares ref.org, for BOTTOM zones compares shoot.org
         let blues = &mut axis.blues;
         for i in 1..blues.len() {
             let mut j = i;
             while j > 0 {
                 let a_pos = if blues[j-1].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0
-                    { blues[j-1].shoot_width.org } else { blues[j-1].ref_width.org };
+                    { blues[j-1].ref_width.org } else { blues[j-1].shoot_width.org };
                 let b_pos = if blues[j].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0
-                    { blues[j].shoot_width.org } else { blues[j].ref_width.org };
+                    { blues[j].ref_width.org } else { blues[j].shoot_width.org };
                 if b_pos >= a_pos { break; }
                 blues.swap(j-1, j);
                 j -= 1;
