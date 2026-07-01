@@ -244,7 +244,11 @@ pub fn metrics_init_widths(
         let stdw = if axis.width_count > 0 {
             axis.widths[0].org
         } else {
-            latin_constant(metrics.units_per_em, 50)
+            // When standard char produces no width pairs, C's
+            // sort_and_quantize may still have width_count>0
+            // with widths[0].org=0 from cluster bug. Match C's
+            // edge_distance_threshold=0 behavior by using 0.
+            0
         };
         axis.standard_width = stdw;
         axis.edge_distance_threshold = stdw / 5;
