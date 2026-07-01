@@ -3,6 +3,43 @@
 //! Implements the core pipeline for grid-fitting Latin glyph outlines:
 //!   segment detection → edge grouping → grid-fitting → point interpolation.
 //!
+//! ## Parity Fixes (853→36, 99.7% pass, 2026-07-01)
+//!
+//! 1. **top_to_bottom gating** (L2108): BOUND checks apply to VERT dim only.
+//!    C: aflatin.c:4271-4273. Fix: `dim == Dimension::Vert &&` guard.
+//!    284 failures fixed (beng, guru, goth, mong → 100%).
+//!
+//! 2. **Blue zone outlier detection** (L495): flat/round median mismatch >20% UPEM
+//!    → unshaped HarfBuzz forms. Trust rounds for top zones, keep blend for
+//!    descenders (0b0f04b). 86 failures fixed (knda, gujr, lao, mlym, sinh,
+//!    sund, taml → 100%).
+//!
+//! 3. **sort_and_quantize_widths denominator** (L131): C divides by `j=end` not
+//!    cluster size `end-cur_idx`. Match this FreeType bug for parity.
+//!    47 failures fixed (deva → 100%, cher, geok).
+//!
+//! 4. **Phase 1 neutral-blue continue** (L2142): C falls through to edge-flip
+//!    after stripping neutral blue. Our `continue` skipped anchor. 1 fixed (arab).
+//!
+//! 5. **VSEP database port** (L56-L88): reverse cmap + af_adjustment_database.
+//!    78 failures fixed.
+//!
+//! 6. **Blue zone sort direction** (L564): C compares ref.org for TOP zones,
+//!    shoot.org for BOTTOM. We had them swapped. 55 fixed.
+//!
+//! 7. **hebr bytecode blue zone** (L540): TrueType font programs at
+//!    FT_LOAD_NO_SCALE alter LiberationSerif hebr headline. Correct 1204→1133.
+//!    48 failures fixed.
+//!
+//! 8. **edge_distance_threshold=0** (L197): when width_count==0, C has edt=0.
+//!    Our fallback latin_constant(50) merged close segments. 2 fixed (nkoo).
+//!
+//! 9. **VSEP min_distance negative** (L920): C allows negative gap. Our
+//!    `!(0..64).contains()` blocked. Use `min_distance >= 64`. 3 fixed.
+//!
+//! Debug: `FT2_DEBUG="aflatin:7" /tmp/gen_refs_v4` for C per-phase trace.
+//!        `RUST_LOG=autohint::pipeline=trace` for our per-phase trace.
+//!
 //! Ported in phases (A through F per ALGORITHMS.md). Some imports are drawn
 //! in early but only used by later phases.
 //!
@@ -2111,6 +2148,10 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
     // C: top_to_bottom_hinting only applies to VERT dimension (aflatin.c:4271-4273).
     // For HORZ dimension, always use bottom-to-top ordering.
+    // ✅ FIX: top_to_bottom gating (8b9eb67)
+    //    C: `if (dim == AF_DIMENSION_VERT) top_to_bottom = script_class->top_to_bottom`
+    //    Our old: applied to BOTH dims, HORZ BOUND checks collapsed stem edges in Indic
+    //    Verified: C fprintf trace showing BOUND check skipped for HORZ dim
     let top_to_bottom_hinting = dim == Dimension::Vert && hints.metrics.as_ref()
         .map_or(false, |m| m.top_to_bottom_hinting);
 

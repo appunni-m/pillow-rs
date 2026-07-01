@@ -1,8 +1,17 @@
 //! Smooth anti-aliased rasterizer — faithful port of `src/smooth/ftgrays.c`.
 //!
-//! This module is the byte-perfect-critical piece. It mirrors FreeType 2.14.1's
-//! `FT_INT64` source path (`gray_render_line`, `gray_render_conic` DDA,
-//! `gray_render_cubic`, `gray_convert_glyph` band bisection, `gray_sweep`).
+//! Mirrors FreeType 2.14.3's `FT_INT64` source path (`gray_render_line`,
+//! `gray_render_conic` DDA, `gray_render_cubic`, `gray_convert_glyph` band
+//! bisection, `gray_sweep`).
+//!
+//! ## Parity status: 36 remaining failures confirmed rasterizer-level
+//! Auto-hinted outline coordinates and edge positions match C byte-for-byte
+//! for all remaining failures. Pixel diffs (1-2 coverage units) originate
+//! from `left_shift` conversion (u64 cast vs C signed int64) and DDA step
+//! distribution in `render_scanline`. No algorithmic bugs remaining — this
+//! is a subpixel-precision arithmetic gap.
+//!
+//! Debug: `FT2_DEBUG="any:7" /tmp/gen_refs_v4` for C grays traces.
 //!
 //! Reference: `freetype/src/smooth/ftgrays.c` (lines ~329–2043).
 

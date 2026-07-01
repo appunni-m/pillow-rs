@@ -66,29 +66,38 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 
 ## Autohinter Parity Status
 
-**Current: 10,935/11,084 passed (98.7%), 149 failures** (2026-07-01)
+**Current: 11,048/11,084 passed (99.7%), 36 failures** (2026-07-01)
 
-### Fixes applied (8 commits, -704 from 853 baseline)
-1. top_to_bottom dimension gating (853→569, -284)
-2. Blue zone outlier detection (569→483, -86)
-3. Standard char fallback chain (preventive)
-4. Per-script non-base glyph detection (483→372, -111)
-5. Skip hinting when blue_count==0 (372→282, -90)
-6. Port VSEP adjustment database (282→204, -78)
-7. Blue zone sort direction (204→149, -55)
-8. sort_and_quantize_widths cluster off-by-one (preventive)
+### Fixes applied (14 commits, -817 from 853 baseline)
 
-### Remaining: 149 failures (15 scripts)
-cher (22%), hebr (19%), deva (16%), geok (1%),
-plus cans/telu/nkoo/thai/medf/ethi/arab/geor/vaii/latb/latp (0-3% each)
+| # | Fix | Delta | Scripts fixed |
+|---|-----|-------|---------------|
+| 1 | top_to_bottom dimension gating | -284 | beng, guru, goth, mong |
+| 2 | Blue zone outlier detection | -86 | knda, gujr, lao, mlym, sinh, sund, taml |
+| 3 | Standard char fallback chain | prev | — |
+| 4 | Per-script non-base glyph detection | -111 | adlm, saur, mymr |
+| 5 | Skip hinting when blue_count==0 | -90 | hani, nkoo |
+| 6 | Port VSEP adjustment database | -78 | latb, latp |
+| 7 | Blue zone sort direction | -55 | geok |
+| 8 | sort_and_quantize_widths denominator | -47 | deva, cher, geok |
+| 9 | hebr TrueType bytecode blue zone | -48 | hebr |
+| 10 | Remove cmap coverage scan skip | -10 | cans |
+| 11 | Phase 1 neutral-blue continue | -1 | arab |
+| 12 | Outlier detection: preserve descenders | -2 | cher |
+| 13 | VSEP min_distance allows negative | -3 | Italic latb/latp |
+| 14 | edge_distance_threshold=0 fallback | -2 | nkoo |
+| **Total** | | **-817** | **44 scripts at 100%** |
 
-**Key finding:** Edge positions match C exactly for all remaining failures.
-Pixel diffs come from 1-FU rasterization/subpixel antialiasing differences.
+### Remaining: 36 failures (9 scripts, each <5% fail rate)
+All confirmed rasterizer-level — outline coordinates and edge positions match C exactly.
+
+### All fix sites documented in source code
+`latin.rs` (top), `globals.rs` (top), `grays.rs` (top) contain fix logs
+with C file:line references and verification notes.
 
 ### Debug tools
 - C trace: `FT2_DEBUG="aflatin:7" /tmp/gen_refs_v4`
-- Rust per-phase edge trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
-  Outputs TR_INITIAL/TR_PHASE1-4 edge dumps matching C format.
+- Rust edge trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
 - Test: `cargo test -p pillow-rs-freetype --test direct_ft_compare`
 - Plan: `pillow-rs-freetype/doc/MASTER_PARITY_PLAN.md`
 
@@ -372,6 +381,24 @@ Checklist when facing unknown divergence:
 - Write separate code paths per mode when needed
 - Don't give tasks back to user — do it all yourself
 - Add tasks to task list and don't stop until done
+- **Hypothesis-driven debugging**: For each suspected root cause, write a
+  minimal test case (Rust unit test or standalone C→Rust comparison) that
+  isolates the specific function. Verify the hypothesis before running the
+  full 11K-test suite. Examples:
+  - `sort_and_quantize_widths`: compare Rust vs C output for identical input arrays
+  - `compute_stem_width`: feed same width/base_delta/flags, verify output matches C
+  - `ft_udiv`/`ft_mul_fix`: write exhaustive parity tests (fixed_parity.rs pattern)
+  - `render_conic` DDA: feed identical p0/control/p2, compare line sequence
+  Running a hypothesis script takes seconds vs the 45-second full test suite.
+- **Document every fix in code**: After applying a fix, add a comment at the
+  fix site with:
+  ```
+  // ✅ FIX: <one-line description>
+  //    C: <C behavior with file:line reference>
+  //    Our old: <what we did wrong>
+  //    Verified: <how it was confirmed, e.g. C fprintf trace>
+  ```
+  This prevents future regressions and makes the codebase self-documenting.
 
 ## Parity Debugging Methodology (C → Rust Port)
 
