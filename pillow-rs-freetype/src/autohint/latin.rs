@@ -985,8 +985,16 @@ pub fn apply_hints(
     }
 
     // Step 4: Write back
-    // Pipeline trace: dump at `trace!` level.  Compiled out in release builds.
-    // Enable with: RUST_LOG=autohint::pipeline=trace
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        for (i, pt) in hints.points.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[TOUCH] p{i}: x={} y={} fx={} fy={} flags=0x{:02x} touch_x={} touch_y={} weak={}",
+                pt.x, pt.y, pt.fx, pt.fy, pt.flags,
+                pt.flags & AF_FLAG_TOUCH_X != 0,
+                pt.flags & AF_FLAG_TOUCH_Y != 0,
+                pt.flags & AF_FLAG_WEAK_INTERPOLATION != 0);
+        }
+    }
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
         trace!(target: "autohint::pipeline", "[PIPE] reload {} pts", hints.num_points());
