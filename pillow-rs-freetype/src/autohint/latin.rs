@@ -2097,8 +2097,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             // Neutral blue dedup: if both edges of a stem have blue edges,
             // keep only the non-neutral one.  aflatin.c:4270-4286.
             let link = axis.edges[i].link;
-            let maybe_blue = axis.edges[i].blue_edge;
-            if let Some(b) = maybe_blue {
+            let mut maybe_blue = axis.edges[i].blue_edge;
+            if let Some(_b) = maybe_blue {
                 if link != usize::MAX {
                     let link_blue = axis.edges[link].blue_edge;
                     if link_blue.is_some() {
@@ -2110,14 +2110,14 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                         } else if is_neutral {
                             axis.edges[i].blue_edge = None;
                             axis.edges[i].flags &= !AF_EDGE_NEUTRAL;
-                            continue; // this edge lost its blue
+                            maybe_blue = None; // edge lost its blue zone
                         }
                     }
                 }
+            }
+            if let Some(b) = maybe_blue {
                 edge1_idx = Some(i);
                 blue = Some(b);
-                // C: edge2 is set to edge->link at loop start (aflatin.c:4291).
-                // If the blue edge has a linked partner, align it too.
                 if link != usize::MAX {
                     edge2_idx = Some(link);
                 }
