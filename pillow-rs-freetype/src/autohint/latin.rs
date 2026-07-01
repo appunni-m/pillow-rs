@@ -1109,8 +1109,13 @@ pub fn apply_hints(
             trace!(target: "autohint::pipeline", "[PIPE] E{ei}: fpos={} opos={} pos={} link={} serif={} dir={:?} flags=0x{:02x}",
                 e.fpos, e.opos, e.pos, e.link, e.serif, e.dir, e.flags);
         }
-        // Also dump HORZ edges
+        // Also dump HORZ edges and segments
         let ha = &hints.axis[Dimension::Horz as usize];
+        trace!(target: "autohint::pipeline", "[PIPE] horz_segs {}", ha.segments.len());
+        for (si, s) in ha.segments.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "[PIPE] HS{si}: p{}..p{} dir={:?} pos={}",
+                s.first, s.last, s.dir, s.pos);
+        }
         let el_horz = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
         let el_vert = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Vert as usize].extra_light);
         trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light_h={el_horz} extra_light_v={el_vert}", ha.edges.len());
