@@ -42,6 +42,49 @@ use super::types::{
     AF_BLUE_PROP_LATIN_X_HEIGHT,
     AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_SMALL_BOTTOM,
 };
+
+// ── Vertical separation adjustment constants (from afadjust.h) ──────────────
+pub const AF_ADJUST_UP:    u32 = 0x0001;
+pub const AF_ADJUST_UP2:   u32 = 0x0002;
+pub const AF_ADJUST_DOWN:  u32 = 0x0004;
+pub const AF_ADJUST_DOWN2: u32 = 0x0008;
+
+/// Port of FreeType's af_adjustment_database_lookup (afadjust.c).
+/// Keyed by Unicode codepoint → AF_ADJUST_* flags.
+/// Only entries relevant to subscript/superscript (latb/latp) included.
+#[rustfmt::skip]
+static ADJUSTMENT_DATABASE: &[(u32, u32)] = &[
+    (0x0021, AF_ADJUST_UP),  /* ! */
+    (0x003F, AF_ADJUST_UP),  /* ? */
+    (0x0069, AF_ADJUST_UP),  /* i */
+    (0x006A, AF_ADJUST_UP),  /* j */
+    (0x006C, AF_ADJUST_UP),  /* l */
+    (0x00AA, AF_ADJUST_UP),  /* ª */
+    (0x00BA, AF_ADJUST_UP),  /* º */
+    (0x00BF, AF_ADJUST_UP),  /* ¿ */
+    (0x0131, AF_ADJUST_UP),  /* ı */
+    (0x0132, AF_ADJUST_UP),  /* Ĳ */
+    (0x0133, AF_ADJUST_UP),  /* ĳ */
+    (0x0237, AF_ADJUST_UP),  /* ȷ */
+    (0x02B0, AF_ADJUST_UP),  /* ʰ superscript h */
+    (0x02B2, AF_ADJUST_UP),  /* ʲ superscript j */
+    (0x02B3, AF_ADJUST_UP),  /* ʳ superscript r */
+    (0x02E1, AF_ADJUST_UP),  /* ˡ superscript l */
+    (0x02E2, AF_ADJUST_UP),  /* ˢ superscript s */
+    (0x1D43, AF_ADJUST_UP),  /* ᵃ superscript a */
+    (0x1D47, AF_ADJUST_UP),  /* ᵇ superscript b */
+    (0x1D52, AF_ADJUST_UP),  /* ᵒ superscript o */
+    (0x1D56, AF_ADJUST_UP),  /* ᵖ superscript p */
+    (0x1D58, AF_ADJUST_UP),  /* ᵘ superscript u */
+    (0x1D62, AF_ADJUST_UP),  /* ᵢ subscript i */
+    (0x2071, AF_ADJUST_UP),  /* ⁱ superscript i */
+    (0x207A, AF_ADJUST_UP),  /* ⁺ superscript + */
+    (0x207E, AF_ADJUST_UP),  /* ⁾ superscript ) */
+    (0x2092, AF_ADJUST_UP),  /* ₒ subscript o */
+    (0x2C7C, AF_ADJUST_UP),  /* ⱼ subscript j */
+    (0xA770, AF_ADJUST_UP),  /* ꝰ modifier letter */
+];
+
 use super::loader;
 
 // ── Metrics helpers ──────────────────────────────────────────────────────────
@@ -733,16 +776,54 @@ fn ft_pix_round(x: i32) -> i32 { (x + 32) & !63 }
 ///
 /// Moves the body contour up by 1px when the dot is too close after hinting.
 /// No-op for all other glyphs.
-fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16) {
+/// Reverse cmap lookup: glyph_index → Unicode codepoint.
+/// Mirrors C's af_reverse_character_map_new (afadjust.c) without HarfBuzz.
+fn reverse_cmap_lookup(font_data: &crate::tables::FontData, glyph_index: u16) -> Option<u32> {
+    // Scan all entries in the adjustment database and check if any
+    // codepoint maps to this glyph index.
+    // In production, this would use the real reverse charmap from
+    // af_reverse_character_map_new. For our parity tests, we just
+    // check the cmap for all known adjustment codepoints.
+    for &(cp, _) in ADJUSTMENT_DATABASE {
+        if font_data.cmap.char_index(cp).unwrap_or(0) == glyph_index {
+            return Some(cp);
+        }
+    }
+    None
+}
+
+/// Binary search the adjustment database for a codepoint.
+fn adjustment_database_lookup(codepoint: u32) -> u32 {
+    let mut low = 0usize;
+    let mut high = ADJUSTMENT_DATABASE.len() - 1;
+    while high >= low {
+        let mid = (low + high) / 2;
+        let mid_cp = ADJUSTMENT_DATABASE[mid].0;
+        if mid_cp < codepoint { low = mid + 1; }
+        else if mid_cp > codepoint { high = mid - 1; }
+        else { return ADJUSTMENT_DATABASE[mid].1; }
+    }
+    0
+}
+
+fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, font_data: &crate::tables::FontData) {
     if hints.contours.len() < 2 { return; }
 
-    // ⚠️ C uses per-glyph adjustment database (afadjust.c).
-    //    We hardcode glyph indices for ASCII entries relevant to our tests:
-    //    76=LiberationSerif i, 77=j, 105=other fonts i, 106=j, 33=!, 63=?
-    let needs_adj = glyph_index == 76 || glyph_index == 77
-        || glyph_index == 105 || glyph_index == 106
-        || glyph_index == 33 || glyph_index == 63;
-    if !needs_adj { return; }
+    // C uses reverse_charmap + af_adjustment_database_lookup.
+    // We replicate via direct cmap scan on known adjustment codepoints.
+    let adj_type = reverse_cmap_lookup(font_data, glyph_index)
+        .map(|cp| adjustment_database_lookup(cp))
+        .unwrap_or(0);
+
+    if adj_type == 0 { return; }
+
+    let adjust_top       = (adj_type & AF_ADJUST_UP) != 0;
+    let adjust_below_top = (adj_type & AF_ADJUST_UP2) != 0;
+    let adjust_bottom       = (adj_type & AF_ADJUST_DOWN) != 0;
+    let adjust_above_bottom = (adj_type & AF_ADJUST_DOWN2) != 0;
+
+    if !((adjust_top || adjust_bottom) && hints.contours.len() >= 2
+        || (adjust_below_top || adjust_above_bottom) && hints.contours.len() >= 3) { return; }
 
     // Recompute vertical extrema from hinted y values (C: af_compute_vertical_extrema)
     let mut new_minima: Vec<i32> = vec![0; hints.contours.len()];
@@ -852,6 +933,7 @@ pub fn apply_hints(
     glyph_index: u16,
     metrics: Option<&AfLatinMetrics>,
     is_italic: bool,
+    font_data: Option<&crate::tables::FontData>,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
@@ -935,7 +1017,7 @@ pub fn apply_hints(
     // C's af_glyph_hints_apply_vertical_separation_adjustments moves the body
     // contour up for characters in the adjustment database (i=0x69, j=0x6A).
     // This creates visual separation between the dot and body after hinting.
-    vertical_separation_adjustments(&mut hints, glyph_index);
+    vertical_separation_adjustments(&mut hints, glyph_index, font_data.unwrap_or_else(|| unreachable!()));
 
     // ── Post-hinting phantom-point adjustment (afloader.c:419-530) ──────
     // After hint_edges grid-fits the leftmost/rightmost edges, we compute

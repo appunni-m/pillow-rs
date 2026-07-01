@@ -169,7 +169,7 @@ pub fn scale_glyph(
     // Apply auto-hinting: snap edges to pixel grid, then interpolate.
     // This modifies the 26.6 coordinates in-place to align with pixel
     // boundaries, matching FreeType's autofit module for Latin script.
-    autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic);
+    autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
@@ -297,6 +297,7 @@ fn autohint_glyph(
     glyph_index: u16,
     metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
+    font_data: &FontData,
 ) {
     use crate::outline::Outline;
 
@@ -333,6 +334,7 @@ fn autohint_glyph(
         glyph_index,
         metrics,
         is_italic,
+        Some(font_data),
     );
 
     // Write hinted coordinates back.
