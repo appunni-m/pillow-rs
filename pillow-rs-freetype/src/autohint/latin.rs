@@ -1022,7 +1022,7 @@ pub fn apply_hints(
 /// - [ ] `major_dir` absolutified? (`abs_dir(major_dir)`)
 /// - [ ] `flat_threshold` correct for this UPEM? (`upem/14`)
 /// - [ ] Height extension: `prev` and `next` neighbors same as C?
-fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
+pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     let flat_threshold = hints.metrics.as_ref().map_or(146, |m| m.units_per_em / 14);
     // match C's af_latin_hints_compute_segments exactly for DejaVuSans 10pt '&'
     // (6 VERT + 6 HORZ segments). Verified via vendored C fprintf trace.
@@ -1547,6 +1547,12 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 /// # Debug: stem pairs differ from C
 /// - [ ] Distance demerit scoring same as C?
 /// - [ ] Serif candidate detection: `seg.serif` pointer matches C?
+/// Public wrapper: links segments using default width/demerit scoring.
+/// Used by CJK stem width detection in cjk.rs.
+pub fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
+    link_segments_inner(hints, dim, 0, &[]);
+}
+
 fn link_segments_inner(
     hints: &mut GlyphHints,
     dim: Dimension,
