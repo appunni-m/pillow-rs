@@ -66,28 +66,29 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 
 ## Autohinter Parity Status
 
-**Current: 10,601/11,084 passed (95.6%), 483 failures** (2026-07-01)
+**Current: 10,712/11,084 passed (96.6%), 372 failures** (2026-07-01)
 
 ### Fix 1: top_to_bottom dimension gating (853→569, -284)
-Bug: `hint_edges` applied `top_to_bottom_hinting` to BOTH dimensions. C gates to VERT
-only (aflatin.c:4271-4273). Fix: `dim == Dimension::Vert &&` guard at line 1937.
-Scripts fixed to 100%: beng, guru, goth, mong.
+Bug: `hint_edges` applied `top_to_bottom_hinting` to BOTH dimensions.
+Fix: `dim == Dimension::Vert &&` guard.
 
 ### Fix 2: blue zone outlier detection (569→483, -86)
-Without HarfBuzz GSUB, some script-specific standard characters produce unshaped forms
-with wrong Y (e.g., knda saknda y=790 instead of headline y=563). Blue zone ref
-picked the flat median over the correct round median. Fix: when flat/round medians
-differ >20% upem, trust rounds for top zones and flats for bottom zones.
-Scripts fixed to 100%: knda, gujr, lao, mlym, sinh, sund, taml.
+Without HarfBuzz, unshaped standard chars produce wrong Y.
+Fix: outlier detection preferring rounds for top zones.
 
-### Remaining: 483 failures (19 scripts)
-- Heavy: adlm (72%), hani (60%), nkoo (36%), deva (24%), cher (22%), hebr (19%)
-- Moderate: latb/latp (5-7%), geok (7%)
-- Light: cans (3%), telu (2%), thai (2%), mymr (4%), etc.
+### Fix 3: per-script non-base glyph detection (483→372, -111)
+C skips compute_blue_edges for non-base glyphs. Our non_base_glyphs missed
+per-script ranges (RANGES_*_NONBASE_UNI) — only had hardcoded Latin diacritics.
+Fix: corrected generated data + scan all STYLE_TABLE non_base_ranges.
+adlm/saur/mymr now 100% passing.
+
+### Remaining: 372 failures (16 scripts)
+- hani (60%), nkoo (36%), cher (22%), hebr (19%), deva (16%)
+- geok (7%), latp (7%), latb (5%)
+- vaii/cans/telu/thai/medf/ethi/arab/geor (0-3% each)
 
 ### Debug tools
-- C binary: `/tmp/gen_refs_v4` links `pillow-rs-freetype/freetype/build/libfreetyped.so`
-- C trace: `FT2_DEBUG="aflatin:7" LD_LIBRARY_PATH=pillow-rs-freetype/freetype/build /tmp/gen_refs_v4`
+- C trace: `FT2_DEBUG="aflatin:7" LD_LIBRARY_PATH=pillow-rs-freetype/freetype/build /tmp/gen_refs_v5`
 - Rust trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
 - Test: `cargo test -p pillow-rs-freetype --test direct_ft_compare`
 - Plan: `pillow-rs-freetype/doc/MASTER_PARITY_PLAN.md`
