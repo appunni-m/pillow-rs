@@ -68,7 +68,7 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 
 **Current: 10,935/11,084 passed (98.7%), 149 failures** (2026-07-01)
 
-### Fixes applied (7 commits, -704 from 853 baseline)
+### Fixes applied (8 commits, -704 from 853 baseline)
 1. top_to_bottom dimension gating (853→569, -284)
 2. Blue zone outlier detection (569→483, -86)
 3. Standard char fallback chain (preventive)
@@ -76,6 +76,7 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 5. Skip hinting when blue_count==0 (372→282, -90)
 6. Port VSEP adjustment database (282→204, -78)
 7. Blue zone sort direction (204→149, -55)
+8. sort_and_quantize_widths cluster off-by-one (preventive)
 
 ### Remaining: 149 failures (15 scripts)
 cher (22%), hebr (19%), deva (16%), geok (1%),
