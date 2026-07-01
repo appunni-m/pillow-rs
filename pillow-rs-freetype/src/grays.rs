@@ -717,6 +717,19 @@ impl Worker {
             i32::MIN
         };
 
+        if std::env::var("GRAYS_DUMP_CELLS").is_ok() {
+            eprintln!("[RUST CELLS] min_ey={} max_ey={} min_ex={} max_ex={}",
+                self.min_ey, self.max_ey, self.min_ex, self.max_ex);
+            for y in self.min_ey..self.max_ey {
+                let yi = usize_from_i32(y - self.min_ey);
+                eprint!("{y:3}:");
+                for cell in &self.scanlines[yi] {
+                    eprint!(" ({:3}, c:{:4}, a:{:6})", cell.x, cell.cover, cell.area);
+                }
+                eprintln!();
+            }
+        }
+
         for y in self.min_ey..self.max_ey {
             let yi = usize_from_i32(y - self.min_ey);
             let scanline = &self.scanlines[yi];
