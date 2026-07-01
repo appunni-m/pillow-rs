@@ -1,129 +1,128 @@
 # 100% SHA-256 Parity — Master Implementation Plan
 
-## Pipeline Architecture: C → Rust Mapping
+## Current Status (2026-07-01)
 
-The FreeType autohinter pipeline for a single glyph is:
+**Baseline:** 10,231/11,084 passed (853 failures, 92.3% pass rate)
+**Latin matrix:** 7,600/7,600 ✅
+**All unit tests:** pass
+
+Failing scripts by severity:
+- Complete failure (80-100%): deva, knda, beng, adlm, guru, hani, goth, mong
+- High failure (15-80%): nkoo, cher, hebr
+- Moderate failure (5-15%): saur, gujr, geok, latp, latb, vaii
+- Low failure (1-4%): mymr, cans, telu, thai, medf, ethi, arab
+
+## Pipeline Verification Status (Updated)
+
+All pipeline functions match C for Latin scripts (verified by 7,600/7,600 passing).
+The 853 remaining failures are in non-Latin scripts only.
 
 ```
-C: af_latin_hints_apply (aflatin.c:4957-5215)
-  ├─ af_glyph_hints_reload (afhints.c:1087)  ← load outline → points with WEAK/STRONG
-  ├─ af_latin_hints_detect_features (aflatin.c:2514)
-  │    ├─ af_latin_hints_compute_segments    ← group contour runs into segments
-  │    ├─ af_latin_hints_link_segments       ← find stem/serif pairs by scoring
-  │    └─ af_latin_hints_compute_edges       ← merge overlapping segments into edges
-  ├─ af_latin_hints_compute_blue_edges       ← assign edges to blue zones
-  ├─ af_latin_hints_hint_edges               ← 4-phase grid-fitting
-  │    ├─ Phase 1: blue-zone alignment
-  │    ├─ Phase 2: stem alignment
-  │    ├─ Phase 3: serif alignment
-  │    └─ Phase 4: anchor propagation
-  ├─ af_glyph_hints_align_edge_points        ← snap contour points to edge positions
-  ├─ af_glyph_hints_align_strong_points      ← interpolate strong points
-  ├─ af_glyph_hints_align_weak_points        ← IUP for weak points
-  └─ af_glyph_hints_apply_vertical_separation ← tilde/cedilla adjustments
-
-Rust: apply_hints (latin.rs:822)
-  ├─ loader::reload                          ← ✅ VERIFIED: matches C reload
-  ├─ compute_segments (HORZ)                 ← ✅ VERIFIED: same logic as C
-  ├─ extract_widths + link_segments (HORZ)   ← ✅ VERIFIED: same scoring
-  ├─ compute_edges (HORZ)                    ← ✅ VERIFIED: same merging logic
-  ├─ hint_edges (HORZ)                       ← ✅ VERIFIED: 4-phase grid-fitting
-  ├─ align_edge_points (HORZ)                ← ✅ VERIFIED: point snapping
-  ├─ align_strong_points (HORZ)              ← ✅ VERIFIED: edge interpolation
-  ├─ align_weak_points (HORZ)                ← ✅ VERIFIED: IUP
-  ├─ compute_segments (VERT)                 ← ✅ same logic
-  ├─ extract_widths + link_segments (VERT)   ← ✅ same logic
-  ├─ compute_edges (VERT)                    ← ✅ same logic
-  ├─ compute_blue_edges                      ← ✅ VERIFIED: blue zone assignment
-  ├─ hint_edges (VERT)                       ← ✅ VERIFIED: 4-phase grid-fitting
-  │    └─ BOUND check: now dynamic for top_to_bottom scripts
-  ├─ align_edge_points (VERT)                ← ✅ VERIFIED
-  ├─ align_strong_points (VERT)              ← ✅ VERIFIED
-  ├─ align_weak_points (VERT)                ← ✅ VERIFIED
-  └─ vertical_separation_adjustments         ← ✅ PORTED: tilde/cedilla moves
+✅ loader::reload              — matches C point coordinates
+✅ compute_segments            — matches C segment detection
+✅ link_segments_inner         — matches C scoring formula
+✅ compute_edges               — matches C edge merging
+✅ compute_blue_edges          — matches C blue zone assignment
+✅ hint_edges (Phase 1-4)      — matches C for Latin
+✅ align_edge_points           — matches C point snapping
+✅ align_strong_points         — matches C interpolation
+✅ align_weak_points           — matches C IUP
+✅ vertical_separation         — matches C tilde/cedilla
 ```
 
-## Gap Analysis: Why 853 failures remain
+## Empirical Investigation Results
 
-All pipeline functions are VERIFIED for Latin (7,600/7,600 pass).
-The 853 non-Latin failures fall into three categories:
+### Hypothesis 1: Override LATB/LATP → LATN for shared glyphs (Phase 1)
+**Result: NO EFFECT.** Noto fonts have dedicated subscript/superscript glyph forms.
+No shared glyph indices between LATB/LATP and LATN were detected.
+Test result unchanged: 853 failures.
 
-### Category A: Missing edge sort in compute_edges for top_to_bottom (376 failures)
+### Hypothesis 2: Always use LATN blue zones for LATB/LATP
+**Result: CATASTROPHIC.** 2,515 failures. Dedicated subscript glyphs need their
+own blue zones; forcing LATN zones produces wrong edge assignments.
 
-**Source:** latin.rs:1430-1433
+### Hypothesis 3: Use Latin 'o' (U+006F) for all scripts' standard widths
+**Result: CATASTROPHIC.** 6,758 failures. Each script MUST use its own standard
+character for stem width detection. Script-specific outlines produce
+fundamentally different stem widths.
 
-Current code:
-```rust
-if axis.edges.len() > 1 {
-    let top_to_bottom = hints.metrics.as_ref()
-        .map_or(false, |m| m.top_to_bottom_hinting) && dim == Dimension::Vert;
-    // then sort ascending or descending
-}
+### Hypothesis 4: major_dir = Direction::Up for top_to_bottom VERT
+**Result: WORSE.** 954 failures. Overriding VERT major_dir breaks segment
+direction matching. The segment linking code already handles top_to_bottom
+correctly for edge sorting.
+
+### Hypothesis 5: Invert compute_blue_edges enter condition
+**Result: CATASTROPHIC.** 9,590 failures. The current enter condition is correct.
+
+## Root Cause Analysis
+
+### C trace comparison for Bengali U+0995 at 10pt (NotoSansBengali-Regular)
+
+Edge positions match C exactly:
+- VERT (horizontal edges): fpos=622, 551, 233, 159, 0 ✅
+- HORZ (vertical edges): fpos=761, 683, 492, 416 ✅
+
+Edge links match C: (HE0↔HE1) and (HE2↔HE3) stem pairs ✅
+
+BUT hint_edges output diverges:
+- C: HE2.pos=454 (opos=437, snapped to 7.09px → 454 in 26.6)
+- Our: HE2.pos=314 (collapses to HE1.pos)
+
+**Root cause:** Phase 1 blue-zone alignment marks edges E0+E1 as DONE for VERT
+dimension. Then Phase 2 uses E2 as the first anchor (since E0+E1 are DONE),
+producing wrong relative-stem positions for E2+E3.
+
+C does NOT mark these edges as DONE in Phase 1 because C's blue zone
+assignment differs for VERT dimension on Bengali scripts. The standard
+character for Bengali (U+09E6) produces stem widths that are close to
+but NOT identical between C and our code:
+
+```
+C:   horizontal widths = 71 fu, vertical widths = 81 fu
+Our: horizontal widths = 81 fu, vertical widths = 71 fu  (SWAPPED!)
 ```
 
-**C equivalent:** af_axis_hints_new_edge (afhints.c:197-276)
+The dimension swap in standard width computation propagates through
+compute_stem_width → wrong stem snapping → different edge positions.
 
-The edge SORT is correct (confirmed by C trace — edges ascend in INITIAL, same as our code). The issue is NOT in the sort direction. It's in `af_latin_hints_link_segments` which uses `axis->major_dir` for segment linking priority. In C, for top_to_bottom scripts, `axis->major_dir` is set to `AF_DIR_UP` (aflatin.c:1581-1583) which changes which segments get linked → different segment pairs → different edges → different positions → different hinting output.
+### Validation
 
-**Fix:** Apply major_dir=Up for VERT dimension of top_to_bottom scripts, AND also adjust the segment linking scoring to handle the reversed coordinate system.
+Scaled standard widths at 10pt (upem=1000, scale≈0.64):
+```
+          C (expected)    Our (actual)
+HORZ:     45 (26.6)       52 (26.6)   ← matches C's VERT value
+VERT:     52 (26.6)       44 (26.6)   ← close to C's HORZ value
+```
 
-**Files:** latin.rs:1056-1060, latin.rs:1556-1650
+Our HORZ axis has the VERT-axis standard width, and vice versa.
+This swap originates in `metrics_init_widths` where the standard
+character outline processing assigns widths to the wrong axis.
 
-### Category B: Subscript/superscript codepoint resolution (153 failures)
+## Corrected Implementation Plan
 
-**Source:** globals.rs line where blue zones are computed
+### Phase A: Fix standard width dimension swap
+1. In `metrics_init_widths` at latin.rs:144, verify the stem width
+   collection loop assigns widths to the correct axis dimension.
+2. The `for dim in 0..2` loop should store HORZ widths in axis[0] and
+   VERT widths in axis[1], matching C's AF_DIMENSION_HORZ=0 and
+   AF_DIMENSION_VERT=1.
+3. Verify by comparing trace output against C's standard width values.
 
-**C equivalent:** FreeType uses HarfBuzz GSUB to resolve subscript/superscript features. The codepoint U+1D62 (subscript i) gets assigned to LATB style with subscript-specific blue strings. Our coverage scan assigns LATN because the codepoint falls in LATN ranges.
+### Phase B: Trace remaining 1-FU drift failures
+For scripts with 1-4% fail rate, the standard width fix should resolve
+most edge-position differences. Remaining failures are likely from:
+- Sub/superscript blue zone differences (113 failures: latb+latp)
+- Rounding/quantization differences in stem snapping
+- Edge case outlines where the standard width swap has cascading effects
 
-**Fix:** Override blue zone entries in `get_metrics()` to use LATN for latb/latp when a glyph is shared between sub/sup and regular Latin. The override must be per-glyph-index, not per-script. Check: if the glyph index for a subscript codepoint matches the glyph index for a regular Latin codepoint → this glyph is shared → use LATN blue entries.
-
-**Files:** globals.rs:130-135
-
-### Category C: 1-FU algorithmic drift (324 failures across 16 scripts)
-
-**Source:** hint_edges, align_strong_points, or align_weak_points
-
-**C trace comparison needed:** Run debug_glyph with RUST_LOG=trace and compare per-phase edge positions with C's TRACE output for one representative failing glyph per script.
-
-**Files:** latin.rs:1924-2180 (hint_edges), 2452-2598 (align_strong_points)
-
-## Implementation Order
-
-### Phase 1: Sub/superscript fix (153 failures → 0) — ~30 minutes
-
-1. In `globals.rs::get_metrics()`, add per-glyph-index check:
-   - If a glyph index appears in LATB/LATP blue strings AND in LATN blue strings → use LATN entries
-   - This handles the shared-glyph case without needing HarfBuzz
-
-### Phase 2: top_to_bottom major_dir (376 failures → ~80) — ~1 hour
-
-1. Set `axis.major_dir = Direction::Up` for VERT dimension of top_to_bottom scripts
-2. Adjust `link_segments_inner` scoring for top_to_bottom coordinate system
-3. Verify per-glyph with C trace comparison
-
-### Phase 3: 1-FU drift debugging (324 failures → 0) — ~2 hours
-
-1. For each script with 1-3% fail rate, trace one glyph with debug_glyph
-2. Compare edge positions at each phase with C TRACE output
-3. Fix the specific divergence point
-
-### Unaddressed: Cherokee, Hebrew, Kannada
-
-These scripts have 15-78% fail rates. They need full per-glyph tracing to identify the root divergence. May require C code instrumentation (fprintf in C's compute_edges/hint_edges) to compare per-function output.
-
-## Total Estimated Effort
-
-| Phase | Failures | Est. Time | Files |
-|-------|----------|-----------|-------|
-| 1: Sub/superscript | 153 | 30 min | globals.rs |
-| 2: top_to_bottom major_dir | 376 | 60 min | latin.rs |
-| 3: 1-FU drift | 324 | 120 min | latin.rs |
-| **Total** | **853** | **~3.5 hours** | |
+### Phase C: Per-script verification
+After Phase A fix, re-run the full test suite and categorize remaining
+failures by script/root cause.
 
 ## Verification Strategy
 
 After each phase:
-1. cargo test -p pillow-rs-freetype --test direct_ft_compare
+1. `cargo test -p pillow-rs-freetype --test direct_ft_compare`
 2. Verify no regression on Latin matrix (7,600/7,600)
-3. Verify per-script pass rates improve as expected
-4. Commit with detailed per-pixel before/after analysis
+3. Verify per-script pass rates improve
+4. Commit with detailed before/after analysis
