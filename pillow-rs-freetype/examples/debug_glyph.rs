@@ -59,5 +59,23 @@ fn main() {
                 eprintln!("  [{}] our=0x{:02x} ft=0x{:02x}", i, mask.pixels[i], ft_px[i]);
             }
         }
+
+        // Print both bitmaps side by side for visual comparison
+        eprintln!("\n  OUR BITMAP (hex rows):");
+        for y in 0..mask.height as usize {
+            eprint!("    ");
+            for x in 0..mask.width as usize {
+                eprint!("{:02x}", mask.pixels[y * mask.width as usize + x]);
+            }
+            eprintln!();
+        }
+        eprintln!("\n  FT BITMAP (hex rows):");
+        for y in 0..(h as usize).min(ft_px.len() / w as usize) {
+            eprint!("    ");
+            for x in 0..w as usize {
+                eprint!("{:02x}", ft_px[y * w as usize + x]);
+            }
+            eprintln!();
+        }
     }
 }
