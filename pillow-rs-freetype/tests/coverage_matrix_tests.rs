@@ -67,21 +67,18 @@ fn get_text(row: &MatrixRow) -> String {
 
 #[test]
 fn test_coverage_matrix_freetype() {
+    // 8-font Latin matrix: getmask + getbbox + getmetrics + getname + getlength
     run_unified("coverage_matrix_ft.json", BitmapBackend::FreeType);
 }
 
-#[test]
-fn test_coverage_matrix_pil() {
-    // PIL parity: checks our Rust PIL backend (BitmapBackend::PIL with
-    // ascender-padded masks, PIL-style bbox) against a fixture generated
-    // by actual Python Pillow 12.2.0 running FreeType 2.14.3.
-    // SHA-256 must match PIL's output exactly.
-    run_unified("coverage_matrix.json", BitmapBackend::PIL);
-}
+// Full 55-script comparison is handled by tests/direct_ft_compare.rs
+// which compares pixel SHA-256 against the live vendored C binary.
+// No fixture needed — the C binary is the oracle.
 
 #[test]
-fn test_unified_coverage() {
-    run_unified("coverage_matrix_unified.json", BitmapBackend::FreeType);
+fn test_coverage_matrix_pil() {
+    // PIL parity: checks our Rust PIL backend against Python Pillow 12.2.0 output
+    run_unified("coverage_matrix.json", BitmapBackend::PIL);
 }
 
 // ── Single runner ─────────────────────────────────────────────────────────
