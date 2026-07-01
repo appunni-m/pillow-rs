@@ -360,6 +360,9 @@ Checklist when facing unknown divergence:
 - Public API names match Pillow exactly. Import name: `RSPIL`.
 - Reference: **Pillow** for API, **Puhu** (`puhu/`) for algorithms/quirks
 - NEVER use git (`commit`, `checkout`, `revert`, `stash`) without explicit permission
+- **NO git reverts** — never `git revert` or `git reset --hard` to undo changes. If a code change
+  causes test regressions, fix forward by editing the code to correct the issue. Always move
+  forward, never go back. Git history is there as backup if absolutely needed.
 - NEVER change fixture output/input JSON images or binaries
 - `pillow-rs-py` must contain NO `if`/`else` — all logic in core
 - Never leave commit message as "anthropic" or "fable"
