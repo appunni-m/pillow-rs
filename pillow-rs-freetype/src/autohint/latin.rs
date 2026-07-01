@@ -443,7 +443,30 @@ pub fn metrics_init_blues_impl(
             let v = flats[flats.len() / 2];
             (v, v)
         } else {
-            (flats[flats.len() / 2], rounds[rounds.len() / 2])
+            let flat_median = flats[flats.len() / 2];
+            let round_median = rounds[rounds.len() / 2];
+            // Outlier detection: if flat and round medians differ by >20% of
+            // upem, some characters may have unshaped forms (HarfBuzz
+            // substitution would reshape them). For top zones, trust rounds;
+            // for bottom zones, trust flats. Falls through to median blend
+            // when values are consistent.
+            let entry_is_top = is_top_blue!(entry.props) || is_sub_top!(entry.props);
+            let threshold = metrics.units_per_em / 5;
+            let diff = (flat_median - round_median).abs();
+            if diff > threshold {
+                // Large discrepancy: some chars have unshaped forms
+                if entry_is_top {
+                    // For top zones, the round values represent the
+                    // correctly shaped headline; flat values may be
+                    // unshaped ascenders. Trust the rounds.
+                    (round_median, round_median)
+                } else {
+                    // For bottom zones, trust the flats (baseline).
+                    (flat_median, flat_median)
+                }
+            } else {
+                (flat_median, round_median)
+            }
         };
         trace!(target: "autohint::pipeline", "[BLUE_FINAL] entry={} flats={:?} rounds={:?} ref_idx={} shoot_idx={} ref={ref_val} shoot={shoot_val}",
             entry.chars[0], flats.len(), rounds.len(), flats.len()/2, rounds.len()/2);
@@ -964,9 +987,9 @@ pub fn apply_hints(
                 let bz = &verge.blues[bi];
                 trace!(target: "autohint::pipeline", "[PIPE] blue{bi}: ref={} shoot={} top={} neut={} active={}",
                     bz.ref_width.org, bz.shoot_width.org,
-                    (bz.flags & 0x02 != 0) || (bz.flags & 0x01 != 0),
-                    bz.flags & 0x04 != 0,
-                    bz.flags & 0x08 != 0);
+                    (bz.flags & 0x02 != 0) || (bz.flags & 0x04 != 0),
+                    bz.flags & 0x08 != 0,
+                    bz.flags & 0x01 != 0);
             }
         }
         trace!(target: "autohint::pipeline", "[PIPE] blue_dump_done");
@@ -982,8 +1005,8 @@ pub fn apply_hints(
         }
         trace!(target: "autohint::pipeline", "[PIPE] edges {}", va.edges.len());
         for (ei, e) in va.edges.iter().enumerate() {
-            trace!(target: "autohint::pipeline", "[PIPE] E{ei}: fpos={} opos={} pos={} link={} serif={}",
-                e.fpos, e.opos, e.pos, e.link, e.serif);
+            trace!(target: "autohint::pipeline", "[PIPE] E{ei}: fpos={} opos={} pos={} link={} serif={} dir={:?} flags=0x{:02x}",
+                e.fpos, e.opos, e.pos, e.link, e.serif, e.dir, e.flags);
         }
         // Also dump HORZ edges
         let ha = &hints.axis[Dimension::Horz as usize];
