@@ -1096,6 +1096,10 @@ pub fn apply_hints(
     {
         let haxis = &hints.axis[Dimension::Horz as usize];
         let num_horz_edges = haxis.edges.len();
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+            log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
+        }
         if num_horz_edges > 1 {
             let edge1 = &haxis.edges[0];                    // leftmost
             let edge2 = &haxis.edges[num_horz_edges - 1];   // rightmost
@@ -1111,6 +1115,11 @@ pub fn apply_hints(
             }
 
             let mut pp1x = (pp1x_uh + 32) & !63; // FT_PIX_ROUND
+
+            #[cfg(debug_assertions)]
+            if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                log::trace!(target: "autohint::pipeline", "[PHANTOM] gi={glyph_index} old_lsb={old_lsb} new_lsb={new_lsb} pp1x_uh={pp1x_uh} pp1x_round={pp1x}");
+            }
 
             // Don't move if we'd lose the stem.
             if pp1x >= new_lsb && old_lsb > 0 {
@@ -1133,6 +1142,10 @@ pub fn apply_hints(
             // on the glyph slot.  We don't replicate rsb_delta (it only
             // affects advance widths), but we document the path for clarity.
             // The x coordinates are unchanged from the raw scaled values.
+            #[cfg(debug_assertions)]
+            if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                log::trace!(target: "autohint::pipeline", "[PHANTOM_SKIP] gi={glyph_index} num_horz_edges={num_horz_edges} (<=1, no adjust)");
+            }
         }
     }
 
@@ -1772,6 +1785,19 @@ fn link_segments_inner(
         0
     };
 
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        let dim_name = if dim == Dimension::Horz { "HORZ" } else { "VERT" };
+        log::trace!(target: "autohint::pipeline", "[LINK_IN] dim={dim_name} n={n} major={:?} wc={width_count} max_width={max_width}",
+            major_dir);
+        for (i, seg) in axis.segments.iter().enumerate() {
+            log::trace!(target: "autohint::pipeline", "  S{i}: pos={} dir={} u=[{},{}] h={} delta={}",
+                seg.pos, seg.dir as i8,
+                seg.min_coord, seg.max_coord,
+                seg.height, seg.delta);
+        }
+    }
+
     let len_threshold = latin_constant(upem, 8).max(1);
     let len_score = latin_constant(upem, 6000);
     let dist_score: i32 = 3000;
@@ -1823,6 +1849,11 @@ fn link_segments_inner(
 
                     let score = dist_demerit + len_score / len.max(1);
                     if score < axis.segments[i].score {
+                        #[cfg(debug_assertions)]
+                        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                            log::trace!(target: "autohint::pipeline", "[LINK_SCORE] i={i}->j={j} dist={dist} len={len} max_width={max_width} delta={} dist_demerit={dist_demerit} score={score}",
+                                if max_width > 0 { ((dist << 10) / max_width) - (1 << 10) } else { dist });
+                        }
                         axis.segments[i].score = score;
                         axis.segments[i].link = j;
                     }
@@ -1836,6 +1867,18 @@ fn link_segments_inner(
     }
 
     // Compute serif segments: if seg.link != seg.link.link, seg is a serif.
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        let dim_name = if dim == Dimension::Horz { "HORZ" } else { "VERT" };
+        for (i, seg) in axis.segments.iter().enumerate() {
+            if seg.link != usize::MAX || seg.serif != usize::MAX {
+                log::trace!(target: "autohint::pipeline", "[LINK_OUT] dim={dim_name} S{i}: link={} serif={} score={}",
+                    if seg.link != usize::MAX { seg.link as isize } else { -1 },
+                    if seg.serif != usize::MAX { seg.serif as isize } else { -1 },
+                    seg.score);
+            }
+        }
+    }
     for i in 0..n {
         let seg2_idx = axis.segments[i].link;
         if seg2_idx != usize::MAX {

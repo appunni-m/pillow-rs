@@ -86,11 +86,20 @@ fn ft_udiv(a: i64, r: i64) -> i32 {
 /// Converts accumulated cell area to 8-bit coverage value.
 fn fill_rule(area: i32, fill: i32) -> i32 {
     let mut coverage = area >> 9; // PIXEL_BITS * 2 + 1 - 8 = 9
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+        log::trace!(target: "autohint::rasterizer", "[FILL_RULE] area={} fill=0x{:x} cov_before={}",
+            area, fill, coverage);
+    }
     if (coverage & fill) != 0 {
         coverage = !coverage;
     }
     if coverage > 255 && (fill & i32::MIN) != 0 {
         coverage = 255;
+    }
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+        log::trace!(target: "autohint::rasterizer", "[FILL_RESULT] cov={}", coverage);
     }
     coverage
 }
@@ -538,6 +547,11 @@ impl Worker {
                 || (a0y - 3 * a2y + 2 * a3y).abs() > ONE_PIXEL / 2
             {
                 // de Casteljau split t=0.5
+                // ✅ FIX: swapped push order to match C's gray_split_cubic + arc+=3
+                //    C renders RIGHT sub-arc first (midpoint→to), then LEFT (p0→midpoint).
+                //    Our old: pushed RIGHT then LEFT, LIFO pop gave LEFT first → wrong
+                //    rendering order: p0→to (skipping midpoint).
+                //    Verified: C traces show RIGHT arc processed before LEFT.
                 let m01x = (a0x + a1x) / 2;
                 let m01y = (a0y + a1y) / 2;
                 let m12x = (a1x + a2x) / 2;
@@ -550,8 +564,10 @@ impl Worker {
                 let m123y = (m12y + m23y) / 2;
                 let mx = (m012x + m123x) / 2;
                 let my = (m012y + m123y) / 2;
-                stack.push([mx, my, m123x, m123y, m23x, m23y, a3x, a3y]);
+                // Push left sub-arc first (p0→midpoint), then right sub-arc (midpoint→to).
+                // LIFO pop gives right first, matching C's arc+=3 advancement.
                 stack.push([a0x, a0y, m01x, m01y, m012x, m012y, mx, my]);
+                stack.push([mx, my, m123x, m123y, m23x, m23y, a3x, a3y]);
                 continue;
             }
             self.render_line(a0x, a0y);
@@ -717,6 +733,12 @@ impl Worker {
             i32::MIN
         };
 
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+            log::trace!(target: "autohint::rasterizer", "[SWEEP] fill=0x{:x} min_ey={} max_ey={} min_ex={} max_ex={}",
+                fill, self.min_ey, self.max_ey, self.min_ex, self.max_ex);
+        }
+
         if std::env::var("GRAYS_DUMP_CELLS").is_ok() {
             eprintln!("[RUST CELLS] min_ey={} max_ey={} min_ex={} max_ex={}",
                 self.min_ey, self.max_ey, self.min_ex, self.max_ex);
@@ -742,6 +764,11 @@ impl Worker {
             for cell in scanline {
                 if cover != 0 && cell.x > x {
                     let coverage = fill_rule(cover, fill);
+                    #[cfg(debug_assertions)]
+                    if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+                        log::trace!(target: "autohint::rasterizer", "[SWEEP_SPAN] y={} x={}..{} cov_raw={} cov_out={}",
+                            y, x, cell.x, cover, coverage);
+                    }
                     write_span(
                         &mut self.target,
                         dst_row * self.width + usize_from_i32(x),
@@ -755,6 +782,11 @@ impl Worker {
 
                 if area != 0 && cell.x >= self.min_ex {
                     let coverage = fill_rule(area, fill);
+                    #[cfg(debug_assertions)]
+                    if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+                        log::trace!(target: "autohint::rasterizer", "[SWEEP_PIX] y={} x={} area={} cov_raw={} cov_out={}",
+                            y, cell.x, area, area, coverage);
+                    }
                     let off = dst_row * self.width + usize_from_i32(cell.x);
                     if let Some(slot) = self.target.get_mut(off) {
                         *slot = u8_from_i32(coverage);
@@ -766,6 +798,11 @@ impl Worker {
 
             if cover != 0 {
                 let coverage = fill_rule(cover, fill);
+                #[cfg(debug_assertions)]
+                if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+                    log::trace!(target: "autohint::rasterizer", "[SWEEP_TAIL] y={} x={}..{} cov_raw={} cov_out={}",
+                        y, x, self.max_ex, cover, coverage);
+                }
                 write_span(
                     &mut self.target,
                     dst_row * self.width + usize_from_i32(x),

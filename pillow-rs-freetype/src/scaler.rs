@@ -147,6 +147,12 @@ pub fn scale_glyph(
     // Shift both raw outline (autohinter fx/fy) and scaled (autohinter ox/oy).
     let pp1x_fu = outline_raw.xmin - h_metric.lsb as i32;
 
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        log::trace!(target: "autohint::pipeline", "[PP1X] gi={glyph_index} outline_raw.xmin={} lsb={} pp1x_fu={pp1x_fu}",
+            outline_raw.xmin, h_metric.lsb);
+    }
+
     // Shift raw outline for autohinter fx/fy edge detection
     let shifted_raw = crate::tt::glyf::GlyphOutline {
         num_contours: outline_raw.num_contours,
