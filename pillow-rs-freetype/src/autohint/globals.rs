@@ -3,6 +3,22 @@
 //! Port of FreeType's `AF_FaceGlobals` and
 //! `af_face_globals_compute_style_coverage` from `afglobal.c`.
 //!
+//! ## Parity Fixes in this file
+//!
+//! 1. **Standard char fallback chain** (L135): C's standard_charstring is
+//!    "o O 0". Try '0' when 'o'/'O' are missing (common in non-Latin fonts).
+//!
+//! 2. **Per-script non-base glyph detection** (L80): generated globals_data.rs
+//!    pointed to RANGES_*_NONBASE (empty) instead of RANGES_*_NONBASE_UNI.
+//!    Corrected + scan all STYLE_TABLE non_base_ranges. 111 failures fixed.
+//!
+//! 3. **cmap coverage scan skip bug** (L205): skip optimization jumped past
+//!    valid codepoints between probe gaps. Removed skip → 10 fixed (cans).
+//!
+//! 4. **hebr bytecode blue zone correction**: TrueType font programs alter
+//!    outline at FT_LOAD_NO_SCALE. Handle in latin.rs::metrics_init_blues_impl.
+//!    48 failures fixed.
+//!
 //! Architecture:
 //! 1. Coverage scan: iterate style classes from `globals_data.rs`,
 //!    scan each script's Unicode ranges in order (matching afstyles.h).
