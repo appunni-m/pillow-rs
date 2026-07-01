@@ -150,7 +150,7 @@ fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold
             for w in &mut widths[cur_idx + 1..end] { w.org = 0; }
             widths[cur_idx].org = i32_from_i64(sum / (end as i64 - cur_idx as i64));
             if i < *count - 1 {
-                cur_idx = i;
+                cur_idx = i + 1;
                 cur_val = widths[cur_idx].org;
             }
         }
