@@ -142,6 +142,10 @@ pub struct AfLatinMetrics {
     /// TOP_TO_BOTTOM hinting for Indic scripts (beng, deva, guru, goth, mong).
     /// Most scripts use bottom-to-top (false).
     pub top_to_bottom_hinting: bool,
+    /// Skip x-height scale adjustment for subscript/superscript styles
+    /// (latb/latp). Without HarfBuzz GSUB reshaping, the raw subscript
+    /// glyph forms have wrong x-height → adjustment compresses glyph.
+    pub skip_xh_adjust: bool,
 }
 
 impl AfLatinMetrics {
@@ -151,6 +155,7 @@ impl AfLatinMetrics {
             axis: [AfLatinAxisMetrics::new(), AfLatinAxisMetrics::new()],
             non_base_glyphs: vec![false; num_glyphs as usize],
             top_to_bottom_hinting: false,
+            skip_xh_adjust: false,
         }
     }
 }

@@ -578,10 +578,9 @@ pub fn metrics_scale_dim(
         if let Some(ai) = adj_idx {
             let shoot_org = vaxis.blues[ai].shoot_width.org;
             let scaled = ft_mul_fix(shoot_org, v_scale);
-            // increase_x_height property: 0 for non-instructed fonts → threshold=40.
             let threshold: i32 = 40;
             let fitted = (scaled + threshold) & !63;
-            trace!(target: "autohint::pipeline", "[XHT] ai={ai} shoot_org={shoot_org} scaled={scaled} threshold={threshold} fitted={fitted} v_scale={v_scale}");
+            trace!(target: "autohint::pipeline", "[XHT] ai={ai} shoot_org={shoot_org} scaled={scaled} fitted={fitted} v_in={v_scale}");
             if scaled != fitted {
                 let new_scale = ft_mul_div(v_scale, fitted, scaled);
                 let mut max_height = metrics.units_per_em;
@@ -592,11 +591,12 @@ pub fn metrics_scale_dim(
                 let dist = ft_mul_fix(max_height, new_scale - v_scale);
                 if -128 < dist && dist < 128 {
                     v_scale = new_scale;
+                    trace!(target: "autohint::pipeline", "[XHT] adjusted v_scale={v_scale} dist={dist}");
                 }
             }
         }
     }
-    trace!(target: "autohint::pipeline", "[XHT] VERT v_scale={v_scale} base_y={y_scale}");
+    trace!(target: "autohint::pipeline", "[XHT] VERT v_out={v_scale} base={y_scale}");
 
     // Vertical axis: widths + blue zones (aflatin.c:1327-1437).
     {
@@ -1935,10 +1935,23 @@ fn compute_stem_width(
 // ── Edge grid-fitting ──────────────────────────────────────────────────────
 //
 // Faithful port of `af_latin_hint_edges` (aflatin.c:4214–4831).
-// Blue zones are skipped (all blue_edge are NULL in our port).
-// Stem alignment is ported faithfully but never executes (all links are
-// usize::MAX). The non-stem section (lines 4629–4824) does the actual
-// grid-fitting via anchor-relative half-pixel rounding.
+
+// Per-phase edge dump matching C's [C TRACE INITIAL/PHASE1-4] format.
+#[cfg(debug_assertions)]
+fn dump_edge_phase(phase: &str, dim: &str, edges: &[AFEdge]) {
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        trace!(target: "autohint::pipeline", "[TR_{phase}] dim={dim} edges={}", edges.len());
+        for (ei, e) in edges.iter().enumerate() {
+            trace!(target: "autohint::pipeline", "  edge[{ei}] fpos={} opos={} pos={} flags=0x{:02x} link={} serif={} blue={}",
+                e.fpos, e.opos, e.pos, e.flags,
+                if e.link != usize::MAX { e.link as isize } else { -1 },
+                if e.serif != usize::MAX { e.serif as isize } else { -1 },
+                if e.blue_edge.is_some() { 1 } else { 0 });
+        }
+    }
+}
+#[cfg(not(debug_assertions))]
+fn dump_edge_phase(_phase: &str, _dim: &str, _edges: &[AFEdge]) {}
 
 // ✅ VERIFIED: all edge positions (fpos, opos, pos) after hint_edges
 // match C exactly for DejaVuSans 10pt '&' (5 VERT + 5 HORZ edges).
@@ -1964,6 +1977,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     if num_edges == 0 {
         return;
     }
+
+    let dim_label = if dim == Dimension::Vert { "VERT" } else { "HORZ" };
+    dump_edge_phase("INITIAL", dim_label, &axis.edges);
 
     // C: top_to_bottom_hinting only applies to VERT dimension (aflatin.c:4271-4273).
     // For HORZ dimension, always use bottom-to-top ordering.
@@ -2034,6 +2050,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             if anchor == usize::MAX { anchor = i; }
         }
+        dump_edge_phase("PHASE1", dim_label, &axis.edges);
     }
 
     // ── Phase 2: Stem alignment ─────────────────────────────────────────
@@ -2214,6 +2231,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         // Phase 4 BOUND checks (aflatin.c:4870-4904) are handled
         // separately in the Phase 4 loop below.
     }
+    dump_edge_phase("PHASE2", dim_label, &axis.edges);
 
     // ── Phase 3: Lowercase 'm' symmetry (aflatin.c:4582-4627) ────────────
     // If a glyph has 3 stems (6 edges) or 3 stems with serifs (12 edges),
@@ -2248,6 +2266,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             }
         }
     }
+    dump_edge_phase("PHASE3", dim_label, &axis.edges);
     // ── Phase 4: Non-stem edges ─────────────────────────────────────────
     // Ported faithfully (aflatin.c:4629–4824).
     // This is the active path since all our edges lack links.
@@ -2420,6 +2439,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             }
         }
     }
+    dump_edge_phase("PHASE4", dim_label, &axis.edges);
 }
 
 // ── Edge-point alignment ───────────────────────────────────────────────────
