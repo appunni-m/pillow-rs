@@ -1,20 +1,12 @@
 //! Direct pixel comparison against vendored FreeType 2.14.3 C binary.
 //!
-//! For each font × script × codepoint × size, runs BOTH our Rust renderer
-//! AND the vendored FreeType C binary, then compares SHA-256 pixel hashes.
+//! Per-pixel diff: diff_count, max_diff, first divergent byte, size delta.
+//! Per-script stats: avg_failing_diffs and max_diff for error-rate analysis.
 //!
-//! No pre-computed fixtures needed — the C binary is the live oracle.
-//! Font inventory (font_inventory.json) provides the test matrix.
-//!
-//! Requirements:
-//!   - /tmp/gen_refs_v4  (FreeType 2.14.3 C reference binary)
-//!   - pillow-rs-freetype/freetype/build/libfreetype.so
-//!   - tests/fixtures/font_inventory.json (font → script → codepoint mapping)
-//!
+//! No pre-computed fixtures — the C binary is the live oracle.
 //! Run: cargo test -p pillow-rs-freetype --test direct_ft_compare -- --test-threads=1
 
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use pillow_rs_freetype::{BitmapBackend, Font};
 use sha2::{Digest, Sha256};
@@ -23,59 +15,40 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 fn sha256(data: &[u8]) -> String {
     Sha256::digest(data).iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// Cached FreeType reference: (font_hash, codepoint, size) -> SHA-256
-static FT_CACHE: OnceLock<Mutex<HashMap<(u64, u32, u32), String>>> = OnceLock::new();
+// (sha, pixels, width, height)
+type CachedEntry = (String, Vec<u8>, usize, usize);
+static FT_CACHE: OnceLock<Mutex<HashMap<(u64, u32, u32), CachedEntry>>> = OnceLock::new();
 
-fn get_ft_sha(font_path: &Path, cp: u32, size: u32, ft_lib_dir: &Path, ft_bin: &Path) -> Option<String> {
-    let font_data = fs::read(font_path).ok()?;
-    let font_hash = {
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        std::hash::Hash::hash(&font_data, &mut h);
-        std::hash::Hasher::finish(&h)
-    };
-
+fn get_ft_ref(path: &Path, cp: u32, sz: u32, lib_dir: &Path, bin: &Path) -> Option<CachedEntry> {
+    let data = fs::read(path).ok()?;
+    let fh = { let mut h = std::collections::hash_map::DefaultHasher::new(); std::hash::Hash::hash(&data, &mut h); std::hash::Hasher::finish(&h) };
     let cache = FT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    {
-        let c = cache.lock().unwrap();
-        if let Some(sha) = c.get(&(font_hash, cp, size)) {
-            return Some(sha.clone());
-        }
-    }
+    if let Some(e) = cache.lock().unwrap().get(&(fh, cp, sz)) { return Some(e.clone()); }
 
-    // Run C binary — format: w h l t pixels_hex
-    let mut child = Command::new(ft_bin)
-        .arg(font_path)
-        .arg(format!("{:04X}", cp))
-        .arg(format!("{}", size))
-        .env("LD_LIBRARY_PATH", ft_lib_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn().ok()?;
-
-    let mut stdout = String::new();
-    child.stdout.take()?.read_to_string(&mut stdout).ok()?;
+    let mut child = Command::new(bin)
+        .arg(path).arg(format!("{:04X}", cp)).arg(format!("{}", sz))
+        .env("LD_LIBRARY_PATH", lib_dir)
+        .stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    let mut out = String::new();
+    child.stdout.take()?.read_to_string(&mut out).ok()?;
     child.wait().ok()?;
-
-    let out = stdout.trim();
+    let out = out.trim();
     if out.is_empty() || out == "NO_GLYPH" { return None; }
-
-    let parts: Vec<&str> = out.split_whitespace().collect();
-    if parts.len() < 5 { return None; }
-
-    let px: Vec<u8> = (0..parts[4].len()).step_by(2)
-        .map(|i| u8::from_str_radix(&parts[4][i..i+2], 16).unwrap_or(0))
-        .collect();
-    let ft_sha = sha256(&px);
-
-    cache.lock().unwrap().insert((font_hash, cp, size), ft_sha.clone());
-    Some(ft_sha)
+    let p: Vec<&str> = out.split_whitespace().collect();
+    if p.len() < 5 { return None; }
+    let w: usize = p[0].parse().unwrap_or(0);
+    let h: usize = p[1].parse().unwrap_or(0);
+    let px: Vec<u8> = (0..p[4].len()).step_by(2).map(|i| u8::from_str_radix(&p[4][i..i+2], 16).unwrap_or(0)).collect();
+    let sha = sha256(&px);
+    let entry = (sha, px, w, h);
+    cache.lock().unwrap().insert((fh, cp, sz), entry.clone());
+    Some(entry)
 }
 
 #[test]
@@ -83,65 +56,63 @@ fn test_direct_ft_comparison() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let font_dir = manifest_dir.join("tests/fixtures/input/fonts_autohint");
     let ft_bin = Path::new("/tmp/gen_refs_v4");
-    let ft_lib_dir = manifest_dir.join("freetype/build");
+    let ft_lib = manifest_dir.join("freetype/build");
+    assert!(ft_bin.exists() && ft_lib.exists());
 
-    assert!(ft_bin.exists(), "Missing /tmp/gen_refs_v4");
-    assert!(ft_lib_dir.exists(), "Missing freetype/build");
-
-    // Load font inventory (single source of truth)
     let inv_path = manifest_dir.join("tests/fixtures/font_inventory.json");
-    assert!(inv_path.exists(), "Missing font_inventory.json");
+    assert!(inv_path.exists());
 
     use serde::Deserialize;
-    #[derive(Debug, Deserialize)]
-    struct InventoryDoc { fonts: HashMap<String, FontInfo> }
-    #[derive(Debug, Deserialize)]
-    struct FontInfo { path: String, scripts: HashMap<String, Vec<u32>> }
+    #[derive(Debug, Deserialize)] struct Inv { fonts: HashMap<String, FontInfo> }
+    #[derive(Debug, Deserialize)] struct FontInfo { path: String, scripts: HashMap<String, Vec<u32>> }
+    let inv: Inv = serde_json::from_str(&fs::read_to_string(&inv_path).unwrap()).unwrap();
+    eprintln!("Testing {} fonts at 10pt+20pt\n", inv.fonts.len());
 
-    let inv: InventoryDoc = serde_json::from_str(&fs::read_to_string(&inv_path).unwrap()).unwrap();
-    eprintln!("Testing {} fonts at 10pt + 20pt\n", inv.fonts.len());
-
-    let sizes: [u32; 2] = [10, 20];
-    let mut total: u32 = 0;
-    let mut passed: u32 = 0;
-    let mut failed: u32 = 0;
+    let sizes = [10u32, 20];
+    let (mut total, mut passed, mut failed) = (0u32, 0u32, 0u32);
     let mut script_counts: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+
+    // Per-script pixel error statistics
+    struct PxStats { diffs: u32, max_diff: u32, total_mag: f64, count: u32 }
+    let mut script_stats: BTreeMap<String, PxStats> = BTreeMap::new();
 
     for (font_name, info) in &inv.fonts {
         let font_path = font_dir.join(&info.path);
-        let data = match fs::read(&font_path) {
-            Ok(d) => d,
-            Err(_) => { eprintln!("  MISSING {font_name}"); continue; }
-        };
+        let data = match fs::read(&font_path) { Ok(d) => d, Err(_) => continue };
 
         for &size in &sizes {
             let font = match Font::truetype(&data, size as f32, BitmapBackend::FreeType) {
-                Ok(f) => f,
-                Err(e) => { eprintln!("  SKIP {font_name} {size}pt: {e}"); continue; }
+                Ok(f) => f, Err(_) => continue,
             };
-
-            for (script, codepoints) in &info.scripts {
-                for &cp in codepoints {
-                    let ch = char::from_u32(cp).unwrap_or('?');
-                    let text = ch.to_string();
-
-                    let mask = match font.getmask(&text) {
-                        Ok(m) => m,
-                        Err(_) => continue,
+            for (script, cps) in &info.scripts {
+                for &cp in cps {
+                    let mask = match font.getmask(&char::from_u32(cp).unwrap_or('?').to_string()) {
+                        Ok(m) => m, Err(_) => continue,
                     };
-                    let our_sha = sha256(&mask.pixels);
-
-                    let ft_sha = match get_ft_sha(&font_path, cp, size, &ft_lib_dir, ft_bin) {
-                        Some(s) => s,
-                        None => continue,
+                    let ft_ref = match get_ft_ref(&font_path, cp, size, &ft_lib, ft_bin) {
+                        Some(r) => r, None => continue,
                     };
-
+                    let (ref ft_sha, ref ft_px, ft_w, ft_h) = ft_ref;
                     total += 1;
+                    let our_sha = sha256(&mask.pixels);
                     let (p, f) = script_counts.entry(script.clone()).or_default();
-                    if our_sha == ft_sha {
+
+                    if our_sha == *ft_sha {
                         passed += 1; *p += 1;
                     } else {
                         failed += 1; *f += 1;
+                        let min = mask.pixels.len().min(ft_px.len());
+                        let (mut dc, mut maxd, mut first) = (0u32, 0u32, None::<usize>);
+                        for i in 0..min {
+                            let d = (mask.pixels[i] as i32 - ft_px[i] as i32).unsigned_abs();
+                            if d > 0 { dc += 1; if d > maxd { maxd = d; } if first.is_none() { first = Some(i); } }
+                        }
+                        let sd = mask.pixels.len() as i32 - min as i32;
+                        let st = script_stats.entry(script.clone()).or_insert(PxStats{diffs:0,max_diff:0,total_mag:0.0,count:0});
+                        st.diffs += dc; if maxd > st.max_diff { st.max_diff = maxd; }
+                        st.total_mag += dc as f64; st.count += 1;
+                        eprintln!("  FAIL [{}_{}_{}_{}] our={}x{} ft={}x{} diffs={} max={} first={:?} size_delta={}",
+                            font_name, size, cp, script, mask.width, mask.height, ft_w, ft_h, dc, maxd, first, sd);
                     }
                 }
             }
@@ -149,37 +120,44 @@ fn test_direct_ft_comparison() {
         eprintln!("  ✓ {font_name}");
     }
 
-    // ── Summary ──
+    // Summary
     eprintln!("\n╔══════════════════════════════════════════════════════════════╗");
-    eprintln!("║  Live C comparison: {passed}/{total} passed, {failed} failed");
+    eprintln!("║  Live C: {passed}/{total} passed, {failed} failed");
     eprintln!("╠══════════════════════════════════════════════════════════════╣");
 
-    let mut passing: Vec<&str> = Vec::new();
-    let mut failing: Vec<(&str, u32, u32)> = Vec::new();
+    let mut pass: Vec<&str> = vec![];
+    let mut fail: Vec<(&str, u32, u32)> = vec![];
     for (s, (p, f)) in &script_counts {
         let t = p + f;
         if t == 0 { continue; }
-        if *f == 0 { passing.push(s); }
-        else { failing.push((s, *p, t)); }
+        if *f == 0 { pass.push(s); }
+        else { fail.push((s, *p, t)); }
     }
 
-    failing.sort_by(|a, b| {
-        ((b.2 - b.1) as f64 / b.2 as f64)
-            .partial_cmp(&((a.2 - a.1) as f64 / a.2 as f64))
-            .unwrap_or(std::cmp::Ordering::Equal)
+    // Sort failing scripts by failure rate (worst first)
+    fail.sort_by(|a, b| {
+        let ra = (b.2 - b.1) as f64 / b.2 as f64;
+        let rb = (a.2 - a.1) as f64 / a.2 as f64;
+        ra.partial_cmp(&rb).unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    eprintln!("║  PASSING — {} scripts:", passing.len());
-    for s in &passing {
-        let (p, _) = script_counts[*s];
-        eprintln!("║    {s} {p}/{p}");
+    if !pass.is_empty() {
+        eprintln!("║  PASSING — {} scripts:", pass.len());
+        for s in &pass {
+            let (p2, _) = script_counts[*s];
+            eprintln!("║    {s} {p2}/{p2}");
+        }
     }
-
-    if !failing.is_empty() {
-        eprintln!("║  FAILING — {} scripts:", failing.len());
-        for (s, ok, total_s) in &failing {
-            let pct = if *total_s > 0 { 100.0 * (*total_s - ok) as f64 / *total_s as f64 } else { 0.0 };
-            eprintln!("║    {s}: {ok}/{total_s} passed ({pct:.0}% fail)");
+    if !fail.is_empty() {
+        eprintln!("║  FAILING — {} scripts (pixel error stats):", fail.len());
+        for (s, ok, total_s) in &fail {
+            let fail_pct = if *total_s > 0 { 100.0 * (*total_s - ok) as f64 / *total_s as f64 } else { 0.0 };
+            let st = script_stats.get(*s);
+            let (avg, maxd) = st.map_or((0.0, 0), |s| {
+                let a = if s.count > 0 { s.total_mag / s.count as f64 } else { 0.0 };
+                (a, s.max_diff)
+            });
+            eprintln!("║    {s}: {ok}/{total_s} passed ({fail_pct:.0}% fail) avg_diffs={avg:.1} max_diff={maxd}");
         }
     }
     eprintln!("╚══════════════════════════════════════════════════════════════╝");
