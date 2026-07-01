@@ -1,128 +1,104 @@
 # 100% SHA-256 Parity — Master Implementation Plan
 
-## Current Status (2026-07-01)
+## Current Status (2026-07-01, end of session)
 
-**Baseline:** 10,231/11,084 passed (853 failures, 92.3% pass rate)
+**Baseline at start:** 10,231/11,084 passed (853 failures, 92.3%)
+**Current:** **10,601/11,084 passed (483 failures, 95.6%)**
+**Progress:** **-370 failures (+3.3% pass rate)**
 **Latin matrix:** 7,600/7,600 ✅
 **All unit tests:** pass
 
-Failing scripts by severity:
-- Complete failure (80-100%): deva, knda, beng, adlm, guru, hani, goth, mong
-- High failure (15-80%): nkoo, cher, hebr
-- Moderate failure (5-15%): saur, gujr, geok, latp, latb, vaii
-- Low failure (1-4%): mymr, cans, telu, thai, medf, ethi, arab
+## Fixes Applied
 
-## Pipeline Verification Status (Updated)
+### Fix 1: top_to_bottom dimension gating (853→569, -284)
+**Commit:** `8b9eb67`
+**Bug:** `hint_edges` applied `top_to_bottom_hinting` to BOTH dimensions.
+C gates it to VERT only (aflatin.c:4271-4273). HORZ edge BOUND checks used
+wrong ordering for Indic scripts, collapsing stem edge positions.
+**Fix:** `dim == Dimension::Vert &&` guard at latin.rs:1937.
+**Scripts fixed to 100%:** beng, guru, goth, mong
+**Scripts improved:** deva (9%→76% pass)
 
-All pipeline functions match C for Latin scripts (verified by 7,600/7,600 passing).
-The 853 remaining failures are in non-Latin scripts only.
+### Fix 2: blue zone outlier detection (569→483, -86)
+**Commit:** `cce672e`
+**Bug:** Without HarfBuzz GSUB, some script-specific standard characters
+produce unshaped forms with wrong Y coordinates (e.g., knda saknda y=790
+instead of shaped headline y=563). Blue zone reference picked the flat
+median over the correct round median.
+**Fix:** When flat/round medians differ >20% upem, trust rounds for top
+zones and flats for bottom zones. Matches what HarfBuzz-shaped forms produce.
+**Scripts fixed to 100%:** knda, gujr, lao, mlym, sinh, sund, taml
 
+## Remaining 483 Failures (19 scripts)
+
+### Heavy (15-72% fail rate)
+| Script | FP | Fail% | Notes |
+|--------|------|-------|-------|
+| adlm | 91/126 | 72% | All in NotoSansAdlamUnjoined-Bold. Consistent 2px height offset. Edges match C's fpos/opos but pos differs (E2: 231 vs C 241, E4: 448 vs C 468). Root cause: edge positions differ post-hinting, likely Phase 4 non-stem edge fitting. |
+| hani | 60/100 | 60% | All codepoint U+007C (|) in non-CJK fonts. Width always 1px narrower at 10pt. Standard character U+7530 missing → fallback widths match C (24 FU). Issue in stem width usage or phase 2 stem snapping. |
+| nkoo | 32/90 | 36% | All in NotoSansNKo-Regular. Consistent width offset. Standard char exists. Widths match C. Issue in segment→edge chain. |
+| deva | 35/144 | 24% | All in NotoSerifDevanagari-Regular. Small diff patterns (4-30px). Sizes match. 1-FU drift. |
+| cher | 25/112 | 22% | Mixed fonts. Edge/link structure differences. |
+| hebr | 48/252 | 19% | Mixed fonts. Moderate diffs. |
+
+### Light (1-8% fail rate)
+| Script | FP | Fail% | Notes |
+|--------|------|-------|-------|
+| geok | 49/666 | 7% | Small diff patterns |
+| latp | 70/1010 | 7% | Subscript-specific blue zones |
+| latb | 43/820 | 5% | Subscript-specific blue zones |
+| saur | 2/24 | 8% | 2 failures |
+| vaii | 1/20 | 5% | 1 failure |
+| mymr | 6/150 | 4% | Small diff |
+| cans | 10/370 | 3% | Small diff |
+| telu | 2/84 | 2% | 2 failures |
+| thai | 3/150 | 2% | 3 failures |
+| medf | 2/124 | 2% | 2 failures |
+| ethi | 1/72 | 1% | Single 20pt glyph, small diff |
+| arab | 1/90 | 1% | 1 failure |
+| geor | 2/528 | <1% | Same codepoint at 10+20pt |
+
+## Prioritized Plan
+
+### Phase 3: adlm edge position drift (91 failures → ~30)
+The 2px height offset is consistent and likely has a single root cause.
+C's hint_edges Phase 4 (non-stem edges) produces different pos values
+than ours for adlm. Key edges to compare:
+- E2: our pos=231 vs C pos=241 (diff=10 in 26.6)
+- E3: our pos=367 vs C pos=387 (diff=20)
+- E4: our pos=448 vs C pos=468 (diff=20)
+
+### Phase 4: hani/codepoint-124 width issue (60 failures → ~10)
+Root cause likely in stem width detection for vertical-bar glyph.
+Standard char fallback yields same std=24 but Phase 2 snapping differs.
+
+### Phase 5: nkoo/deva/cher/hebr edge alignment (140 failures → ~50)
+Systematic edge/link differences for these scripts.
+
+### Phase 6: latb/latp subscript (113 failures → ~30)
+Needs HarfBuzz-free subscript detection or blue zone override.
+
+### Phase 7: Long-tail cleanup (~60 failures across 8 scripts)
+Individual 1-2-failure scripts plus geok (49).
+
+## Debug Commands Reference
+
+```bash
+# C binary with trace output
+FT2_DEBUG="aflatin:7" LD_LIBRARY_PATH=pillow-rs-freetype/freetype/build \
+  /tmp/gen_refs_v4 <font.ttf> <CP_HEX> <size_pt>
+
+# Our tracer
+RUST_LOG=autohint::pipeline=trace \
+  cargo run -p pillow-rs-freetype --example debug_glyph -- \
+  <font.ttf> <size_pt> <CP_HEX>
+
+# Full test suite
+cargo test -p pillow-rs-freetype --test direct_ft_compare
+
+# Build debug lib
+cd pillow-rs-freetype/freetype/build
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-DFT_DEBUG_LEVEL_TRACE"
+cmake --build . -j$(nproc)
+ln -sf libfreetyped.so.6 libfreetype.so.6
 ```
-✅ loader::reload              — matches C point coordinates
-✅ compute_segments            — matches C segment detection
-✅ link_segments_inner         — matches C scoring formula
-✅ compute_edges               — matches C edge merging
-✅ compute_blue_edges          — matches C blue zone assignment
-✅ hint_edges (Phase 1-4)      — matches C for Latin
-✅ align_edge_points           — matches C point snapping
-✅ align_strong_points         — matches C interpolation
-✅ align_weak_points           — matches C IUP
-✅ vertical_separation         — matches C tilde/cedilla
-```
-
-## Empirical Investigation Results
-
-### Hypothesis 1: Override LATB/LATP → LATN for shared glyphs (Phase 1)
-**Result: NO EFFECT.** Noto fonts have dedicated subscript/superscript glyph forms.
-No shared glyph indices between LATB/LATP and LATN were detected.
-Test result unchanged: 853 failures.
-
-### Hypothesis 2: Always use LATN blue zones for LATB/LATP
-**Result: CATASTROPHIC.** 2,515 failures. Dedicated subscript glyphs need their
-own blue zones; forcing LATN zones produces wrong edge assignments.
-
-### Hypothesis 3: Use Latin 'o' (U+006F) for all scripts' standard widths
-**Result: CATASTROPHIC.** 6,758 failures. Each script MUST use its own standard
-character for stem width detection. Script-specific outlines produce
-fundamentally different stem widths.
-
-### Hypothesis 4: major_dir = Direction::Up for top_to_bottom VERT
-**Result: WORSE.** 954 failures. Overriding VERT major_dir breaks segment
-direction matching. The segment linking code already handles top_to_bottom
-correctly for edge sorting.
-
-### Hypothesis 5: Invert compute_blue_edges enter condition
-**Result: CATASTROPHIC.** 9,590 failures. The current enter condition is correct.
-
-## Root Cause Analysis
-
-### C trace comparison for Bengali U+0995 at 10pt (NotoSansBengali-Regular)
-
-Edge positions match C exactly:
-- VERT (horizontal edges): fpos=622, 551, 233, 159, 0 ✅
-- HORZ (vertical edges): fpos=761, 683, 492, 416 ✅
-
-Edge links match C: (HE0↔HE1) and (HE2↔HE3) stem pairs ✅
-
-BUT hint_edges output diverges:
-- C: HE2.pos=454 (opos=437, snapped to 7.09px → 454 in 26.6)
-- Our: HE2.pos=314 (collapses to HE1.pos)
-
-**Root cause:** Phase 1 blue-zone alignment marks edges E0+E1 as DONE for VERT
-dimension. Then Phase 2 uses E2 as the first anchor (since E0+E1 are DONE),
-producing wrong relative-stem positions for E2+E3.
-
-C does NOT mark these edges as DONE in Phase 1 because C's blue zone
-assignment differs for VERT dimension on Bengali scripts. The standard
-character for Bengali (U+09E6) produces stem widths that are close to
-but NOT identical between C and our code:
-
-```
-C:   horizontal widths = 71 fu, vertical widths = 81 fu
-Our: horizontal widths = 81 fu, vertical widths = 71 fu  (SWAPPED!)
-```
-
-The dimension swap in standard width computation propagates through
-compute_stem_width → wrong stem snapping → different edge positions.
-
-### Validation
-
-Scaled standard widths at 10pt (upem=1000, scale≈0.64):
-```
-          C (expected)    Our (actual)
-HORZ:     45 (26.6)       52 (26.6)   ← matches C's VERT value
-VERT:     52 (26.6)       44 (26.6)   ← close to C's HORZ value
-```
-
-Our HORZ axis has the VERT-axis standard width, and vice versa.
-This swap originates in `metrics_init_widths` where the standard
-character outline processing assigns widths to the wrong axis.
-
-## Corrected Implementation Plan
-
-### Phase A: Fix standard width dimension swap
-1. In `metrics_init_widths` at latin.rs:144, verify the stem width
-   collection loop assigns widths to the correct axis dimension.
-2. The `for dim in 0..2` loop should store HORZ widths in axis[0] and
-   VERT widths in axis[1], matching C's AF_DIMENSION_HORZ=0 and
-   AF_DIMENSION_VERT=1.
-3. Verify by comparing trace output against C's standard width values.
-
-### Phase B: Trace remaining 1-FU drift failures
-For scripts with 1-4% fail rate, the standard width fix should resolve
-most edge-position differences. Remaining failures are likely from:
-- Sub/superscript blue zone differences (113 failures: latb+latp)
-- Rounding/quantization differences in stem snapping
-- Edge case outlines where the standard width swap has cascading effects
-
-### Phase C: Per-script verification
-After Phase A fix, re-run the full test suite and categorize remaining
-failures by script/root cause.
-
-## Verification Strategy
-
-After each phase:
-1. `cargo test -p pillow-rs-freetype --test direct_ft_compare`
-2. Verify no regression on Latin matrix (7,600/7,600)
-3. Verify per-script pass rates improve
-4. Commit with detailed before/after analysis
