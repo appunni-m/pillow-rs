@@ -66,29 +66,23 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 
 ## Autohinter Parity Status
 
-**Current: 10,712/11,084 passed (96.6%), 372 failures** (2026-07-01)
+**Current: 10,802/11,084 passed (97.5%), 282 failures** (2026-07-01)
 
-### Fix 1: top_to_bottom dimension gating (853→569, -284)
-Bug: `hint_edges` applied `top_to_bottom_hinting` to BOTH dimensions.
-Fix: `dim == Dimension::Vert &&` guard.
+### Fixes applied
+1. top_to_bottom dimension gating (853→569, -284)
+2. Blue zone outlier detection (569→483, -86)
+3. Standard char fallback chain (preventive)
+4. Per-script non-base glyph detection (483→372, -111)
+5. Skip hinting when no blue zones (372→282, -90)
 
-### Fix 2: blue zone outlier detection (569→483, -86)
-Without HarfBuzz, unshaped standard chars produce wrong Y.
-Fix: outlier detection preferring rounds for top zones.
+Total: **853 → 282 (-571, +5.2% pass rate)**
 
-### Fix 3: per-script non-base glyph detection (483→372, -111)
-C skips compute_blue_edges for non-base glyphs. Our non_base_glyphs missed
-per-script ranges (RANGES_*_NONBASE_UNI) — only had hardcoded Latin diacritics.
-Fix: corrected generated data + scan all STYLE_TABLE non_base_ranges.
-adlm/saur/mymr now 100% passing.
-
-### Remaining: 372 failures (16 scripts)
-- hani (60%), nkoo (36%), cher (22%), hebr (19%), deva (16%)
-- geok (7%), latp (7%), latb (5%)
-- vaii/cans/telu/thai/medf/ethi/arab/geor (0-3% each)
+### Remaining: 282 failures (15 scripts)
+cher (22%), hebr (19%), deva (16%), geok (7%), latp (7%), latb (5%),
+plus vaii/cans/telu/nkoo/thai/medf/ethi/arab/geor (0-5% each)
 
 ### Debug tools
-- C trace: `FT2_DEBUG="aflatin:7" LD_LIBRARY_PATH=pillow-rs-freetype/freetype/build /tmp/gen_refs_v5`
+- C trace: `FT2_DEBUG="aflatin:7" /tmp/gen_refs_v7`
 - Rust trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
 - Test: `cargo test -p pillow-rs-freetype --test direct_ft_compare`
 - Plan: `pillow-rs-freetype/doc/MASTER_PARITY_PLAN.md`
