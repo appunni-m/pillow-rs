@@ -497,15 +497,25 @@ pub fn metrics_init_blues_impl(
             let threshold = metrics.units_per_em / 5;
             let diff = (flat_median - round_median).abs();
             if diff > threshold {
-                // Large discrepancy: some chars have unshaped forms
+                // Large discrepancy: some chars have unshaped forms.
+                // For TOP zones, flat values may be unshaped ascenders;
+                // trust the correctly-shaped rounds.
+                // For BOTTOM zones, only apply when flats are ABOVE
+                // rounds (unshaped ascenders in bottom zone). When flats
+                // are BELOW rounds (descenders below baseline), the
+                // divergence is expected — keep the standard blend to
+                // produce the correct zone height for the ACTIVE check.
                 if entry_is_top {
-                    // For top zones, the round values represent the
-                    // correctly shaped headline; flat values may be
-                    // unshaped ascenders. Trust the rounds.
+                    (round_median, round_median)
+                } else if flat_median > round_median {
+                    // Flats above rounds: unshaped ascender forms in
+                    // bottom zone. Trust the rounds (correct baseline).
                     (round_median, round_median)
                 } else {
-                    // For bottom zones, trust the flats (baseline).
-                    (flat_median, flat_median)
+                    // Flats below rounds: normal descender zone. Keep
+                    // standard blend so the height difference keeps the
+                    // zone active for descender detection.
+                    (flat_median, round_median)
                 }
             } else {
                 (flat_median, round_median)
