@@ -68,22 +68,26 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 
 **Current: 10,935/11,084 passed (98.7%), 149 failures** (2026-07-01)
 
-### Fixes applied (7 commits, -704 tests from baseline)
+### Fixes applied (7 commits, -704 from 853 baseline)
 1. top_to_bottom dimension gating (853→569, -284)
 2. Blue zone outlier detection (569→483, -86)
 3. Standard char fallback chain (preventive)
 4. Per-script non-base glyph detection (483→372, -111)
 5. Skip hinting when blue_count==0 (372→282, -90)
-6. Port vertical separation adjustment database (282→204, -78)
-7. Blue zone sort direction fix (204→149, -55)
+6. Port VSEP adjustment database (282→204, -78)
+7. Blue zone sort direction (204→149, -55)
 
 ### Remaining: 149 failures (15 scripts)
 cher (22%), hebr (19%), deva (16%), geok (1%),
 plus cans/telu/nkoo/thai/medf/ethi/arab/geor/vaii/latb/latp (0-3% each)
 
+**Key finding:** Edge positions match C exactly for all remaining failures.
+Pixel diffs come from 1-FU rasterization/subpixel antialiasing differences.
+
 ### Debug tools
 - C trace: `FT2_DEBUG="aflatin:7" /tmp/gen_refs_v4`
-- Rust trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
+- Rust per-phase edge trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
+  Outputs TR_INITIAL/TR_PHASE1-4 edge dumps matching C format.
 - Test: `cargo test -p pillow-rs-freetype --test direct_ft_compare`
 - Plan: `pillow-rs-freetype/doc/MASTER_PARITY_PLAN.md`
 
