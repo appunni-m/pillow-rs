@@ -5186,6 +5186,27 @@
     af_glyph_hints_save( hints, outline );
 
   Exit:
+    {
+      AF_Point  pt   = hints->points;
+      int       nn  = hints->num_points;
+      int       ii;
+      fprintf(stderr, "[C PRE_SAVE] n=%d\n", nn);
+      for ( ii = 0; ii < nn; ii++ )
+        fprintf(stderr, "  p[%d] x=%ld y=%ld fx=%d fy=%d flags=0x%02x\n", ii,
+                (long)pt[ii].x, (long)pt[ii].y, (int)pt[ii].fx, (int)pt[ii].fy, (int)pt[ii].flags);
+      /* Also dump both axes edges right before save */
+      { int d;
+        for ( d = 0; d < 2; d++ ) {
+          AF_AxisHints a = &hints->axis[d];
+          int ei;
+          fprintf(stderr, "[C PRE_EDGE] dim=%d edges=%d\n", d, (int)a->num_edges);
+          for ( ei = 0; ei < a->num_edges; ei++ ) {
+            fprintf(stderr, "  e[%d] fpos=%d opos=%d pos=%d\n", ei,
+                    (int)a->edges[ei].fpos, (int)a->edges[ei].opos, (int)a->edges[ei].pos);
+          }
+        }
+      }
+    }
     return error;
   }
 

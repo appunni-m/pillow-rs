@@ -1314,9 +1314,17 @@
     FT_Vector*  vec   = outline->points;
     FT_Byte*    tag   = outline->tags;
 
+    fprintf(stderr, "[C save_coords] n=%d\n", (int)hints->num_points);
 
     for ( ; point < limit; point++, vec++, tag++ )
     {
+      fprintf(stderr, "  p[%td] x=%ld y=%ld fx=%d fy=%d flags=0x%02x touch=%d u=%d v=%d\n",
+              point - hints->points,
+              (long)point->x, (long)point->y,
+              (int)point->fx, (int)point->fy,
+              (int)point->flags,
+              (int)((point->flags & 0x20) != 0),
+              (int)point->u, (int)point->v);
       vec->x = point->x;
       vec->y = point->y;
 
