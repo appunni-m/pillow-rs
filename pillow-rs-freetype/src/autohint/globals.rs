@@ -80,6 +80,23 @@ impl FaceGlobals {
         // Run coverage scan
         compute_style_coverage(&font_data.cmap, ng as u16, &mut glyph_styles);
 
+        // Per-script non-base ranges: C checks glyph_styles[gi] & AF_NONBASE
+        // during coverage. Each style's non_base_ranges (RANGES_*_NONBASE
+        // and RANGES_*_NONBASE_UNI) contain combining marks and diacritics
+        // that should NOT get blue zone alignment (afglobal.c).
+        for style in STYLE_TABLE {
+            for range in style.non_base_ranges {
+                let mut cp = range.first;
+                while cp <= range.last {
+                    if let Some(gi) = font_data.cmap.char_index(cp) {
+                        if (gi as usize) < ng { non_base[gi as usize] = true; }
+                    }
+                    cp += 1;
+                    if cp > range.last { break; }
+                }
+            }
+        }
+
         FaceGlobals {
             glyph_count: ng as u16,
             glyph_styles,
