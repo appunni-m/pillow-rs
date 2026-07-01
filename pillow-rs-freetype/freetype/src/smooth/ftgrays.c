@@ -545,18 +545,19 @@ typedef ptrdiff_t  FT_PtrDist;
   {
     int  y;
 
+    fprintf(stderr, "[C CELLS] min_ey=%d max_ey=%d min_ex=%d max_ex=%d\n",
+            (int)ras.min_ey, (int)ras.max_ey, (int)ras.min_ex, (int)ras.max_ex);
 
     for ( y = ras.min_ey; y < ras.max_ey; y++ )
     {
       PCell  cell = ras.ycells[y - ras.min_ey];
 
-
-      printf( "%3d:", y );
+      fprintf(stderr, "%3d:", y);
 
       for ( ; cell != ras.cell_null; cell = cell->next )
-        printf( " (%3d, c:%4d, a:%6d)",
-                cell->x, cell->cover, cell->area );
-      printf( "\n" );
+        fprintf(stderr, " (%3d, c:%4d, a:%6d)",
+                cell->x, cell->cover, cell->area);
+      fprintf(stderr, "\n");
     }
   }
 
@@ -1929,6 +1930,8 @@ typedef ptrdiff_t  FT_PtrDist;
             gray_sweep_direct( RAS_VAR );
           else
             gray_sweep( RAS_VAR );
+          if (getenv("FT2_DUMP_CELLS"))
+            gray_dump_cells( RAS_VAR );
           band--;
           continue;
         }
