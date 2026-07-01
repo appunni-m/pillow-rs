@@ -261,6 +261,11 @@ impl Worker {
         let mut ex1 = trunc(x1);
         let ex2 = trunc(x2);
 
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+            log::trace!(target: "autohint::rasterizer", "[SCANLINE] ey={ey} x1={x1} y1={y1} x2={x2} y2={y2}");
+        }
+
         if y1 == y2 {
             self.set_cell(ex2, ey);
             return;
@@ -322,6 +327,12 @@ impl Worker {
     fn render_line(&mut self, to_x: i64, to_y: i64) {
         let mut ey1 = trunc(self.y);
         let ey2 = trunc(to_y);
+
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::rasterizer", log::Level::Trace) {
+            log::trace!(target: "autohint::rasterizer", "[LINE] from=({},{}) to=({},{}) ey1={ey1} ey2={ey2}",
+                self.x, self.y, to_x, to_y);
+        }
 
         if (ey1 >= self.max_ey && ey2 >= self.max_ey)
             || (ey1 < self.min_ey && ey2 < self.min_ey)

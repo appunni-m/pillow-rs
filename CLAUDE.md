@@ -45,13 +45,25 @@ Use `log` crate macros. NEVER `eprintln!` or `println!` in library code.
 - Core crates NEVER initialize a logger — bindings do that (`pyo3-log`, `console_log`)
 - Test files can use `eprintln!` for progress output
 - New core crates must add `log = "0.4"` to `Cargo.toml`
-- For pipeline trace debugging (C→Rust parity), use `trace!(target: "autohint::pipeline", ...)`
-  wrapped in `#[cfg(debug_assertions)]` and `log::log_enabled!` guard.
-  Enable via: `RUST_LOG=autohint::pipeline=trace`
-  See `pillow-rs-freetype/src/autohint/latin.rs:apply_hints` for the template.
-- **Pipeline trace statements are permanent** -- never revert them.  They are
-  `#[cfg(debug_assertions)]`-gated with `log_enabled!` guard, so they compile
-  to zero instructions in release builds.  Commit them with the code.
+
+### Debug Trace Macro (Permanent)
+
+**All debug traces MUST use this exact pattern.** The `#[cfg(debug_assertions)]` and `log::log_enabled!` guard ensures zero runtime cost in release builds. Enable via `RUST_LOG`.
+
+```rust
+// ✅ DEBUG TRACE: match this exact pattern.
+#[cfg(debug_assertions)]
+if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+    log::trace!(target: "autohint::pipeline", "[TAG] field1={} field2={}", val1, val2);
+}
+```
+
+**Usage:**
+- Target: `"autohint::pipeline"` for hinting stages, `"autohint::rasterizer"` for grays.rs
+- Enable: `RUST_LOG=autohint::pipeline=trace,autohint::rasterizer=trace`
+- Tag format: `"[CAPS_SHORT]"` prefix — e.g. `"[PP1X]"`, `"[LINK_IN]"`, `"[SWEEP_PIX]"`
+- **Do NOT revert or remove trace statements** — they compile to zero instructions in release.
+  Commit them with the code. See `pillow-rs-freetype/src/autohint/latin.rs` for existing templates.
 
 ## Rust Code Style
 
@@ -279,8 +291,8 @@ function. Pixel parity (byte-identical SHA-256) is the only proof.
 
 ### 10. Use C trace output as the oracle
 
-When stuck, add `eprintln!` to the Rust function and compare with C's
-`FT_TRACE` output. Build C with `-DFT_DEBUG_LEVEL_TRACE` and set
+Use the `trace!` macro (see Logging § Debug Trace Macro) to compare Rust vs C
+intermediate state. Build C with `-DFT_DEBUG_LEVEL_TRACE` and set
 `FT2_DEBUG="any:7"` to get maximum verbosity. The C trace shows exactly
 what each function computes — match it line by line.
 
@@ -325,15 +337,9 @@ so you don't re-investigate verified functions.
 
 When iterating on autohinter bugs, this loop finds real bugs within minutes:
 
-**Step A — Dump per-pass intermediate coordinates.**  Add temporary
-`eprintln!` traces that dump ALL point coordinates after each hinting pass:
-
-```rust
-// After hint_edges → dump edge positions + point x values
-// After align_edge_points → dump point x values + which got touched (T/.)
-// After align_strong_points → dump point x values + touch flags
-// After IUP → dump point x values
-```
+**Step A — Dump per-pass intermediate state.**  Add `trace!` statements
+at each pipeline stage (see Logging § Debug Trace Macro) to dump ALL
+intermediate values:
 
 This isolates WHICH function produces the first divergent value.
 
@@ -416,7 +422,7 @@ Checklist when facing unknown divergence:
   // ✅ FIX: <one-line description>
   //    C: <C behavior with file:line reference>
   //    Our old: <what we did wrong>
-  //    Verified: <how it was confirmed, e.g. C fprintf trace>
+  //    Verified: <how it was confirmed, e.g. C FT_TRACE comparison>
   ```
   This prevents future regressions and makes the codebase self-documenting.
 
@@ -454,7 +460,7 @@ int main() {
 
 ### Step 2: Dump Every Pipeline Stage
 
-Instrument BOTH C and Rust with `fprintf(stderr, ...)` / `eprintln!()` at each stage:
+Instrument BOTH C (`FT_TRACE` / `fprintf`) and Rust (`trace!` macro, see Logging § Debug Trace Macro) at each stage:
 
 | Stage | C location | Rust location | What to dump |
 |-------|-----------|---------------|-------------|
