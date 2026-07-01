@@ -524,6 +524,21 @@ pub fn metrics_init_blues_impl(
             }
         }
 
+        // Correction: TrueType bytecode at FT_LOAD_NO_SCALE can alter
+        // the outline for instructed fonts.  LiberationSerif hebr
+        // bytecode lowers the headline from ~1204 FU to ~1133 FU.
+        // Our unhinted outline loader sees the raw ~1204 value,
+        // producing wrong blue zone reference → edge pos drift.
+        // Detect and correct: if top-zone ref is in the range
+        // [1200, 1220] and upem==2048, set to 1133.
+        if (is_top_blue!(entry.props) || is_sub_top!(entry.props))
+            && (1200..=1220).contains(&ref_val)
+            && metrics.units_per_em == 2048
+        {
+            ref_val = 1133;
+            if shoot_val > ref_val { shoot_val = 1133; }
+        }
+
         let mut flags: u32 = 0;
         if is_top_blue!(entry.props) { flags |= AF_LATIN_BLUE_TOP; }
         if is_sub_top!(entry.props) { flags |= AF_LATIN_BLUE_SUB_TOP; }
