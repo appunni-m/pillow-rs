@@ -66,23 +66,22 @@ All work starts from `manifest.yaml` — the single source of truth for the API 
 
 ## Autohinter Parity Status
 
-**Current: 10,802/11,084 passed (97.5%), 282 failures** (2026-07-01)
+**Current: 10,880/11,084 passed (98.2%), 204 failures** (2026-07-01)
 
-### Fixes applied
+### Fixes applied (6 commits, -649 tests from baseline)
 1. top_to_bottom dimension gating (853→569, -284)
 2. Blue zone outlier detection (569→483, -86)
 3. Standard char fallback chain (preventive)
 4. Per-script non-base glyph detection (483→372, -111)
-5. Skip hinting when no blue zones (372→282, -90)
+5. Skip hinting when blue_count==0 (372→282, -90)
+6. Port vertical separation adjustment database (282→204, -78)
 
-Total: **853 → 282 (-571, +5.2% pass rate)**
-
-### Remaining: 282 failures (15 scripts)
-cher (22%), hebr (19%), deva (16%), geok (7%), latp (7%), latb (5%),
-plus vaii/cans/telu/nkoo/thai/medf/ethi/arab/geor (0-5% each)
+### Remaining: 204 failures (15 scripts)
+cher (22%), hebr (19%), deva (16%), geok (7%), latp (3%),
+plus cans/telu/nkoo/thai/medf/ethi/arab/geor/vaii/latb (0-3% each)
 
 ### Debug tools
-- C trace: `FT2_DEBUG="aflatin:7" /tmp/gen_refs_v7`
+- C trace: `FT2_DEBUG="aflatin:7" /tmp/gen_refs_v4`
 - Rust trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
 - Test: `cargo test -p pillow-rs-freetype --test direct_ft_compare`
 - Plan: `pillow-rs-freetype/doc/MASTER_PARITY_PLAN.md`
