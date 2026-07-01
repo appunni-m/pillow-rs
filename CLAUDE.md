@@ -64,6 +64,30 @@ Delegate to `rust-development` skill. Key repo specifics:
 
 All work starts from `manifest.yaml` — the single source of truth for the API surface.
 
+## Autohinter Parity Status
+
+**Current: 10,515/11,084 passed (94.9%), 569 failures** (2026-07-01)
+
+### Fixed: top_to_bottom dimension gating (853→569, -33%)
+Bug in `hint_edges` latin.rs: applied `top_to_bottom_hinting` to BOTH dimensions.
+C gates to VERT only (aflatin.c:4271-4273). BOUND checks for HORZ edges used
+wrong ordering for Indic scripts. Fix: `dim == Dimension::Vert &&` guard at line 1937.
+
+Scripts fixed to 100%: beng, guru, goth, mong (+284 tests).
+
+### Remaining categories
+1. Heavy-fail (knda 78%, adlm 72%, hani 60%, nkoo 36%): systematic — edge pos match
+   C but pixel diff persists, likely in point positioning or rasterization
+2. Low-fail (1-8%): 1-FU drift or subscript/superscript blue zone issues
+3. deva: 24% fail — additional bug beyond top_to_bottom
+
+### Debug tools
+- C binary: `/tmp/gen_refs_v4` links `pillow-rs-freetype/freetype/build/libfreetyped.so`
+- C trace: `FT2_DEBUG="aflatin:7" LD_LIBRARY_PATH=pillow-rs-freetype/freetype/build /tmp/gen_refs_v4`
+- Rust trace: `RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph`
+- Test: `cargo test -p pillow-rs-freetype --test direct_ft_compare`
+- Plan: `pillow-rs-freetype/doc/MASTER_PARITY_PLAN.md`
+
 **Adding a function:**
 1. Add entry to `manifest.yaml` (signature, modes, variants)
 2. `scripts/generate_stubs.py` → creates stub in core
