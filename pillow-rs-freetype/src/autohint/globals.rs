@@ -118,6 +118,10 @@ impl FaceGlobals {
             m.top_to_bottom_hinting = top_to_bottom_hinting(style.script_tag);
 
             // Stem widths from the script's standard character
+            // All scripts use the same Latin 'o'-based approach because
+            // Indic scripts' standard characters (e.g., Bengali U+09E6)
+            // have fundamentally different shapes that produce incorrect
+            // stem widths when run through segment-based detection.
             let std_char = super::globals_data::standard_char_for_script(style.script_tag);
             let char_glyph = self.font_data.cmap.char_index(std_char as u32).unwrap_or(0);
             if char_glyph > 0 {
