@@ -2491,55 +2491,56 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             let mut delta: i32 = 1000;
 
             // ── Serif handling (C: aflatin.c:4733-4813) ──────────────
-            // Real-serif overlap check using segment cross-axis extents.
-            // C only checks when |opos_delta| < 1.5px (64+32), then walks
-            // intermediate edges between serif and base. If any intermediate
-            // edge's cross-axis range overlaps the serif+base range, it's
-            // not a real serif → delta stays 1000 → edge is skipped,
-            // keeping its Phase 2 position.
+            // Real-serif overlap check: C reads edge->first->first->v
+            // which = point.fx because VERT compute_segments runs before
+            // the C hint loop and overwrites v=fx on all points.
+            // Our pipeline: HORZ hint before VERT segs → v=fy during
+            // HORZ Phase 4. Must read point.fx directly to match C.
+            // For VERT dim, v=fx already (set by own compute_segments).
+            // Using point.fx universally matches both dims.
             let serif_idx = axis.edges[i].serif;
             if serif_idx != usize::MAX {
                 delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
                 if delta < 0 { delta = -delta; }
                 // Only check overlap when delta < 1.5px (C: aflatin.c:4767)
                 if delta < 64 + 32 {
-                    // Compute v-extents for serif and base edges
-                    let s_first_i = axis.edges[i].first;
-                    let s_last_i = axis.edges[i].last;
-                    let s_first_s = axis.edges[serif_idx].first;
-                    let s_last_s = axis.edges[serif_idx].last;
-                    let v_i_min = i32::min(axis.segments[s_first_i].min_coord as i32,
-                                            axis.segments[s_last_i].min_coord as i32);
-                    let v_i_max = i32::max(axis.segments[s_first_i].max_coord as i32,
-                                            axis.segments[s_last_i].max_coord as i32);
-                    let v_s_min = i32::min(axis.segments[s_first_s].min_coord as i32,
-                                            axis.segments[s_last_s].min_coord as i32);
-                    let v_s_max = i32::max(axis.segments[s_first_s].max_coord as i32,
-                                            axis.segments[s_last_s].max_coord as i32);
-                    let v_min = v_i_min.min(v_s_min);
-                    let v_max = v_i_max.max(v_s_max);
-                    // Walk intermediate edges for v-overlap
+                    // Helper: min/max of fx across first+last points of a segment
+                    let seg_fx_min = |seg_idx: usize| -> i32 {
+                        let seg = &axis.segments[seg_idx];
+                        i32::min(hints.points[seg.first].fx as i32,
+                                 hints.points[seg.last].fx as i32)
+                    };
+                    let seg_fx_max = |seg_idx: usize| -> i32 {
+                        let seg = &axis.segments[seg_idx];
+                        i32::max(hints.points[seg.first].fx as i32,
+                                 hints.points[seg.last].fx as i32)
+                    };
+                    // C computes extent from 4 points per edge pair
+                    let s_fi = axis.edges[i].first;
+                    let s_li = axis.edges[i].last;
+                    let s_fs = axis.edges[serif_idx].first;
+                    let s_ls = axis.edges[serif_idx].last;
+                    let v_min = i32::min(i32::min(seg_fx_min(s_fi), seg_fx_min(s_li)),
+                                         i32::min(seg_fx_min(s_fs), seg_fx_min(s_ls)));
+                    let v_max = i32::max(i32::max(seg_fx_max(s_fi), seg_fx_max(s_li)),
+                                         i32::max(seg_fx_max(s_fs), seg_fx_max(s_ls)));
+                    // Walk intermediate edges for overlap
                     let lo = serif_idx.min(i);
                     let hi = serif_idx.max(i);
                     let mut overlap = false;
                     for j in (lo + 1)..hi {
                         if j == i || j == serif_idx { continue; }
-                        // C checks ALL intermediate edges, not just
-                        // non-DONE ones (aflatin.c:4793-4805)
                         let sj_f = axis.edges[j].first;
                         let sj_l = axis.edges[j].last;
                         if sj_f == usize::MAX || sj_l == usize::MAX { continue; }
-                        let ej_min = i32::min(axis.segments[sj_f].min_coord as i32,
-                                               axis.segments[sj_l].min_coord as i32);
-                        let ej_max = i32::max(axis.segments[sj_f].max_coord as i32,
-                                               axis.segments[sj_l].max_coord as i32);
+                        let ej_min = i32::min(seg_fx_min(sj_f), seg_fx_min(sj_l));
+                        let ej_max = i32::max(seg_fx_max(sj_f), seg_fx_max(sj_l));
                         if !((ej_min < v_min && ej_max < v_min) || (ej_min > v_max && ej_max > v_max)) {
                             overlap = true;
                             break;
                         }
                     }
                     if overlap {
-                        // C (aflatin.c:4812): `if (delta == 1000) continue;`
                         continue;
                     }
                 }
