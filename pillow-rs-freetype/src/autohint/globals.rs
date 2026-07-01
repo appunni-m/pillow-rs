@@ -118,12 +118,29 @@ impl FaceGlobals {
             m.top_to_bottom_hinting = top_to_bottom_hinting(style.script_tag);
 
             // Stem widths from the script's standard character
+            // C's `script_class->standard_charstring` is a space-separated
+            // list.  C iterates: first character that maps to a valid glyph
+            // wins (af_latin_metrics_init_widths, aflatin.c:95-131).
+            // Without HarfBuzz, shaper is a no-op — C just tries chars in
+            // order. Our `standard_char_for_script` only returns the first
+            // char. Track multiple fallback chars to match C.
+            //
             // All scripts use the same Latin 'o'-based approach because
             // Indic scripts' standard characters (e.g., Bengali U+09E6)
             // have fundamentally different shapes that produce incorrect
             // stem widths when run through segment-based detection.
-            let std_char = super::globals_data::standard_char_for_script(style.script_tag);
-            let char_glyph = self.font_data.cmap.char_index(std_char as u32).unwrap_or(0);
+            let std_chars: &[char] = match style.script_tag {
+                // C's "o O 0": if 'o' missing, try 'O', then '0'.
+                "latn" => &['o', 'O', '0'],
+                // Most scripts have a single standard character.
+                _ => &[super::globals_data::standard_char_for_script(style.script_tag), '\0'],
+            };
+            let mut char_glyph: u16 = 0;
+            for &sc in std_chars {
+                if sc == '\0' { break; }
+                let g = self.font_data.cmap.char_index(sc as u32).unwrap_or(0);
+                if g > 0 { char_glyph = g; break; }
+            }
             if char_glyph > 0 {
                 if let Ok(outline_raw) = crate::tt::glyf::load_glyph(
                     &self.font_data.glyf_data, &self.font_data.loca_data,
