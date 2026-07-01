@@ -368,6 +368,10 @@ Checklist when facing unknown divergence:
 
 - Public API names match Pillow exactly. Import name: `RSPIL`.
 - Reference: **Pillow** for API, **Puhu** (`puhu/`) for algorithms/quirks
+- **NO FFI** — never call external C/C++ libraries at runtime (no `extern "C"`,
+  no `cc::Build`, no `dlopen`). All algorithms including rasterization
+  (`grays.rs`) must be pure Rust. The C reference binary (`/tmp/gen_refs_v4`)
+  is for comparison and validation only, never linked into production code.
 - NEVER use git (`commit`, `checkout`, `revert`, `stash`) without explicit permission
 - **NO git reverts** — never `git revert` or `git reset --hard` to undo changes. If a code change
   causes test regressions, fix forward by editing the code to correct the issue. Always move
