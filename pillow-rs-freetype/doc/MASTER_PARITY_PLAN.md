@@ -1,75 +1,73 @@
 # 100% SHA-256 Parity — Master Implementation Plan
 
-## Current Status (2026-07-01, session end)
+## Current Status (2026-07-01, EOD)
 
 **Start:** 10,231/11,084 passed (853 failures, 92.3%)
-**Current:** **10,712/11,084 passed (372 failures, 96.6%)**
-**Progress:** **-481 failures (+4.3% pass rate)**
+**Current:** **10,802/11,084 passed (282 failures, 97.5%)**
+**Progress:** **-571 failures (+5.2% pass rate)**
 **Latin matrix:** 7,600/7,600 ✅
 
-## Fixes Applied
+## Fixes Applied (5 commits)
 
-### Fix 1: top_to_bottom dimension gating (853→569, -284)
-`8b9eb67` — `hint_edges` applied `top_to_bottom_hinting` to BOTH dimensions.
-C gates to VERT only (aflatin.c:4271-4273).
-Scripts fixed: beng, guru, goth, mong.
+| Commit | Fix | Delta | Scripts fixed to 100% |
+|--------|-----|-------|----------------------|
+| `8b9eb67` | top_to_bottom gating to VERT only | -284 | beng, guru, goth, mong |
+| `cce672e` | Blue zone outlier detection | -86 | knda, gujr, lao, mlym, sinh, sund, taml |
+| `c899649` | Standard char fallback `['o','O','0']` | 0 | Preventive only |
+| `6dc884f` | Per-script non-base glyph detection | -111 | adlm, saur, mymr |
+| `c94f379` / `409c7c7` | Skip hinting when blue_count==0 | -90 | hani, nkoo (partial) |
+| **Total** | | **-571** | **16 scripts** |
 
-### Fix 2: blue zone outlier detection (569→483, -86)
-`cce672e` — Without HarfBuzz, unshaped standard chars produce wrong Y.
-Scripts fixed: knda, gujr, lao, mlym, sinh, sund, taml.
+## Remaining 282 Failures (15 scripts)
 
-### Fix 3: standard char fallback chain (no immediate change)
-`c899649` — C's "o O 0" for latn: try 'o', then 'O', then '0'.
+### Category A: 1-FU pixel drift (219 tests)
+Scripts: cher (25), hebr (48), deva (23), geok (49), latp (70), latb (43), vaii (1)
+All have matching bbox, small diff count, low avg_diff (<25px).
+Root cause: edge positions match C exactly (verified for multiple glyphs),
+but pixel values differ. Likely in the rasterization path or stem width
+snapping produces slightly different edge.pos values.
 
-### Fix 4: per-script non-base glyph detection (483→372, -111)
-`6dc884f` — C skips `compute_blue_edges` for non-base glyphs.
-Our non_base_glyphs missed per-script RANGES_*_NONBASE_UNI.
-Fixed: corrected generated data + scan all STYLE_TABLE non_base_ranges.
-Scripts fixed: adlm, saur, mymr. deva improved.
+**Fix approach:** Per-glyph per-stage C trace comparison using
+`FT2_DEBUG="aflatin:7" /tmp/gen_refs_v7`. Compare edge positions at
+each phase (INITIAL, PHASE1, PHASE2, FINAL).
 
-## Remaining 372 Failures (16 scripts)
+### Category B: Size mismatches (63 tests)
+Scripts: cher (some), cans, telu, thai, medf, ethi, arab, geor, nkoo (2)
+Width/height differs by 1-2px. Likely bbox computation or scaler
+rounding differences.
 
-| Script | Fail | Rate | Notes |
-|--------|------|------|-------|
-| hani | 60/100 | 60% | U+007C pipe in non-CJK fonts. Bbox matches C, pixel diff only |
-| nkoo | 32/90 | 36% | NotoSansNKo-Regular, width offset |
-| cher | 25/112 | 22% | Mixed fonts |
-| hebr | 48/252 | 19% | Mixed fonts |
-| deva | 23/144 | 16% | NotoSerifDevanagari, small diffs |
-| geok | 49/666 | 7% | DejaVuSerif-Bold, consistent diffs |
-| latp | 70/1010 | 7% | Superscript blue zones |
-| latb | 43/820 | 5% | Subscript blue zones |
-| vaii | 1/20 | 5% | Single glyph |
-| cans | 10/370 | 3% | Small diffs |
-| telu | 2/84 | 2% | 2 glyphs |
-| thai | 3/150 | 2% | 3 glyphs |
-| medf | 2/124 | 2% | 2 glyphs |
-| ethi | 1/72 | 1% | Single 20pt glyph |
-| arab | 1/90 | 1% | 1 glyph |
-| geor | 2/528 | <1% | Same codepoint at 10+20pt |
+**Fix approach:** Trace `scale_glyph` bbox computation vs C's
+`FT_Glyph_Get_CBox` + `FT_PIX_FLOOR`/`FT_PIX_CEIL`.
 
-## Prioritized Remaining Phases
+## Key Architectural Gaps
 
-### Phase 5: nkoo segment/edge detection (32 failures)
-Likely same class as adlm — blue zone or non-base issue.
-
-### Phase 6: hani pixel-level diff (60 failures)
-U+007C pipe glyph. Edge positions match C. Purely rasterization diff.
-
-### Phase 7: latb/latp HarfBuzz-aware detection (113 failures)
-Needs GSUB feature detection to match C's reshaped output.
-
-### Phase 8: Long tail cleanup (~70 failures)
-Individual 1-50 failure scripts. Trace per-failing glyph.
+1. **HarfBuzz GSUB**: C uses HarfBuzz to reshape subscript/superscript
+   glyphs via 'subs'/'sups' GSUB features. Without this, latb/latp glyphs
+   get wrong outlines → wrong blue zones.
+2. **Rasterizer**: Our `grays::rasterize` may produce slightly different
+   antialiasing than FreeType's renderer for certain edge configurations.
+3. **Stem width quantization**: `sort_and_quantize_widths` might cluster
+   widths differently than C's `af_sort_and_quantize_widths` for
+   multi-width scripts like cher.
 
 ## Debug Commands
 
 ```bash
-# C binary with trace output
-LD_LIBRARY_PATH=pillow-rs-freetype/freetype/build \
-  /tmp/gen_refs_v5 <font.ttf> <CP_HEX> <size_pt>
+# Rebuild C reference binary with trace-enabled lib
+cd pillow-rs-freetype/freetype/build
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-DFT_DEBUG_LEVEL_TRACE"
+cmake --build . -j$(nproc)
+cd /home/appunni/work/pil-wasm
+gcc -o /tmp/gen_refs_v7 /tmp/gen_refs_v2.c \
+  -Ipillow-rs-freetype/freetype/include \
+  -Lpillow-rs-freetype/freetype/build \
+  -Wl,-rpath,$(pwd)/pillow-rs-freetype/freetype/build \
+  -lfreetyped -lm -lz
 
-# Our tracer
+# C trace with per-stage edge dump
+FT2_DEBUG="aflatin:7" /tmp/gen_refs_v7 <font.ttf> <CP_HEX> <size_pt>
+
+# Our trace
 RUST_LOG=autohint::pipeline=trace \
   cargo run -p pillow-rs-freetype --example debug_glyph -- \
   <font.ttf> <size_pt> <CP_HEX>
