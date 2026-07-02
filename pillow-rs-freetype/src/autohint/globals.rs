@@ -182,6 +182,7 @@ impl FaceGlobals {
                 if let Ok(outline_raw) = crate::tt::glyf::load_glyph(
                     &self.font_data.glyf_data, &self.font_data.loca_data,
                     self.font_data.head.index_to_loc_format, char_glyph,
+                    &self.font_data.hmtx,
                 ) {
                     let sp: Vec<_> = outline_raw.points.iter()
                         .map(|p| crate::outline::OutlinePoint {

@@ -383,6 +383,7 @@ pub fn metrics_init_blues_impl(
             let outline = match crate::tt::glyf::load_glyph(
                 &font_data.glyf_data, &font_data.loca_data,
                 font_data.head.index_to_loc_format, gid,
+                &font_data.hmtx,
             ) {
                 Ok(o) => o,
                 Err(_) => continue,
