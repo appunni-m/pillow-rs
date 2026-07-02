@@ -42,9 +42,10 @@ pub struct GlyphOutline {
     pub end_pts_of_contours: Vec<u16>,
     pub points: Vec<OutlinePoint>,
     pub xmin: i32, pub ymin: i32, pub xmax: i32, pub ymax: i32,
-    /// Whether composite. If true, xmin = last recursive sub-glyph's header
-    /// (matching C's loader->bbox overwrite at ttgload.c:324).
+    /// Whether composite. If true, xmin tracks last sub-glyph's glyf header
+    /// (matching C's loader->bbox ttgload.c:324) and lsb tracks last sub's.
     pub is_composite: bool,
+    pub sub_lsb: i32,
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
@@ -84,8 +85,9 @@ pub fn load_glyph(
     loca: &[u8],
     index_to_loc_format: i16,
     glyph_index: u16,
+    hmtx: &crate::tt::hmtx::HmtxTable,
 ) -> Result<GlyphOutline, FontError> {
-    load_glyph_inner(glyf, loca, index_to_loc_format, glyph_index, 0)
+    load_glyph_inner(glyf, loca, index_to_loc_format, glyph_index, hmtx, 0)
 }
 
 fn load_glyph_inner(
@@ -93,6 +95,7 @@ fn load_glyph_inner(
     loca: &[u8],
     index_to_loc_format: i16,
     glyph_index: u16,
+    hmtx: &crate::tt::hmtx::HmtxTable,
     depth: u8,
 ) -> Result<GlyphOutline, FontError> {
     if depth > 8 {
@@ -122,13 +125,13 @@ fn load_glyph_inner(
     let ymax = i16::from_be_bytes([bytes[8], bytes[9]]) as i32;
 
     if num_contours >= 0 {
-        // Simple glyph — use header bbox (matches C).
         let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))?;
         outline.xmin = xmin;
         outline.ymin = ymin;
         outline.xmax = xmax;
         outline.ymax = ymax;
         outline.is_composite = false;
+        outline.sub_lsb = hmtx.get(glyph_index).lsb as i32;
         Ok(outline)
     } else {
         // Composite glyph: decode components, recurse, flatten.
@@ -136,11 +139,18 @@ fn load_glyph_inner(
         let mut points: Vec<OutlinePoint> = Vec::new();
         let mut end_pts: Vec<u16> = Vec::new();
         let mut num_contours_total = 0u16;
-        let mut bbox = (xmin, ymin, xmax, ymax);
+        // C: recursive sub-glyph loading overwrites loader->bbox (ttgload.c:324)
+        //    AND loader->left_bearing (tt_get_metrics). pp1.x = xmin - lsb
+        //    uses BOTH from the last sub-glyph. compute_glyph_metrics
+        //    (ttgload.c:1962) reuses this cache O(1) vs FT_Outline_Get_CBox O(n).
+        let mut last_sub_xmin = xmin;
+        let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
 
         for comp in components {
             let sub =
-                load_glyph_inner(glyf, loca, index_to_loc_format, comp.glyph_index, depth + 1)?;
+                load_glyph_inner(glyf, loca, index_to_loc_format, comp.glyph_index, hmtx, depth + 1)?;
+            last_sub_xmin = sub.xmin;
+            last_sub_lsb = sub.sub_lsb;
             let base = points.len();
             for pt in &sub.points {
                 points.push(transform_point(*pt, &comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax));
@@ -150,19 +160,18 @@ fn load_glyph_inner(
             }
             num_contours_total =
                 num_contours_total.saturating_add(sub.num_contours);
-            // Note: sub glyph bbox already accounts for component placement.
-            let _ = &mut bbox;
         }
 
         Ok(GlyphOutline {
             num_contours: num_contours_total,
             end_pts_of_contours: end_pts,
             points,
-            xmin,
+            xmin: last_sub_xmin,
             ymin,
             xmax,
             ymax,
             is_composite: true,
+            sub_lsb: last_sub_lsb,
         })
     }
 }
@@ -287,6 +296,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         xmax: 0,
         ymax: 0,
         is_composite: false,
+        sub_lsb: 0,
     })
 }
 

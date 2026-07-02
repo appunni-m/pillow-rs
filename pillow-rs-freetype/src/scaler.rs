@@ -120,6 +120,7 @@ pub fn scale_glyph(
         &data.loca_data,
         data.head.index_to_loc_format,
         glyph_index,
+        &data.hmtx,
     )?;
 
     if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
@@ -144,11 +145,16 @@ pub fn scale_glyph(
     // produce 26.6 coords that differ from C by 1 unit (e.g. 344→345),
     // changing the DDA prod init → pixel mismatch.
     //
-    // ✅ FIX: glyf.rs now computes actual bbox from parsed points for
-    //    both simple and composite glyphs (matching C's outline bbox).
-    //    C's pp1.x uses loader->bbox which for composites contains the
-    //    last sub-glyph's header bbox (accidental match to actual).
-    let pp1x_fu = outline_raw.xmin - h_metric.lsb as i32;
+    // C: for composites, loader->bbox.xMin and loader->left_bearing are
+    //    BOTH overwritten by the last recursive sub-glyph (ttgload.c:324,
+    //    tt_get_metrics). glyf.rs tracks xmin=last_sub_xmin and
+    //    sub_lsb=last_sub_lsb to match this exactly.
+    //    For simple glyphs: xmin = header xmin, sub_lsb = hmtx lsb.
+    let pp1x_fu = if outline_raw.is_composite {
+        outline_raw.xmin - outline_raw.sub_lsb
+    } else {
+        outline_raw.xmin - h_metric.lsb as i32
+    };
 
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
@@ -165,6 +171,7 @@ pub fn scale_glyph(
             .collect(),
         xmin: 0, ymin: 0, xmax: 0, ymax: 0,
         is_composite: outline_raw.is_composite,
+        sub_lsb: outline_raw.sub_lsb,
     };
 
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
