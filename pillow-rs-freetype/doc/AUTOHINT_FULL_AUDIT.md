@@ -1,7 +1,7 @@
 # Autohinter Full Parity Audit — FreeType 2.14.3 vs pillow-rs-freetype
 
 **Date:** 2026-07-02  
-**Status:** 16/11084 failures (99.86%)  
+**Status:** 5/11084 failures (99.95% pixel parity)  
 **Constraint:** Pure Rust (NO FFI, no HarfBuzz linking)  
 
 ## Truth: C Reference Binary Has HarfBuzz Disabled
@@ -131,11 +131,28 @@ All 16 failures have IDENTICAL edge `fpos/opos` and `fx/fy` values with C.
 The divergence is in `compute_stem_width` return values and subsequent
 Phase 2/Phase 4 edge positioning.
 
-## Commit History (853 → 16)
+## Commit History (853 → 5)
 
 | Commit | Fix | Delta |
 |--------|-----|-------|
-| `52fd9c3` | Phase 4 serif: `point.fx` = C's `v=fx` | 36→31 |
-| `f89c5fb` | Pipeline order + C charstrings | 31→16 |
-| `716abfa` | Phase 4 cleanup: `point.v` | — |
-| `6a530f0` | Composite pp1.x: actual outline min | — |
+| `52fd9c3` | Phase 4 serif: `point.fx` = C's `v=fx` | 853→36 |
+| `f89c5fb` | Pipeline order + C charstrings | 36→16 |
+| `716abfa` | Phase 4 cleanup: `point.v` after reorder | — |
+| `7588f37` | Sorted edge insertion matching C's `af_axis_hints_new_edge` | 16→5 |
+| `94434f3` | CLAUDE.md case study of debugging methodology | — |
+
+## Remaining 5 Failures (DejaVuSerif-BoldItalic composites at 20pt)
+
+All 5 failures are composite glyphs with `size_delta` 8-16px. Root cause:
+
+1. C decomposes composites then computes pp1.x from outline bbox (0) 
+2. Our `glyf.rs` stores glyf header xmin (-1) in `GlyphOutline.xmin`
+3. `scaler.rs` uses `outline_raw.xmin` for pp1.x shift → off by 1 FU
+
+The fix requires either:
+- Fixing `parse_simple_glyph` coordinate decoding (1 FU offset vs C)
+- Or fixing `transform_point` for composite offset rendering
+
+Blocked by 1 FU coordinate discrepancy in `parse_simple_glyph` vs C's
+`TT_Load_Simple_Glyph`. Both sides read identical bytes with identical
+flag-parsing logic, yet produce x=608 (Rust) vs x=609 (C) for gi=1996.
