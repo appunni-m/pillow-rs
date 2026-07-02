@@ -2076,6 +2076,10 @@ fn compute_stem_width(
                 if dist < 48 { dist = 48; }
                 // goto Done_Width
                 if sign != 0 { dist = -dist; }
+                #[cfg(debug_assertions)]
+                if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                    log::trace!(target: "autohint::pipeline", "[CSW_RET] smooth-stdw → return {dist}");
+                }
                 return dist;
             }
 
@@ -2157,6 +2161,11 @@ fn compute_stem_width(
     // Done_Width: restore sign
     if sign != 0 {
         dist = -dist;
+    }
+
+    #[cfg(debug_assertions)]
+    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+        log::trace!(target: "autohint::pipeline", "[CSW_RET] Done_Width → return width_in={} dist={dist}", width);
     }
 
     dist
