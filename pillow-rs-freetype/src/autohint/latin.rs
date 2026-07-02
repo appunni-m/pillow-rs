@@ -1606,15 +1606,45 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
                 last: seg_idx,
                 blue_edge: None,
             };
-            axis.edges.push(edge);
-            // Update the segment's edge reference.
-            axis.segments[seg_idx].edge = axis.edges.len() - 1;
+            // ✅ FIX: Insert edge at sorted position matching C's
+            //    af_axis_hints_new_edge (afhints.c:254-264). C inserts
+            //    edges sorted by fpos (smallest first). For same-fpos
+            //    edges, major-dir edges go before minor-dir edges.
+            //    Without this sort, Phase 2 BOUND check compares
+            //    edges in wrong order → edge positions differ.
+            let insert_pos = {
+                let major_dir = axis.major_dir;
+                let mut pos = axis.edges.len();
+                while pos > 0 {
+                    let prev = &axis.edges[pos - 1];
+                    if prev.fpos < fpos { break; }
+                    if prev.fpos == fpos && seg_dir == major_dir { break; }
+                    pos -= 1;
+                }
+                pos
+            };
+            axis.edges.insert(insert_pos, edge);
+            // Update segment→edge references for ALL edges shifted right.
+            axis.segments[seg_idx].edge = insert_pos;
+            for i in (insert_pos + 1)..axis.edges.len() {
+                // Update segments that pointed to the old index.
+                let mut s = axis.edges[i].first;
+                loop {
+                    if axis.segments[s].edge >= insert_pos {
+                        axis.segments[s].edge += 1;
+                    }
+                    if s == axis.edges[i].last { break; }
+                    s = axis.segments[s].edge_next;
+                }
+            }
         } else {
             // Append segment to existing edge.
             let e = &mut axis.edges[found_edge];
             let prev_last = e.last;
             axis.segments[prev_last].edge_next = seg_idx;
             e.last = seg_idx;
+            // Segment added to existing edge — edge already at correct
+            // sorted position. No index shifts needed.
             axis.segments[seg_idx].edge = found_edge;
         }
     }
