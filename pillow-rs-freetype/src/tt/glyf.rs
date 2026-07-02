@@ -49,6 +49,8 @@ pub struct GlyphOutline {
     pub ymin: i32,
     pub xmax: i32,
     pub ymax: i32,
+    /// Whether this glyph is composite (flattened from components).
+    pub is_composite: bool,
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
@@ -132,6 +134,7 @@ fn load_glyph_inner(
         outline.ymin = ymin;
         outline.xmax = xmax;
         outline.ymax = ymax;
+        outline.is_composite = false;
         Ok(outline)
     } else {
         // Composite glyph: decode components, recurse, flatten.
@@ -165,6 +168,7 @@ fn load_glyph_inner(
             ymin,
             xmax,
             ymax,
+            is_composite: true,
         })
     }
 }
@@ -288,6 +292,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         ymin: 0,
         xmax: 0,
         ymax: 0,
+        is_composite: false,
     })
 }
 
