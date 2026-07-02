@@ -143,14 +143,32 @@ pub fn scale_glyph(
     // pp1.x origin shift (ttgload.c:2582). Without this, italic fonts
     // produce 26.6 coords that differ from C by 1 unit (e.g. 344→345),
     // changing the DDA prod init → pixel mismatch.
-    // Uses glyf HEADER xMin (not computed min) — they can differ by ±1 FU.
-    // Shift both raw outline (autohinter fx/fy) and scaled (autohinter ox/oy).
-    let pp1x_fu = outline_raw.xmin - h_metric.lsb as i32;
+    //
+    // ✅ FIX: For composite glyphs, use actual outline minimum (not header).
+    //    C computes bbox from decomposed outline points (ttgload.c).
+    //    Glyf header xmin is an approximation that can differ by ±1 FU
+    //    for composites → pp1.x wrong → bbox size_delta of 2-16px.
+    //    Simple glyphs: header xmin equals actual minimum (parsed correctly).
+    //    Verified: DejaVuSerif-BoldItalic_20 U+2088 header xmin=-1,
+    //    C outline minimum=0.
+    let pp1x_fu = if outline_raw.num_contours < 0 {
+        // Composite: use actual outline minimum.
+        let actual_xmin = outline_raw.points.iter().map(|p| p.x).min().unwrap_or(0);
+        actual_xmin - h_metric.lsb as i32
+    } else {
+        // Simple: header xmin equals actual.
+        outline_raw.xmin - h_metric.lsb as i32
+    };
 
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-        log::trace!(target: "autohint::pipeline", "[PP1X] gi={glyph_index} outline_raw.xmin={} lsb={} pp1x_fu={pp1x_fu}",
-            outline_raw.xmin, h_metric.lsb);
+        let actual_xmin = if outline_raw.num_contours < 0 {
+            outline_raw.points.iter().map(|p| p.x).min().unwrap_or(0)
+        } else {
+            outline_raw.xmin
+        };
+        log::trace!(target: "autohint::pipeline", "[PP1X] gi={glyph_index} nc={} header_xmin={} actual_xmin={actual_xmin} lsb={} pp1x_fu={pp1x_fu}",
+            outline_raw.num_contours, outline_raw.xmin, h_metric.lsb);
     }
 
     // Shift raw outline for autohinter fx/fy edge detection
