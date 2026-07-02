@@ -2513,40 +2513,36 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             let mut delta: i32 = 1000;
 
             // ── Serif handling (C: aflatin.c:4733-4813) ──────────────
-            // Real-serif overlap check: C reads edge->first->first->v
-            // which = point.fx because VERT compute_segments runs before
-            // the C hint loop and overwrites v=fx on all points.
-            // Our pipeline: HORZ hint before VERT segs → v=fy during
-            // HORZ Phase 4. Must read point.fx directly to match C.
-            // For VERT dim, v=fx already (set by own compute_segments).
-            // Using point.fx universally matches both dims.
+            // C reads edge->first->first->v which = point.v.
+            // Since pipeline order matches C (VERT compute_segments runs
+            // before hint loop, overwriting v=fx for HORZ), point.v = fx
+            // (main-axis position). This correctly detects serif overlap
+            // when intermediate edges share the same fpos range.
+            // For VERT dim, v = fx = fpos already.
             let serif_idx = axis.edges[i].serif;
             if serif_idx != usize::MAX {
                 delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
                 if delta < 0 { delta = -delta; }
                 // Only check overlap when delta < 1.5px (C: aflatin.c:4767)
                 if delta < 64 + 32 {
-                    // Helper: min/max of fx across first+last points of a segment
-                    let seg_fx_min = |seg_idx: usize| -> i32 {
+                    // C: reads first/last points of first/last segments (4 pts per edge)
+                    let seg_v_min = |seg_idx: usize| -> i32 {
                         let seg = &axis.segments[seg_idx];
-                        i32::min(hints.points[seg.first].fx as i32,
-                                 hints.points[seg.last].fx as i32)
+                        i32::min(hints.points[seg.first].v, hints.points[seg.last].v)
                     };
-                    let seg_fx_max = |seg_idx: usize| -> i32 {
+                    let seg_v_max = |seg_idx: usize| -> i32 {
                         let seg = &axis.segments[seg_idx];
-                        i32::max(hints.points[seg.first].fx as i32,
-                                 hints.points[seg.last].fx as i32)
+                        i32::max(hints.points[seg.first].v, hints.points[seg.last].v)
                     };
-                    // C computes extent from 4 points per edge pair
                     let s_fi = axis.edges[i].first;
                     let s_li = axis.edges[i].last;
                     let s_fs = axis.edges[serif_idx].first;
                     let s_ls = axis.edges[serif_idx].last;
-                    let v_min = i32::min(i32::min(seg_fx_min(s_fi), seg_fx_min(s_li)),
-                                         i32::min(seg_fx_min(s_fs), seg_fx_min(s_ls)));
-                    let v_max = i32::max(i32::max(seg_fx_max(s_fi), seg_fx_max(s_li)),
-                                         i32::max(seg_fx_max(s_fs), seg_fx_max(s_ls)));
-                    // Walk intermediate edges for overlap
+                    let v_min = i32::min(i32::min(seg_v_min(s_fi), seg_v_min(s_li)),
+                                         i32::min(seg_v_min(s_fs), seg_v_min(s_ls)));
+                    let v_max = i32::max(i32::max(seg_v_max(s_fi), seg_v_max(s_li)),
+                                         i32::max(seg_v_max(s_fs), seg_v_max(s_ls)));
+                    // Walk intermediate edges for v-overlap
                     let lo = serif_idx.min(i);
                     let hi = serif_idx.max(i);
                     let mut overlap = false;
@@ -2555,8 +2551,8 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                         let sj_f = axis.edges[j].first;
                         let sj_l = axis.edges[j].last;
                         if sj_f == usize::MAX || sj_l == usize::MAX { continue; }
-                        let ej_min = i32::min(seg_fx_min(sj_f), seg_fx_min(sj_l));
-                        let ej_max = i32::max(seg_fx_max(sj_f), seg_fx_max(sj_l));
+                        let ej_min = i32::min(seg_v_min(sj_f), seg_v_min(sj_l));
+                        let ej_max = i32::max(seg_v_max(sj_f), seg_v_max(sj_l));
                         if !((ej_min < v_min && ej_max < v_min) || (ej_min > v_max && ej_max > v_max)) {
                             overlap = true;
                             break;
