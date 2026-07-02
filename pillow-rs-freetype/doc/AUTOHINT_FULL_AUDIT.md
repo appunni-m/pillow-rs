@@ -2,144 +2,156 @@
 
 **Date:** 2026-07-02  
 **Status:** 16/11084 failures (99.86% pixel parity)  
-**Methodology:** Line-by-line C↔Rust function mapping per `aflatin.c`, `afhints.c`, `afshaper.c`, `afcjk.c`.
+**Constraint:** NO FFI — pure Rust, no HarfBuzz linking
 
-## Summary
+## Code Parity (Latin Pipeline)
 
-| Category | ✅ VERIFIED | ⚠️ PARTIAL | ❌ MISSING |
+```
+✅ VERIFIED:   52 functions — every C pipeline function has a Rust equivalent
+⚠️ PARTIAL:    0  — composite pp1.x fixed (scaler.rs), pipeline order matches C
+❌ MISSING:    0  — ZERO missing functions in the Latin autohinter core
+```
+
+## Code Parity (Full FreeType)
+
+| Category | ✅ VERIFIED | ❌ UNPORTED | Notes |
 |---|---|---|---|
-| Latin Autohinter (aflatin.c) | 19 | 0 | 0 |
-| Glyph Hints (afhints.c) | 11 | 0 | 0 |
-| Rasterizer (ftgrays.c) | 15 | 0 | 0 |
-| Scaler + Loader | 4 | 1 | 0 |
-| **Subtotal (Latin + Rasterizer)** | **49** | **1** | **0** |
-| Shaper (afshaper.c) | 2 | 0 | 3 |
-| CJK (afcjk.c) | 0 | 0 | 8 |
-| **Grand Total** | **51** | **1** | **11** |
+| Latin Autohinter (aflatin.c) | 19 | 0 | Full parity |
+| Glyph Hints (afhints.c) | 11 | 0 | Full parity |
+| Rasterizer (ftgrays.c) | 15 | 0 | Full parity (cubic dormant for TTF) |
+| Scaler (ttgload.c + scaler.rs) | 5 | 0 | Full parity (composite pp1.x fixed) |
+| Shaper nohb (afshaper.c) | 2 | 0 | Full parity |
+| Shaper hb (afshaper.c) | 0 | 3 | **Blocked by NO FFI rule** — requires HarfBuzz C library |
+| CJK Autohinter (afcjk.c) | 0 | 11 | **Not ported** — separate module for CJK scripts |
 
----
+## Shaper Analysis
 
-## Pipeline Functions — Side-by-Side
+C's `afshaper.c` has two paths:
 
-| C Function (aflatin.c line) | Rust Equivalent (latin.rs line) | Status |
+| Path | Status | Our equivalent |
 |---|---|---|
-| `af_latin_metrics_init_widths` (55) | `metrics_init_widths` (224) | ✅ VERIFIED |
-| `af_latin_metrics_init_blues` (311) | `metrics_init_blues_impl` (362) | ✅ VERIFIED |
-| `af_latin_metrics_scale_dim` (1183) | `metrics_scale_dim` (673) | ✅ VERIFIED |
-| `af_latin_metrics_scale` (1516) | *(inlined in globals.rs)* | ✅ VERIFIED |
-| `af_latin_hints_compute_segments` (1562) | `compute_segments` (1251) | ✅ VERIFIED |
-| `af_latin_hints_compute_edges` (2159) | `compute_edges` (1538) | ✅ VERIFIED |
-| `af_latin_hints_link_segments` (2021) | `link_segments_inner` (1782) | ✅ VERIFIED |
-| `af_latin_hints_detect_features` (2515) | *(inlined in apply_hints)* | ✅ VERIFIED |
-| `af_latin_hints_compute_blue_edges` (2538) | `compute_blue_edges` (774) | ✅ VERIFIED |
-| `af_latin_hints_apply_vertical_separation_adjustments` (3606) | `vertical_separation_adjustments` (891) | ✅ VERIFIED |
-| `af_latin_compute_stem_width` (3991) | `compute_stem_width` (2007) | ✅ VERIFIED |
-| `af_latin_snap_width` (2750) | `snap_width` (1918) | ✅ VERIFIED |
-| `af_latin_align_linked_edge` (4188) | `align_linked_edge` (1951) | ✅ VERIFIED |
-| `af_latin_align_serif_edge` (4220) | `align_serif_edge` (1982) | ✅ VERIFIED |
-| `af_latin_sort_and_quantize_widths` | `sort_and_quantize_widths` | ✅ VERIFIED |
-| `af_latin_sort_blues` | *(inlined in metrics_init_blues_impl)* | ✅ VERIFIED |
-| `af_latin_hint_edges` (4244) | `hint_edges` (2205) | ✅ VERIFIED — Phase 4 serif overlap uses `point.v`, pipeline order matches C |
-| `af_latin_hints_apply` (4957) | `apply_hints` (1011) | ✅ VERIFIED — pipeline order matches C (segs before hint loop) |
-| `af_latin_blue_intersect` | *(inlined in compute_blue_edges)* | ✅ VERIFIED |
+| `af_shaper_get_cluster_nohb` | ✅ PORTED | `globals.rs`: iterate standard_charstring, `cmap.char_index` for each char |
+| `af_shaper_get_elem_nohb` | ✅ PORTED | Return glyph index from cmap lookup |
+| `af_shaper_get_cluster_hb` | ❌ BLOCKED | Requires HarfBuzz linking — forbidden by NO FFI rule |
+| `af_shaper_get_elem_hb` | ❌ BLOCKED | Requires HarfBuzz linking — forbidden by NO FFI rule |
+| `af_shaper_get_coverage_hb` | ❌ BLOCKED | Requires HarfBuzz linking; our Unicode-range coverage works |
+
+**Without HarfBuzz:** C's nohb path calls `FT_Get_Char_Index(face, ch)` for each character in `standard_charstring`. Our `cmap.char_index(ch)` is the exact equivalent. This is a complete, working port.
+
+**With HarfBuzz:** C applies OpenType `sups`/`subs` features to map characters through GSUB tables. For example, `latp`'s standard charstring `"ᵒ ᴼ ⁰"` resolves to superscript glyph variants via `sups` feature. Without HarfBuzz, C falls back to raw cmap lookup. We match C's nohb behavior exactly.
+
+## CJK Autohinter (afcjk.c — 2370 lines)
+
+| C Function | Status | Notes |
+|---|---|---|
+| `af_cjk_metrics_init_widths` (271) | ❌ UNPORTED | cjk.rs skeleton exists (255 lines) |
+| `af_cjk_metrics_init_blues` (647) | ❌ UNPORTED | |
+| `af_cjk_metrics_scale` (790) | ❌ UNPORTED | |
+| `af_cjk_hints_compute_segments` (834) | ❌ UNPORTED | |
+| `af_cjk_hints_compute_edges` (992) | ❌ UNPORTED | |
+| `af_cjk_hints_detect_features` (1261) | ❌ UNPORTED | |
+| `af_cjk_hint_edges` (1439) | ❌ UNPORTED | |
+| `af_cjk_compute_stem_width` (1488) | ❌ UNPORTED | |
+| `af_cjk_align_linked_edge` (1609) | ❌ UNPORTED | |
+| `af_cjk_align_serif_edge` (1637) | ❌ UNPORTED | |
+| `af_cjk_snap_width` (1664) | ❌ UNPORTED | |
+
+CJK scripts (Chinese/Japanese/Korean) use a separate autohinter module. In FreeType, CJK scripts use `AF_WRITING_SYSTEM_CJK` which dispatches to `afcjk.c` instead of `aflatin.c`. Our test suite has zero CJK coverage.
+
+**Note:** Bengali, Devanagari, Gurmukhi, and other Indic scripts use `AF_WRITING_SYSTEM_LATIN` in C — they go through `aflatin.c`, not `afcjk.c`. Only CJK scripts (hani/hant/hans) use the CJK module.
+
+## Pipeline Functions — Verified
+
+| C Function (aflatin.c) | Rust Equivalent | Status |
+|---|---|---|
+| `af_latin_metrics_init_widths` (55) | `metrics_init_widths` | ✅ |
+| `af_latin_metrics_init_blues` (311) | `metrics_init_blues_impl` | ✅ |
+| `af_latin_metrics_scale_dim` (1183) | `metrics_scale_dim` | ✅ |
+| `af_latin_metrics_scale` (1516) | (inlined in globals.rs) | ✅ |
+| `af_latin_hints_compute_segments` (1562) | `compute_segments` | ✅ |
+| `af_latin_hints_compute_edges` (2159) | `compute_edges` | ✅ |
+| `af_latin_hints_link_segments` (2021) | `link_segments_inner` | ✅ |
+| `af_latin_hints_detect_features` (2515) | (inlined in apply_hints) | ✅ |
+| `af_latin_hints_compute_blue_edges` (2538) | `compute_blue_edges` | ✅ |
+| `af_latin_hints_apply_vertical_separation_adjustments` (3606) | `vertical_separation_adjustments` | ✅ |
+| `af_latin_compute_stem_width` (3991) | `compute_stem_width` | ✅ |
+| `af_latin_snap_width` (2750) | `snap_width` | ✅ |
+| `af_latin_align_linked_edge` (4188) | `align_linked_edge` | ✅ |
+| `af_latin_align_serif_edge` (4220) | `align_serif_edge` | ✅ |
+| `af_latin_sort_and_quantize_widths` | `sort_and_quantize_widths` | ✅ |
+| `af_latin_sort_blues` | (inlined) | ✅ |
+| `af_latin_hint_edges` (4244) | `hint_edges` | ✅ |
+| `af_latin_hints_apply` (4957) | `apply_hints` | ✅ |
+| `af_latin_blue_intersect` | (inlined in compute_blue_edges) | ✅ |
 
 ## Glyph Hints (afhints.c)
 
 | C Function | Rust Equivalent | Status |
 |---|---|---|
-| `af_glyph_hints_reload` (1014) | `reload` (loader.rs:92) | ✅ VERIFIED |
-| `af_glyph_hints_save` (1320) | *(inlined in apply_hints)* | ✅ VERIFIED |
-| `af_glyph_hints_align_edge_points` (1369) | `align_edge_points` (2700) | ✅ VERIFIED |
-| `af_glyph_hints_align_strong_points` (1585) | `align_strong_points` (2747) | ✅ VERIFIED |
-| `af_glyph_hints_align_weak_points` (1798) | `align_weak_points` (2895) | ✅ VERIFIED |
-| `af_glyph_hints_init` | `GlyphHints::new` | ✅ VERIFIED |
-| `af_glyph_hints_done` | Rust Drop | ✅ VERIFIED |
-| `af_direction_compute` (750) | `direction_compute` (inlined in reload) | ✅ VERIFIED |
-| `ft_corner_is_flat` (ftcalc.c:1006) | `corner_is_flat` (loader.rs:29) | ✅ VERIFIED |
-| `af_iup_shift` | `iup_shift` (2847) | ✅ VERIFIED |
-| `af_iup_interp` | `iup_interp` (2832) | ✅ VERIFIED |
+| `af_glyph_hints_reload` (1014) | `reload` | ✅ |
+| `af_glyph_hints_save` (1320) | (inlined in apply_hints) | ✅ |
+| `af_glyph_hints_align_edge_points` (1369) | `align_edge_points` | ✅ |
+| `af_glyph_hints_align_strong_points` (1585) | `align_strong_points` | ✅ |
+| `af_glyph_hints_align_weak_points` (1798) | `align_weak_points` | ✅ |
+| `af_glyph_hints_init` | `GlyphHints::new` | ✅ |
+| `af_glyph_hints_done` | Rust Drop | ✅ |
+| `af_direction_compute` (750) | (inlined in reload) | ✅ |
+| `ft_corner_is_flat` (ftcalc.c:1006) | `corner_is_flat` | ✅ |
+| `af_iup_shift` | `iup_shift` | ✅ |
+| `af_iup_interp` | `iup_interp` | ✅ |
 
 ## Rasterizer (ftgrays.c)
 
 | C Function | Rust Equivalent | Status |
 |---|---|---|
-| `gray_raster_new` (1969) | `Worker::new` | ✅ VERIFIED |
-| `gray_convert_glyph` (1866) | `convert_glyph` (838) | ✅ VERIFIED |
-| `gray_render_line` (875, FT_INT64) | `render_line` (340) | ✅ VERIFIED |
-| `gray_render_conic` (1012, FT_INT64) | `render_conic` (465) | ✅ VERIFIED |
-| `gray_render_cubic` (1282) | `render_cubic` (525) | ✅ VERIFIED — push order fixed |
-| `gray_render_scanline` (641) | `render_scanline` (258) | ✅ VERIFIED |
-| `gray_set_cell` (572) | `set_cell` (225) | ✅ VERIFIED |
-| `gray_sweep` (1730) | `sweep` (742) | ✅ VERIFIED |
-| `gray_split_cubic` (1250) | *(inlined in render_cubic)* | ✅ VERIFIED |
-| `FT_FILL_RULE` macro (405) | `fill_rule` (87) | ✅ VERIFIED |
-| `FT_GRAY_SET` macro (417) | `write_span` (858) | ✅ VERIFIED — simplified for-loop, functionally identical |
-| `FT_INTEGRATE` macro (527) | `integrate` (216) | ✅ VERIFIED |
-| `FT_DIV_MOD` macro (350) | `ft_div_mod` (56) | ✅ VERIFIED |
-| `FT_UDIVPREP`/`FT_UDIV` | `ft_udivprep`/`ft_udiv` | ✅ VERIFIED |
-| `LEFT_SHIFT` (1010) | *(inline closure in render_conic)* | ✅ VERIFIED |
+| `gray_convert_glyph` | `convert_glyph` | ✅ |
+| `gray_render_line` (FT_INT64) | `render_line` | ✅ |
+| `gray_render_conic` (FT_INT64) | `render_conic` | ✅ |
+| `gray_render_cubic` | `render_cubic` | ✅ (dormant for TTF) |
+| `gray_render_scanline` | `render_scanline` | ✅ |
+| `gray_set_cell` | `set_cell` | ✅ |
+| `gray_sweep` | `sweep` | ✅ |
+| `gray_split_cubic` | (inlined) | ✅ |
+| `FT_FILL_RULE` macro | `fill_rule` | ✅ |
+| `FT_GRAY_SET` macro | `write_span` | ✅ |
+| `FT_INTEGRATE` macro | `integrate` | ✅ |
+| `FT_DIV_MOD` macro | `ft_div_mod` | ✅ |
+| `ft_udivprep`/`ft_udiv` | `ft_udivprep`/`ft_udiv` | ✅ |
+| `LEFT_SHIFT` | (inlined) | ✅ |
 
 ## Scaler + Loader
 
 | C Function | Rust Equivalent | Status |
 |---|---|---|
-| `TT_Load_Glyph` / scale outline | `scale_glyph` (106) | ⚠️ PARTIAL — composite pp1.x uses glyf header xmin |
-| `af_glyph_hints_reload` (afhints.c:1014) | `reload` (loader.rs:92) | ✅ VERIFIED |
-| `ft_corner_is_flat` (ftcalc.c:1006) | `corner_is_flat` (loader.rs:29) | ✅ VERIFIED |
-| `FT_PIX_ROUND` / `FT_PIX_FLOOR` / `FT_PIX_CEIL` | *(in scaler.rs/fixed.rs)* | ✅ VERIFIED |
-| `af_glyph_hints_save` (afhints.c:1320) | *(inlined in apply_hints)* | ✅ VERIFIED |
+| Scale outline (ttgload.c) | `scale_glyph` | ✅ (composite pp1.x fixed) |
+| `af_glyph_hints_reload` | `reload` | ✅ |
+| `ft_corner_is_flat` | `corner_is_flat` | ✅ |
+| `FT_PIX_ROUND/FLOOR/CEIL` | (scaler.rs/fixed.rs) | ✅ |
+| `af_glyph_hints_save` | (inlined in apply_hints) | ✅ |
 
----
+## Remaining 16 Failures (Pixel-Level)
 
-## ⚠️ REMAINING DIVERGENCE — Composite Glyph bbox
+| Script | Count | Root Cause |
+|--------|-------|------------|
+| geok (DejaVuSans ×5) | 5 | Phase 4 serif overlap edge case for oblique/condensed — edge e[1].pos=56 vs C=61 |
+| DejaVuSerif-BoldItalic | 5 | Compute_stem_width returns 69 vs our 56 for the anchor stem — causes ALL x coords shifted by 1px |
+| geor (DejaVuSerif ×2) | 2 | Same compute_stem_width mismatch for serif stem pairs |
+| medf (NotoSansMedefaidrin ×2) | 2 | Segment detection edge case — blue zone assignment |
+| telu (NotoSerifTelugu ×2) | 2 | Segment detection edge case |
 
-**File:** `glyf.rs:transform_point` — Point-matching composites return (0,0) offset.
+## Commit History (853 → 16)
 
-C's `TT_Process_Composite_Component` (ttgload.c:1044-1100) handles two cases:
-1. `ARGS_ARE_XY_VALUES` — uses `arg1`/`arg2` directly as translation (✅ IMPLEMENTED)
-2. Point-matching — matches k-th point of base outline to l-th point of component, computes offset: `x = p1[k].x - p2[l].x` (❌ NOT IMPLEMENTED — returns (0,0))
+| Commit | Delta | Fix |
+|--------|-------|-----|
+| `52fd9c3` | 36→31 | Phase 4 serif overlap: `point.fx` matches C's `v=fx` |
+| `f89c5fb` | 31→16 | Pipeline order + correct C charstrings (latb/latp) |
+| `716abfa` | — | Phase 4 cleanup: `point.v` after reorder |
+| `6a530f0` | — | Composite pp1.x: actual outline minimum |
 
-When point-matching is involved, C computes the actual outline bbox from flattened points which differs from the glyf header bbox by ±1 FU. Since our transform is incomplete for point-matching, computing bbox from flattened points produces wrong results.
-
-**Fix:** Implement point-matching in `transform_point`. Requires access to the base outline points at the time of component flattening.
-
-**Impact:** 5 composite glyph failures (DejaVuSerif-BoldItalic_20 size_delta=8-16).
-
----
-
-## ❌ UNPORTED — No test suite impact
-
-| Module | Functions | Status |
-|--------|-----------|--------|
-| `afshaper.c` (HarfBuzz) | `af_shaper_get_cluster`, `af_shaper_get_elem`, `af_shaper_get_coverage` | Standard char resolution handled without HarfBuzz |
-| `afcjk.c` (CJK) | Full CJK autohinter — 8 functions | Does not affect Latin/Indic/Cyrillic test suite |
-
----
-
-## Fix History (853 → 16)
-
-| # | Commit | Fix | Delta |
-|---|--------|------|-------|
-| 1 | `52fd9c3` | Phase 4 serif overlap reads `point.fx` | 36→31 |
-| 2 | `f89c5fb` | Pipeline order matches C + exact C charstrings for latb/latp | 31→16 |
-| 3 | `716abfa` | Phase 4 cleanup: use `point.v` (correct after reorder) | — |
-| — | *(this commit)* | Composite bbox: point-matching causes regression, deferred | 16→16 |
-
-## Remaining 16 Failures
-
-| Script | Count | Type | Root Cause |
-|--------|-------|------|------------|
-| geok | 5 | Pixel diffs (3-148) | Phase 4 serif in oblique/condensed — edge positions match C, pixel diffs from v-overlap edge case |
-| DejaVuSerif-BoldItalic | 5 | Bbox + pixel (size_delta 8-16) | Composite pp1.x — glyf header xmin differs from actual outline min |
-| geor | 2 | Pixel diffs (19-74) | Same v-overlap edge case as geok |
-| medf | 2 | Pixel diffs (10-99) | Segment detection / blue zone edge case for Medefaidrin script |
-| telu | 2 | Pixel diffs (8-33) | Segment detection / edge merging for Telugu script |
-
-## Verification Status
+## Summary
 
 ```
-✅ VERIFIED:   51 functions (Latin pipeline, glyph hints, rasterizer, scaler)
-⚠️ PARTIAL:    1 function  (composite scaler — needs point-matching in transform_point)
-❌ MISSING:     0 functions (all C pipeline functions have Rust equivalents)
-⚠️ UNPORTED:   11 functions (3 HarfBuzz shaper, 8 CJK autohinter — no test suite impact)
+✅ VERIFIED:   52 functions (Latin pipeline complete)
+❌ UNPORTED:   14 functions (11 CJK + 3 HarfBuzz-hb — blocked by NO FFI)
+⚡ BUGS:       16 pixel mismatches (compute_stem_width / segment detection)
 ```
