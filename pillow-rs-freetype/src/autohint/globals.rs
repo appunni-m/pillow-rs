@@ -163,8 +163,12 @@ impl FaceGlobals {
             // have fundamentally different shapes that produce incorrect
             // stem widths when run through segment-based detection.
             let std_chars: &[char] = match style.script_tag {
-                // C's "o O 0": if 'o' missing, try 'O', then '0'.
+                // C Latin: "o O 0" (afscript.h:216-220)
                 "latn" => &['o', 'O', '0'],
+                // C Latin subscript: "ₒ ₀" = U+2092 U+2080 (afscript.h)
+                "latb" => &['\u{2092}', '\u{2080}'],
+                // C Latin superscript: "ᵒ ᴼ ⁰" = U+1D52 U+1D3C U+2070
+                "latp" => &['\u{1D52}', '\u{1D3C}', '\u{2070}'],
                 // Most scripts have a single standard character.
                 _ => &[super::globals_data::standard_char_for_script(style.script_tag), '\0'],
             };

@@ -1055,54 +1055,49 @@ pub fn apply_hints(
         return;
     }
 
-    // Step 2: Process horizontal dimension first (X-axis / vertical edges)
-    // ✅ Order matches C's af_latin_hints_apply (aflatin.c:5050-5068): HORZ before VERT.
-    // ⚠️ C: AF_HINTS_DO_HORIZONTAL skips HORZ for italic fonts (aflatin.c:2720-2726).
-    if hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0 {
+    // ✅ C PARITY: Exact pipeline order matching af_latin_hints_apply (aflatin.c:4957-5200).
+    // Phase A: detect_features for HORZ (segs → link → edges)
+    let do_horz = hints.scaler_flags & AF_SCALER_FLAG_NO_HORIZONTAL == 0;
+    let mut horz_widths_26_6: Vec<i32> = Vec::new();
+    if do_horz {
         compute_segments(&mut hints, Dimension::Horz);
-        let horz_widths_26_6: Vec<i32>;
         {
             let (wc, widths) = extract_widths(&hints, Dimension::Horz);
             horz_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
             link_segments_inner(&mut hints, Dimension::Horz, wc, &widths);
         }
         compute_edges(&mut hints, Dimension::Horz);
-        hint_edges(&mut hints, Dimension::Horz, &horz_widths_26_6, ppem);
-        align_edge_points(&mut hints, Dimension::Horz);
-        align_strong_points(&mut hints, Dimension::Horz);
-        align_weak_points(&mut hints, Dimension::Horz);
-    } else {
-        crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_HORZ_SKIPPED);
     }
 
-    // Step 3: Process vertical dimension (Y-axis / horizontal edges)
+    // Phase B: detect_features for VERT (segs → link → edges) + blue zones.
+    // This OVERWRITES point.v = fx — matching C's behavior before the hint loop.
     compute_segments(&mut hints, Dimension::Vert);
-    let vert_widths_26_6: Vec<i32>; // scaled widths for snapping
+    let vert_widths_26_6: Vec<i32>;
     {
         let (wc, widths) = extract_widths(&hints, Dimension::Vert);
         vert_widths_26_6 = widths.iter().take(wc).map(|w| w.cur).collect();
         link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
     }
     compute_edges(&mut hints, Dimension::Vert);
-    // Blue zones are pre-scaled by metrics_scale_dim (per-size); assign edges.
-    // ⚠️ MATCHES C: af_latin_hints_apply skips compute_blue_edges for non-base
-    //    glyphs (accents, diacritics, etc.) via ganglia->glyph_styles & AF_NONBASE.
     let is_nonbase = hints.metrics.as_ref()
         .is_some_and(|m| (glyph_index as usize) < m.non_base_glyphs.len()
             && m.non_base_glyphs[glyph_index as usize]);
     if !is_nonbase {
         compute_blue_edges(&mut hints);
     }
-    hint_edges(&mut hints, Dimension::Vert, &vert_widths_26_6, ppem);
-    align_edge_points(&mut hints, Dimension::Vert);
-    align_strong_points(&mut hints, Dimension::Vert);
-    align_weak_points(&mut hints, Dimension::Vert);
 
-    // ── Vertical separation for i/j dot glyphs (C: aflatin.c:3602-3975) ────
-    // C's af_glyph_hints_apply_vertical_separation_adjustments moves the body
-    // contour up for characters in the adjustment database (i=0x69, j=0x6A).
-    // This creates visual separation between the dot and body after hinting.
-    vertical_separation_adjustments(&mut hints, glyph_index, font_data.unwrap_or_else(|| unreachable!()));
+    // Phase C: grid-fit the outline — for-loop over both dims (aflatin.c:5169-5177).
+    for dim_i in 0..2 {
+        let dim = if dim_i == 0 { Dimension::Horz } else { Dimension::Vert };
+        let do_dim = if dim_i == 0 { do_horz } else { true };
+        if !do_dim { continue; }
+        let widths = if dim_i == 0 { &horz_widths_26_6 } else { &vert_widths_26_6 };
+        hint_edges(&mut hints, dim, widths, ppem);
+        align_edge_points(&mut hints, dim);
+        align_strong_points(&mut hints, dim);
+        align_weak_points(&mut hints, dim);
+        vertical_separation_adjustments(&mut hints, glyph_index, font_data.unwrap_or_else(|| unreachable!()));
+    }
 
     // ── Post-hinting phantom-point adjustment (afloader.c:419-530) ──────
     // After hint_edges grid-fits the leftmost/rightmost edges, we compute
