@@ -38,18 +38,12 @@ pub struct OutlinePoint {
 /// A glyph outline as a flattened list of contours.
 #[derive(Debug, Clone, Default)]
 pub struct GlyphOutline {
-    /// Number of contours (0 for an empty glyph such as space).
     pub num_contours: u16,
-    /// Endpoint index of each contour (into `points`).
     pub end_pts_of_contours: Vec<u16>,
-    /// Flattened points across all contours.
     pub points: Vec<OutlinePoint>,
-    /// Glyph bbox in font units (from the glyf header).
-    pub xmin: i32,
-    pub ymin: i32,
-    pub xmax: i32,
-    pub ymax: i32,
-    /// Whether this glyph is composite (flattened from components).
+    pub xmin: i32, pub ymin: i32, pub xmax: i32, pub ymax: i32,
+    /// Whether composite. If true, xmin = last recursive sub-glyph's header
+    /// (matching C's loader->bbox overwrite at ttgload.c:324).
     pub is_composite: bool,
 }
 
