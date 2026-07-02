@@ -134,15 +134,39 @@ fn load_glyph_inner(
         outline.sub_lsb = hmtx.get(glyph_index).lsb as i32;
         Ok(outline)
     } else {
-        // Composite glyph: decode components, recurse, flatten.
+        // ── Composite glyph: decode components, recurse, flatten ──
+        //
+        // C's load_truetype_glyph recursively loads each sub-glyph.
+        // Each recursive call hits TT_Load_Glyph_Header (ttgload.c:324)
+        // which overwrites `loader->bbox` with the glyf header values.
+        // tt_get_metrics does the same for `loader->left_bearing`.
+        // The LAST sub-glyph "wins" — shared mutable state written N times.
+        //
+        // What looks like a bug is actually a deliberate choice. After
+        // loading, compute_glyph_metrics (ttgload.c:1962-1968) checks:
+        //
+        //   if (glyph->format != FT_GLYPH_FORMAT_COMPOSITE)
+        //       FT_Outline_Get_CBox(&glyph->outline, &bbox);  // O(n)
+        //   else
+        //       bbox = loader->bbox;  // O(1) — reuse cached value
+        //
+        // For composites it SKIPS calling FT_Outline_Get_CBox and reuses
+        // whatever is already cached — the last sub-glyph's header. This
+        // saves walking every point of every component again.
+        //
+        // The cost: pp1.x (computed from bbox.xMin - left_bearing)
+        // can differ from the actual outline minimum by ±1-2 font units.
+        // That's 1/64 of a pixel — invisible at any screen resolution.
+        // The tradeoff has been there since FreeType 2.0 (1996).
+        //
+        // To achieve pixel-identical output we track BOTH last_sub_xmin
+        // and last_sub_lsb from the final recursive sub-glyph, then
+        // compute pp1.x = xmin - sub_lsb in scaler.rs — exactly
+        // matching C's accidental-but-intentional behavior.
         let components = parse_composite_components(bytes, 10)?;
         let mut points: Vec<OutlinePoint> = Vec::new();
         let mut end_pts: Vec<u16> = Vec::new();
         let mut num_contours_total = 0u16;
-        // C: recursive sub-glyph loading overwrites loader->bbox (ttgload.c:324)
-        //    AND loader->left_bearing (tt_get_metrics). pp1.x = xmin - lsb
-        //    uses BOTH from the last sub-glyph. compute_glyph_metrics
-        //    (ttgload.c:1962) reuses this cache O(1) vs FT_Outline_Get_CBox O(n).
         let mut last_sub_xmin = xmin;
         let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
 

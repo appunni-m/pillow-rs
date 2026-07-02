@@ -145,11 +145,14 @@ pub fn scale_glyph(
     // produce 26.6 coords that differ from C by 1 unit (e.g. 344→345),
     // changing the DDA prod init → pixel mismatch.
     //
-    // C: for composites, loader->bbox.xMin and loader->left_bearing are
-    //    BOTH overwritten by the last recursive sub-glyph (ttgload.c:324,
-    //    tt_get_metrics). glyf.rs tracks xmin=last_sub_xmin and
-    //    sub_lsb=last_sub_lsb to match this exactly.
-    //    For simple glyphs: xmin = header xmin, sub_lsb = hmtx lsb.
+    // C's compute_glyph_metrics (ttgload.c:1962-68) has a 1996-era
+    // optimization: for composite glyphs it SKIPS the O(n) point walk
+    // of FT_Outline_Get_CBox and reuses whatever is cached from the
+    // last recursive sub-glyph load. pp1.x = cache.xMin - cache.lsb.
+    //
+    // Our glyf.rs tracks both values from the final sub-glyph:
+    // xmin = last_sub_xmin, sub_lsb = last_sub_lsb.
+    // For simple glyphs: xmin = header xmin, sub_lsb = hmtx lsb.
     let pp1x_fu = if outline_raw.is_composite {
         outline_raw.xmin - outline_raw.sub_lsb
     } else {
