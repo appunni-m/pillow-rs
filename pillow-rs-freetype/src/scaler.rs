@@ -149,8 +149,8 @@ pub fn scale_glyph(
 
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-        log::trace!(target: "autohint::pipeline", "[PP1X] gi={glyph_index} outline_raw.xmin={} lsb={} pp1x_fu={pp1x_fu}",
-            outline_raw.xmin, h_metric.lsb);
+        log::trace!(target: "autohint::pipeline", "[PP1X] gi={glyph_index} cmp={} hdr_xmin={} lsb={} pp1x_fu={pp1x_fu}",
+            outline_raw.is_composite, outline_raw.xmin, h_metric.lsb);
     }
 
     // Shift raw outline for autohinter fx/fy edge detection
@@ -161,6 +161,7 @@ pub fn scale_glyph(
             .map(|p| crate::tt::glyf::OutlinePoint { x: p.x - pp1x_fu, ..*p })
             .collect(),
         xmin: 0, ymin: 0, xmax: 0, ymax: 0,
+        is_composite: outline_raw.is_composite,
     };
 
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
