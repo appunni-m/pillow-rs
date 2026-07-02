@@ -143,8 +143,11 @@ pub fn scale_glyph(
     // pp1.x origin shift (ttgload.c:2582). Without this, italic fonts
     // produce 26.6 coords that differ from C by 1 unit (e.g. 344→345),
     // changing the DDA prod init → pixel mismatch.
-    // Uses glyf HEADER xMin (not computed min) — they can differ by ±1 FU.
-    // Shift both raw outline (autohinter fx/fy) and scaled (autohinter ox/oy).
+    //
+    // ✅ FIX: glyf.rs now computes actual bbox from parsed points for
+    //    both simple and composite glyphs (matching C's outline bbox).
+    //    C's pp1.x uses loader->bbox which for composites contains the
+    //    last sub-glyph's header bbox (accidental match to actual).
     let pp1x_fu = outline_raw.xmin - h_metric.lsb as i32;
 
     #[cfg(debug_assertions)]

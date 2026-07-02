@@ -128,7 +128,7 @@ fn load_glyph_inner(
     let ymax = i16::from_be_bytes([bytes[8], bytes[9]]) as i32;
 
     if num_contours >= 0 {
-        // Simple glyph.
+        // Simple glyph — use header bbox (matches C).
         let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))?;
         outline.xmin = xmin;
         outline.ymin = ymin;
