@@ -588,3 +588,55 @@ Same mechanism (WEAK classification), different glyph topologies:
 ### Documentation
 
 Autohinter documentation: `pillow-rs-freetype/src/autohint/mod.rs` (pipeline + font categories) and doc comments on key functions (`reload`, `apply_hints`, `align_weak_points`, `build_direction_chain`)
+
+## Case Study: The 2026-07-02 Edge Sorting Fix (853 → 5)
+
+### Timeline
+
+| Phase | What | Result |
+|-------|------|--------|
+| Start | 853 failures | Baseline |
+| Fix 1 | Phase 4 serif overlap reads `point.fx` (matching C's `v=fx`) | 853→36 |
+| Fix 2 | Pipeline order matches C + correct Latin standard char strings | 36→31 |
+| Fix 3 | Phase 4 cleanup: use `point.v` after pipeline reorder | 31→31 |
+| Fix 4 | C instrumentation + sorted-edge insertion matching `af_axis_hints_new_edge` | 31→5 |
+| **Total** | **-848 failures (-99.4%)** | **853→5** |
+
+### The Breakthrough Method
+
+**Rule 1: Stop guessing, start comparing.** Dump raw data from both C and Rust at EVERY pipeline stage. Never trust "it looks similar" — demand exact byte-for-byte comparison.
+
+**Rule 2: Instrument C with fprintf, not reasoning.** When stuck, add `fprintf(stderr, …)` to the exact C function you suspect, rebuild, run on ONE glyph, diff against Rust traces.
+
+**Rule 3: Binary-search the pipeline.** Start at the output (pixels), work backwards. Cells match? Check hint. Hint matches? Check edges. Edges match? Check segments. The first stage that diverges IS the bug.
+
+**Rule 4: Fix the root cause, not the symptom.** The fix must be at the exact point of divergence — never add a compensating adjustment downstream.
+
+### The exact diagnostic chain
+
+1. **Cell dump comparison** → Rust and C cells differ for 12 glyphs → hinting produces different coordinates
+2. **Hinted point comparison** → 95 points have x-offset of +64 (1px) → phantom/pp1.x or edge positioning
+3. **Edge comparison** → Phase 4 HORZ edge[1].pos=56 vs C's 61
+4. **Segment dump** via `[C SEGDUMP]` fprintf → 9 HORZ segments, identical positions and u-ranges to Rust ✓
+5. **Link dump** via `[C LNKDMP]` fprintf → segment links identical to Rust ✓
+6. **Edge dump** via `[C EDGDUMP]` fprintf → edge fpos/opos match, but edge INDEX numbering differs: C has E0=fpos=40 dir=2 link=E1, Rust has E0=fpos=40 dir=2 link=E2. Same pair, different indices.
+7. **Phase 2 center dump** via `[C P2C]` fprintf → C computes `pos=56` from center of E2 (fpos=213 dir=2), IDENTICAL to Rust's computation.
+8. **Final Phase 2 output** → C shows `pos=61` for that edge, not 56. Something changed it AFTER the center computation.
+9. **Trace the BOUND check** → C's `aflatin.c:4606-4628` adjusts edge positions if they violate ordering. C processes edges in sorted fpos order: E0(fpos=40), E1(fpos=213 dir=-2), E2(fpos=213 dir=2), E3(fpos=433). When edge[2] gets center-position=56, its predecessor edge[1] already has pos=61. BOUND check fires: 56 < 61 → snap to 61.
+10. **Root cause** → C inserts edges in sorted order (`af_axis_hints_new_edge` at afhints.c:254-264). Our `compute_edges` appended to end: E0(fpos=40), E1(fpos=213 dir=2), E2(fpos=213 dir=-2), E3(fpos=433). Reversed order for the two fpos=213 edges. BOUND check compares against wrong neighbor, never fires → pos stays at 56.
+
+### The fix (latin.rs:compute_edges, 30 lines)
+
+Before: `axis.edges.push(edge)` — appends to end, unsorted.
+
+After: Walk backwards from end, find insertion point where `prev.fpos < fpos` (or same fpos but current is major-dir), insert there. Update all segment→edge references for shifted edges. Matches C's `af_axis_hints_new_edge` exactly.
+
+### Why 11 tests were fixed by sorting 8 edges
+
+The BOUND check (`aflatin.c:4606-4628`) acts as a tie-breaker for edges at identical fpos. When edges are sorted correctly (C order), the earlier edge (fpos=213 dir=-2, link→fpos=40) gets processed first, setting its pos=61. The later edge (fpos=213 dir=2, link→fpos=433) gets its center-computed pos=56, then the BOUND check detects 56 < 61 and snaps it to 61. Without sorting, the check compares against the wrong neighbor and never fires.
+
+This 5-unit difference per edge position cascades: different edge positions → different phantom adjustment → ALL x-coordinates shifted by 1 pixel → 12 failures across geok, geor, and BoldItalic scripts.
+
+### Remaining 5 failures
+
+Composite glyph bbox (DejaVuSerif-BoldItalic at 20pt). `transform_point` produces (0,0) offset for non-XY-args components. Root cause: `parse_simple_glyph` returns header bbox (xmin=0,ymin=0), but actual outline minimum differs by ±1-2 FU. Fix requires actual-point bbox in `parse_simple_glyph` + composite pp1.x fix.
