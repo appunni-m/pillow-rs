@@ -164,20 +164,16 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // Prep execution disabled — twilight zone operations need MIRP/MDRP
-    // that use correct vector projection and distance computation on
-    // zero-initialized twilight points. We get garbage output because
-    // MIRP in prep computes wrong relative distances on (0,0) points.
+    // CVT scaling with pixel rounding (matches prep program output).
+    // Step 1: Extract font-unit value (parser stores as FU * 64).
+    // Step 2: Scale to 26.6 pixel units via FT_MulFix.
+    // Step 3: Round to pixel grid via FT_PIX_ROUND (prep rounds CVT values).
     let _prep = prep;
-    let cvt_scaled_by_prep = false;
-
-    // Linear CVT scaling from font_units*64 to 26.6 pixel units.
-    if !cvt_scaled_by_prep {
-        let y_scale = scale.y_scale;
-        for cv in &mut ctx.cvt {
-            let fu = *cv / 64;
-            *cv = crate::fixed::ft_mul_fix(fu, y_scale);
-        }
+    let y_scale = scale.y_scale;
+    for cv in &mut ctx.cvt {
+        let fu = *cv / 64;
+        *cv = crate::fixed::ft_mul_fix(fu, y_scale);
+        *cv = crate::fixed::ft_round_fix(*cv);
     }
 
     // ── Run the glyph's instruction stream ────────────────────────────
