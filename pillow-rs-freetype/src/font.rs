@@ -213,8 +213,12 @@ impl Font {
         let advance = pixel_round(ft_mul_fix(
             data.hmtx.get(glyph).advance_width as i32, scale.x_scale));
         let metrics_cache = self.face_globals.get_metrics(glyph);
-        let metrics = metrics_cache.as_ref();
-        match scaler::scale_glyph(data, glyph, metrics, self.is_italic) {
+        // PIL backend: skip autohinting
+        let metrics_for_scale = match self.backend {
+            BitmapBackend::PIL => None,
+            BitmapBackend::FreeType => metrics_cache.as_ref(),
+        };
+        match scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic) {
             Ok(g) if g.outline.n_contours > 0 => {
                 match self.backend {
                     BitmapBackend::PIL => {
@@ -274,9 +278,14 @@ impl Font {
 
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
+        // PIL backend: skip autohinting. PIL uses native bytecode hinter.
+        // Our autohinter produces different bbox/pixel values.
         let metrics_cache = self.face_globals.get_metrics(glyph);
-        let metrics = metrics_cache.as_ref();
-        let scaled = scaler::scale_glyph(data, glyph, metrics, self.is_italic)?;
+        let metrics_for_scale = match self.backend {
+            BitmapBackend::PIL => None,
+            BitmapBackend::FreeType => metrics_cache.as_ref(),
+        };
+        let scaled = scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic)?;
 
         if scaled.outline.n_contours == 0 {
             // No outline → empty mask (but PIL still returns the advance-sized
