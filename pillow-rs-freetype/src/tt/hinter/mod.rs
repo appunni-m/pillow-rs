@@ -192,16 +192,7 @@ pub fn hint_glyph(
     }
 
     // ── Write hinted coordinates back ──────────────────────────────────
-    let n = n_points.min(scaled.len());
-    let y_before_0 = scaled[0].y;
-    let y_after_0 = zone.cur_y[0];
-    let y_last_before = if n > 0 { scaled[n-1].y } else { 0 };
-    let y_last_after = if n > 0 { zone.cur_y[n-1.min(zone.cur_y.len()-1)] } else { 0 };
-    if y_before_0 != y_after_0 || y_last_before != y_last_after {
-        log::debug!("[VM] y-shift: p0 {}→{} p{} {}→{}",
-            y_before_0, y_after_0, n-1, y_last_before, y_last_after);
-    }
-    for (i, pt) in scaled.iter_mut().enumerate().take(n) {
+    for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
         pt.x = zone.cur_x[i];
         pt.y = zone.cur_y[i];
     }
