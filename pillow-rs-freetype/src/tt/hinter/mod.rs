@@ -164,13 +164,31 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // CVT scaling: linearly scale from font_units*64 to 26.6 pixels.
-    // Prep program (experimental, behind env var) handles per-glyph tuning.
-    // Linear scaling alone is >99% accurate since CVT values are simple
-    // font-unit distances scaled to pixel size.
-    let _prep = prep;
+    // Run prep program to scale CVT values for the current ppem.
+    // prep calls TT_Load_Context equivalent (reset GS, scale CVT, clear storage)
+    // and executes the bytecode against the twilight zone.
+    if !prep.is_empty() {
+        if let Err(e) = ctx.run_prep(prep) {
+            log::info!("[VM] prep failed: {e}");
+            // Fall back to linear CVT scaling below
+        }
+    }
+
+    // Linear CVT scaling fallback: applies if prep is missing or failed.
+    // Scaled CVT entries that were already handled by prep will be
+    // re-scaled here too but FT_MulFix on already-scaled pixel values
+    // with y_scale produces garbage. So we skip entries already in
+    // pixel range (small values < y_scale).
     let y_scale = scale.y_scale;
     for cv in &mut ctx.cvt {
+        let abs_val = cv.abs();
+        // If value looks like it's in pixel units (smaller than typical
+        // font_unit * 64 value at this ppem), skip — prep already scaled it.
+        let typical_raw_fu64 = 100 * 64; // 100 FU * 64 = 6400
+        if abs_val < typical_raw_fu64 || abs_val == 0 {
+            continue; // Already in pixel units (prep-scaled)
+        }
+        // Still in FU*64 format — apply linear scaling
         let fu = *cv / 64;
         *cv = crate::fixed::ft_mul_fix(fu, y_scale);
         *cv = crate::fixed::ft_round_fix(*cv);

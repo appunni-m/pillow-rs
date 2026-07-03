@@ -243,78 +243,29 @@ impl ExecContext {
         if self.font_range.size == 0 {
             return Ok(());
         }
-        // Save GS — fpgm modifies it and we need fresh GS for glyph programs
-        let gs_saved = self.gs.clone();
+        // C executes fpgm through the full VM (TT_Run_Context) on an empty zone.
+        // This ensures all function body opcodes execute, keeping stack state
+        // accurate for subsequent FDEF pops.
+        // Previously we had a custom parser that skipped body opcodes, causing
+        // stack desyncs after ~10 functions.
         self.stack.clear();
-        self.cur_range = 1; // font program range
+        self.glyph_program = self.font_program.clone();
         self.ip = 0;
+        self.cur_range = 2; // glyph range (uses glyph_program for fetch)
 
-        // Execute fpgm bytecode with full opcode handling.
-        // This must process ALL opcodes to keep stack state accurate
-        // through function bodies that contain pushes and pops.
-        // FDEF/ENDF are handled inline to register function definitions.
-        while self.ip < self.font_range.size {
-            let opcode = self.fetch_byte()?;
+        // Empty zone: fpgm runs without glyph points (C: exec->pts.n_points = 0)
+        let mut empty_zone = GlyphZone {
+            cur_x: vec![], cur_y: vec![], org_x: vec![], org_y: vec![],
+            orus_x: vec![], orus_y: vec![],
+            tags: vec![], contours: vec![],
+            n_points: 0, n_contours: 0, first_point: 0,
+        };
 
-            match opcode {
-                // Push ops
-                0x40 => { let cnt = self.fetch_byte()? as usize; for _ in 0..cnt { let b = self.fetch_byte()?; self.push(b as i32); } }
-                0x41 => { let cnt = self.fetch_byte()? as usize; for _ in 0..cnt { let hi = self.fetch_byte()? as i16; let lo = self.fetch_byte()? as i16; self.push(((hi as i32) << 8) | (lo as i32)); } }
-                0xB0..=0xB7 => { let cnt = (opcode - 0xB0 + 1) as usize; for _ in 0..cnt { let b = self.fetch_byte()?; self.push(b as i32); } }
-                0xB8..=0xBF => { let cnt = (opcode - 0xB8 + 1) as usize; for _ in 0..cnt { let hi = self.fetch_byte()? as i16; let lo = self.fetch_byte()? as i16; self.push(((hi as i32) << 8) | (lo as i32)); } }
-                // Stack ops
-                0x20|0x23|0x24|0x25|0x26|0x27 => { let _ = self.pop()?; } // DUP/SWAP/DEPTH/CINDEX/MINDEX/ALIGNPTS: handle approx
-                0x21 => { let _ = self.pop()?; } // POP
-                0x22 => self.stack.clear(), // CLEAR
-                // Math ops (pop 2, push 1)
-                0x60|0x61|0x62|0x63 => { let _ = self.pop()?; let _ = self.pop()?; self.push(0); }
-                0x64|0x65|0x66|0x67 => { let _ = self.pop()?; self.push(0); } // unary
-                // Storage/CVT
-                0x42|0x44|0x48 => { let _ = self.pop()?; let _ = self.pop()?; } // WS/WCVTP/SCFS: pop 2
-                0x43|0x45|0x46|0x47|0x49|0x4B|0x4C => { let _ = self.pop()?; self.push(0); } // RS/RCVT/GC/ROUND/MPPEM/MPS: pop 1 push 1
-                // Point ops (pop args from stack)
-                0x2E|0x2F => { let _ = self.pop()?; } // MDAP: pop 1
-                0x3E|0x3F => { let _ = self.pop()?; let _ = self.pop()?; } // MIAP: pop 2
-                0x3A|0x3C => { let _ = self.pop()?; } // ALIGNRP: pop 1
-                0x10|0x11|0x12 => { let _ = self.pop()?; } // SRP0/1/2: pop 1
-                0x17 => { let _ = self.pop()?; } // SLOOP: pop 1
-                0x1A => { let _ = self.pop()?; } // SMD: pop 1
-                0x1C => { let _ = self.pop()?; } // JMPR: pop 1
-                0x2A => { let _ = self.pop()?; let _ = self.pop()?; } // LOOPCALL: pop 2
-                0x2B => { let _ = self.pop()?; } // CALL: pop 1
-                0xC0..=0xDF => { let _ = self.pop()?; } // MDRP: pop 1
-                0xE0..=0xFF => { let _ = self.pop()?; let _ = self.pop()?; } // MIRP: pop 2
-                0x38 => { let _ = self.pop()?; let _ = self.pop()?; } // SHPIX: pop 2
-                0x39 => { let _ = self.pop()?; } // IP: pop 1 (loop times)
-                0x30|0x31 => {} // IUP: no stack change
-                0x80|0x81|0x82|0x83|0x84|0x85|0x86|0x87|0x88|0x89 => { let _ = self.pop()?; } // various pop 1
-                0x5D|0x5E|0x5F|0x71|0x72|0x73|0x74 => { let _ = self.pop()?; } // DELTAP: pop N
-                // FDEF
-                0x2C => {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let func_num = self.pop()? as u16;
-                    if (func_num as usize) < self.functions.len() {
-                        let start = self.ip;
-                        let mut depth = 1;
-                        while depth > 0 && self.ip < self.font_range.size {
-                            let b = self.fetch_byte()?;
-                            match b { 0x2C => { depth += 1; }, 0x2D => { depth -= 1; }, _ => {} }
-                        }
-                        if depth == 0 {
-                            self.functions[func_num as usize] = Some(DefRecord {
-                                range: 1, start, end: self.ip, opc: func_num, active: true,
-                            });
-                        }
-                    }
-                }
-                0x2D => { return Err(FontError::InvalidOutline("stray ENDF in fpgm".into())); }
-                // Rounding/vector/control ops: no stack change
-                _ => {}
-            }
-        }
-        // Restore GS for subsequent glyph execution
+        // Save/restore GS — fpgm may modify it but glyph programs need defaults
+        let gs_saved = self.gs.clone();
+        let result = self.run_program(&mut empty_zone);
         self.gs = gs_saved;
-        Ok(())
+        result
     }
 
     /// Run the prep program to scale CVT values for the current ppem.
@@ -325,18 +276,37 @@ impl ExecContext {
     pub fn run_prep(&mut self, prep_bytes: &[u8]) -> Result<(), FontError> {
         if prep_bytes.is_empty() { return Ok(()); }
 
-        // Set up a minimal twilight zone (16 points, like default maxTwilightPoints)
-        let twilight_sz = 16;
+        // ── TT_Load_Context equivalent (C: ttobjs.c:891-957) ──────
+        // C calls this before EVERY program execution (fpgm, prep, glyph).
+        // It resets GS, scales CVT from FU to pixel units, zeroes storage.
+        self.gs = GraphicsState::default();
+        self.gs.auto_flip = true;  // C default
+
+        // Scale CVT: face->cvt[i] / 64 → FT_MulFix(_, scale)
+        // Our CVT entries are in FU*64 from the parser. Divide by 64 to get FU.
+        // Then scale to 26.6 pixel units using y_scale.
+        for i in 0..self.cvt.len() {
+            let fu = self.cvt[i] / 64;
+            self.cvt[i] = crate::fixed::ft_mul_fix(fu, self.y_scale);
+        }
+
+        // Zero storage (C: FT_ARRAY_ZERO(exec->storage, exec->storeSize))
+        for s in &mut self.storage {
+            *s = 0;
+        }
+
+        // Zero twilight zone (C: FT_ARRAY_ZERO)
+        let n_twilight = 16; // maxTwilightPoints from maxp
         let mut twilight = GlyphZone {
-            cur_x: vec![0i32; twilight_sz], cur_y: vec![0i32; twilight_sz],
-            org_x: vec![0i32; twilight_sz], org_y: vec![0i32; twilight_sz],
-            orus_x: vec![0i32; twilight_sz], orus_y: vec![0i32; twilight_sz],
-            tags: vec![0u8; twilight_sz], contours: vec![],
-            n_points: twilight_sz as u16, n_contours: 0, first_point: 0,
+            cur_x: vec![0i32; n_twilight], cur_y: vec![0i32; n_twilight],
+            org_x: vec![0i32; n_twilight], org_y: vec![0i32; n_twilight],
+            orus_x: vec![0i32; n_twilight], orus_y: vec![0i32; n_twilight],
+            tags: vec![0u8; n_twilight], contours: vec![],
+            n_points: n_twilight as u16, n_contours: 0, first_point: 0,
         };
 
-        // Set up prep as a glyph program (cur_range=2)
-        self.stack.clear();  // fresh stack for prep
+        // Set up prep as a glyph program
+        self.stack.clear();
         self.glyph_program = prep_bytes.to_vec();
         self.ip = 0;
         self.cur_range = 2;
@@ -346,13 +316,11 @@ impl ExecContext {
         self.gs.zp1 = 0;
         self.gs.zp2 = 0;
         self.gs.set_vectors_to_y();
-        self.pedantic_hinting = false;
 
-        // Run the prep program against the twilight zone
-        // The prep program writes CVT values via WCVTP (which we handle in run_program)
+        // Run prep against twilight zone
         self.run_program(&mut twilight)?;
 
-        // Restore zone pointers for glyph execution
+        // Restore zone pointers for glyph hinting
         self.gs.zp0 = 1;
         self.gs.zp1 = 1;
         self.gs.zp2 = 1;
@@ -635,33 +603,43 @@ impl ExecContext {
                 }
 
                 // ── MDRP — Move Direct Relative Point ────────────
+                // C: Ins_MDRP at ttinterp.c:5399-5519
+                // Flag bits: round=bit2(0x04), min_dist=bit3(0x08), set_rp0=bit4(0x10)
                 0xC0..=0xDF => {
                     let p = self.pop()? as usize;
-                    // Get reference point coordinates (rp0)
                     let rp = self.gs.rp0 as usize;
-                    let (rcx, rcy) = if self.gs.zp1 == 0 {
-                        // Twilight zone — not supported yet
-                        zone.cur(rp)
+
+                    // Reference point current coords (always from cur)
+                    let (rcx, rcy) = zone.cur(rp);
+
+                    // Original distance: C uses orus for glyph zone, org for twilight
+                    let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
+                    let org_dist = if is_twilight {
+                        // Twilight zone: use org (scaled 26.6) arrays directly
+                        let (rorg_x, rorg_y) = zone.org(rp);
+                        let (oorg_x, oorg_y) = zone.org(p);
+                        self.gs.project(oorg_x - rorg_x, oorg_y - rorg_y)
                     } else {
-                        zone.cur(rp)
+                        // Glyph zone: use orus (unscaled font units), then scale
+                        let (rorus_x, rorus_y) = zone.orus(rp);
+                        let (oorus_x, oorus_y) = zone.orus(p);
+                        let du = self.gs.project(oorus_x - rorus_x, oorus_y - rorus_y);
+                        crate::fixed::ft_mul_fix(du, self.x_scale)
                     };
-                    let (rorg_x, rorg_y) = zone.org(rp);
-                    let (oorg_x, oorg_y) = zone.org(p);
 
-                    // Compute original distance along projection vector
-                    let org_dist = self.gs.project(
-                        oorg_x - rorg_x,
-                        oorg_y - rorg_y,
-                    );
+                    // Round if flag bit 2 (0x04) is set
+                    let rnd_dist = if (opcode & 0x04) != 0 {
+                        self.gs.round(org_dist)
+                    } else {
+                        org_dist
+                    };
 
-                    // Round (MDRP uses the original distance, rounds it)
-                    let rnd_dist = self.gs.round(org_dist);
-
-                    // Apply minimum distance
-                    let dist = if self.gs.minimum_distance > 0
+                    // Minimum distance if flag bit 3 (0x08) is set
+                    let dist = if (opcode & 0x08) != 0
+                        && self.gs.minimum_distance > 0
                         && rnd_dist.abs() < self.gs.minimum_distance
                     {
-                        if rnd_dist >= 0 {
+                        if org_dist >= 0 {
                             self.gs.minimum_distance
                         } else {
                             -self.gs.minimum_distance
@@ -670,58 +648,69 @@ impl ExecContext {
                         rnd_dist
                     };
 
-                    // Move the point: compute new position relative to ref
+                    // Move point along freedom vector relative to reference
                     let (dx, dy) = self.gs.move_along_free(dist);
                     zone.set_cur(p, rcx + dx, rcy + dy);
-                    zone.set_tag(p, 0x03); // TOUCH_X | TOUCH_Y
+                    zone.set_tag(p, 0x03);
 
-                    // Update rp0 to the moved point
-                    self.gs.rp0 = p as u32;
+                    // C: rp1 = rp0, rp2 = point
+                    self.gs.rp1 = rp as u32;
+                    self.gs.rp2 = p as u32;
+                    // Set rp0 if flag bit 4 (0x10) is set
+                    if (opcode & 0x10) != 0 {
+                        self.gs.rp0 = p as u32;
+                    }
                 }
 
                 // ── MIRP — Move Indirect Relative Point ──────────
+                // C: Ins_MIRP at ttinterp.c:5520-5673
+                // Flag bits same as MDRP + auto-flip
                 0xE0..=0xFF => {
-                    // pops cvt_index (deeper) then point (top)
-                    let p = self.pop()? as usize;  // top = point
-                    let cvt_idx = self.pop()? as usize;  // deeper = cvt index
+                    // Pops: point (top), cvt_index (deeper)
+                    let p = self.pop()? as usize;
+                    let cvt_idx = self.pop()? as usize;
                     let cvt_val = self.get_cvt(cvt_idx)?;
 
-                    // Get reference point
                     let rp = self.gs.rp0 as usize;
                     let (rcx, rcy) = zone.cur(rp);
-                    let (rorg_x, rorg_y) = zone.org(rp);
-                    let (oorg_x, oorg_y) = zone.org(p);
 
-                    // Compute original distance
-                    let org_dist = self.gs.project(
-                        oorg_x - rorg_x,
-                        oorg_y - rorg_y,
-                    );
+                    // Original distance: C uses orus for glyph zone
+                    let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
+                    let org_dist = if is_twilight {
+                        let (rorg_x, rorg_y) = zone.org(rp);
+                        let (oorg_x, oorg_y) = zone.org(p);
+                        self.gs.project(oorg_x - rorg_x, oorg_y - rorg_y)
+                    } else {
+                        let (rorus_x, rorus_y) = zone.orus(rp);
+                        let (oorus_x, oorus_y) = zone.orus(p);
+                        let du = self.gs.project(oorus_x - rorus_x, oorus_y - rorus_y);
+                        crate::fixed::ft_mul_fix(du, self.x_scale)
+                    };
 
                     // Round CVT value
                     let rnd_cvt = self.gs.round(cvt_val);
 
-                    // Auto-flip: if org_dist and rounded CVT have different signs
-                    let dist = if self.gs.auto_flip
-                        && (org_dist ^ rnd_cvt) < 0
-                    {
+                    // Auto-flip: C uses org_dist sign vs cvt_val, not rnd_cvt
+                    let cvt_dist = if self.gs.auto_flip && (org_dist ^ cvt_val) < 0 {
                         -rnd_cvt
                     } else {
                         rnd_cvt
                     };
 
-                    // CVT cut-in: use original distance if it's close to CVT
-                    let dist = if (org_dist - dist).abs() < self.gs.cvt_cut_in {
-                        dist
+                    // CVT cut-in: C compares |org_dist - cvt_dist|, not |org_dist - rnd_cvt|
+                    let dist = if (org_dist - cvt_dist).abs() < self.gs.cvt_cut_in {
+                        cvt_dist
                     } else {
-                        org_dist
+                        let rnd_org = if (opcode & 0x04) != 0 { self.gs.round(org_dist) } else { org_dist };
+                        rnd_org
                     };
 
-                    // Minimum distance
-                    let dist = if self.gs.minimum_distance > 0
+                    // Minimum distance (flag bit 3)
+                    let dist = if (opcode & 0x08) != 0
+                        && self.gs.minimum_distance > 0
                         && dist.abs() < self.gs.minimum_distance
                     {
-                        if dist >= 0 {
+                        if org_dist >= 0 {
                             self.gs.minimum_distance
                         } else {
                             -self.gs.minimum_distance
@@ -733,7 +722,13 @@ impl ExecContext {
                     let (dx, dy) = self.gs.move_along_free(dist);
                     zone.set_cur(p, rcx + dx, rcy + dy);
                     zone.set_tag(p, 0x03);
-                    self.gs.rp0 = p as u32;
+
+                    // C: rp1 = rp0, rp2 = point
+                    self.gs.rp1 = rp as u32;
+                    self.gs.rp2 = p as u32;
+                    if (opcode & 0x10) != 0 {
+                        self.gs.rp0 = p as u32;
+                    }
                 }
 
                 // ── ALIGNRP ───────────────────────────────────────
