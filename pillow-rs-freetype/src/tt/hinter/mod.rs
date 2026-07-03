@@ -34,6 +34,7 @@ pub mod zone;
 pub mod tables;
 pub mod gs;
 pub mod exec;
+pub mod iup;
 
 use crate::error::FontError;
 use crate::outline::OutlinePoint;
