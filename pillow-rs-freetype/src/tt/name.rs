@@ -16,8 +16,6 @@ pub struct NameTable {
 /// nameID constants we read.
 const NAME_ID_FAMILY: u16 = 1;
 const NAME_ID_SUBFAMILY: u16 = 2;
-const NAME_ID_TYPO_FAMILY: u16 = 16;
-const NAME_ID_TYPO_SUBFAMILY: u16 = 17;
 
 #[derive(Debug)]
 struct NameRecord {
@@ -56,14 +54,9 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
         });
     }
 
-    // Prefer typographic family/subfamily (nameID 16/17) over legacy (1/2).
-    // FreeType 2.14.3 uses typographic names when available via face->family_name
-    // which checks nameID 16 first, falling back to nameID 1.
-    let family = find_name_string(data, string_offset, &records, NAME_ID_TYPO_FAMILY)
-        .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_FAMILY))
+    let family = find_name_string(data, string_offset, &records, NAME_ID_FAMILY)
         .unwrap_or_else(|| "Unknown".into());
-    let subfamily = find_name_string(data, string_offset, &records, NAME_ID_TYPO_SUBFAMILY)
-        .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_SUBFAMILY))
+    let subfamily = find_name_string(data, string_offset, &records, NAME_ID_SUBFAMILY)
         .unwrap_or_else(|| "Regular".into());
 
     Ok(NameTable {
