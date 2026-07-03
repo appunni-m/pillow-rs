@@ -445,8 +445,7 @@ impl ExecContext {
     pub fn run_program(&mut self, zone: &mut GlyphZone) -> Result<(), FontError> {
         let mut step_count = 0u32;
         while self.ip < self.glyph_program.len() {
-            if step_count > 500 { return Err(FontError::InvalidOutline(
-                "bytecode: exceeded max steps".into())); }
+            if step_count > 2000 { return Err(FontError::InvalidOutline("VM: max steps".into())); }
             step_count += 1;
             let opcode = self.fetch_byte_glyph()?;
 
@@ -903,6 +902,101 @@ impl ExecContext {
                     zone.set_tag(p, 0x03);
                 }
 
+                // ── ALIGNPTS (0x27) — Align points ──────────
+                0x27 => {
+                    let p = self.pop()? as usize;
+                    let q = self.pop()? as usize;
+                    // Move p relative to q along projection vector
+                    let (qx, qy) = zone.cur(q);
+                    let (porg_x, porg_y) = zone.org(p);
+                    let (qorg_x, qorg_y) = zone.org(q);
+                    let dist = self.gs.project(porg_x - qorg_x, porg_y - qorg_y);
+                    let (dx, dy) = self.gs.move_along_free(dist);
+                    zone.set_cur(p, qx + dx, qy + dy);
+                    zone.set_tag(p, 0x03);
+                }
+                // ── CINDEX (0x25) — Copy indexed element ─────────
+                0x25 => {
+                    let k = self.pop()? as usize;
+                    if k < self.stack.len() {
+                        let v = self.stack[self.stack.len() - 1 - k];
+                        self.push(v);
+                    }
+                }
+                // ── MINDEX (0x26) — Move indexed element ─────────
+                0x26 => {
+                    let k = self.pop()? as usize;
+                    if k < self.stack.len() {
+                        let v = self.stack.remove(self.stack.len() - 1 - k);
+                        self.push(v);
+                    }
+                }
+                // ── SMD (0x1A) — Set Minimum Distance ────────────
+                0x1A => {
+                    let v = self.pop()?;
+                    self.gs.minimum_distance = v;
+                }
+                // ── FLIPPT (0x80) — Flip point ───────────────────
+                0x80 => {
+                    let p = self.pop()? as usize;
+                    // Toggle on-curve flag
+                    // We don't track this precisely, just mark touched
+                    zone.set_tag(p, 0x03);
+                }
+                // ── DELTAP1 (0x5D) — Delta exception ─────────────
+                0x5D => { let _ = self.pop()?; } // skip for now
+                // ── DELTAP2 (0x5E) ───────────────────────────────
+                0x5E => { let _ = self.pop()?; }
+                // ── DELTAP3 (0x5F) ───────────────────────────────
+                0x5F => { let _ = self.pop()?; }
+                // ── SCVTCI (0x6C) — Set CVT Cut-In ───────────────
+                0x6C => {
+                    let v = self.pop()?;
+                    self.gs.control_value_cutin = v;
+                }
+                // ── SSW (0x6E) — Set Single Width ────────────────
+                0x6E => {
+                    let v = self.pop()?;
+                    self.gs.single_width_value = v;
+                }
+                // ── SSWCI (0x6D) — Set Single Width Cut-In ───────
+                0x6D => {
+                    let v = self.pop()?;
+                    self.gs.single_width_cutin = v;
+                }
+                // ── SDB (0x8B) — Set Delta Base ──────────────────
+                0x8B => {
+                    let v = self.pop()?;
+                    self.gs.delta_base = v as u32;
+                }
+                // ── SDS (0x8A) — Set Delta Shift ─────────────────
+                0x8A => {
+                    let v = self.pop()?;
+                    self.gs.delta_shift = v as u32;
+                }
+                // ── JMPR (0x1C) — Jump Relative ──────────────────
+                0x1C => {
+                    let offset = self.pop()? - 1;
+                    self.ip = (self.ip as i32 + offset) as usize;
+                }
+                // ── JROT (0x78) — Jump Relative On True ──────────
+                0x78 => {
+                    let offset = self.pop()?;
+                    let e2 = self.pop()?;
+                    let e1 = self.pop()?;
+                    if e1 > e2 {
+                        self.ip = (self.ip as i32 + offset - 1) as usize;
+                    }
+                }
+                // ── JROF (0x79) — Jump Relative On False ─────────
+                0x79 => {
+                    let offset = self.pop()?;
+                    let e2 = self.pop()?;
+                    let e1 = self.pop()?;
+                    if e1 <= e2 {
+                        self.ip = (self.ip as i32 + offset - 1) as usize;
+                    }
+                }
                 // ── Unknown opcode ────────────────────────────
                 _ => {}
             }
