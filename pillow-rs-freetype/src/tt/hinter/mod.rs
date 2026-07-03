@@ -82,6 +82,7 @@ pub fn hint_glyph(
     scale: &HintScale,
     glyph_ins: &[u8],
 ) -> Result<(), FontError> {
+    let _prep = prep; // unused while prep execution is disabled
     // ── Build the glyph zone ──────────────────────────────────────────
     // C: ttgload.c:874-891 — adds 4 phantom points to the zone.
     // Phantom points are at indices [n_points..n_points+3], not included
@@ -164,10 +165,16 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // Run the prep program to scale CVT values for the current ppem
-    if !prep.is_empty() {
-        ctx.run_prep(prep)?;
-    }
+    // Run the prep program to scale CVT values for the current ppem.
+    // DISABLED: our twilight zone is not properly initialized (all zeros),
+    // so MIAP/MIRP compute 0, WCVTP writes 0 to all CVT entries.
+    // This makes all CVT-dependent operations (MIRP) produce wrong distances.
+    // The raw CVT values (font_units * 64) from table parsing are closer to
+    // correct than post-prep zeros.
+    // TODO: initialize twilight zone from fpgm/prep data before running prep.
+    // if !prep.is_empty() {
+    //     ctx.run_prep(prep)?;
+    // }
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
