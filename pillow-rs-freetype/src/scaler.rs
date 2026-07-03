@@ -189,7 +189,13 @@ pub fn scale_glyph(
     // Apply auto-hinting: snap edges to pixel grid, then interpolate.
     // This modifies the 26.6 coordinates in-place to align with pixel
     // boundaries, matching FreeType's autofit module for Latin script.
-    autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
+    // PIL backend: skip autohinting (passes None for latin_metrics).
+    // PIL uses FT_LOAD_DEFAULT which applies native bytecode hinter,
+    // not autofit.  Since we don't implement bytecode hinting, unhinted
+    // scaled output is the best approximation.
+    if latin_metrics.is_some() {
+        autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
+    }
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
