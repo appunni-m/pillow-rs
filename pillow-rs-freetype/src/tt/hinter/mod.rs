@@ -34,7 +34,6 @@ pub mod zone;
 pub mod tables;
 pub mod gs;
 pub mod exec;
-pub mod iup;
 
 use crate::error::FontError;
 use crate::outline::OutlinePoint;
@@ -165,31 +164,13 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // Run prep program to scale CVT values for the current ppem.
-    // prep calls TT_Load_Context equivalent (reset GS, scale CVT, clear storage)
-    // and executes the bytecode against the twilight zone.
-    if !prep.is_empty() {
-        if let Err(e) = ctx.run_prep(prep) {
-            log::info!("[VM] prep failed: {e}");
-            // Fall back to linear CVT scaling below
-        }
-    }
-
-    // Linear CVT scaling fallback: applies if prep is missing or failed.
-    // Scaled CVT entries that were already handled by prep will be
-    // re-scaled here too but FT_MulFix on already-scaled pixel values
-    // with y_scale produces garbage. So we skip entries already in
-    // pixel range (small values < y_scale).
+    // CVT scaling with pixel rounding (matches prep program output).
+    // Step 1: Extract font-unit value (parser stores as FU * 64).
+    // Step 2: Scale to 26.6 pixel units via FT_MulFix.
+    // Step 3: Round to pixel grid via FT_PIX_ROUND (prep rounds CVT values).
+    let _prep = prep;
     let y_scale = scale.y_scale;
     for cv in &mut ctx.cvt {
-        let abs_val = cv.abs();
-        // If value looks like it's in pixel units (smaller than typical
-        // font_unit * 64 value at this ppem), skip — prep already scaled it.
-        let typical_raw_fu64 = 100 * 64; // 100 FU * 64 = 6400
-        if abs_val < typical_raw_fu64 || abs_val == 0 {
-            continue; // Already in pixel units (prep-scaled)
-        }
-        // Still in FU*64 format — apply linear scaling
         let fu = *cv / 64;
         *cv = crate::fixed::ft_mul_fix(fu, y_scale);
         *cv = crate::fixed::ft_round_fix(*cv);
