@@ -964,8 +964,10 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
     if min_distance >= 64 { return; }
 
     let adjustment = 64 - min_distance;
-    // For negative min_distance, adjustment exceeds 64 which is valid.
-    if adjustment > 128 { return; }
+    // C: calculated_amount >= -2 && (calculated_amount <= 66 || adjustment_amount <= 66)
+    // (aflatin.c:3807). We don't have calculated_amount (no tilde centering),
+    // so the check simplifies to adjustment <= 66.
+    if adjustment <= -3 || adjustment > 66 { return; }
 
     // C: af_move_contours_up(hints, limit, delta)
     // Moves ENTIRE CONTOURS where y_min > limit, i.e. contours above limit
