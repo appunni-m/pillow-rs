@@ -194,12 +194,15 @@ pub fn scale_glyph(
     if latin_metrics.is_some() {
         // Autohinter path: grid-fit edges via Latin script heuristics.
         autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
+    } else if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
+        let prep_ref = data.prep.as_deref().unwrap_or(&[]);
+        let hs = crate::tt::hinter::HintScale { x_scale: scale.x_scale, y_scale: y_adj, ppem: scale.ppem };
+        let raw_pts: Vec<OutlinePoint> = shifted_raw.points.iter()
+            .map(|p| OutlinePoint { x: p.x, y: p.y, on_curve: p.on_curve }).collect();
+        if let Err(e) = crate::tt::hinter::hint_glyph(&mut scaled, &raw_pts, cvt, fpgm, prep_ref, &hs, &outline_raw.instructions) {
+            log::warn!("[VM] gi={glyph_index}: {e}");
+        }
     }
-    // Bytecode VM (crate::tt::hinter) is implemented but disabled.
-    // Produces regressions without full opcode coverage and prep program
-    // execution. Re-enable when Phase 3 (IUP + prep + remaining opcodes)
-    // is complete.
-    // else: unhinted — raw scaled coordinates (used when no bytecode tables exist)
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;

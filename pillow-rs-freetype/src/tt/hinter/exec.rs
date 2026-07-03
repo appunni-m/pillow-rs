@@ -347,34 +347,45 @@ impl ExecContext {
         Ok(())
     }
 
-    /// Run the prep program to initialize CVT values for the current ppem.
-    /// C: `tt_size_run_prep` in ttobjs.c:2257-2310, `TT_RunIns` in ttinterp.c.
-    ///
-    /// The prep program typically uses WCVTP, RCVT, PUSH, and math opcodes
-    /// to scale the raw CVT font-unit values to pixel-specific values for
-    /// the current ppem. It may also set storage values and function defs.
+    /// Run the prep program to scale CVT values for the current ppem.
+    /// C: `tt_size_run_prep` in ttobjs.c.
+    /// The prep program uses WCVTP to write pixel-specific CVT values
+    /// and may set up the twilight zone for control value scaling.
+    /// We run it with a minimal twilight zone (enough for point ops).
     pub fn run_prep(&mut self, prep_bytes: &[u8]) -> Result<(), FontError> {
-        if prep_bytes.is_empty() {
-            return Ok(());
-        }
+        if prep_bytes.is_empty() { return Ok(()); }
 
-        self.cvt_program = prep_bytes.to_vec();
-        self.ip = 0;
-        self.cur_range = 0; // CVT program range (C: tt_coderange_cvt = 0)
-
-        // C: sets up exec context carefully — scale, metrics
-        // For prep, CVT should already be in 26.6 from table parsing.
-        // The prep program uses WCVTP to write pixel-specific values.
-        // For now, treat prep like the glyph program loop.
-        let mut dummy_zone = GlyphZone {
-            cur_x: vec![], cur_y: vec![],
-            org_x: vec![], org_y: vec![],
-            orus_x: vec![], orus_y: vec![],
-            tags: vec![], contours: vec![],
-            n_points: 0, n_contours: 0, first_point: 0,
+        // Set up a minimal twilight zone (16 points, like default maxTwilightPoints)
+        let twilight_sz = 16;
+        let mut twilight = GlyphZone {
+            cur_x: vec![0i32; twilight_sz], cur_y: vec![0i32; twilight_sz],
+            org_x: vec![0i32; twilight_sz], org_y: vec![0i32; twilight_sz],
+            orus_x: vec![0i32; twilight_sz], orus_y: vec![0i32; twilight_sz],
+            tags: vec![0u8; twilight_sz], contours: vec![],
+            n_points: twilight_sz as u16, n_contours: 0, first_point: 0,
         };
 
-        self.run_program(&mut dummy_zone)?;
+        // Set up prep as a glyph program (cur_range=2)
+        self.glyph_program = prep_bytes.to_vec();
+        self.ip = 0;
+        self.cur_range = 2;
+
+        // C: prep runs with zp0=zp1=zp2=0 (twilight zone)
+        self.gs.zp0 = 0;
+        self.gs.zp1 = 0;
+        self.gs.zp2 = 0;
+        self.gs.set_vectors_to_y();
+        self.pedantic_hinting = false;
+
+        // Run the prep program against the twilight zone
+        // The prep program writes CVT values via WCVTP (which we handle in run_program)
+        self.run_program(&mut twilight)?;
+
+        // Restore zone pointers for glyph execution
+        self.gs.zp0 = 1;
+        self.gs.zp1 = 1;
+        self.gs.zp2 = 1;
+
         Ok(())
     }
 
