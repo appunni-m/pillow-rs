@@ -192,13 +192,9 @@ impl ExecContext {
     }
 
     /// Pop a value from the data stack. Returns 0 if stack is empty.
+    /// This matches C's non-pedantic mode where stack errors are ignored.
     pub fn pop(&mut self) -> Result<i32, FontError> {
-        if self.stack.is_empty() {
-            // Return 0 silently — this matches C's behavior when
-            // the interpreter is not in pedantic mode.
-            return Ok(0);
-        }
-        Ok(self.stack.pop().unwrap())
+        Ok(self.stack.pop().unwrap_or(0))
     }
 
     /// Peek at the top of the stack without removing it.
@@ -350,7 +346,11 @@ impl ExecContext {
                 0x23 => { let a = self.pop()?; let b = self.pop()?; self.push(a); self.push(b); } // SWAP
                 0x24 => { self.push(self.stack.len() as i32); } // DEPTH
                 0x25|0x26 => { let _ = self.pop()?; } // CINDEX/MINDEX
-                0x2A|0x2B|0x39|0x3C => {} // CALL/IP/ALIGNRP
+                0x2A|0x2B => {
+                    // CALL/LOOPCALL in fpgm body: pop func num, skip
+                    let _ = self.pop()?;
+                }
+                0x39|0x3C => {} // IP/ALIGNRP
                 0x3A|0x3E|0x3F => {} // ALIGNRP/MIAP
                 0x44 => { let _ = self.pop()?; let _ = self.pop()?; } // WCVTP
                 0x45 => { let _ = self.pop()?; } // RCVT

@@ -164,9 +164,25 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // Prep program disabled: twilight zone initialization needed first.
-    // See doc/BYTECODE_HINTER_IMPL.md § Phase 3.
+    // Prep program disabled: needs twilight zone initialization first.
+    // Running against uninitialized twilight zone zeroes out CVT values
+    // via WCVTP, which breaks MIRP in glyph programs.
     let _prep = prep;
+
+    // CVT scaling: without prep execution, CVT values are in font_units * 64.
+    // Scale to 26.6 pixel units so MIRP/MIAP compute correct distances.
+    // Each CVT entry is a FWORD (i16) from the font file, multiplied by 64
+    // in our parser (matching C's FT_GET_SHORT() * 64).
+    // To get 26.6 pixel units: ft_mul_fix(cvt_i16, y_scale)
+    // = ft_mul_fix(cvt_26dot6 / 64, y_scale) = (cvt_i16 * y_scale) >> 16
+    // where cvt_i16 = cvt_raw / 64 = cvt[i] / 64
+    let y_scale = scale.y_scale;
+    for cv in &mut ctx.cvt {
+        // cvt[i] is in font_units * 64. Extract the font-unit value
+        // by dividing by 64, then scale to 26.6 pixel units.
+        let fu = *cv / 64;
+        *cv = crate::fixed::ft_mul_fix(fu, y_scale);
+    }
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
@@ -176,7 +192,16 @@ pub fn hint_glyph(
     }
 
     // ── Write hinted coordinates back ──────────────────────────────────
-    for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
+    let n = n_points.min(scaled.len());
+    let y_before_0 = scaled[0].y;
+    let y_after_0 = zone.cur_y[0];
+    let y_last_before = if n > 0 { scaled[n-1].y } else { 0 };
+    let y_last_after = if n > 0 { zone.cur_y[n-1.min(zone.cur_y.len()-1)] } else { 0 };
+    if y_before_0 != y_after_0 || y_last_before != y_last_after {
+        log::debug!("[VM] y-shift: p0 {}→{} p{} {}→{}",
+            y_before_0, y_after_0, n-1, y_last_before, y_last_after);
+    }
+    for (i, pt) in scaled.iter_mut().enumerate().take(n) {
         pt.x = zone.cur_x[i];
         pt.y = zone.cur_y[i];
     }
