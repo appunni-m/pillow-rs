@@ -46,6 +46,9 @@ pub struct GlyphOutline {
     /// (matching C's loader->bbox ttgload.c:324) and lsb tracks last sub's.
     pub is_composite: bool,
     pub sub_lsb: i32,
+    /// TrueType bytecode instructions for this glyph (from glyf table).
+    /// Only populated for simple glyphs; empty for composites and empty glyphs.
+    pub instructions: Vec<u8>,
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
@@ -196,6 +199,7 @@ fn load_glyph_inner(
             ymax,
             is_composite: true,
             sub_lsb: last_sub_lsb,
+            instructions: Vec::new(),
         })
     }
 }
@@ -243,6 +247,11 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
 
     let inst_off = end_off + nc * 2;
     let instruction_length = u16::from_be_bytes([data[inst_off], data[inst_off + 1]]) as usize;
+    let instructions = if instruction_length > 0 {
+        data[inst_off + 2..inst_off + 2 + instruction_length].to_vec()
+    } else {
+        Vec::new()
+    };
     let mut pos = inst_off + 2 + instruction_length;
 
     // Decode flags with repeat compaction.
@@ -321,6 +330,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         ymax: 0,
         is_composite: false,
         sub_lsb: 0,
+        instructions,
     })
 }
 

@@ -84,6 +84,7 @@ pub fn hint_glyph(
     cvt: &[i32],
     fpgm: &[u8],
     scale: &HintScale,
+    glyph_ins: &[u8],
 ) -> Result<(), FontError> {
     // ── Build the glyph zone ──────────────────────────────────────────
     // C: ttgload.c:874-891 — adds 4 phantom points to the zone.
@@ -171,8 +172,12 @@ pub fn hint_glyph(
     // ctx.run_prep(prep)?;
 
     // ── Run the glyph's instruction stream ────────────────────────────
-    // TODO(Phase 2): Extract glyph instructions from the glyf table and
-    // run them through the bytecode VM. For now, coordinates pass through.
+    if !glyph_ins.is_empty() {
+        ctx.set_glyph_program(glyph_ins);
+        // Set up default vectors for glyph execution (C: SVTCA[y] at start)
+        ctx.gs.set_vectors_to_y();
+        ctx.run_program(&mut zone)?;
+    }
 
     // ── Write hinted coordinates back ──────────────────────────────────
     for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
