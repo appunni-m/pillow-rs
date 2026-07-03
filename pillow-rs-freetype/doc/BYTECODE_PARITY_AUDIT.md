@@ -234,11 +234,14 @@ Find first_touched, last_touched (global)
 Linear interpolation from last to first using cur deltas: frac = k/n * delta
 ```
 
-**Status: ❌ DIVERGENT** — completely different algorithm. Needs:
-- Per-contour walk using zone.contours data
-- ORUS-based ratio computation (not CUR deltas)
-- Per-segment interpolation (not single start-to-end)
-- Single-touched contour handling
+**Status: ✅ VERIFIED** (58a8ae8) — ported from pillow-rs-font-legacy-attempt/iup.rs.
+Matches C exactly:
+- Per-contour walk using zone.contours endpoints
+- ORUS (original unscaled) for interpolation ratio
+- Per-segment interpolation between consecutive touched points
+- Single-touched contour uniform shift (iup_shift)
+- Wrap-around handling (last→end and start→first)
+- FT_MulDiv_No_Round for ratio computation
 
 ---
 
@@ -267,7 +270,7 @@ Linear interpolation from last to first using cur deltas: frac = k/n * delta
 | 0x2C | FDEF | 3266 | ✅ VERIFIED (handled in run_program) |
 | 0x2D | ENDF | 3351 | ✅ VERIFIED |
 | 0x2E-0x2F | MDAP | 5276-5315 | ✅ VERIFIED — rounds point, optional rp0 set |
-| 0x30-0x31 | IUP | 6189 | ❌ DIVERGENT — see §6 |
+| 0x30-0x31 | IUP | 6189 | ✅ VERIFIED — delegates to hinter/iup.rs |
 | 0x32-0x37 | SHP | 5159 | ✅ VERIFIED — shift rp2 relative to rpX |
 | 0x38 | SHPIX | 5228 | ✅ VERIFIED — shift by popped amount |
 | 0x39 | IP | 5854 | 🚧 Basic — interpolates between rp1/rp2 |
@@ -311,6 +314,6 @@ Linear interpolation from last to first using cur deltas: frac = k/n * delta
 | Divergent | 1 | ❌ IUP |
 | Stub (noop) | 2 | 🚧 DELTAP |
 
-**Overall: 55/60 (92%) opcodes verified matching C.**
+**Overall: 56/60 (93%) opcodes verified matching C.**
 Remaining work: IUP rewrite (~200 lines), ALIGNRP C-accurate (~20 lines),
 IP complete (~20 lines), DELTAP (~50 lines).
