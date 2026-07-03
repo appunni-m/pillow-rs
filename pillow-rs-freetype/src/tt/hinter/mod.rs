@@ -164,22 +164,20 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // Prep program disabled: needs full twilight zone + MIAP/MIRP chain
-    // to correctly scale CVT values. Manual linear approximation below.
-    // Prep programs use twilight points as temporary registers during
-    // CVT scaling — without proper twilight zone initialization, MIAP
-    // writes garbage to twilight which propagates to CVT via WCVTP.
+    // Prep execution disabled — twilight zone operations need MIRP/MDRP
+    // that use correct vector projection and distance computation on
+    // zero-initialized twilight points. We get garbage output because
+    // MIRP in prep computes wrong relative distances on (0,0) points.
     let _prep = prep;
+    let cvt_scaled_by_prep = false;
 
-    // CVT scaling: without prep execution, CVT values are in font_units * 64.
-    // Scale linearly to 26.6 pixel units. This is an approximation — the
-    // real prep program applies rounding mode adjustments. The difference
-    // manifests as 1-2px errors in MIRP/MIAP that reference CVT values.
-    let y_scale = scale.y_scale;
-    for cv in &mut ctx.cvt {
-        // cvt[i] = font_units * 64. Extract FU by dividing by 64, then scale.
-        let fu = *cv / 64;
-        *cv = crate::fixed::ft_mul_fix(fu, y_scale);
+    // Linear CVT scaling from font_units*64 to 26.6 pixel units.
+    if !cvt_scaled_by_prep {
+        let y_scale = scale.y_scale;
+        for cv in &mut ctx.cvt {
+            let fu = *cv / 64;
+            *cv = crate::fixed::ft_mul_fix(fu, y_scale);
+        }
     }
 
     // ── Run the glyph's instruction stream ────────────────────────────

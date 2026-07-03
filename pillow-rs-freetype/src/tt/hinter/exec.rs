@@ -352,7 +352,7 @@ impl ExecContext {
                 }
                 0x39|0x3C => {} // IP/ALIGNRP
                 0x3A|0x3E|0x3F => {} // ALIGNRP/MIAP
-                0x44 => { let _ = self.pop()?; let _ = self.pop()?; } // WCVTP
+                0x44 => { let _ = self.pop()?; let _ = self.pop()?; } // WCVTP (correct: top=val, deeper=idx)
                 0x45 => { let _ = self.pop()?; } // RCVT
                 0x46|0x47 => { let _ = self.pop()?; } // GC
                 0x48 => { let _ = self.pop()?; let _ = self.pop()?; } // SCFS
@@ -564,9 +564,9 @@ impl ExecContext {
 
                 // ── Storage ──────────────────────────────────────
                 0x42 => {
-                    // WS: Write Storage — pops value then index
-                    let idx = self.pop()? as usize;
-                    let val = self.pop()?;
+                    // WS: pops index (deeper) then value (top)
+                    let val = self.pop()?;  // top = value
+                    let idx = self.pop()? as usize;  // deeper = index
                     self.set_storage(idx, val)?;
                 }
                 0x43 => {
@@ -578,9 +578,10 @@ impl ExecContext {
 
                 // ── CVT ──────────────────────────────────────────
                 0x44 => {
-                    // WCVTP: Write CVT in pixels — pops value then index
-                    let idx = self.pop()? as usize;
-                    let val = self.pop()?;
+                    // WCVTP: pops index (deeper) then value (top)
+                    // Stack before: [..., index, value] where value is top
+                    let val = self.pop()?;  // top = value
+                    let idx = self.pop()? as usize;  // deeper = index
                     self.set_cvt(idx, val)?;
                 }
                 0x45 => {
@@ -644,10 +645,9 @@ impl ExecContext {
 
                 // ── SCFS — Set Coordinate From Stack ─────────────
                 0x48 => {
-                    // Pops value then point num. Sets cur coords
-                    // along freedom vector relative to original position
-                    let p = self.pop()? as usize;
-                    let val = self.pop()?;
+                    // pops point (deeper) then value (top)
+                    let val = self.pop()?;  // top = value
+                    let p = self.pop()? as usize;  // deeper = point
                     // Move point along freedom vector to match the value
                     let (ox, oy) = zone.org(p);
                     let old_proj = self.gs.project(ox, oy);
@@ -676,9 +676,9 @@ impl ExecContext {
 
                 // ── MIAP — Move Indirect Absolute Point ──────────
                 0x3E | 0x3F => {
-                    // MIAP[0]/MIAP[1]: round to CVT, set rp0
-                    let cvt_idx = self.pop()? as usize;
-                    let p = self.pop()? as usize;
+                    // pops cvt_index (deeper) then point (top)
+                    let p = self.pop()? as usize;  // top = point
+                    let cvt_idx = self.pop()? as usize;  // deeper = cvt index
                     let cvt_val = self.get_cvt(cvt_idx)?;
                     let (cx, cy) = zone.cur(p);
                     // Project original and current coords onto freedom vector
@@ -742,8 +742,9 @@ impl ExecContext {
 
                 // ── MIRP — Move Indirect Relative Point ──────────
                 0xE0..=0xFF => {
-                    let cvt_idx = self.pop()? as usize;
-                    let p = self.pop()? as usize;
+                    // pops cvt_index (deeper) then point (top)
+                    let p = self.pop()? as usize;  // top = point
+                    let cvt_idx = self.pop()? as usize;  // deeper = cvt index
                     let cvt_val = self.get_cvt(cvt_idx)?;
 
                     // Get reference point
@@ -881,8 +882,32 @@ impl ExecContext {
                 }
 
                 // ── Control flow ──────────────────────────────────
+                // SLOOP (0x17): set loop counter
+                0x17 => {
+                    let v = self.pop()?;
+                    self.gs.loop_counter = v;
+                }
+                // LOOPCALL (0x2A): pop count (deeper), func_num (top)
+                0x2A => {
+                    let func_num = self.pop()? as u16;  // top
+                    let count = self.pop()?;  // deeper
+                    if (func_num as usize) < self.functions.len() {
+                        if let Some(ref def) = self.functions[func_num as usize] {
+                            if def.active {
+                                self.call_stack.push(CallRecord {
+                                    caller_range: self.cur_range,
+                                    caller_ip: self.ip,
+                                    cur_count: count,
+                                    def_index: func_num as usize,
+                                });
+                                self.ip = def.start;
+                                self.cur_range = def.range;
+                            }
+                        }
+                    }
+                }
+                // CALL (0x2B): pop function number from top of stack
                 0x2B => {
-                    // CALL: pop function number, push return IP, jump
                     let func_num = self.pop()? as u16;
                     if (func_num as usize) < self.functions.len() {
                         if let Some(ref def) = self.functions[func_num as usize] {
@@ -926,9 +951,9 @@ impl ExecContext {
 
                 // ── SHPIX — Shift Pixel ───────────────────────────
                 0x38 => {
-                    // SHPIX: shift point(s) by the popped amount
-                    let amount = self.pop()?;
-                    let p = self.pop()? as usize;
+                    // pops point (deeper) then amount (top)
+                    let p = self.pop()? as usize;  // deeper = point
+                    let amount = self.pop()?;  // top = amount
                     let (dx, dy) = self.gs.move_along_free(amount);
                     let (cx, cy) = zone.cur(p);
                     zone.set_cur(p, cx + dx, cy + dy);
@@ -1008,20 +1033,20 @@ impl ExecContext {
                     let offset = self.pop()? - 1;
                     self.ip = (self.ip as i32 + offset) as usize;
                 }
-                // ── JROT (0x78) — Jump Relative On True ──────────
+                // ── JROT (0x78) — pops e1(top), e2, offset(deeper)
                 0x78 => {
-                    let offset = self.pop()?;
+                    let e1 = self.pop()?;  // top
                     let e2 = self.pop()?;
-                    let e1 = self.pop()?;
+                    let offset = self.pop()?;  // deeper
                     if e1 > e2 {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
                 }
-                // ── JROF (0x79) — Jump Relative On False ─────────
+                // ── JROF (0x79) — pops e1(top), e2, offset(deeper)
                 0x79 => {
-                    let offset = self.pop()?;
+                    let e1 = self.pop()?;  // top
                     let e2 = self.pop()?;
-                    let e1 = self.pop()?;
+                    let offset = self.pop()?;  // deeper
                     if e1 <= e2 {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
