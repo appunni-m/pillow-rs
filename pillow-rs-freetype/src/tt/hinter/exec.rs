@@ -9,7 +9,6 @@
 //! pointer, code ranges, and the glyph zones being hinted.
 
 use super::gs::GraphicsState;
-use super::gs::RoundMode;
 use super::zone::GlyphZone;
 use crate::error::FontError;
 use crate::fixed::{ft_mul_fix, ft_floor_fix, ft_ceil_fix, ft_div_fix};
@@ -358,7 +357,8 @@ impl ExecContext {
                 0x46|0x47 => { let _ = self.pop()?; } // GC
                 0x48 => { let _ = self.pop()?; let _ = self.pop()?; } // SCFS
                 0x49 => { let v = self.pop()?; let r = self.gs.round(v); self.push(r); } // ROUND
-                0x4B => { self.push(self.ppem); } // MPPEM
+                0x4B => { self.push(self.ppem * 64); } // MPPEM (26.6 format)
+                0x4C => { self.push(self.ppem * 64); } // MPS (same as MPPEM at 72dpi)
                 0x58|0x1B|0x59 => {} // IF/ELSE/EIF
                 0x5B => { let b = self.pop()?; let a = self.pop()?; self.push(if a!=0||b!=0 {1} else {0}); } // OR
                 0x60 => { let b = self.pop()?; let a = self.pop()?; self.push(a+b); } // ADD
@@ -612,18 +612,8 @@ impl ExecContext {
                     self.gs.rp2 = p as u32;
                 } // SRP2
 
-                // ── Rounding mode ────────────────────────────────
-                0x3D => { self.gs.round_state = RoundMode::Grid; } // RTG
-                0x7C => { self.gs.round_state = RoundMode::HalfGrid; } // RTHG
-                0x7D => { self.gs.round_state = RoundMode::DownToGrid; } // RDTG
-                0x7E => { self.gs.round_state = RoundMode::UpToGrid; } // RUTG
-                0x18 => { self.gs.round_state = RoundMode::Off; } // RTDG/ROFF
-
-                // ── MPPEM ────────────────────────────────────────
-                0x4B => {
-                    // Push pixels per em
-                    self.push(self.ppem);
-                }
+                // ── MPPEM / MPS ────────────────────────────────
+                0x4B|0x4C => { self.push(self.ppem * 64); } // 26.6 format
 
                 // ── ROUND ────────────────────────────────────────
                 0x49 => {
