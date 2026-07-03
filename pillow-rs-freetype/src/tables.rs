@@ -24,4 +24,10 @@ pub struct FontData {
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
     pub size_pt: f32,
+    /// Font program bytecode (fpgm table). Optional — not all fonts have bytecode.
+    pub fpgm: Option<Vec<u8>>,
+    /// CVT program bytecode (prep table). Optional.
+    pub prep: Option<Vec<u8>>,
+    /// Control Value Table (cvt table) in 26.6 format. Optional.
+    pub cvt: Option<Vec<i32>>,
 }
