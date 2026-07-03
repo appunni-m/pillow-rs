@@ -192,12 +192,11 @@ pub fn scale_glyph(
     // FreeType backend (metrics=Some): use Latin autohinter.
     // If neither is available, use unhinted scaled coordinates.
     if latin_metrics.is_some() {
-        // Autohinter path: grid-fit edges via Latin script heuristics.
         autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
-    } else if let (Some(ref _fpgm), Some(ref _cvt)) = (&data.fpgm, &data.cvt) {
-        // VM disabled: needs opcode verification before re-enabling
-        // crate::tt::hinter::hint_glyph(&mut scaled, ...)
     }
+    // Bytecode VM (crate::tt::hinter): fully built (50+ opcodes) but disabled.
+    // Produces regressions vs PIL baseline until prep execution is fixed.
+    // See doc/BYTECODE_HINTER_IMPL.md for status.
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
