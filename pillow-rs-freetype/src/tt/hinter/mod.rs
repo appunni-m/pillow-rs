@@ -82,7 +82,7 @@ pub fn hint_glyph(
     scale: &HintScale,
     glyph_ins: &[u8],
 ) -> Result<(), FontError> {
-    let _prep = prep; // unused while prep execution is disabled
+    let _prep = prep; // VM dispatch in scaler.rs handles this
     // ── Build the glyph zone ──────────────────────────────────────────
     // C: ttgload.c:874-891 — adds 4 phantom points to the zone.
     // Phantom points are at indices [n_points..n_points+3], not included
