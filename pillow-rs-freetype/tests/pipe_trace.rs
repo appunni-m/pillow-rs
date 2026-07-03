@@ -28,7 +28,7 @@ fn trace_one_glyph() {
     let gid = fd.cmap.char_index(ch as u32).unwrap();
 
     let raw = tt::glyf::load_glyph(
-        &fd.glyf_data, &fd.loca_data, fd.head.index_to_loc_format, gid
+        &fd.glyf_data, &fd.loca_data, fd.head.index_to_loc_format, gid, &fd.hmtx
     ).unwrap();
 
     let base_scale = scaler::ScaleMetrics::new(size_pt, fd.head.units_per_em);
@@ -40,6 +40,8 @@ fn trace_one_glyph() {
             x: p.x - pp1x_fu, ..*p
         }).collect(),
         xmin: 0, ymin: 0, xmax: 0, ymax: 0,
+        is_composite: raw.is_composite,
+        sub_lsb: raw.sub_lsb,
     };
 
     let metrics = font.face_globals.get_metrics(gid);
@@ -55,7 +57,7 @@ fn trace_one_glyph() {
     latin::apply_hints(
         &mut outline, &shifted_raw,
         x_adj, y_adj_new, 0, 0,
-        gid as u16, metrics.as_ref(), is_italic,
+        gid as u16, metrics.as_ref(), is_italic, Some(&fd),
     );
 
     let font2 = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
