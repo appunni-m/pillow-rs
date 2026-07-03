@@ -337,10 +337,42 @@ impl ExecContext {
                         "bytecode: stray ENDF in font program".into(),
                     ));
                 }
-                _ => {
-                    // Ignore other opcodes during fpgm execution
-                    // (storage setup, etc. that fpgm may contain)
-                }
+                // ── Fpgm body opcodes (function body instructions) ──
+                0x00|0x01|0x06|0x07 => {} // SVTCA
+                0x02|0x03|0x04|0x05|0x08|0x09|0x0A|0x0B|0x0E => {} // vectors
+                0x10|0x11|0x12 => { let _ = self.pop()?; } // SRP0/1/2
+                0x17 => { let _ = self.pop()?; } // SLOOP
+                0x18|0x19|0x3D|0x7C|0x7D|0x7E|0x7F => {} // rounding
+                0x1A => { let _ = self.pop()?; } // SMD
+                0x1C => { let _ = self.pop()?; } // JMPR
+                0x20 => { if let Ok(v) = self.top() { self.push(v); } } // DUP
+                0x21 => { let _ = self.pop()?; } // POP
+                0x22 => self.stack.clear(), // CLEAR
+                0x23 => { let a = self.pop()?; let b = self.pop()?; self.push(a); self.push(b); } // SWAP
+                0x24 => { self.push(self.stack.len() as i32); } // DEPTH
+                0x25|0x26 => { let _ = self.pop()?; } // CINDEX/MINDEX
+                0x2A|0x2B|0x39|0x3C => {} // CALL/IP/ALIGNRP
+                0x3A|0x3E|0x3F => {} // ALIGNRP/MIAP
+                0x44 => { let _ = self.pop()?; let _ = self.pop()?; } // WCVTP
+                0x45 => { let _ = self.pop()?; } // RCVT
+                0x46|0x47 => { let _ = self.pop()?; } // GC
+                0x48 => { let _ = self.pop()?; let _ = self.pop()?; } // SCFS
+                0x49 => { let v = self.pop()?; let r = self.gs.round(v); self.push(r); } // ROUND
+                0x4B => { self.push(self.ppem); } // MPPEM
+                0x58|0x1B|0x59 => {} // IF/ELSE/EIF
+                0x5B => { let b = self.pop()?; let a = self.pop()?; self.push(if a!=0||b!=0 {1} else {0}); } // OR
+                0x60 => { let b = self.pop()?; let a = self.pop()?; self.push(a+b); } // ADD
+                0x61 => { let b = self.pop()?; let a = self.pop()?; self.push(a-b); } // SUB
+                0x62 => { let b = self.pop()?; let a = self.pop()?; if b==0 {self.push(0)} else {self.push(ft_div_fix(a,b));} } // DIV
+                0x63 => { let b = self.pop()?; let a = self.pop()?; self.push(ft_mul_fix(a,b)); } // MUL
+                0x64 => { let a = self.pop()?; self.push(a.abs()); } // ABS
+                0x65 => { let a = self.pop()?; self.push(-a); } // NEG
+                0x66 => { let a = self.pop()?; self.push(ft_floor_fix(a)); } // FLOOR
+                0x67 => { let a = self.pop()?; self.push(ft_ceil_fix(a)); } // CEILING
+                0x50..=0x55 => { let _ = self.pop()?; let _ = self.pop()?; } // comparisons
+                0xC0..=0xDF|0xE0..=0xFF => { let _ = self.pop()?; } // MDRP/MIRP
+                0x30|0x31 => {} // IUP
+                _ => {}
             }
         }
 
@@ -955,11 +987,7 @@ impl ExecContext {
                     zone.set_tag(p, 0x03);
                 }
                 // ── DELTAP1 (0x5D) — Delta exception ─────────────
-                0x5D => { let _ = self.pop()?; } // skip for now
-                // ── DELTAP2 (0x5E) ───────────────────────────────
-                0x5E => { let _ = self.pop()?; }
-                // ── DELTAP3 (0x5F) ───────────────────────────────
-                0x5F => { let _ = self.pop()?; }
+                0x5D | 0x71 | 0x72 => { let _ = self.pop()?; } // DELTAP1/2/3
                 // ── SCVTCI (0x6C) — Set CVT Cut-In ───────────────
                 0x6C => {
                     let v = self.pop()?;
@@ -1008,6 +1036,105 @@ impl ExecContext {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
                 }
+                // ── SFVTL (0x08-0x09) — Set Freedom Vector To Line ──
+                0x08 | 0x09 => {
+                    // Sets freedom vector to be parallel to line from rp1 to rp2
+                    let p1 = self.gs.rp1 as usize;
+                    let p2 = self.gs.rp2 as usize;
+                    let (x1, y1) = if self.gs.zp1 == 0 { zone.cur(p1) } else { zone.org(p1) };
+                    let (x2, y2) = if self.gs.zp2 == 0 { zone.cur(p2) } else { zone.org(p2) };
+                    let dx = x2 - x1;
+                    let dy = y2 - y1;
+                    // Project (dx,dy) onto freedom vector as 2.14 fixed
+                    if dx == 0 && dy == 0 {} else {
+                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
+                        if len > 0 {
+                            self.gs.freedom_vector = (
+                                ((dx as i64 * 0x4000 / len) as i32),
+                                ((dy as i64 * 0x4000 / len) as i32)
+                            );
+                        }
+                    }
+                }
+                // ── SPVFS (0x0A) — Set Proj Vector From Stack ──────
+                0x0A => {
+                    let y = self.pop()?;
+                    let x = self.pop()?;
+                    self.gs.proj_vector = (x, y);
+                }
+                // ── SFVFS (0x0B) — Set Freedom Vector From Stack ────
+                0x0B => {
+                    let y = self.pop()?;
+                    let x = self.pop()?;
+                    self.gs.freedom_vector = (x, y);
+                }
+                // ── SFVTPV (0x0E) — Set Freedom Vector To Proj Vector ─
+                0x0E => {
+                    self.gs.freedom_vector = self.gs.proj_vector;
+                }
+                // ── DEPTH (0x24) — Push stack depth ─────────────────
+                0x24 => {
+                    self.push(self.stack.len() as i32);
+                }
+                // ── IP (0x39) — Interpolate Point ───────────────────
+                0x39 => {
+                    // Interpolate a point between rp1 and rp2 relative
+                    // to their original positions
+                    let loop_count = self.gs.loop_counter;
+                    let rp1 = self.gs.rp1 as usize;
+                    let rp2 = self.gs.rp2 as usize;
+                    let (r1_ox, r1_oy) = zone.org(rp1);
+                    let (r2_ox, r2_oy) = zone.org(rp2);
+                    let (r1_cx, r1_cy) = zone.cur(rp1);
+                    let (r2_cx, r2_cy) = zone.cur(rp2);
+                    let orig_dist = self.gs.project(r2_ox - r1_ox, r2_oy - r1_oy);
+                    let cur_dist = self.gs.project(r2_cx - r1_cx, r2_cy - r1_cy);
+                    for _ in 0..loop_count {
+                        let p = self.pop()? as usize;
+                        let (ox, oy) = zone.org(p);
+                        let p_orig_dist = self.gs.project(ox - r1_ox, oy - r1_oy);
+                        let frac = if orig_dist != 0 { (p_orig_dist * cur_dist) / orig_dist } else { 0 };
+                        let (dx, dy) = self.gs.move_along_free(frac);
+                        zone.set_cur(p, r1_cx + dx, r1_cy + dy);
+                        zone.set_tag(p, 0x03);
+                    }
+                }
+                // ── AlignRP (0x3C) — Align to Reference Point ───────
+                0x3C => {
+                    // Same as 0x3A but uses zp1 for reference
+                    let p = self.pop()? as usize;
+                    let rp = self.gs.rp0 as usize;
+                    let start = rp.min(p);
+                    let end = rp.max(p);
+                    let (rcx, rcy) = zone.cur(rp);
+                    for i in start..=end {
+                        if i == rp { continue; }
+                        let (org_x, org_y) = zone.org(i);
+                        let (rorg_x, rorg_y) = zone.org(rp);
+                        let orig_rel = self.gs.project(org_x - rorg_x, org_y - rorg_y);
+                        let rnd_rel = self.gs.round(orig_rel);
+                        let (dx, dy) = self.gs.move_along_free(rnd_rel);
+                        zone.set_cur(i, rcx + dx, rcy + dy);
+                        zone.set_tag(i, 0x03);
+                    }
+                }
+                // ── LT (0x50) — Less Than ───────────────────────────
+                0x50 => { let b = self.pop()?; let a = self.pop()?; self.push(if a < b {1} else {0}); }
+                // ── LTEQ (0x51) ─────────────────────────────────────
+                0x51 => { let b = self.pop()?; let a = self.pop()?; self.push(if a <= b {1} else {0}); }
+                // ── GT (0x52) ───────────────────────────────────────
+                0x52 => { let b = self.pop()?; let a = self.pop()?; self.push(if a > b {1} else {0}); }
+                // ── GTEQ (0x53) ─────────────────────────────────────
+                0x53 => { let b = self.pop()?; let a = self.pop()?; self.push(if a >= b {1} else {0}); }
+                // ── EQ (0x54) ───────────────────────────────────────
+                0x54 => { let b = self.pop()?; let a = self.pop()?; self.push(if a == b {1} else {0}); }
+                // ── NEQ (0x55) ──────────────────────────────────────
+                0x55 => { let b = self.pop()?; let a = self.pop()?; self.push(if a != b {1} else {0}); }
+                // ── OR (0x5B) — Logical OR ──────────────────────────
+                0x5B => { let b = self.pop()?; let a = self.pop()?; self.push(if a != 0 || b != 0 {1} else {0}); }
+                // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
+                0x81 => { let _ = self.pop()?; } // FLIPRGON
+                0x82 => { let _ = self.pop()?; } // FLIPRGOFF
                 // ── Unknown opcode ────────────────────────────
                 _ => {}
             }
