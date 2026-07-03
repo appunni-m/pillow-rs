@@ -161,20 +161,17 @@ pub fn hint_glyph(
 
     // Run the font program to set up function definitions
     if !fpgm.is_empty() {
-ctx.run_fpgm()?;
+        ctx.run_fpgm()?;
     }
 
-    // Run the prep program to scale CVT values for the current ppem.
-    // The prep program uses WCVTP to write pixel-specific CVT values.
-    // This modifies ctx.cvt in place, which the glyph program then uses.
-    // TODO(Phase 3): Fix run_prep — currently fails silently on complex prep data
+    // Run the prep program to scale CVT values for the current ppem
     if !prep.is_empty() {
-        // ctx.run_prep(prep)?;
+        ctx.run_prep(prep)?;
     }
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
-ctx.set_glyph_program(glyph_ins);
+        ctx.set_glyph_program(glyph_ins);
         ctx.gs.set_vectors_to_y();
         ctx.run_program(&mut zone)?;
     }
