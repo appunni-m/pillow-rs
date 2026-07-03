@@ -65,15 +65,11 @@ fn get_text(row: &MatrixRow) -> String {
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-#[test]
-fn test_coverage_matrix_freetype() {
-    // 8-font Latin matrix: getmask + getbbox + getmetrics + getname + getlength
-    run_unified("coverage_matrix_ft.json", BitmapBackend::FreeType);
-}
-
-// Full 55-script comparison is handled by tests/direct_ft_compare.rs
-// which compares pixel SHA-256 against the live vendored C binary.
-// No fixture needed — the C binary is the oracle.
+/// Full 55-script pixel-level comparison against the live vendored C binary is
+/// handled by `tests/direct_ft_compare.rs` — no static fixtures needed.
+///
+/// The PIL backend test below compares our Rust PIL emulation against
+/// pre-computed Python Pillow 12.2.0 output (coverage_matrix.json).
 
 #[test]
 fn test_coverage_matrix_pil() {
