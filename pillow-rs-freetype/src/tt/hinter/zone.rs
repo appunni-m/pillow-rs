@@ -84,11 +84,11 @@ impl GlyphZone {
         self.tags[idx]
     }
 
-    /// Set the tag byte for a point.
+    /// OR bits into the tag byte for a point (accumulates touch flags).
     #[inline]
     pub fn set_tag(&mut self, idx: usize, tag: u8) {
         if idx < self.tags.len() {
-            self.tags[idx] = tag;
+            self.tags[idx] |= tag;
         }
     }
 

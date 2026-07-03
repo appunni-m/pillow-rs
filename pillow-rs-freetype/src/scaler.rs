@@ -188,15 +188,11 @@ pub fn scale_glyph(
     }
 
     // ── Hinting dispatch ────────────────────────────────────────────────
-    // PIL backend (metrics=None): try bytecode interpreter first.
-    // FreeType backend (metrics=Some): use Latin autohinter.
-    // If neither is available, use unhinted scaled coordinates.
     if latin_metrics.is_some() {
         autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
     }
-    // Bytecode VM (crate::tt::hinter): fully built (50+ opcodes) but disabled.
-    // Produces regressions vs PIL baseline until prep execution is fixed.
-    // See doc/BYTECODE_HINTER_IMPL.md for status.
+    // Bytecode VM disabled pending twilight zone + prep + CVT chain fix.
+    // See doc/BYTECODE_HINTER_IMPL.md § Phase 3.
 
     // FT_Outline_Get_CBox: raw 26.6 min/max of the (hinted) points.
     let mut x_min = scaled[0].x;
