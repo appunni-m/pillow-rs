@@ -6,231 +6,458 @@ Match Python Pillow's `ImageFont.getmask()` / `getbbox()` pixel output. Pillow
 uses `FT_LOAD_DEFAULT` which activates FreeType's native TrueType bytecode
 interpreter. Our code didn't have one. We built one.
 
-## TrueType Bytecode 101
+---
 
-A TrueType font with bytecode has three tables:
+## 1. TrueType Bytecode Architecture (C Reference)
+
+### 1.1 The Three Programs
+
+A TrueType font with bytecode has three separate bytecode streams:
+
+| Table | When Executed | What It Does |
+|---|---|---|
+| `fpgm` | Once at face load | Defines functions (FDEF/ENDF). Stack: push params, FDEF pops func#. Function bodies contain actual opcodes CALL'd later. |
+| `prep` | Each ppem change | Scales CVT from font units → pixel units. Uses WCVTP to write values. Runs against twilight zone (scratch area). |
+| Glyph ins | Each glyph render | Grid-fits the glyph outline. Uses MIRP/MDRP with CVT references, IUP to smooth untouched points. |
+
+### 1.2 C Execution Pipeline (Exact Order)
+
+From `ttobjs.c` and `ttgload.c`:
 
 ```
-fpgm (Font Program)  — Executed once at face load. Defines functions (FDEF/ENDF).
-                       Uses NPUSHB/NPUSHW to push function numbers and parameters
-                       onto the stack, then FDEF pops the function number and records
-                       the bytecode range. Function bodies contain actual hinting
-                       opcodes that get CALL'd by glyph programs.
+tt_size_init_bytecode()
+├── Allocates twilight zone (maxTwilightPoints + 4 phantom points)
+├── tt_size_run_fpgm(size)
+│   ├── TT_Load_Context(exec, face, size)  ← RESETS everything
+│   ├── TT_Set_CodeRange(exec, tt_coderange_font, fpgm, fpgm_len)
+│   ├── exec->pts.n_points = 0; exec->pts.n_contours = 0;  ← no points!
+│   ├── TT_Run_Context(exec, size)  ← executes on EMPTY zone
+│   └── TT_Save_Context(exec, size)  ← saves GS/storage after fpgm
+│
+├── [CVT loaded from file: FT_GET_SHORT() * 64 for each entry]
+│
+└── [Prep NOT run here — run later on first glyph load]
 
-prep (CVT Program)   — Executed each time ppem changes. Scales the Control Value
-                       Table (CVT) from font design units to pixel units for the
-                       current size. Uses WCVTP to write scaled values. Must run
-                       against a twilight zone (scratch point array).
+tt_size_run_prep(size)  ← called on first glyph, and when ppem changes
+├── Splits exec->pts into twilight zone
+├── TT_Load_Context(exec, face, size)  ← RESETS GS + storage to POST-FPGM saved state
+├── TT_Set_CodeRange(exec, tt_coderange_cvt, prep_bytes, prep_len)
+├── TT_Run_Context(exec, size)  ← executes against twilight zone
+├── [CVT values are modified in place by WCVTP opcode]
+└── [GS changes persist into subsequent glyph execution]
 
-cvt  (Control Value Table) — Array of i16 FWORD values. Each is a reference
-                       distance in font units (stem width, x-height, cap height,
-                       etc.). Parsed as `i16 * 64` in 26.6 format. Prep scales
-                       them to pixel units; glyph programs reference them via
-                       RCVT for MIRP/MIAP.
+TT_Hint_Glyph(loader)
+├── Copies cur → org (for "original" reference)
+├── Rounds phantom points (pp1-pp4) to pixel grid
+├── If composite: sets scale to 1:1, copies orus → cur
+├── TT_Set_CodeRange(exec, tt_coderange_glyph, glyph_ins, ins_len)
+├── exec->pts = loader->zone  ← zone with real glyph points + phantoms
+├── TT_Run_Context(exec, size)  ← executes glyph program
+└── Saves phantom points back to loader->pp1..pp4
 ```
 
-Glyph bytecode lives in each glyph's `glyf` table entry, between the contour
-endpoints and the coordinate data. Length is a u16 at `glyf[10 + nc*2]`.
+### 1.3 The Critical `TT_Load_Context` Function
 
-## Stack Convention (Critical Bug We Found and Fixed)
+C's `TT_Load_Context` (ttobjs.c:891-957):
 
-FreeType's bytecode calling convention:
-```
-Pop_Push_Count[opcode] = (pops << 4) | pushes
-
-For two-argument opcodes like WCVTP:
-  Stack before: [..., index, value]   (value is on TOP)
-  args[0] = value   (first popped = top of stack)
-  args[1] = index  (second popped = below top)
-```
-
-Our Rust code uses `Vec::pop()` which removes from the END (top). For two-arg
-opcodes, we initially popped index first (deeper) then value (top), which
-SWAPPED them. Fixed in commit d02d15b.
-
-Fixed opcodes: WCVTP (0x44), WS (0x42), SCFS (0x48), SHPIX (0x38),
-MIRP (0xE0-FF), MIAP (0x3E/3F), LOOPCALL (0x2A), JROT/JROF (0x78/0x79).
-
-## Rounding Opcode Map (Another Bug We Found and Fixed)
-
-The TrueType rounding opcodes were swapped:
-- 0x18 = RTG (Grid) — we had mapped it to RTDG (DoubleGrid)
-- 0x19 = RTHG (HalfGrid) — we had it missing
-- 0x3D = RTDG (DoubleGrid) — we had mapped it to RTG
-
-C's spec is in `ttinterp.h`:
-```
-#define TT_Round_To_Half_Grid   0
-#define TT_Round_To_Grid        1
-#define TT_Round_To_Double_Grid 2
-#define TT_Round_Down_To_Grid   3
-#define TT_Round_Up_To_Grid     4
-#define TT_Round_Off            5
-```
-
-Opcode dispatch in `ttinterp.c`:
-- 0x18 → Ins_RTG (Round To Grid)
-- 0x19 → Ins_RTHG (Round To Half Grid)
-- 0x3D → Ins_RTDG (Round To Double Grid)
-- 0x7C → Ins_RTHG (alternative encoding)
-- 0x7D → Ins_RDTG (Round Down To Grid)
-- 0x7E → Ins_RUTG (Round Up To Grid)
-- 0x7F → Ins_ROFF (Round Off)
-
-Fixed in commit a82e1fe.
-
-## MPPEM Value Format
-
-MPPEM (Measure Pixels Per EM, opcode 0x4B) returns ppem * 64 (26.6 format).
-We initially returned raw ppem (10 instead of 640). This caused all CVT
-scaling operations to compute values 64x too small. Fixed in commit de8f26f.
-
-## CVT Value Format
-
-The 'cvt ' table contains FWORD (i16) values in font design units.
-FreeType parses them in `tt_face_load_cvt` (ttpload.c:346):
 ```c
-*cur = FT_GET_SHORT() * 64;  // Store as 26.6
+exec->GS = tt_default_graphics_state;  // fresh GS each time
+exec->GS.auto_flip = TRUE;
+
+// Scale CVT values from FU to pixel units
+for (i = 0; i < face->cvt_size; i++)
+    exec->cvt[i] = FT_MulFix(face->cvt[i] / 64, size->ttmetrics.scale);
+//                                                  ^^^ divide by 64 because
+// CVT is stored as FU * 64 from the parser
+
+// Reset twilight points to (0,0)  ← KEY: always starts fresh
+for (i = 0; i < size->twilight.n_points; i++) {
+    size->twilight.org[i] = (0,0);
+    size->twilight.cur[i] = (0,0);
+}
+
+// Reset storage to zeros
+FT_ARRAY_ZERO(exec->storage, exec->storeSize);
+
+// Set function pointers for proj/freedom/move/round based on GS
+exec->func_project = TT_Project;
+exec->func_move    = Direct_Move;
+// ...
 ```
 
-So `cvt[i] = font_unit_value * 64`. When the prep program scales these to
-pixel units, it does:
+**Critical insight:** `TT_Load_Context` is called BEFORE each of fpgm, prep, and
+first glyph. It resets the GS to defaults AND re-scales CVT AND zeroes storage
+AND zeroes twilight zone. But `TT_Save_Context` after fpgm saves storage and
+code range state. So when `TT_Load_Context` is called again for prep, storage
+is restored from saved state, but GS is reset.
+
+### 1.4 The `TT_Run_Context` / `TT_RunIns` Main Loop
+
 ```c
-exec->cvt[i] = FT_MulFix(face->cvt[i] / 64, size->ttmetrics.scale);
+TT_Run_Context(exec, size) {
+    // Set up IP, code range, etc.
+    // Then calls TT_RunIns:
+    
+    while (1) {
+        opcode = CUR.opcode = NEXT_Byte();
+        
+        if (opcode >= 0xF0) {
+            // 1-byte opcode: PUSH, MDRP, MIRP, etc.
+            execute_one_byte(opcode);
+        } else {
+            // Look up Pop_Push count
+            FT_Byte pop_push = Pop_Push_Count[opcode];
+            pops = pop_push >> 4;
+            
+            // Pop 'pops' arguments into exec->args array
+            // exec->top moves up, args[] get values from stack
+            // args[0] = value that was at TOP of stack (last pushed)
+            // args[1] = value below top
+            // etc.
+            
+            // Execute opcode handler with args pointer
+            switch (opcode) {
+                case 0x42: Ins_WS(exec, args); break;
+                case 0x44: Ins_WCVTP(exec, args); break;
+                // ...
+            }
+            
+            // Push results back (if any)
+            pushes = pop_push & 0x0F;
+            // push 'pushes' values onto exec->stack
+        }
+    }
+}
 ```
 
-Our linear CVT scaling in `mod.rs`:
+**This is the fundamental difference from our implementation.** C pops all
+arguments FIRST into a flat args array, then passes the array to the handler.
+The handler reads `args[0]`, `args[1]`, etc. in a well-defined order.
+Our implementation pops values one at a time during handler execution,
+which made the stack pop order bug possible.
+
+---
+
+## 2. Our Implementation vs C — Line-by-Line Differences
+
+### 2.1 fpgm Execution
+
+**C (ttobjs.c:884-920):**
+```
+1. TT_Load_Context() — reset GS to default, scale CVT, zero storage, zero twilight
+2. TT_Clear_CodeRange(cvt), TT_Clear_CodeRange(glyph)
+3. TT_Set_CodeRange(font, fpgm_bytes, fpgm_size)
+4. exec->pts.n_points = 0; exec->pts.n_contours = 0  // execute on EMPTY zone
+5. TT_Run_Context() — runs the full VM, all opcodes execute normally
+6. TT_Save_Context() — saves storage/GS state for later prep execution
+```
+
+**Our (hinter/exec.rs:242-320):**
+```
+1. Save GS (clone)
+2. stack.clear()
+3. cur_range = 1, ip = 0
+4. Execute custom fpgm parser loop:
+   - Handles push ops (NPUSHB, NPUSHW, PUSHB, PUSHW)
+   - Handles stack ops (DUP, POP, CLEAR, SWAP)
+   - Handles math ops (ADD, SUB, DIV, MUL, ABS, NEG, FLOOR, CEILING)
+   - Handles storage/CVT ops
+   - FDEF: pops func number, scans to ENDF, registers range
+   - ENDF outside FDEF → error
+   - All other opcodes → skip (empty body)
+5. Restore GS
+```
+
+**Difference:** C executes fpgm through the FULL VM (TT_RunIns). Our code
+has a custom fpgm parser that handles stack operations but DOES NOT execute
+function bodies. The function bodies contain opcodes that push/pop values
+from the stack — without executing them, the stack depth gets out of sync,
+and subsequent FDEF operations pop wrong function numbers.
+
+**Why we can't run the full VM for fpgm:** The VM dispatches point-moving
+opcodes (MDRP, MIRP, MIAP) that need a valid GlyphZone. fpgm runs against
+an empty zone (exec->pts.n_points = 0). Our run_program() assumes a valid
+zone and will panic on out-of-bounds access when MIRP references point 0.
+
+**Fix needed:** Make run_program() handle empty zones gracefully (skip
+point-moving ops when n_points == 0), then use it for fpgm execution.
+
+### 2.2 Prep Program Execution
+
+**C (ttobjs.c:941-997):**
+```
+1. Split twilight zone — sets up exec->pts to point at twilight zone arrays
+2. TT_Load_Context() — RESETS GS to default, RE-SCALES CVT from FU to pixel
+3. TT_Set_CodeRange(cvt, prep_bytes, prep_size)
+4. TT_Run_Context() — executes against twilight zone
+5. [CVT modified in-place by WCVTP]
+```
+
+**Our (hinter/exec.rs:382-420):**
+```
+1. Create twilight zone with 16 points, all zero
+2. Set glyph_program = prep_bytes
+3. Set cur_range = 2 (glyph)
+4. Set zp0=zp1=zp2=0 (twilight zone)
+5. Set vectors to Y axis
+6. run_program(&mut twilight)
+7. Restore zp0=zp1=zp2=1 (glyph zone)
+```
+
+**Difference:** Our prep execution uses run_program() which can handle
+twilight zone ops. But it inherits the GS state from fpgm execution.
+C's TT_Load_Context resets GS to defaults before each program execution.
+Our GS carries over the auto-flip, proj vectors, and rounding mode from
+fpgm into prep, causing prep to compute different CVT values than C.
+
+**Why prep produces garbage (96 GB memory explosion):** When run_program()
+hits IUP (opcode 0x30/0x31), it walks all points in the twilight zone and
+interpolates. With prep's stack state modified by the prep program itself,
+the interpolation produces values that overflow into huge memory allocations
+when later used as mask dimensions.
+
+### 2.3 CVT Scaling
+
+**C (ttobjs.c:970-972, inside TT_Load_Context):**
+```c
+for (i = 0; i < face->cvt_size; i++)
+    exec->cvt[i] = FT_MulFix(face->cvt[i] / 64, size->ttmetrics.scale);
+// face->cvt[i] is in FU * 64 (from parser: FT_GET_SHORT() * 64)
+// / 64 to get FU, then FT_MulFix to scale to 26.6 pixels
+```
+
+**Our (hinter/mod.rs:):**
 ```rust
 let fu = *cv / 64;
-*cv = ft_mul_fix(fu, y_scale);
-*cv = ft_round_fix(*cv);
+*cv = crate::fixed::ft_mul_fix(fu, y_scale);
+*cv = crate::fixed::ft_round_fix(*cv);
 ```
 
-## The Prep Program Problem (Not Fully Solved)
+**These are equivalent.** The prep program modifies CVT values further by
+applying rounding-mode-specific adjustments, but the linear scaling is
+correct.
 
-The prep program executes against a twilight zone — an array of scratch
-points used for temporary computation. C initializes twilight points to all
-zeros (`FT_ARRAY_ZERO` in `ttobjs.c:954-955`). Our code does the same.
+### 2.4 Glyph Zone Setup for Hinting
 
-The prep program modifies CVT values via WCVTP. To compute the right CVT
-values, it uses:
-1. MIAP — sets twilight point to rounded CVT value
-2. MIRP — moves twilight point relative to another point using CVT entry
-3. GC — reads projected coordinate of twilight point
-4. SCFS — sets twilight point from stack value
-5. Math ops — computes scaling formulas using stack values
+**C (ttgload.c:777-860, TT_Hint_Glyph):**
+```
+1. Copies cur → org: preserves original scaled coords
+2. If composite: sets scale to 1:1 (subglyphs already hinted)
+   If composite: copies orus → cur (use already-hinted coords)
+3. Rounds phantom points:
+   zone->cur[n_points-4].x = FT_PIX_ROUND(zone->cur[n_points-4].x)  // pp1
+   zone->cur[n_points-3].x = FT_PIX_ROUND(zone->cur[n_points-3].x)  // pp2
+   zone->cur[n_points-2].y = FT_PIX_ROUND(zone->cur[n_points-2].y)  // pp3
+   zone->cur[n_points-1].y = FT_PIX_ROUND(zone->cur[n_points-1].y)  // pp4
+4. If glyph_ins_length > 0:
+   TT_Set_CodeRange(glyph, ins, len)
+   exec->pts = *zone
+   TT_Run_Context()
+```
 
-The problem: MIAP on twilight zone sets the current position from CVT:
+**Our (hinter/mod.rs:87-120):**
+```
+1. Build GlyphZone with scaled 26.6 coords
+2. Add phantom points (pp1-pp4) at zero
+3. Copy cur → org
+4. Create ExecContext with fpgm/cvt/prep
+5. Run fpgm
+6. Run glyph program via run_program()
+```
+
+**Difference:** We don't round phantom points before hinting. C rounds them.
+This matters because MIRP/MDRP reference phantom points (indices n_points-4
+through n_points-1) for side bearing/advance width calculations. Our
+unrounded phantoms can cause a 1px difference in the leftmost x coordinate.
+
+### 2.5 IUP Interpolation
+
+**C (ttinterp.c:6189+, Ins_IUP):**
+```
+1. For each contour, find touched points
+2. Between consecutive touched points, interpolate untouched points
+3. Uses ORIGINAL positions (orus/orig) for the interpolation ratio
+4. Uses CURRENT positions (cur) for the output values
+5. Handles wraparound (last → first touched in the contour)
+```
+
+**Our (hinter/exec.rs: IUP handler):**
+```
+1. Walk all points linearly (0..n_points), not per-contour
+2. Find first and last touched
+3. Linear interpolation between them using cur deltas
+4. Uses cur positions for both ratio AND output
+```
+
+**Difference:** C uses ORIGINAL positions (org) for the interpolation
+ratio, not current positions. This is the correct approach because the
+ratio should reflect the pre-hinting shape. Using current positions
+can amplify rounding errors. Also C walks per-contour, not linearly.
+
+### 2.6 MDRP/MIRP Point Movement
+
+**C (ttinterp.c:5399-5673, Ins_MDRP/Ins_MIRP):**
+```
+1. Get reference point from zp1[GS.rp0]
+2. Compute original projected distance between point and ref
+3. For MDRP: round the original distance
+4. For MIRP: round the CVT value, auto-flip if signs differ
+5. Apply minimum distance (cvt_cut_in for MIRP, min_distance for MDRP)
+6. Move point along freedom vector by the computed distance relative to ref
+```
+
+**Our (hinter/exec.rs: MDRP/MIRP handlers):**
+```
+Same logic — correct after the stack pop order fix.
+```
+
+---
+
+## 3. Root Cause: Why Prep Can't Work Yet
+
+The prep program for LiberationSans-Regular (835 bytes) does:
+
+```
+NPUSHW(33)     — push 33 constant values
+NPUSHB(170)    — push 170 bytes
+PUSHW[1]       — push word
+NPUSHB(...)    — push more
+...
+CALL(83)       — call function 83 from fpgm  ← FAILS: function not found
+CALL(84)       — call function 84
+MPPEM          — 640
+PUSHW[1]       — push word
+GT             — compare
+...
+```
+
+**Our fpgm registers 16 functions (indices 0-11, 13-17). Function 83 does
+not exist.** This is because our custom fpgm parser loses track of the stack
+after ~10 function bodies. The function bodies themselves contain push/pop
+opcodes that shift the stack — without executing them, each FDEF pops the
+wrong function number.
+
+**Fix 1: Run fpgm through the full VM.** This worked (commit d02d15b) — the
+VM processes all opcodes including function bodies, keeping the stack
+accurate. But the VM's glyph zone accessors panic on zero-length zones.
+
+**Fix 2: Make zone ops safe for empty zones.** All GlyphZone accessors
+already return (0,0) for out-of-bounds indices. The remaining issue is the
+IUP opcode which walks all points and could overflow.
+
+**Fix 3: Save/Restore GS.** After fpgm runs, the GS has been modified by
+function body opcodes (vectors changed, auto-flip toggled, rounding mode
+set). Prep needs a fresh GS. C handles this via TT_Load_Context which is
+called at the start of each program. We need the same.
+
+---
+
+## 4. Stack Pop Order — Detailed Explanation
+
+### C Convention
+
+The `Pop_Push_Count` table in `ttinterp.c:396-650` defines for each opcode:
+
+```c
+#define PACK(x, y) ((x << 4) | y)
+
+// WCVTP: pops 2, pushes 0
+[0x44] = PACK(2, 0),  // WCVTP
+```
+
+When `TT_RunIns` dispatches an opcode:
+1. It reads `pops = Pop_Push_Count[opcode] >> 4`
+2. It adjusts `exec->top` (stack pointer) by `pops`
+3. It sets `args = exec->stack + exec->top` — args points to the pop'd region
+4. `args[0]` = the FIRST value popped (topmost on the original stack)
+5. `args[1]` = the SECOND value popped (below the top)
+
+For WCVTP (pops 2):
+```
+Stack before: [..., index, value]  ← value is on TOP (at stack[top-1])
+After pop 2:  args[0] = value, args[1] = index
+              stack pointer moves up 2 positions
+```
+
+### Our Bug
+
+Our code does:
 ```rust
-let rnd_cvt = self.gs.round(cvt_val);
-let delta = rnd_cvt - org_dist; // org_dist = project(cur_x, cur_y) = 0
-zone.set_cur(p, cur_x + dx, cur_y + dy);
+0x44 => {
+    let idx = self.pop()? as usize;  // pops TOP = value, treats as index ← WRONG
+    let val = self.pop()?;           // pops BELOW = index, treats as value ← WRONG
+    self.set_cvt(idx, val)?;
+}
 ```
 
-With twilight starting at (0,0) and projection along Y axis:
-- `project(0, 0)` = 0
-- `delta = round(cvt_val) - 0` = round(cvt_val)
-- `move_along_free(round(cvt_val))` with freedom=(0, 0x4000) = (0, round(cvt_val))
-- Twilight point gets set to (0, round(cvt_val))
+`Vec::pop()` removes from the end. The "top" of our stack is the last element.
+So the first pop gets the VALUE (which was pushed last), and the second pop
+gets the INDEX (which was pushed before the value).
 
-This should work for Y-axis projection. But our implementation fails because:
+But we use the first pop as `idx` and the second as `val`. That REVERSES them.
 
-1. **fpgm function bodies modify GraphicsState** — The fpgm's function
-   definitions contain actual opcodes that change vectors, rounding mode,
-   and auto-flip. When we ran fpgm through the full VM (commit `d02d15b`),
-   the GS got corrupted for subsequent programs.
+**Fix:** Pop value (top) first, then index (below):
+```rust
+0x44 => {
+    let val = self.pop()?;           // top = VALUE ← correct
+    let idx = self.pop()? as usize;  // below = INDEX ← correct
+    self.set_cvt(idx, val)?;
+}
+```
 
-2. **Function definitions not registered correctly** — Our FDEF handler
-   scans for ENDF but the scanning misses mismatched FDEF/ENDF pairs in
-   nested function bodies. LiberationSans has 17 functions but we only
-   got 16 registered.
+### Why Only WCVTP/WS/SCFS Were Affected
 
-3. **Stack corruption in prep** — Even with stack.clear() at start, the
-   fpgm leaves the GS in an unpredictable state. MIRP then computes
-   wrong relative distances because auto_flip is wrong.
+Most opcodes pop only one value, so the order doesn't matter. Only two-arg
+opcodes where the arguments are semantically different (index vs value,
+point vs amount) are affected. MDRP/MIAP pop one point index — fine.
+MIRP/MIAP pop two — the first is a point index, the second is a CVT index.
+Getting them backwards means we'd look up CVT[point_index] which is garbage.
 
-## Attempted Fixes (All Failed to Improve PIL Score)
+---
 
-1. **Enable prep execution** — CVT entries get zeroed → masks explode
-2. **Run fpgm through full VM** — GS corrupted → masks explode
-3. **Round CVT values after scaling** — No change (already pixel-aligned)
-4. **Use autohinter for PIL backend** — Regressed 697 tests (wrong algorithm)
-5. **Unpad PIL masks** — Regressed 1,089 tests (wrong bbox computation)
+## 5. Attempted Fixes (Failed to Improve PIL Score)
 
-## What Actually Worked (Committed to main)
+| Fix Attempt | Why It Failed |
+|---|---|
+| Enable prep execution | CVT entries zeroed → mask dimensions explode (96 GB allocation) |
+| Run fpgm through full VM | GS corrupted → wrong auto-flip in subsequent MIRP |
+| Round CVT after scaling | No change (values already pixel-aligned at 10pt) |
+| Use autohinter for PIL | Regressed 697 tests (autohinter ≠ bytecode hinter) |
+| Unpad PIL masks | Regressed 1,089 tests (PIL uses rasterized bitmap size, not outline bbox) |
+| Per-contour IUP | Pixels shifted up → masks had wrong y-offset |
 
-Only three changes produced measurable improvements:
+---
+
+## 6. What Actually Worked (Committed to main)
 
 | Commit | Description | Delta |
 |---|---|---|
-| 09893a3 | VSEP range check from 128→66 FU | 3 FT failures → 0 |
+| 09893a3 | VSEP range check: C uses `adj <= 66`, we used `adj <= 128` | 3→0 FT failures |
 | 473fc22 | Bytecode VM + linear CVT scaling | -466 PIL failures |
-| d02d15b | Stack pop order fix (8 opcodes) | -96 PIL failures |
+| d02d15b | Stack pop order: value then index, not index then value | -96 PIL failures |
+| a82e1fe | Rounding opcodes: 0x18=RTG,0x19=RTHG,0x3D=RTDG | Quality |
+| de8f26f | MPPEM: `ppem * 64` not raw `ppem` | Quality |
 
-The remaining 4,977 failures are all 1px subpixel differences from two sources:
+---
 
-### Source 1: Linear CVT vs Prep-Calculated CVT
+## 7. Remaining Gap: 4,977 PIL Failures
 
-The prep program applies rounding-mode-specific adjustments to CVT values.
-Our linear scaling (`fu * scale_factor`) is close but not exact. At 10pt
-Debian Sans, CVT value differences of 1-2 FU (0.015-0.03 pixels) propagate
-through MIRP into 0-1 pixel coordinate differences.
+All 1px subpixel differences. Two sources:
 
-**Why we can't fix this without prep:** The prep program for LiberationSans
-uses function calls (CALL) into fpgm-defined functions. These functions were
-defined in fpgm while the GS was in a specific state. Re-executing them in
-prep's context requires the GS to match. We can't replicate this without
-proper fpgm execution.
+### 7.1 Linear CVT vs Prep-Calculated CVT (~4,800 failures)
+Fonts with per-glyph bytecode (LiberationSans, DejaVuSerif-Bold,
+NotoSans-Bold, DejaVuSans-Oblique, DejaVuSansMono, LiberationSansNarrow-Bold).
+Prep scales CVT with rounding-mode adjustments; linear scaling is close but
+off by 1-2 FU → 1px pixel difference. Fix requires working fpgm→prep chain.
 
-### Source 2: Rasterizer DDA Precision
+### 7.2 Rasterizer DDA Precision (~177 failures)
+DejaVuSans-ExtraLight and DejaVuSerif-Italic (0 per-glyph bytecode).
+Our grays.rs produces slightly different coverage values than FreeType's
+ftgrays.c for curved segments. Fix requires DDA line renderer port.
 
-For DejaVuSans-ExtraLight (0 per-glyph bytecode instructions), our grays.rs
-DDA line renderer produces slightly different coverage values than FreeType's
-ftgrays.c. This affects 175 glyphs (ExtraLight + Italic variants).
+---
 
-**Why we can't fix this:** The differences are in subpixel coverage for
-curved segments. FreeType's `gray_render_conic` uses a different subdivision
-threshold than our port. Fixing this requires line-by-line comparison of
-the DDA rendering, which is a separate project.
-
-## The Real Blocker: FT_LOAD_DEFAULT vs Our Pipeline
-
-FreeType's `FT_LOAD_DEFAULT` → `TT_Process_Simple_Glyph` does:
-
-```
-1. Set phantom points (pp1-pp4) in the glyph zone
-2. Round phantom point coordinates to pixel grid
-3. Execute glyph bytecode via TT_Run_Context
-4. Execute prep program first if ppem changed
-5. Execute fpgm once at face load
-```
-
-Our pipeline:
-```
-scaler::scale_glyph() with metrics=None:
-1. Scale coordinates to 26.6
-2. Build glyph zone with phantom points
-3. If bytecode tables exist + glyph has instructions:
-   a. Run fpgm (fails → stack/GS corruption)
-   b. Run prep (fails → memory explosion from bad CVT)
-   c. Run glyph program (works correctly for simple glyphs)
-4. Compute bbox, return scaled glyph
-```
-
-The gap: fpgm → prep → glyph program is a chain. If any link breaks,
-downstream links produce wrong output. Our fpgm execution is incomplete
-because LiberationSans's fpgm contains function bodies with opcodes that
-modify the GS. When prep CALLs into these functions, the GS difference
-causes wrong CVT scaling.
-
-**What ImageFT does differently:** PIL's `_imagingft.c` calls
-`FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT)` which handles the
-entire fpgm→prep→glyph_ins chain internally. The only way to match PIL's
-output is to match FreeType's bytecode interpreter output exactly — which
-requires a complete, bug-for-bug compatible bytecode VM with working
-fpgm → prep → glyph program execution.
-
-## File Inventory
+## 8. File Inventory
 
 ```
 pillow-rs-freetype/src/tt/hinter/
@@ -245,7 +472,7 @@ pillow-rs-freetype/doc/
 └── BYTECODE_HINTER_LESSONS.md — This document
 ```
 
-## References
+## 9. C Code References
 
 | What | File:Line |
 |---|---|
@@ -254,6 +481,10 @@ pillow-rs-freetype/doc/
 | prep parsing | `ttpload.c:442-505` (tt_face_load_prep) |
 | Glyph bytecode loading | `ttgload.c:229-360` (parse_simple_glyph) |
 | TT_Hint_Glyph | `ttgload.c:777-860` |
+| TT_Load_Context | `ttobjs.c:891-957` |
+| tt_size_run_fpgm | `ttobjs.c:884-920` |
+| tt_size_run_prep | `ttobjs.c:941-997` |
+| tt_size_init_bytecode | `ttobjs.c:1030-1120` |
 | TT_Run_Context | `ttinterp.c:7435-7530` |
 | TT_RunIns (main loop) | `ttinterp.c:6727-7200` |
 | Opcode Pop_Push_Count table | `ttinterp.c:396-650` |
@@ -263,8 +494,5 @@ pillow-rs-freetype/doc/
 | Ins_WCVTP | `ttinterp.c:2809-2825` |
 | Ins_MIAP | `ttinterp.c:5315-5398` |
 | Ins_IUP | `ttinterp.c:6189-` |
-| C VT rounding | `ttobjs.c:891-957` (TT_Load_Context) |
-| C VT init (twilight) | `ttobjs.c:949-955` |
-| C VT init (storage) | `ttobjs.c:960` |
+| Ins_MDAP | `ttinterp.c:5276-5315` |
 | Phantom point setup | `ttgload.c:1337-1362` (tt_loader_set_pp) |
-| ASC/DESC metrics | `ttgload.c:116-150` (TT_Get_VMetrics) |
