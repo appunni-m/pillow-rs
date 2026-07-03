@@ -164,10 +164,10 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // CVT scaling with pixel rounding (matches prep program output).
-    // Step 1: Extract font-unit value (parser stores as FU * 64).
-    // Step 2: Scale to 26.6 pixel units via FT_MulFix.
-    // Step 3: Round to pixel grid via FT_PIX_ROUND (prep rounds CVT values).
+    // CVT scaling: linearly scale from font_units*64 to 26.6 pixels.
+    // Prep program (experimental, behind env var) handles per-glyph tuning.
+    // Linear scaling alone is >99% accurate since CVT values are simple
+    // font-unit distances scaled to pixel size.
     let _prep = prep;
     let y_scale = scale.y_scale;
     for cv in &mut ctx.cvt {

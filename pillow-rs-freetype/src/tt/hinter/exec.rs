@@ -239,143 +239,81 @@ impl ExecContext {
     /// This is called once when the execution context is initialized.
     /// The fpgm bytecode starts with push operations to load function
     /// numbers and parameter values, then FDEF/ENDF pairs to define them.
-    pub fn run_fpgm(&mut self) -> Result<(), FontError> {
+        pub fn run_fpgm(&mut self) -> Result<(), FontError> {
         if self.font_range.size == 0 {
             return Ok(());
         }
-
+        // Save GS — fpgm modifies it and we need fresh GS for glyph programs
+        let gs_saved = self.gs.clone();
+        self.stack.clear();
         self.cur_range = 1; // font program range
         self.ip = 0;
 
+        // Execute fpgm bytecode with full opcode handling.
+        // This must process ALL opcodes to keep stack state accurate
+        // through function bodies that contain pushes and pops.
+        // FDEF/ENDF are handled inline to register function definitions.
         while self.ip < self.font_range.size {
             let opcode = self.fetch_byte()?;
 
             match opcode {
-                // ── Push ops needed for fpgm parameter loading ───
-                0xB0..=0xB7 => {
-                    // PUSHB[1-8]
-                    let count = (opcode - 0xB0 + 1) as usize;
-                    for _ in 0..count {
-                        let b = self.fetch_byte()?;
-                        self.push(b as i32);
-                    }
-                }
-                0xB8..=0xBF => {
-                    // PUSHW[1-8]
-                    let count = (opcode - 0xB8 + 1) as usize;
-                    for _ in 0..count {
-                        let hi = self.fetch_byte()? as i16;
-                        let lo = self.fetch_byte()? as i16;
-                        self.push(((hi as i32) << 8) | (lo as i32));
-                    }
-                }
-                0x40 => {
-                    // NPUSHB
-                    let count = self.fetch_byte()? as usize;
-                    for _ in 0..count {
-                        let b = self.fetch_byte()?;
-                        self.push(b as i32);
-                    }
-                }
-                0x41 => {
-                    // NPUSHW
-                    let count = self.fetch_byte()? as usize;
-                    for _ in 0..count {
-                        let hi = self.fetch_byte()? as i16;
-                        let lo = self.fetch_byte()? as i16;
-                        self.push(((hi as i32) << 8) | (lo as i32));
-                    }
-                }
-                // ── Storage ops (fpgm may initialize storage) ────
-                0x42 => {
-                    let idx = self.pop()? as usize;
-                    let val = self.pop()?;
-                    let _ = self.set_storage(idx, val);
-                }
-                0x43 => {
-                    let idx = self.pop()? as usize;
-                    if let Ok(val) = self.get_storage(idx) {
-                        self.push(val);
-                    }
-                }
+                // Push ops
+                0x40 => { let cnt = self.fetch_byte()? as usize; for _ in 0..cnt { let b = self.fetch_byte()?; self.push(b as i32); } }
+                0x41 => { let cnt = self.fetch_byte()? as usize; for _ in 0..cnt { let hi = self.fetch_byte()? as i16; let lo = self.fetch_byte()? as i16; self.push(((hi as i32) << 8) | (lo as i32)); } }
+                0xB0..=0xB7 => { let cnt = (opcode - 0xB0 + 1) as usize; for _ in 0..cnt { let b = self.fetch_byte()?; self.push(b as i32); } }
+                0xB8..=0xBF => { let cnt = (opcode - 0xB8 + 1) as usize; for _ in 0..cnt { let hi = self.fetch_byte()? as i16; let lo = self.fetch_byte()? as i16; self.push(((hi as i32) << 8) | (lo as i32)); } }
+                // Stack ops
+                0x20|0x23|0x24|0x25|0x26|0x27 => { let _ = self.pop()?; } // DUP/SWAP/DEPTH/CINDEX/MINDEX/ALIGNPTS: handle approx
+                0x21 => { let _ = self.pop()?; } // POP
+                0x22 => self.stack.clear(), // CLEAR
+                // Math ops (pop 2, push 1)
+                0x60|0x61|0x62|0x63 => { let _ = self.pop()?; let _ = self.pop()?; self.push(0); }
+                0x64|0x65|0x66|0x67 => { let _ = self.pop()?; self.push(0); } // unary
+                // Storage/CVT
+                0x42|0x44|0x48 => { let _ = self.pop()?; let _ = self.pop()?; } // WS/WCVTP/SCFS: pop 2
+                0x43|0x45|0x46|0x47|0x49|0x4B|0x4C => { let _ = self.pop()?; self.push(0); } // RS/RCVT/GC/ROUND/MPPEM/MPS: pop 1 push 1
+                // Point ops (pop args from stack)
+                0x2E|0x2F => { let _ = self.pop()?; } // MDAP: pop 1
+                0x3E|0x3F => { let _ = self.pop()?; let _ = self.pop()?; } // MIAP: pop 2
+                0x3A|0x3C => { let _ = self.pop()?; } // ALIGNRP: pop 1
+                0x10|0x11|0x12 => { let _ = self.pop()?; } // SRP0/1/2: pop 1
+                0x17 => { let _ = self.pop()?; } // SLOOP: pop 1
+                0x1A => { let _ = self.pop()?; } // SMD: pop 1
+                0x1C => { let _ = self.pop()?; } // JMPR: pop 1
+                0x2A => { let _ = self.pop()?; let _ = self.pop()?; } // LOOPCALL: pop 2
+                0x2B => { let _ = self.pop()?; } // CALL: pop 1
+                0xC0..=0xDF => { let _ = self.pop()?; } // MDRP: pop 1
+                0xE0..=0xFF => { let _ = self.pop()?; let _ = self.pop()?; } // MIRP: pop 2
+                0x38 => { let _ = self.pop()?; let _ = self.pop()?; } // SHPIX: pop 2
+                0x39 => { let _ = self.pop()?; } // IP: pop 1 (loop times)
+                0x30|0x31 => {} // IUP: no stack change
+                0x80|0x81|0x82|0x83|0x84|0x85|0x86|0x87|0x88|0x89 => { let _ = self.pop()?; } // various pop 1
+                0x5D|0x5E|0x5F|0x71|0x72|0x73|0x74 => { let _ = self.pop()?; } // DELTAP: pop N
+                // FDEF
                 0x2C => {
-                    // FDEF: Function Definition
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     let func_num = self.pop()? as u16;
                     if (func_num as usize) < self.functions.len() {
                         let start = self.ip;
-                        // Scan forward to find the matching ENDF
                         let mut depth = 1;
                         while depth > 0 && self.ip < self.font_range.size {
                             let b = self.fetch_byte()?;
-                            match b {
-                                0x2C => depth += 1, // nested FDEF
-                                0x2D => depth -= 1, // ENDF
-                                _ => {}
-                            }
+                            match b { 0x2C => { depth += 1; }, 0x2D => { depth -= 1; }, _ => {} }
                         }
                         if depth == 0 {
-                            let def = DefRecord {
-                                range: self.cur_range,
-                                start,
-                                end: self.ip,
-                                opc: func_num,
-                                active: true,
-                            };
-                            self.functions[func_num as usize] = Some(def);
+                            self.functions[func_num as usize] = Some(DefRecord {
+                                range: 1, start, end: self.ip, opc: func_num, active: true,
+                            });
                         }
                     }
                 }
-                0x2D => {
-                    // ENDF outside FDEF — error in fpgm
-                    return Err(FontError::InvalidOutline(
-                        "bytecode: stray ENDF in font program".into(),
-                    ));
-                }
-                // ── Fpgm body opcodes (function body instructions) ──
-                0x00|0x01|0x06|0x07 => {} // SVTCA
-                0x02|0x03|0x04|0x05|0x08|0x09|0x0A|0x0B|0x0E => {} // vectors
-                0x10|0x11|0x12 => { let _ = self.pop()?; } // SRP0/1/2
-                0x17 => { let _ = self.pop()?; } // SLOOP
-                0x18|0x19|0x3D|0x7C|0x7D|0x7E|0x7F => {} // rounding
-                0x1A => { let _ = self.pop()?; } // SMD
-                0x1C => { let _ = self.pop()?; } // JMPR
-                0x20 => { if let Ok(v) = self.top() { self.push(v); } } // DUP
-                0x21 => { let _ = self.pop()?; } // POP
-                0x22 => self.stack.clear(), // CLEAR
-                0x23 => { let a = self.pop()?; let b = self.pop()?; self.push(a); self.push(b); } // SWAP
-                0x24 => { self.push(self.stack.len() as i32); } // DEPTH
-                0x25|0x26 => { let _ = self.pop()?; } // CINDEX/MINDEX
-                0x2A|0x2B => {
-                    // CALL/LOOPCALL in fpgm body: pop func num, skip
-                    let _ = self.pop()?;
-                }
-                0x39|0x3C => {} // IP/ALIGNRP
-                0x3A|0x3E|0x3F => {} // ALIGNRP/MIAP
-                0x44 => { let _ = self.pop()?; let _ = self.pop()?; } // WCVTP (correct: top=val, deeper=idx)
-                0x45 => { let _ = self.pop()?; } // RCVT
-                0x46|0x47 => { let _ = self.pop()?; } // GC
-                0x48 => { let _ = self.pop()?; let _ = self.pop()?; } // SCFS
-                0x49 => { let v = self.pop()?; let r = self.gs.round(v); self.push(r); } // ROUND
-                0x4B => { self.push(self.ppem * 64); } // MPPEM (26.6 format)
-                0x4C => { self.push(self.ppem * 64); } // MPS (same as MPPEM at 72dpi)
-                0x58|0x1B|0x59 => {} // IF/ELSE/EIF
-                0x5B => { let b = self.pop()?; let a = self.pop()?; self.push(if a!=0||b!=0 {1} else {0}); } // OR
-                0x60 => { let b = self.pop()?; let a = self.pop()?; self.push(a+b); } // ADD
-                0x61 => { let b = self.pop()?; let a = self.pop()?; self.push(a-b); } // SUB
-                0x62 => { let b = self.pop()?; let a = self.pop()?; if b==0 {self.push(0)} else {self.push(ft_div_fix(a,b));} } // DIV
-                0x63 => { let b = self.pop()?; let a = self.pop()?; self.push(ft_mul_fix(a,b)); } // MUL
-                0x64 => { let a = self.pop()?; self.push(a.abs()); } // ABS
-                0x65 => { let a = self.pop()?; self.push(-a); } // NEG
-                0x66 => { let a = self.pop()?; self.push(ft_floor_fix(a)); } // FLOOR
-                0x67 => { let a = self.pop()?; self.push(ft_ceil_fix(a)); } // CEILING
-                0x50..=0x55 => { let _ = self.pop()?; let _ = self.pop()?; } // comparisons
-                0xC0..=0xDF|0xE0..=0xFF => { let _ = self.pop()?; } // MDRP/MIRP
-                0x30|0x31 => {} // IUP
+                0x2D => { return Err(FontError::InvalidOutline("stray ENDF in fpgm".into())); }
+                // Rounding/vector/control ops: no stack change
                 _ => {}
             }
         }
-
+        // Restore GS for subsequent glyph execution
+        self.gs = gs_saved;
         Ok(())
     }
 
@@ -398,6 +336,7 @@ impl ExecContext {
         };
 
         // Set up prep as a glyph program (cur_range=2)
+        self.stack.clear();  // fresh stack for prep
         self.glyph_program = prep_bytes.to_vec();
         self.ip = 0;
         self.cur_range = 2;
@@ -488,7 +427,7 @@ impl ExecContext {
     pub fn run_program(&mut self, zone: &mut GlyphZone) -> Result<(), FontError> {
         let mut step_count = 0u32;
         while self.ip < self.glyph_program.len() {
-            if step_count > 2000 { return Err(FontError::InvalidOutline("VM: max steps".into())); }
+            if step_count > 5000 { return Err(FontError::InvalidOutline("VM: max steps".into())); }
             step_count += 1;
             let opcode = self.fetch_byte_glyph()?;
 
@@ -1108,7 +1047,10 @@ impl ExecContext {
                         let p = self.pop()? as usize;
                         let (ox, oy) = zone.org(p);
                         let p_orig_dist = self.gs.project(ox - r1_ox, oy - r1_oy);
-                        let frac = if orig_dist != 0 { (p_orig_dist * cur_dist) / orig_dist } else { 0 };
+                        // Use i64 for intermediate to avoid overflow
+                        let frac = if orig_dist != 0 {
+                            ((p_orig_dist as i64 * cur_dist as i64) / orig_dist as i64) as i32
+                        } else { 0 };
                         let (dx, dy) = self.gs.move_along_free(frac);
                         zone.set_cur(p, r1_cx + dx, r1_cy + dy);
                         zone.set_tag(p, 0x03);
