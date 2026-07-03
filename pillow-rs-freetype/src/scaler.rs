@@ -175,6 +175,7 @@ pub fn scale_glyph(
         xmin: 0, ymin: 0, xmax: 0, ymax: 0,
         is_composite: outline_raw.is_composite,
         sub_lsb: outline_raw.sub_lsb,
+        instructions: outline_raw.instructions.clone(),
     };
 
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
@@ -210,6 +211,7 @@ pub fn scale_glyph(
             cvt,
             fpgm,
             &hint_scale,
+            &outline_raw.instructions,
         ) {
             log::warn!("bytecode hinter failed for gi={glyph_index}: {e}");
             // Fall through to unhinted output

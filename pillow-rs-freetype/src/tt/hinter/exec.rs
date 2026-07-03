@@ -9,7 +9,10 @@
 //! pointer, code ranges, and the glyph zones being hinted.
 
 use super::gs::GraphicsState;
+use super::gs::RoundMode;
+use super::zone::GlyphZone;
 use crate::error::FontError;
+use crate::fixed::{ft_mul_fix, ft_floor_fix, ft_ceil_fix, ft_div_fix};
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -131,6 +134,9 @@ pub struct ExecContext {
 
     /// Pedantic hinting mode (abort on errors).
     pub pedantic_hinting: bool,
+
+    /// The glyph's instruction stream (set per glyph).
+    pub glyph_program: Vec<u8>,
 }
 
 impl ExecContext {
@@ -171,6 +177,7 @@ impl ExecContext {
             cur_range: 0,
             is_composite: false,
             pedantic_hinting: false,
+            glyph_program: Vec::new(),
         }
     }
 
@@ -323,6 +330,469 @@ impl ExecContext {
             ));
         }
         self.cvt[idx] = val;
+        Ok(())
+    }
+
+    // ── Glyph program execution ────────────────────────────────────
+
+    /// Set the glyph instruction stream for execution.
+    pub fn set_glyph_program(&mut self, ins: &[u8]) {
+        self.glyph_program = ins.to_vec();
+        self.glyph_range = CodeRange { base: 0, size: ins.len() };
+        self.ip = 0;
+        self.cur_range = 2; // glyph
+    }
+
+    /// Fetch a byte from the glyph program at current IP.
+    fn fetch_byte_glyph(&mut self) -> Result<u8, FontError> {
+        if self.ip >= self.glyph_program.len() {
+            return Err(FontError::InvalidOutline(
+                "bytecode: IP overflow in glyph program".into(),
+            ));
+        }
+        let b = self.glyph_program[self.ip];
+        self.ip += 1;
+        Ok(b)
+    }
+
+    /// Main opcode dispatch loop for the glyph program.
+    pub fn run_program(&mut self, zone: &mut GlyphZone) -> Result<(), FontError> {
+        while self.ip < self.glyph_program.len() {
+            let opcode = self.fetch_byte_glyph()?;
+
+            match opcode {
+                // ── Push small bytes (0xB0-0xB7) ────────────────
+                0xB0..=0xB7 => {
+                    // PUSHB[opcode-0xB0+1]: push 1-8 bytes
+                    let count = (opcode - 0xB0 + 1) as usize;
+                    for _ in 0..count {
+                        let b = self.fetch_byte_glyph()?;
+                        self.push(b as i32);
+                    }
+                }
+                // ── Push small words (0xB8-0xBF) ────────────────
+                0xB8..=0xBF => {
+                    let count = (opcode - 0xB8 + 1) as usize;
+                    for _ in 0..count {
+                        let hi = self.fetch_byte_glyph()? as i16;
+                        let lo = self.fetch_byte_glyph()? as i16;
+                        self.push(((hi as i32) << 8) | (lo as i32));
+                    }
+                }
+
+                // ── PUSH operations ──────────────────────────────
+                0x40 => {
+                    // NPUSHB
+                    let count = self.fetch_byte_glyph()? as usize;
+                    for _ in 0..count {
+                        let b = self.fetch_byte_glyph()?;
+                        self.push(b as i32);
+                    }
+                }
+                0x41 => {
+                    // NPUSHW
+                    let count = self.fetch_byte_glyph()? as usize;
+                    for _ in 0..count {
+                        let hi = self.fetch_byte_glyph()? as i16;
+                        let lo = self.fetch_byte_glyph()? as i16;
+                        self.push(((hi as i32) << 8) | (lo as i32));
+                    }
+                }
+
+                // ── Stack operations ─────────────────────────────
+                0x20 => {
+                    let v = self.top()?;
+                    self.push(v);
+                } // DUP
+                0x21 => { let _ = self.pop()?; } // POP
+                0x22 => self.stack.clear(), // CLEAR
+                0x23 => {
+                    // SWAP
+                    let a = self.pop()?;
+                    let b = self.pop()?;
+                    self.push(a);
+                    self.push(b);
+                }
+
+                // ── Math ─────────────────────────────────────────
+                0x60 => { let b = self.pop()?; let a = self.pop()?; self.push(a + b); } // ADD
+                0x61 => { let b = self.pop()?; let a = self.pop()?; self.push(a - b); } // SUB
+                0x62 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    if b == 0 { return Err(FontError::InvalidOutline("bytecode: division by zero".into())); }
+                    self.push(ft_div_fix(a, b));
+                } // DIV
+                0x63 => { let b = self.pop()?; let a = self.pop()?; self.push(ft_mul_fix(a, b)); } // MUL
+                0x64 => { let a = self.pop()?; self.push(a.abs()); } // ABS
+                0x65 => { let a = self.pop()?; self.push(-a); } // NEG
+                0x66 => { let a = self.pop()?; self.push(ft_floor_fix(a)); } // FLOOR
+                0x67 => { let a = self.pop()?; self.push(ft_ceil_fix(a)); } // CEILING
+
+                // ── Storage ──────────────────────────────────────
+                0x42 => {
+                    // WS: Write Storage — pops value then index
+                    let idx = self.pop()? as usize;
+                    let val = self.pop()?;
+                    self.set_storage(idx, val)?;
+                }
+                0x43 => {
+                    // RS: Read Storage — pops index, pushes value
+                    let idx = self.pop()? as usize;
+                    let val = self.get_storage(idx)?;
+                    self.push(val);
+                }
+
+                // ── CVT ──────────────────────────────────────────
+                0x44 => {
+                    // WCVTP: Write CVT in pixels — pops value then index
+                    let idx = self.pop()? as usize;
+                    let val = self.pop()?;
+                    self.set_cvt(idx, val)?;
+                }
+                0x45 => {
+                    // RCVT: Read CVT — pops index, pushes value
+                    let idx = self.pop()? as usize;
+                    let val = self.get_cvt(idx)?;
+                    self.push(val);
+                }
+
+                // ── Graphics state — vectors ─────────────────────
+                0x00 => { self.gs.set_vectors_to_y(); } // SVTCA[y]
+                0x01 => { self.gs.set_vectors_to_x(); } // SVTCA[x]
+                0x02 => { self.gs.set_proj_to_y(); }   // SPVTCA[y]
+                0x03 => { self.gs.set_proj_to_x(); }   // SPVTCA[x]
+                0x04 => { self.gs.set_free_to_y(); }    // SFVTCA[y]
+                0x05 => { self.gs.set_free_to_x(); }    // SFVTCA[x]
+
+                // ── Reference points ─────────────────────────────
+                0x10 => {
+                    let p = self.pop()?;
+                    self.gs.rp0 = p as u32;
+                } // SRP0
+                0x11 => {
+                    let p = self.pop()?;
+                    self.gs.rp1 = p as u32;
+                } // SRP1
+                0x12 => {
+                    let p = self.pop()?;
+                    self.gs.rp2 = p as u32;
+                } // SRP2
+
+                // ── Rounding mode ────────────────────────────────
+                0x3D => { self.gs.round_state = RoundMode::Grid; } // RTG
+                0x7C => { self.gs.round_state = RoundMode::HalfGrid; } // RTHG
+                0x7D => { self.gs.round_state = RoundMode::DownToGrid; } // RDTG
+                0x7E => { self.gs.round_state = RoundMode::UpToGrid; } // RUTG
+                0x18 => { self.gs.round_state = RoundMode::Off; } // RTDG/ROFF
+
+                // ── MPPEM ────────────────────────────────────────
+                0x4B => {
+                    // Push pixels per em
+                    self.push(self.ppem);
+                }
+
+                // ── ROUND ────────────────────────────────────────
+                0x49 => {
+                    // ROUND — pop value, round, push back
+                    let v = self.pop()?;
+                    let r = self.gs.round(v);
+                    self.push(r);
+                }
+
+                // ── GC — Get Coordinate ──────────────────────────
+                0x46 => {
+                    // GC[0] = get current coordinate of point in zp2
+                    // Uses zp2 zone pointer to select zone, then
+                    // projects the point's cur position onto proj vector
+                    let p = self.pop()? as usize;
+                    // Always use glyph zone (zp2=1 by default)
+                    let (px, py) = zone.cur(p);
+                    let proj = self.gs.project(px, py);
+                    self.push(proj);
+                }
+                0x47 => {
+                    // GC[1] = get original coordinate
+                    let p = self.pop()? as usize;
+                    let (px, py) = zone.org(p);
+                    let proj = self.gs.project(px, py);
+                    self.push(proj);
+                }
+
+                // ── SCFS — Set Coordinate From Stack ─────────────
+                0x48 => {
+                    // Pops value then point num. Sets cur coords
+                    // along freedom vector relative to original position
+                    let p = self.pop()? as usize;
+                    let val = self.pop()?;
+                    // Move point along freedom vector to match the value
+                    let (ox, oy) = zone.org(p);
+                    let old_proj = self.gs.project(ox, oy);
+                    let dist = val - old_proj;
+                    let (dx, dy) = self.gs.move_along_free(dist);
+                    let (cx, cy) = zone.cur(p);
+                    zone.set_cur(p, cx + dx, cy + dy);
+                    zone.set_tag(p, 0x01); // TOUCH_X
+                    zone.set_tag(p, 0x02); // TOUCH_Y
+                }
+
+                // ── MDAP — Move Direct Absolute Point ────────────
+                0x2E | 0x2F => {
+                    // MDAP[0]/MDAP[1]: round point, optionally set rp0
+                    let p = self.pop()? as usize;
+                    // Get current position, round it
+                    let (cx, cy) = zone.cur(p);
+                    let rx = self.gs.round(cx);
+                    let ry = self.gs.round(cy);
+                    zone.set_cur(p, rx, ry);
+                    zone.set_tag(p, 0x03); // TOUCH_X | TOUCH_Y
+                    if opcode == 0x2F {
+                        self.gs.rp0 = p as u32;
+                    }
+                }
+
+                // ── MIAP — Move Indirect Absolute Point ──────────
+                0x3E | 0x3F => {
+                    // MIAP[0]/MIAP[1]: round to CVT, set rp0
+                    let cvt_idx = self.pop()? as usize;
+                    let p = self.pop()? as usize;
+                    let cvt_val = self.get_cvt(cvt_idx)?;
+                    let (cx, cy) = zone.cur(p);
+                    // Project original and current coords onto freedom vector
+                    let org_dist = self.gs.project(cx, cy);
+                    // Round CVT value
+                    let rnd_cvt = self.gs.round(cvt_val);
+                    // Move: calculate delta from current position
+                    let delta = rnd_cvt - org_dist;
+                    let (dx, dy) = self.gs.move_along_free(delta);
+                    zone.set_cur(p, cx + dx, cy + dy);
+                    zone.set_tag(p, 0x03);
+                    if opcode == 0x3F {
+                        self.gs.rp0 = p as u32;
+                    }
+                }
+
+                // ── MDRP — Move Direct Relative Point ────────────
+                0xC0..=0xDF => {
+                    let p = self.pop()? as usize;
+                    // Get reference point coordinates (rp0)
+                    let rp = self.gs.rp0 as usize;
+                    let (rcx, rcy) = if self.gs.zp1 == 0 {
+                        // Twilight zone — not supported yet
+                        zone.cur(rp)
+                    } else {
+                        zone.cur(rp)
+                    };
+                    let (rorg_x, rorg_y) = zone.org(rp);
+                    let (oorg_x, oorg_y) = zone.org(p);
+
+                    // Compute original distance along projection vector
+                    let org_dist = self.gs.project(
+                        oorg_x - rorg_x,
+                        oorg_y - rorg_y,
+                    );
+
+                    // Round (MDRP uses the original distance, rounds it)
+                    let rnd_dist = self.gs.round(org_dist);
+
+                    // Apply minimum distance
+                    let dist = if self.gs.minimum_distance > 0
+                        && rnd_dist.abs() < self.gs.minimum_distance
+                    {
+                        if rnd_dist >= 0 {
+                            self.gs.minimum_distance
+                        } else {
+                            -self.gs.minimum_distance
+                        }
+                    } else {
+                        rnd_dist
+                    };
+
+                    // Move the point: compute new position relative to ref
+                    let (dx, dy) = self.gs.move_along_free(dist);
+                    zone.set_cur(p, rcx + dx, rcy + dy);
+                    zone.set_tag(p, 0x03); // TOUCH_X | TOUCH_Y
+
+                    // Update rp0 to the moved point
+                    self.gs.rp0 = p as u32;
+                }
+
+                // ── MIRP — Move Indirect Relative Point ──────────
+                0xE0..=0xFF => {
+                    let cvt_idx = self.pop()? as usize;
+                    let p = self.pop()? as usize;
+                    let cvt_val = self.get_cvt(cvt_idx)?;
+
+                    // Get reference point
+                    let rp = self.gs.rp0 as usize;
+                    let (rcx, rcy) = zone.cur(rp);
+                    let (rorg_x, rorg_y) = zone.org(rp);
+                    let (oorg_x, oorg_y) = zone.org(p);
+
+                    // Compute original distance
+                    let org_dist = self.gs.project(
+                        oorg_x - rorg_x,
+                        oorg_y - rorg_y,
+                    );
+
+                    // Round CVT value
+                    let rnd_cvt = self.gs.round(cvt_val);
+
+                    // Auto-flip: if org_dist and rounded CVT have different signs
+                    let dist = if self.gs.auto_flip
+                        && (org_dist ^ rnd_cvt) < 0
+                    {
+                        -rnd_cvt
+                    } else {
+                        rnd_cvt
+                    };
+
+                    // CVT cut-in: use original distance if it's close to CVT
+                    let dist = if (org_dist - dist).abs() < self.gs.cvt_cut_in {
+                        dist
+                    } else {
+                        org_dist
+                    };
+
+                    // Minimum distance
+                    let dist = if self.gs.minimum_distance > 0
+                        && dist.abs() < self.gs.minimum_distance
+                    {
+                        if dist >= 0 {
+                            self.gs.minimum_distance
+                        } else {
+                            -self.gs.minimum_distance
+                        }
+                    } else {
+                        dist
+                    };
+
+                    let (dx, dy) = self.gs.move_along_free(dist);
+                    zone.set_cur(p, rcx + dx, rcy + dy);
+                    zone.set_tag(p, 0x03);
+                    self.gs.rp0 = p as u32;
+                }
+
+                // ── ALIGNRP ───────────────────────────────────────
+                0x3A => {
+                    // Align all points between rp0 and popped point
+                    let p = self.pop()? as usize;
+                    let rp = self.gs.rp0 as usize;
+                    // Move all points from rp to p in zone
+                    // C's ALIGNRP: for each point, compute relative
+                    // distance from rp0 in original coords along proj,
+                    // then snap to zero relative to rp0 in cur coords
+                    let start = rp.min(p);
+                    let end = rp.max(p);
+                    let (rcx, rcy) = zone.cur(rp);
+                    for i in start..=end {
+                        if i == rp { continue; }
+                        let (org_x, org_y) = zone.org(i);
+                        let (rorg_x, rorg_y) = zone.org(rp);
+                        let orig_rel = self.gs.project(
+                            org_x - rorg_x,
+                            org_y - rorg_y,
+                        );
+                        let rnd_rel = self.gs.round(orig_rel);
+                        let (dx, dy) = self.gs.move_along_free(rnd_rel);
+                        zone.set_cur(i, rcx + dx, rcy + dy);
+                        zone.set_tag(i, 0x03);
+                    }
+                }
+
+                // ── IUP — Interpolate Untouched Points ────────────
+                0x30 => {
+                    // IUP[0] = IUP for X
+                    // Find touched points along contours, interpolate between them
+                    // This is a complex operation — simplified version:
+                    // Walk each contour, find consecutive TOUCH_X points,
+                    // interpolate untouched points between them.
+                    // For now, skip IUP
+                }
+                0x31 => {
+                    // IUP[1] = IUP for Y
+                    // Same as above but for Y axis
+                }
+
+                // ── Control flow ──────────────────────────────────
+                0x1B => {
+                    // CALL: pop function number, push return IP, jump
+                    let func_num = self.pop()? as u16;
+                    if (func_num as usize) < self.functions.len() {
+                        if let Some(ref def) = self.functions[func_num as usize] {
+                            if def.active {
+                                self.call_stack.push(CallRecord {
+                                    caller_range: self.cur_range,
+                                    caller_ip: self.ip,
+                                    cur_count: 0,
+                                    def_index: func_num as usize,
+                                });
+                                self.ip = def.start;
+                                self.cur_range = def.range;
+                            }
+                        }
+                    }
+                }
+                0x1D => {
+                    // ENDF: return from function
+                    if let Some(call) = self.call_stack.pop() {
+                        self.ip = call.caller_ip;
+                        self.cur_range = call.caller_range;
+                    }
+                }
+                0x1C => {
+                    // FDEF inside glyph program — should not happen.
+                    // Defined in fpgm, just skip.
+                }
+                0x59 => {
+                    // IF: skip if false
+                    let condition = self.pop()?;
+                    if condition == 0 {
+                        // Skip to matching ELSE/EIF
+                        let mut depth = 1;
+                        while depth > 0 && self.ip < self.glyph_program.len() {
+                            let b = self.fetch_byte_glyph()?;
+                            match b {
+                                0x59 => depth += 1, // nested IF
+                                0x1B => depth += 1, // IF
+                                0x58 => { depth -= 1; if depth == 0 { break; } } // ELSE
+                                0x2D => { depth -= 1; if depth == 0 { break; } } // EIF
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                0x58 => {
+                    // ELSE: skip to EIF
+                    let mut depth = 1;
+                    while depth > 0 && self.ip < self.glyph_program.len() {
+                        let b = self.fetch_byte_glyph()?;
+                        match b {
+                            0x59 | 0x1B => depth += 1,
+                            0x2D => { depth -= 1; if depth == 0 { break; } }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // ── SHPIX — Shift Pixel ───────────────────────────
+                0x38 => {
+                    // SHPIX: shift point(s) by the popped amount
+                    let amount = self.pop()?;
+                    let p = self.pop()? as usize;
+                    let (dx, dy) = self.gs.move_along_free(amount);
+                    let (cx, cy) = zone.cur(p);
+                    zone.set_cur(p, cx + dx, cy + dy);
+                    zone.set_tag(p, 0x03);
+                }
+
+                // ── SCFS ──────────────────────────────────────────
+                _ => {
+                    // Unknown opcode — skip silently (like C in non-pedantic mode)
+                }
+            }
+        }
+
         Ok(())
     }
 }
