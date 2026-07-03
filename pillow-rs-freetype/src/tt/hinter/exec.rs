@@ -137,6 +137,9 @@ pub struct ExecContext {
 
     /// The glyph's instruction stream (set per glyph).
     pub glyph_program: Vec<u8>,
+
+    /// The prep/CVT program bytecode (executed once per size change).
+    pub cvt_program: Vec<u8>,
 }
 
 impl ExecContext {
@@ -178,6 +181,7 @@ impl ExecContext {
             is_composite: false,
             pedantic_hinting: false,
             glyph_program: Vec::new(),
+            cvt_program: Vec::new(),
         }
     }
 
@@ -249,7 +253,7 @@ impl ExecContext {
             let opcode = self.fetch_byte()?;
 
             match opcode {
-                0x1C => {
+                0x2C => {
                     // FDEF: Function Definition
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     let func_num = self.pop()? as u16;
@@ -260,8 +264,8 @@ impl ExecContext {
                         while depth > 0 && self.ip < self.font_range.size {
                             let b = self.fetch_byte()?;
                             match b {
-                                0x1C => depth += 1, // nested FDEF
-                                0x1D => depth -= 1, // ENDF
+                                0x2C => depth += 1, // nested FDEF
+                                0x2D => depth -= 1, // ENDF
                                 _ => {}
                             }
                         }
@@ -277,7 +281,7 @@ impl ExecContext {
                         }
                     }
                 }
-                0x1D => {
+                0x2D => {
                     // ENDF outside FDEF — error in fpgm
                     return Err(FontError::InvalidOutline(
                         "bytecode: stray ENDF in font program".into(),
@@ -290,6 +294,37 @@ impl ExecContext {
             }
         }
 
+        Ok(())
+    }
+
+    /// Run the prep program to initialize CVT values for the current ppem.
+    /// C: `tt_size_run_prep` in ttobjs.c:2257-2310, `TT_RunIns` in ttinterp.c.
+    ///
+    /// The prep program typically uses WCVTP, RCVT, PUSH, and math opcodes
+    /// to scale the raw CVT font-unit values to pixel-specific values for
+    /// the current ppem. It may also set storage values and function defs.
+    pub fn run_prep(&mut self, prep_bytes: &[u8]) -> Result<(), FontError> {
+        if prep_bytes.is_empty() {
+            return Ok(());
+        }
+
+        self.cvt_program = prep_bytes.to_vec();
+        self.ip = 0;
+        self.cur_range = 0; // CVT program range (C: tt_coderange_cvt = 0)
+
+        // C: sets up exec context carefully — scale, metrics
+        // For prep, CVT should already be in 26.6 from table parsing.
+        // The prep program uses WCVTP to write pixel-specific values.
+        // For now, treat prep like the glyph program loop.
+        let mut dummy_zone = GlyphZone {
+            cur_x: vec![], cur_y: vec![],
+            org_x: vec![], org_y: vec![],
+            orus_x: vec![], orus_y: vec![],
+            tags: vec![], contours: vec![],
+            n_points: 0, n_contours: 0, first_point: 0,
+        };
+
+        self.run_program(&mut dummy_zone)?;
         Ok(())
     }
 
@@ -343,22 +378,33 @@ impl ExecContext {
         self.cur_range = 2; // glyph
     }
 
-    /// Fetch a byte from the glyph program at current IP.
+    /// Fetch a byte from the active program at current IP.
+    /// Range 0 = CVT/prep program, 1 = font program (fpgm), 2 = glyph program.
     fn fetch_byte_glyph(&mut self) -> Result<u8, FontError> {
-        if self.ip >= self.glyph_program.len() {
+        let program: &[u8] = match self.cur_range {
+            0 => &self.cvt_program,
+            1 => &self.font_program,
+            _ => &self.glyph_program,
+        };
+        if self.ip >= program.len() {
             return Err(FontError::InvalidOutline(
-                "bytecode: IP overflow in glyph program".into(),
+                "bytecode: IP overflow in program".into(),
             ));
         }
-        let b = self.glyph_program[self.ip];
+        let b = program[self.ip];
         self.ip += 1;
         Ok(b)
     }
 
     /// Main opcode dispatch loop for the glyph program.
     pub fn run_program(&mut self, zone: &mut GlyphZone) -> Result<(), FontError> {
+        let mut step_count = 0u32;
         while self.ip < self.glyph_program.len() {
+            if step_count > 500 { return Err(FontError::InvalidOutline(
+                "bytecode: exceeded max steps".into())); }
+            step_count += 1;
             let opcode = self.fetch_byte_glyph()?;
+
 
             match opcode {
                 // ── Push small bytes (0xB0-0xB7) ────────────────
@@ -715,7 +761,7 @@ impl ExecContext {
                 }
 
                 // ── Control flow ──────────────────────────────────
-                0x1B => {
+                0x2B => {
                     // CALL: pop function number, push return IP, jump
                     let func_num = self.pop()? as u16;
                     if (func_num as usize) < self.functions.len() {
@@ -733,35 +779,18 @@ impl ExecContext {
                         }
                     }
                 }
-                0x1D => {
+                0x2D => {
                     // ENDF: return from function
                     if let Some(call) = self.call_stack.pop() {
                         self.ip = call.caller_ip;
                         self.cur_range = call.caller_range;
                     }
                 }
-                0x1C => {
+                0x2C => {
                     // FDEF inside glyph program — should not happen.
                     // Defined in fpgm, just skip.
                 }
-                0x59 => {
-                    // IF: skip if false
-                    let condition = self.pop()?;
-                    if condition == 0 {
-                        // Skip to matching ELSE/EIF
-                        let mut depth = 1;
-                        while depth > 0 && self.ip < self.glyph_program.len() {
-                            let b = self.fetch_byte_glyph()?;
-                            match b {
-                                0x59 => depth += 1, // nested IF
-                                0x1B => depth += 1, // IF
-                                0x58 => { depth -= 1; if depth == 0 { break; } } // ELSE
-                                0x2D => { depth -= 1; if depth == 0 { break; } } // EIF
-                                _ => {}
-                            }
-                        }
-                    }
-                }
+
                 0x58 => {
                     // ELSE: skip to EIF
                     let mut depth = 1;

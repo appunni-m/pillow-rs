@@ -197,6 +197,7 @@ pub fn scale_glyph(
     } else if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
         // Bytecode hinter path: execute the glyph's TrueType instruction stream.
         // This is the path PIL uses via FT_LOAD_DEFAULT.
+        let prep = data.prep.as_deref().unwrap_or(&[]);
         let hint_scale = crate::tt::hinter::HintScale {
             x_scale: scale.x_scale,
             y_scale: y_adj,
@@ -210,6 +211,7 @@ pub fn scale_glyph(
             &raw_points,
             cvt,
             fpgm,
+            prep,
             &hint_scale,
             &outline_raw.instructions,
         ) {
