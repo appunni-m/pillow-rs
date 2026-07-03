@@ -122,6 +122,15 @@ impl Font {
             .ok_or_else(|| FontError::InvalidFont("missing 'glyf' table".into()))?
             .to_vec();
 
+        // Bytecode tables: optional, required for PIL backend pixel parity.
+        // Missing tables fall back to unhinted scaling (same behavior as FreeType
+        // without TT_USE_BYTECODE_INTERPRETER).
+        let fpgm = dir.find(data, tag(b"fpgm")).map(|d| d.to_vec());
+        let prep = dir.find(data, tag(b"prep")).map(|d| d.to_vec());
+        let cvt = dir
+            .find(data, tag(b"cvt "))
+            .and_then(|d| crate::tt::hinter::tables::parse_cvt(d).ok());
+
         // Build FontData first, then compute Latin autohinter metrics.
         let font_data = Arc::new(FontData {
             cmap,
@@ -134,6 +143,9 @@ impl Font {
             loca_data,
             glyf_data,
             size_pt,
+            fpgm,
+            prep,
+            cvt,
         });
 
         let _upem = font_data.head.units_per_em as i32;
