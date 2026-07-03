@@ -164,22 +164,20 @@ pub fn hint_glyph(
         ctx.run_fpgm()?;
     }
 
-    // Prep program disabled: needs twilight zone initialization first.
-    // Running against uninitialized twilight zone zeroes out CVT values
-    // via WCVTP, which breaks MIRP in glyph programs.
+    // Prep program disabled: needs full twilight zone + MIAP/MIRP chain
+    // to correctly scale CVT values. Manual linear approximation below.
+    // Prep programs use twilight points as temporary registers during
+    // CVT scaling — without proper twilight zone initialization, MIAP
+    // writes garbage to twilight which propagates to CVT via WCVTP.
     let _prep = prep;
 
     // CVT scaling: without prep execution, CVT values are in font_units * 64.
-    // Scale to 26.6 pixel units so MIRP/MIAP compute correct distances.
-    // Each CVT entry is a FWORD (i16) from the font file, multiplied by 64
-    // in our parser (matching C's FT_GET_SHORT() * 64).
-    // To get 26.6 pixel units: ft_mul_fix(cvt_i16, y_scale)
-    // = ft_mul_fix(cvt_26dot6 / 64, y_scale) = (cvt_i16 * y_scale) >> 16
-    // where cvt_i16 = cvt_raw / 64 = cvt[i] / 64
+    // Scale linearly to 26.6 pixel units. This is an approximation — the
+    // real prep program applies rounding mode adjustments. The difference
+    // manifests as 1-2px errors in MIRP/MIAP that reference CVT values.
     let y_scale = scale.y_scale;
     for cv in &mut ctx.cvt {
-        // cvt[i] is in font_units * 64. Extract the font-unit value
-        // by dividing by 64, then scale to 26.6 pixel units.
+        // cvt[i] = font_units * 64. Extract FU by dividing by 64, then scale.
         let fu = *cv / 64;
         *cv = crate::fixed::ft_mul_fix(fu, y_scale);
     }
