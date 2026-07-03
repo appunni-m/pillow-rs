@@ -192,11 +192,14 @@ impl ExecContext {
         self.stack.push(val);
     }
 
-    /// Pop a value from the data stack. Returns Err if stack is empty.
+    /// Pop a value from the data stack. Returns 0 if stack is empty.
     pub fn pop(&mut self) -> Result<i32, FontError> {
-        self.stack.pop().ok_or(FontError::InvalidOutline(
-            "bytecode: stack underflow".into(),
-        ))
+        if self.stack.is_empty() {
+            // Return 0 silently — this matches C's behavior when
+            // the interpreter is not in pedantic mode.
+            return Ok(0);
+        }
+        Ok(self.stack.pop().unwrap())
     }
 
     /// Peek at the top of the stack without removing it.
@@ -207,22 +210,22 @@ impl ExecContext {
         ))
     }
 
-    /// Read a byte from the current code range at the current IP,
-    /// then increment IP.
+    /// Read a byte from the active code range at the current IP,
+    /// then increment IP. Used during fpgm parsing.
     pub fn fetch_byte(&mut self) -> Result<u8, FontError> {
-        let range = match self.cur_range {
-            0 => &self.font_range,
-            1 => &self.cvt_range,
-            _ => &self.glyph_range,
+        // During fpgm parsing (cur_range=1), read from font_program.
+        // During run_program (cur_range=2), read from glyph_program.
+        let data = if self.cur_range == 1 {
+            &self.font_program
+        } else {
+            &self.glyph_program
         };
-        // For font/cvt ranges, we use self.font_program
-        let data = &self.font_program; // TODO: support separate prep/glyph programs
-        if self.ip >= range.size {
+        if self.ip >= data.len() {
             return Err(FontError::InvalidOutline(
                 "bytecode: IP out of range".into(),
             ));
         }
-        let byte = data[range.base + self.ip];
+        let byte = data[self.ip];
         self.ip += 1;
         Ok(byte)
     }
@@ -239,8 +242,8 @@ impl ExecContext {
 
     /// Run the font program (fpgm) to set up function definitions.
     /// This is called once when the execution context is initialized.
-    /// The fpgm bytecode is expected to contain only FDEF/ENDF pairs
-    /// and storage area setup.
+    /// The fpgm bytecode starts with push operations to load function
+    /// numbers and parameter values, then FDEF/ENDF pairs to define them.
     pub fn run_fpgm(&mut self) -> Result<(), FontError> {
         if self.font_range.size == 0 {
             return Ok(());
@@ -253,6 +256,53 @@ impl ExecContext {
             let opcode = self.fetch_byte()?;
 
             match opcode {
+                // ── Push ops needed for fpgm parameter loading ───
+                0xB0..=0xB7 => {
+                    // PUSHB[1-8]
+                    let count = (opcode - 0xB0 + 1) as usize;
+                    for _ in 0..count {
+                        let b = self.fetch_byte()?;
+                        self.push(b as i32);
+                    }
+                }
+                0xB8..=0xBF => {
+                    // PUSHW[1-8]
+                    let count = (opcode - 0xB8 + 1) as usize;
+                    for _ in 0..count {
+                        let hi = self.fetch_byte()? as i16;
+                        let lo = self.fetch_byte()? as i16;
+                        self.push(((hi as i32) << 8) | (lo as i32));
+                    }
+                }
+                0x40 => {
+                    // NPUSHB
+                    let count = self.fetch_byte()? as usize;
+                    for _ in 0..count {
+                        let b = self.fetch_byte()?;
+                        self.push(b as i32);
+                    }
+                }
+                0x41 => {
+                    // NPUSHW
+                    let count = self.fetch_byte()? as usize;
+                    for _ in 0..count {
+                        let hi = self.fetch_byte()? as i16;
+                        let lo = self.fetch_byte()? as i16;
+                        self.push(((hi as i32) << 8) | (lo as i32));
+                    }
+                }
+                // ── Storage ops (fpgm may initialize storage) ────
+                0x42 => {
+                    let idx = self.pop()? as usize;
+                    let val = self.pop()?;
+                    let _ = self.set_storage(idx, val);
+                }
+                0x43 => {
+                    let idx = self.pop()? as usize;
+                    if let Ok(val) = self.get_storage(idx) {
+                        self.push(val);
+                    }
+                }
                 0x2C => {
                     // FDEF: Function Definition
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -348,23 +398,18 @@ impl ExecContext {
         Ok(())
     }
 
-    /// Get a CVT value.
+    /// Get a CVT value. Returns 0 if index is out of range.
     #[allow(dead_code)]
     pub fn get_cvt(&self, idx: usize) -> Result<i32, FontError> {
-        self.cvt.get(idx).copied().ok_or(FontError::InvalidOutline(
-            "bytecode: CVT index out of range".into(),
-        ))
+        Ok(*self.cvt.get(idx).unwrap_or(&0))
     }
 
-    /// Set a CVT value.
+    /// Set a CVT value. No-op if index is out of range.
     #[allow(dead_code)]
     pub fn set_cvt(&mut self, idx: usize, val: i32) -> Result<(), FontError> {
-        if idx >= self.cvt.len() {
-            return Err(FontError::InvalidOutline(
-                "bytecode: CVT index out of range".into(),
-            ));
+        if idx < self.cvt.len() {
+            self.cvt[idx] = val;
         }
-        self.cvt[idx] = val;
         Ok(())
     }
 
@@ -746,18 +791,61 @@ impl ExecContext {
                     }
                 }
 
-                // ── IUP — Interpolate Untouched Points ────────────
-                0x30 => {
-                    // IUP[0] = IUP for X
-                    // Find touched points along contours, interpolate between them
-                    // This is a complex operation — simplified version:
-                    // Walk each contour, find consecutive TOUCH_X points,
-                    // interpolate untouched points between them.
-                    // For now, skip IUP
+                // ── SHP — Shift Point by last point (0x32-0x37) ──
+                0x32..=0x37 => {
+                    // SHP[rpX]: shift rp2 using the relationship between
+                    // rpX and rp2 in original coords, projected onto freedom vec
+                    let ref_pt = match opcode & 3 {
+                        0 => self.gs.rp0 as usize,
+                        1 => self.gs.rp1 as usize,
+                        _ => self.gs.rp2 as usize,
+                    };
+                    let (rcx, rcy) = zone.cur(ref_pt);
+                    let (rorg_x, rorg_y) = zone.org(ref_pt);
+                    let p = self.gs.rp2 as usize;
+                    let (porg_x, porg_y) = zone.org(p);
+                    let orig_rel = self.gs.project(porg_x - rorg_x, porg_y - rorg_y);
+                    let (dx, dy) = self.gs.move_along_free(orig_rel);
+                    zone.set_cur(p, rcx + dx, rcy + dy);
+                    zone.set_tag(p, 0x03);
                 }
-                0x31 => {
-                    // IUP[1] = IUP for Y
-                    // Same as above but for Y axis
+
+                // ── IUP — Interpolate Untouched Points ────────────
+                0x30 | 0x31 => {
+                    let do_x = opcode == 0x30;
+                    // Simple IUP: walk point array, find touched neighbors, interp
+                    let n = zone.n_points as usize;
+                    let touch_bit = if do_x { 0x01u8 } else { 0x02u8 };
+                    let cur = if do_x { &mut zone.cur_x } else { &mut zone.cur_y };
+                    
+                    // Find consecutive touched ranges
+                    let mut first_touched: Option<usize> = None;
+                    for i in 0..n {
+                        if zone.tags[i] & touch_bit != 0 {
+                            if first_touched.is_none() { first_touched = Some(i); }
+                        }
+                    }
+                    
+                    if let Some(ft) = first_touched {
+                        // Find last touched
+                        let mut last_touched = ft;
+                        for i in (0..n).rev() {
+                            if zone.tags[i] & touch_bit != 0 {
+                                last_touched = i; break;
+                            }
+                        }
+                        // Interp from last_touched through wrap to first_touched
+                        if last_touched != ft {
+                            let delta = cur[ft] - cur[last_touched];
+                            let count = (n - last_touched + ft) as i32;
+                            for k in 1..((n - last_touched + ft).min(n)) {
+                                let idx = (last_touched + k) % n;
+                                if idx == ft { break; }
+                                let frac = k as i32 * delta / count;
+                                cur[idx] = cur[last_touched] + frac;
+                            }
+                        }
+                    }
                 }
 
                 // ── Control flow ──────────────────────────────────
@@ -815,10 +903,8 @@ impl ExecContext {
                     zone.set_tag(p, 0x03);
                 }
 
-                // ── SCFS ──────────────────────────────────────────
-                _ => {
-                    // Unknown opcode — skip silently (like C in non-pedantic mode)
-                }
+                // ── Unknown opcode ────────────────────────────
+                _ => {}
             }
         }
 

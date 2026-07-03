@@ -54,26 +54,28 @@ impl GlyphZone {
     /// Get the current (x, y) of a point as a tuple.
     #[inline]
     pub fn cur(&self, idx: usize) -> (i32, i32) {
-        (self.cur_x[idx], self.cur_y[idx])
+        if idx >= self.cur_x.len() { (0, 0) } else { (self.cur_x[idx], self.cur_y[idx]) }
     }
 
     /// Set the current (x, y) of a point.
     #[inline]
     pub fn set_cur(&mut self, idx: usize, x: i32, y: i32) {
-        self.cur_x[idx] = x;
-        self.cur_y[idx] = y;
+        if idx < self.cur_x.len() {
+            self.cur_x[idx] = x;
+            self.cur_y[idx] = y;
+        }
     }
 
     /// Get the original (x, y) of a point as a tuple.
     #[inline]
     pub fn org(&self, idx: usize) -> (i32, i32) {
-        (self.org_x[idx], self.org_y[idx])
+        if idx >= self.org_x.len() { (0, 0) } else { (self.org_x[idx], self.org_y[idx]) }
     }
 
     /// Get the unscaled original (x, y) of a point as a tuple.
     #[inline]
     pub fn orus(&self, idx: usize) -> (i32, i32) {
-        (self.orus_x[idx], self.orus_y[idx])
+        if idx >= self.orus_x.len() { (0, 0) } else { (self.orus_x[idx], self.orus_y[idx]) }
     }
 
     /// Get the tag byte for a point.
@@ -85,7 +87,9 @@ impl GlyphZone {
     /// Set the tag byte for a point.
     #[inline]
     pub fn set_tag(&mut self, idx: usize, tag: u8) {
-        self.tags[idx] = tag;
+        if idx < self.tags.len() {
+            self.tags[idx] = tag;
+        }
     }
 
     /// Number of real points (excluding phantom points).

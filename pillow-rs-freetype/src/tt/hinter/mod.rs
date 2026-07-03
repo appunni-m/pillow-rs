@@ -161,7 +161,7 @@ pub fn hint_glyph(
 
     // Run the font program to set up function definitions
     if !fpgm.is_empty() {
-        ctx.run_fpgm()?;
+ctx.run_fpgm()?;
     }
 
     // Run the prep program to scale CVT values for the current ppem.
@@ -174,8 +174,7 @@ pub fn hint_glyph(
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
-        ctx.set_glyph_program(glyph_ins);
-        // Set up default vectors for glyph execution (C: SVTCA[y] at start)
+ctx.set_glyph_program(glyph_ins);
         ctx.gs.set_vectors_to_y();
         ctx.run_program(&mut zone)?;
     }
