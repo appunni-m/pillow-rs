@@ -282,13 +282,13 @@
       "path": "glyph/render",
       "owner": "glyph",
       "parity": {
-        "family": "native_tt_default",
-        "passing": 7640,
-        "total": 7640
+        "family": "render_mode_matrix",
+        "passing": 16,
+        "total": 16
       },
       "symbols": {
         "FT_Render_Glyph": {
-          "rust": "grays::rasterize",
+          "rust": "Font::render_char_mode",
           "status": "partial"
         }
       }
@@ -335,21 +335,22 @@
     {
       "path": "bitmap",
       "owner": "raster",
+      "parity": { "family": "render_mode_matrix", "passing": 16, "total": 16 },
       "symbols": {
         "FT_Bitmap_Blend": {
           "rust": null,
           "status": "planned"
         },
         "FT_Bitmap_Convert": {
-          "rust": null,
-          "status": "planned"
+          "rust": "render::unpack_mono_row",
+          "status": "partial"
         },
         "FT_Bitmap_Copy": {
           "rust": null,
           "status": "planned"
         },
         "FT_Bitmap_Done": {
-          "rust": "drop GlyphMask",
+          "rust": "drop RenderedBitmap",
           "status": "partial"
         },
         "FT_Bitmap_Embolden": {
@@ -357,7 +358,7 @@
           "status": "planned"
         },
         "FT_Bitmap_Init": {
-          "rust": "GlyphMask",
+          "rust": "RenderedBitmap",
           "status": "partial"
         },
         "FT_Bitmap_New": {
@@ -449,15 +450,30 @@
     {
       "path": "raster/mono",
       "owner": "raster",
-      "symbols": {}
+      "parity": {
+        "family": "render_mode_matrix",
+        "passing": 4,
+        "total": 4
+      },
+      "symbols": {
+        "FT_Render_Glyph": {
+          "rust": "render::RenderMode::Mono",
+          "status": "partial"
+        }
+      }
     },
     {
       "path": "raster/lcd",
       "owner": "raster",
+      "parity": {
+        "family": "render_mode_matrix",
+        "passing": 8,
+        "total": 8
+      },
       "symbols": {
         "FT_Library_SetLcdFilter": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Harmony LCD geometry (subpixel rendering disabled)",
+          "status": "partial"
         },
         "FT_Library_SetLcdFilterWeights": {
           "rust": null,
@@ -466,6 +482,10 @@
         "FT_Library_SetLcdGeometry": {
           "rust": null,
           "status": "planned"
+        },
+        "FT_Render_Glyph": {
+          "rust": "render::RenderMode::Lcd/LcdV",
+          "status": "partial"
         }
       }
     },
