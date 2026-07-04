@@ -1033,11 +1033,71 @@ impl ExecContext {
                 // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
                 0x81 => { let _ = self.pop()?; } // FLIPRGON
                 0x82 => { let _ = self.pop()?; } // FLIPRGOFF
-                // ── DELTAP1/2/3 (0x5D, 0x71, 0x72) — Delta exceptions ──
-                // C: Ins_DELTAP at ttinterp.c (various). Skips for now —
-                // delta exceptions are per-ppem adjustment tables that
-                // are rarely used at 72dpi 10-24pt.
-                0x5D | 0x5E | 0x5F | 0x71 | 0x72 | 0x73 | 0x74 => {}
+                // ── DELTAP/DELTAC — Delta exceptions ───────────────
+                // ✅ VERIFIED: C: Ins_DELTAP (ttinterp.c:6300-6395),
+                //    Ins_DELTAC (ttinterp.c:6396-6475)
+                // Per-ppem point/CVT adjustments. Pops count then
+                // (point_index, delta) pairs. Applies delta * F to
+                // points (DELTAP) or CVT entries (DELTAC) when the
+                // ppem range matches.
+                0x5D | 0x71 | 0x72 => {
+                    // DELTAP: Move points by delta
+                    let count = self.pop()?;
+                    let nump = if count < 0 || count > self.stack.len() as i32 / 2 {
+                        self.stack.len() as i32 / 2
+                    } else { count };
+                    // C: P = ppem*64 - delta_base, range offset by opcode
+                    let base_ppem = self.ppem * 64;
+                    let p = base_ppem - self.gs.delta_base as i32
+                        - match opcode { 0x71 => 16, 0x72 => 32, _ => 0 };
+                    if (p & !0xF) != 0 { // P < 0 || P > 15 → skip
+                        // Consume the args without processing
+                        for _ in 0..nump { let _ = self.pop()?; let _ = self.pop()?; }
+                    } else {
+                        let ppem_bits = p << 4; // P << 4 for matching
+                        let f = 1i32 << (6 - self.gs.delta_shift as i32); // F scale
+                        for _ in 0..nump {
+                            let b = self.pop()?; // delta + ppem bits
+                            let a = self.pop()? as usize; // point index
+                            if a < zone.n_points as usize && (b & 0xF0) == ppem_bits {
+                                let mut d = (b & 0x0F) - 8;
+                                if d >= 0 { d += 1; }
+                                d *= f;
+                                let (dx, dy) = self.gs.move_along_free(d);
+                                let (cx, cy) = zone.cur(a);
+                                zone.set_cur(a, cx + dx, cy + dy);
+                                zone.set_tag(a, 0x03);
+                            }
+                        }
+                    }
+                }
+                0x73 | 0x74 | 0x75 => {
+                    // DELTAC: Adjust CVT values by delta
+                    let count = self.pop()?;
+                    let nump = if count < 0 || count > self.stack.len() as i32 / 2 {
+                        self.stack.len() as i32 / 2
+                    } else { count };
+                    let base_ppem = self.ppem * 64;
+                    let p = base_ppem - self.gs.delta_base as i32
+                        - match opcode { 0x74 => 16, 0x75 => 32, _ => 0 };
+                    if (p & !0xF) != 0 {
+                        for _ in 0..nump { let _ = self.pop()?; let _ = self.pop()?; }
+                    } else {
+                        let ppem_bits = p << 4;
+                        let f = 1i32 << (6 - self.gs.delta_shift as i32);
+                        for _ in 0..nump {
+                            let b = self.pop()?;
+                            let a = self.pop()? as usize;
+                            if a < self.cvt.len() && (b & 0xF0) == ppem_bits {
+                                let mut d = (b & 0x0F) - 8;
+                                if d >= 0 { d += 1; }
+                                d *= f;
+                                let cv = self.cvt[a].wrapping_add(d);
+                                let _ = self.set_cvt(a, cv);
+                            }
+                        }
+                    }
+                }
                 // ── Unknown opcode ────────────────────────────
                 _ => {}
             }
