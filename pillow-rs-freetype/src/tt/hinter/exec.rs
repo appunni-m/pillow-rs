@@ -308,12 +308,11 @@ impl ExecContext {
         self.gs = GraphicsState::default();
         self.gs.auto_flip = true; // C default
 
-        // Scale CVT: face->cvt[i] / 64 → FT_MulFix(_, scale)
-        // Our CVT entries are in FU*64 from the parser. Divide by 64 to get FU.
-        // Then scale to 26.6 pixel units using y_scale.
+        // Scale CVT: face->cvt[i] is already FWORD*64 from the parser,
+        // matching FreeType's face-level CVT storage. Applying the 16.16
+        // size scale directly keeps the result in 26.6 pixels.
         for i in 0..self.cvt.len() {
-            let fu = self.cvt[i] / 64;
-            self.cvt[i] = crate::fixed::ft_mul_fix(fu, self.y_scale);
+            self.cvt[i] = crate::fixed::ft_mul_fix(self.cvt[i], self.y_scale);
         }
 
         // Restore the post-fpgm storage snapshot saved by TT_Save_Context.
@@ -448,6 +447,21 @@ impl ExecContext {
             self.twilight.set_tag(p, tag);
         } else {
             glyph.set_tag(p, tag);
+        }
+    }
+
+    fn clear_touch_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize) {
+        let mut mask = 0u8;
+        if self.gs.freedom_vector.0 != 0 {
+            mask |= 0x01;
+        }
+        if self.gs.freedom_vector.1 != 0 {
+            mask |= 0x02;
+        }
+        if zp == 0 {
+            self.twilight.clear_tag(p, mask);
+        } else {
+            glyph.clear_tag(p, mask);
         }
     }
 
@@ -881,15 +895,14 @@ impl ExecContext {
                     let (dx, dy) = self.gs.move_along_free(target - proj);
                     self.set_cur_in(zone, self.gs.zp0, p, cx + dx, cy + dy);
                     self.touch_in(zone, self.gs.zp0, p);
-                    if opcode == 0x2F {
-                        self.gs.rp0 = p as u32;
-                    }
+                    self.gs.rp0 = p as u32;
+                    self.gs.rp1 = p as u32;
                 }
 
                 // ── MIAP — Move Indirect Absolute Point ──────────
                 0x3E | 0x3F => {
-                    let p = self.pop()? as usize;
                     let cvt_idx = self.pop()? as usize;
+                    let p = self.pop()? as usize;
                     let cvt_val = self.get_cvt(cvt_idx)?;
                     if self.gs.zp0 == 0 {
                         let (ox, oy) = self.gs.move_along_free(cvt_val);
@@ -952,7 +965,7 @@ impl ExecContext {
                         org_dist
                     };
 
-                    if (opcode & 0x08) != 0 {
+                    if (opcode & 0x08) != 0 && org_dist != 0 {
                         if org_dist >= 0 {
                             if distance < self.gs.minimum_distance {
                                 distance = self.gs.minimum_distance;
@@ -981,8 +994,8 @@ impl ExecContext {
                 // C: Ins_MIRP at ttinterp.c:5520-5673
                 // Flag bits same as MDRP + auto-flip
                 0xE0..=0xFF => {
-                    let p = self.pop()? as usize;
                     let cvt_idx = self.pop()?;
+                    let p = self.pop()? as usize;
                     let mut cvt_dist = if cvt_idx < 0 {
                         0
                     } else {
@@ -1038,7 +1051,7 @@ impl ExecContext {
                         cvt_dist
                     };
 
-                    if (opcode & 0x08) != 0 {
+                    if (opcode & 0x08) != 0 && org_dist != 0 {
                         if org_dist >= 0 {
                             if distance < self.gs.minimum_distance {
                                 distance = self.gs.minimum_distance;
@@ -1060,21 +1073,21 @@ impl ExecContext {
                     }
                 }
 
-                // ── ALIGNRP (0x3A, 0x3C) — Align Relative Point ──
+                // ── ALIGNRP (0x3C) — Align Relative Point ──
                 // ✅ VERIFIED: C: Ins_ALIGNRP (ttinterp.c:5673-5720)
                 // Pops GS.loop counter points. For each, snaps position
                 // to rp0: distance = PROJECT(cur[p], cur[rp0]), move by -distance
-                0x3A | 0x3C => {
+                0x3C => {
                     let loop_count = self.gs.loop_counter as usize;
                     let rp = self.gs.rp0 as usize;
-                    let (rcx, rcy) = zone.cur(rp);
+                    let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
                     for _ in 0..loop_count {
                         let p = self.pop()? as usize;
-                        let (pcx, pcy) = zone.cur(p);
+                        let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
                         let dist = self.gs.project(pcx - rcx, pcy - rcy);
                         let (dx, dy) = self.gs.move_along_free(-dist);
-                        zone.set_cur(p, pcx + dx, pcy + dy);
-                        self.touch_point(zone, p);
+                        self.set_cur_in(zone, self.gs.zp1, p, pcx + dx, pcy + dy);
+                        self.touch_in(zone, self.gs.zp1, p);
                     }
                     self.gs.loop_counter = 1; // C: GS.loop = 1
                 }
@@ -1135,10 +1148,10 @@ impl ExecContext {
                 // ── IUP — Interpolate Untouched Points ────────────
                 // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
                 0x30 => {
-                    iup::iup_x(zone);
+                    iup::iup_y(zone);
                 }
                 0x31 => {
-                    iup::iup_y(zone);
+                    iup::iup_x(zone);
                 }
 
                 // ── Control flow ──────────────────────────────────
@@ -1226,9 +1239,9 @@ impl ExecContext {
                     let (dx, dy) = self.gs.move_along_raw_free(amount);
                     for _ in 0..self.gs.loop_counter {
                         let p = self.pop()? as usize;
-                        let (cx, cy) = zone.cur(p);
-                        zone.set_cur(p, cx + dx, cy + dy);
-                        self.touch_point(zone, p);
+                        let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
+                        self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                        self.touch_in(zone, self.gs.zp2, p);
                     }
                     self.gs.loop_counter = 1;
                 }
@@ -1249,16 +1262,16 @@ impl ExecContext {
                 // ── CINDEX (0x25) — Copy indexed element ─────────
                 0x25 => {
                     let k = self.pop()? as usize;
-                    if k < self.stack.len() {
-                        let v = self.stack[self.stack.len() - 1 - k];
+                    if k > 0 && k <= self.stack.len() {
+                        let v = self.stack[self.stack.len() - k];
                         self.push(v);
                     }
                 }
                 // ── MINDEX (0x26) — Move indexed element ─────────
                 0x26 => {
                     let k = self.pop()? as usize;
-                    if k < self.stack.len() {
-                        let v = self.stack.remove(self.stack.len() - 1 - k);
+                    if k > 0 && k <= self.stack.len() {
+                        let v = self.stack.remove(self.stack.len() - k);
                         self.push(v);
                     }
                 }
@@ -1274,15 +1287,16 @@ impl ExecContext {
                     // We don't track this precisely, just mark touched
                     self.touch_point(zone, p);
                 }
-                // ── SDB (0x8B) — Set Delta Base ──────────────────
-                0x8B => {
-                    let v = self.pop()?;
-                    self.gs.delta_base = v as u32;
-                }
-                // ── SDS (0x8A) — Set Delta Shift ─────────────────
+                // ── ROLL (0x8A) — rotate the top three stack entries ─
                 0x8A => {
-                    let v = self.pop()?;
-                    self.gs.delta_shift = v as u32;
+                    if self.stack.len() >= 3 {
+                        let a = self.pop()?;
+                        let b = self.pop()?;
+                        let c = self.pop()?;
+                        self.push(b);
+                        self.push(a);
+                        self.push(c);
+                    }
                 }
                 // ── JMPR (0x1C) — Jump Relative ──────────────────
                 0x1C => {
@@ -1453,8 +1467,10 @@ impl ExecContext {
                 // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
                 0x81 => {
                     let _ = self.pop()?;
+                    let _ = self.pop()?;
                 } // FLIPRGON
                 0x82 => {
+                    let _ = self.pop()?;
                     let _ = self.pop()?;
                 } // FLIPRGOFF
                 // ── SPVTL (0x06-0x07) — Set Projection Vector To Line ──
@@ -1540,23 +1556,57 @@ impl ExecContext {
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
-                // C: Ins_GETINFO. Returns flags about the engine. Push 0.
+                // C: Ins_GETINFO. Returns flags about the engine.
                 0x88 => {
-                    self.push(0);
+                    let selector = self.pop()?;
+                    let mut result = 0;
+                    if selector & 0x01 != 0 {
+                        // FreeType's bytecode interpreter advertises the v35
+                        // compatible instruction set for classic grayscale
+                        // hinting. Rotation/stretch/variation/ClearType flags
+                        // remain clear for this metrics-only load path.
+                        result |= 35;
+                    }
+                    if selector & 0x10 != 0 {
+                        result |= 0x0800;
+                    }
+                    self.push(result);
                 }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
-                // C: Ins_UTP (ttinterp.c:6016). Pops point, clears its touch.
+                // C: Ins_UTP. Pops point in zp0 and clears touch bits selected
+                // by the current freedom vector.
                 0x29 => {
                     let p = self.pop()? as usize;
-                    zone.set_tag(p, 0x00); // clear touch flags
+                    self.clear_touch_in(zone, self.gs.zp0, p);
                 }
-                // ── MSIRP (0x3B) — Move Single Indirect Relative Point ──
-                // C: Ins_MSIRP (ttinterp.c:5224-5276). Like MIRP but single.
-                // Rarely used. Skip with stack cleanup (pops 2 args).
-                0x3B => {
-                    let _ = self.pop()?;
-                    let _ = self.pop()?;
+                // ── MSIRP (0x3A-0x3B) — Move Stack Indirect Relative Point ──
+                // Like MIRP, but uses a stack-provided distance and does not
+                // apply rounding or control-value cut-in.
+                0x3A | 0x3B => {
+                    let p = self.pop()? as usize;
+                    let distance = self.pop()?;
+                    let rp = self.gs.rp0 as usize;
+
+                    if self.gs.zp1 == 0 {
+                        let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
+                        let (dx, dy) = self.gs.move_along_free(distance);
+                        self.set_org_in(zone, self.gs.zp1, p, rcx + dx, rcy + dy);
+                        self.set_cur_in(zone, self.gs.zp1, p, rcx + dx, rcy + dy);
+                    }
+
+                    let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
+                    let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
+                    let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
+                    let (dx, dy) = self.gs.move_along_free(distance - cur_dist);
+                    self.set_cur_in(zone, self.gs.zp1, p, pcx + dx, pcy + dy);
+                    self.touch_in(zone, self.gs.zp1, p);
+
+                    self.gs.rp1 = rp as u32;
+                    self.gs.rp2 = p as u32;
+                    if opcode & 1 != 0 {
+                        self.gs.rp0 = p as u32;
+                    }
                 }
                 // ── AND (0x5A) — Logical AND ───────────────────────
                 // C: Ins_AND (ttinterp.c:2588-2601)
@@ -1765,14 +1815,7 @@ impl ExecContext {
                 // ── DELTAC1 (0x73) — already handled above ─────────
                 // ── Unknown (0x7B) ─────────────────────────────────
                 0x7B => {}
-                // ── FLIPRGOFF (0x83) ────────────────────────────
-                0x83 => {
-                    let _ = self.pop()?;
-                }
-                // ── FLIPRGON (0x84) ─────────────────────────────
-                0x84 => {
-                    let _ = self.pop()?;
-                }
+                0x83 | 0x84 => {}
                 // ── SCANCTRL (0x85) ──────────────────────────────
                 // C: Ins_SCANCTRL. Sets scan control. Pop and ignore.
                 0x85 => {
@@ -1785,27 +1828,27 @@ impl ExecContext {
                     let _ = self.pop()?;
                 }
 
-                // ── MAX (0x8C) — Maximum ────────────────────────
+                // ── MAX (0x8B) — Maximum ────────────────────────
                 // C: Ins_MAX. Pops a, b, pushes max(a,b).
-                0x8C => {
+                0x8B => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     self.push(if a > b { a } else { b });
                 }
-                // ── MIN (0x8D) — Minimum ────────────────────────
-                0x8D => {
+                // ── MIN (0x8C) — Minimum ────────────────────────
+                0x8C => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     self.push(if a < b { a } else { b });
                 }
-                // ── SCANTYPE (0x8E) — Set Scan Type ──────────────
+                // ── SCANTYPE (0x8D) — Set Scan Type ──────────────
                 // C: Ins_SCANTYPE. Pops value, sets GS.scan_type.
-                0x8E => {
+                0x8D => {
                     self.gs.scan_type = self.pop()? as u8;
                 }
-                // ── INSTCTRL (0x8F) — Set Instruction Control ────
+                // ── INSTCTRL (0x8E) — Set Instruction Control ────
                 // C: Ins_INSTCTRL. Pops selector,value. Sets instruct_control.
-                0x8F => {
+                0x8E => {
                     let _val = self.pop()?;
                     let _sel = self.pop()?;
                 }

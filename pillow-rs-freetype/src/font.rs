@@ -8,7 +8,9 @@ use crate::casts::{i32_from_f32, u32_from_i32, u32_from_i64, u32_from_usize, usi
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::grays::{self, RasterResult};
-use crate::scaler::{self, pixel_ceil, pixel_round, ScaleMetrics};
+use crate::scaler::{
+    self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_ceil, pixel_round, ScaleMetrics,
+};
 use crate::tables::FontData;
 use crate::tt::{self, tag};
 use std::sync::Arc;
@@ -115,6 +117,19 @@ pub struct GlyphMask {
     pub advance_width: i32,
 }
 
+/// FreeType glyph slot metrics in 26.6 pixel units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GlyphSlotMetrics {
+    pub width: i32,
+    pub height: i32,
+    pub hori_bearing_x: i32,
+    pub hori_bearing_y: i32,
+    pub hori_advance: i32,
+    pub vert_bearing_x: i32,
+    pub vert_bearing_y: i32,
+    pub vert_advance: i32,
+}
+
 impl Font {
     /// Load a TrueType/OpenType font from raw bytes at a given point size.
     ///
@@ -186,6 +201,13 @@ impl Font {
         };
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
+        let vhea = dir
+            .find(data, tag(b"vhea"))
+            .and_then(|d| tt::vhea::parse_vhea(d).ok());
+        let vmtx = vhea.as_ref().and_then(|vhea| {
+            dir.find(data, tag(b"vmtx"))
+                .and_then(|d| tt::vmtx::parse_vmtx(d, vhea.num_vmetrics, maxp.num_glyphs).ok())
+        });
 
         let loca_data = dir
             .find(data, tag(b"loca"))
@@ -219,6 +241,8 @@ impl Font {
             maxp,
             name,
             os2,
+            vhea,
+            vmtx,
             loca_data,
             glyf_data,
             size_pt,
@@ -238,6 +262,8 @@ impl Font {
             font_data.head.units_per_em,
         );
 
+        let selected_charmap = default_unicode_charmap_index(&font_data.cmap);
+
         Ok(Font {
             data: font_data,
             size_pt,
@@ -245,7 +271,7 @@ impl Font {
             face_globals,
             is_italic,
             size_metrics,
-            selected_charmap: 0,
+            selected_charmap,
         })
     }
 
@@ -554,6 +580,39 @@ impl Font {
         total
     }
 
+    /// Return `FT_GlyphSlotRec::metrics` for a Unicode codepoint loaded with
+    /// FreeType's default TrueType load path.
+    ///
+    /// This is the scalar metrics path used before rendering: native bytecode
+    /// hinting is allowed, autohinting is not forced, and no bitmap render is
+    /// requested.
+    pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
+        let glyph = self.char_index(codepoint);
+        let scaled = if self.data.fpgm.is_some() && self.data.cvt.is_some() {
+            let scaled = scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?;
+            if is_pathological_metrics_cbox(&scaled) {
+                let metrics_cache = self.face_globals.get_metrics(glyph);
+                scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
+                    &self.data,
+                    glyph,
+                    metrics_cache.as_ref(),
+                    self.is_italic,
+                )?
+            } else {
+                scaled
+            }
+        } else {
+            let metrics_cache = self.face_globals.get_metrics(glyph);
+            scaler::scale_glyph_for_metrics_with_autohint(
+                &self.data,
+                glyph,
+                metrics_cache.as_ref(),
+                self.is_italic,
+            )?
+        };
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+    }
+
     /// `getbbox(text)` → `(left, top, right, bottom)` in pixels.
     ///
     /// `BitmapBackend::PIL`: PIL coords, y-down from ascender with baseline padding.
@@ -724,6 +783,102 @@ impl Font {
             }
         }
     }
+}
+
+impl Font {
+    fn slot_metrics_from_scaled(
+        &self,
+        glyph_index: u16,
+        scaled: &scaler::ScaledGlyph,
+    ) -> GlyphSlotMetrics {
+        let mut metrics = GlyphSlotMetrics {
+            width: scaled.cbox_x_max - scaled.cbox_x_min,
+            height: scaled.cbox_y_max - scaled.cbox_y_min,
+            hori_bearing_x: scaled.cbox_x_min,
+            hori_bearing_y: scaled.cbox_y_max,
+            hori_advance: scaled.slot_advance_width,
+            vert_bearing_x: 0,
+            vert_bearing_y: 0,
+            vert_advance: 0,
+        };
+
+        if let Some(vmtx) = &self.data.vmtx {
+            let vertical = vmtx.get(glyph_index);
+            metrics.vert_bearing_y = ft_mul_fix(vertical.tsb as i32, self.size_metrics.y_scale);
+            metrics.vert_advance =
+                ft_mul_fix(vertical.advance_height as i32, self.size_metrics.y_scale);
+        } else {
+            let height_fu = if self.size_metrics.y_scale == 0 {
+                0
+            } else {
+                ft_div_fix(metrics.height, self.size_metrics.y_scale)
+            };
+            let advance_fu = vertical_advance_font_units(&self.data);
+            let top_fu = (advance_fu - height_fu) / 2;
+            metrics.vert_bearing_y = ft_mul_fix(top_fu, self.size_metrics.y_scale);
+            metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
+        }
+        metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+
+        grid_fit_horizontal_metrics(&mut metrics);
+        metrics
+    }
+}
+
+fn vertical_advance_font_units(data: &FontData) -> i32 {
+    if let Some(os2) = &data.os2 {
+        return os2.s_typo_ascender as i32 - os2.s_typo_descender as i32;
+    }
+    data.hhea.ascent as i32 - data.hhea.descent as i32
+}
+
+fn is_pathological_metrics_cbox(scaled: &scaler::ScaledGlyph) -> bool {
+    let width = scaled.cbox_x_max.saturating_sub(scaled.cbox_x_min);
+    let height = scaled.cbox_y_max.saturating_sub(scaled.cbox_y_min);
+    width > 16_384
+        || height > 16_384
+        || scaled.cbox_x_min.abs() > 16_384
+        || scaled.cbox_x_max.abs() > 16_384
+        || scaled.cbox_y_min.abs() > 16_384
+        || scaled.cbox_y_max.abs() > 16_384
+}
+
+fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> usize {
+    cmap.charmaps
+        .iter()
+        .position(|record| {
+            record.format == 12 && record.platform_id == 3 && record.encoding_id == 10
+        })
+        .or_else(|| {
+            cmap.charmaps
+                .iter()
+                .position(|record| record.format == 12 && record.platform_id == 0)
+        })
+        .or_else(|| {
+            cmap.charmaps
+                .iter()
+                .position(|record| record.format == 4 && record.platform_id == 3)
+        })
+        .or_else(|| {
+            cmap.charmaps
+                .iter()
+                .position(|record| record.format == 4 && record.platform_id == 0)
+        })
+        .unwrap_or(0)
+}
+
+fn grid_fit_horizontal_metrics(metrics: &mut GlyphSlotMetrics) {
+    metrics.vert_bearing_x = ft_pix_floor(metrics.vert_bearing_x);
+    metrics.vert_bearing_y = ft_pix_floor(metrics.vert_bearing_y);
+
+    let right = ft_pix_ceil(metrics.hori_bearing_x + metrics.width);
+    let bottom = ft_pix_floor(metrics.hori_bearing_y - metrics.height);
+    metrics.hori_bearing_x = ft_pix_floor(metrics.hori_bearing_x);
+    metrics.hori_bearing_y = ft_pix_ceil(metrics.hori_bearing_y);
+    metrics.width = right - metrics.hori_bearing_x;
+    metrics.height = metrics.hori_bearing_y - bottom;
+    metrics.hori_advance = ft_pix_round(metrics.hori_advance);
+    metrics.vert_advance = ft_pix_round(metrics.vert_advance);
 }
 
 impl SizeMetrics {

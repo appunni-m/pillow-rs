@@ -104,6 +104,14 @@ impl GlyphZone {
         }
     }
 
+    /// Clear selected touch bits for a point.
+    #[inline]
+    pub fn clear_tag(&mut self, idx: usize, mask: u8) {
+        if idx < self.tags.len() {
+            self.tags[idx] &= !mask;
+        }
+    }
+
     /// Number of real points (excluding phantom points).
     pub fn n_real_points(&self) -> usize {
         (self.n_points as usize).saturating_sub(4)

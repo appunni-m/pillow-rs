@@ -10,7 +10,7 @@ use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
 use crate::outline::{Outline, OutlinePoint};
 use crate::tables::FontData;
-use crate::tt::glyf::{load_glyph, GlyphOutline};
+use crate::tt::glyf::{load_glyph, load_glyph_with_scaled_component_offsets, GlyphOutline};
 
 /// Fixed-point scale factors derived from point size and units-per-em.
 ///
@@ -80,8 +80,14 @@ fn ppem_from_size(size_pt: f32) -> i32 {
 pub struct ScaledGlyph {
     /// Outline in 26.6, with origin at the glyph's pixel bbox bottom-left.
     pub outline: Outline,
-    pub advance_width: i32, // 26.6
-    pub lsb: i32,           // 26.6
+    pub advance_width: i32,      // 26.6
+    pub slot_advance_width: i32, // 26.6, after hinted phantom adjustment
+    pub lsb: i32,                // 26.6
+    /// Raw scaled CBox before pixel floor/ceil conversion.
+    pub cbox_x_min: i32,
+    pub cbox_y_min: i32,
+    pub cbox_x_max: i32,
+    pub cbox_y_max: i32,
     /// Pixel CBox (FT_GLYPH_BBOX_PIXELS): x/yMin floored, x/yMax ceiled.
     pub bbox_x_min: i32,
     pub bbox_y_min: i32,
@@ -127,6 +133,73 @@ pub fn scale_glyph(
         },
         true,
         false,
+        false,
+        false,
+    )
+}
+
+pub fn scale_glyph_for_metrics(
+    data: &FontData,
+    glyph_index: u16,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        None,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+        false,
+        true,
+        false,
+    )
+}
+
+pub fn scale_glyph_for_metrics_with_autohint(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+        false,
+        true,
+        true,
+    )
+}
+
+pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+        false,
+        true,
+        false,
     )
 }
 
@@ -150,6 +223,8 @@ pub fn scale_glyph_lcd(
             stem_adjust: false,
         },
         true,
+        false,
+        false,
         false,
     )
 }
@@ -175,6 +250,8 @@ pub fn scale_glyph_lcd_v(
         },
         true,
         false,
+        false,
+        false,
     )
 }
 
@@ -196,6 +273,8 @@ pub fn scale_glyph_mono(
         },
         true,
         true,
+        false,
+        false,
     )
 }
 
@@ -218,6 +297,8 @@ pub fn scale_glyph_no_hinting(
         },
         false,
         false,
+        false,
+        false,
     )
 }
 
@@ -228,26 +309,46 @@ fn scale_glyph_impl(
     style: HintStyle,
     allow_bytecode: bool,
     target_mono: bool,
+    round_component_offsets: bool,
+    use_autohint_advance: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
     let h_metric = data.hmtx.get(glyph_index);
     let advance_width = scale.scale_x(h_metric.advance_width as i32);
+    let mut slot_advance_width = advance_width;
     let lsb = scale.scale_x(h_metric.lsb as i32);
 
-    let outline_raw = load_glyph(
-        &data.glyf_data,
-        &data.loca_data,
-        data.head.index_to_loc_format,
-        glyph_index,
-        &data.hmtx,
-    )?;
+    let outline_raw = if round_component_offsets {
+        load_glyph_with_scaled_component_offsets(
+            &data.glyf_data,
+            &data.loca_data,
+            data.head.index_to_loc_format,
+            glyph_index,
+            &data.hmtx,
+            scale.x_scale,
+            scale.y_scale,
+        )?
+    } else {
+        load_glyph(
+            &data.glyf_data,
+            &data.loca_data,
+            data.head.index_to_loc_format,
+            glyph_index,
+            &data.hmtx,
+        )?
+    };
 
     if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
         return Ok(ScaledGlyph {
             outline: Outline::default(),
             advance_width,
+            slot_advance_width,
             lsb,
+            cbox_x_min: 0,
+            cbox_y_min: 0,
+            cbox_x_max: 0,
+            cbox_y_max: 0,
             bbox_x_min: 0,
             bbox_y_min: 0,
             bbox_x_max: 0,
@@ -356,7 +457,7 @@ fn scale_glyph_impl(
 
     // ── Hinting dispatch ────────────────────────────────────────────────
     if use_autohint {
-        autohint_glyph(
+        let hinted_advance = autohint_glyph(
             &mut scaled,
             &shifted_raw,
             &scale,
@@ -369,6 +470,11 @@ fn scale_glyph_impl(
                 mono: target_mono,
             },
         );
+        if use_autohint_advance {
+            if let Some(advance_width) = hinted_advance {
+                slot_advance_width = advance_width;
+            }
+        }
     } else if allow_bytecode {
         if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
             // Bytecode VM: run on glyphs with per-glyph instructions.
@@ -401,8 +507,13 @@ fn scale_glyph_impl(
                 &hs,
                 &outline_raw.instructions,
             );
-            if let Err(e) = hint_result {
-                log::debug!("[VM] gi={glyph_index}: {e}");
+            match hint_result {
+                Ok(outcome) => {
+                    slot_advance_width = outcome.advance_width;
+                }
+                Err(e) => {
+                    log::debug!("[VM] gi={glyph_index}: {e}");
+                }
             }
         }
     }
@@ -454,7 +565,12 @@ fn scale_glyph_impl(
     Ok(ScaledGlyph {
         outline,
         advance_width,
+        slot_advance_width,
         lsb,
+        cbox_x_min: x_min,
+        cbox_y_min: y_min,
+        cbox_x_max: x_max,
+        cbox_y_max: y_max,
         bbox_x_min: px_x_min,
         bbox_y_min: px_y_min,
         bbox_x_max: px_x_max,
@@ -535,12 +651,12 @@ fn autohint_glyph(
     style: HintStyle,
     font_data: &FontData,
     target: HintTarget,
-) {
+) -> Option<i32> {
     use crate::outline::Outline;
 
     let num_contours = raw_outline.num_contours as i32;
     if num_contours == 0 {
-        return;
+        return None;
     }
 
     // Build a temporary Outline with scaled 26.6 coords.
@@ -571,7 +687,7 @@ fn autohint_glyph(
             }
         })
         .unwrap_or(scale.y_scale);
-    crate::autohint::apply_hints(
+    let output = crate::autohint::apply_hints(
         &mut outline,
         raw_outline,
         scale.x_scale,
@@ -594,6 +710,7 @@ fn autohint_glyph(
             s.y = p.y;
         }
     }
+    output.advance_width
 }
 
 #[derive(Debug, Clone, Copy)]
