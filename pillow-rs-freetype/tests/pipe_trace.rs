@@ -65,6 +65,7 @@ fn trace_one_glyph() {
         ymax: 0,
         is_composite: raw.is_composite,
         sub_lsb: raw.sub_lsb,
+        instructions: raw.instructions.clone(),
     };
 
     let metrics = font.face_globals.get_metrics(gid);

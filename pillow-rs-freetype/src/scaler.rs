@@ -192,17 +192,19 @@ pub fn scale_glyph(
         instructions: outline_raw.instructions.clone(),
     };
 
+    let use_autohint = latin_metrics.is_some();
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
     for p in &outline_raw.points {
+        let x = if use_autohint { p.x - pp1x_fu } else { p.x };
         scaled.push(OutlinePoint {
-            x: scale.scale_x(p.x - pp1x_fu),
+            x: scale.scale_x(x),
             y: ft_mul_fix(p.y, y_adj),
             on_curve: p.on_curve,
         });
     }
 
     // ── Hinting dispatch ────────────────────────────────────────────────
-    if latin_metrics.is_some() {
+    if use_autohint {
         autohint_glyph(
             &mut scaled,
             &shifted_raw,
@@ -215,7 +217,7 @@ pub fn scale_glyph(
     } else if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
         // Bytecode VM: run on glyphs with per-glyph instructions.
         // Falls through to unhinted on error (graceful degradation).
-        let raw_pts: Vec<OutlinePoint> = shifted_raw
+        let raw_pts: Vec<OutlinePoint> = outline_raw
             .points
             .iter()
             .map(|p| OutlinePoint {

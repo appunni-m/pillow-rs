@@ -73,6 +73,11 @@ pub struct GraphicsState {
     /// Used to determine the direction of point movement.
     pub freedom_vector: (i32, i32),
 
+    /// Computed movement vector (16.16 fixed-point).  FreeType derives this
+    /// from the projection and freedom vectors so that a requested movement
+    /// changes the point by the requested projected distance.
+    pub move_vector: (i32, i32),
+
     /// Rounding mode. Default: Grid (1).
     pub round_state: RoundMode,
 
@@ -140,6 +145,7 @@ impl Default for GraphicsState {
             dual_proj_vector: (0, 0x4000),
             // Default: freedom along X axis (1.0, 0)
             freedom_vector: (0x4000, 0),
+            move_vector: (0x10000, 0),
             round_state: RoundMode::Grid,
             auto_flip: true,
             cvt_cut_in: DEFAULT_CVT_CUT_IN,
@@ -170,6 +176,7 @@ impl GraphicsState {
         self.proj_vector = (0, 0x4000);
         self.dual_proj_vector = (0, 0x4000);
         self.freedom_vector = (0, 0x4000);
+        self.compute_move_vector();
     }
 
     /// Set projection and freedom vectors to the X axis.
@@ -178,26 +185,52 @@ impl GraphicsState {
         self.proj_vector = (0x4000, 0);
         self.dual_proj_vector = (0x4000, 0);
         self.freedom_vector = (0x4000, 0);
+        self.compute_move_vector();
     }
 
     /// Set projection vector (only) to Y axis. C: `SPVTCA[0]`.
     pub fn set_proj_to_y(&mut self) {
         self.proj_vector = (0, 0x4000);
+        self.compute_move_vector();
     }
 
     /// Set projection vector (only) to X axis. C: `SPVTCA[1]`.
     pub fn set_proj_to_x(&mut self) {
         self.proj_vector = (0x4000, 0);
+        self.compute_move_vector();
     }
 
     /// Set freedom vector (only) to Y axis. C: `SFVTCA[0]`.
     pub fn set_free_to_y(&mut self) {
         self.freedom_vector = (0, 0x4000);
+        self.compute_move_vector();
     }
 
     /// Set freedom vector (only) to X axis. C: `SFVTCA[1]`.
     pub fn set_free_to_x(&mut self) {
         self.freedom_vector = (0x4000, 0);
+        self.compute_move_vector();
+    }
+
+    /// Recompute FreeType's `moveVector` from the current projection/freedom
+    /// vectors.  The dot product is in 2.14 fixed point, while the resulting
+    /// move vector is 16.16.
+    pub fn compute_move_vector(&mut self) {
+        let f_dot_p = ((self.proj_vector.0 as i64 * self.freedom_vector.0 as i64
+            + self.proj_vector.1 as i64 * self.freedom_vector.1 as i64
+            + 0x2000)
+            >> 14) as i32;
+
+        self.move_vector = if f_dot_p >= 0x3FFE {
+            (self.freedom_vector.0 * 4, self.freedom_vector.1 * 4)
+        } else if (-0x400..0x400).contains(&f_dot_p) {
+            (0, 0)
+        } else {
+            (
+                (self.freedom_vector.0 as i64 * 0x10000 / f_dot_p as i64) as i32,
+                (self.freedom_vector.1 as i64 * 0x10000 / f_dot_p as i64) as i32,
+            )
+        };
     }
 
     /// Project a 2D vector onto the current projection vector.
@@ -224,8 +257,15 @@ impl GraphicsState {
     /// Returns (dx, dy) to add to the point's current position.
     /// The distance is in 26.6, and the freedom vector is in 2.14.
     pub fn move_along_free(&self, distance: i32) -> (i32, i32) {
-        // Normalize the freedom vector? C does this via FT_MulDiv with
-        // the vector length. For axis-aligned vectors this is trivial.
+        let dx = ft_mul_fix(distance, self.move_vector.0);
+        let dy = ft_mul_fix(distance, self.move_vector.1);
+        (dx, dy)
+    }
+
+    /// Move by a literal amount along the freedom vector.  This is used by
+    /// SHPIX, which FreeType implements with TT_MulFix14 rather than the
+    /// computed `moveVector`.
+    pub fn move_along_raw_free(&self, distance: i32) -> (i32, i32) {
         let dx = ft_mul_fix(distance, self.freedom_vector.0 << 2);
         let dy = ft_mul_fix(distance, self.freedom_vector.1 << 2);
         (dx, dy)
