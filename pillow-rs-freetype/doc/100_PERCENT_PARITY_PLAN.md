@@ -1,138 +1,151 @@
-# 100% FreeType Autohinter Parity — Architecture & Roadmap
+# 100% FreeType Parity Plan
 
-## Status: 17,250/18,500 (93.2%) SHA-256 parity with FreeType 2.14.3
+This plan has one purpose: make the harness strong enough that `pillow-rs-freetype` can pass only by matching FreeType C exactly with Rust code.
 
-| Category | Scripts | Tests | Status |
-|----------|---------|-------|--------|
-| Full SHA-256 parity | 31 | 16,001 | 100% ✓ |
-| 1-FU drift (95%+) | 18 | 970 | Near parity |
-| Sub/superscript | 2 | 153 | Needs GSUB |
-| CJK/Indic engine | 4 | 376 | Needs afcjk.c port |
+Percentages are diagnostics, not success. Thresholds are debt, not completion. Fixture presence is debt until the fixture is executed by a default exact gate.
 
-## Pass/Detailed Status
+## Current Truth
 
-### 31 Scripts at 100% (armn avst bamu buhd cakm cari copt cprt cyrl dsrt geor glag grek kali khmr khms lao latn lisu mlym olck orkh osge osma rohg shaw sinh sund taml tavt tfng)
+Exact executable gates:
 
-### Near-Parity Scripts (95-99% pass)
-| Script | Pass Rate | Failures | Root Cause |
-|--------|-----------|----------|-----------|
-| ethi | 99% | 1 | Edge case only |
-| medf | 99% | 1 | Edge case |
-| thai | 99% | 3 | 1-FU blue zone drift |
-| arab | 99% | 4 | Arabic joining joins |
-| telu | 99% | 4 | Telugu head-line |
-| vaii | 98% | 2 | Vai edge case |
-| mymr | 97% | 10 | Myanmar edge case |
-| cans | 97% | 16 | Canadian Syllabics |
+| Gate | Scope | Status |
+|---|---|---|
+| `force_autohint_matrix.json` | broad force-autohint `getmask` and `getbbox` | `22168/22168` exact |
+| `render_mode_matrix.json` | current render-mode byte/metadata matrix | `16/16` exact |
+| `fixed_parity.rs` | fixed-point scalar math | exact mandatory C-oracle test |
+| `core_face_size_charmap.rs` | current face, size, charmap, SFNT behavior | exact API gate |
+| `no_runtime_ffi.rs` | runtime boundary | exact guard |
+| `harness_contract.rs` | fixture breadth and gate strength | exact guard |
+| `interface_coverage.rs` | FreeType export map and truthful reporting | exact guard |
 
-### Moderate Gap Scripts (85-95% pass)
-| Script | Pass Rate | Failures | Root Cause |
-|--------|-----------|----------|-----------|
-| gujr | 95% | 18 | Gujarati edge cases |
-| geok | 95% | 47 | Khutsuri glyph sharing |
-| saur | 94% | 6 | Saurashtra edge case |
-| latp | 94% | 88 | Sub/superscript glyph sharing |
-| latb | 95% | 65 | Sub/superscript glyph sharing |
-| hebr | 92% | 31 | Hebrew blue zones |
-| cher | 85% | 34 | Cherokee edge cases |
+Incomplete executable baseline:
 
-### Large Gap Scripts (needs CJK engine port)
-| Script | Pass Rate | Failures | Root Cause |
-|--------|-----------|----------|-----------|
-| adlm | 37% | 158 | Adlam blue zone scanning |
-| nkoo | 67% | 60 | N'Ko edge detection |
-| goth | 56% | 14 | Gothic needs top_to_bottom |
-| hani | 37% | 114 | CJK stroke snapping |
-| beng | 44% | 115 | Bengali needs top_to_bottom |
-| deva | 47% | 154 | Devanagari needs top_to_bottom |
-| guru | 42% | 166 | Gurmukhi needs top_to_bottom |
-| knda | 35% | 125 | Kannada needs top_to_bottom |
-| mong | 25% | 21 | Mongolian needs top_to_bottom |
+| Baseline | Current status | Meaning |
+|---|---|---|
+| `native_tt_default_matrix.json` | `3176/7640` | unfinished TrueType bytecode/default load parity |
 
-## Implementation Roadmap
+Present-but-unexecuted fixture debt:
 
-### Phase 1: Sub/Superscript Fix (153 failures → 0)
+| Fixture | Required next step |
+|---|---|
+| `metrics_only_matrix.json` | add exact runner support |
+| `no_hinting_matrix.json` | add exact runner support |
+| `outline_cbox_matrix.json` | add exact runner support |
+| `render_mono_matrix.json` | add exact runner support |
+| `render_lcd_matrix.json` | add exact runner support |
 
-**Root cause**: Subscript/superscript codepoints (U+2080, U+2070, etc.) fall within LATN Unicode ranges. The coverage scan assigns LATN style to these glyphs. FreeType uses HarfBuzz GSUB feature detection to reassign them to LATB/LATP styles.
+## Harness-First Roadmap
 
-**Fix**: Add per-codepoint blue string override in `get_metrics()`. When a glyph is asked to render a subscript-range codepoint, check if the glyph also has a LATB/LATP style in its glyph_styles and use those metric s. No HarfBuzz needed.
+### Phase 1: Keep Existing Gates Exact
 
-**Effort**: ~50 lines in globals.rs
+Do not change implementation or fixtures in ways that weaken existing gates.
 
-### Phase 2: afcjk.c Port (376 failures → 0)
+Required behavior:
 
-**Root cause**: `beng`, `deva`, `guru`, `knda`, `mong`, `goth` use CIJK writing system. They need `afcjk.c` edge detection + width computation + `top_to_bottom_hinting` flag. Without this, edges are ordered bottom-to-top (wrong for these scripts), cascading through hint_edges → align_strong_points → IUP.
+- `force_autohint_matrix.json` remains broad and exact.
+- `render_mode_matrix.json` remains read-only from tests.
+- `fixed_parity.rs` keeps mandatory C-oracle comparison.
+- `no_runtime_ffi.rs` keeps runtime C impossible.
+- `harness_contract.rs` keeps broad matrix coverage from shrinking.
 
-**Implementation**:
-1. Write `src/autohint/cjk.rs` with:
-   - `cjk_metrics_init_widths()` — segment-based stem detection
-   - `cjk_metrics_init_blues()` — flat/fill blue zones  
-   - `cjk_hints_compute_edges()` — linked-segment-aware edge detection
-   - `cjk_hints_init()` — render-mode flags
-2. Wire into `FaceGlobals::get_metrics()` for Indic/CJK scripts
-3. Verify one script at a time (start with guru → deva → beng)
+Verification:
 
-**Effort**: ~1,200 lines of Rust, 2-3 sessions
-
-### Phase 3: 1-FU Drift Fixes (970 failures → 0)
-
-These are genuine small algorithmic divergences where our blue zone computation or stem width detection differs by 1 FU from FreeType. Fix via per-glyph debugging with `debug_glyph` tool.
-
-**Approach**: Pick one script at a time, trace representative failing glyphs, find the first pipeline stage where values diverge, fix.
-
-**Effort**: Per-glyph debugging, scattered across ~18 scripts
-
-### Phase 4: Hani CJK Fix
-
-`hani` uses the full CJK hinting engine. After Phase 2's `afcjk.c` port, hani should also improve. Remaining gaps need CJK-specific stroke snapping (`af_cjk_snap_width`).
-
-## Files
-
-### Source (Rust)
-```
-src/autohint/
-├── mod.rs              Module declarations + re-exports
-├── types.rs            Core data structures (AfLatinMetrics, AFEdge, etc.)
-├── loader.rs           Outline loading + direction chain + WEAK/STRONG classify
-├── latin.rs            Main hinting pipeline (compute_segments, compute_edges,
-│                       hint_edges, align_edge_points, align_strong_points,
-│                       align_weak_points)
-├── coverage.rs         COV_* instrumentation bits
-├── blue_strings.rs     Auto-generated: 55 scripts with blue zone char arrays
-├── globals_data.rs     Auto-generated: StyleClass[59], Unicode ranges, metadata
-├── globals.rs          FaceGlobals with coverage scan + lazy metrics
-└── script.rs           Per-glyph script detection
+```bash
+cargo test -p pillow-rs-freetype --locked
+cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
 ```
 
-### Scripts (Python)
-```
-scripts/
-├── build_fixtures.py          Main fixture pipeline
-├── build_ft_fixture.py        FreeType-path fixture generator
-├── extract_blues.py           afblue.dat → blue_strings.rs
-├── generate_globals.py        afranges.c + afstyles.h → globals_data.rs
-├── generate_script_meta.py    afscript.h → standard char + blue chars
-└── build_ft.sh               Build vendored FreeType 2.14.3
+### Phase 2: Promote Unexecuted Fixtures Into Exact Gates
+
+The existing supplemental matrices must stop being passive files.
+
+Work items:
+
+1. Add `metrics_only` operation support to the unified runner.
+2. Add `outline_cbox` operation support to the unified runner.
+3. Add load-flag mode support for `no_hinting`.
+4. Add render-mode support for `render_mono`.
+5. Add render-mode support for `render_lcd`.
+6. Add or regenerate `render_lcd_v` fixtures if LCD_V remains in scope.
+
+Done criteria:
+
+- Each matrix is executed in default tests.
+- Each row compares exact C-oracle values and bytes.
+- Missing raw bytes, missing dimensions, unsupported operations, and mismatches fail.
+- `harness_contract.rs` moves each family out of unexecuted debt only after its exact gate passes.
+
+### Phase 3: Native TrueType Default To Exact
+
+`native_tt_default_matrix.json` is the main known implementation gap.
+
+Current truth:
+
+- `3176/7640` passes.
+- `4464/7640` fails.
+- Failure classes include bbox, bitmap placement, and pixel coverage.
+
+Work items:
+
+1. Preserve the current threshold baseline until exact work begins.
+2. Add stage-level fixtures where needed: glyph index, raw outline, scaled outline, hinted outline, metrics, bbox, placement, pixels.
+3. Fix bytecode execution: fpgm, prep, glyph programs, CVT, storage, twilight zone, phantom points, IUP.
+4. Remove the threshold bypass when the matrix reaches exact parity.
+5. Update `interface_map.json` to `7640/7640` only after the exact gate passes.
+
+Done criteria:
+
+- `native_tt_default_matrix.json` runs as an exact gate.
+- Result is `7640/7640`.
+- No threshold path remains for native TrueType default parity.
+
+### Phase 4: Expand Endpoint Families
+
+Only expand scope with matching exact gates.
+
+Families:
+
+- `sfnt_tables`: raw table bytes and parsed fields.
+- `charmap`: selection, active charmap, iteration, glyph indexes.
+- `glyph/metrics`: 26.6 and 16.16 advances and slot metrics.
+- `outline`: bbox, cbox, transform, decompose.
+- `bitmap`: copy, convert, embolden, blend.
+- `math`: vector, matrix, trigonometric helpers.
+- Extended fonts: CFF, Type 1/CID, bitmap strikes, color fonts, variations.
+
+Done criteria:
+
+- Every new implemented behavior has a C-oracle fixture family or mandatory scalar oracle.
+- Interface map status is `complete` only after executable exact parity passes.
+
+## What Not To Do
+
+- Do not replace broad matrices with smaller ones.
+- Do not count SHA-only render checks as exact gates.
+- Do not let tests regenerate fixtures from Rust output.
+- Do not call threshold baselines successful.
+- Do not call fixture files coverage until the default runner executes them.
+- Do not reintroduce runtime C to make a parity failure disappear.
+
+## Required Verification
+
+Normal change gate:
+
+```bash
+cargo fmt --all --check
+cargo test -p pillow-rs-freetype --locked
+cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
 ```
 
-### Fixtures (JSON)
-```
-tests/fixtures/
-├── font_inventory.json              Font → script → codepoint mapping
-├── force_autohint_matrix.json       55-script FreeType force_autohint fixture
-├── native_tt_default_matrix.json    Native TrueType default fixture
-├── no_hinting_matrix.json           FreeType no_hinting fixture
-├── metrics_only_matrix.json         FreeType metrics_only fixture
-├── outline_cbox_matrix.json         FreeType outline_cbox fixture
-├── render_mono_matrix.json          FreeType mono render fixture
-└── render_lcd_matrix.json           FreeType LCD render fixture
+Project parity audit gate:
+
+```bash
+cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked
+cargo test -p pillow-rs-freetype --test harness_contract --locked
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
+cargo test -p pillow-rs-freetype --test render_mode_matrix --locked
+cargo test -p pillow-rs-freetype --test fixed_parity --locked
+cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
 ```
 
-## Test Results
-
-| Test | Rows | Pass | Status |
-|------|------|------|--------|
-| `test_coverage_matrix_force_autohint` | 22,168 | 22,168 | ✓ |
-| `test_coverage_matrix_native_tt_default` | 7,640 | partial | diagnostic |
-| Unit tests | 14 | 14 | ✓ |
-| Fixed parity | 6 | 6 | ✓ |
+The project is not at 100% while any threshold baseline or unexecuted fixture debt remains.
