@@ -1,27 +1,22 @@
 # References and Fixtures
 
-## FT Fixture Matrix
+## FreeType Fixture Matrices
 
-File: `tests/fixtures/coverage_matrix_ft.json`  
-Generator: `scripts/gen_ft_refs.c` → `scripts/gen_ft_matrix.py`  
-Reference: FreeType 2.14.3 C library, built from vendored source with `FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT`  
-Fonts: 29 fonts under `tests/fixtures/input/fonts_autohint/`  
-Current pass rate: 27,686/27,695 (99.97%)
+Reference fixtures in this crate are generated from vendored FreeType C.  The
+active families are named by FreeType path and flags:
 
-## PIL Fixture Matrix
-
-File: `tests/fixtures/coverage_matrix.json`  
-Generator: `scripts/generate_font_refs.py`  
-Reference: PIL 12.2.0 `ImageFont.getmask()`  
+- `native_tt_default_matrix.json`: `FT_LOAD_RENDER`
+- `force_autohint_matrix.json`: `FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT`
+- `no_hinting_matrix.json`: `FT_LOAD_RENDER | FT_LOAD_NO_HINTING`
+- `metrics_only_matrix.json`: `FT_Load_Glyph` without render
+- `outline_cbox_matrix.json`: outline cbox/bbox after load
+- `render_mono_matrix.json`: `FT_RENDER_MODE_MONO`
+- `render_lcd_matrix.json`: `FT_RENDER_MODE_LCD`
 
 ## Running Tests
 
 ```bash
-# FT fixtures (autohint comparison)
-cargo test -p pillow-rs-freetype test_font_coverage_matrix_freetype
-
-# PIL fixtures
-cargo test -p pillow-rs-freetype test_font_coverage_matrix_pil
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
 ```
 
 ## Regenerating Fixtures
@@ -31,16 +26,16 @@ Build FreeType from vendored source (one-time):
 cd pillow-rs-freetype && bash scripts/build_ft.sh
 ```
 
-Regenerate FT matrix:
+Regenerate FreeType fixture matrices:
 ```bash
-gcc -o /tmp/gen_ft_refs pillow-rs-freetype/scripts/gen_ft_refs.c \
-  -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype
-python pillow-rs-freetype/scripts/gen_ft_matrix.py
-```
-
-Regenerate PIL matrix:
-```bash
-python pillow-rs-freetype/scripts/generate_font_refs.py
+cd pillow-rs-freetype
+python3 scripts/build_ft_fixture.py --family force_autohint --build-ref-bin
+python3 scripts/build_ft_fixture.py --family native_tt_default
+python3 scripts/build_ft_fixture.py --family no_hinting --small
+python3 scripts/build_ft_fixture.py --family metrics_only --small
+python3 scripts/build_ft_fixture.py --family outline_cbox --small
+python3 scripts/build_ft_fixture.py --family render_mono --small
+python3 scripts/build_ft_fixture.py --family render_lcd --small
 ```
 
 ## Tracing a Failing Glyph
