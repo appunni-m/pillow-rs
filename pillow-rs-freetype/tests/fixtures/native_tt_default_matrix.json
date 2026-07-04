@@ -1,9 +1,9 @@
 {
-  "version": "2.0.0",
-  "generator": "Pillow 12.2.0 (Python PIL via scripts/build_pil_fixture.py)",
+  "version": "3.0.0",
+  "generator": "legacy native TrueType default fixture; regenerate with scripts/build_native_tt_fixture.py",
   "font_source": "fonts_autohint",
-  "hinting": "autohint",
-  "mode": "PIL",
+  "hinting": "native_tt_default",
+  "mode": "FT_LOAD_RENDER",
   "rows": [
     {
       "id": "DejaVuSans-ExtraLight_10_getmetrics",
