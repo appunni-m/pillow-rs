@@ -1329,15 +1329,14 @@ impl ExecContext {
                     // We don't track this precisely, just mark touched
                     self.touch_point(zone, p);
                 }
-                // ── SDB (0x8B) — Set Delta Base ──────────────────
-                0x8B => {
-                    let v = self.pop()?;
-                    self.gs.delta_base = v as u32;
-                }
-                // ── SDS (0x8A) — Set Delta Shift ─────────────────
+                // ── ROLL (0x8A) — Roll top three stack elements ───
                 0x8A => {
-                    let v = self.pop()?;
-                    self.gs.delta_shift = v as u32;
+                    let c = self.pop()?;
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(c);
+                    self.push(a);
+                    self.push(b);
                 }
                 // ── JMPR (0x1C) — Jump Relative ──────────────────
                 0x1C => {
@@ -1595,9 +1594,30 @@ impl ExecContext {
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
-                // C: Ins_GETINFO. Returns flags about the engine. Push 0.
+                // C: Ins_GETINFO. This runtime models FreeType's v40
+                // grayscale, non-LCD interpreter mode used by the oracle.
                 0x88 => {
-                    self.push(0);
+                    let selector = self.pop()?;
+                    let mut info = 0;
+                    if selector & 1 != 0 {
+                        info = 40;
+                    }
+                    if selector & 32 != 0 {
+                        info |= 1 << 12;
+                    }
+                    if selector & 64 != 0 {
+                        info |= 1 << 13;
+                    }
+                    if selector & 1024 != 0 {
+                        info |= 1 << 17;
+                    }
+                    if selector & 2048 != 0 {
+                        info |= 1 << 18;
+                    }
+                    if selector & 4096 != 0 {
+                        info |= 1 << 19;
+                    }
+                    self.push(info);
                 }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
@@ -1840,27 +1860,30 @@ impl ExecContext {
                     let _ = self.pop()?;
                 }
 
-                // ── MAX (0x8C) — Maximum ────────────────────────
+                // ── MAX (0x8B) — Maximum ────────────────────────
                 // C: Ins_MAX. Pops a, b, pushes max(a,b).
-                0x8C => {
+                0x8B => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     self.push(if a > b { a } else { b });
                 }
-                // ── MIN (0x8D) — Minimum ────────────────────────
-                0x8D => {
+                // ── MIN (0x8C) — Minimum ────────────────────────
+                0x8C => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     self.push(if a < b { a } else { b });
                 }
-                // ── SCANTYPE (0x8E) — Set Scan Type ──────────────
+                // ── SCANTYPE (0x8D) — Set Scan Type ──────────────
                 // C: Ins_SCANTYPE. Pops value, sets GS.scan_type.
-                0x8E => {
-                    self.gs.scan_type = self.pop()? as u8;
+                0x8D => {
+                    let v = self.pop()?;
+                    if v >= 0 {
+                        self.gs.scan_type = v as u8;
+                    }
                 }
-                // ── INSTCTRL (0x8F) — Set Instruction Control ────
+                // ── INSTCTRL (0x8E) — Set Instruction Control ────
                 // C: Ins_INSTCTRL. Pops selector,value. Sets instruct_control.
-                0x8F => {
+                0x8E => {
                     let _val = self.pop()?;
                     let _sel = self.pop()?;
                 }
