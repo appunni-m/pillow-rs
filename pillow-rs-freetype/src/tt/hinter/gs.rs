@@ -141,8 +141,8 @@ impl Default for GraphicsState {
         GraphicsState {
             // Default: projection along X axis (1.0, 0)
             proj_vector: (0x4000, 0),
-            // Default: dual projection along Y axis (0, 1.0)
-            dual_proj_vector: (0, 0x4000),
+            // Default: dual projection along X axis (1.0, 0)
+            dual_proj_vector: (0x4000, 0),
             // Default: freedom along X axis (1.0, 0)
             freedom_vector: (0x4000, 0),
             move_vector: (0x10000, 0),
