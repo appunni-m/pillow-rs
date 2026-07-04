@@ -1427,14 +1427,21 @@ impl ExecContext {
                         };
                         let (pcx, pcy) = self.cur_in(zone, self.gs.zp2, p);
                         let cur_dist = self.gs.project(pcx - r1_cx, pcy - r1_cy);
-                        let new_dist = if p_old != 0 {
-                            if old_range != 0 {
-                                crate::fixed::ft_mul_div(p_old, cur_range, old_range)
-                            } else {
-                                p_old
-                            }
-                        } else {
+                        let new_dist = if old_range == 0 || p_old == 0 {
                             0
+                        } else {
+                            let (old_range_abs, p_old_abs) = if old_range < 0 {
+                                (-old_range, -p_old)
+                            } else {
+                                (old_range, p_old)
+                            };
+                            if p_old_abs <= 0 {
+                                0
+                            } else if p_old_abs >= old_range_abs {
+                                cur_range
+                            } else {
+                                crate::fixed::ft_mul_div(p_old_abs, cur_range, old_range_abs)
+                            }
                         };
                         let (dx, dy) = self.gs.move_along_free(new_dist - cur_dist);
                         self.set_cur_in(zone, self.gs.zp2, p, pcx + dx, pcy + dy);
