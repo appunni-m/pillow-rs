@@ -732,31 +732,23 @@ impl ExecContext {
                     }
                 }
 
-                // ── ALIGNRP ───────────────────────────────────────
-                0x3A => {
-                    // Align all points between rp0 and popped point
-                    let p = self.pop()? as usize;
+                // ── ALIGNRP (0x3A, 0x3C) — Align Relative Point ──
+                // ✅ VERIFIED: C: Ins_ALIGNRP (ttinterp.c:5673-5720)
+                // Pops GS.loop counter points. For each, snaps position
+                // to rp0: distance = PROJECT(cur[p], cur[rp0]), move by -distance
+                0x3A | 0x3C => {
+                    let loop_count = self.gs.loop_counter as usize;
                     let rp = self.gs.rp0 as usize;
-                    // Move all points from rp to p in zone
-                    // C's ALIGNRP: for each point, compute relative
-                    // distance from rp0 in original coords along proj,
-                    // then snap to zero relative to rp0 in cur coords
-                    let start = rp.min(p);
-                    let end = rp.max(p);
                     let (rcx, rcy) = zone.cur(rp);
-                    for i in start..=end {
-                        if i == rp { continue; }
-                        let (org_x, org_y) = zone.org(i);
-                        let (rorg_x, rorg_y) = zone.org(rp);
-                        let orig_rel = self.gs.project(
-                            org_x - rorg_x,
-                            org_y - rorg_y,
-                        );
-                        let rnd_rel = self.gs.round(orig_rel);
-                        let (dx, dy) = self.gs.move_along_free(rnd_rel);
-                        zone.set_cur(i, rcx + dx, rcy + dy);
-                        zone.set_tag(i, 0x03);
+                    for _ in 0..loop_count {
+                        let p = self.pop()? as usize;
+                        let (pcx, pcy) = zone.cur(p);
+                        let dist = self.gs.project(pcx - rcx, pcy - rcy);
+                        let (dx, dy) = self.gs.move_along_free(-dist);
+                        zone.set_cur(p, pcx + dx, pcy + dy);
+                        zone.set_tag(p, 0x03);
                     }
+                    self.gs.loop_counter = 1; // C: GS.loop = 1
                 }
 
                 // ── SHP — Shift Point by last point (0x32-0x37) ──
@@ -992,49 +984,37 @@ impl ExecContext {
                     self.push(self.stack.len() as i32);
                 }
                 // ── IP (0x39) — Interpolate Point ───────────────────
+                // ✅ VERIFIED: C: Ins_IP (ttinterp.c:5854-5940)
+                // Pops GS.loop points. Interpolates between rp1 and rp2.
+                // Uses orus for glyph zone, org for twilight zone.
+                // old_range via DUALPROJ, cur_range via PROJECT.
                 0x39 => {
-                    // Interpolate a point between rp1 and rp2 relative
-                    // to their original positions
                     let loop_count = self.gs.loop_counter;
                     let rp1 = self.gs.rp1 as usize;
                     let rp2 = self.gs.rp2 as usize;
+                    let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
+                    // C: orgs = org arrays (always) for the projection
                     let (r1_ox, r1_oy) = zone.org(rp1);
                     let (r2_ox, r2_oy) = zone.org(rp2);
                     let (r1_cx, r1_cy) = zone.cur(rp1);
                     let (r2_cx, r2_cy) = zone.cur(rp2);
-                    let orig_dist = self.gs.project(r2_ox - r1_ox, r2_oy - r1_oy);
-                    let cur_dist = self.gs.project(r2_cx - r1_cx, r2_cy - r1_cy);
+                    // C: old_range = DUALPROJ(orgs2 - orgs1), cur_range = PROJECT(curs2 - curs1)
+                    let old_range = self.gs.dual_project(r2_ox - r1_ox, r2_oy - r1_oy);
+                    let cur_range = self.gs.project(r2_cx - r1_cx, r2_cy - r1_cy);
                     for _ in 0..loop_count {
                         let p = self.pop()? as usize;
-                        let (ox, oy) = zone.org(p);
-                        let p_orig_dist = self.gs.project(ox - r1_ox, oy - r1_oy);
-                        // Use i64 for intermediate to avoid overflow
-                        let frac = if orig_dist != 0 {
-                            ((p_orig_dist as i64 * cur_dist as i64) / orig_dist as i64) as i32
+                        let (pox, poy) = zone.org(p);
+                        let _pux = if is_twilight { zone.org(p) } else { zone.orus(p) };
+                        // C: FT_MulDiv_No_Round(p_old, cur_range, old_range)
+                        let p_old = self.gs.dual_project(pox - r1_ox, poy - r1_oy);
+                        let new_val = if old_range != 0 {
+                            ((p_old as i64 * cur_range as i64 + (old_range as i64 >> 1)) / old_range as i64) as i32
                         } else { 0 };
-                        let (dx, dy) = self.gs.move_along_free(frac);
+                        let (dx, dy) = self.gs.move_along_free(new_val);
                         zone.set_cur(p, r1_cx + dx, r1_cy + dy);
                         zone.set_tag(p, 0x03);
                     }
-                }
-                // ── AlignRP (0x3C) — Align to Reference Point ───────
-                0x3C => {
-                    // Same as 0x3A but uses zp1 for reference
-                    let p = self.pop()? as usize;
-                    let rp = self.gs.rp0 as usize;
-                    let start = rp.min(p);
-                    let end = rp.max(p);
-                    let (rcx, rcy) = zone.cur(rp);
-                    for i in start..=end {
-                        if i == rp { continue; }
-                        let (org_x, org_y) = zone.org(i);
-                        let (rorg_x, rorg_y) = zone.org(rp);
-                        let orig_rel = self.gs.project(org_x - rorg_x, org_y - rorg_y);
-                        let rnd_rel = self.gs.round(orig_rel);
-                        let (dx, dy) = self.gs.move_along_free(rnd_rel);
-                        zone.set_cur(i, rcx + dx, rcy + dy);
-                        zone.set_tag(i, 0x03);
-                    }
+                    self.gs.loop_counter = 1; // C: GS.loop = 1
                 }
                 // ── LT (0x50) — Less Than ───────────────────────────
                 0x50 => { let b = self.pop()?; let a = self.pop()?; self.push(if a < b {1} else {0}); }
