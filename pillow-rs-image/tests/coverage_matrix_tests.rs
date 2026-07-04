@@ -1,4 +1,5 @@
-// AS PER DESIGN — DO NOT REMOVE: Tests may unwrap/expect.
+// AS PER DESIGN — DO NOT REMOVE:
+// Tests may use unwrap/expect. The deny lints are for production code only.
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_in_result)]
@@ -9,17 +10,33 @@
 //! Decode: load asset → decode → compare pixel bytes with PIL reference bytes.
 //! Encode: decode reference → encode with params → decode → compare pixel bytes.
 
-// AS PER DESIGN — DO NOT REMOVE:
-//   Tests may use unwrap/expect. The deny lints are for production code only.
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::expect_used)]
-
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use pillow_rs_image as img;
+
+static COVERAGE_MATRIX: OnceLock<Option<CoverageMatrix>> = OnceLock::new();
+
+fn coverage_matrix() -> Option<&'static CoverageMatrix> {
+    COVERAGE_MATRIX
+        .get_or_init(|| {
+            let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+            let matrix_path = manifest_dir
+                .join("tests")
+                .join("fixtures")
+                .join("coverage_matrix.json");
+
+            if !matrix_path.exists() {
+                return None;
+            }
+
+            Some(serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap())
+        })
+        .as_ref()
+}
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -280,13 +297,8 @@ fn assert_pixel_parity(
 #[test]
 fn test_decode_matrix() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let matrix_path = manifest_dir
-        .join("tests")
-        .join("fixtures")
-        .join("coverage_matrix.json");
-
-    let matrix: CoverageMatrix = if matrix_path.exists() {
-        serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap()
+    let matrix = if let Some(matrix) = coverage_matrix() {
+        matrix
     } else {
         eprintln!(
             "SKIP: coverage_matrix.json not found. Run: python scripts/generate_decode_refs.py"
@@ -390,13 +402,8 @@ fn test_decode_matrix() {
 #[test]
 fn test_encode_matrix() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let matrix_path = manifest_dir
-        .join("tests")
-        .join("fixtures")
-        .join("coverage_matrix.json");
-
-    let matrix: CoverageMatrix = if matrix_path.exists() {
-        serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap()
+    let matrix = if let Some(matrix) = coverage_matrix() {
+        matrix
     } else {
         eprintln!("SKIP: no matrix");
         return;
@@ -411,6 +418,8 @@ fn test_encode_matrix() {
         .join("fixtures")
         .join("input")
         .join("images");
+    let mut asset_cache: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+    let mut decoded_cache: HashMap<PathBuf, img::DecodedImage> = HashMap::new();
 
     for (fmt_name, fmt_data) in &matrix.formats {
         if fmt_data.encode.is_empty() {
@@ -427,12 +436,12 @@ fn test_encode_matrix() {
 
             // Determine source: use row's source_asset if present, otherwise fall back
             // to the first active decode row for this format.
-            let asset_data = if let (Some(ref src_fmt), Some(ref src_asset)) =
+            let asset_path = if let (Some(ref src_fmt), Some(ref src_asset)) =
                 (&row.source_format, &row.source_asset)
             {
                 let path = assets_dir.join(src_fmt).join(src_asset);
                 if path.exists() {
-                    fs::read(&path).unwrap()
+                    path
                 } else {
                     eprintln!("  FAIL [{}]: source asset not found: {:?}", row.id, path);
                     failed += 1;
@@ -448,7 +457,7 @@ fn test_encode_matrix() {
                     Some(src) => {
                         let path = assets_dir.join(fmt_name).join(src.asset.as_ref().unwrap());
                         if path.exists() {
-                            fs::read(&path).unwrap()
+                            path
                         } else {
                             skipped += 1;
                             continue;
@@ -461,14 +470,24 @@ fn test_encode_matrix() {
                 }
             };
 
-            let decoded = match img::decode(&asset_data) {
-                Some(d) => d,
-                None => {
-                    eprintln!("  FAIL [{}]: source decode failed", row.id);
-                    failed += 1;
-                    continue;
+            if let Entry::Vacant(entry) = asset_cache.entry(asset_path.clone()) {
+                entry.insert(fs::read(&asset_path).unwrap());
+            }
+
+            if let Entry::Vacant(entry) = decoded_cache.entry(asset_path.clone()) {
+                let asset_data = asset_cache.get(&asset_path).unwrap();
+                match img::decode(asset_data) {
+                    Some(decoded) => {
+                        entry.insert(decoded);
+                    }
+                    None => {
+                        eprintln!("  FAIL [{}]: source decode failed", row.id);
+                        failed += 1;
+                        continue;
+                    }
                 }
-            };
+            }
+            let decoded = decoded_cache.get(&asset_path).unwrap();
 
             // Build encode options from row params
             let opts = img::encode_options::EncodeOptions {
@@ -576,14 +595,8 @@ fn test_encode_matrix() {
 
 #[test]
 fn test_coverage_matrix() {
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let matrix_path = manifest_dir
-        .join("tests")
-        .join("fixtures")
-        .join("coverage_matrix.json");
-
-    let matrix: CoverageMatrix = if matrix_path.exists() {
-        serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap()
+    let matrix = if let Some(matrix) = coverage_matrix() {
+        matrix
     } else {
         eprintln!("SKIP: no matrix");
         return;
