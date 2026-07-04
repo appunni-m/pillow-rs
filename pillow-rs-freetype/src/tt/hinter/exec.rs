@@ -354,10 +354,21 @@ impl ExecContext {
         let mut empty_glyph = Self::new_twilight_zone(0);
         self.run_program(&mut empty_glyph)?;
 
-        // Restore zone pointers for glyph hinting
-        self.gs.zp0 = 1;
-        self.gs.zp1 = 1;
-        self.gs.zp2 = 1;
+        // C: TT_Save_Context only persists selected prep state fields into
+        // size->GS. Projection/freedom vectors, round state, reference points,
+        // zone pointers, and loop state return to defaults for glyph programs.
+        let prep_gs = self.gs.clone();
+        self.gs = GraphicsState::default();
+        self.gs.minimum_distance = prep_gs.minimum_distance;
+        self.gs.control_value_cutin = prep_gs.control_value_cutin;
+        self.gs.single_width_cutin = prep_gs.single_width_cutin;
+        self.gs.single_width_value = prep_gs.single_width_value;
+        self.gs.delta_base = prep_gs.delta_base;
+        self.gs.delta_shift = prep_gs.delta_shift;
+        self.gs.auto_flip = prep_gs.auto_flip;
+        self.gs.instruct_control = prep_gs.instruct_control;
+        self.gs.scan_control = prep_gs.scan_control;
+        self.gs.scan_type = prep_gs.scan_type;
 
         Ok(())
     }
