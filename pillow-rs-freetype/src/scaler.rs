@@ -214,11 +214,19 @@ fn scale_glyph_impl(
     };
 
     let use_autohint = latin_metrics.is_some();
+    // FreeType translates TrueType outlines back by the scaled left phantom
+    // point after loading. Apply it after scaling so FT_MulFix rounding stays
+    // separate from point-coordinate rounding.
+    let no_hinting_origin_shift_x = if !use_autohint && !allow_bytecode {
+        scale.scale_x(pp1x_fu)
+    } else {
+        0
+    };
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
     for p in &outline_raw.points {
         let x = if use_autohint { p.x - pp1x_fu } else { p.x };
         scaled.push(OutlinePoint {
-            x: scale.scale_x(x),
+            x: scale.scale_x(x) - no_hinting_origin_shift_x,
             y: ft_mul_fix(p.y, y_adj),
             on_curve: p.on_curve,
         });
