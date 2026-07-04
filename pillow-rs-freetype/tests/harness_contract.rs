@@ -228,8 +228,8 @@ fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
 }
 
 #[test]
-fn supplemental_matrices_are_present_and_not_smoke_tested_away() {
-    let expected = [
+fn supplemental_matrices_are_present_broad_and_explicitly_unexecuted() {
+    let known_unexecuted = [
         ("metrics_only_matrix.json", 8usize),
         ("no_hinting_matrix.json", 8),
         ("outline_cbox_matrix.json", 8),
@@ -237,12 +237,16 @@ fn supplemental_matrices_are_present_and_not_smoke_tested_away() {
         ("render_lcd_matrix.json", 8),
     ];
 
-    for (name, min_rows) in expected {
+    for (name, min_rows) in known_unexecuted {
         let matrix = read_coverage_matrix(name);
         assert_coverage_header(name, &matrix);
         assert!(
             matrix.rows.len() >= min_rows,
             "{name} was reduced below its current coverage floor"
+        );
+        assert!(
+            !matrix.assert_pixel_parity,
+            "{name} is marked as a parity gate but is not executed by coverage_matrix_tests.rs"
         );
     }
 }
