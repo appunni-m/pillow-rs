@@ -182,7 +182,7 @@ pub fn hint_glyph(
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
-        ctx.backward_compatibility = 4;
+        ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
         ctx.set_glyph_program(glyph_ins);
         ctx.run_program(&mut zone)?;
     }

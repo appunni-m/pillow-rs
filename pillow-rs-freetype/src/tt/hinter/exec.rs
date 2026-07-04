@@ -338,11 +338,13 @@ impl ExecContext {
         // Zero twilight zone (C: FT_ARRAY_ZERO)
         self.twilight = Self::new_twilight_zone(self.twilight.n_points as usize);
 
-        // Set up prep as a glyph program
+        // Set up prep as the CVT program.  FreeType's INSTCTRL only persists
+        // size graphics-state flags from this code range.
         self.stack.clear();
-        self.glyph_program = prep_bytes.to_vec();
+        self.cvt_program = prep_bytes.to_vec();
+        self.glyph_program.clear();
         self.ip = 0;
-        self.cur_range = 2;
+        self.cur_range = 0;
 
         // C: prep runs with zp0=zp1=zp2=0 (twilight zone)
         self.gs.zp0 = 0;
@@ -1884,8 +1886,23 @@ impl ExecContext {
                 // ── INSTCTRL (0x8E) — Set Instruction Control ────
                 // C: Ins_INSTCTRL. Pops selector,value. Sets instruct_control.
                 0x8E => {
-                    let _val = self.pop()?;
-                    let _sel = self.pop()?;
+                    let value = self.pop()?;
+                    let selector = self.pop()?;
+                    if !(1..=3).contains(&selector) {
+                        continue;
+                    }
+
+                    let flag = 1u8 << (selector - 1);
+                    if value != 0 && value != flag as i32 {
+                        continue;
+                    }
+
+                    if self.cur_range == 0 {
+                        self.gs.instruct_control &= !flag;
+                        self.gs.instruct_control |= value as u8;
+                    } else if self.cur_range == 2 && selector == 3 {
+                        self.backward_compatibility = ((value as u8) & 4) ^ 4;
+                    }
                 }
                 // ── ADJUST (0x90-0x92) — GX adjustment ───────────
                 // C: Ins_UNKNOWN. GX/MIRP variations. Pop N args.
