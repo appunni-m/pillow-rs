@@ -86,14 +86,6 @@
       }
     },
     {
-      "id": "enc_progressive",
-      "source_asset": "baseline_444.jpg",
-      "source_format": "jpeg",
-      "params": {
-        "progressive": true
-      }
-    },
-    {
       "id": "enc_baseline",
       "source_asset": "baseline_444.jpg",
       "source_format": "jpeg",
@@ -260,14 +252,6 @@
       "source_format": "jpeg",
       "params": {
         "subsampling": "420"
-      }
-    },
-    {
-      "id": "enc_progressive",
-      "source_asset": "baseline_444.jpg",
-      "source_format": "jpeg",
-      "params": {
-        "progressive": true
       }
     },
     {

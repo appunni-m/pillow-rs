@@ -40,6 +40,10 @@
     {
       "id": "error_empty",
       "asset": "empty.gif"
+    },
+    {
+      "id": "animated_gif_animated_3frame",
+      "asset": "animated_3frame.gif"
     }
   ]
 }

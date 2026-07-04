@@ -7,165 +7,443 @@
   "cases": [
     {
       "id": "color_gray",
-      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_gray_png.bin",
       "ref_bytes": 16384,
-      "ref_mode": "L8"
+      "ref_mode": "L8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "color_gray_alpha",
-      "ref_sha256": "b6dcbaf7b5a0b3225e7586f65b10fddca0a8f56c1aa22ba684411c0682c09f4b",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_gray_alpha_png.bin",
       "ref_bytes": 32768,
-      "ref_mode": "La8"
+      "ref_mode": "La8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "color_rgb",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_rgb_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "color_rgba",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_rgba_png.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "color_indexed",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_indexed_png.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "color_indexed_alpha",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_indexed_alpha_png.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_1",
-      "ref_sha256": "b73f7cbd2e75fb2128203993c9e95855f2f62a6e54de9ec2078da285dfb28b30",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_1bit_png.bin",
       "ref_bytes": 2048,
-      "ref_mode": "1"
+      "ref_mode": "1",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_2",
-      "ref_sha256": "2863dcbb27cf09a29a2024b1711bd87091edf82707afd785e5d8f68a40e656fd",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_2bit_png.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_4",
-      "ref_sha256": "2fc3bb12799a0cd683c22bc041e1bc0f371eda4f025b5f58310d7769e4aaf1b5",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_4bit_png.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_8",
-      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_8bit_png.bin",
       "ref_bytes": 16384,
-      "ref_mode": "L8"
+      "ref_mode": "L8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_16",
-      "ref_sha256": "468493084ad08ed060c794c5055ddd0ee667fb059a096d2a2f1647f3f6347b6e",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_16bit_png.bin",
       "ref_bytes": 32768,
-      "ref_mode": "I;16"
+      "ref_mode": "I;16",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "no_interlace",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_no_interlace_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "interlace_adam7",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_adam7_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "filter_none",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_none_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "filter_sub",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_sub_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "filter_up",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_up_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "filter_average",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_average_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "filter_paeth",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_paeth_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "filter_mixed",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_mixed_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compress_default",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_default_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compress_none",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_none_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compress_max",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_max_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "chunk_gama",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_gama_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "chunk_srgb",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_srgb_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "chunk_iccp",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_iccp_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "chunk_text",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_text_chunks_png.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "chunk_time",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_time_chunk_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "chunk_background",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_bkgd_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "chunk_phys",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_phys_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "size_1x1",
-      "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_1x1_png.bin",
       "ref_bytes": 3,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "size_small",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_16x16_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "size_large",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_large_png.bin",
+      "ref_bytes": 395523,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        513,
+        257
+      ]
     },
     {
       "id": "size_odd",
-      "ref_sha256": "ffd87a1ba3408876b7f22fb205642480b6c8e5487f8f370e801bc58033ee30d3",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_odd_size_png.bin",
       "ref_bytes": 867,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        17,
+        17
+      ]
+    },
+    {
+      "id": "apng_static",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_apng_static_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "apng_animated",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_apng_animated_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "color_rgba_alpha_checker",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_alpha_checker_png.bin",
+      "ref_bytes": 65536,
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "color_rgba_alpha_partial",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_alpha_partial_png.bin",
+      "ref_bytes": 65536,
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "color_indexed_palette_2color",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_palette_2color_png.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "color_indexed_palette_256color",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_palette_256color_png.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compress_default_compress_fast",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_fast_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compress_default_compress_mid",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_mid_png.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "size_odd_2x3",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_2x3_png.bin",
+      "ref_bytes": 18,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        2,
+        3
+      ]
+    },
+    {
+      "id": "size_odd_1x255",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_1x255_png.bin",
+      "ref_bytes": 765,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        1,
+        255
+      ]
+    },
+    {
+      "id": "size_odd_255x1",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.png_255x1_png.bin",
+      "ref_bytes": 765,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        255,
+        1
+      ]
     }
   ]
 }

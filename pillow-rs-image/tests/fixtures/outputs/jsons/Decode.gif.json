@@ -7,39 +7,93 @@
   "cases": [
     {
       "id": "static_gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_static_gif.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "animated_gif",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_animated_gif.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "transparent",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_transparent_gif.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "interlaced",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_interlaced_gif.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "color_table_global",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_global_ct_gif.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "color_table_local",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_local_ct_gif.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "extension_gce",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_gce_gif.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "size_1x1",
-      "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_1x1_gif.bin",
       "ref_bytes": 1,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "animated_gif_animated_3frame",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.gif_animated_3frame_gif.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     }
   ]
 }

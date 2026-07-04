@@ -76,6 +76,18 @@
     {
       "id": "error_not_bmp",
       "asset": "not_bmp.bmp"
+    },
+    {
+      "id": "size_odd_width2",
+      "asset": "width2.bmp"
+    },
+    {
+      "id": "size_odd_width3",
+      "asset": "width3.bmp"
+    },
+    {
+      "id": "size_odd_width31",
+      "asset": "width31.bmp"
     }
   ]
 }

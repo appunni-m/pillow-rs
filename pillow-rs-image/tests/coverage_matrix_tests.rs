@@ -2,11 +2,12 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_in_result)]
+#![allow(unused_crate_dependencies)]
 
 //! Coverage matrix tests — driven by tests/fixtures/coverage_matrix.json
 //! Each row in the matrix is one test assertion.
-//! Decode: load asset → decode → compare SHA-256 with PIL pre-computed reference.
-//! Encode: decode reference → encode with params → decode → compare bytes.
+//! Decode: load asset → decode → compare pixel bytes with PIL reference bytes.
+//! Encode: decode reference → encode with params → decode → compare pixel bytes.
 
 // AS PER DESIGN — DO NOT REMOVE:
 //   Tests may use unwrap/expect. The deny lints are for production code only.
@@ -19,7 +20,6 @@ use std::fs;
 use std::path::Path;
 
 use pillow_rs_image as img;
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -49,7 +49,7 @@ struct DecodeRow {
     expect_error: Option<bool>,
     ref_mode: Option<String>,
     ref_size: Option<Vec<u32>>,
-    ref_sha256: Option<String>,
+    ref_path: Option<String>,
     ref_bytes: Option<usize>,
 }
 
@@ -68,11 +68,13 @@ struct EncodeRow {
     #[serde(default)]
     source_asset: Option<String>,
     #[serde(default)]
-    ref_sha256: Option<String>,
-    #[serde(default)]
     ref_bytes: Option<usize>,
     #[serde(default)]
     ref_mode: Option<String>,
+    #[serde(default)]
+    ref_size: Option<Vec<u32>>,
+    #[serde(default)]
+    ref_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +88,191 @@ struct Summary {
     decode_active: usize,
     decode_planned: usize,
     encode_not_wired: usize,
+}
+
+#[derive(Debug)]
+struct PixelParityRef {
+    id: String,
+    bytes: Vec<u8>,
+    width: Option<u32>,
+    height: Option<u32>,
+    mode: Option<String>,
+}
+
+#[derive(Debug)]
+struct PixelMismatch {
+    byte_index: usize,
+    pixel_index: usize,
+    x: u32,
+    y: u32,
+    channel: usize,
+    expected: u8,
+    actual: u8,
+}
+
+fn expected_raw_name(module: &str, format: &str, asset: &str) -> String {
+    format!("{module}.{format}_{}.bin", asset.replace('.', "_"))
+}
+
+fn load_pixel_reference(
+    manifest_dir: &Path,
+    id: &str,
+    ref_path: Option<&str>,
+    module: &str,
+    format: &str,
+    asset: &str,
+    ref_size: Option<&[u32]>,
+    ref_mode: Option<&str>,
+) -> Option<PixelParityRef> {
+    let raw_path = ref_path.map_or_else(
+        || {
+            manifest_dir
+                .join("tests")
+                .join("fixtures")
+                .join("outputs")
+                .join("raws")
+                .join(expected_raw_name(module, format, asset))
+        },
+        |path| manifest_dir.join(path),
+    );
+
+    let bytes = match fs::read(&raw_path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("  SKIP [{id}]: reference pixels not readable at {raw_path:?}: {err}");
+            return None;
+        }
+    };
+
+    Some(PixelParityRef {
+        id: id.to_owned(),
+        bytes,
+        width: ref_size.and_then(|s| s.first().copied()),
+        height: ref_size.and_then(|s| s.get(1).copied()),
+        mode: ref_mode.map(str::to_owned),
+    })
+}
+
+fn mode_bytes_per_pixel(mode: Option<&str>) -> Option<usize> {
+    match mode {
+        Some("1") | Some("P") | Some("L") | Some("L8") => Some(1),
+        Some("I;16") | Some("I;16B") | Some("I;16L") | Some("L16") | Some("La8") => Some(2),
+        Some("RGB") | Some("Rgb8") => Some(3),
+        Some("RGBA") | Some("Rgba8") | Some("La16") => Some(4),
+        Some("Rgb16") => Some(6),
+        Some("Rgba16") => Some(8),
+        _ => None,
+    }
+}
+
+fn first_pixel_mismatches(
+    expected: &[u8],
+    actual: &[u8],
+    width: u32,
+    bytes_per_pixel: usize,
+) -> Vec<PixelMismatch> {
+    expected
+        .chunks(64)
+        .zip(actual.chunks(64))
+        .enumerate()
+        .flat_map(|(chunk_index, (expected_chunk, actual_chunk))| {
+            expected_chunk
+                .iter()
+                .zip(actual_chunk)
+                .enumerate()
+                .filter_map(move |(offset, (&expected, &actual))| {
+                    if expected == actual {
+                        return None;
+                    }
+                    let byte_index = chunk_index * 64 + offset;
+                    let pixel_index = byte_index / bytes_per_pixel;
+                    let x = (pixel_index as u32) % width;
+                    let y = (pixel_index as u32) / width;
+                    Some(PixelMismatch {
+                        byte_index,
+                        pixel_index,
+                        x,
+                        y,
+                        channel: byte_index % bytes_per_pixel,
+                        expected,
+                        actual,
+                    })
+                })
+        })
+        .take(8)
+        .collect()
+}
+
+fn count_mismatched_bytes(expected: &[u8], actual: &[u8]) -> usize {
+    expected
+        .chunks(1024)
+        .zip(actual.chunks(1024))
+        .map(|(expected_chunk, actual_chunk)| {
+            expected_chunk
+                .iter()
+                .zip(actual_chunk)
+                .filter(|(expected, actual)| expected != actual)
+                .count()
+        })
+        .sum()
+}
+
+fn assert_pixel_parity(
+    expected: &PixelParityRef,
+    actual: &img::DecodedImage,
+) -> Result<(), String> {
+    if let Some(width) = expected.width {
+        if actual.width != width {
+            return Err(format!(
+                "width mismatch: actual {}, expected {}",
+                actual.width, width
+            ));
+        }
+    }
+    if let Some(height) = expected.height {
+        if actual.height != height {
+            return Err(format!(
+                "height mismatch: actual {}, expected {}",
+                actual.height, height
+            ));
+        }
+    }
+
+    let actual_bytes = actual.as_bytes();
+    if actual_bytes.len() != expected.bytes.len() {
+        return Err(format!(
+            "byte length mismatch: actual {}, expected {}",
+            actual_bytes.len(),
+            expected.bytes.len()
+        ));
+    }
+
+    if actual_bytes == expected.bytes.as_slice() {
+        return Ok(());
+    }
+
+    let bytes_per_pixel = mode_bytes_per_pixel(expected.mode.as_deref())
+        .unwrap_or_else(|| usize::from(actual.color.bytes_per_pixel()));
+    let width = expected.width.unwrap_or(actual.width).max(1);
+    let mismatch_count = count_mismatched_bytes(&expected.bytes, actual_bytes);
+    let examples = first_pixel_mismatches(&expected.bytes, actual_bytes, width, bytes_per_pixel)
+        .into_iter()
+        .map(|m| {
+            format!(
+                "byte {} pixel {} ({}, {}) channel {} expected {:02x} actual {:02x}",
+                m.byte_index, m.pixel_index, m.x, m.y, m.channel, m.expected, m.actual
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    Err(format!(
+        "{} mismatched byte(s) out of {} for mode {}; first: {}",
+        mismatch_count,
+        actual_bytes.len(),
+        expected.mode.as_deref().unwrap_or("?"),
+        examples
+    ))
 }
 
 // ── Decode Tests ─────────────────────────────────────────────────────────
@@ -160,38 +347,33 @@ fn test_decode_matrix() {
                 }
             };
 
-            let actual = decoded.as_bytes();
-            // Compare pixel bytes against PIL reference (pre-computed SHA-256 in matrix)
-            if let Some(ref ref_hash) = row.ref_sha256 {
-                let actual_hash = Sha256::digest(actual)
-                    .iter()
-                    .map(|b| format!("{:02x}", b))
-                    .collect::<String>();
-                if actual_hash == *ref_hash {
+            let Some(expected) = load_pixel_reference(
+                manifest_dir,
+                &row.id,
+                row.ref_path.as_deref(),
+                "Decode",
+                fmt_name,
+                asset_name,
+                row.ref_size.as_deref(),
+                row.ref_mode.as_deref(),
+            ) else {
+                skipped += 1;
+                continue;
+            };
+
+            match assert_pixel_parity(&expected, &decoded) {
+                Ok(()) => {
                     eprintln!(
-                        "  OK   [{}] {} bytes (mode={})",
-                        row.id,
-                        actual.len(),
+                        "  OK   [{}] {} bytes pixel-parity (mode={})",
+                        expected.id,
+                        decoded.as_bytes().len(),
                         row.ref_mode.as_deref().unwrap_or("?")
                     );
                     passed += 1;
-                } else if let Some(ref_bytes) = row.ref_bytes {
-                    if actual.len() != ref_bytes {
-                        eprintln!(
-                            "  FAIL [{}]: {} bytes, expected {} bytes",
-                            row.id,
-                            actual.len(),
-                            ref_bytes
-                        );
-                        failed += 1;
-                    } else {
-                        eprintln!(
-                            "  FAIL [{}]: same size ({}B) but different pixels",
-                            row.id,
-                            actual.len()
-                        );
-                        failed += 1;
-                    }
+                }
+                Err(message) => {
+                    eprintln!("  FAIL [{}]: {message}", expected.id);
+                    failed += 1;
                 }
             }
         }
@@ -236,6 +418,11 @@ fn test_encode_matrix() {
         }
 
         for row in &fmt_data.encode {
+            if row.status == "planned" {
+                skipped += 1;
+                continue;
+            }
+
             total += 1;
 
             // Determine source: use row's source_asset if present, otherwise fall back
@@ -328,41 +515,35 @@ fn test_encode_matrix() {
                 }
             };
 
-            // Roundtrip: re-decode and compare pixel SHA-256 against PIL reference.
-            // This matches the decode test pattern — pixel-perfect verification.
+            // Roundtrip: re-decode and compare pixels against the PIL reference.
             match img::decode(&encoded) {
                 Some(redecoded) => {
-                    if let Some(ref ref_hash) = row.ref_sha256 {
-                        let actual_pixels = redecoded.as_bytes();
-                        let actual_hash = Sha256::digest(actual_pixels)
-                            .iter()
-                            .map(|b| format!("{:02x}", b))
-                            .collect::<String>();
-                        if actual_hash == *ref_hash {
-                            eprintln!(
-                                "  OK   [{}] {}B, re-decoded {}x{} (mode={})",
-                                row.id,
-                                encoded.len(),
-                                redecoded.width,
-                                redecoded.height,
-                                row.ref_mode.as_deref().unwrap_or("?")
-                            );
-                            passed += 1;
-                        } else if let Some(ref_bytes) = row.ref_bytes {
-                            if actual_pixels.len() != ref_bytes {
+                    if let Some(expected) = row.ref_path.as_deref().and_then(|ref_path| {
+                        load_pixel_reference(
+                            manifest_dir,
+                            &row.id,
+                            Some(ref_path),
+                            "Encode",
+                            fmt_name,
+                            row.source_asset.as_deref().unwrap_or(""),
+                            row.ref_size.as_deref(),
+                            row.ref_mode.as_deref(),
+                        )
+                    }) {
+                        match assert_pixel_parity(&expected, &redecoded) {
+                            Ok(()) => {
                                 eprintln!(
-                                    "  FAIL [{}]: {} pix bytes, expected {}",
+                                    "  OK   [{}] {}B, re-decoded {}x{} pixel-parity (mode={})",
                                     row.id,
-                                    actual_pixels.len(),
-                                    ref_bytes
+                                    encoded.len(),
+                                    redecoded.width,
+                                    redecoded.height,
+                                    row.ref_mode.as_deref().unwrap_or("?")
                                 );
-                                failed += 1;
-                            } else {
-                                eprintln!(
-                                    "  FAIL [{}]: same pix count ({}B) but different pixels",
-                                    row.id,
-                                    actual_pixels.len()
-                                );
+                                passed += 1;
+                            }
+                            Err(message) => {
+                                eprintln!("  FAIL [{}]: {message}", row.id);
                                 failed += 1;
                             }
                         }
@@ -386,6 +567,9 @@ fn test_encode_matrix() {
     }
 
     eprintln!("\nencode matrix: {passed}/{total} passed, {failed} failed, {skipped} skipped");
+    if failed > 0 {
+        panic!("{failed} encode test(s) failed");
+    }
 }
 
 // ── Manifest Coverage ────────────────────────────────────────────────────

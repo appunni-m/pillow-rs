@@ -56,6 +56,26 @@
     {
       "id": "error_truncated",
       "asset": "truncated.webp"
+    },
+    {
+      "id": "lossy_vp8_lossy_q10",
+      "asset": "lossy_q10.webp"
+    },
+    {
+      "id": "lossy_vp8_lossy_q50",
+      "asset": "lossy_q50.webp"
+    },
+    {
+      "id": "lossy_vp8_lossy_q90",
+      "asset": "lossy_q90.webp"
+    },
+    {
+      "id": "lossy_vp8_lossy_q100",
+      "asset": "lossy_q100.webp"
+    },
+    {
+      "id": "with_alpha_alpha_lossy",
+      "asset": "alpha_lossy.webp"
     }
   ]
 }

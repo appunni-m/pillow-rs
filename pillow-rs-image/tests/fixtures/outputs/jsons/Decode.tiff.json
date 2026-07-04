@@ -7,51 +7,193 @@
   "cases": [
     {
       "id": "byte_order_le",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_le_tiff.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "byte_order_be",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_be_tiff.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compression_none",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_uncompressed_tiff.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compression_lzw",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_lzw_tiff.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compression_deflate",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_deflate_tiff.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_packbits",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_packbits_tiff.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "bilevel",
-      "ref_sha256": "3d92f194e3d8ff64db82b9d6d7c8888526665cbcbee3f4c5e3a6c097076c67c5",
-      "ref_bytes": 32,
-      "ref_mode": "1"
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_bilevel_tiff.bin",
+      "ref_bytes": 2048,
+      "ref_mode": "1",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "grayscale",
-      "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_gray_tiff.bin",
       "ref_bytes": 16384,
-      "ref_mode": "L8"
+      "ref_mode": "L8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "rgb",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_rgb_tiff.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "rgba",
-      "ref_sha256": "98f4b65a00baf17d30ebb2a9250399ab01972aaa17610fe55aebeda5f0e04fbe",
-      "ref_bytes": 1024,
-      "ref_mode": "Rgba8"
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_rgba_tiff.bin",
+      "ref_bytes": 65536,
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "depth_1",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_1bit_tiff.bin",
+      "ref_bytes": 2048,
+      "ref_mode": "1",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "depth_8",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_8bit_tiff.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "L8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "stripped",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_stripped_tiff.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "tiled",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_tiled_tiff.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "single_page",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_single_tiff.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "multi_page",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_multipage_tiff.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_lzw_gray_lzw",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_gray_lzw_tiff.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "L8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_lzw_rgba_lzw",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_rgba_lzw_tiff.bin",
+      "ref_bytes": 65536,
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_deflate_gray_deflate",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_gray_deflate_tiff.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "L8",
+      "ref_size": [
+        128,
+        128
+      ]
     }
   ]
 }

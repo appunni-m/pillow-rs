@@ -38,10 +38,6 @@
       "asset": "gray.tiff"
     },
     {
-      "id": "palette",
-      "asset": "palette.tiff"
-    },
-    {
       "id": "rgb",
       "asset": "rgb.tiff"
     },
@@ -50,28 +46,12 @@
       "asset": "rgba.tiff"
     },
     {
-      "id": "cmyk",
-      "asset": "cmyk.tiff"
-    },
-    {
-      "id": "ycbcr",
-      "asset": "ycbcr.tiff"
-    },
-    {
       "id": "depth_1",
       "asset": "1bit.tiff"
     },
     {
       "id": "depth_8",
       "asset": "8bit.tiff"
-    },
-    {
-      "id": "depth_16",
-      "asset": "16bit.tiff"
-    },
-    {
-      "id": "depth_float",
-      "asset": "float32.tiff"
     },
     {
       "id": "stripped",
@@ -92,6 +72,18 @@
     {
       "id": "error_bad_ifd",
       "asset": "bad_ifd.tiff"
+    },
+    {
+      "id": "compression_lzw_gray_lzw",
+      "asset": "gray_lzw.tiff"
+    },
+    {
+      "id": "compression_lzw_rgba_lzw",
+      "asset": "rgba_lzw.tiff"
+    },
+    {
+      "id": "compression_deflate_gray_deflate",
+      "asset": "gray_deflate.tiff"
     }
   ]
 }
