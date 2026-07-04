@@ -201,6 +201,13 @@ impl Font {
         };
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
+        let vhea = dir
+            .find(data, tag(b"vhea"))
+            .and_then(|d| tt::vhea::parse_vhea(d).ok());
+        let vmtx = vhea.as_ref().and_then(|vhea| {
+            dir.find(data, tag(b"vmtx"))
+                .and_then(|d| tt::vmtx::parse_vmtx(d, vhea.num_vmetrics, maxp.num_glyphs).ok())
+        });
 
         let loca_data = dir
             .find(data, tag(b"loca"))
@@ -234,6 +241,8 @@ impl Font {
             maxp,
             name,
             os2,
+            vhea,
+            vmtx,
             loca_data,
             glyf_data,
             size_pt,
@@ -578,7 +587,7 @@ impl Font {
     pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
         let glyph = self.char_index(codepoint);
         let scaled = scaler::scale_glyph(&self.data, glyph, None, self.is_italic)?;
-        Ok(self.slot_metrics_from_scaled(&scaled))
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
     }
 
     /// `getbbox(text)` → `(left, top, right, bottom)` in pixels.
@@ -754,7 +763,11 @@ impl Font {
 }
 
 impl Font {
-    fn slot_metrics_from_scaled(&self, scaled: &scaler::ScaledGlyph) -> GlyphSlotMetrics {
+    fn slot_metrics_from_scaled(
+        &self,
+        glyph_index: u16,
+        scaled: &scaler::ScaledGlyph,
+    ) -> GlyphSlotMetrics {
         let mut metrics = GlyphSlotMetrics {
             width: scaled.cbox_x_max - scaled.cbox_x_min,
             height: scaled.cbox_y_max - scaled.cbox_y_min,
@@ -766,16 +779,23 @@ impl Font {
             vert_advance: 0,
         };
 
-        let height_fu = if self.size_metrics.y_scale == 0 {
-            0
+        if let Some(vmtx) = &self.data.vmtx {
+            let vertical = vmtx.get(glyph_index);
+            metrics.vert_bearing_y = ft_mul_fix(vertical.tsb as i32, self.size_metrics.y_scale);
+            metrics.vert_advance =
+                ft_mul_fix(vertical.advance_height as i32, self.size_metrics.y_scale);
         } else {
-            ft_div_fix(metrics.height, self.size_metrics.y_scale)
-        };
-        let advance_fu = vertical_advance_font_units(&self.data);
-        let top_fu = (advance_fu - height_fu) / 2;
+            let height_fu = if self.size_metrics.y_scale == 0 {
+                0
+            } else {
+                ft_div_fix(metrics.height, self.size_metrics.y_scale)
+            };
+            let advance_fu = vertical_advance_font_units(&self.data);
+            let top_fu = (advance_fu - height_fu) / 2;
+            metrics.vert_bearing_y = ft_mul_fix(top_fu, self.size_metrics.y_scale);
+            metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
+        }
         metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
-        metrics.vert_bearing_y = ft_mul_fix(top_fu, self.size_metrics.y_scale);
-        metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
 
         grid_fit_horizontal_metrics(&mut metrics);
         metrics
