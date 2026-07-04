@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "description": "Font\u2192script\u2192codepoint mapping. Single source of truth for fixture generation.",
-  "pipeline": "python3 scripts/build_fixtures.py reads this \u2192 generates coverage_matrix_unified.json",
+  "description": "Font→script→codepoint mapping. Single source of truth for fixture generation.",
+  "pipeline": "python3 scripts/build_fixtures.py reads this -> generates force_autohint_matrix.json",
   "sizes": [
     10,
     20

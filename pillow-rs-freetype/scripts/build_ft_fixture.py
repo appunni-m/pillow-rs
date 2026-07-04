@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""Build FreeType-path fixture matrices from vendored FreeType C.
+
+The C helper is the source of truth for every generated row.  It records the
+exact load flags, render mode, glyph index, metrics, bboxes, bitmap placement,
+and raw bitmap bytes for each glyph.
+
+Examples:
+  python3 scripts/build_ft_fixture.py --family force_autohint
+  python3 scripts/build_ft_fixture.py --family no_hinting --small
+  python3 scripts/build_ft_fixture.py --all-small
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+FONT_DIR = ROOT / "tests/fixtures/input/fonts_autohint"
+FIXTURE_DIR = ROOT / "tests/fixtures"
+BUILD_DIR = ROOT / "freetype/build"
+RAW_BASE = FIXTURE_DIR / "outputs"
+DEFAULT_REF_BIN = Path(os.environ.get("FT_REF_BIN", "/tmp/gen_refs_v4"))
+
+FULL_SIZES = (10, 20)
+NATIVE_TT_SIZES = (10, 12, 16, 20, 24)
+ASCII_CODEPOINTS = tuple(range(33, 127))
+SMALL_SIZES = (10, 20)
+SMALL_CODEPOINTS = (33, 65, 103, 109)
+FULL_FAMILY = "force_autohint"
+FAMILIES = (
+    "native_tt_default",
+    "force_autohint",
+    "no_hinting",
+    "metrics_only",
+    "outline_cbox",
+    "render_mono",
+    "render_lcd",
+)
+
+FONT_MAP = {
+    "DejaVuSans-ExtraLight": "DejaVuSans-ExtraLight.ttf",
+    "DejaVuSans-Oblique": "DejaVuSans-Oblique.ttf",
+    "DejaVuSansMono": "DejaVuSansMono.ttf",
+    "DejaVuSerif-Bold": "DejaVuSerif-Bold.ttf",
+    "DejaVuSerif-Italic": "DejaVuSerif-Italic.ttf",
+    "LiberationSans-Regular": "LiberationSans-Regular.ttf",
+    "LiberationSansNarrow-Bold": "LiberationSansNarrow-Bold.ttf",
+    "NotoSans-Bold": "NotoSans-Bold.ttf",
+}
+
+
+def load_inventory() -> dict[str, dict]:
+    path = FIXTURE_DIR / "font_inventory.json"
+    with path.open() as fh:
+        return json.load(fh)["fonts"]
+
+
+def build_ref_bin(output: Path) -> None:
+    cmd = [
+        "cc",
+        "-I",
+        str(ROOT / "freetype/include"),
+        str(ROOT / "scripts/gen_ft_refs.c"),
+        "-L",
+        str(BUILD_DIR),
+        "-lfreetype",
+        "-lm",
+        "-o",
+        str(output),
+    ]
+    subprocess.run(cmd, check=True)
+
+
+def run_ref(ref_bin: Path, font_path: Path, cp: int, size: int, family: str) -> dict | None:
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = str(BUILD_DIR)
+    result = subprocess.run(
+        [str(ref_bin), "--json", str(font_path), f"{cp:04X}", str(size), family],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        env=env,
+    )
+    data = json.loads(result.stdout)
+    if data.get("status") == "missing_glyph":
+        return None
+    return data
+
+
+def operation_for_family(family: str) -> str:
+    if family == "metrics_only":
+        return "metrics_only"
+    if family == "outline_cbox":
+        return "outline_cbox"
+    return "getmask"
+
+
+def row_from_ref(family: str, font_name: str, size: int, cp: int, ref: dict, raw_dir: Path) -> dict:
+    op = operation_for_family(family)
+    row_id = f"{font_name}_{size}_{cp}_{family}_{op}"
+    raw_bytes = bytes.fromhex(ref["raw_pixels"])
+
+    bitmap = ref["bitmap"]
+    bbox = ref["bbox"]
+    row = {
+        "id": row_id,
+        "fixture_family": family,
+        "generator": ref["generator"],
+        "freetype_version": ref["freetype_version"],
+        "load_flags": ref["load_flags"],
+        "load_flags_value": ref["load_flags_value"],
+        "render_mode": ref["render_mode"],
+        "font": font_name,
+        "font_file": ref["font"],
+        "size_pt": size,
+        "codepoint": cp,
+        "glyph_index": ref["glyph_index"],
+        "char": chr(cp) if cp <= 0x10FFFF else "",
+        "operation": op,
+        "status": "active",
+        "metrics": ref["metrics"],
+        "bbox": bbox,
+        "bitmap": bitmap,
+        "bitmap_placement": {"left": bitmap["left"], "top": bitmap["top"]},
+        "raw_pixels": ref["raw_pixels"],
+        "ref_sha256": hashlib.sha256(raw_bytes).hexdigest(),
+        "ref_size": [bitmap["width"], bitmap["rows"]],
+    }
+    if op == "getmask":
+        raw_name = f"{row_id}.bin"
+        raw_path = raw_dir / raw_name
+        raw_path.write_bytes(raw_bytes)
+        row["ref_raw"] = str(raw_path.relative_to(FIXTURE_DIR))
+        row["ref_value"] = bbox["bitmap_pixels"]
+    elif op == "metrics_only":
+        row["ref_value"] = ref["metrics"]
+    else:
+        row["ref_value"] = bbox
+    return row
+
+
+def build_family(
+    family: str,
+    ref_bin: Path,
+    small: bool,
+    output: Path | None,
+) -> Path:
+    raw_dir = RAW_BASE / f"raws_{family}"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+
+    if small:
+        fonts = {"DejaVuSans-ExtraLight": FONT_MAP["DejaVuSans-ExtraLight"]}
+        sizes = SMALL_SIZES
+        codepoints_by_font = {"DejaVuSans-ExtraLight": {"latn": list(SMALL_CODEPOINTS)}}
+    elif family == FULL_FAMILY:
+        fonts = {name: info["path"] for name, info in sorted(load_inventory().items())}
+        sizes = FULL_SIZES
+        codepoints_by_font = {
+            name: {script: cps for script, cps in info["scripts"].items()}
+            for name, info in sorted(load_inventory().items())
+        }
+    elif family == "native_tt_default":
+        fonts = FONT_MAP
+        sizes = NATIVE_TT_SIZES
+        codepoints_by_font = {
+            name: {"latn": list(ASCII_CODEPOINTS)} for name in sorted(FONT_MAP)
+        }
+    else:
+        fonts = {"DejaVuSans-ExtraLight": FONT_MAP["DejaVuSans-ExtraLight"]}
+        sizes = SMALL_SIZES
+        codepoints_by_font = {"DejaVuSans-ExtraLight": {"latn": list(SMALL_CODEPOINTS)}}
+
+    for font_name, font_file in fonts.items():
+        font_path = FONT_DIR / font_file
+        if not font_path.exists():
+            print(f"SKIP {font_name}: {font_file} not found", file=sys.stderr)
+            continue
+        for script, codepoints in codepoints_by_font[font_name].items():
+            for size in sizes:
+                for cp in codepoints:
+                    ref = run_ref(ref_bin, font_path, cp, size, family)
+                    if ref is None:
+                        continue
+                    row = row_from_ref(family, font_name, size, cp, ref, raw_dir)
+                    row["script"] = script
+                    rows.append(row)
+
+    matrix_path = output or (FIXTURE_DIR / f"{family}_matrix.json")
+    matrix = {
+        "version": "6.0.0",
+        "fixture_family": family,
+        "generator": "scripts/build_ft_fixture.py + scripts/gen_ft_refs.c",
+        "source": "vendored FreeType C",
+        "font_source": "fonts_autohint",
+        "load_flags": rows[0]["load_flags"] if rows else [],
+        "render_mode": rows[0]["render_mode"] if rows else "none",
+        "assert_pixel_parity": family == FULL_FAMILY,
+        "rows": rows,
+        "summary": {
+            "total_rows": len(rows),
+            "active_rows": len(rows),
+            "fonts": len({row["font"] for row in rows}),
+            "sizes": sorted({row["size_pt"] for row in rows}),
+            "glyphs": len({(row["font"], row["codepoint"]) for row in rows}),
+        },
+    }
+    with matrix_path.open("w") as fh:
+        json.dump(matrix, fh, indent=2, ensure_ascii=False)
+    print(f"{family}: {len(rows)} rows -> {matrix_path}", file=sys.stderr)
+    return matrix_path
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--family", choices=FAMILIES)
+    parser.add_argument("--all-small", action="store_true")
+    parser.add_argument("--small", action="store_true")
+    parser.add_argument("--ref-bin", type=Path, default=DEFAULT_REF_BIN)
+    parser.add_argument("--build-ref-bin", action="store_true")
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+
+    if args.build_ref_bin:
+        build_ref_bin(args.ref_bin)
+    if not args.ref_bin.exists():
+        print(f"missing FreeType reference helper: {args.ref_bin}", file=sys.stderr)
+        print("run with --build-ref-bin after building vendored FreeType", file=sys.stderr)
+        return 1
+
+    families = FAMILIES if args.all_small else (args.family,)
+    if not families or families == (None,):
+        parser.error("--family or --all-small is required")
+
+    for family in families:
+        build_family(family, args.ref_bin, args.small or args.all_small, args.output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

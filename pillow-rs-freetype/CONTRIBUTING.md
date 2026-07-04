@@ -48,8 +48,8 @@ See `src/autohint/loader.rs` for an example of inline debug documentation.
 
 ## Adding a New Feature
 
-1. Write a PIL parity test in `tests/`
-2. Generate a JSON fixture using `scripts/generate_font_refs.py`
+1. Write a FreeType-path parity test in `tests/`
+2. Generate a JSON fixture using `scripts/build_ft_fixture.py`
 3. Implement the feature in `src/`
 4. Run `cargo test -p pillow-rs-freetype` and verify pass
 

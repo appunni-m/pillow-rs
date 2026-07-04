@@ -1,0 +1,641 @@
+{
+  "version": "6.0.0",
+  "fixture_family": "render_mono",
+  "generator": "scripts/build_ft_fixture.py + scripts/gen_ft_refs.c",
+  "source": "vendored FreeType C",
+  "font_source": "fonts_autohint",
+  "load_flags": [
+    "FT_LOAD_FORCE_AUTOHINT",
+    "FT_LOAD_TARGET_MONO"
+  ],
+  "render_mode": "FT_RENDER_MODE_MONO",
+  "assert_pixel_parity": false,
+  "rows": [
+    {
+      "id": "DejaVuSans-ExtraLight_10_33_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 33,
+      "glyph_index": 4,
+      "char": "!",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 64,
+        "height": 512,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 512,
+        "hori_advance": 256,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 64,
+        "vert_advance": 704
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 2,
+          "y_max": 8
+        }
+      },
+      "bitmap": {
+        "width": 1,
+        "rows": 8,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 1,
+        "top": 8
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 8
+      },
+      "raw_pixels": "80008000800080008000000000008000",
+      "ref_sha256": "fec62cb1110110478a89d7c5a164412315d5e75406c1762ae766b635b55b88dd",
+      "ref_size": [
+        1,
+        8
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_10_33_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": 0,
+        "x_max": 2,
+        "y_max": 8
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_65_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 65,
+      "glyph_index": 36,
+      "char": "A",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 448,
+        "height": 512,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 512,
+        "hori_advance": 448,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 64,
+        "vert_advance": 704
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 7,
+          "y_max": 8
+        }
+      },
+      "bitmap": {
+        "width": 7,
+        "rows": 8,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 0,
+        "top": 8
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 8
+      },
+      "raw_pixels": "100030002800480048007c0084008400",
+      "ref_sha256": "596f522005f6e6df81efdc84b076cf5fc86875355c5fd552029724986e500ae4",
+      "ref_size": [
+        7,
+        8
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_10_65_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 0,
+        "y_min": 0,
+        "x_max": 7,
+        "y_max": 8
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_103_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 103,
+      "glyph_index": 74,
+      "char": "g",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 320,
+        "height": 512,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 384,
+        "hori_advance": 448,
+        "vert_bearing_x": -128,
+        "vert_bearing_y": 64,
+        "vert_advance": 704
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": -2,
+          "x_max": 6,
+          "y_max": 6
+        }
+      },
+      "bitmap": {
+        "width": 5,
+        "rows": 8,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 1,
+        "top": 6
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 6
+      },
+      "raw_pixels": "78008800880088008800580028003000",
+      "ref_sha256": "e70152c545af3cc44dbd68977818d95f30d7eddd0b66c09922e63e0f2eb7e11c",
+      "ref_size": [
+        5,
+        8
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_10_103_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": -2,
+        "x_max": 6,
+        "y_max": 6
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_109_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 109,
+      "glyph_index": 80,
+      "char": "m",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 576,
+        "height": 384,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 384,
+        "hori_advance": 704,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 128,
+        "vert_advance": 704
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 10,
+          "y_max": 6
+        }
+      },
+      "bitmap": {
+        "width": 9,
+        "rows": 6,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 1,
+        "top": 6
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 6
+      },
+      "raw_pixels": "f70088808880888088808880",
+      "ref_sha256": "d4daf561fab608233f40ab3a3821a96402efc80de48c61947a239fe445207a0a",
+      "ref_size": [
+        9,
+        6
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_10_109_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": 0,
+        "x_max": 10,
+        "y_max": 6
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_33_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 33,
+      "glyph_index": 4,
+      "char": "!",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 64,
+        "height": 896,
+        "hori_bearing_x": 256,
+        "hori_bearing_y": 896,
+        "hori_advance": 576,
+        "vert_bearing_x": 0,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 4,
+          "y_min": 0,
+          "x_max": 5,
+          "y_max": 14
+        }
+      },
+      "bitmap": {
+        "width": 1,
+        "rows": 14,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 4,
+        "top": 14
+      },
+      "bitmap_placement": {
+        "left": 4,
+        "top": 14
+      },
+      "raw_pixels": "80008000800080008000800080008000800080000000000000008000",
+      "ref_sha256": "8f4ba169cadfc4482c1caf96cb59b988c8c9d52d7a3d9426a00c410daa4e3a24",
+      "ref_size": [
+        1,
+        14
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_20_33_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 4,
+        "y_min": 0,
+        "x_max": 5,
+        "y_max": 14
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_65_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 65,
+      "glyph_index": 36,
+      "char": "A",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 896,
+        "height": 896,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 896,
+        "hori_advance": 896,
+        "vert_bearing_x": -448,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 13,
+          "y_max": 14
+        }
+      },
+      "bitmap": {
+        "width": 12,
+        "rows": 14,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 1,
+        "top": 14
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 14
+      },
+      "raw_pixels": "060006000a000900110010801080208020407fc04060402080208010",
+      "ref_sha256": "e2659f5c07cb08e84834ae747e3c301c5928cf33d519d26e7cc864e1e7722d29",
+      "ref_size": [
+        12,
+        14
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_20_65_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": 0,
+        "x_max": 13,
+        "y_max": 14
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_103_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 103,
+      "glyph_index": 74,
+      "char": "g",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 576,
+        "height": 960,
+        "hori_bearing_x": 128,
+        "hori_bearing_y": 704,
+        "hori_advance": 832,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 2,
+          "y_min": -4,
+          "x_max": 11,
+          "y_max": 11
+        }
+      },
+      "bitmap": {
+        "width": 9,
+        "rows": 15,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 2,
+        "top": 11
+      },
+      "bitmap_placement": {
+        "left": 2,
+        "top": 11
+      },
+      "raw_pixels": "3c806280418080808080808080808080c18062803c800080008001007e00",
+      "ref_sha256": "4ed6be3ecacbc6f9640845bc82dde539fa70a2fb29fc524c50aeeceb0a8ef474",
+      "ref_size": [
+        9,
+        15
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_20_103_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 2,
+        "y_min": -4,
+        "x_max": 11,
+        "y_max": 11
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_109_render_mono_getmask",
+      "fixture_family": "render_mono",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_FORCE_AUTOHINT",
+        "FT_LOAD_TARGET_MONO"
+      ],
+      "load_flags_value": 131104,
+      "render_mode": "FT_RENDER_MODE_MONO",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 109,
+      "glyph_index": 80,
+      "char": "m",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 960,
+        "height": 704,
+        "hori_bearing_x": 128,
+        "hori_bearing_y": 704,
+        "hori_advance": 1216,
+        "vert_bearing_x": -512,
+        "vert_bearing_y": 256,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 2,
+          "y_min": 0,
+          "x_max": 17,
+          "y_max": 11
+        }
+      },
+      "bitmap": {
+        "width": 15,
+        "rows": 11,
+        "pitch": 2,
+        "pixel_mode": 1,
+        "num_grays": 256,
+        "left": 2,
+        "top": 11
+      },
+      "bitmap_placement": {
+        "left": 2,
+        "top": 11
+      },
+      "raw_pixels": "9e3ca2c4c18281028102810281028102810281028102",
+      "ref_sha256": "b5c06ef1c33d95a9d21b0c855f0de3da18047597ddf2263535d3b36f0834e8fd",
+      "ref_size": [
+        15,
+        11
+      ],
+      "ref_raw": "outputs/raws_render_mono/DejaVuSans-ExtraLight_20_109_render_mono_getmask.bin",
+      "ref_value": {
+        "x_min": 2,
+        "y_min": 0,
+        "x_max": 17,
+        "y_max": 11
+      },
+      "script": "latn"
+    }
+  ],
+  "summary": {
+    "total_rows": 8,
+    "active_rows": 8,
+    "fonts": 1,
+    "sizes": [
+      10,
+      20
+    ],
+    "glyphs": 4
+  }
+}

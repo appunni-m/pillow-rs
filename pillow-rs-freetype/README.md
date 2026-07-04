@@ -99,11 +99,8 @@ Key modules:
 ## Testing
 
 ```bash
-# Run FT fixture tests
-cargo test -p pillow-rs-freetype test_font_coverage_matrix_freetype
-
-# Run PIL fixture tests  
-cargo test -p pillow-rs-freetype test_font_coverage_matrix_pil
+# Run FreeType fixture tests
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
 
 # Run all tests
 cargo test -p pillow-rs-freetype
@@ -112,7 +109,7 @@ cargo test -p pillow-rs-freetype
 cargo test -p pillow-rs-freetype -- --nocapture
 ```
 
-Test fixtures are SHA-256 hashes of rendered glyph bitmaps against FreeType
+Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C.
 2.14.3 C reference output. See `doc/REFERENCES.md` for fixture regeneration.
 
 ## License
