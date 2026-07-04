@@ -13,7 +13,7 @@ use super::gs::RoundMode;
 use super::iup;
 use super::zone::GlyphZone;
 use crate::error::FontError;
-use crate::fixed::{ft_ceil_fix, ft_floor_fix, ft_mul_fix};
+use crate::fixed::ft_mul_fix;
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -769,6 +769,10 @@ impl ExecContext {
 
     /// Set the glyph instruction stream for execution.
     pub fn set_glyph_program(&mut self, ins: &[u8]) {
+        // C: TT_Run_Context in ttinterp.c clears exec->top and exec->callTop
+        // before each glyph execution.  Some fonts leave stack values behind.
+        self.stack.clear();
+        self.call_stack.clear();
         self.glyph_program = ins.to_vec();
         self.glyph_range = CodeRange {
             base: 0,
@@ -886,7 +890,9 @@ impl ExecContext {
                 0x63 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(ft_mul_fix(a, b));
+                    // C: Ins_MUL in ttinterp.c uses F26.6 stack arithmetic:
+                    // FT_MulDiv(a, b, 64), not the 16.16 FT_MulFix helper.
+                    self.push(crate::fixed::ft_mul_div(a, b, 64));
                 } // MUL
                 0x64 => {
                     let a = self.pop()?;
@@ -898,11 +904,13 @@ impl ExecContext {
                 } // NEG
                 0x66 => {
                     let a = self.pop()?;
-                    self.push(ft_floor_fix(a));
+                    // C: Ins_FLOOR/Ins_CEILING in ttinterp.c use pixel-grid
+                    // F26.6 rounding macros, not generic fixed floor/ceil.
+                    self.push(crate::scaler::ft_pix_floor(a));
                 } // FLOOR
                 0x67 => {
                     let a = self.pop()?;
-                    self.push(ft_ceil_fix(a));
+                    self.push(crate::scaler::ft_pix_ceil(a));
                 } // CEILING
 
                 // ── Storage ──────────────────────────────────────
@@ -1335,10 +1343,12 @@ impl ExecContext {
                     let v = self.pop()?;
                     self.gs.loop_counter = v;
                 }
-                // LOOPCALL (0x2A): pop count (top), func_num (deeper)
+                // LOOPCALL (0x2A): top is function number, deeper is count.
+                // C: Ins_LOOPCALL uses args[1] as FDEF id and args[0] as count
+                // after the VM has popped two operands into the argument area.
                 0x2A => {
-                    let count = self.pop()?;
                     let func_num = self.pop()? as u16;
+                    let count = self.pop()?;
                     if count > 0 && (func_num as usize) < self.functions.len() {
                         if let Some(ref def) = self.functions[func_num as usize] {
                             if def.active {
@@ -1484,21 +1494,21 @@ impl ExecContext {
                     let offset = self.pop()? - 1;
                     self.ip = (self.ip as i32 + offset) as usize;
                 }
-                // ── JROT (0x78) — pops e1(top), e2, offset(deeper)
+                // ── JROT (0x78) — pops condition(top), offset(deeper)
+                // C: Ins_JROT/Ins_JROF test args[1] and pass args[0] as the
+                // relative jump offset.  These are not comparison opcodes.
                 0x78 => {
-                    let e1 = self.pop()?; // top
-                    let e2 = self.pop()?;
-                    let offset = self.pop()?; // deeper
-                    if e1 > e2 {
+                    let condition = self.pop()?;
+                    let offset = self.pop()?;
+                    if condition != 0 {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
                 }
-                // ── JROF (0x79) — pops e1(top), e2, offset(deeper)
+                // ── JROF (0x79) — pops condition(top), offset(deeper)
                 0x79 => {
-                    let e1 = self.pop()?; // top
-                    let e2 = self.pop()?;
-                    let offset = self.pop()?; // deeper
-                    if e1 <= e2 {
+                    let condition = self.pop()?;
+                    let offset = self.pop()?;
+                    if condition == 0 {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
                 }
