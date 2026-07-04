@@ -251,7 +251,7 @@ fn rasterize_mono_center(
     let pitch = mono_pitch(width);
     let mut buffer = vec![0u8; pitch * height];
     rasterize_mono_profiles(&segments, &mut buffer, width, height, pitch);
-    apply_horizontal_center_edges(&segments, &mut buffer, width, height, pitch);
+    rasterize_mono_horizontal_profiles(&segments, &mut buffer, width, height, pitch);
     Ok(buffer)
 }
 
@@ -361,6 +361,37 @@ fn rasterize_mono_profiles(
     }
 
     draw_mono_profile_sweep(profiles, buffer, width, height, pitch);
+}
+
+fn rasterize_mono_horizontal_profiles(
+    segments: &[Segment],
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+) {
+    if width == 0 || height == 0 || segments.is_empty() {
+        return;
+    }
+
+    let flipped: Vec<Segment> = segments
+        .iter()
+        .map(|segment| Segment {
+            x0: segment.y0,
+            y0: segment.x0,
+            x1: segment.y1,
+            y1: segment.x1,
+            contour: segment.contour,
+            order: segment.order,
+            contour_len: segment.contour_len,
+        })
+        .collect();
+    let profiles = MonoProfileBuilder::new(&flipped, 0, i32_from_usize(width) * 64).build();
+    if profiles.is_empty() {
+        return;
+    }
+
+    draw_mono_horizontal_profile_sweep(profiles, buffer, width, height, pitch);
 }
 
 impl<'a> MonoProfileBuilder<'a> {
@@ -610,6 +641,168 @@ fn draw_mono_profile_sweep(
         increment_profiles(&mut draw_left, &mut profiles, 1);
         increment_profiles(&mut draw_right, &mut profiles, -1);
     }
+}
+
+fn draw_mono_horizontal_profile_sweep(
+    mut profiles: Vec<MonoProfile>,
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+) {
+    let mut waiting: Vec<usize> = (0..profiles.len())
+        .filter(|&index| profiles[index].height > 0)
+        .collect();
+    waiting.sort_by_key(|&index| profiles[index].start);
+    let Some(min_y) = waiting.first().map(|&index| profiles[index].start) else {
+        return;
+    };
+    let max_y = profiles
+        .iter()
+        .filter(|profile| profile.height > 0)
+        .map(|profile| profile.start + i32_from_usize(profile.height) - 1)
+        .max()
+        .unwrap_or(min_y);
+
+    let mut draw_left: Vec<usize> = Vec::new();
+    let mut draw_right: Vec<usize> = Vec::new();
+    for y in min_y..=max_y {
+        let mut index = 0;
+        while index < waiting.len() {
+            let profile = waiting[index];
+            if profiles[profile].start == y {
+                let profile = waiting.remove(index);
+                if profiles[profile].flags & MONO_FLOW_UP != 0 {
+                    insert_profile_sorted(&mut draw_left, profile, &profiles);
+                } else {
+                    insert_profile_sorted(&mut draw_right, profile, &profiles);
+                }
+            } else {
+                index += 1;
+            }
+        }
+
+        if y >= 0 && y < i32_from_usize(width) {
+            let pair_count = draw_left.len().min(draw_right.len());
+            let mut dropouts = Vec::new();
+            for pair in 0..pair_count {
+                let left = draw_left[pair];
+                let right = draw_right[pair];
+                let mut x1 = profiles[left].x;
+                let mut x2 = profiles[right].x;
+                if x1 > x2 {
+                    std::mem::swap(&mut x1, &mut x2);
+                }
+                if mono_ceiling_fixed(x1) <= mono_floor_fixed(x2) {
+                    set_mono_horizontal_span_edges(buffer, width, height, pitch, y, x1, x2);
+                } else if should_draw_profile_dropout(&profiles, left, right, x1, x2) {
+                    let drop = profile_dropout_pixels(x1, x2);
+                    profiles[left].x = drop.primary;
+                    profiles[right].x = drop.secondary;
+                    profiles[left].flags |= MONO_DROPOUT;
+                    dropouts.push((left, right));
+                }
+            }
+
+            for (left, right) in dropouts {
+                if profiles[left].flags & MONO_DROPOUT != 0 {
+                    set_mono_horizontal_dropout_pixel(
+                        buffer,
+                        width,
+                        height,
+                        pitch,
+                        y,
+                        profiles[left].x,
+                        profiles[right].x,
+                    );
+                    profiles[left].flags &= !MONO_DROPOUT;
+                }
+            }
+        }
+
+        increment_profiles(&mut draw_left, &mut profiles, 1);
+        increment_profiles(&mut draw_right, &mut profiles, -1);
+    }
+}
+
+fn set_mono_horizontal_span_edges(
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+    x: i32,
+    y1: i32,
+    y2: i32,
+) {
+    if y1 == mono_ceiling_fixed(y1) {
+        set_mono_horizontal_pixel(buffer, width, height, pitch, x, y1 >> 6);
+    }
+    if y2 == mono_floor_fixed(y2) {
+        set_mono_horizontal_pixel(buffer, width, height, pitch, x, y2 >> 6);
+    }
+}
+
+fn set_mono_horizontal_dropout_pixel(
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+    x: i32,
+    mut primary: i32,
+    secondary: i32,
+) {
+    if primary < 0 || primary >= i32_from_usize(height) {
+        primary = secondary;
+    } else if secondary >= 0
+        && secondary < i32_from_usize(height)
+        && mono_horizontal_pixel_is_set(buffer, width, height, pitch, x, secondary)
+    {
+        return;
+    }
+
+    set_mono_horizontal_pixel(buffer, width, height, pitch, x, primary);
+}
+
+fn mono_horizontal_pixel_is_set(
+    buffer: &[u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+    x: i32,
+    y: i32,
+) -> bool {
+    let Some((row, col)) = mono_pixel_offset(width, height, pitch, x, y) else {
+        return false;
+    };
+    buffer[row + col / 8] & (0x80 >> (col & 7)) != 0
+}
+
+fn set_mono_horizontal_pixel(
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+    x: i32,
+    y: i32,
+) {
+    let Some((row, col)) = mono_pixel_offset(width, height, pitch, x, y) else {
+        return;
+    };
+    buffer[row + col / 8] |= 0x80 >> (col & 7);
+}
+
+fn mono_pixel_offset(
+    width: usize,
+    height: usize,
+    pitch: usize,
+    x: i32,
+    y: i32,
+) -> Option<(usize, usize)> {
+    if x < 0 || y < 0 || x >= i32_from_usize(width) || y >= i32_from_usize(height) {
+        return None;
+    }
+    let row = height - 1 - usize_from_i32(y);
+    Some((row * pitch, usize_from_i32(x)))
 }
 
 fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
