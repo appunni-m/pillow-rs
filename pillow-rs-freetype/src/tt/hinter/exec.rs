@@ -308,12 +308,11 @@ impl ExecContext {
         self.gs = GraphicsState::default();
         self.gs.auto_flip = true; // C default
 
-        // Scale CVT: face->cvt[i] / 64 → FT_MulFix(_, scale)
-        // Our CVT entries are in FU*64 from the parser. Divide by 64 to get FU.
-        // Then scale to 26.6 pixel units using y_scale.
+        // Scale CVT: face->cvt[i] is already FWORD*64 from the parser,
+        // matching FreeType's face-level CVT storage. Applying the 16.16
+        // size scale directly keeps the result in 26.6 pixels.
         for i in 0..self.cvt.len() {
-            let fu = self.cvt[i] / 64;
-            self.cvt[i] = crate::fixed::ft_mul_fix(fu, self.y_scale);
+            self.cvt[i] = crate::fixed::ft_mul_fix(self.cvt[i], self.y_scale);
         }
 
         // Restore the post-fpgm storage snapshot saved by TT_Save_Context.
