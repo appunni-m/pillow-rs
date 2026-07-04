@@ -270,6 +270,7 @@ fn rasterize_mono_center(
             }
         }
     }
+    apply_horizontal_center_edges(&segments, &mut buffer, width, height, pitch);
     Ok(buffer)
 }
 
@@ -343,6 +344,31 @@ fn set_mono_dropout(row: &mut [u8], width: usize, x1: i32, x2: i32) {
     if primary >= 0 && primary < i32_from_usize(width) {
         let x = usize_from_i32(primary);
         row[x / 8] |= 0x80 >> (x & 7);
+    }
+}
+
+fn apply_horizontal_center_edges(
+    segments: &[Segment],
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+) {
+    for segment in segments {
+        if segment.y0 != segment.y1 || (segment.y0 & 63) != 32 {
+            continue;
+        }
+
+        let y = (segment.y0 - 32) >> 6;
+        if y < 0 || y >= i32_from_usize(height) {
+            continue;
+        }
+
+        let row = height - 1 - usize_from_i32(y);
+        let row = &mut buffer[row * pitch..(row + 1) * pitch];
+        let x1 = pixel_ceiling(segment.x0.min(segment.x1) - 32);
+        let x2 = pixel_floor(segment.x0.max(segment.x1) - 32);
+        fill_mono_span(row, width, x1, x2);
     }
 }
 
