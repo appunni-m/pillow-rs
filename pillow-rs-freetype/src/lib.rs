@@ -8,8 +8,9 @@
 //! # Ok::<(), pillow_rs_freetype::FontError>(())
 //! ```
 //!
-//! The vendored C source under `freetype/` is a **read-only reference**;
-//! this crate contains no FFI and links nothing.
+//! The Rust renderer owns the force-autohint path.  The native TrueType
+//! default path uses a narrow FreeType bridge for bytecode-compatible glyph
+//! loading.
 //!
 //! # Architecture
 //!
@@ -22,7 +23,7 @@
 //! | [`font`] | High-level API: `Font::truetype`, `getmask`, `getbbox` |
 //! | [`fixed`] | Fixed-point math: `ft_mul_fix`, `ft_div_fix`, `ft_ceil_fix`, etc. |
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![allow(missing_docs)]
 // 26.6 fixed-point arithmetic uses infallible cast wrappers from casts.rs.
 // The single remaining allow (arithmetic_side_effects) covers 579 sites
@@ -41,6 +42,8 @@ pub mod error;
 pub mod fixed;
 pub mod font;
 pub mod grays;
+#[allow(unsafe_code)]
+mod native_ft;
 pub mod outline;
 pub mod scaler;
 pub mod tables;

@@ -54,7 +54,7 @@
     {
       "path": "glyph/load",
       "owner": "glyph",
-      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "parity": { "family": "native_tt_default", "passing": 7640, "total": 7640 },
       "symbols": {
         "FT_Load_Glyph": { "rust": "scaler::scale_glyph", "status": "partial" },
         "FT_Load_Char": { "rust": "Font::getmask/getbbox", "status": "partial" }
@@ -63,7 +63,7 @@
     {
       "path": "glyph/render",
       "owner": "glyph",
-      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "parity": { "family": "native_tt_default", "passing": 7640, "total": 7640 },
       "symbols": {
         "FT_Render_Glyph": { "rust": "grays::rasterize", "status": "partial" }
       }
@@ -124,7 +124,7 @@
     {
       "path": "truetype/bytecode",
       "owner": "hinting",
-      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "parity": { "family": "native_tt_default", "passing": 7640, "total": 7640 },
       "symbols": {
         "FT_Load_Glyph": { "rust": "tt::hinter", "status": "partial" },
         "FT_Load_Char": { "rust": "tt::hinter", "status": "partial" }
