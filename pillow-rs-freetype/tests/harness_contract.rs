@@ -235,12 +235,12 @@ fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
         );
         assert_eq!(
             matrix.rows.len(),
-            8,
+            11_086,
             "{name} coverage changed; update the executed baseline intentionally"
         );
 
         let counts = operation_counts(&matrix.rows);
-        assert_eq!(counts.get("getmask"), Some(&8));
+        assert_eq!(counts.get("getmask"), Some(&11_086));
         for row in matrix.rows.iter().filter(|row| row.operation == "getmask") {
             assert!(
                 row.ref_size.as_ref().is_some_and(|size| size.len() >= 2),
@@ -267,12 +267,12 @@ fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
         );
         assert_eq!(
             matrix.rows.len(),
-            8,
+            11_086,
             "{name} coverage changed; update the executed baseline intentionally"
         );
 
         let counts = operation_counts(&matrix.rows);
-        assert_eq!(counts.get(operation), Some(&8));
+        assert_eq!(counts.get(operation), Some(&11_086));
     }
 }
 
@@ -282,16 +282,16 @@ fn all_committed_supplemental_matrices_have_executed_status() {
     assert_coverage_header("no_hinting_matrix.json", &no_hinting);
     assert!(
         !no_hinting.assert_pixel_parity,
-        "no_hinting_matrix.json is an executed 8/8 baseline but not yet a broad exact parity gate"
+        "no_hinting_matrix.json is an executed broad baseline but not yet an exact parity gate"
     );
     assert_eq!(
         no_hinting.rows.len(),
-        8,
+        11_086,
         "no_hinting_matrix.json coverage changed; update the executed baseline intentionally"
     );
 
     let counts = operation_counts(&no_hinting.rows);
-    assert_eq!(counts.get("getmask"), Some(&8));
+    assert_eq!(counts.get("getmask"), Some(&11_086));
     for row in no_hinting
         .rows
         .iter()

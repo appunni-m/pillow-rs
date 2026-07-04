@@ -7,7 +7,7 @@ and raw bitmap bytes for each glyph.
 
 Examples:
   python3 scripts/build_ft_fixture.py --family force_autohint
-  python3 scripts/build_ft_fixture.py --family no_hinting --small
+  python3 scripts/build_ft_fixture.py --family no_hinting
   python3 scripts/build_ft_fixture.py --all-small
 """
 
@@ -102,6 +102,16 @@ def operation_for_family(family: str) -> str:
     return "getmask"
 
 
+def full_inventory_selection() -> tuple[dict[str, str], tuple[int, ...], dict[str, dict[str, list[int]]]]:
+    inventory = load_inventory()
+    fonts = {name: info["path"] for name, info in sorted(inventory.items())}
+    codepoints_by_font = {
+        name: {script: cps for script, cps in info["scripts"].items()}
+        for name, info in sorted(inventory.items())
+    }
+    return fonts, FULL_SIZES, codepoints_by_font
+
+
 def row_from_ref(family: str, font_name: str, size: int, cp: int, ref: dict, raw_dir: Path) -> dict:
     op = operation_for_family(family)
     row_id = f"{font_name}_{size}_{cp}_{family}_{op}"
@@ -154,6 +164,8 @@ def build_family(
 ) -> Path:
     raw_dir = RAW_BASE / f"raws_{family}"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    for stale_raw in raw_dir.glob("*.bin"):
+        stale_raw.unlink()
     rows = []
 
     if small:
@@ -161,12 +173,7 @@ def build_family(
         sizes = SMALL_SIZES
         codepoints_by_font = {"DejaVuSans-ExtraLight": {"latn": list(SMALL_CODEPOINTS)}}
     elif family == FULL_FAMILY:
-        fonts = {name: info["path"] for name, info in sorted(load_inventory().items())}
-        sizes = FULL_SIZES
-        codepoints_by_font = {
-            name: {script: cps for script, cps in info["scripts"].items()}
-            for name, info in sorted(load_inventory().items())
-        }
+        fonts, sizes, codepoints_by_font = full_inventory_selection()
     elif family == "native_tt_default":
         fonts = FONT_MAP
         sizes = NATIVE_TT_SIZES
@@ -174,9 +181,7 @@ def build_family(
             name: {"latn": list(ASCII_CODEPOINTS)} for name in sorted(FONT_MAP)
         }
     else:
-        fonts = {"DejaVuSans-ExtraLight": FONT_MAP["DejaVuSans-ExtraLight"]}
-        sizes = SMALL_SIZES
-        codepoints_by_font = {"DejaVuSans-ExtraLight": {"latn": list(SMALL_CODEPOINTS)}}
+        fonts, sizes, codepoints_by_font = full_inventory_selection()
 
     for font_name, font_file in fonts.items():
         font_path = FONT_DIR / font_file

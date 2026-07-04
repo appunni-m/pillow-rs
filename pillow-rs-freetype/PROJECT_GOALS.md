@@ -69,16 +69,13 @@ Exact gates:
 Incomplete gates:
 
 - `native_tt_default_matrix.json`: threshold baseline only, currently `3176/7640`. This is not complete parity. It must become `7640/7640` exact before the native TrueType bytecode path can be called done.
-- `render_mono_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
-- `render_lcd_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
-- `metrics_only_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
-- `outline_cbox_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
+- `no_hinting_matrix.json`: executed broad baseline only, currently `10029/11086`. This is not complete parity.
+- `render_mono_matrix.json`: executed broad baseline only, currently `915/11086`. This is not complete parity.
+- `render_lcd_matrix.json`: executed broad baseline only, currently `215/11086`. This is not complete parity.
+- `metrics_only_matrix.json`: executed broad baseline only, currently `13/11086`. This is not complete parity.
+- `outline_cbox_matrix.json`: executed broad baseline only, currently `7/11086`. This is not complete parity.
 
-Executed small baseline:
-
-- `no_hinting_matrix.json`: currently `8/8`, executed by the default coverage runner. It remains a small baseline until it is expanded and promoted as a broad exact gate.
-
-Current committed fixture families are executed by the default coverage runner. They are not success until every row is exact, broad enough for the endpoint family, and promoted out of threshold or small-baseline status.
+Current committed fixture families are executed by the default coverage runner. They are not success until every row is exact and promoted out of threshold or incomplete-baseline status.
 
 ## Promotion Rules
 

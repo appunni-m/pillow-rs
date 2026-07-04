@@ -336,7 +336,7 @@ fn test_render_mono_matrix_baseline_is_executed() {
     run_unified(
         "render_mono_matrix.json",
         BitmapBackend::FreeType,
-        Some((0, 8)),
+        Some((915, 11_086)),
     );
 }
 
@@ -345,7 +345,7 @@ fn test_render_lcd_matrix_baseline_is_executed() {
     run_unified(
         "render_lcd_matrix.json",
         BitmapBackend::FreeType,
-        Some((0, 8)),
+        Some((215, 11_086)),
     );
 }
 
@@ -354,18 +354,26 @@ fn test_no_hinting_matrix_baseline_is_executed() {
     run_unified(
         "no_hinting_matrix.json",
         BitmapBackend::FreeType,
-        Some((8, 8)),
+        Some((10_029, 11_086)),
     );
 }
 
 #[test]
 fn test_metrics_only_matrix_baseline_is_executed() {
-    run_unified("metrics_only_matrix.json", BitmapBackend::PIL, Some((0, 8)));
+    run_unified(
+        "metrics_only_matrix.json",
+        BitmapBackend::PIL,
+        Some((13, 11_086)),
+    );
 }
 
 #[test]
 fn test_outline_cbox_matrix_baseline_is_executed() {
-    run_unified("outline_cbox_matrix.json", BitmapBackend::PIL, Some((0, 8)));
+    run_unified(
+        "outline_cbox_matrix.json",
+        BitmapBackend::PIL,
+        Some((7, 11_086)),
+    );
 }
 
 #[test]
