@@ -126,6 +126,15 @@ pub fn scale_glyph_for_metrics(
     scale_glyph_impl(data, glyph_index, None, is_italic, true, true)
 }
 
+pub fn scale_glyph_for_metrics_with_autohint(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, true)
+}
+
 /// Scale a glyph without autohinting or native TrueType bytecode.
 ///
 /// This models the Rust side of `FT_LOAD_NO_HINTING` fixture execution.
