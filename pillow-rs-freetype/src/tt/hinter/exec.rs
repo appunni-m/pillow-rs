@@ -28,6 +28,11 @@ const MAX_FUNCTIONS: usize = 256;
 /// Maximum instruction definitions (IDEF).
 const MAX_INSTRUCTION_DEFS: usize = 256;
 
+/// Conservative VM guard for malformed bytecode. FreeType limits backward
+/// jumps and LOOPCALLs separately with font-derived budgets; a flat 5000-op
+/// cap is too small for valid programs with tight JROT/JROF loops.
+const MAX_VM_STEPS: u32 = 100_000;
+
 #[inline]
 fn delta_step(delta_shift: u32) -> i32 {
     if delta_shift <= 6 {
@@ -376,23 +381,15 @@ impl ExecContext {
     /// Get a value from the storage area.
     #[allow(dead_code)]
     pub fn get_storage(&self, idx: usize) -> Result<i32, FontError> {
-        self.storage
-            .get(idx)
-            .copied()
-            .ok_or(FontError::InvalidOutline(
-                "bytecode: storage index out of range".into(),
-            ))
+        Ok(*self.storage.get(idx).unwrap_or(&0))
     }
 
     /// Set a value in the storage area.
     #[allow(dead_code)]
     pub fn set_storage(&mut self, idx: usize, val: i32) -> Result<(), FontError> {
-        if idx >= self.storage.len() {
-            return Err(FontError::InvalidOutline(
-                "bytecode: storage index out of range".into(),
-            ));
+        if idx < self.storage.len() {
+            self.storage[idx] = val;
         }
-        self.storage[idx] = val;
         Ok(())
     }
 
@@ -590,6 +587,78 @@ impl ExecContext {
         ))
     }
 
+    fn define_instruction(&mut self) -> Result<(), FontError> {
+        let opcode = self.pop()?;
+        if !(0..=0xFF).contains(&opcode) {
+            return Err(FontError::InvalidOutline(
+                "bytecode: IDEF opcode out of range".into(),
+            ));
+        }
+
+        let range = self.cur_range;
+        if range == 2 {
+            return Err(FontError::InvalidOutline(
+                "bytecode: IDEF in glyph program".into(),
+            ));
+        }
+
+        let program = match range {
+            0 => &self.cvt_program,
+            1 => &self.font_program,
+            _ => &self.glyph_program,
+        };
+        let start = self.ip;
+        let mut scan_ip = self.ip;
+
+        while scan_ip < program.len() {
+            let op_ip = scan_ip;
+            let op = program[scan_ip];
+            scan_ip += 1;
+            match op {
+                0x2C | 0x89 => {
+                    return Err(FontError::InvalidOutline(
+                        "bytecode: nested FDEF/IDEF".into(),
+                    ));
+                }
+                0x2D => {
+                    self.instruction_defs[opcode as usize] = Some(DefRecord {
+                        range,
+                        start,
+                        end: op_ip,
+                        opc: opcode as u16,
+                        active: true,
+                    });
+                    self.ip = scan_ip;
+                    return Ok(());
+                }
+                _ => Self::skip_instruction_operands(program, &mut scan_ip, op),
+            }
+        }
+
+        Err(FontError::InvalidOutline(
+            "bytecode: unterminated IDEF".into(),
+        ))
+    }
+
+    fn call_instruction_def(&mut self, opcode: u8) -> bool {
+        let Some(def) = self.instruction_defs[opcode as usize].as_ref() else {
+            return false;
+        };
+        if !def.active || self.call_stack.len() >= MAX_CALL_DEPTH {
+            return false;
+        }
+
+        self.call_stack.push(CallRecord {
+            caller_range: self.cur_range,
+            caller_ip: self.ip,
+            cur_count: 1,
+            def_index: opcode as usize,
+        });
+        self.ip = def.start;
+        self.cur_range = def.range;
+        true
+    }
+
     fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, u8, usize) {
         let (ref_zone, ref_pt) = if opcode & 1 != 0 {
             (self.gs.zp0, self.gs.rp1 as usize)
@@ -731,7 +800,7 @@ impl ExecContext {
     pub fn run_program(&mut self, zone: &mut GlyphZone) -> Result<(), FontError> {
         let mut step_count = 0u32;
         while self.ip < self.active_program_len() {
-            if step_count > 5000 {
+            if step_count > MAX_VM_STEPS {
                 return Err(FontError::InvalidOutline("VM: max steps".into()));
             }
             step_count += 1;
@@ -1358,6 +1427,8 @@ impl ExecContext {
                     if k > 0 && k <= self.stack.len() {
                         let v = self.stack[self.stack.len() - k];
                         self.push(v);
+                    } else {
+                        self.push(0);
                     }
                 }
                 // ── MINDEX (0x26) — Move indexed element ─────────
@@ -1916,12 +1987,10 @@ impl ExecContext {
                     self.push(v);
                 }
                 // ── DELTAC1 (0x73) — already handled above ─────────
-                // ── Unknown (0x7B) ─────────────────────────────────
-                0x7B => {}
-                // ── FLIPRGOFF (0x83) ────────────────────────────
-                0x83 => {}
-                // ── FLIPRGON (0x84) ─────────────────────────────
-                0x84 => {}
+                // ── Unknown opcodes (FreeType routes these through IDEF) ──
+                0x7B | 0x83 | 0x84 => {
+                    let _ = self.call_instruction_def(opcode);
+                }
                 // ── SCANCTRL (0x85) ──────────────────────────────
                 // C: Ins_SCANCTRL. Sets scan control. Pop and ignore.
                 0x85 => {
@@ -1929,9 +1998,8 @@ impl ExecContext {
                 }
                 // ── SDPVTL (0x86) — already covered by 0x87 above ──
                 // ── IDEF (0x89) — Instruction Definition ────────────
-                // C: Ins_IDEF. Registers a new opcode. Skip for now.
                 0x89 => {
-                    let _ = self.pop()?;
+                    self.define_instruction()?;
                 }
 
                 // ── MAX (0x8B) — Maximum ────────────────────────
@@ -1976,12 +2044,16 @@ impl ExecContext {
                         self.backward_compatibility = ((value as u8) & 4) ^ 4;
                     }
                 }
-                // ── ADJUST (0x90-0x92) — GX adjustment ───────────
-                // C: Ins_UNKNOWN. GX/MIRP variations. Pop N args.
-                0x90..=0x92 => {}
+                // ── ADJUST/GX opcodes (FreeType routes these through IDEF
+                // when GX variation handlers are inactive).
+                0x8F..=0x92 => {
+                    let _ = self.call_instruction_def(opcode);
+                }
 
                 // ── Unknown opcode ────────────────────────────
-                _ => {}
+                _ => {
+                    let _ = self.call_instruction_def(opcode);
+                }
             }
         }
 
