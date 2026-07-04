@@ -469,6 +469,14 @@ impl ExecContext {
         }
     }
 
+    fn minimum_distance(&self) -> i32 {
+        if self.backward_compatibility != 0 {
+            0
+        } else {
+            self.gs.minimum_distance
+        }
+    }
+
     fn touch_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize) {
         let mut tag = 0u8;
         if self.gs.freedom_vector.0 != 0 {
@@ -986,12 +994,13 @@ impl ExecContext {
                     };
 
                     if (opcode & 0x08) != 0 {
+                        let minimum_distance = self.minimum_distance();
                         if org_dist >= 0 {
-                            if distance < self.gs.minimum_distance {
-                                distance = self.gs.minimum_distance;
+                            if distance < minimum_distance {
+                                distance = minimum_distance;
                             }
-                        } else if distance > -self.gs.minimum_distance {
-                            distance = -self.gs.minimum_distance;
+                        } else if distance > -minimum_distance {
+                            distance = -minimum_distance;
                         }
                     }
 
@@ -1072,12 +1081,13 @@ impl ExecContext {
                     };
 
                     if (opcode & 0x08) != 0 {
+                        let minimum_distance = self.minimum_distance();
                         if org_dist >= 0 {
-                            if distance < self.gs.minimum_distance {
-                                distance = self.gs.minimum_distance;
+                            if distance < minimum_distance {
+                                distance = minimum_distance;
                             }
-                        } else if distance > -self.gs.minimum_distance {
-                            distance = -self.gs.minimum_distance;
+                        } else if distance > -minimum_distance {
+                            distance = -minimum_distance;
                         }
                     }
 
