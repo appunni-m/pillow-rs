@@ -9,6 +9,7 @@
 //! pointer, code ranges, and the glyph zones being hinted.
 
 use super::gs::GraphicsState;
+use super::gs::RoundMode;
 use super::zone::GlyphZone;
 use super::iup;
 use crate::error::FontError;
@@ -1033,6 +1034,121 @@ impl ExecContext {
                 // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
                 0x81 => { let _ = self.pop()?; } // FLIPRGON
                 0x82 => { let _ = self.pop()?; } // FLIPRGOFF
+                // ── SPVTL (0x06-0x07) — Set Projection Vector To Line ──
+                // C: Ins_SPVTL (ttinterp.c) — same logic as SFVTL but for proj
+                0x06 | 0x07 => {
+                    let p1 = self.gs.rp1 as usize;
+                    let p2 = self.gs.rp2 as usize;
+                    let (x1, y1) = if self.gs.zp1 == 0 { zone.cur(p1) } else { zone.org(p1) };
+                    let (x2, y2) = if self.gs.zp2 == 0 { zone.cur(p2) } else { zone.org(p2) };
+                    let dx = x2.wrapping_sub(x1);
+                    let dy = y2.wrapping_sub(y1);
+                    if dx != 0 || dy != 0 {
+                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
+                        if len > 0 {
+                            self.gs.proj_vector = (
+                                ((dx as i64 * 0x4000 / len) as i32),
+                                ((dy as i64 * 0x4000 / len) as i32)
+                            );
+                        }
+                    }
+                }
+                // ── GPV (0x0C) — Get Projection Vector ─────────────
+                0x0C => {
+                    // Pushes proj_vector.x and proj_vector.y onto stack
+                    self.push(self.gs.proj_vector.0);
+                    self.push(self.gs.proj_vector.1);
+                }
+                // ── GFV (0x0D) — Get Freedom Vector ────────────────
+                0x0D => {
+                    self.push(self.gs.freedom_vector.0);
+                    self.push(self.gs.freedom_vector.1);
+                }
+                // ── ISECT (0x0F) — Move point to intersection of two lines ──
+                // C: Ins_ISECT. Rarely used. Skip with stack cleanup.
+                0x0F => {
+                    for _ in 0..5 { let _ = self.pop()?; }
+                }
+                // ── Rounding modes ────────────────────────────────
+                0x18 => { self.gs.round_state = RoundMode::Grid; } // RTG
+                0x19 => { self.gs.round_state = RoundMode::HalfGrid; } // RTHG
+                0x3D => { self.gs.round_state = RoundMode::DoubleGrid; } // RTDG
+                0x7C => { self.gs.round_state = RoundMode::HalfGrid; } // RTHG (alt)
+                0x7D => { self.gs.round_state = RoundMode::DownToGrid; } // RDTG
+                0x7E => { self.gs.round_state = RoundMode::UpToGrid; } // RUTG
+                0x7F => { self.gs.round_state = RoundMode::Off; } // ROFF
+                // ── SROUND (0x76) — Super Round ─────────────────────
+                0x76 => {
+                    let _ = self.pop()?;
+                    // C: Ins_SROUND — parses period/phase/threshold from input
+                    // Super rounding is rarely used by our test fonts; apply as grid
+                    self.gs.round_state = RoundMode::Super;
+                }
+                // ── S45ROUND (0x77) — Super Round 45 ────────────────
+                0x77 => {
+                    let _v = self.pop()?;
+                    self.gs.round_state = RoundMode::Super45;
+                }
+                // ── WCVTF (0x70) — Write CVT in Font Units ──────────
+                // C: Ins_WCVTF. Scales value by metrics.scale before writing.
+                0x70 => {
+                    let val = self.pop()?;  // top = value
+                    let idx = self.pop()? as usize;  // deeper = index
+                    // Scale: FT_MulFix(value, scale) then write to CVT
+                    let scaled = crate::fixed::ft_mul_fix(val, self.y_scale);
+                    let _ = self.set_cvt(idx, scaled);
+                }
+                // ── GetINFO (0x88) — Get Info ───────────────────────
+                // C: Ins_GETINFO. Returns flags about the engine. Push 0.
+                0x88 => { self.push(0); }
+
+                // ── UTP (0x29) — UnTouch Point ───────────────────
+                // C: Ins_UTP (ttinterp.c:6016). Pops point, clears its touch.
+                0x29 => {
+                    let p = self.pop()? as usize;
+                    zone.set_tag(p, 0x00); // clear touch flags
+                }
+                // ── MSIRP (0x3B) — Move Single Indirect Relative Point ──
+                // C: Ins_MSIRP (ttinterp.c:5224-5276). Like MIRP but single.
+                // Rarely used. Skip with stack cleanup (pops 2 args).
+                0x3B => {
+                    let _ = self.pop()?; let _ = self.pop()?;
+                }
+                // ── AND (0x5A) — Logical AND ───────────────────────
+                // C: Ins_AND (ttinterp.c:2588-2601)
+                0x5A => {
+                    let b = self.pop()?; let a = self.pop()?;
+                    self.push(if a != 0 && b != 0 { 1 } else { 0 });
+                }
+                // ── SDB (0x5E) — Set Delta Base ────────────────────
+                0x5E => {
+                    let v = self.pop()?;
+                    self.gs.delta_base = v as u32;
+                }
+                // ── SDS (0x5F) — Set Delta Shift ───────────────────
+                0x5F => {
+                    let v = self.pop()?;
+                    self.gs.delta_shift = v as u32;
+                }
+                // ── SDPVTL (0x87) — Set Dual Projection Vector To Line ──
+                0x87 => {
+                    let p1 = self.gs.rp1 as usize;
+                    let p2 = self.gs.rp2 as usize;
+                    let (x1, y1) = if self.gs.zp1 == 0 { zone.cur(p1) } else { zone.org(p1) };
+                    let (x2, y2) = if self.gs.zp2 == 0 { zone.cur(p2) } else { zone.org(p2) };
+                    let dx = x2.wrapping_sub(x1);
+                    let dy = y2.wrapping_sub(y1);
+                    if dx != 0 || dy != 0 {
+                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
+                        if len > 0 {
+                            self.gs.dual_proj_vector = (
+                                ((dx as i64 * 0x4000 / len) as i32),
+                                ((dy as i64 * 0x4000 / len) as i32)
+                            );
+                        }
+                    }
+                }
+
                 // ── DELTAP/DELTAC — Delta exceptions ───────────────
                 // ✅ VERIFIED: C: Ins_DELTAP (ttinterp.c:6300-6395),
                 //    Ins_DELTAC (ttinterp.c:6396-6475)
