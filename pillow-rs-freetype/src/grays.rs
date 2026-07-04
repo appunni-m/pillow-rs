@@ -165,6 +165,30 @@ pub struct RasterResult {
 /// - [ ] `render_conic` subdivision endpoints match C?
 /// - [ ] Cell cover/area values after `decompose` match C?
 pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
+    rasterize_clipped(outline, None)
+}
+
+/// Render an outline into an explicit pixel box.
+///
+/// This mirrors `FT_Raster_Params.clip_box`, used by the smooth LCD renderers
+/// when subpixel shifts need a bitmap that is wider or taller than the
+/// outline's own control box.
+pub fn rasterize_in_box(
+    mut outline: Outline,
+    width: usize,
+    height: usize,
+) -> Result<RasterResult, FontError> {
+    outline.cbox_x_min = 0;
+    outline.cbox_y_min = 0;
+    outline.cbox_x_max = i32_from_usize(width);
+    outline.cbox_y_max = i32_from_usize(height);
+    rasterize_clipped(outline, Some((width, height)))
+}
+
+fn rasterize_clipped(
+    outline: Outline,
+    forced_size: Option<(usize, usize)>,
+) -> Result<RasterResult, FontError> {
     if outline.points.is_empty() || outline.n_contours == 0 {
         return Ok(RasterResult {
             width: 0,
@@ -172,8 +196,12 @@ pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
             pixels: Vec::new(),
         });
     }
-    let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min);
-    let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min);
+    let (width, height) = forced_size.unwrap_or_else(|| {
+        (
+            usize_from_i32(outline.cbox_x_max - outline.cbox_x_min),
+            usize_from_i32(outline.cbox_y_max - outline.cbox_y_min),
+        )
+    });
     if width == 0 || height == 0 {
         return Ok(RasterResult {
             width: 0,
