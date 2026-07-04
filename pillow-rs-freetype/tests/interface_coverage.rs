@@ -28,6 +28,8 @@ struct SymbolMapping {
     #[allow(dead_code)]
     rust: Option<String>,
     status: Status,
+    #[serde(default)]
+    reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -100,6 +102,15 @@ fn freetype_interface_coverage_report() {
             }
             if !exported_symbols.contains(symbol) {
                 stats.missing_from_headers += 1;
+            }
+            if mapping.status == Status::OutOfScope {
+                assert!(
+                    mapping
+                        .reason
+                        .as_ref()
+                        .is_some_and(|reason| !reason.trim().is_empty()),
+                    "{symbol} is out_of_scope but has no reason"
+                );
             }
             match mapping.status {
                 Status::Complete => stats.complete += 1,
