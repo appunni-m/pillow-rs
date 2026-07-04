@@ -74,6 +74,11 @@ use super::types::{
     AF_LATIN_BLUE_BOTTOM_SMALL, AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_SUB_TOP, AF_LATIN_BLUE_TOP,
 };
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ApplyHintsMetrics {
+    pub advance_width: Option<i32>,
+}
+
 // ── Vertical separation adjustment constants (from afadjust.h) ──────────────
 pub const AF_ADJUST_UP: u32 = 0x0001;
 pub const AF_ADJUST_UP2: u32 = 0x0002;
@@ -1193,7 +1198,8 @@ pub fn apply_hints(
     metrics: Option<&AfLatinMetrics>,
     is_italic: bool,
     font_data: Option<&crate::tables::FontData>,
-) {
+) -> ApplyHintsMetrics {
+    let mut output = ApplyHintsMetrics::default();
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
 
@@ -1204,7 +1210,7 @@ pub fn apply_hints(
     // C's NONE_DFLT path. Match C by skipping hinting entirely when
     // the VERT axis has no blue zones.
     if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
-        return;
+        return output;
     }
     // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
     // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
@@ -1226,7 +1232,7 @@ pub fn apply_hints(
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
     loader::reload(&mut hints, raw_outline, &outline.points);
     if hints.num_points() == 0 {
-        return;
+        return output;
     }
 
     // ✅ C PARITY: Exact pipeline order matching af_latin_hints_apply (aflatin.c:4957-5200).
@@ -1294,6 +1300,9 @@ pub fn apply_hints(
     {
         let haxis = &hints.axis[Dimension::Horz as usize];
         let num_horz_edges = haxis.edges.len();
+        let advance_width = font_data.map_or(0, |data| {
+            ft_mul_fix(data.hmtx.get(glyph_index).advance_width as i32, x_scale)
+        });
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
             log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
@@ -1314,11 +1323,6 @@ pub fn apply_hints(
 
             let mut pp1x = (pp1x_uh + 32) & !63; // FT_PIX_ROUND
 
-            #[cfg(debug_assertions)]
-            if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-                log::trace!(target: "autohint::pipeline", "[PHANTOM] gi={glyph_index} old_lsb={old_lsb} new_lsb={new_lsb} pp1x_uh={pp1x_uh} pp1x_round={pp1x}");
-            }
-
             // Don't move if we'd lose the stem.
             if pp1x >= new_lsb && old_lsb > 0 {
                 pp1x -= 64;
@@ -1330,9 +1334,28 @@ pub fn apply_hints(
                     pt.x -= pp1x;
                 }
             }
-            // Note: pp2.x (right side bearing adjustment) is not implemented.
-            // It affects advance width (getlength) but not the rendered glyph.
-            let _ = edge2; // used for pp2x computation which we skip
+            if advance_width != 0 {
+                let old_rsb = advance_width - edge2.opos;
+                let mut pp2x_uh = edge2.pos + old_rsb;
+                if old_rsb < 24 {
+                    pp2x_uh += 8;
+                }
+                let mut pp2x = (pp2x_uh + 32) & !63; // FT_PIX_ROUND
+                if pp2x <= edge2.pos && old_rsb > 0 {
+                    pp2x += 64;
+                }
+                output.advance_width = Some(pp2x - pp1x);
+
+                #[cfg(debug_assertions)]
+                if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                    log::trace!(target: "autohint::pipeline", "[PHANTOM] gi={glyph_index} old_lsb={old_lsb} old_rsb={old_rsb} new_lsb={new_lsb} pp1x_uh={pp1x_uh} pp2x_uh={pp2x_uh} pp1x_round={pp1x} pp2x_round={pp2x}");
+                }
+            } else {
+                #[cfg(debug_assertions)]
+                if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+                    log::trace!(target: "autohint::pipeline", "[PHANTOM] gi={glyph_index} old_lsb={old_lsb} new_lsb={new_lsb} pp1x_uh={pp1x_uh} pp1x_round={pp1x}");
+                }
+            }
         } else {
             // C's afloader.c:454-460: even without edges, phantom points
             // are always adjusted.  pp1.x = FT_PIX_ROUND(0) = 0 is a no-op,
@@ -1343,6 +1366,9 @@ pub fn apply_hints(
             #[cfg(debug_assertions)]
             if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
                 log::trace!(target: "autohint::pipeline", "[PHANTOM_SKIP] gi={glyph_index} num_horz_edges={num_horz_edges} (<=1, no adjust)");
+            }
+            if advance_width != 0 {
+                output.advance_width = Some((advance_width + 32) & !63);
             }
         }
     }
@@ -1415,6 +1441,7 @@ pub fn apply_hints(
         }
     }
     hints.save_to_outline(outline);
+    output
 }
 
 // ── Segment detection ─────────────────────────────────────────────────────
