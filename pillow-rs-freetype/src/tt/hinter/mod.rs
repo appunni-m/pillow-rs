@@ -226,9 +226,10 @@ pub fn hint_glyph(
     // the twilight zone when present.
     ctx.run_prep(prep, &saved_storage)?;
 
+    ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
+
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
-        ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
         if scale.reset_vectors_at_glyph_entry {
             ctx.gs.set_vectors_to_x();
         }
@@ -241,17 +242,27 @@ pub fn hint_glyph(
         pt.x = if scale.metrics_legacy_phantoms {
             zone.cur_x[i]
         } else {
-            zone.cur_x[i] - zone.cur_x[n_points]
+            let pp1 = if ctx.backward_compatibility != 0 {
+                pp1_x
+            } else {
+                zone.cur_x[n_points]
+            };
+            zone.cur_x[i] - pp1
         };
         pt.y = zone.cur_y[i];
     }
 
-    let pp1 = zone.cur_x.get(n_points).copied().unwrap_or(0);
-    let pp2 = zone
-        .cur_x
-        .get(n_points + 1)
-        .copied()
-        .unwrap_or(advance_width);
+    let (pp1, pp2) = if ctx.backward_compatibility != 0 {
+        (pp1_x, pp1_x + advance_width)
+    } else {
+        (
+            zone.cur_x.get(n_points).copied().unwrap_or(0),
+            zone.cur_x
+                .get(n_points + 1)
+                .copied()
+                .unwrap_or(advance_width),
+        )
+    };
 
     Ok(HintOutcome {
         advance_width: pp2 - pp1,
