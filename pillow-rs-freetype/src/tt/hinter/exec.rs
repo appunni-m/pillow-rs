@@ -847,12 +847,12 @@ impl ExecContext {
                     let p1 = self.pop()? as usize;
                     let p2 = self.pop()? as usize;
                     let (x1, y1, x2, y2) = if opcode == 0x4A {
-                        let (x1, y1) = zone.org(p1);
-                        let (x2, y2) = zone.org(p2);
+                        let (x1, y1) = self.org_in(zone, self.gs.zp0, p1);
+                        let (x2, y2) = self.org_in(zone, self.gs.zp1, p2);
                         (x1, y1, x2, y2)
                     } else {
-                        let (x1, y1) = zone.cur(p1);
-                        let (x2, y2) = zone.cur(p2);
+                        let (x1, y1) = self.cur_in(zone, self.gs.zp0, p1);
+                        let (x2, y2) = self.cur_in(zone, self.gs.zp1, p2);
                         (x1, y1, x2, y2)
                     };
                     self.push(self.gs.project(x1 - x2, y1 - y2));
@@ -872,21 +872,24 @@ impl ExecContext {
                     // GC[1] = get original coordinate
                     let p = self.pop()? as usize;
                     let (px, py) = self.org_in(zone, self.gs.zp2, p);
-                    let proj = self.gs.project(px, py);
+                    let proj = self.gs.dual_project(px, py);
                     self.push(proj);
                 }
 
                 // ── SCFS — Set Coordinate From Stack ─────────────
                 0x48 => {
-                    // pops point (deeper) then value (top)
-                    let val = self.pop()?; // top = value
-                    let p = self.pop()? as usize; // deeper = point
-                                                  // Move point along freedom vector to match the value
+                    let p = self.pop()? as usize;
+                    let val = self.pop()?;
                     let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
                     let old_proj = self.gs.project(cx, cy);
                     let dist = val - old_proj;
                     let (dx, dy) = self.gs.move_along_free(dist);
-                    self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                    let new_x = cx + dx;
+                    let new_y = cy + dy;
+                    self.set_cur_in(zone, self.gs.zp2, p, new_x, new_y);
+                    if self.gs.zp2 == 0 {
+                        self.set_org_in(zone, self.gs.zp2, p, new_x, new_y);
+                    }
                     self.touch_in(zone, self.gs.zp2, p);
                 }
 
@@ -914,7 +917,7 @@ impl ExecContext {
                     let cvt_idx = self.pop()? as usize;
                     let cvt_val = self.get_cvt(cvt_idx)?;
                     if self.gs.zp0 == 0 {
-                        let (ox, oy) = self.gs.move_along_free(cvt_val);
+                        let (ox, oy) = self.gs.move_along_raw_free(cvt_val);
                         self.set_org_in(zone, self.gs.zp0, p, ox, oy);
                         self.set_cur_in(zone, self.gs.zp0, p, ox, oy);
                     }
@@ -951,10 +954,15 @@ impl ExecContext {
                     } else {
                         let (rorus_x, rorus_y) = self.orus_in(zone, self.gs.zp0, rp);
                         let (oorus_x, oorus_y) = self.orus_in(zone, self.gs.zp1, p);
-                        self.gs.dual_project(
-                            crate::fixed::ft_mul_fix(oorus_x - rorus_x, self.x_scale),
-                            crate::fixed::ft_mul_fix(oorus_y - rorus_y, self.y_scale),
-                        )
+                        if self.x_scale == self.y_scale {
+                            let dist = self.gs.dual_project(oorus_x - rorus_x, oorus_y - rorus_y);
+                            crate::fixed::ft_mul_fix(dist, self.x_scale)
+                        } else {
+                            self.gs.dual_project(
+                                crate::fixed::ft_mul_fix(oorus_x - rorus_x, self.x_scale),
+                                crate::fixed::ft_mul_fix(oorus_y - rorus_y, self.y_scale),
+                            )
+                        }
                     };
 
                     if self.gs.single_width_cutin > 0
@@ -1003,8 +1011,8 @@ impl ExecContext {
                 // C: Ins_MIRP at ttinterp.c:5520-5673
                 // Flag bits same as MDRP + auto-flip
                 0xE0..=0xFF => {
-                    let p = self.pop()? as usize;
                     let cvt_idx = self.pop()?;
+                    let p = self.pop()? as usize;
                     let mut cvt_dist = if cvt_idx < 0 {
                         0
                     } else {
@@ -1013,25 +1021,15 @@ impl ExecContext {
 
                     let rp = self.gs.rp0 as usize;
 
-                    let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
-                    let org_dist = if is_twilight {
-                        let (rorg_x, rorg_y) = self.org_in(zone, self.gs.zp0, rp);
-                        let (oorg_x, oorg_y) = self.org_in(zone, self.gs.zp1, p);
-                        self.gs.dual_project(oorg_x - rorg_x, oorg_y - rorg_y)
-                    } else {
-                        let (rorus_x, rorus_y) = self.orus_in(zone, self.gs.zp0, rp);
-                        let (oorus_x, oorus_y) = self.orus_in(zone, self.gs.zp1, p);
-                        self.gs.dual_project(
-                            crate::fixed::ft_mul_fix(oorus_x - rorus_x, self.x_scale),
-                            crate::fixed::ft_mul_fix(oorus_y - rorus_y, self.y_scale),
-                        )
-                    };
                     if self.gs.zp1 == 0 {
                         let (dx, dy) = self.gs.move_along_free(cvt_dist);
                         let (rox, roy) = self.org_in(zone, self.gs.zp0, rp);
                         self.set_org_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
                         self.set_cur_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
                     }
+                    let (rorg_x, rorg_y) = self.org_in(zone, self.gs.zp0, rp);
+                    let (oorg_x, oorg_y) = self.org_in(zone, self.gs.zp1, p);
+                    let org_dist = self.gs.dual_project(oorg_x - rorg_x, oorg_y - rorg_y);
                     let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
                     let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
                     let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
@@ -1089,14 +1087,14 @@ impl ExecContext {
                 0x3C => {
                     let loop_count = self.gs.loop_counter as usize;
                     let rp = self.gs.rp0 as usize;
-                    let (rcx, rcy) = zone.cur(rp);
+                    let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
                     for _ in 0..loop_count {
                         let p = self.pop()? as usize;
-                        let (pcx, pcy) = zone.cur(p);
+                        let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
                         let dist = self.gs.project(pcx - rcx, pcy - rcy);
                         let (dx, dy) = self.gs.move_along_free(-dist);
-                        zone.set_cur(p, pcx + dx, pcy + dy);
-                        self.touch_point(zone, p);
+                        self.set_cur_in(zone, self.gs.zp1, p, pcx + dx, pcy + dy);
+                        self.touch_in(zone, self.gs.zp1, p);
                     }
                     self.gs.loop_counter = 1; // C: GS.loop = 1
                 }
@@ -1137,6 +1135,7 @@ impl ExecContext {
 
                 // ── SHZ — Shift zone by reference-point displacement ──
                 0x36 | 0x37 => {
+                    let _zone_selector = self.pop()?;
                     let (dx, dy, ref_zone, ref_pt) = self.point_displacement(opcode, zone);
                     let target_zp = self.gs.zp2;
                     let limit = if target_zp == 0 {
@@ -1169,11 +1168,11 @@ impl ExecContext {
                     let v = self.pop()?;
                     self.gs.loop_counter = v;
                 }
-                // LOOPCALL (0x2A): pop count (deeper), func_num (top)
+                // LOOPCALL (0x2A): pop count (top), func_num (deeper)
                 0x2A => {
-                    let func_num = self.pop()? as u16; // top
-                    let count = self.pop()?; // deeper
-                    if (func_num as usize) < self.functions.len() {
+                    let count = self.pop()?;
+                    let func_num = self.pop()? as u16;
+                    if count > 0 && (func_num as usize) < self.functions.len() {
                         if let Some(ref def) = self.functions[func_num as usize] {
                             if def.active {
                                 self.call_stack.push(CallRecord {
@@ -1248,9 +1247,9 @@ impl ExecContext {
                     let (dx, dy) = self.gs.move_along_raw_free(amount);
                     for _ in 0..self.gs.loop_counter {
                         let p = self.pop()? as usize;
-                        let (cx, cy) = zone.cur(p);
-                        zone.set_cur(p, cx + dx, cy + dy);
-                        self.touch_point(zone, p);
+                        let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
+                        self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                        self.touch_in(zone, self.gs.zp2, p);
                     }
                     self.gs.loop_counter = 1;
                 }
@@ -1291,10 +1290,13 @@ impl ExecContext {
                 }
                 // ── FLIPPT (0x80) — Flip point ───────────────────
                 0x80 => {
-                    let p = self.pop()? as usize;
-                    // Toggle on-curve flag
-                    // We don't track this precisely, just mark touched
-                    self.touch_point(zone, p);
+                    for _ in 0..self.gs.loop_counter {
+                        let p = self.pop()? as usize;
+                        // Toggle on-curve flag
+                        // We don't track this precisely, just mark touched
+                        self.touch_point(zone, p);
+                    }
+                    self.gs.loop_counter = 1;
                 }
                 // ── SDB (0x8B) — Set Delta Base ──────────────────
                 0x8B => {
@@ -1333,8 +1335,8 @@ impl ExecContext {
                 0x08 | 0x09 => {
                     let p_top = self.pop()? as usize;
                     let p_deeper = self.pop()? as usize;
-                    let (x1, y1) = zone.cur(p_deeper);
-                    let (x2, y2) = zone.cur(p_top);
+                    let (x1, y1) = self.cur_in(zone, self.gs.zp2, p_deeper);
+                    let (x2, y2) = self.cur_in(zone, self.gs.zp1, p_top);
                     if let Some(vector) = Self::line_vector(x2 - x1, y2 - y1, opcode & 1 != 0) {
                         self.gs.freedom_vector = vector;
                     } else {
@@ -1475,8 +1477,10 @@ impl ExecContext {
                 // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
                 0x81 => {
                     let _ = self.pop()?;
+                    let _ = self.pop()?;
                 } // FLIPRGON
                 0x82 => {
+                    let _ = self.pop()?;
                     let _ = self.pop()?;
                 } // FLIPRGOFF
                 // ── SPVTL (0x06-0x07) — Set Projection Vector To Line ──
@@ -1484,8 +1488,8 @@ impl ExecContext {
                 0x06 | 0x07 => {
                     let p_top = self.pop()? as usize;
                     let p_deeper = self.pop()? as usize;
-                    let (x1, y1) = zone.cur(p_deeper);
-                    let (x2, y2) = zone.cur(p_top);
+                    let (x1, y1) = self.cur_in(zone, self.gs.zp2, p_deeper);
+                    let (x2, y2) = self.cur_in(zone, self.gs.zp1, p_top);
                     if let Some(vector) =
                         Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
                     {
@@ -1583,7 +1587,7 @@ impl ExecContext {
 
                     if self.gs.zp1 == 0 {
                         let (rox, roy) = self.org_in(zone, self.gs.zp0, rp);
-                        let (dx, dy) = self.gs.move_along_free(distance);
+                        let (dx, dy) = self.gs.move_along_raw_free(distance);
                         self.set_org_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
                         self.set_cur_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
                     }
@@ -1622,8 +1626,8 @@ impl ExecContext {
                 0x86 | 0x87 => {
                     let p_top = self.pop()? as usize;
                     let p_deeper = self.pop()? as usize;
-                    let (x1, y1) = zone.org(p_deeper);
-                    let (x2, y2) = zone.org(p_top);
+                    let (x1, y1) = self.org_in(zone, self.gs.zp2, p_deeper);
+                    let (x2, y2) = self.org_in(zone, self.gs.zp1, p_top);
                     if let Some(vector) =
                         Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
                     {
@@ -1810,13 +1814,9 @@ impl ExecContext {
                 // ── Unknown (0x7B) ─────────────────────────────────
                 0x7B => {}
                 // ── FLIPRGOFF (0x83) ────────────────────────────
-                0x83 => {
-                    let _ = self.pop()?;
-                }
+                0x83 => {}
                 // ── FLIPRGON (0x84) ─────────────────────────────
-                0x84 => {
-                    let _ = self.pop()?;
-                }
+                0x84 => {}
                 // ── SCANCTRL (0x85) ──────────────────────────────
                 // C: Ins_SCANCTRL. Sets scan control. Pop and ignore.
                 0x85 => {
