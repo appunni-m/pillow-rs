@@ -12,6 +12,7 @@ The project succeeds only when the harness makes false success impossible. Rust 
 - Broad fixture matrices must not be reduced to smoke tests.
 - A test that passes by threshold, skipped oracle, missing raw bytes, or unexecuted fixture presence is not a parity gate.
 - Incomplete work must be named as debt until it becomes an exact executable gate.
+- Fixture generation and reproducibility are part of the harness, not ad hoc maintenance work.
 
 ## Runtime Boundary
 
@@ -25,8 +26,19 @@ The runtime crate must not contain:
 C is allowed only under oracle tooling:
 
 - Vendored FreeType source for audits.
-- `scripts/` helpers that generate reference fixtures.
+- Maintained `scripts/` helpers that generate reference fixtures.
 - Test-local oracle helpers for scalar parity, provided they are not linked into the runtime crate.
+
+## Generator System
+
+Fixture generators are project infrastructure. They must be reproducible, documented, and covered by contract tests.
+
+- `doc/GENERATOR_SYSTEM.md` is the source of truth for fixture generation.
+- Generator scripts live under `scripts/` and are reviewed like source code.
+- New fixture families must extend `scripts/gen_ft_refs.c` and `scripts/build_ft_fixture.py` unless there is a documented reason for a dedicated generator.
+- Committed matrices must identify their generator, fixture family, load flags, render mode, and raw byte paths.
+- Fixture updates must be reproducible through documented commands.
+- One-off scripts are not acceptable as hidden dependencies for future fixture maintenance.
 
 ## Harness Goal
 
@@ -52,6 +64,7 @@ Exact gates:
 - `core_face_size_charmap.rs`: exact API behavior checks for current face, size, charmap, and SFNT table coverage.
 - `no_runtime_ffi.rs`: runtime boundary guard.
 - `harness_contract.rs`: gate strength and fixture breadth guard.
+- `generator_contract.rs`: generator documentation and reproducibility guard.
 
 Incomplete gates:
 
