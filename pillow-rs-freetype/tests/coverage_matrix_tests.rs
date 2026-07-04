@@ -157,13 +157,14 @@ fn pixel_diff(
 /// Full 55-script pixel-level comparison against the live vendored C binary is
 /// handled by `tests/direct_ft_compare.rs` — no static fixtures needed.
 ///
-/// The PIL backend test below compares our Rust PIL emulation against
-/// pre-computed Python Pillow 12.2.0 output (coverage_matrix.json).
+/// The native TrueType test below compares our Rust native bytecode path
+/// against a FreeType-compatible default TrueType fixture.
 
 #[test]
-fn test_coverage_matrix_pil() {
-    // PIL parity: checks our Rust PIL backend against Python Pillow 12.2.0 output
-    run_unified("coverage_matrix.json", BitmapBackend::PIL);
+fn test_coverage_matrix_native_tt_default() {
+    // Native TrueType default parity: FreeType's default load/render path runs
+    // embedded TrueType bytecode instead of forcing the autohinter.
+    run_unified("native_tt_default_matrix.json", BitmapBackend::PIL);
 }
 
 #[test]

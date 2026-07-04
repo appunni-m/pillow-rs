@@ -5,9 +5,21 @@
 #include FT_FREETYPE_H
 #include <openssl/sha.h>  /* fallback: compute SHA in python later */
 
+static FT_Int32 load_flags_for_mode(const char *mode) {
+    if (strcmp(mode, "native") == 0 || strcmp(mode, "native-tt-default") == 0) {
+        return FT_LOAD_RENDER;
+    }
+    if (strcmp(mode, "no-hinting") == 0) {
+        return FT_LOAD_RENDER | FT_LOAD_NO_HINTING;
+    }
+    return FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT;
+}
+
 /* Simple hex dump of bitmap, then we'll compute SHA in python */
 int main(int argc, char **argv) {
-    if (argc < 2) { fprintf(stderr,"Usage: %s <font.ttf>\n",argv[0]); return 1; }
+    if (argc < 2) { fprintf(stderr,"Usage: %s <font.ttf> [force-autohint|native|no-hinting]\n",argv[0]); return 1; }
+    const char *mode = argc >= 3 ? argv[2] : "force-autohint";
+    FT_Int32 load_flags = load_flags_for_mode(mode);
     
     FT_Library library;
     FT_Face face;
@@ -33,7 +45,7 @@ int main(int argc, char **argv) {
         for(int c=33;c<127;c++) {
             FT_UInt idx = FT_Get_Char_Index(face,c);
             if(!idx) continue;
-            err = FT_Load_Glyph(face,idx,FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+            err = FT_Load_Glyph(face,idx,load_flags);
             if(err) continue;
             
             FT_GlyphSlot slot = face->glyph;
