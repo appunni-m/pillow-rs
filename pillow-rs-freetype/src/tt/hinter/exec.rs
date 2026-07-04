@@ -153,6 +153,10 @@ pub struct ExecContext {
 
     /// Persistent twilight zone for prep and glyph programs.
     pub twilight: GlyphZone,
+
+    /// FreeType v40 backward-compatibility state: bit 2 enables the mode,
+    /// bits 0-1 track whether IUP[y]/IUP[x] have executed.
+    pub backward_compatibility: u8,
 }
 
 impl ExecContext {
@@ -197,6 +201,7 @@ impl ExecContext {
             glyph_program: Vec::new(),
             cvt_program: Vec::new(),
             twilight: Self::new_twilight_zone(16),
+            backward_compatibility: 0,
         }
     }
 
@@ -433,8 +438,27 @@ impl ExecContext {
         if zp == 0 {
             self.twilight.set_cur(p, x, y);
         } else {
-            glyph.set_cur(p, x, y);
+            self.set_glyph_cur(glyph, p, x, y);
         }
+    }
+
+    fn set_glyph_cur(&self, glyph: &mut GlyphZone, p: usize, x: i32, y: i32) {
+        if p >= glyph.cur_x.len() {
+            return;
+        }
+
+        let mut new_x = x;
+        let mut new_y = y;
+        if self.backward_compatibility != 0 {
+            if self.gs.move_vector.0 != 0 {
+                new_x = glyph.cur_x[p];
+            }
+            if self.gs.move_vector.1 != 0 && self.backward_compatibility == 0x7 {
+                new_y = glyph.cur_y[p];
+            }
+        }
+
+        glyph.set_cur(p, new_x, new_y);
     }
 
     fn set_org_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize, x: i32, y: i32) {
@@ -1082,7 +1106,7 @@ impl ExecContext {
                         let (pcx, pcy) = zone.cur(p);
                         let dist = self.gs.project(pcx - rcx, pcy - rcy);
                         let (dx, dy) = self.gs.move_along_free(-dist);
-                        zone.set_cur(p, pcx + dx, pcy + dy);
+                        self.set_glyph_cur(zone, p, pcx + dx, pcy + dy);
                         self.touch_point(zone, p);
                     }
                     self.gs.loop_counter = 1; // C: GS.loop = 1
@@ -1144,9 +1168,21 @@ impl ExecContext {
                 // ── IUP — Interpolate Untouched Points ────────────
                 // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
                 0x30 => {
+                    if self.backward_compatibility != 0 {
+                        if self.backward_compatibility == 0x7 {
+                            continue;
+                        }
+                        self.backward_compatibility |= 1;
+                    }
                     iup::iup_y(zone);
                 }
                 0x31 => {
+                    if self.backward_compatibility != 0 {
+                        if self.backward_compatibility == 0x7 {
+                            continue;
+                        }
+                        self.backward_compatibility |= 2;
+                    }
                     iup::iup_x(zone);
                 }
 
@@ -1236,7 +1272,7 @@ impl ExecContext {
                     for _ in 0..self.gs.loop_counter {
                         let p = self.pop()? as usize;
                         let (cx, cy) = zone.cur(p);
-                        zone.set_cur(p, cx + dx, cy + dy);
+                        self.set_glyph_cur(zone, p, cx + dx, cy + dy);
                         self.touch_point(zone, p);
                     }
                     self.gs.loop_counter = 1;
@@ -1252,7 +1288,7 @@ impl ExecContext {
                     let (qorg_x, qorg_y) = zone.org(q);
                     let dist = self.gs.project(porg_x - qorg_x, porg_y - qorg_y);
                     let (dx, dy) = self.gs.move_along_free(dist);
-                    zone.set_cur(p, qx + dx, qy + dy);
+                    self.set_glyph_cur(zone, p, qx + dx, qy + dy);
                     self.touch_point(zone, p);
                 }
                 // ── CINDEX (0x25) — Copy indexed element ─────────
@@ -1645,7 +1681,7 @@ impl ExecContext {
                                 d *= f;
                                 let (dx, dy) = self.gs.move_along_free(d);
                                 let (cx, cy) = zone.cur(a);
-                                zone.set_cur(a, cx + dx, cy + dy);
+                                self.set_glyph_cur(zone, a, cx + dx, cy + dy);
                                 self.touch_point(zone, a);
                             }
                         }
