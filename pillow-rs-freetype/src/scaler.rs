@@ -174,9 +174,21 @@ fn scale_glyph_impl(
         });
     }
 
+    let fallback_metrics =
+        if latin_metrics.is_none() && allow_bytecode && should_use_default_autohint(data) {
+            let globals = crate::autohint::globals::FaceGlobals::new(
+                std::sync::Arc::new(data.clone()),
+                is_italic,
+            );
+            globals.get_metrics(glyph_index)
+        } else {
+            None
+        };
+    let hint_metrics = latin_metrics.or(fallback_metrics.as_ref());
+
     // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
     // vertical scale (x-height optimization) from latin_metrics if available.
-    let y_adj = latin_metrics
+    let y_adj = hint_metrics
         .and_then(|m| {
             let s = m.axis[1].scale;
             if s != 0 {
@@ -232,7 +244,7 @@ fn scale_glyph_impl(
         components: Vec::new(),
     };
 
-    let use_autohint = latin_metrics.is_some();
+    let use_autohint = hint_metrics.is_some();
     let mut scaled: Vec<OutlinePoint> =
         if outline_raw.is_composite && !use_autohint && allow_bytecode {
             scale_composite_components(data, &outline_raw, is_italic, &scale)?
@@ -256,7 +268,7 @@ fn scale_glyph_impl(
             &shifted_raw,
             &scale,
             glyph_index,
-            latin_metrics,
+            hint_metrics,
             is_italic,
             data,
         );
@@ -369,6 +381,13 @@ fn scale_glyph_impl(
         bbox_x_max: px_x_max,
         bbox_y_max: px_y_max,
     })
+}
+
+fn should_use_default_autohint(data: &FontData) -> bool {
+    let has_font_program = data.fpgm.as_ref().is_some_and(|fpgm| !fpgm.is_empty());
+    let prep_len = data.prep.as_ref().map_or(0, Vec::len);
+
+    !has_font_program && prep_len <= 7 && !data.loca_data.is_empty()
 }
 
 fn scale_composite_components(
