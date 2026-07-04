@@ -92,6 +92,7 @@ fn trace_one_glyph() {
         metrics.as_ref(),
         is_italic,
         false,
+        true,
         Some(&fd),
     );
 

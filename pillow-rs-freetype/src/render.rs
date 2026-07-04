@@ -88,13 +88,23 @@ impl Font {
         let glyph = self.data.cmap.char_index(ch as u32).unwrap_or(0);
         let metrics_cache = self.face_globals.get_metrics(glyph);
         let scaled = match mode {
-            RenderMode::Lcd | RenderMode::LcdV => {
+            RenderMode::Lcd => {
                 scaler::scale_glyph_lcd(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
             }
+            RenderMode::LcdV => scaler::scale_glyph_lcd_v(
+                &self.data,
+                glyph,
+                metrics_cache.as_ref(),
+                self.is_italic,
+            )?,
             RenderMode::Normal | RenderMode::Mono => {
                 scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
             }
         };
+
+        if scaled.outline.n_contours == 0 && mode == RenderMode::Lcd {
+            return render_lcd(scaled.outline, scaled.bbox_x_min, scaled.bbox_y_max);
+        }
 
         if scaled.outline.n_contours == 0 {
             return Ok(RenderedBitmap {
@@ -297,6 +307,15 @@ fn lcd_padding(cbox: &mut PixelBox, mode: RenderMode) {
 }
 
 fn outline_cbox_26_6(outline: &Outline) -> PixelBox {
+    if outline.points.is_empty() {
+        return PixelBox {
+            x_min: 0,
+            y_min: 0,
+            x_max: 0,
+            y_max: 0,
+        };
+    }
+
     let mut x_min = outline.points[0].x;
     let mut y_min = outline.points[0].y;
     let mut x_max = outline.points[0].x;

@@ -93,6 +93,7 @@ pub struct ScaledGlyph {
 struct HintStyle {
     is_italic: bool,
     no_horizontal_hinting: bool,
+    stem_adjust: bool,
 }
 
 /// Scale a glyph's outline to 26.6 and translate it so its pixel bbox's
@@ -115,7 +116,17 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, false)
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+    )
 }
 
 /// Scale a glyph for `FT_LOAD_TARGET_LCD`.
@@ -128,7 +139,40 @@ pub fn scale_glyph_lcd(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, true)
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: true,
+            stem_adjust: false,
+        },
+        true,
+    )
+}
+
+/// Scale a glyph for `FT_LOAD_TARGET_LCD_V`.
+///
+/// Vertical LCD target keeps FreeType's normal horizontal fitting behavior and
+/// stem adjustment; the vertical subpixel expansion happens during rendering.
+pub fn scale_glyph_lcd_v(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+    )
 }
 
 /// Scale a glyph without autohinting or native TrueType bytecode.
@@ -139,16 +183,25 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, false, false)
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        None,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        false,
+    )
 }
 
 fn scale_glyph_impl(
     data: &FontData,
     glyph_index: u16,
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
-    is_italic: bool,
+    style: HintStyle,
     allow_bytecode: bool,
-    no_horizontal_hinting: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -252,10 +305,7 @@ fn scale_glyph_impl(
             &scale,
             glyph_index,
             latin_metrics,
-            HintStyle {
-                is_italic,
-                no_horizontal_hinting,
-            },
+            style,
             data,
         );
     } else if allow_bytecode {
@@ -470,6 +520,7 @@ fn autohint_glyph(
         metrics,
         style.is_italic,
         style.no_horizontal_hinting,
+        style.stem_adjust,
         Some(font_data),
     );
 
