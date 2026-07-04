@@ -239,19 +239,28 @@ fn rasterize_mono_center(
 
     for y in 0..height {
         let scan_y = (y as i32) * 64 + 32;
-        let mut intersections = Vec::new();
+        let mut left = Vec::new();
+        let mut right = Vec::new();
         for segment in &segments {
             if let Some(intersection) = segment_intersection(*segment, scan_y) {
-                intersections.push(intersection);
+                if intersection.flow_up {
+                    left.push(intersection);
+                } else {
+                    right.push(intersection);
+                }
             }
         }
-        intersections.sort_by_key(|intersection| intersection.x);
+        left.sort_by_key(|intersection| intersection.x);
+        right.sort_by_key(|intersection| intersection.x);
 
         let row = height - 1 - y;
         let dst_row = row * pitch;
-        for pair in intersections.chunks_exact(2) {
-            let x1 = pair[0].x;
-            let x2 = pair[1].x;
+        for (left, right) in left.iter().zip(&right) {
+            let mut x1 = left.x;
+            let mut x2 = right.x;
+            if x1 > x2 {
+                std::mem::swap(&mut x1, &mut x2);
+            }
             let e1 = pixel_ceiling(x1);
             let e2 = pixel_floor(x2);
             if e1 <= e2 {
@@ -267,17 +276,21 @@ fn rasterize_mono_center(
 #[derive(Debug, Clone, Copy)]
 struct Intersection {
     x: i32,
+    flow_up: bool,
 }
 
 fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
+    let flow_up;
     if segment.y0 < segment.y1 {
         if scan_y <= segment.y0 || scan_y > segment.y1 {
             return None;
         }
+        flow_up = true;
     } else if segment.y1 < segment.y0 {
         if scan_y < segment.y1 || scan_y >= segment.y0 {
             return None;
         }
+        flow_up = false;
     } else {
         return None;
     }
@@ -285,7 +298,7 @@ fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
     let dx = segment.x1 - segment.x0;
     let dy = segment.y1 - segment.y0;
     let x = segment.x0 - 32 + ((scan_y - segment.y0) as i64 * dx as i64 / dy as i64) as i32;
-    Some(Intersection { x })
+    Some(Intersection { x, flow_up })
 }
 
 fn pixel_ceiling(x: i32) -> i32 {
