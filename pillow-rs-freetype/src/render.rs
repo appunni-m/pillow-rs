@@ -228,6 +228,7 @@ struct Segment {
     y1: i32,
     contour: usize,
     order: usize,
+    contour_len: usize,
 }
 
 fn rasterize_mono_center(
@@ -289,6 +290,7 @@ struct Intersection {
     flow_up: bool,
     contour: usize,
     order: usize,
+    contour_len: usize,
 }
 
 fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
@@ -315,6 +317,7 @@ fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
         flow_up,
         contour: segment.contour,
         order: segment.order,
+        contour_len: segment.contour_len,
     })
 }
 
@@ -352,7 +355,7 @@ fn set_mono_dropout(
     if width == 0 {
         return;
     }
-    if left.contour == right.contour && left.order.abs_diff(right.order) == 1 && x2 - x1 < 32 {
+    if left.contour == right.contour && x2 - x1 < 32 && adjacent_in_contour(left, right) {
         return;
     }
 
@@ -371,6 +374,15 @@ fn set_mono_dropout(
         let x = usize_from_i32(primary);
         row[x / 8] |= 0x80 >> (x & 7);
     }
+}
+
+fn adjacent_in_contour(left: &Intersection, right: &Intersection) -> bool {
+    if left.order.abs_diff(right.order) == 1 {
+        return true;
+    }
+    left.contour_len > 1
+        && left.order.min(right.order) == 0
+        && left.order.max(right.order) == left.contour_len - 1
 }
 
 fn apply_horizontal_center_edges(
@@ -433,6 +445,7 @@ impl MonoFlattener {
                 y1: y,
                 contour: self.contour,
                 order: self.order,
+                contour_len: 0,
             });
             self.order += 1;
         }
@@ -551,6 +564,7 @@ impl MonoFlattener {
             }
 
             self.move_to(v_start.x, v_start.y);
+            let contour_start = self.segments.len();
             let start = if first_tag == CURVE_TAG_CONIC {
                 if first == 0 {
                     -1
@@ -561,6 +575,10 @@ impl MonoFlattener {
                 i32_from_usize(first)
             };
             self.walk_contour(pts, start, i32_from_usize(limit_eff), v_start)?;
+            let contour_len = self.segments.len() - contour_start;
+            for segment in &mut self.segments[contour_start..] {
+                segment.contour_len = contour_len;
+            }
         }
         Ok(())
     }
