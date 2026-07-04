@@ -228,9 +228,7 @@ pub fn hint_glyph(
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
-        if !scale.metrics_legacy_phantoms {
-            ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
-        }
+        ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
         if scale.reset_vectors_at_glyph_entry {
             ctx.gs.set_vectors_to_x();
         }
