@@ -1,5 +1,8 @@
-//! Fixpoint parity regression tests — spot-checks against C oracle.
-//! Full exhaustive verification was done via C programs (0 diffs in 65K+ tests).
+//! Fixpoint parity regression tests — exhaustive spot-domain checks against C oracle.
+//!
+//! The implementation under test is Rust. The optional `/tmp/ftecho` binary is
+//! an oracle only; when present, these tests compare every value in the ranges
+//! below against vendored FreeType C behavior.
 
 #![allow(clippy::cast_possible_truncation)]
 #![allow(unused_crate_dependencies)]
@@ -40,6 +43,7 @@ fn mul_fix_parity() {
         }
     }
 }
+
 #[test]
 fn div_fix_parity() {
     for a in -32..32i32 {
@@ -50,6 +54,7 @@ fn div_fix_parity() {
         }
     }
 }
+
 #[test]
 fn mul_div_parity() {
     for a in -8..8i32 {
@@ -60,6 +65,7 @@ fn mul_div_parity() {
         }
     }
 }
+
 #[test]
 fn rounding_parity() {
     for a in -64..64i32 {
@@ -75,6 +81,7 @@ fn div_fix_non_pow2() {
         check!(ft_div_fix(a, b), "div_fix", a, b);
     }
 }
+
 #[test]
 fn mul_div_signs() {
     for (a, b, c) in [

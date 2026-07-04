@@ -568,17 +568,6 @@ impl Font {
         let asc_px = pixel_ceil(asc_26);
 
         let ch = text.chars().next().unwrap_or('\0');
-        if self.backend == BitmapBackend::PIL {
-            if let Ok(mask) = crate::native_ft::render_pil_native(data, ch as u32) {
-                let asc_px = self.getmetrics().0 as i32;
-                return (
-                    mask.xmin,
-                    asc_px - mask.ymin - mask.height as i32,
-                    mask.xmin + mask.width as i32,
-                    asc_px - mask.ymin,
-                );
-            }
-        }
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
         let advance = pixel_round(ft_mul_fix(
             data.hmtx.get(glyph).advance_width as i32,
@@ -649,9 +638,6 @@ impl Font {
         }
 
         let ch = text.chars().next().unwrap_or('\0');
-        if self.backend == BitmapBackend::PIL {
-            return crate::native_ft::render_pil_native(data, ch as u32);
-        }
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
         // PIL backend: skip autohinting. PIL uses native bytecode hinter.
         // Our autohinter produces different bbox/pixel values.

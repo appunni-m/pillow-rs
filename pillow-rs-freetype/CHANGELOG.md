@@ -9,8 +9,10 @@
 - Smooth anti-aliased rasterizer (FT_INT64 DDA path from ftgrays.c)
 - `BitmapBackend::FreeType` and `BitmapBackend::PIL` backends
 - FT fixture test matrix: 27,686/27,695 pass (99.97%)
+- Runtime FFI guard: `tests/no_runtime_ffi.rs` prevents reintroducing FreeType C linking in crate runtime files.
 
 ### Fixed
+- Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); `BitmapBackend::PIL` now routes through the Rust scaler, TrueType hinting, and rasterizer path.
 - `1ecd364`: WEAK_INTERPOLATION classification — 18→9 failures. The "both-None" case
   XOR check and `corner_is_flat` must run sequentially (not OR'd) because
   `corner_is_flat` updates direction-chain deltas that downstream classifications
