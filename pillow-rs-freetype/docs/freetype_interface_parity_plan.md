@@ -82,11 +82,11 @@ If any item is missing, the endpoint is `partial` or `planned`, not complete.
 | `native_tt_default` | threshold baseline, `3176/7640` | promote to exact `7640/7640` |
 | `fixed_parity` | exact executable scalar gate | extend to more math endpoints |
 | `core_face_size_charmap` | exact executable API gate for current surface | add fixture families for remaining scalar paths |
-| `metrics_only` | executed baseline, `0/8` | promote to exact `8/8` |
-| `no_hinting` | executed small baseline, `8/8` | expand and promote to broad exact gate |
-| `outline_cbox` | executed baseline, `0/8` | promote to exact `8/8` |
-| `render_mono` | executed baseline, `0/8` | promote to exact `8/8` |
-| `render_lcd` | executed baseline, `0/8` | promote to exact `8/8` |
+| `metrics_only` | executed broad baseline, `13/11086` | promote to exact `11086/11086` |
+| `no_hinting` | executed broad baseline, `10029/11086` | promote to exact `11086/11086` |
+| `outline_cbox` | executed broad baseline, `7/11086` | promote to exact `11086/11086` |
+| `render_mono` | executed broad baseline, `915/11086` | promote to exact `11086/11086` |
+| `render_lcd` | executed broad baseline, `215/11086` | promote to exact `11086/11086` |
 | `render_lcd_v` | in scope if LCD_V remains exposed | add C fixtures and exact runner support |
 | `sfnt_tables` | partially covered by API tests | make fixture family explicit |
 | `charmap` | partially covered by API tests | make fixture family explicit |
@@ -202,7 +202,7 @@ Done criteria:
 
 - Each family has operation-specific runner support.
 - Each active row compares exact expected data.
-- Each family moves from "executed baseline" to "exact gate" only after all rows pass and coverage is broad enough for the endpoint.
+- Each family moves from "executed baseline" to "exact gate" only after all rows pass.
 
 ### Chunk 6: Rasterizers And Render Modes
 

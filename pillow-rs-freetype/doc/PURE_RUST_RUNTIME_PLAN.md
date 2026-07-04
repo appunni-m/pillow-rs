@@ -106,20 +106,17 @@ Current exact matrix:
 Current incomplete matrix:
 
 - `native_tt_default_matrix.json`: `3176/7640`, threshold baseline only.
-- `render_mono_matrix.json`: `0/8`, executed baseline only.
-- `render_lcd_matrix.json`: `0/8`, executed baseline only.
-- `metrics_only_matrix.json`: `0/8`, executed baseline only.
-- `outline_cbox_matrix.json`: `0/8`, executed baseline only.
-
-Current small executed baseline:
-
-- `no_hinting_matrix.json`: `8/8`, executed by the default runner; expand before calling the endpoint family complete.
+- `no_hinting_matrix.json`: `10029/11086`, executed broad baseline only.
+- `render_mono_matrix.json`: `915/11086`, executed broad baseline only.
+- `render_lcd_matrix.json`: `215/11086`, executed broad baseline only.
+- `metrics_only_matrix.json`: `13/11086`, executed broad baseline only.
+- `outline_cbox_matrix.json`: `7/11086`, executed broad baseline only.
 
 Plan:
 
 1. Keep `force_autohint_matrix.json` exact and broad.
 2. Promote `native_tt_default_matrix.json` from threshold to exact.
-3. Expand and promote `no_hinting_matrix.json` from small executed baseline to exact.
+3. Promote `no_hinting_matrix.json` from executed broad baseline to exact.
 4. Promote `metrics_only_matrix.json` from executed baseline to exact.
 5. Promote `outline_cbox_matrix.json` from executed baseline to exact.
 6. Promote `render_mono_matrix.json` from executed baseline to exact.

@@ -39,15 +39,17 @@ cd pillow-rs-freetype
 bash scripts/build_ft.sh
 python3 scripts/build_ft_fixture.py --family force_autohint --build-ref-bin
 python3 scripts/build_ft_fixture.py --family native_tt_default
-python3 scripts/build_ft_fixture.py --family no_hinting --small
-python3 scripts/build_ft_fixture.py --family metrics_only --small
-python3 scripts/build_ft_fixture.py --family outline_cbox --small
-python3 scripts/build_ft_fixture.py --family render_mono --small
-python3 scripts/build_ft_fixture.py --family render_lcd --small
+python3 scripts/build_ft_fixture.py --family no_hinting
+python3 scripts/build_ft_fixture.py --family metrics_only
+python3 scripts/build_ft_fixture.py --family outline_cbox
+python3 scripts/build_ft_fixture.py --family render_mono
+python3 scripts/build_ft_fixture.py --family render_lcd
 python3 scripts/build_render_mode_fixture.py
 ```
 
 `build_ft_fixture.py` uses `FT_REF_BIN` when set. Without it, it uses `/tmp/gen_refs_v4`; the `--build-ref-bin` option builds that helper from `scripts/gen_ft_refs.c` after `scripts/build_ft.sh` has produced the vendored FreeType library.
+
+Pass `--small` only for explicit seed/debug regeneration. Committed supplemental parity fixtures use the full font inventory by default.
 
 ## Fixture Update Checklist
 
@@ -58,7 +60,7 @@ Before committing fixture changes:
 3. Confirm the matrix `generator`, `fixture_family`, `load_flags`, and `render_mode` are correct.
 4. Run the exact gate or contract that owns the fixture family.
 5. Run `cargo test -p pillow-rs-freetype --test harness_contract --locked`.
-6. Document any threshold or unexecuted state as debt.
+6. Document any threshold, incomplete, small-baseline, or unexecuted state as debt.
 
 ## Adding A New Fixture Family
 
