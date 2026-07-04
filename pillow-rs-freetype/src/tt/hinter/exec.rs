@@ -679,9 +679,11 @@ impl ExecContext {
         if selector & 32 != 0 {
             result |= 1 << 12;
         }
-        if selector & 64 != 0 {
-            result |= 1 << 13;
-        }
+        // C: Ins_GETINFO only reports selector bit 6 (result bit 13) when
+        // FreeType is built with minimal subpixel hinting support enabled for
+        // the active render mode.  The native default grayscale fixture does
+        // not advertise that bit, which keeps legacy direct-move helpers on
+        // their grayscale branch.
         if selector & 1024 != 0 {
             result |= 1 << 17;
         }
