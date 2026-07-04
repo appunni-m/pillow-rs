@@ -80,8 +80,14 @@ fn ppem_from_size(size_pt: f32) -> i32 {
 pub struct ScaledGlyph {
     /// Outline in 26.6, with origin at the glyph's pixel bbox bottom-left.
     pub outline: Outline,
-    pub advance_width: i32, // 26.6
-    pub lsb: i32,           // 26.6
+    pub advance_width: i32,      // 26.6
+    pub slot_advance_width: i32, // 26.6, after hinted phantom adjustment
+    pub lsb: i32,                // 26.6
+    /// Raw scaled CBox before pixel floor/ceil conversion.
+    pub cbox_x_min: i32,
+    pub cbox_y_min: i32,
+    pub cbox_x_max: i32,
+    pub cbox_y_max: i32,
     /// Pixel CBox (FT_GLYPH_BBOX_PIXELS): x/yMin floored, x/yMax ceiled.
     pub bbox_x_min: i32,
     pub bbox_y_min: i32,
@@ -134,6 +140,7 @@ fn scale_glyph_impl(
 
     let h_metric = data.hmtx.get(glyph_index);
     let advance_width = scale.scale_x(h_metric.advance_width as i32);
+    let mut slot_advance_width = advance_width;
     let lsb = scale.scale_x(h_metric.lsb as i32);
 
     let outline_raw = load_glyph(
@@ -148,7 +155,12 @@ fn scale_glyph_impl(
         return Ok(ScaledGlyph {
             outline: Outline::default(),
             advance_width,
+            slot_advance_width,
             lsb,
+            cbox_x_min: 0,
+            cbox_y_min: 0,
+            cbox_x_max: 0,
+            cbox_y_max: 0,
             bbox_x_min: 0,
             bbox_y_min: 0,
             bbox_x_max: 0,
@@ -267,8 +279,13 @@ fn scale_glyph_impl(
                 &hs,
                 &outline_raw.instructions,
             );
-            if let Err(e) = hint_result {
-                log::debug!("[VM] gi={glyph_index}: {e}");
+            match hint_result {
+                Ok(outcome) => {
+                    slot_advance_width = outcome.advance_width;
+                }
+                Err(e) => {
+                    log::debug!("[VM] gi={glyph_index}: {e}");
+                }
             }
         }
     }
@@ -320,7 +337,12 @@ fn scale_glyph_impl(
     Ok(ScaledGlyph {
         outline,
         advance_width,
+        slot_advance_width,
         lsb,
+        cbox_x_min: x_min,
+        cbox_y_min: y_min,
+        cbox_x_max: x_max,
+        cbox_y_max: y_max,
         bbox_x_min: px_x_min,
         bbox_y_min: px_y_min,
         bbox_x_max: px_x_max,
