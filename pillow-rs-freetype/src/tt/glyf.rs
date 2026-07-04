@@ -254,7 +254,7 @@ fn load_glyph_inner(
             let base = points.len();
             let mut transformed = Vec::with_capacity(sub.points.len());
             for pt in &sub.points {
-                transformed.push(transform_point(*pt, &comp, 0, 0));
+                transformed.push(transform_point(*pt, comp, 0, 0));
             }
             let (dx, dy) = if comp.args_are_xy {
                 component_xy_offset(comp, component_offset_scale)
@@ -384,7 +384,7 @@ fn load_glyph_scaled_inner(
             0
         };
         for pt in &sub.points {
-            points.push(transform_scaled_point(*pt, &comp, dx, dy));
+            points.push(transform_scaled_point(*pt, comp, dx, dy));
         }
         for &ep in &sub.end_pts_of_contours {
             end_pts.push(u16_from_u32(u32_from_usize(base) + ep as u32));
