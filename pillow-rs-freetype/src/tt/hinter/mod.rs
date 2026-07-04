@@ -46,6 +46,7 @@ pub struct HintScale {
     pub y_scale: i32,
     pub ppem: i32,
     pub storage_size: usize,
+    pub reset_vectors_at_glyph_entry: bool,
 }
 
 /// Entry point: run bytecode hinting on scaled 26.6 coordinates.
@@ -198,6 +199,9 @@ pub fn hint_glyph(
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
+        if scale.reset_vectors_at_glyph_entry {
+            ctx.gs.set_vectors_to_x();
+        }
         ctx.set_glyph_program(glyph_ins);
         ctx.run_program(&mut zone)?;
     }

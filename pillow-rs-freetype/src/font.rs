@@ -579,7 +579,15 @@ impl Font {
             BitmapBackend::PIL => None,
             BitmapBackend::FreeType => metrics_cache.as_ref(),
         };
-        match scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic) {
+        let scaled = match self.backend {
+            BitmapBackend::PIL => {
+                scaler::scale_glyph_native_default(data, glyph, metrics_for_scale, self.is_italic)
+            }
+            BitmapBackend::FreeType => {
+                scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic)
+            }
+        };
+        match scaled {
             Ok(g) if g.outline.n_contours > 0 => {
                 match self.backend {
                     BitmapBackend::PIL => {
@@ -646,7 +654,14 @@ impl Font {
             BitmapBackend::PIL => None,
             BitmapBackend::FreeType => metrics_cache.as_ref(),
         };
-        let scaled = scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic)?;
+        let scaled = match self.backend {
+            BitmapBackend::PIL => {
+                scaler::scale_glyph_native_default(data, glyph, metrics_for_scale, self.is_italic)?
+            }
+            BitmapBackend::FreeType => {
+                scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic)?
+            }
+        };
 
         if scaled.outline.n_contours == 0 {
             // No outline → empty mask (but PIL still returns the advance-sized

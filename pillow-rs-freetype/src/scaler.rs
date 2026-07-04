@@ -109,7 +109,17 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true)
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, false)
+}
+
+/// Scale a glyph through the PIL native TrueType default load path.
+pub fn scale_glyph_native_default(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, true)
 }
 
 /// Scale a glyph without autohinting or native TrueType bytecode.
@@ -120,7 +130,7 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, false)
+    scale_glyph_impl(data, glyph_index, None, is_italic, false, false)
 }
 
 fn scale_glyph_impl(
@@ -129,6 +139,7 @@ fn scale_glyph_impl(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
     allow_bytecode: bool,
+    reset_vectors_at_glyph_entry: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -253,6 +264,7 @@ fn scale_glyph_impl(
                 y_scale: y_adj,
                 ppem: scale.ppem,
                 storage_size: data.maxp.max_storage as usize,
+                reset_vectors_at_glyph_entry,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
             let (raw_ascender, raw_descender) = data
