@@ -60,10 +60,13 @@ formats:
       description: Quality 100 (minimal compression)
       test_assets:
       - q100.jpg
+      - q90.jpg
+      - q75.jpg
     - id: quality_50
       description: Quality 50 (medium compression)
       test_assets:
       - q50.jpg
+      - q25.jpg
     - id: quality_10
       description: Quality 10 (heavy compression, artifacts)
       test_assets:
@@ -282,10 +285,14 @@ formats:
       description: RGBA (color type 6)
       test_assets:
       - rgba.png
+      - alpha_checker.png
+      - alpha_partial.png
     - id: color_indexed
       description: Indexed/Palette (color type 3)
       test_assets:
       - indexed.png
+      - palette_2color.png
+      - palette_256color.png
     - id: color_indexed_alpha
       description: Indexed with tRNS transparency
       test_assets:
@@ -346,6 +353,8 @@ formats:
       description: Default zlib compression (level 6)
       test_assets:
       - compress_default.png
+      - compress_fast.png
+      - compress_mid.png
     - id: compress_none
       description: No compression (store only)
       test_assets:
@@ -398,6 +407,9 @@ formats:
       description: Non-power-of-2 dimensions
       test_assets:
       - odd_size.png
+      - 2x3.png
+      - 1x255.png
+      - 255x1.png
     - id: error_truncated
       description: Truncated PNG file
       test_assets:
@@ -565,6 +577,7 @@ formats:
       description: Animated GIF (decode first frame)
       test_assets:
       - animated.gif
+      - animated_3frame.gif
     - id: transparent
       description: GIF with transparency index
       test_assets:
@@ -726,6 +739,9 @@ formats:
       description: Odd width (row padding required)
       test_assets:
       - odd_width.bmp
+      - width2.bmp
+      - width3.bmp
+      - width31.bmp
     - id: error_not_bmp
       description: File without BM magic
       test_assets:
@@ -817,6 +833,10 @@ formats:
       description: Lossy WebP (VP8 codec)
       test_assets:
       - lossy.webp
+      - lossy_q10.webp
+      - lossy_q50.webp
+      - lossy_q90.webp
+      - lossy_q100.webp
     - id: lossless_vp8l
       description: Lossless WebP (VP8L codec)
       test_assets:
@@ -833,6 +853,7 @@ formats:
       description: WebP with alpha channel
       test_assets:
       - with_alpha.webp
+      - alpha_lossy.webp
     - id: alpha_lossless
       description: Lossless WebP with alpha
       test_assets:
@@ -985,10 +1006,13 @@ formats:
       description: LZW compression
       test_assets:
       - lzw.tiff
+      - gray_lzw.tiff
+      - rgba_lzw.tiff
     - id: compression_deflate
       description: Deflate/ZIP compression
       test_assets:
       - deflate.tiff
+      - gray_deflate.tiff
     - id: compression_packbits
       description: PackBits compression
       test_assets:
