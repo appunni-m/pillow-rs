@@ -965,7 +965,7 @@ impl ExecContext {
                         org_dist
                     };
 
-                    if (opcode & 0x08) != 0 {
+                    if (opcode & 0x08) != 0 && org_dist != 0 {
                         if org_dist >= 0 {
                             if distance < self.gs.minimum_distance {
                                 distance = self.gs.minimum_distance;
@@ -1051,7 +1051,7 @@ impl ExecContext {
                         cvt_dist
                     };
 
-                    if (opcode & 0x08) != 0 {
+                    if (opcode & 0x08) != 0 && org_dist != 0 {
                         if org_dist >= 0 {
                             if distance < self.gs.minimum_distance {
                                 distance = self.gs.minimum_distance;
