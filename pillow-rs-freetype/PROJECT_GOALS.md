@@ -31,6 +31,7 @@
 - `force_autohint_matrix.json`: exact Rust-vs-FreeType fixture parity for the broad force-autohint getmask/getbbox matrix.
 - `render_mode_matrix.json`: exact byte and metadata parity for the current render-mode matrix.
 - `native_tt_default_matrix.json`: still a threshold baseline. This is not done; it must be promoted to exact parity by improving the Rust bytecode/default TrueType path.
+- `metrics_only_matrix.json`, `no_hinting_matrix.json`, `outline_cbox_matrix.json`, `render_mono_matrix.json`, and `render_lcd_matrix.json`: present C-oracle fixtures that are not yet executed by the unified runner. They are explicit harness debt, not completion evidence.
 
 ## Harness Contract
 
@@ -39,6 +40,7 @@
 - Fixture regeneration must be done by explicit C-oracle scripts, not by test code that blesses Rust output.
 - Threshold baselines must remain named and documented as incomplete until they reach exact parity.
 - Contract tests must lock current matrix breadth so broad coverage cannot quietly shrink.
+- Present-but-unexecuted matrices must stay named as debt until the runner executes them as exact gates.
 
 ## Required Habit
 

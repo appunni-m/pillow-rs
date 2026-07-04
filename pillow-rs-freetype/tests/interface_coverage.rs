@@ -182,6 +182,19 @@ fn freetype_interface_coverage_report() {
             stats.planned,
             stats.out_of_scope
         );
+        if let Some(parity) = &stats.parity {
+            if parity.family == "native_tt_default" {
+                assert_eq!(
+                    (parity.passing, parity.total),
+                    (3176, 7640),
+                    "{path} misreports the current native TrueType threshold baseline"
+                );
+                assert!(
+                    parity.passing < parity.total,
+                    "{path} cannot report native TrueType as exact until the bytecode path reaches 100%"
+                );
+            }
+        }
     }
 
     eprintln!("╚══════════════════════════════════════════════════════════════╝");
