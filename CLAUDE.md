@@ -138,6 +138,18 @@ For FreeType work, load `.claude/skills/freetype-parity` and
   output, exact 26.6 values for metrics and geometry.
 - When a lane is incomplete, make the failure count visible and classify it.
 
+## Parity Documentation
+
+Every discovered implementation nuance must be preserved for future agents.
+
+- When a fix depends on subtle C behavior, add a short code comment at the
+  implementation site with the C function/file area and the reason.
+- If a finding affects future debugging strategy, fixture generation, or
+  harness expectations, update the relevant project notes or skill docs.
+- Commit messages must include the first divergence, the C behavior, the Rust
+  behavior before the fix, and the exact lane count impact.
+- Do not leave knowledge only in chat, temporary traces, or one-off scripts.
+
 ## Subagents
 
 Subagents are isolated workers for classified failure buckets only.
@@ -149,6 +161,10 @@ Subagents are isolated workers for classified failure buckets only.
 - They must not push main.
 - They must commit only verified improvements and report changed files,
   before/after counts, verification commands, and remaining bucket.
+- They must document any newly discovered implementation nuance in code at the
+  relevant site, and call it out in their final report. If the nuance is broad
+  enough to guide future workers, they must update the appropriate project
+  note or skill doc instead of leaving it only in the report.
 - The orchestrating agent reviews and merges into main, then runs the relevant
   lane, full harness, no-runtime-FFI, fmt, and clippy checks.
 - Archive or remove completed worktrees. Do not report archived trees as
