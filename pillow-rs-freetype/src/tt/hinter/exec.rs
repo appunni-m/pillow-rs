@@ -334,7 +334,6 @@ impl ExecContext {
         self.gs.zp0 = 0;
         self.gs.zp1 = 0;
         self.gs.zp2 = 0;
-        self.gs.set_vectors_to_y();
 
         // Run prep against twilight zone
         let mut empty_glyph = Self::new_twilight_zone(0);
@@ -527,17 +526,17 @@ impl ExecContext {
         ))
     }
 
-    fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, usize) {
-        let ref_pt = if opcode & 1 != 0 {
-            self.gs.rp1 as usize
+    fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, u8, usize) {
+        let (ref_zone, ref_pt) = if opcode & 1 != 0 {
+            (self.gs.zp0, self.gs.rp1 as usize)
         } else {
-            self.gs.rp2 as usize
+            (self.gs.zp1, self.gs.rp2 as usize)
         };
-        let (cx, cy) = self.cur_in(zone, self.gs.zp2, ref_pt);
-        let (ox, oy) = self.org_in(zone, self.gs.zp2, ref_pt);
+        let (cx, cy) = self.cur_in(zone, ref_zone, ref_pt);
+        let (ox, oy) = self.org_in(zone, ref_zone, ref_pt);
         let dist = self.gs.project(cx - ox, cy - oy);
         let (dx, dy) = self.gs.move_along_free(dist);
-        (dx, dy, ref_pt)
+        (dx, dy, ref_zone, ref_pt)
     }
 
     fn skip_to_else_or_eif(&mut self) -> Result<(), FontError> {
@@ -892,24 +891,27 @@ impl ExecContext {
                     let p = self.pop()? as usize;
                     let cvt_idx = self.pop()? as usize;
                     let cvt_val = self.get_cvt(cvt_idx)?;
-                    let (cx, cy) = self.cur_in(zone, self.gs.zp0, p);
-                    // Project original and current coords onto freedom vector
-                    let org_dist = self.gs.project(cx, cy);
-                    // Round CVT value
-                    let rnd_cvt = self.gs.round(cvt_val);
-                    // Move: calculate delta from current position
-                    let delta = rnd_cvt - org_dist;
-                    let (dx, dy) = self.gs.move_along_free(delta);
                     if self.gs.zp0 == 0 {
                         let (ox, oy) = self.gs.move_along_free(cvt_val);
                         self.set_org_in(zone, self.gs.zp0, p, ox, oy);
                         self.set_cur_in(zone, self.gs.zp0, p, ox, oy);
                     }
+                    let (cx, cy) = self.cur_in(zone, self.gs.zp0, p);
+                    let mut distance = cvt_val;
+                    let org_dist = self.gs.project(cx, cy);
+                    if opcode == 0x3F {
+                        let delta = (distance - org_dist).abs();
+                        if delta > self.gs.control_value_cutin {
+                            distance = org_dist;
+                        }
+                        distance = self.gs.round(distance);
+                    }
+                    let delta = distance - org_dist;
+                    let (dx, dy) = self.gs.move_along_free(delta);
                     self.set_cur_in(zone, self.gs.zp0, p, cx + dx, cy + dy);
                     self.touch_in(zone, self.gs.zp0, p);
-                    if opcode == 0x3F {
-                        self.gs.rp0 = p as u32;
-                    }
+                    self.gs.rp0 = p as u32;
+                    self.gs.rp1 = p as u32;
                 }
 
                 // ── MDRP — Move Direct Relative Point ────────────
@@ -1080,7 +1082,7 @@ impl ExecContext {
                 // ── SHP — Shift points by reference-point displacement ──
                 0x32 | 0x33 => {
                     let loop_count = self.gs.loop_counter as usize;
-                    let (dx, dy, _) = self.point_displacement(opcode, zone);
+                    let (dx, dy, _, _) = self.point_displacement(opcode, zone);
                     for _ in 0..loop_count {
                         let p = self.pop()? as usize;
                         let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
@@ -1094,7 +1096,7 @@ impl ExecContext {
                 0x34 | 0x35 => {
                     let contour = self.pop()? as usize;
                     if contour < zone.contours.len() {
-                        let (dx, dy, ref_pt) = self.point_displacement(opcode, zone);
+                        let (dx, dy, ref_zone, ref_pt) = self.point_displacement(opcode, zone);
                         let start = if contour == 0 {
                             0
                         } else {
@@ -1102,7 +1104,7 @@ impl ExecContext {
                         };
                         let limit = zone.contours[contour] as usize + 1;
                         for p in start..limit {
-                            if p != ref_pt {
+                            if self.gs.zp2 != ref_zone || p != ref_pt {
                                 let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
                                 self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
                                 self.touch_in(zone, self.gs.zp2, p);
@@ -1113,18 +1115,17 @@ impl ExecContext {
 
                 // ── SHZ — Shift zone by reference-point displacement ──
                 0x36 | 0x37 => {
-                    let zone_arg = self.pop()?;
-                    let (dx, dy, ref_pt) = self.point_displacement(opcode, zone);
-                    let target_zp = (zone_arg & 1) as u8;
+                    let (dx, dy, ref_zone, ref_pt) = self.point_displacement(opcode, zone);
+                    let target_zp = self.gs.zp2;
                     let limit = if target_zp == 0 {
                         self.twilight.n_points as usize
-                    } else if zone_arg == 1 {
+                    } else if zone.n_contours > 0 {
                         zone.n_real_points()
                     } else {
-                        zone.n_points as usize
+                        0
                     };
                     for p in 0..limit {
-                        if p != ref_pt {
+                        if target_zp != ref_zone || p != ref_pt {
                             let (cx, cy) = self.cur_in(zone, target_zp, p);
                             self.set_cur_in(zone, target_zp, p, cx + dx, cy + dy);
                         }
@@ -1222,7 +1223,7 @@ impl ExecContext {
                 // ── SHPIX — Shift Pixel ───────────────────────────
                 0x38 => {
                     let amount = self.pop()?;
-                    let (dx, dy) = self.gs.move_along_free(amount);
+                    let (dx, dy) = self.gs.move_along_raw_free(amount);
                     for _ in 0..self.gs.loop_counter {
                         let p = self.pop()? as usize;
                         let (cx, cy) = zone.cur(p);
@@ -1317,22 +1318,27 @@ impl ExecContext {
                     } else {
                         self.gs.freedom_vector = (0x4000, 0);
                     }
+                    self.gs.compute_move_vector();
                 }
                 // ── SPVFS (0x0A) — Set Proj Vector From Stack ──────
                 0x0A => {
                     let y = self.pop()?;
                     let x = self.pop()?;
                     self.gs.proj_vector = (x, y);
+                    self.gs.dual_proj_vector = (x, y);
+                    self.gs.compute_move_vector();
                 }
                 // ── SFVFS (0x0B) — Set Freedom Vector From Stack ────
                 0x0B => {
                     let y = self.pop()?;
                     let x = self.pop()?;
                     self.gs.freedom_vector = (x, y);
+                    self.gs.compute_move_vector();
                 }
                 // ── SFVTPV (0x0E) — Set Freedom Vector To Proj Vector ─
                 0x0E => {
                     self.gs.freedom_vector = self.gs.proj_vector;
+                    self.gs.compute_move_vector();
                 }
                 // ── DEPTH (0x24) — Push stack depth ─────────────────
                 0x24 => {
@@ -1349,17 +1355,17 @@ impl ExecContext {
                     let rp2 = self.gs.rp2 as usize;
                     let use_twilight_org = self.gs.zp0 == 0 || self.gs.zp1 == 0;
                     let (r1_ox, r1_oy) = if use_twilight_org {
-                        self.org_in(zone, self.gs.zp1, rp1)
+                        self.org_in(zone, self.gs.zp0, rp1)
                     } else {
-                        self.orus_in(zone, self.gs.zp1, rp1)
+                        self.orus_in(zone, self.gs.zp0, rp1)
                     };
                     let (r2_ox, r2_oy) = if use_twilight_org {
-                        self.org_in(zone, self.gs.zp0, rp2)
+                        self.org_in(zone, self.gs.zp1, rp2)
                     } else {
-                        self.orus_in(zone, self.gs.zp0, rp2)
+                        self.orus_in(zone, self.gs.zp1, rp2)
                     };
-                    let (r1_cx, r1_cy) = self.cur_in(zone, self.gs.zp1, rp1);
-                    let (r2_cx, r2_cy) = self.cur_in(zone, self.gs.zp0, rp2);
+                    let (r1_cx, r1_cy) = self.cur_in(zone, self.gs.zp0, rp1);
+                    let (r2_cx, r2_cy) = self.cur_in(zone, self.gs.zp1, rp2);
                     // C: old_range = DUALPROJ(orgs2 - orgs1), cur_range = PROJECT(curs2 - curs1)
                     let old_range = if use_twilight_org {
                         self.gs.dual_project(r2_ox - r1_ox, r2_oy - r1_oy)
@@ -1377,7 +1383,6 @@ impl ExecContext {
                         } else {
                             self.orus_in(zone, self.gs.zp2, p)
                         };
-                        // C: FT_MulDiv_No_Round(p_old, cur_range, old_range)
                         let p_old = if use_twilight_org {
                             self.gs.dual_project(pox - r1_ox, poy - r1_oy)
                         } else {
@@ -1386,14 +1391,19 @@ impl ExecContext {
                                 crate::fixed::ft_mul_fix(poy - r1_oy, self.y_scale),
                             )
                         };
-                        let new_val = if old_range != 0 {
-                            ((p_old as i64 * cur_range as i64 + (old_range as i64 >> 1))
-                                / old_range as i64) as i32
+                        let (pcx, pcy) = self.cur_in(zone, self.gs.zp2, p);
+                        let cur_dist = self.gs.project(pcx - r1_cx, pcy - r1_cy);
+                        let new_dist = if p_old != 0 {
+                            if old_range != 0 {
+                                crate::fixed::ft_mul_div(p_old, cur_range, old_range)
+                            } else {
+                                p_old
+                            }
                         } else {
                             0
                         };
-                        let (dx, dy) = self.gs.move_along_free(new_val);
-                        self.set_cur_in(zone, self.gs.zp2, p, r1_cx + dx, r1_cy + dy);
+                        let (dx, dy) = self.gs.move_along_free(new_dist - cur_dist);
+                        self.set_cur_in(zone, self.gs.zp2, p, pcx + dx, pcy + dy);
                         self.touch_in(zone, self.gs.zp2, p);
                     }
                     self.gs.loop_counter = 1; // C: GS.loop = 1
@@ -1463,6 +1473,7 @@ impl ExecContext {
                         self.gs.proj_vector = (0x4000, 0);
                         self.gs.dual_proj_vector = (0x4000, 0);
                     }
+                    self.gs.compute_move_vector();
                 }
                 // ── GPV (0x0C) — Get Projection Vector ─────────────
                 0x0C => {
@@ -1577,6 +1588,7 @@ impl ExecContext {
                     } else {
                         self.gs.dual_proj_vector = (0x4000, 0);
                     }
+                    self.gs.compute_move_vector();
                 }
 
                 // ── DELTAP/DELTAC — Delta exceptions ───────────────

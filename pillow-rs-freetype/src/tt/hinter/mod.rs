@@ -179,7 +179,6 @@ pub fn hint_glyph(
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
         ctx.set_glyph_program(glyph_ins);
-        ctx.gs.set_vectors_to_y();
         ctx.run_program(&mut zone)?;
     }
 

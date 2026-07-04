@@ -16,12 +16,12 @@ fn main() {
     let ch = args[3].chars().next().expect("char");
 
     let data = fs::read(font_path).expect("read font");
-    let font = pillow_rs_freetype::Font::truetype(
-        &data,
-        size_pt,
-        pillow_rs_freetype::BitmapBackend::FreeType,
-    )
-    .expect("load font");
+    let backend = if args.get(4).is_some_and(|arg| arg == "pil") {
+        pillow_rs_freetype::BitmapBackend::PIL
+    } else {
+        pillow_rs_freetype::BitmapBackend::FreeType
+    };
+    let font = pillow_rs_freetype::Font::truetype(&data, size_pt, backend).expect("load font");
 
     let mask = font.getmask(&ch.to_string()).expect("getmask");
 
