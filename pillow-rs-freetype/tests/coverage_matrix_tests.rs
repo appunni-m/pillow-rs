@@ -1120,8 +1120,7 @@ fn rust_slot_metrics(
     font: &Font,
     row: &MatrixRow,
 ) -> Result<serde_json::Value, (FailureStage, String)> {
-    let glyph = font.data.cmap.char_index(row.codepoint).unwrap_or(0);
-    let scaled = scaler::scale_glyph(&font.data, glyph, None, font.is_italic).map_err(|err| {
+    let metrics = font.glyph_metrics(row.codepoint).map_err(|err| {
         (
             FailureStage::LoadError,
             format!(
@@ -1132,18 +1131,15 @@ fn rust_slot_metrics(
             ),
         )
     })?;
-    let width = (scaled.bbox_x_max - scaled.bbox_x_min) * 64;
-    let height = (scaled.bbox_y_max - scaled.bbox_y_min) * 64;
-    let vert_advance = font.size_metrics().y_ppem as i32 * 64;
     Ok(serde_json::json!({
-        "width": width,
-        "height": height,
-        "hori_bearing_x": scaled.bbox_x_min * 64,
-        "hori_bearing_y": scaled.bbox_y_max * 64,
-        "hori_advance": scaled.advance_width,
-        "vert_bearing_x": -(width / 2),
-        "vert_bearing_y": (vert_advance - height) / 2,
-        "vert_advance": vert_advance,
+        "width": metrics.width,
+        "height": metrics.height,
+        "hori_bearing_x": metrics.hori_bearing_x,
+        "hori_bearing_y": metrics.hori_bearing_y,
+        "hori_advance": metrics.hori_advance,
+        "vert_bearing_x": metrics.vert_bearing_x,
+        "vert_bearing_y": metrics.vert_bearing_y,
+        "vert_advance": metrics.vert_advance,
     }))
 }
 
