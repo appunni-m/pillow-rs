@@ -103,6 +103,16 @@ pub struct ScaledGlyph {
     pub bbox_y_min: i32,
     pub bbox_x_max: i32,
     pub bbox_y_max: i32,
+    /// Metrics synthesized by FreeType's auto-hinter from the pre-hint slot
+    /// vector and the final hinted bbox.
+    pub autohint_vertical: Option<AutohintVerticalMetrics>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AutohintVerticalMetrics {
+    pub bearing_x: i32,
+    pub bearing_y: i32,
+    pub advance: i32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -146,6 +156,7 @@ pub fn scale_glyph(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -168,6 +179,7 @@ pub fn scale_glyph_for_metrics(
         true,
         false,
         false,
+        true,
     )
 }
 
@@ -191,6 +203,7 @@ pub fn scale_glyph_for_metrics_with_autohint(
         true,
         true,
         false,
+        true,
     )
 }
 
@@ -214,6 +227,7 @@ pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
         true,
         false,
         false,
+        true,
     )
 }
 
@@ -238,6 +252,7 @@ pub fn scale_glyph_native_default(
         false,
         false,
         true,
+        false,
     )
 }
 
@@ -261,6 +276,7 @@ pub fn scale_glyph_lcd(
             stem_adjust: false,
         },
         true,
+        false,
         false,
         false,
         false,
@@ -292,6 +308,7 @@ pub fn scale_glyph_lcd_v(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -313,6 +330,7 @@ pub fn scale_glyph_mono(
         },
         true,
         true,
+        false,
         false,
         false,
         false,
@@ -341,6 +359,7 @@ pub fn scale_glyph_no_hinting(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -355,6 +374,7 @@ fn scale_glyph_impl(
     round_component_offsets: bool,
     use_autohint_advance: bool,
     reset_vectors_at_glyph_entry: bool,
+    legacy_hinter_phantoms: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -405,19 +425,23 @@ fn scale_glyph_impl(
             bbox_y_min: 0,
             bbox_x_max: 0,
             bbox_y_max: 0,
+            autohint_vertical: None,
         });
     }
 
-    let fallback_metrics =
-        if latin_metrics.is_none() && allow_bytecode && should_use_default_autohint(data) {
-            let globals = crate::autohint::globals::FaceGlobals::new(
-                std::sync::Arc::new(data.clone()),
-                style.is_italic,
-            );
-            globals.get_metrics(glyph_index)
-        } else {
-            None
-        };
+    let fallback_metrics = if latin_metrics.is_none()
+        && allow_bytecode
+        && !round_component_offsets
+        && should_use_default_autohint(data)
+    {
+        let globals = crate::autohint::globals::FaceGlobals::new(
+            std::sync::Arc::new(data.clone()),
+            style.is_italic,
+        );
+        globals.get_metrics(glyph_index)
+    } else {
+        None
+    };
     let hint_metrics = latin_metrics.or(fallback_metrics.as_ref());
 
     // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
@@ -502,7 +526,13 @@ fn scale_glyph_impl(
     };
     let mut scaled: Vec<OutlinePoint> =
         if outline_raw.is_composite && !use_autohint && allow_bytecode {
-            scale_composite_components(data, &outline_raw, style.is_italic, &scale)?
+            scale_composite_components(
+                data,
+                &outline_raw,
+                style.is_italic,
+                &scale,
+                legacy_hinter_phantoms,
+            )?
         } else {
             let mut scaled = Vec::with_capacity(outline_raw.points.len());
             for (index, p) in outline_raw.points.iter().enumerate() {
@@ -565,6 +595,7 @@ fn scale_glyph_impl(
                 ppem: scale.ppem,
                 storage_size: data.maxp.max_storage as usize,
                 reset_vectors_at_glyph_entry,
+                metrics_legacy_phantoms: legacy_hinter_phantoms,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
             let (raw_ascender, raw_descender) = data
@@ -626,6 +657,19 @@ fn scale_glyph_impl(
     let px_y_min = (ft_pix_floor(y_min)) >> 6;
     let px_x_max = (ft_pix_ceil(x_max)) >> 6;
     let px_y_max = (ft_pix_ceil(y_max)) >> 6;
+    let autohint_vertical = if use_autohint {
+        Some(autohint_vertical_metrics(
+            data,
+            glyph_index,
+            &outline_raw,
+            h_metric.advance_width as i32,
+            y_adj,
+            x_min,
+            y_max,
+        ))
+    } else {
+        None
+    };
 
     // Translate outline so its pixel bbox sits at (0,0).
     // The translation preserves subpixel fractional parts (only clears the
@@ -673,6 +717,7 @@ fn scale_glyph_impl(
         bbox_y_min: px_y_min,
         bbox_x_max: px_x_max,
         bbox_y_max: px_y_max,
+        autohint_vertical,
     })
 }
 
@@ -683,11 +728,57 @@ fn should_use_default_autohint(data: &FontData) -> bool {
     !has_font_program && prep_len <= 7 && !data.loca_data.is_empty()
 }
 
+fn autohint_vertical_metrics(
+    data: &FontData,
+    glyph_index: u16,
+    raw_outline: &GlyphOutline,
+    hori_advance_fu: i32,
+    y_scale: i32,
+    hinted_x_min: i32,
+    hinted_y_max: i32,
+) -> AutohintVerticalMetrics {
+    let mut raw_y_min = raw_outline.points[0].y;
+    let mut raw_y_max = raw_outline.points[0].y;
+    for point in &raw_outline.points {
+        raw_y_min = raw_y_min.min(point.y);
+        raw_y_max = raw_y_max.max(point.y);
+    }
+
+    let (top_fu, advance_fu) = if let Some(vmtx) = &data.vmtx {
+        let vertical = vmtx.get(glyph_index);
+        (vertical.tsb as i32, vertical.advance_height as i32)
+    } else {
+        let height_fu = raw_y_max - raw_y_min;
+        let advance_fu = vertical_advance_font_units(data);
+        ((advance_fu - height_fu) / 2, advance_fu)
+    };
+
+    let vvector_x = ft_mul_fix(
+        -(hori_advance_fu / 2),
+        ScaleMetrics::new(data.size_pt, data.head.units_per_em).x_scale,
+    );
+    let vvector_y = ft_mul_fix(top_fu - raw_y_max, y_scale);
+
+    AutohintVerticalMetrics {
+        bearing_x: ft_pix_floor(ft_pix_floor(hinted_x_min) + vvector_x),
+        bearing_y: ft_pix_floor(ft_pix_ceil(hinted_y_max) + vvector_y),
+        advance: ft_pix_round(ft_mul_fix(advance_fu, y_scale)),
+    }
+}
+
+fn vertical_advance_font_units(data: &FontData) -> i32 {
+    if let Some(os2) = &data.os2 {
+        return os2.s_typo_ascender as i32 - os2.s_typo_descender as i32;
+    }
+    data.hhea.ascent as i32 - data.hhea.descent as i32
+}
+
 fn scale_composite_components(
     data: &FontData,
     outline_raw: &GlyphOutline,
     is_italic: bool,
     scale: &ScaleMetrics,
+    legacy_hinter_phantoms: bool,
 ) -> Result<Vec<OutlinePoint>, FontError> {
     let mut points = Vec::with_capacity(outline_raw.points.len());
     for comp in &outline_raw.components {
@@ -705,6 +796,7 @@ fn scale_composite_components(
             false,
             false,
             false,
+            legacy_hinter_phantoms,
         )?;
         let off_x = ft_pix_floor(sub.outline_cbox_x_min);
         let off_y = ft_pix_floor(sub.outline_cbox_y_min);

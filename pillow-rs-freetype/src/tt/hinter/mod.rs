@@ -47,6 +47,7 @@ pub struct HintScale {
     pub ppem: i32,
     pub storage_size: usize,
     pub reset_vectors_at_glyph_entry: bool,
+    pub metrics_legacy_phantoms: bool,
 }
 
 /// Metrics side effects produced by glyph bytecode hinting.
@@ -143,43 +144,66 @@ pub fn hint_glyph(
         zone.orus_y.push(p.y);
     }
 
-    // Add phantom points.
-    // FreeType seeds horizontal phantoms as pp1 = xMin - lsb and
-    // pp2 = pp1 + advance, then translates the final outline by -pp1.x.
-    zone.cur_x.push(pp1_x);
-    zone.cur_y.push(0);
-    zone.orus_x.push(raw_pp1_x);
-    zone.orus_y.push(0);
-    // pp2: advance width in the shifted glyph coordinate system.
-    zone.cur_x.push(pp1_x + advance_width);
-    zone.cur_y.push(0);
-    zone.orus_x.push(raw_pp1_x + raw_advance_width);
-    zone.orus_y.push(0);
-    // pp3, pp4: vertical phantom points.  Without vmtx, FreeType synthesizes
-    // them from OS/2 typo metrics or hhea ascender/descender in font units.
-    zone.cur_x.push(0);
-    zone.cur_y
-        .push(crate::fixed::ft_mul_fix(raw_ascender, scale.y_scale));
-    zone.orus_x.push(0);
-    zone.orus_y.push(raw_ascender);
-    zone.cur_x.push(0);
-    zone.cur_y
-        .push(crate::fixed::ft_mul_fix(raw_descender, scale.y_scale));
-    zone.orus_x.push(0);
-    zone.orus_y.push(raw_descender);
+    if scale.metrics_legacy_phantoms {
+        // Metrics parity branch contract: seed horizontal phantoms at zero and
+        // leave vertical phantoms unused.
+        zone.cur_x.push(0);
+        zone.cur_y.push(0);
+        zone.orus_x.push(0);
+        zone.orus_y.push(0);
+        zone.cur_x.push(advance_width);
+        zone.cur_y.push(0);
+        zone.orus_x.push(raw_advance_width);
+        zone.orus_y.push(0);
+        zone.cur_x.push(0);
+        zone.cur_y.push(0);
+        zone.orus_x.push(0);
+        zone.orus_y.push(0);
+        zone.cur_x.push(0);
+        zone.cur_y.push(0);
+        zone.orus_x.push(0);
+        zone.orus_y.push(0);
+    } else {
+        // Add phantom points.
+        // FreeType seeds horizontal phantoms as pp1 = xMin - lsb and
+        // pp2 = pp1 + advance, then translates the final outline by -pp1.x.
+        zone.cur_x.push(pp1_x);
+        zone.cur_y.push(0);
+        zone.orus_x.push(raw_pp1_x);
+        zone.orus_y.push(0);
+        // pp2: advance width in the shifted glyph coordinate system.
+        zone.cur_x.push(pp1_x + advance_width);
+        zone.cur_y.push(0);
+        zone.orus_x.push(raw_pp1_x + raw_advance_width);
+        zone.orus_y.push(0);
+        // pp3, pp4: vertical phantom points.  Without vmtx, FreeType synthesizes
+        // them from OS/2 typo metrics or hhea ascender/descender in font units.
+        zone.cur_x.push(0);
+        zone.cur_y
+            .push(crate::fixed::ft_mul_fix(raw_ascender, scale.y_scale));
+        zone.orus_x.push(0);
+        zone.orus_y.push(raw_ascender);
+        zone.cur_x.push(0);
+        zone.cur_y
+            .push(crate::fixed::ft_mul_fix(raw_descender, scale.y_scale));
+        zone.orus_x.push(0);
+        zone.orus_y.push(raw_descender);
+    }
 
     // Copy cur → org for the bytecode interpreter's initial state
     zone.org_x = zone.cur_x.clone();
     zone.org_y = zone.cur_y.clone();
 
-    let pp1_idx = n_points;
-    let pp2_idx = n_points + 1;
-    let pp3_idx = n_points + 2;
-    let pp4_idx = n_points + 3;
-    zone.cur_x[pp1_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp1_idx]);
-    zone.cur_x[pp2_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp2_idx]);
-    zone.cur_y[pp3_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp3_idx]);
-    zone.cur_y[pp4_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp4_idx]);
+    if !scale.metrics_legacy_phantoms {
+        let pp1_idx = n_points;
+        let pp2_idx = n_points + 1;
+        let pp3_idx = n_points + 2;
+        let pp4_idx = n_points + 3;
+        zone.cur_x[pp1_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp1_idx]);
+        zone.cur_x[pp2_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp2_idx]);
+        zone.cur_y[pp3_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp3_idx]);
+        zone.cur_y[pp4_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp4_idx]);
+    }
 
     // ── Initialize execution context ──────────────────────────────────
     let mut ctx = exec::ExecContext::new(
@@ -204,7 +228,9 @@ pub fn hint_glyph(
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
-        ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
+        if !scale.metrics_legacy_phantoms {
+            ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
+        }
         if scale.reset_vectors_at_glyph_entry {
             ctx.gs.set_vectors_to_x();
         }
@@ -214,7 +240,11 @@ pub fn hint_glyph(
 
     // ── Write hinted coordinates back ──────────────────────────────────
     for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
-        pt.x = zone.cur_x[i] - zone.cur_x[n_points];
+        pt.x = if scale.metrics_legacy_phantoms {
+            zone.cur_x[i]
+        } else {
+            zone.cur_x[i] - zone.cur_x[n_points]
+        };
         pt.y = zone.cur_y[i];
     }
 

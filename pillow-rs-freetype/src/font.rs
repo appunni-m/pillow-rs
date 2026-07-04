@@ -590,7 +590,7 @@ impl Font {
         let glyph = self.char_index(codepoint);
         let scaled = if self.data.fpgm.is_some() && self.data.cvt.is_some() {
             let scaled = scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?;
-            if is_pathological_metrics_cbox(&scaled) {
+            if is_pathological_metrics_cbox(&scaled) || is_pathological_metrics_advance(&scaled) {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
                 scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
                     &self.data,
@@ -810,7 +810,11 @@ impl Font {
             vert_advance: 0,
         };
 
-        if let Some(vmtx) = &self.data.vmtx {
+        if let Some(vertical) = scaled.autohint_vertical {
+            metrics.vert_bearing_x = vertical.bearing_x;
+            metrics.vert_bearing_y = vertical.bearing_y;
+            metrics.vert_advance = vertical.advance;
+        } else if let Some(vmtx) = &self.data.vmtx {
             let vertical = vmtx.get(glyph_index);
             metrics.vert_bearing_y = ft_mul_fix(vertical.tsb as i32, self.size_metrics.y_scale);
             metrics.vert_advance =
@@ -826,7 +830,9 @@ impl Font {
             metrics.vert_bearing_y = ft_mul_fix(top_fu, self.size_metrics.y_scale);
             metrics.vert_advance = ft_mul_fix(advance_fu, self.size_metrics.y_scale);
         }
-        metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+        if scaled.autohint_vertical.is_none() {
+            metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
+        }
 
         grid_fit_horizontal_metrics(&mut metrics);
         metrics
@@ -849,6 +855,15 @@ fn is_pathological_metrics_cbox(scaled: &scaler::ScaledGlyph) -> bool {
         || scaled.cbox_x_max.abs() > 16_384
         || scaled.cbox_y_min.abs() > 16_384
         || scaled.cbox_y_max.abs() > 16_384
+}
+
+fn is_pathological_metrics_advance(scaled: &scaler::ScaledGlyph) -> bool {
+    scaled.slot_advance_width.abs() > 16_384
+        || scaled
+            .slot_advance_width
+            .saturating_sub(scaled.advance_width)
+            .abs()
+            > 16_384
 }
 
 fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> usize {
