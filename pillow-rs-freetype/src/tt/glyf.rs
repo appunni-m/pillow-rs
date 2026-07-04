@@ -58,7 +58,7 @@ pub struct GlyphOutline {
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Affine {
     pub xx: i32,
     pub xy: i32,
@@ -204,6 +204,9 @@ fn load_glyph_inner(
         let mut num_contours_total = 0u16;
         let mut last_sub_xmin = xmin;
         let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
+        let inherit_component_instructions =
+            composite.instructions.is_empty() && composite.components.len() == 1;
+        let mut component_instructions = Vec::new();
 
         for comp in composite.components {
             let sub = load_glyph_inner(
@@ -217,6 +220,9 @@ fn load_glyph_inner(
             )?;
             last_sub_xmin = sub.xmin;
             last_sub_lsb = sub.sub_lsb;
+            if inherit_component_instructions && comp.transform == Affine::IDENTITY {
+                component_instructions = sub.instructions.clone();
+            }
             let base = points.len();
             let mut transformed = Vec::with_capacity(sub.points.len());
             for pt in &sub.points {
@@ -257,7 +263,11 @@ fn load_glyph_inner(
             ymax,
             is_composite: true,
             sub_lsb: last_sub_lsb,
-            instructions: composite.instructions,
+            instructions: if composite.instructions.is_empty() {
+                component_instructions
+            } else {
+                composite.instructions
+            },
         })
     }
 }
