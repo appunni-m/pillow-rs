@@ -232,10 +232,6 @@ fn load_glyph_inner(
         let mut num_contours_total = 0u16;
         let mut last_sub_xmin = xmin;
         let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
-        let inherit_component_instructions =
-            composite.instructions.is_empty() && composite.components.len() == 1;
-        let mut component_instructions = Vec::new();
-
         for comp in &composite.components {
             let sub = load_glyph_inner(
                 glyf,
@@ -248,9 +244,6 @@ fn load_glyph_inner(
             )?;
             last_sub_xmin = sub.xmin;
             last_sub_lsb = sub.sub_lsb;
-            if inherit_component_instructions && comp.transform == Affine::IDENTITY {
-                component_instructions = sub.instructions.clone();
-            }
             let base = points.len();
             let mut transformed = Vec::with_capacity(sub.points.len());
             for pt in &sub.points {
@@ -291,11 +284,11 @@ fn load_glyph_inner(
             ymax,
             is_composite: true,
             sub_lsb: last_sub_lsb,
-            instructions: if composite.instructions.is_empty() {
-                component_instructions
-            } else {
-                composite.instructions.clone()
-            },
+            // C: TT_Process_Composite_Glyph in ttgload.c:1208-1234 reads
+            // only this composite glyph's instruction block.  Component
+            // glyph instructions run during recursive component loading and
+            // must not be inherited for a second hint pass.
+            instructions: composite.instructions,
             components: composite.components,
         })
     }

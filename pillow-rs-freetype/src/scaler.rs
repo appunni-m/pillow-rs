@@ -780,7 +780,7 @@ fn scale_composite_components(
     scale: &ScaleMetrics,
     legacy_hinter_phantoms: bool,
 ) -> Result<Vec<OutlinePoint>, FontError> {
-    let mut points = Vec::with_capacity(outline_raw.points.len());
+    let mut points: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
     for comp in &outline_raw.components {
         let sub = scale_glyph_impl(
             data,
@@ -800,27 +800,43 @@ fn scale_composite_components(
         )?;
         let off_x = ft_pix_floor(sub.outline_cbox_x_min);
         let off_y = ft_pix_floor(sub.outline_cbox_y_min);
-        let dx = if comp.args_are_xy {
-            scale.scale_x(comp.arg1)
-        } else {
-            0
-        };
-        let dy = if comp.args_are_xy {
-            let scaled = scale.scale_y(comp.arg2);
-            if comp.round_xy_to_grid {
-                ft_pix_round(scaled)
-            } else {
-                scaled
-            }
-        } else {
-            0
-        };
+        let mut transformed = Vec::with_capacity(sub.outline.points.len());
         for point in &sub.outline.points {
             let x = point.x + off_x;
             let y = point.y + off_y;
+            transformed.push(OutlinePoint {
+                x: ft_mul_fix(x, comp.transform.xx) + ft_mul_fix(y, comp.transform.xy),
+                y: ft_mul_fix(x, comp.transform.yx) + ft_mul_fix(y, comp.transform.yy),
+                on_curve: point.on_curve,
+            });
+        }
+        let (dx, dy) = if comp.args_are_xy {
+            let dx = scale.scale_x(comp.arg1);
+            let dy = {
+                let scaled = scale.scale_y(comp.arg2);
+                if comp.round_xy_to_grid {
+                    ft_pix_round(scaled)
+                } else {
+                    scaled
+                }
+            };
+            (dx, dy)
+        } else {
+            // C: TT_Process_Composite_Component in ttgload.c:1051-1079.
+            // Match the current component point to a point from previously
+            // loaded components after the component transform has been applied.
+            let parent = points.get(comp.arg1 as usize).ok_or_else(|| {
+                FontError::InvalidOutline("glyf: composite parent point out of range".into())
+            })?;
+            let component = transformed.get(comp.arg2 as usize).ok_or_else(|| {
+                FontError::InvalidOutline("glyf: composite component point out of range".into())
+            })?;
+            (parent.x - component.x, parent.y - component.y)
+        };
+        for point in transformed {
             points.push(OutlinePoint {
-                x: ft_mul_fix(x, comp.transform.xx) + ft_mul_fix(y, comp.transform.xy) + dx,
-                y: ft_mul_fix(x, comp.transform.yx) + ft_mul_fix(y, comp.transform.yy) + dy,
+                x: point.x + dx,
+                y: point.y + dy,
                 on_curve: point.on_curve,
             });
         }
