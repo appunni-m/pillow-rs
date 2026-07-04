@@ -383,12 +383,7 @@ fn scale_composite_components(
         let off_x = ft_pix_floor(sub.outline_cbox_x_min);
         let off_y = ft_pix_floor(sub.outline_cbox_y_min);
         let dx = if comp.args_are_xy {
-            let scaled = scale.scale_x(comp.arg1);
-            if comp.round_xy_to_grid {
-                ft_pix_round(scaled)
-            } else {
-                scaled
-            }
+            scale.scale_x(comp.arg1)
         } else {
             0
         };
