@@ -28,6 +28,15 @@ const MAX_FUNCTIONS: usize = 256;
 /// Maximum instruction definitions (IDEF).
 const MAX_INSTRUCTION_DEFS: usize = 256;
 
+#[inline]
+fn delta_step(delta_shift: u32) -> i32 {
+    if delta_shift <= 6 {
+        1i32 << (6 - delta_shift)
+    } else {
+        0
+    }
+}
+
 /// A code range (pointer into a bytecode stream).
 #[derive(Debug, Clone, Default)]
 pub struct CodeRange {
@@ -144,6 +153,10 @@ pub struct ExecContext {
 
     /// Persistent twilight zone for prep and glyph programs.
     pub twilight: GlyphZone,
+
+    /// FreeType v40 backward-compatibility state: bit 2 enables the mode,
+    /// bits 0-1 track whether IUP[y]/IUP[x] have executed.
+    pub backward_compatibility: u8,
 }
 
 impl ExecContext {
@@ -188,6 +201,7 @@ impl ExecContext {
             glyph_program: Vec::new(),
             cvt_program: Vec::new(),
             twilight: Self::new_twilight_zone(16),
+            backward_compatibility: 0,
         }
     }
 
@@ -323,11 +337,13 @@ impl ExecContext {
         // Zero twilight zone (C: FT_ARRAY_ZERO)
         self.twilight = Self::new_twilight_zone(self.twilight.n_points as usize);
 
-        // Set up prep as a glyph program
+        // Set up prep as the CVT program.  FreeType's INSTCTRL only persists
+        // size graphics-state flags from this code range.
         self.stack.clear();
-        self.glyph_program = prep_bytes.to_vec();
+        self.cvt_program = prep_bytes.to_vec();
+        self.glyph_program.clear();
         self.ip = 0;
-        self.cur_range = 2;
+        self.cur_range = 0;
 
         // C: prep runs with zp0=zp1=zp2=0 (twilight zone)
         self.gs.zp0 = 0;
@@ -423,8 +439,27 @@ impl ExecContext {
         if zp == 0 {
             self.twilight.set_cur(p, x, y);
         } else {
-            glyph.set_cur(p, x, y);
+            self.set_glyph_cur(glyph, p, x, y);
         }
+    }
+
+    fn set_glyph_cur(&self, glyph: &mut GlyphZone, p: usize, x: i32, y: i32) {
+        if p >= glyph.cur_x.len() {
+            return;
+        }
+
+        let mut new_x = x;
+        let mut new_y = y;
+        if self.backward_compatibility != 0 {
+            if self.gs.move_vector.0 != 0 {
+                new_x = glyph.cur_x[p];
+            }
+            if self.gs.move_vector.1 != 0 && self.backward_compatibility == 0x7 {
+                new_y = glyph.cur_y[p];
+            }
+        }
+
+        glyph.set_cur(p, new_x, new_y);
     }
 
     fn set_org_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize, x: i32, y: i32) {
@@ -432,6 +467,14 @@ impl ExecContext {
         if p < zone.org_x.len() {
             zone.org_x[p] = x;
             zone.org_y[p] = y;
+        }
+    }
+
+    fn minimum_distance(&self) -> i32 {
+        if self.backward_compatibility != 0 {
+            0
+        } else {
+            self.gs.minimum_distance
         }
     }
 
@@ -965,13 +1008,14 @@ impl ExecContext {
                         org_dist
                     };
 
-                    if (opcode & 0x08) != 0 && org_dist != 0 {
-                        if org_dist >= 0 {
-                            if distance < self.gs.minimum_distance {
-                                distance = self.gs.minimum_distance;
+                    if (opcode & 0x08) != 0 {
+                        let minimum_distance = self.minimum_distance();
+                        if org_dist != 0 && org_dist >= 0 {
+                            if distance < minimum_distance {
+                                distance = minimum_distance;
                             }
-                        } else if distance > -self.gs.minimum_distance {
-                            distance = -self.gs.minimum_distance;
+                        } else if org_dist != 0 && distance > -minimum_distance {
+                            distance = -minimum_distance;
                         }
                     }
 
@@ -1051,13 +1095,14 @@ impl ExecContext {
                         cvt_dist
                     };
 
-                    if (opcode & 0x08) != 0 && org_dist != 0 {
-                        if org_dist >= 0 {
-                            if distance < self.gs.minimum_distance {
-                                distance = self.gs.minimum_distance;
+                    if (opcode & 0x08) != 0 {
+                        let minimum_distance = self.minimum_distance();
+                        if org_dist != 0 && org_dist >= 0 {
+                            if distance < minimum_distance {
+                                distance = minimum_distance;
                             }
-                        } else if distance > -self.gs.minimum_distance {
-                            distance = -self.gs.minimum_distance;
+                        } else if org_dist != 0 && distance > -minimum_distance {
+                            distance = -minimum_distance;
                         }
                     }
 
@@ -1148,9 +1193,21 @@ impl ExecContext {
                 // ── IUP — Interpolate Untouched Points ────────────
                 // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
                 0x30 => {
+                    if self.backward_compatibility != 0 {
+                        if self.backward_compatibility == 0x7 {
+                            continue;
+                        }
+                        self.backward_compatibility |= 1;
+                    }
                     iup::iup_y(zone);
                 }
                 0x31 => {
+                    if self.backward_compatibility != 0 {
+                        if self.backward_compatibility == 0x7 {
+                            continue;
+                        }
+                        self.backward_compatibility |= 2;
+                    }
                     iup::iup_x(zone);
                 }
 
@@ -1256,7 +1313,7 @@ impl ExecContext {
                     let (qorg_x, qorg_y) = zone.org(q);
                     let dist = self.gs.project(porg_x - qorg_x, porg_y - qorg_y);
                     let (dx, dy) = self.gs.move_along_free(dist);
-                    zone.set_cur(p, qx + dx, qy + dy);
+                    self.set_glyph_cur(zone, p, qx + dx, qy + dy);
                     self.touch_point(zone, p);
                 }
                 // ── CINDEX (0x25) — Copy indexed element ─────────
@@ -1556,21 +1613,30 @@ impl ExecContext {
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
-                // C: Ins_GETINFO. Returns flags about the engine.
+                // C: Ins_GETINFO. This runtime models FreeType's v40
+                // grayscale, non-LCD interpreter mode used by the oracle.
                 0x88 => {
                     let selector = self.pop()?;
-                    let mut result = 0;
-                    if selector & 0x01 != 0 {
-                        // FreeType's bytecode interpreter advertises the v35
-                        // compatible instruction set for classic grayscale
-                        // hinting. Rotation/stretch/variation/ClearType flags
-                        // remain clear for this metrics-only load path.
-                        result |= 35;
+                    let mut info = 0;
+                    if selector & 1 != 0 {
+                        info = 40;
                     }
-                    if selector & 0x10 != 0 {
-                        result |= 0x0800;
+                    if selector & 32 != 0 {
+                        info |= 1 << 12;
                     }
-                    self.push(result);
+                    if selector & 64 != 0 {
+                        info |= 1 << 13;
+                    }
+                    if selector & 1024 != 0 {
+                        info |= 1 << 17;
+                    }
+                    if selector & 2048 != 0 {
+                        info |= 1 << 18;
+                    }
+                    if selector & 4096 != 0 {
+                        info |= 1 << 19;
+                    }
+                    self.push(info);
                 }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
@@ -1656,8 +1722,8 @@ impl ExecContext {
                     } else {
                         count
                     };
-                    // C: P = ppem*64 - delta_base, range offset by opcode
-                    let base_ppem = self.ppem * 64;
+                    // C: P = ppem - delta_base, range offset by opcode.
+                    let base_ppem = self.ppem;
                     let p = base_ppem
                         - self.gs.delta_base as i32
                         - match opcode {
@@ -1674,7 +1740,7 @@ impl ExecContext {
                         }
                     } else {
                         let ppem_bits = p << 4; // P << 4 for matching
-                        let f = 1i32 << (6 - self.gs.delta_shift as i32); // F scale
+                        let f = delta_step(self.gs.delta_shift);
                         for _ in 0..nump {
                             let b = self.pop()?; // delta + ppem bits
                             let a = self.pop()? as usize; // point index
@@ -1686,7 +1752,7 @@ impl ExecContext {
                                 d *= f;
                                 let (dx, dy) = self.gs.move_along_free(d);
                                 let (cx, cy) = zone.cur(a);
-                                zone.set_cur(a, cx + dx, cy + dy);
+                                self.set_glyph_cur(zone, a, cx + dx, cy + dy);
                                 self.touch_point(zone, a);
                             }
                         }
@@ -1700,7 +1766,7 @@ impl ExecContext {
                     } else {
                         count
                     };
-                    let base_ppem = self.ppem * 64;
+                    let base_ppem = self.ppem;
                     let p = base_ppem
                         - self.gs.delta_base as i32
                         - match opcode {
@@ -1715,7 +1781,7 @@ impl ExecContext {
                         }
                     } else {
                         let ppem_bits = p << 4;
-                        let f = 1i32 << (6 - self.gs.delta_shift as i32);
+                        let f = delta_step(self.gs.delta_shift);
                         for _ in 0..nump {
                             let b = self.pop()?;
                             let a = self.pop()? as usize;
@@ -1787,12 +1853,12 @@ impl ExecContext {
                 // ── ODD (0x56) — Is Odd ────────────────────────────
                 0x56 => {
                     let a = self.pop()?;
-                    self.push(if a & 1 != 0 { a } else { 0 });
+                    self.push(if self.gs.round(a) & 64 != 0 { 1 } else { 0 });
                 }
                 // ── EVEN (0x57) — Is Even ──────────────────────────
                 0x57 => {
                     let a = self.pop()?;
-                    self.push(if a & 1 == 0 { a } else { 0 });
+                    self.push(if self.gs.round(a) & 64 == 0 { 1 } else { 0 });
                 }
                 // ── EIF (0x59) — End If ──────────────────────────
                 0x59 => {}
@@ -1844,13 +1910,31 @@ impl ExecContext {
                 // ── SCANTYPE (0x8D) — Set Scan Type ──────────────
                 // C: Ins_SCANTYPE. Pops value, sets GS.scan_type.
                 0x8D => {
-                    self.gs.scan_type = self.pop()? as u8;
+                    let v = self.pop()?;
+                    if v >= 0 {
+                        self.gs.scan_type = v as u8;
+                    }
                 }
                 // ── INSTCTRL (0x8E) — Set Instruction Control ────
                 // C: Ins_INSTCTRL. Pops selector,value. Sets instruct_control.
                 0x8E => {
-                    let _val = self.pop()?;
-                    let _sel = self.pop()?;
+                    let value = self.pop()?;
+                    let selector = self.pop()?;
+                    if !(1..=3).contains(&selector) {
+                        continue;
+                    }
+
+                    let flag = 1u8 << (selector - 1);
+                    if value != 0 && value != flag as i32 {
+                        continue;
+                    }
+
+                    if self.cur_range == 0 {
+                        self.gs.instruct_control &= !flag;
+                        self.gs.instruct_control |= value as u8;
+                    } else if self.cur_range == 2 && selector == 3 {
+                        self.backward_compatibility = ((value as u8) & 4) ^ 4;
+                    }
                 }
                 // ── ADJUST (0x90-0x92) — GX adjustment ───────────
                 // C: Ins_UNKNOWN. GX/MIRP variations. Pop N args.

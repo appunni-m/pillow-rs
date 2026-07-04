@@ -7,7 +7,7 @@
 use crate::casts::i32_from_f32;
 
 use crate::error::FontError;
-use crate::fixed::ft_mul_fix;
+use crate::fixed::{ft_mul_div, ft_mul_fix};
 use crate::outline::{Outline, OutlinePoint};
 use crate::tables::FontData;
 use crate::tt::glyf::{load_glyph, load_glyph_with_scaled_component_offsets, GlyphOutline};
@@ -88,6 +88,16 @@ pub struct ScaledGlyph {
     pub cbox_y_min: i32,
     pub cbox_x_max: i32,
     pub cbox_y_max: i32,
+    /// Raw `FT_Outline_Get_CBox` result before bitmap-origin translation.
+    pub outline_cbox_x_min: i32,
+    pub outline_cbox_y_min: i32,
+    pub outline_cbox_x_max: i32,
+    pub outline_cbox_y_max: i32,
+    /// Exact `FT_Outline_Get_BBox` result before bitmap-origin translation.
+    pub outline_bbox_x_min: i32,
+    pub outline_bbox_y_min: i32,
+    pub outline_bbox_x_max: i32,
+    pub outline_bbox_y_max: i32,
     /// Pixel CBox (FT_GLYPH_BBOX_PIXELS): x/yMin floored, x/yMax ceiled.
     pub bbox_x_min: i32,
     pub bbox_y_min: i32,
@@ -349,6 +359,14 @@ fn scale_glyph_impl(
             cbox_y_min: 0,
             cbox_x_max: 0,
             cbox_y_max: 0,
+            outline_cbox_x_min: 0,
+            outline_cbox_y_min: 0,
+            outline_cbox_x_max: 0,
+            outline_cbox_y_max: 0,
+            outline_bbox_x_min: 0,
+            outline_bbox_y_min: 0,
+            outline_bbox_x_max: 0,
+            outline_bbox_y_max: 0,
             bbox_x_min: 0,
             bbox_y_min: 0,
             bbox_x_max: 0,
@@ -356,9 +374,21 @@ fn scale_glyph_impl(
         });
     }
 
+    let fallback_metrics =
+        if latin_metrics.is_none() && allow_bytecode && should_use_default_autohint(data) {
+            let globals = crate::autohint::globals::FaceGlobals::new(
+                std::sync::Arc::new(data.clone()),
+                style.is_italic,
+            );
+            globals.get_metrics(glyph_index)
+        } else {
+            None
+        };
+    let hint_metrics = latin_metrics.or(fallback_metrics.as_ref());
+
     // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
     // vertical scale (x-height optimization) from latin_metrics if available.
-    let y_adj = latin_metrics
+    let y_adj = hint_metrics
         .and_then(|m| {
             let s = m.axis[1].scale;
             if s != 0 {
@@ -411,9 +441,10 @@ fn scale_glyph_impl(
         is_composite: outline_raw.is_composite,
         sub_lsb: outline_raw.sub_lsb,
         instructions: outline_raw.instructions.clone(),
+        components: Vec::new(),
     };
 
-    let use_autohint = latin_metrics.is_some();
+    let use_autohint = hint_metrics.is_some();
     let no_hinting_scaled = if !use_autohint && !allow_bytecode && outline_raw.is_composite {
         Some(crate::tt::glyf::load_glyph_scaled_no_hinting(
             &data.glyf_data,
@@ -435,25 +466,31 @@ fn scale_glyph_impl(
     } else {
         0
     };
-    let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
-    for (index, p) in outline_raw.points.iter().enumerate() {
-        let scaled_point = no_hinting_scaled
-            .as_ref()
-            .and_then(|outline| outline.points.get(index));
-        let x = if let Some(point) = scaled_point {
-            point.x
-        } else if use_autohint {
-            scale.scale_x(p.x - pp1x_fu)
+    let mut scaled: Vec<OutlinePoint> =
+        if outline_raw.is_composite && !use_autohint && allow_bytecode {
+            scale_composite_components(data, &outline_raw, style.is_italic, &scale)?
         } else {
-            scale.scale_x(p.x)
+            let mut scaled = Vec::with_capacity(outline_raw.points.len());
+            for (index, p) in outline_raw.points.iter().enumerate() {
+                let scaled_point = no_hinting_scaled
+                    .as_ref()
+                    .and_then(|outline| outline.points.get(index));
+                let x = if let Some(point) = scaled_point {
+                    point.x
+                } else if use_autohint {
+                    scale.scale_x(p.x - pp1x_fu)
+                } else {
+                    scale.scale_x(p.x)
+                };
+                let y = scaled_point.map_or_else(|| ft_mul_fix(p.y, y_adj), |point| point.y);
+                scaled.push(OutlinePoint {
+                    x: x - no_hinting_origin_shift_x,
+                    y,
+                    on_curve: p.on_curve,
+                });
+            }
+            scaled
         };
-        let y = scaled_point.map_or_else(|| ft_mul_fix(p.y, y_adj), |point| point.y);
-        scaled.push(OutlinePoint {
-            x: x - no_hinting_origin_shift_x,
-            y,
-            on_curve: p.on_curve,
-        });
-    }
 
     // ── Hinting dispatch ────────────────────────────────────────────────
     if use_autohint {
@@ -462,7 +499,7 @@ fn scale_glyph_impl(
             &shifted_raw,
             &scale,
             glyph_index,
-            latin_metrics,
+            hint_metrics,
             style,
             data,
             HintTarget {
@@ -501,6 +538,8 @@ fn scale_glyph_impl(
                 &outline_raw.end_pts_of_contours,
                 advance_width,
                 h_metric.advance_width as i32,
+                scale.scale_x(pp1x_fu),
+                pp1x_fu,
                 cvt,
                 fpgm,
                 prep,
@@ -529,6 +568,14 @@ fn scale_glyph_impl(
         x_max = x_max.max(p.x);
         y_max = y_max.max(p.y);
     }
+    let outline_cbox = BBox {
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    };
+    let outline_bbox =
+        outline_exact_bbox(&scaled, &outline_raw.end_pts_of_contours).unwrap_or(outline_cbox);
 
     // FT_GLYPH_BBOX_PIXELS: floor the min, ceil the max (FT_PIX_FLOOR/CEIL on 26.6),
     // then convert to integer pixels.
@@ -571,11 +618,217 @@ fn scale_glyph_impl(
         cbox_y_min: y_min,
         cbox_x_max: x_max,
         cbox_y_max: y_max,
+        outline_cbox_x_min: outline_cbox.x_min,
+        outline_cbox_y_min: outline_cbox.y_min,
+        outline_cbox_x_max: outline_cbox.x_max,
+        outline_cbox_y_max: outline_cbox.y_max,
+        outline_bbox_x_min: outline_bbox.x_min,
+        outline_bbox_y_min: outline_bbox.y_min,
+        outline_bbox_x_max: outline_bbox.x_max,
+        outline_bbox_y_max: outline_bbox.y_max,
         bbox_x_min: px_x_min,
         bbox_y_min: px_y_min,
         bbox_x_max: px_x_max,
         bbox_y_max: px_y_max,
     })
+}
+
+fn should_use_default_autohint(data: &FontData) -> bool {
+    let has_font_program = data.fpgm.as_ref().is_some_and(|fpgm| !fpgm.is_empty());
+    let prep_len = data.prep.as_ref().map_or(0, Vec::len);
+
+    !has_font_program && prep_len <= 7 && !data.loca_data.is_empty()
+}
+
+fn scale_composite_components(
+    data: &FontData,
+    outline_raw: &GlyphOutline,
+    is_italic: bool,
+    scale: &ScaleMetrics,
+) -> Result<Vec<OutlinePoint>, FontError> {
+    let mut points = Vec::with_capacity(outline_raw.points.len());
+    for comp in &outline_raw.components {
+        let sub = scale_glyph_impl(
+            data,
+            comp.glyph_index,
+            None,
+            HintStyle {
+                is_italic,
+                no_horizontal_hinting: false,
+                stem_adjust: true,
+            },
+            true,
+            false,
+            false,
+            false,
+        )?;
+        let off_x = ft_pix_floor(sub.outline_cbox_x_min);
+        let off_y = ft_pix_floor(sub.outline_cbox_y_min);
+        let dx = if comp.args_are_xy {
+            scale.scale_x(comp.arg1)
+        } else {
+            0
+        };
+        let dy = if comp.args_are_xy {
+            let scaled = scale.scale_y(comp.arg2);
+            if comp.round_xy_to_grid {
+                ft_pix_round(scaled)
+            } else {
+                scaled
+            }
+        } else {
+            0
+        };
+        for point in &sub.outline.points {
+            let x = point.x + off_x;
+            let y = point.y + off_y;
+            points.push(OutlinePoint {
+                x: ft_mul_fix(x, comp.transform.xx) + ft_mul_fix(y, comp.transform.xy) + dx,
+                y: ft_mul_fix(x, comp.transform.yx) + ft_mul_fix(y, comp.transform.yy) + dy,
+                on_curve: point.on_curve,
+            });
+        }
+    }
+    Ok(points)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BBox {
+    x_min: i32,
+    y_min: i32,
+    x_max: i32,
+    y_max: i32,
+}
+
+fn update_bbox_point(bbox: &mut BBox, point: OutlinePoint) {
+    bbox.x_min = bbox.x_min.min(point.x);
+    bbox.y_min = bbox.y_min.min(point.y);
+    bbox.x_max = bbox.x_max.max(point.x);
+    bbox.y_max = bbox.y_max.max(point.y);
+}
+
+fn outline_exact_bbox(points: &[OutlinePoint], contours: &[u16]) -> Option<BBox> {
+    if points.is_empty() || contours.is_empty() {
+        return Some(BBox {
+            x_min: 0,
+            y_min: 0,
+            x_max: 0,
+            y_max: 0,
+        });
+    }
+
+    let mut cbox = BBox {
+        x_min: i32::MAX,
+        y_min: i32::MAX,
+        x_max: i32::MIN + 1,
+        y_max: i32::MIN + 1,
+    };
+    let mut bbox = cbox;
+    for &point in points {
+        update_bbox_point(&mut cbox, point);
+        if point.on_curve {
+            update_bbox_point(&mut bbox, point);
+        }
+    }
+
+    if cbox.x_min >= bbox.x_min
+        && cbox.x_max <= bbox.x_max
+        && cbox.y_min >= bbox.y_min
+        && cbox.y_max <= bbox.y_max
+    {
+        return Some(bbox);
+    }
+
+    decompose_bbox(points, contours, bbox)
+}
+
+fn decompose_bbox(points: &[OutlinePoint], contours: &[u16], mut bbox: BBox) -> Option<BBox> {
+    let mut first = 0usize;
+    for &last_u16 in contours {
+        let last = last_u16 as usize;
+        if last < first || last >= points.len() {
+            return None;
+        }
+
+        let mut start = points[first];
+        let last_point = points[last];
+        let mut point_index = first as isize;
+        let mut limit = last;
+
+        if !start.on_curve {
+            if last_point.on_curve {
+                start = last_point;
+                limit = limit.saturating_sub(1);
+            } else {
+                start = OutlinePoint {
+                    x: (start.x + last_point.x) / 2,
+                    y: (start.y + last_point.y) / 2,
+                    on_curve: true,
+                };
+            }
+            point_index = first as isize - 1;
+        }
+
+        update_bbox_point(&mut bbox, start);
+        let mut last_emitted = start;
+
+        while point_index < limit as isize {
+            point_index += 1;
+            let point = points[point_index as usize];
+            if point.on_curve {
+                last_emitted = point;
+                continue;
+            }
+
+            let mut control = point;
+            loop {
+                if point_index < limit as isize {
+                    point_index += 1;
+                    let next = points[point_index as usize];
+                    if next.on_curve {
+                        bbox_conic_to(last_emitted, control, next, &mut bbox);
+                        last_emitted = next;
+                        break;
+                    }
+
+                    let middle = OutlinePoint {
+                        x: (control.x + next.x) / 2,
+                        y: (control.y + next.y) / 2,
+                        on_curve: true,
+                    };
+                    bbox_conic_to(last_emitted, control, middle, &mut bbox);
+                    last_emitted = middle;
+                    control = next;
+                } else {
+                    bbox_conic_to(last_emitted, control, start, &mut bbox);
+                    last_emitted = start;
+                    break;
+                }
+            }
+        }
+
+        first = last + 1;
+    }
+
+    Some(bbox)
+}
+
+fn bbox_conic_to(from: OutlinePoint, control: OutlinePoint, to: OutlinePoint, bbox: &mut BBox) {
+    update_bbox_point(bbox, to);
+    if control.x < bbox.x_min || control.x > bbox.x_max {
+        bbox_conic_check(from.x, control.x, to.x, &mut bbox.x_min, &mut bbox.x_max);
+    }
+    if control.y < bbox.y_min || control.y > bbox.y_max {
+        bbox_conic_check(from.y, control.y, to.y, &mut bbox.y_min, &mut bbox.y_max);
+    }
+}
+
+fn bbox_conic_check(y1: i32, y2: i32, y3: i32, min: &mut i32, max: &mut i32) {
+    let y1 = y1 - y2;
+    let y3 = y3 - y2;
+    let y = y2 + ft_mul_div(y1, y3, y1 + y3);
+    *min = (*min).min(y);
+    *max = (*max).max(y);
 }
 
 /// `FT_PIX_ROUND(x)` on a 26.6 value → rounded pixel (in 26.6, subpixel cleared).
