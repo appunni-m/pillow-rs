@@ -28,6 +28,15 @@ const MAX_FUNCTIONS: usize = 256;
 /// Maximum instruction definitions (IDEF).
 const MAX_INSTRUCTION_DEFS: usize = 256;
 
+#[inline]
+fn delta_step(delta_shift: u32) -> i32 {
+    if delta_shift <= 6 {
+        1i32 << (6 - delta_shift)
+    } else {
+        0
+    }
+}
+
 /// A code range (pointer into a bytecode stream).
 #[derive(Debug, Clone, Default)]
 pub struct CodeRange {
@@ -1135,10 +1144,10 @@ impl ExecContext {
                 // ── IUP — Interpolate Untouched Points ────────────
                 // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
                 0x30 => {
-                    iup::iup_x(zone);
+                    iup::iup_y(zone);
                 }
                 0x31 => {
-                    iup::iup_y(zone);
+                    iup::iup_x(zone);
                 }
 
                 // ── Control flow ──────────────────────────────────
@@ -1606,8 +1615,8 @@ impl ExecContext {
                     } else {
                         count
                     };
-                    // C: P = ppem*64 - delta_base, range offset by opcode
-                    let base_ppem = self.ppem * 64;
+                    // C: P = ppem - delta_base, range offset by opcode.
+                    let base_ppem = self.ppem;
                     let p = base_ppem
                         - self.gs.delta_base as i32
                         - match opcode {
@@ -1624,7 +1633,7 @@ impl ExecContext {
                         }
                     } else {
                         let ppem_bits = p << 4; // P << 4 for matching
-                        let f = 1i32 << (6 - self.gs.delta_shift as i32); // F scale
+                        let f = delta_step(self.gs.delta_shift);
                         for _ in 0..nump {
                             let b = self.pop()?; // delta + ppem bits
                             let a = self.pop()? as usize; // point index
@@ -1650,7 +1659,7 @@ impl ExecContext {
                     } else {
                         count
                     };
-                    let base_ppem = self.ppem * 64;
+                    let base_ppem = self.ppem;
                     let p = base_ppem
                         - self.gs.delta_base as i32
                         - match opcode {
@@ -1665,7 +1674,7 @@ impl ExecContext {
                         }
                     } else {
                         let ppem_bits = p << 4;
-                        let f = 1i32 << (6 - self.gs.delta_shift as i32);
+                        let f = delta_step(self.gs.delta_shift);
                         for _ in 0..nump {
                             let b = self.pop()?;
                             let a = self.pop()? as usize;
@@ -1737,12 +1746,12 @@ impl ExecContext {
                 // ── ODD (0x56) — Is Odd ────────────────────────────
                 0x56 => {
                     let a = self.pop()?;
-                    self.push(if a & 1 != 0 { a } else { 0 });
+                    self.push(if self.gs.round(a) & 64 != 0 { 1 } else { 0 });
                 }
                 // ── EVEN (0x57) — Is Even ──────────────────────────
                 0x57 => {
                     let a = self.pop()?;
-                    self.push(if a & 1 == 0 { a } else { 0 });
+                    self.push(if self.gs.round(a) & 64 == 0 { 1 } else { 0 });
                 }
                 // ── EIF (0x59) — End If ──────────────────────────
                 0x59 => {}

@@ -26,6 +26,7 @@ const WE_HAVE_A_SCALE: u16 = 0x0008;
 const MORE_COMPONENTS: u16 = 0x0020;
 const WE_HAVE_AN_X_Y_SCALE: u16 = 0x0040;
 const WE_HAVE_A_TWO_BY_TWO: u16 = 0x0080;
+const WE_HAVE_INSTRUCTIONS: u16 = 0x0100;
 
 /// A single decoded outline point in font design units.
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +52,7 @@ pub struct GlyphOutline {
     pub is_composite: bool,
     pub sub_lsb: i32,
     /// TrueType bytecode instructions for this glyph (from glyf table).
-    /// Only populated for simple glyphs; empty for composites and empty glyphs.
+    /// Empty for glyphs with no instructions.
     pub instructions: Vec<u8>,
     /// Component records for composite glyphs. Empty for simple glyphs.
     pub components: Vec<CompositeComponent>,
@@ -172,7 +173,7 @@ fn load_glyph_inner(
         // and last_sub_lsb from the final recursive sub-glyph, then
         // compute pp1.x = xmin - sub_lsb in scaler.rs — exactly
         // matching C's accidental-but-intentional behavior.
-        let components = parse_composite_components(bytes, 10)?;
+        let (components, instructions) = parse_composite_components(bytes, 10)?;
         let mut points: Vec<OutlinePoint> = Vec::new();
         let mut end_pts: Vec<u16> = Vec::new();
         let mut num_contours_total = 0u16;
@@ -212,7 +213,7 @@ fn load_glyph_inner(
             ymax,
             is_composite: true,
             sub_lsb: last_sub_lsb,
-            instructions: Vec::new(),
+            instructions,
             components,
         })
     }
@@ -366,8 +367,9 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
 fn parse_composite_components(
     data: &[u8],
     mut pos: usize,
-) -> Result<Vec<CompositeComponent>, FontError> {
+) -> Result<(Vec<CompositeComponent>, Vec<u8>), FontError> {
     let mut components = Vec::new();
+    let mut last_flags;
     loop {
         if pos + 4 > data.len() {
             return Err(FontError::InvalidOutline(
@@ -375,6 +377,7 @@ fn parse_composite_components(
             ));
         }
         let flags = u16::from_be_bytes([data[pos], data[pos + 1]]);
+        last_flags = flags;
         let glyph_index = u16::from_be_bytes([data[pos + 2], data[pos + 3]]);
         pos += 4;
 
@@ -444,7 +447,26 @@ fn parse_composite_components(
             break;
         }
     }
-    Ok(components)
+
+    let instructions = if last_flags & WE_HAVE_INSTRUCTIONS != 0 {
+        if pos + 2 > data.len() {
+            return Err(FontError::InvalidOutline(
+                "glyf: composite instruction length overflow".into(),
+            ));
+        }
+        let len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
+        pos += 2;
+        if pos + len > data.len() {
+            return Err(FontError::InvalidOutline(
+                "glyf: composite instruction overflow".into(),
+            ));
+        }
+        data[pos..pos + len].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    Ok((components, instructions))
 }
 
 // Unused-warning suppressor for the unused `GlyphLocation` import path.

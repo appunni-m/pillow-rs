@@ -1,6 +1,8 @@
 //! IUP — Interpolate Untouched Points.
 //! ✅ VERIFIED against FreeType Ins_IUP (ttinterp.c:6189-6750).
 //! Per-contour, orus-based ratio, single-touch shift, multi-touch interp.
+use crate::fixed::{ft_div_fix, ft_mul_fix};
+
 use super::zone::GlyphZone;
 
 pub fn iup_x(zone: &mut GlyphZone) {
@@ -66,9 +68,9 @@ fn iup_impl(zone: &mut GlyphZone, do_x: bool) {
         if ct == ft {
             let delta = cur_arr[ft].wrapping_sub(org_arr[ft]);
             if delta != 0 {
-                for i in fp..ep {
+                for (i, cur) in cur_arr.iter_mut().enumerate().take(ep).skip(fp) {
                     if i != ft {
-                        cur_arr[i] = org_arr[i].wrapping_add(delta);
+                        *cur = cur.wrapping_add(delta);
                     }
                 }
             }
@@ -112,8 +114,7 @@ fn seg(cur: &mut [i32], org: &[i32], orus: &[i32], a: usize, b: usize, r1: usize
             };
         }
     } else {
-        let dc = c2.wrapping_sub(c1);
-        let do_ = o2.wrapping_sub(o1);
+        let scale = ft_div_fix(c2.wrapping_sub(c1), o2.wrapping_sub(o1));
         for i in a..=b {
             let x = org[i];
             if x <= g1 {
@@ -121,14 +122,7 @@ fn seg(cur: &mut [i32], org: &[i32], orus: &[i32], a: usize, b: usize, r1: usize
             } else if x >= g2 {
                 cur[i] = x.wrapping_add(d2);
             } else {
-                let v = orus[i];
-                let f = if do_ != 0 {
-                    ((v.wrapping_sub(o1) as i64 * dc as i64 + (do_ as i64 >> 1)) / do_ as i64)
-                        as i32
-                } else {
-                    0
-                };
-                cur[i] = c1.wrapping_add(f);
+                cur[i] = c1.wrapping_add(ft_mul_fix(orus[i].wrapping_sub(o1), scale));
             }
         }
     }
