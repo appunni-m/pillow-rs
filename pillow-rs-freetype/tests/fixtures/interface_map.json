@@ -256,7 +256,7 @@
       "owner": "glyph",
       "parity": {
         "family": "native_tt_default",
-        "passing": 3176,
+        "passing": 7640,
         "total": 7640
       },
       "symbols": {
@@ -283,7 +283,7 @@
       "owner": "glyph",
       "parity": {
         "family": "native_tt_default",
-        "passing": 3176,
+        "passing": 7640,
         "total": 7640
       },
       "symbols": {
@@ -515,7 +515,7 @@
       "owner": "hinting",
       "parity": {
         "family": "native_tt_default",
-        "passing": 3176,
+        "passing": 7640,
         "total": 7640
       },
       "symbols": {}
