@@ -1,0 +1,632 @@
+{
+  "version": "6.0.0",
+  "fixture_family": "render_lcd",
+  "generator": "scripts/build_ft_fixture.py + scripts/gen_ft_refs.c",
+  "source": "vendored FreeType C",
+  "font_source": "fonts_autohint",
+  "load_flags": [
+    "FT_LOAD_TARGET_LCD"
+  ],
+  "render_mode": "FT_RENDER_MODE_LCD",
+  "assert_pixel_parity": false,
+  "rows": [
+    {
+      "id": "DejaVuSans-ExtraLight_10_33_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 33,
+      "glyph_index": 4,
+      "char": "!",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 128,
+        "height": 512,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 512,
+        "hori_advance": 256,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 7,
+          "y_max": 8
+        }
+      },
+      "bitmap": {
+        "width": 6,
+        "rows": 8,
+        "pitch": 8,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 1,
+        "top": 8
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 8
+      },
+      "raw_pixels": "0011232311000000003c78783c000000003c78783c000000003b77773b0000000033666633000000001832321a000000000000000000000000254b4b25000000",
+      "ref_sha256": "721764e4347bf7606de998c30a9cb5eb39eafcc618306b6e5ab9581c9fd686d3",
+      "ref_size": [
+        6,
+        8
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_10_33_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": 0,
+        "x_max": 7,
+        "y_max": 8
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_65_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 65,
+      "glyph_index": 36,
+      "char": "A",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 448,
+        "height": 512,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 512,
+        "hori_advance": 448,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": -1,
+          "y_min": 0,
+          "x_max": 23,
+          "y_max": 8
+        }
+      },
+      "bitmap": {
+        "width": 24,
+        "rows": 8,
+        "pitch": 24,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": -1,
+        "top": 8
+      },
+      "bitmap_placement": {
+        "left": -1,
+        "top": 8
+      },
+      "raw_pixels": "000000000000000000000017313821070000000000000000000000000000000000023a7aa5b887590f00000000000000000000000000000005487e7b39226e876618000000000000000000000000000a5180752f0000176888711f0000000000000000000000125d806e2200000000115d89782c00000000000000000018699ba5786868686868687198ad833a01000000000000236f8460140000000000000000064b89884405000000002f7783540c00000000000000000000033d838c520b",
+      "ref_sha256": "2a9243d2cd7c7e1d78aa65028f5d4e7ecd3a341a8db35f3e202d8e1ee2ae81ba",
+      "ref_size": [
+        24,
+        8
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_10_65_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": -1,
+        "y_min": 0,
+        "x_max": 23,
+        "y_max": 8
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_103_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 103,
+      "glyph_index": 74,
+      "char": "g",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 384,
+        "height": 576,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 384,
+        "hori_advance": 384,
+        "vert_bearing_x": -192,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": -3,
+          "x_max": 18,
+          "y_max": 6
+        }
+      },
+      "bitmap": {
+        "width": 18,
+        "rows": 9,
+        "pitch": 20,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 0,
+        "top": 6
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 6
+      },
+      "raw_pixels": "0000000112355869696a66502a2836361a0000000000216783682206000005204e8eab7d38000000001a6c73590700000000000003528a8638000000002572734d0000000000000000467e7e380000000007497872300100000000002673aa84380000000000011f4d747a6f6969686b506c7b72340000000000000000000000000000000a5971661800000000000e375a6b5f555357626a7764401100000000000000000002060c0e0a04000000000000000000",
+      "ref_sha256": "344241ee3f4b68639971acc41365c1a1468c79a917c1fa737f1612552ba0f5bf",
+      "ref_size": [
+        18,
+        9
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_10_103_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 0,
+        "y_min": -3,
+        "x_max": 18,
+        "y_max": 6
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_109_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 109,
+      "glyph_index": 80,
+      "char": "m",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 512,
+        "height": 384,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 384,
+        "hori_advance": 640,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 128,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 27,
+          "y_max": 6
+        }
+      },
+      "bitmap": {
+        "width": 27,
+        "rows": 6,
+        "pitch": 28,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 0,
+        "top": 6
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 6
+      },
+      "raw_pixels": "0000163434272a4d666867695c3a160115365967676766512d0c00000000307ba89552260900000435779a9a6c48170400000c4f786c29000000307e805002000000000003558683300000000000001d6f6f5100000030707040000000000000005070702000000000000018707058000000307070400000000000000050707020000000000000187070580000003070704000000000000000507070200000000000001870705800",
+      "ref_sha256": "736ccf321daccd8ed4b9680b97b356be26e6ea4039fd2840bdb9e1f2d3996bbd",
+      "ref_size": [
+        27,
+        6
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_10_109_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 0,
+        "y_min": 0,
+        "x_max": 27,
+        "y_max": 6
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_33_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 33,
+      "glyph_index": 4,
+      "char": "!",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 128,
+        "height": 960,
+        "hori_bearing_x": 192,
+        "hori_bearing_y": 960,
+        "hori_advance": 512,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 3,
+          "y_min": 0,
+          "x_max": 9,
+          "y_max": 15
+        }
+      },
+      "bitmap": {
+        "width": 6,
+        "rows": 15,
+        "pitch": 8,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 3,
+        "top": 15
+      },
+      "bitmap_placement": {
+        "left": 3,
+        "top": 15
+      },
+      "raw_pixels": "14457578471700002478ccd07c2800002478ccd07c2800002478ccd07c2800002478ccd07c2800002478ccd07c2800002377cbcf7b2700001a6ec2c5711d00000b5fb3b6620e00000050a2a35301000000142a2a1500000000000000000000000000000000000000091e33341f0a00002478ccd07c280000",
+      "ref_sha256": "06d825cf443bcecb2302cc7b7b0a1c4000c95055c745d1af89490e4e9e17a624",
+      "ref_size": [
+        6,
+        15
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_20_33_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 3,
+        "y_min": 0,
+        "x_max": 9,
+        "y_max": 15
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_65_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 65,
+      "glyph_index": 36,
+      "char": "A",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 896,
+        "height": 960,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 960,
+        "hori_advance": 896,
+        "vert_bearing_x": -448,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 42,
+          "y_max": 15
+        }
+      },
+      "bitmap": {
+        "width": 42,
+        "rows": 15,
+        "pitch": 44,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 0,
+        "top": 15
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 15
+      },
+      "raw_pixels": "0000000000000000000000000000000001295c8b948150200000000000000000000000000000000000000000000000000000000000000000000000044296e4dddde2d8852d000000000000000000000000000000000000000000000000000000000000000000084fa3e7b15d357bcfe38f3b030000000000000000000000000000000000000000000000000000000000000e59b1e7a74f0a001d6fc3e89d4905000000000000000000000000000000000000000000000000000000001767bbe49a46040000001463bbedab530b00000000000000000000000000000000000000000000000000001e74c8df8c380200000000000d5bafeeb561130000000000000000000000000000000000000000000000002a7ed5d6822b0000000000000000094fa3edc36f1a00000000000000000000000000000000000000000001388cdcc975220000000000000000000004439be9d1792500000000000000000000000000000000000000044199e4bf6718000000000000000000000000013b8fe1da87330000000000000000000000000000000000094fa3f0dca9736464646464646464646464646464648bbff4e5953d0300000000000000000000000000000e5db1e9c1906c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c74a5d6ed9f4b080000000000000000000000001666bee79e4606000000000000000000000000000000000000001a6bbff1ad590c000000000000000000002174c8e1913d02000000000000000000000000000000000000000000115eb6f2bb631400000000000000002982d5db84300000000000000000000000000000000000000000000000000a55a9f0c5711e000000000002378be0d07c24000000000000000000000000000000000000000000000000000007489cecd27f2700000000",
+      "ref_sha256": "c4949cf505a64987914c0368faff924eb777d567df4610976de89618f2d6350c",
+      "ref_size": [
+        42,
+        15
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_20_65_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 0,
+        "y_min": 0,
+        "x_max": 42,
+        "y_max": 15
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_103_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 103,
+      "glyph_index": 74,
+      "char": "g",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 640,
+        "height": 1088,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 768,
+        "hori_advance": 768,
+        "vert_bearing_x": -320,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": -5,
+          "x_max": 31,
+          "y_max": 12
+        }
+      },
+      "bitmap": {
+        "width": 30,
+        "rows": 17,
+        "pitch": 32,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 1,
+        "top": 12
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 12
+      },
+      "raw_pixels": "00000000000000000000030e1b272b281e10060000000000000000000000000000000000000b3166a0c9dbd2bfafa7a7adbcc6bf9f66300b2170bfb7691a00000000001b5eb2dec07c351001000000000000000d2f71a398798eccc4701c000000023a92dec36b1c00000000000000000000000000001660adebf5c4701c0000003286dcbc681100000000000000000000000000000000095db1fbc4701c00000357abe4913d0000000000000000000000000000000000003286dac4701c00000c60b4db8733000000000000000000000000000000000000277bcfc4701c00000252a6e79642000000000000000000000000000000000000388ce0c4701c000000267ad2c9751d00000000000000000000000000000000146abefec4701c00000000277dcfd6863305000000000000000000000000022974addae4c4701c00000000000b3d8ad3d7ab663312030000000002102e5e9aa77b567fccc36f1b000000000000000115396c9abcd0d8d6d4d4d3d0c0a3733a13012c80d4b8641000000000000000000000000000000000000000000000000000004195de9f4b0200000000000000000000000000000000000000000000000000257dcdbd6515000000000000182f3a220c010000000000000000000006163b76b7cd99470d000000000000002761a3c8d3d2c6baafa59fa1a9b2becdd4caac814d1f060000000000000000000000000000030910161c2123221c110701000000000000000000000000",
+      "ref_sha256": "7956b386f8a92f61820b442811e6cd1edae72aef6675298f433cecb8548a531a",
+      "ref_size": [
+        30,
+        17
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_20_103_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": -5,
+        "x_max": 31,
+        "y_max": 12
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_109_render_lcd_getmask",
+      "fixture_family": "render_lcd",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_TARGET_LCD"
+      ],
+      "load_flags_value": 196608,
+      "render_mode": "FT_RENDER_MODE_LCD",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 109,
+      "glyph_index": 80,
+      "char": "m",
+      "operation": "getmask",
+      "status": "active",
+      "metrics": {
+        "width": 1024,
+        "height": 768,
+        "hori_bearing_x": 128,
+        "hori_bearing_y": 768,
+        "hori_advance": 1216,
+        "vert_bearing_x": -512,
+        "vert_bearing_y": 256,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "outline_bbox_26_6": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 0,
+          "y_max": 0
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 52,
+          "y_max": 12
+        }
+      },
+      "bitmap": {
+        "width": 51,
+        "rows": 12,
+        "pitch": 52,
+        "pixel_mode": 5,
+        "num_grays": 256,
+        "left": 1,
+        "top": 12
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 12
+      },
+      "raw_pixels": "00000000000000000000000000040b1721292a2314080100000000000000000000000108121d272923140701000000000000000000000f61b0ca78290f386fa3c6d1cdbfb1a5a5b0c7d2c89b551f0200000523548cb8cbcdc2b5a8a4abbed5d1af6c320d0000000000001068bcd9a59cb2b9884d220900000000000000134699d7bd692b509ab8975c2b0e01000000000000092d79c7d78c3501000000001068bcffeeac5911000000000000000000000000002a82d5e8e1ac6f1f000000000000000000000000000e64b8d9832f000000001068bcf7a652060000000000000000000000000000045cb0ffbe6a160000000000000000000000000000003f93e4a450000000001068bcde86320000000000000000000000000000000051a5ef9e4a000000000000000000000000000000003589ddaf5b070000001068bcd8802c0000000000000000000000000000000050a4e89844000000000000000000000000000000003488dcb05c080000001068bcd8802c0000000000000000000000000000000050a4e89844000000000000000000000000000000003488dcb05c080000001068bcd8802c0000000000000000000000000000000050a4e89844000000000000000000000000000000003488dcb05c080000001068bcd8802c0000000000000000000000000000000050a4e89844000000000000000000000000000000003488dcb05c080000001068bcd8802c0000000000000000000000000000000050a4e89844000000000000000000000000000000003488dcb05c080000001068bcd8802c0000000000000000000000000000000050a4e89844000000000000000000000000000000003488dcb05c0800",
+      "ref_sha256": "de1fbf49346aea6d96038f866d4e20657ac39be914ed08d55d9dea084cd1744d",
+      "ref_size": [
+        51,
+        12
+      ],
+      "ref_raw": "outputs/raws_render_lcd/DejaVuSans-ExtraLight_20_109_render_lcd_getmask.bin",
+      "ref_value": {
+        "x_min": 1,
+        "y_min": 0,
+        "x_max": 52,
+        "y_max": 12
+      },
+      "script": "latn"
+    }
+  ],
+  "summary": {
+    "total_rows": 8,
+    "active_rows": 8,
+    "fonts": 1,
+    "sizes": [
+      10,
+      20
+    ],
+    "glyphs": 4
+  }
+}

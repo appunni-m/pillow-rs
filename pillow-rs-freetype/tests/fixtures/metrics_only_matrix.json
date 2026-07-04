@@ -1,0 +1,656 @@
+{
+  "version": "6.0.0",
+  "fixture_family": "metrics_only",
+  "generator": "scripts/build_ft_fixture.py + scripts/gen_ft_refs.c",
+  "source": "vendored FreeType C",
+  "font_source": "fonts_autohint",
+  "load_flags": [
+    "FT_LOAD_DEFAULT"
+  ],
+  "render_mode": "none",
+  "assert_pixel_parity": false,
+  "rows": [
+    {
+      "id": "DejaVuSans-ExtraLight_10_33_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 33,
+      "glyph_index": 4,
+      "char": "!",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 128,
+        "height": 512,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 512,
+        "hori_advance": 256,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 113,
+          "y_min": 0,
+          "x_max": 143,
+          "y_max": 467
+        },
+        "outline_bbox_26_6": {
+          "x_min": 113,
+          "y_min": 0,
+          "x_max": 143,
+          "y_max": 467
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 3,
+          "y_max": 8
+        }
+      },
+      "bitmap": {
+        "width": 2,
+        "rows": 8,
+        "pitch": 2,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 1,
+        "top": 8
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 8
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        2,
+        8
+      ],
+      "ref_value": {
+        "width": 128,
+        "height": 512,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 512,
+        "hori_advance": 256,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_65_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 65,
+      "glyph_index": 36,
+      "char": "A",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 448,
+        "height": 512,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 512,
+        "hori_advance": 448,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 19,
+          "y_min": 0,
+          "x_max": 417,
+          "y_max": 467
+        },
+        "outline_bbox_26_6": {
+          "x_min": 19,
+          "y_min": 0,
+          "x_max": 417,
+          "y_max": 467
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 7,
+          "y_max": 8
+        }
+      },
+      "bitmap": {
+        "width": 7,
+        "rows": 8,
+        "pitch": 7,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 0,
+        "top": 8
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 8
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        7,
+        8
+      ],
+      "ref_value": {
+        "width": 448,
+        "height": 512,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 512,
+        "hori_advance": 448,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_103_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 103,
+      "glyph_index": 74,
+      "char": "g",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 384,
+        "height": 576,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 384,
+        "hori_advance": 384,
+        "vert_bearing_x": -192,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 52,
+          "y_min": -133,
+          "x_max": 334,
+          "y_max": 358
+        },
+        "outline_bbox_26_6": {
+          "x_min": 52,
+          "y_min": -133,
+          "x_max": 334,
+          "y_max": 358
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": -3,
+          "x_max": 6,
+          "y_max": 6
+        }
+      },
+      "bitmap": {
+        "width": 6,
+        "rows": 9,
+        "pitch": 6,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 0,
+        "top": 6
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 6
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        6,
+        9
+      ],
+      "ref_value": {
+        "width": 384,
+        "height": 576,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 384,
+        "hori_advance": 384,
+        "vert_bearing_x": -192,
+        "vert_bearing_y": 64,
+        "vert_advance": 640
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_10_109_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 10,
+      "codepoint": 109,
+      "glyph_index": 80,
+      "char": "m",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 512,
+        "height": 384,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 384,
+        "hori_advance": 640,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 128,
+        "vert_advance": 640
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 73,
+          "y_min": 0,
+          "x_max": 555,
+          "y_max": 358
+        },
+        "outline_bbox_26_6": {
+          "x_min": 73,
+          "y_min": 0,
+          "x_max": 555,
+          "y_max": 358
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": 0,
+          "x_max": 9,
+          "y_max": 6
+        }
+      },
+      "bitmap": {
+        "width": 8,
+        "rows": 6,
+        "pitch": 8,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 1,
+        "top": 6
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 6
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        8,
+        6
+      ],
+      "ref_value": {
+        "width": 512,
+        "height": 384,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 384,
+        "hori_advance": 640,
+        "vert_bearing_x": -256,
+        "vert_bearing_y": 128,
+        "vert_advance": 640
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_33_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 33,
+      "glyph_index": 4,
+      "char": "!",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 128,
+        "height": 960,
+        "hori_bearing_x": 192,
+        "hori_bearing_y": 960,
+        "hori_advance": 512,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 226,
+          "y_min": 0,
+          "x_max": 287,
+          "y_max": 933
+        },
+        "outline_bbox_26_6": {
+          "x_min": 226,
+          "y_min": 0,
+          "x_max": 287,
+          "y_max": 933
+        },
+        "bitmap_pixels": {
+          "x_min": 3,
+          "y_min": 0,
+          "x_max": 5,
+          "y_max": 15
+        }
+      },
+      "bitmap": {
+        "width": 2,
+        "rows": 15,
+        "pitch": 2,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 3,
+        "top": 15
+      },
+      "bitmap_placement": {
+        "left": 3,
+        "top": 15
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        2,
+        15
+      ],
+      "ref_value": {
+        "width": 128,
+        "height": 960,
+        "hori_bearing_x": 192,
+        "hori_bearing_y": 960,
+        "hori_advance": 512,
+        "vert_bearing_x": -64,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_65_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 65,
+      "glyph_index": 36,
+      "char": "A",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 896,
+        "height": 960,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 960,
+        "hori_advance": 896,
+        "vert_bearing_x": -448,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 38,
+          "y_min": 0,
+          "x_max": 833,
+          "y_max": 933
+        },
+        "outline_bbox_26_6": {
+          "x_min": 38,
+          "y_min": 0,
+          "x_max": 833,
+          "y_max": 933
+        },
+        "bitmap_pixels": {
+          "x_min": 0,
+          "y_min": 0,
+          "x_max": 14,
+          "y_max": 15
+        }
+      },
+      "bitmap": {
+        "width": 14,
+        "rows": 15,
+        "pitch": 14,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 0,
+        "top": 15
+      },
+      "bitmap_placement": {
+        "left": 0,
+        "top": 15
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        14,
+        15
+      ],
+      "ref_value": {
+        "width": 896,
+        "height": 960,
+        "hori_bearing_x": 0,
+        "hori_bearing_y": 960,
+        "hori_advance": 896,
+        "vert_bearing_x": -448,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_103_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 103,
+      "glyph_index": 74,
+      "char": "g",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 640,
+        "height": 1088,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 768,
+        "hori_advance": 768,
+        "vert_bearing_x": -320,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 103,
+          "y_min": -266,
+          "x_max": 668,
+          "y_max": 717
+        },
+        "outline_bbox_26_6": {
+          "x_min": 103,
+          "y_min": -266,
+          "x_max": 668,
+          "y_max": 717
+        },
+        "bitmap_pixels": {
+          "x_min": 1,
+          "y_min": -5,
+          "x_max": 11,
+          "y_max": 12
+        }
+      },
+      "bitmap": {
+        "width": 10,
+        "rows": 17,
+        "pitch": 10,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 1,
+        "top": 12
+      },
+      "bitmap_placement": {
+        "left": 1,
+        "top": 12
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        10,
+        17
+      ],
+      "ref_value": {
+        "width": 640,
+        "height": 1088,
+        "hori_bearing_x": 64,
+        "hori_bearing_y": 768,
+        "hori_advance": 768,
+        "vert_bearing_x": -320,
+        "vert_bearing_y": 128,
+        "vert_advance": 1280
+      },
+      "script": "latn"
+    },
+    {
+      "id": "DejaVuSans-ExtraLight_20_109_metrics_only_metrics_only",
+      "fixture_family": "metrics_only",
+      "generator": "scripts/gen_ft_refs.c",
+      "freetype_version": "2.14.3",
+      "load_flags": [
+        "FT_LOAD_DEFAULT"
+      ],
+      "load_flags_value": 0,
+      "render_mode": "none",
+      "font": "DejaVuSans-ExtraLight",
+      "font_file": "DejaVuSans-ExtraLight.ttf",
+      "size_pt": 20,
+      "codepoint": 109,
+      "glyph_index": 80,
+      "char": "m",
+      "operation": "metrics_only",
+      "status": "active",
+      "metrics": {
+        "width": 1024,
+        "height": 768,
+        "hori_bearing_x": 128,
+        "hori_bearing_y": 768,
+        "hori_advance": 1216,
+        "vert_bearing_x": -512,
+        "vert_bearing_y": 256,
+        "vert_advance": 1280
+      },
+      "bbox": {
+        "outline_cbox_26_6": {
+          "x_min": 145,
+          "y_min": 0,
+          "x_max": 1111,
+          "y_max": 717
+        },
+        "outline_bbox_26_6": {
+          "x_min": 145,
+          "y_min": 0,
+          "x_max": 1111,
+          "y_max": 717
+        },
+        "bitmap_pixels": {
+          "x_min": 2,
+          "y_min": 0,
+          "x_max": 18,
+          "y_max": 12
+        }
+      },
+      "bitmap": {
+        "width": 16,
+        "rows": 12,
+        "pitch": 16,
+        "pixel_mode": 2,
+        "num_grays": 256,
+        "left": 2,
+        "top": 12
+      },
+      "bitmap_placement": {
+        "left": 2,
+        "top": 12
+      },
+      "raw_pixels": "",
+      "ref_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ref_size": [
+        16,
+        12
+      ],
+      "ref_value": {
+        "width": 1024,
+        "height": 768,
+        "hori_bearing_x": 128,
+        "hori_bearing_y": 768,
+        "hori_advance": 1216,
+        "vert_bearing_x": -512,
+        "vert_bearing_y": 256,
+        "vert_advance": 1280
+      },
+      "script": "latn"
+    }
+  ],
+  "summary": {
+    "total_rows": 8,
+    "active_rows": 8,
+    "fonts": 1,
+    "sizes": [
+      10,
+      20
+    ],
+    "glyphs": 4
+  }
+}
