@@ -1337,16 +1337,17 @@ impl ExecContext {
 
                 // ── ALIGNPTS (0x27) — Align points ──────────
                 0x27 => {
-                    let p = self.pop()? as usize;
-                    let q = self.pop()? as usize;
-                    // Move p relative to q along projection vector
-                    let (qx, qy) = zone.cur(q);
-                    let (porg_x, porg_y) = zone.org(p);
-                    let (qorg_x, qorg_y) = zone.org(q);
-                    let dist = self.gs.project(porg_x - qorg_x, porg_y - qorg_y);
-                    let (dx, dy) = self.gs.move_along_free(dist);
-                    self.set_glyph_cur(zone, p, qx + dx, qy + dy);
-                    self.touch_point(zone, p);
+                    let p1 = self.pop()? as usize;
+                    let p2 = self.pop()? as usize;
+                    let (p1x, p1y) = self.cur_in(zone, self.gs.zp1, p1);
+                    let (p2x, p2y) = self.cur_in(zone, self.gs.zp0, p2);
+                    let distance = self.gs.project(p1x - p2x, p1y - p2y) / 2;
+                    let (dx1, dy1) = self.gs.move_along_free(distance);
+                    let (dx2, dy2) = self.gs.move_along_free(-distance);
+                    self.set_cur_in(zone, self.gs.zp1, p1, p1x + dx1, p1y + dy1);
+                    self.set_cur_in(zone, self.gs.zp0, p2, p2x + dx2, p2y + dy2);
+                    self.touch_in(zone, self.gs.zp1, p1);
+                    self.touch_in(zone, self.gs.zp0, p2);
                 }
                 // ── CINDEX (0x25) — Copy indexed element ─────────
                 0x25 => {
@@ -1716,8 +1717,8 @@ impl ExecContext {
                 0x86 | 0x87 => {
                     let p_top = self.pop()? as usize;
                     let p_deeper = self.pop()? as usize;
-                    let (x1, y1) = self.org_in(zone, self.gs.zp2, p_deeper);
-                    let (x2, y2) = self.org_in(zone, self.gs.zp1, p_top);
+                    let (x1, y1) = zone.org(p_deeper);
+                    let (x2, y2) = zone.org(p_top);
                     if let Some(vector) =
                         Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
                     {
@@ -1773,8 +1774,13 @@ impl ExecContext {
                                 d *= f;
                                 let (dx, dy) = self.gs.move_along_free(d);
                                 let (cx, cy) = zone.cur(a);
-                                self.set_glyph_cur(zone, a, cx + dx, cy + dy);
-                                self.touch_point(zone, a);
+                                if self.backward_compatibility == 0
+                                    || (self.backward_compatibility != 0x7
+                                        && (zone.tag(a) & 0x02) != 0)
+                                {
+                                    self.set_glyph_cur(zone, a, cx + dx, cy + dy);
+                                    self.touch_point(zone, a);
+                                }
                             }
                         }
                     }
@@ -1873,15 +1879,13 @@ impl ExecContext {
                 0x4F => {}
                 // ── ODD (0x56) — Is Odd ────────────────────────────
                 0x56 => {
-                    let value = self.pop()?;
-                    let rounded = self.gs.round(value);
-                    self.push(if ((rounded >> 6) & 1) != 0 { 1 } else { 0 });
+                    let a = self.pop()?;
+                    self.push(if (self.gs.round(a) & 64) == 64 { 1 } else { 0 });
                 }
                 // ── EVEN (0x57) — Is Even ──────────────────────────
                 0x57 => {
-                    let value = self.pop()?;
-                    let rounded = self.gs.round(value);
-                    self.push(if ((rounded >> 6) & 1) == 0 { 1 } else { 0 });
+                    let a = self.pop()?;
+                    self.push(if (self.gs.round(a) & 64) == 0 { 1 } else { 0 });
                 }
                 // ── EIF (0x59) — End If ──────────────────────────
                 0x59 => {}
