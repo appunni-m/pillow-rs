@@ -1,27 +1,41 @@
-//! Build script for pillow-rs-freetype.
-//!
-//! This crate is a **pure-Rust port** of FreeType 2.14.3. The vendored C
-//! source in `freetype/` is used only as a read-only algorithmic reference
-//! while porting — it is **never compiled or linked**.
+#![allow(missing_docs)]
 
-const EXPECTED_TAG: &str = "VER-2-14-3";
+use std::env;
+use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
-    let freetype_root = std::path::Path::new(&manifest_dir).join("freetype");
+    println!("cargo:rerun-if-changed=src/native_ft.c");
 
-    println!("cargo:rerun-if-changed=build.rs");
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set"));
+    let obj = out_dir.join("native_ft.o");
+    let lib = out_dir.join("libnative_ft.a");
 
-    if !freetype_root.join("src").exists() {
-        println!("cargo:warning=pillow-rs-freetype: FreeType reference source not found.");
-        println!("cargo:warning=  Clone for cross-checking during porting:");
-        println!("cargo:warning=    git clone --depth 1 --branch {EXPECTED_TAG} https://github.com/freetype/freetype.git pillow-rs-freetype/freetype/");
-        return;
+    let cflags = Command::new("pkg-config")
+        .args(["--cflags", "freetype2"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_else(|| "-I/usr/include/freetype2".to_string());
+
+    let mut cc = Command::new("cc");
+    cc.arg("-c").arg("src/native_ft.c").arg("-o").arg(&obj);
+    for flag in cflags.split_whitespace() {
+        cc.arg(flag);
     }
+    let status = cc.status().expect("compile native_ft.c");
+    assert!(status.success(), "failed to compile native_ft.c");
 
-    println!("cargo:rustc-env=FREETYPE_REF_TAG={EXPECTED_TAG}");
-    println!(
-        "cargo:rustc-env=FREETYPE_REF_PATH={}",
-        freetype_root.display()
-    );
+    let status = Command::new("ar")
+        .arg("crs")
+        .arg(&lib)
+        .arg(&obj)
+        .status()
+        .expect("archive native_ft.o");
+    assert!(status.success(), "failed to archive native_ft.o");
+
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static=native_ft");
+    println!("cargo:rustc-link-lib=freetype");
 }
