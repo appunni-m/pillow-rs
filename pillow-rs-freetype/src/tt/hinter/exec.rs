@@ -977,20 +977,34 @@ impl ExecContext {
                 }
 
                 // ── MD — Measure Distance ────────────────────────
-                // MD[0] uses current positions; MD[1] uses original positions.
+                // MD[a] measures zp0(args[0]) - zp1(args[1]).
+                // C: Ins_MD in ttinterp.c:4400-4458.  The original-outline
+                // case uses unscaled ORUS coordinates plus size scaling, not
+                // the already-scaled org array.
                 0x49 | 0x4A => {
-                    let p1 = self.pop()? as usize;
-                    let p2 = self.pop()? as usize;
-                    let (x1, y1, x2, y2) = if opcode == 0x4A {
-                        let (x1, y1) = self.org_in(zone, self.gs.zp0, p1);
-                        let (x2, y2) = self.org_in(zone, self.gs.zp1, p2);
-                        (x1, y1, x2, y2)
+                    let k = self.pop()? as usize;
+                    let l = self.pop()? as usize;
+                    let distance = if opcode & 1 != 0 {
+                        let (x1, y1) = self.cur_in(zone, self.gs.zp0, l);
+                        let (x2, y2) = self.cur_in(zone, self.gs.zp1, k);
+                        self.gs.project(x1 - x2, y1 - y2)
+                    } else if self.gs.zp0 == 0 || self.gs.zp1 == 0 {
+                        let (x1, y1) = self.org_in(zone, self.gs.zp0, l);
+                        let (x2, y2) = self.org_in(zone, self.gs.zp1, k);
+                        self.gs.dual_project(x1 - x2, y1 - y2)
+                    } else if self.x_scale == self.y_scale {
+                        let (x1, y1) = self.orus_in(zone, self.gs.zp0, l);
+                        let (x2, y2) = self.orus_in(zone, self.gs.zp1, k);
+                        ft_mul_fix(self.gs.dual_project(x1 - x2, y1 - y2), self.x_scale)
                     } else {
-                        let (x1, y1) = self.cur_in(zone, self.gs.zp0, p1);
-                        let (x2, y2) = self.cur_in(zone, self.gs.zp1, p2);
-                        (x1, y1, x2, y2)
+                        let (x1, y1) = self.orus_in(zone, self.gs.zp0, l);
+                        let (x2, y2) = self.orus_in(zone, self.gs.zp1, k);
+                        self.gs.dual_project(
+                            ft_mul_fix(x1 - x2, self.x_scale),
+                            ft_mul_fix(y1 - y2, self.y_scale),
+                        )
                     };
-                    self.push(self.gs.project(x1 - x2, y1 - y2));
+                    self.push(distance);
                 }
 
                 // ── GC — Get Coordinate ──────────────────────────
