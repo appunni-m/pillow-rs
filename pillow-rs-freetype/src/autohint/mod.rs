@@ -26,6 +26,13 @@
 //! | Italic | 20 FU | NO_HORIZONTAL (skips X-axis) |
 //!
 //! Reference: `freetype/src/autofit/` (VER-2-14-1).
+//!
+//! ## Lint rationale
+//!
+//! All arithmetic in this module is 26.6 fixed-point or font-unit math
+//! ported from C, where 2's-complement overflow is the intended semantics.
+//! Replacing with wrapping_add() would obfuscate the C parity comparison.
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod types;
 pub mod coverage;

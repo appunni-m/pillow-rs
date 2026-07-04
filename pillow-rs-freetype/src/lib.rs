@@ -24,19 +24,10 @@
 
 #![forbid(unsafe_code)]
 #![allow(missing_docs)]
-// 26.6 fixed-point arithmetic uses infallible cast wrappers from casts.rs.
-// The single remaining allow (arithmetic_side_effects) covers 579 sites
-// of i32 +/×/- operations inherent to the 26.6 domain. See casts.rs for why
-// wrapping_add/saturating_add are incorrect alternatives.
-#![allow(
-    clippy::arithmetic_side_effects,
-    clippy::if_same_then_else
-)]
+// 26.6 fixed-point math uses portable wrapping helpers (wrapping.rs) and
+// module-level allows for verified C ports (autohint, grays, scaler, tt, font).
 // sha2/serde/serde_json are dev-deps used by the coverage test.
 #![cfg_attr(test, allow(unused_crate_dependencies))]
-// Internal helpers exercised by integration tests (coverage_matrix_tests.rs)
-// trigger dead_code. Remove once they have dedicated unit tests.
-#![allow(dead_code)]
 
 pub mod autohint;
 pub mod casts;
@@ -48,6 +39,7 @@ pub mod outline;
 pub mod scaler;
 pub mod tables;
 pub mod tt;
+pub mod wrapping;
 
 pub use error::FontError;
 pub use font::{BitmapBackend, Font, GlyphMask};

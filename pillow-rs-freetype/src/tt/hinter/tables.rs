@@ -56,12 +56,13 @@ pub fn parse_prep(data: &[u8]) -> Vec<u8> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parse_cvt_empty() {
-        let cvt = parse_cvt(&[]).unwrap();
+        let cvt = parse_cvt(&[]).expect("empty CVT");
         assert!(cvt.is_empty());
     }
 
@@ -69,7 +70,7 @@ mod tests {
     fn test_parse_cvt_single() {
         // Single FWORD value: 0x0135 = 309 FU → 309 * 64 = 19776 (26.6)
         let data = [0x01u8, 0x35];
-        let cvt = parse_cvt(&data).unwrap();
+        let cvt = parse_cvt(&data).expect("single FWORD");
         assert_eq!(cvt.len(), 1);
         assert_eq!(cvt[0], 309 * 64);
     }
@@ -78,7 +79,7 @@ mod tests {
     fn test_parse_cvt_negative() {
         // Negative FWORD: 0xFF9C = -100 FU → -100 * 64 = -6400
         let data = [0xFFu8, 0x9C];
-        let cvt = parse_cvt(&data).unwrap();
+        let cvt = parse_cvt(&data).expect("negative FWORD");
         assert_eq!(cvt[0], -100 * 64);
     }
 
@@ -86,7 +87,7 @@ mod tests {
     fn test_parse_cvt_multiple() {
         // Two entries: 0x0064 (100) and 0xFFCE (-50)
         let data = [0x00, 0x64, 0xFF, 0xCE];
-        let cvt = parse_cvt(&data).unwrap();
+        let cvt = parse_cvt(&data).expect("multiple FWORDs");
         assert_eq!(cvt.len(), 2);
         assert_eq!(cvt[0], 100 * 64);
         assert_eq!(cvt[1], -50 * 64);

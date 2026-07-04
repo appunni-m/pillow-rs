@@ -14,6 +14,12 @@
 //! Debug: `FT2_DEBUG="any:7" /tmp/gen_refs_v4` for C grays traces.
 //!
 //! Reference: `freetype/src/smooth/ftgrays.c` (lines ~329–2043).
+//!
+//! ## Lint rationale
+//!
+//! All arithmetic in this module is subpixel DDA math ported from C's
+//! `FT_INT64` path, where 2's-complement overflow is the intended semantics.
+#![allow(clippy::arithmetic_side_effects)]
 
 use crate::casts::{i32_from_i64, i32_from_u64, i32_from_usize, u32_from_i32, u64_from_i64, u8_from_i32, usize_from_i32, usize_from_i64};
 use crate::error::FontError;
@@ -46,6 +52,7 @@ fn add_int(a: i32, b: i32) -> i32 {
 #[inline]
 /// Euclidean division: quotient floored, remainder >= 0.
 /// Used by `render_scanline` for DDA step distribution.
+#[allow(dead_code)] // only exercised via integration tests
 fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
     let mut quotient = i32_from_i64(dividend / divisor);
     let mut remainder = i32_from_i64(dividend % divisor);
@@ -257,6 +264,7 @@ impl Worker {
 
     // ── gray_render_scanline (ftgrays.c:639) ──────────────────────────────
     #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code)] // only exercised via integration tests
     fn render_scanline(&mut self, ey: i32, x1: i64, y1: i32, x2: i64, y2: i32) {
         let mut ex1 = trunc(x1);
         let ex2 = trunc(x2);

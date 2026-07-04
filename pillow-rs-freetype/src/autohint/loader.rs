@@ -254,9 +254,9 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
         let out_dir = hints.points[i].out_dir;
         let flags = hints.points[i].flags;
 
-        let is_weak = if flags & AF_FLAG_CONTROL != 0 {
-            true
-        } else if in_dir == out_dir && in_dir != Direction::None {
+        let is_weak = if flags & AF_FLAG_CONTROL != 0
+            || (in_dir == out_dir && in_dir != Direction::None)
+        {
             true
         } else if in_dir == out_dir {
             // Both-None: C ONLY calls corner_is_flat (afhints.c:1276-1290).
@@ -271,18 +271,15 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
             let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
             let out_y = hints.points[nu].fy as i32 - pt.fy as i32;
-            if corner_is_flat(in_x, in_y, out_x, out_y) {
+            let flat = corner_is_flat(in_x, in_y, out_x, out_y);
+            if flat {
                 // C (afhints.c:1286-1287): update index deltas
                 hints.points[pv].u = i32_from_usize(nu) - i32_from_usize(pv);
                 hints.points[nu].v = -(hints.points[pv].u);
-                true
-            } else {
-                false
             }
-        } else if in_dir == out_dir.opposite() {
-            true
+            flat
         } else {
-            false
+            in_dir == out_dir.opposite()
         };
 
         if is_weak {

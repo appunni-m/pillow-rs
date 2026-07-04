@@ -87,6 +87,14 @@ pub(crate) fn u16_from_u32(x: u32) -> u16 {
     { x as u16 }
 }
 
+/// Infallible: usize → u16. Max glyph count < u16::MAX for any font.
+#[inline(always)]
+pub(crate) fn u16_from_usize(x: usize) -> u16 {
+    debug_assert!(x <= u16::MAX as usize);
+    #[allow(clippy::cast_possible_truncation)]
+    { x as u16 }
+}
+
 /// Infallible: i32 → u32. Values guaranteed non-negative (glyph indices).
 #[inline(always)]
 pub(crate) fn u32_from_i32(x: i32) -> u32 {

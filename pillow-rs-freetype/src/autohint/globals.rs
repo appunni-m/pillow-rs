@@ -36,6 +36,7 @@ use super::globals_data::{
 use super::blue_strings::{BlueStringEntry, SCRIPT_TABLE, SCRIPT_LATN};
 use super::types::AfLatinMetrics;
 use super::latin::{metrics_init_blues_impl, metrics_init_widths};
+use crate::casts::u16_from_usize;
 use crate::tt::cmap::CmapTable;
 use crate::tables::FontData;
 
@@ -67,6 +68,7 @@ impl FaceGlobals {
     /// Create FaceGlobals and run the coverage scan over all 52+ scripts.
     pub fn new(font_data: std::sync::Arc<FontData>, is_italic: bool) -> Self {
         let ng = font_data.maxp.num_glyphs as usize;
+        let glyph_count = u16_from_usize(ng);
         let num_styles = STYLE_TABLE.len();
 
         // Build non-base glyph table (Latin diacritics etc.)
@@ -94,7 +96,7 @@ impl FaceGlobals {
         let metrics_cache = std::rc::Rc::new(RefCell::new(vec![None; num_styles]));
 
         // Run coverage scan
-        compute_style_coverage(&font_data.cmap, ng as u16, &mut glyph_styles);
+        compute_style_coverage(&font_data.cmap, glyph_count, &mut glyph_styles);
 
         // Per-script non-base ranges: C checks glyph_styles[gi] & AF_NONBASE
         // during coverage. Each style's non_base_ranges (RANGES_*_NONBASE
@@ -114,7 +116,7 @@ impl FaceGlobals {
         }
 
         FaceGlobals {
-            glyph_count: ng as u16,
+            glyph_count,
             glyph_styles,
             non_base_glyphs: std::rc::Rc::new(non_base),
             metrics_cache,

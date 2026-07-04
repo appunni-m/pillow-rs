@@ -303,7 +303,7 @@ impl ExecContext {
             org_x: vec![0i32; n_twilight], org_y: vec![0i32; n_twilight],
             orus_x: vec![0i32; n_twilight], orus_y: vec![0i32; n_twilight],
             tags: vec![0u8; n_twilight], contours: vec![],
-            n_points: n_twilight as u16, n_contours: 0, first_point: 0,
+            n_points: crate::casts::u16_from_usize(n_twilight), n_contours: 0, first_point: 0,
         };
 
         // Set up prep as a glyph program
@@ -701,9 +701,10 @@ impl ExecContext {
                     // CVT cut-in: C compares |org_dist - cvt_dist|, not |org_dist - rnd_cvt|
                     let dist = if (org_dist - cvt_dist).abs() < self.gs.cvt_cut_in {
                         cvt_dist
+                    } else if (opcode & 0x04) != 0 {
+                        self.gs.round(org_dist)
                     } else {
-                        let rnd_org = if (opcode & 0x04) != 0 { self.gs.round(org_dist) } else { org_dist };
-                        rnd_org
+                        org_dist
                     };
 
                     // Minimum distance (flag bit 3)
@@ -954,7 +955,7 @@ impl ExecContext {
                     let dy = y2 - y1;
                     // Project (dx,dy) onto freedom vector as 2.14 fixed
                     if dx == 0 && dy == 0 {} else {
-                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
+                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt().round() as i64;
                         if len > 0 {
                             self.gs.freedom_vector = (
                                 ((dx as i64 * 0x4000 / len) as i32),
@@ -1071,7 +1072,7 @@ impl ExecContext {
                         }
                     }
                 }
-                0x73 | 0x74 | 0x75 => {
+                0x73..=0x75 => {
                     // DELTAC: Adjust CVT values by delta
                     let count = self.pop()?;
                     let nump = if count < 0 || count > self.stack.len() as i32 / 2 {

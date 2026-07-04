@@ -2,6 +2,12 @@
 //!
 //! Mirrors the subset of PIL's `FreeTypeFont` API used by the coverage matrix:
 //! `truetype`, `getmask`, `getbbox`, `getmetrics`, `getname`, `getlength`.
+//!
+//! ## Lint rationale
+//!
+//! Pixel-to-26.6 math using C-ported FT_MulFix/FT_PIX_CEIL rounding.
+//! Wrapping arithmetic matches FreeType's 2's-complement semantics.
+#![allow(clippy::arithmetic_side_effects)]
 
 use crate::casts::{i32_from_f32, i32_from_usize, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
 

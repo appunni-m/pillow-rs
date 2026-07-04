@@ -867,12 +867,9 @@ fn reverse_cmap_lookup(font_data: &crate::tables::FontData, glyph_index: u16) ->
     // In production, this would use the real reverse charmap from
     // af_reverse_character_map_new. For our parity tests, we just
     // check the cmap for all known adjustment codepoints.
-    for &(cp, _) in ADJUSTMENT_DATABASE {
-        if font_data.cmap.char_index(cp).unwrap_or(0) == glyph_index {
-            return Some(cp);
-        }
-    }
-    None
+    ADJUSTMENT_DATABASE.iter()
+        .find(|&&(cp, _)| font_data.cmap.char_index(cp).unwrap_or(0) == glyph_index)
+        .map(|&(cp, _)| cp)
 }
 
 /// Binary search the adjustment database for a codepoint.
@@ -895,8 +892,7 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
     // C uses reverse_charmap + af_adjustment_database_lookup.
     // We replicate via direct cmap scan on known adjustment codepoints.
     let adj_type = reverse_cmap_lookup(font_data, glyph_index)
-        .map(|cp| adjustment_database_lookup(cp))
-        .unwrap_or(0);
+        .map_or(0, adjustment_database_lookup);
 
     if adj_type == 0 { return; }
 
@@ -1032,7 +1028,7 @@ pub fn apply_hints(
     // Our pipeline with blue_count==0 produces different results than
     // C's NONE_DFLT path. Match C by skipping hinting entirely when
     // the VERT axis has no blue zones.
-    if metrics.map_or(true, |m| m.axis[1].blue_count == 0) {
+    if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
         return;
     }
     // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
@@ -1211,8 +1207,8 @@ pub fn apply_hints(
             trace!(target: "autohint::pipeline", "[PIPE] HS{si}: p{}..p{} dir={:?} pos={}",
                 s.first, s.last, s.dir, s.pos);
         }
-        let el_horz = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
-        let el_vert = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Vert as usize].extra_light);
+        let el_horz = hints.metrics.as_ref().is_some_and(|m| m.axis[Dimension::Horz as usize].extra_light);
+        let el_vert = hints.metrics.as_ref().is_some_and(|m| m.axis[Dimension::Vert as usize].extra_light);
         trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light_h={el_horz} extra_light_v={el_vert}", ha.edges.len());
         for (ei, e) in ha.edges.iter().enumerate() {
             trace!(target: "autohint::pipeline", "[PIPE] HE{ei}: fpos={} opos={} pos={} link={} serif={}",
@@ -1683,7 +1679,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     // For top_to_bottom scripts (Indic/Mongolian), sort descending.
     if axis.edges.len() > 1 {
         let top_to_bottom = hints.metrics.as_ref()
-            .map_or(false, |m| m.top_to_bottom_hinting) && dim == Dimension::Vert;
+            .is_some_and(|m| m.top_to_bottom_hinting) && dim == Dimension::Vert;
         let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
         if top_to_bottom {
             indices.sort_by(|&a, &b| axis.edges[b].fpos.cmp(&axis.edges[a].fpos));
@@ -1799,8 +1795,10 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 /// Unlinked segments with serif-candidates get serif pointers instead.
 ///
 /// # Debug: stem pairs differ from C
+///
 /// - [ ] Distance demerit scoring same as C?
 /// - [ ] Serif candidate detection: `seg.serif` pointer matches C?
+///
 /// Public wrapper: links segments using default width/demerit scoring.
 /// Used by CJK stem width detection in cjk.rs.
 pub fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
@@ -2005,8 +2003,8 @@ fn align_linked_edge(
 // Port of `af_latin_align_serif_edge` (aflatin.c:4189–4197).
 // Preserves serif offset relative to the base edge.
 
-// ✅ TRIVIAL
-/// Snap serif edge to same position as its linked stem edge.
+// Port of af_latin_align_serif_edge (aflatin.c:4189). Kept for future use.
+#[allow(dead_code)]
 fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
     serif.pos = base.pos + (serif.opos - base.opos);
 }
@@ -2260,7 +2258,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     //    Our old: applied to BOTH dims, HORZ BOUND checks collapsed stem edges in Indic
     //    Verified: C fprintf trace showing BOUND check skipped for HORZ dim
     let top_to_bottom_hinting = dim == Dimension::Vert && hints.metrics.as_ref()
-        .map_or(false, |m| m.top_to_bottom_hinting);
+        .is_some_and(|m| m.top_to_bottom_hinting);
 
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;

@@ -69,10 +69,10 @@ fn in_ranges(cp: u32, ranges: &[UniRange]) -> bool {
 /// Greek characters exist in the font. Falls back to Latin.
 pub fn script_for_codepoint(cmap: &CmapTable, cp: u32) -> &'static [BlueStringEntry] {
     // Check Greek first (FreeType scans Greek before Latin)
-    if in_ranges(cp, GRK_RANGES) {
-        if cmap.char_index('\u{0393}' as u32).unwrap_or(0) != 0 {
-            return SCRIPT_GREK;
-        }
+    if in_ranges(cp, GRK_RANGES)
+        && cmap.char_index('\u{0393}' as u32).unwrap_or(0) != 0
+    {
+        return SCRIPT_GREK;
     }
     // Check Latin via SCRIPT_TABLE (LATN is first)
     for (_tag, ch, entries) in SCRIPT_TABLE {

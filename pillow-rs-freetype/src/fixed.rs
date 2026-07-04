@@ -9,16 +9,11 @@
 /// ✅ TRIVIAL: wrapping_add matching C's 2's-complement int.
 #[inline]
 fn add_long(a: i32, b: i32) -> i32 {
-    a.wrapping_add(b)
-}
-
-/// ✅ TRIVIAL: wrapping_sub matching C's NEG_LONG.
-#[inline]
-fn neg_long(a: i32) -> i32 {
-    0i32.wrapping_sub(a)
+    wrapping::add(a, b)
 }
 
 use crate::casts::{i32_from_i64, i32_from_u64};
+use crate::wrapping;
 
 /// FT_MulDiv — ✅ VERIFIED: matches C FT_MulDiv (ftcalc.c:162, INT64 path).
 ///
@@ -27,6 +22,7 @@ use crate::casts::{i32_from_i64, i32_from_u64};
 /// Exhaustive parity: 0 diffs in 2M+ values (fixed_parity.rs).
 #[inline]
 // ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
+#[allow(clippy::arithmetic_side_effects)] // safe: c == 0 checked above, u64 div
 pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     if c == 0 {
         return 0x7FFFFFFF;
@@ -34,7 +30,7 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     let ua: u64 = (a as i64).unsigned_abs();
     let ub: u64 = (b as i64).unsigned_abs();
     let uc: u64 = (c as i64).unsigned_abs();
-    let d = (ua.wrapping_mul(ub) + (uc >> 1)) / uc;
+    let d = ua.wrapping_mul(ub).wrapping_add(uc >> 1) / uc;
     let d32 = i32_from_u64(d);
     let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
     if negate { 0i32.wrapping_sub(d32) } else { d32 }
@@ -64,6 +60,7 @@ pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
 /// Exhaustive parity: 0 diffs in 65K+ values (fixed_parity.rs).
 #[inline]
 // ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
+#[allow(clippy::arithmetic_side_effects)] // safe: b == 0 checked above, u64 div
 pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     // C's FT_DivFix (ftcalc.c:233, INT64 path) uses sign-stripping:
     //   FT_MOVE_SIGN(a) → ua, s; FT_MOVE_SIGN(b) → ub, s;
@@ -77,7 +74,7 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     }
     let ua: u64 = (a as i64).unsigned_abs();
     let ub: u64 = (b as i64).unsigned_abs();
-    let q = ((ua << 16) + (ub >> 1)) / ub;
+    let q = (ua << 16).wrapping_add(ub >> 1) / ub;
     let q32 = i32_from_u64(q);
     let negate = (a < 0) ^ (b < 0);
     if negate { 0i32.wrapping_sub(q32) } else { q32 }
@@ -88,7 +85,7 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
 /// `ADD_LONG(a, 0x8000L - (a < 0)) & ~0xFFFFL`.
 #[inline]
 pub fn ft_round_fix(a: i32) -> i32 {
-    let bias = 0x8000i32 - i32::from(a < 0);
+    let bias = wrapping::sub(0x8000i32, i32::from(a < 0));
     add_long(a, bias) & !0xFFFFi32
 }
 

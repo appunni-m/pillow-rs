@@ -3,6 +3,11 @@
 //!
 //! Reference: `src/base/ftoutln.c` (`FT_Outline_Transform` via `FT_MulFix`),
 //! `src/base/ftglyph.c` (`FT_Glyph_Get_CBox` with `FT_GLYPH_BBOX_PIXELS`).
+//!
+//! ## Lint rationale
+//!
+//! All arithmetic is 26.6 fixed-point scaling via FT_MulFix, C-ported.
+#![allow(clippy::arithmetic_side_effects)]
 
 use crate::casts::i32_from_f32;
 

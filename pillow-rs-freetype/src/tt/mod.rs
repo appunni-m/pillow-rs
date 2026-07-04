@@ -4,6 +4,12 @@
 //! `src/sfnt/ttload.c`, `src/sfnt/ttcmap.c`, and `src/truetype/ttgload.c`
 //! for the subset needed by PIL rendering (head, maxp, hhea, hmtx, cmap,
 //! name, loca, glyf, OS/2).
+//!
+//! ## Lint rationale
+//!
+//! All arithmetic is table offset/index math bounded by font file size.
+//! Valid font data never produces overflow;
+#![allow(clippy::arithmetic_side_effects)]
 
 pub mod cmap;
 pub mod glyf;
@@ -107,11 +113,6 @@ pub const fn tag(bytes: &[u8; 4]) -> u32 {
 #[inline]
 pub(crate) fn read_u16(data: &[u8], offset: usize) -> u16 {
     u16::from_be_bytes([data[offset], data[offset + 1]])
-}
-
-#[inline]
-pub(crate) fn read_i16(data: &[u8], offset: usize) -> i16 {
-    i16::from_be_bytes([data[offset], data[offset + 1]])
 }
 
 #[inline]

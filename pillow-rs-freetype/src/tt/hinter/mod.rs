@@ -9,6 +9,15 @@
 //! to match Python Pillow's pixel output (which uses FreeType's native
 //! bytecode interpreter via `FT_LOAD_DEFAULT`).
 //!
+//! ## Cast lint rationale
+//!
+//! The bytecode VM manipulates font data with known bounds (glyph indices
+//! < 65535, coordinates in font units < 32767, stack depth < 64). All
+//! `as` casts in this module are provably infallible within those bounds.
+#![allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+// 26.6 bytecode math: all arithmetic is C-ported 2's-complement.
+#![allow(clippy::arithmetic_side_effects)]
+//!
 //! ## Architecture
 //!
 //! ```text
