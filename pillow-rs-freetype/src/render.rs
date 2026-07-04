@@ -12,6 +12,7 @@ use crate::outline::Outline;
 use crate::scaler;
 
 const LCD_SUBPIXELS: [i32; 3] = [-21, 0, 21];
+const FT_PIXEL_ONE: i32 = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderMode {
@@ -86,8 +87,14 @@ impl Font {
     ) -> Result<RenderedBitmap, FontError> {
         let glyph = self.data.cmap.char_index(ch as u32).unwrap_or(0);
         let metrics_cache = self.face_globals.get_metrics(glyph);
-        let scaled =
-            scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?;
+        let scaled = match mode {
+            RenderMode::Lcd | RenderMode::LcdV => {
+                scaler::scale_glyph_lcd(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
+            }
+            RenderMode::Normal | RenderMode::Mono => {
+                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
+            }
+        };
 
         if scaled.outline.n_contours == 0 {
             return Ok(RenderedBitmap {
@@ -155,14 +162,19 @@ fn render_mono(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, 
 }
 
 fn render_lcd(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, FontError> {
-    let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min + 2);
-    let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min);
+    let box_ = lcd_pixel_box(&outline, RenderMode::Lcd);
+    let width = usize_from_i32(box_.x_max - box_.x_min);
+    let height = usize_from_i32(box_.y_max - box_.y_min);
     let row_width = width * 3;
     let pitch = pad_ceil(row_width, 4);
     let mut buffer = vec![0u8; pitch * height];
     for (channel, sub_x) in LCD_SUBPIXELS.iter().enumerate() {
         let mut shifted = outline.clone();
-        translate_outline(&mut shifted, 64 - *sub_x, 0);
+        translate_outline(
+            &mut shifted,
+            -box_.x_min * FT_PIXEL_ONE - *sub_x,
+            -box_.y_min * FT_PIXEL_ONE,
+        );
         let raster = grays::rasterize_in_box(shifted, width, height)?;
         for y in 0..height {
             let src = y * width;
@@ -177,8 +189,8 @@ fn render_lcd(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, F
         rows: u32_from_usize(height),
         pitch: i32_from_usize(pitch),
         pixel_mode: PixelMode::Lcd,
-        left: left - 1,
-        top,
+        left: left + box_.x_min,
+        top: top - outline.cbox_y_max + box_.y_max,
         buffer,
     })
 }
@@ -235,5 +247,72 @@ fn translate_outline(outline: &mut Outline, dx: i32, dy: i32) {
     for point in &mut outline.points {
         point.x += dx;
         point.y += dy;
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PixelBox {
+    x_min: i32,
+    y_min: i32,
+    x_max: i32,
+    y_max: i32,
+}
+
+fn lcd_pixel_box(outline: &Outline, mode: RenderMode) -> PixelBox {
+    let mut cbox = outline_cbox_26_6(outline);
+    let mut pbox = PixelBox {
+        x_min: cbox.x_min >> 6,
+        y_min: cbox.y_min >> 6,
+        x_max: cbox.x_max >> 6,
+        y_max: cbox.y_max >> 6,
+    };
+
+    cbox.x_min &= 63;
+    cbox.y_min &= 63;
+    cbox.x_max &= 63;
+    cbox.y_max &= 63;
+    lcd_padding(&mut cbox, mode);
+
+    pbox.x_min += cbox.x_min >> 6;
+    pbox.y_min += cbox.y_min >> 6;
+    pbox.x_max += (cbox.x_max + 63) >> 6;
+    pbox.y_max += (cbox.y_max + 63) >> 6;
+    pbox
+}
+
+fn lcd_padding(cbox: &mut PixelBox, mode: RenderMode) {
+    let min_sub = LCD_SUBPIXELS[0];
+    let max_sub = LCD_SUBPIXELS[2];
+    match mode {
+        RenderMode::Lcd => {
+            cbox.x_min -= max_sub;
+            cbox.x_max -= min_sub;
+        }
+        RenderMode::LcdV => {
+            cbox.y_min += min_sub;
+            cbox.y_max += max_sub;
+        }
+        RenderMode::Normal | RenderMode::Mono => {}
+    }
+}
+
+fn outline_cbox_26_6(outline: &Outline) -> PixelBox {
+    let mut x_min = outline.points[0].x;
+    let mut y_min = outline.points[0].y;
+    let mut x_max = outline.points[0].x;
+    let mut y_max = outline.points[0].y;
+
+    for point in &outline.points {
+        x_min = x_min.min(point.x);
+        y_min = y_min.min(point.y);
+        x_max = x_max.max(point.x);
+        y_max = y_max.max(point.y);
+    }
+
+    PixelBox {
+        x_min,
+        y_min,
+        x_max,
+        y_max,
     }
 }

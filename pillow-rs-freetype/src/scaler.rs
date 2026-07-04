@@ -89,6 +89,12 @@ pub struct ScaledGlyph {
     pub bbox_y_max: i32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct HintStyle {
+    is_italic: bool,
+    no_horizontal_hinting: bool,
+}
+
 /// Scale a glyph's outline to 26.6 and translate it so its pixel bbox's
 /// bottom-left corner sits at (0,0) — the convention `ftsmooth`/`ft_bitmap`
 /// use when rendering into a sized bitmap.
@@ -109,7 +115,20 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true)
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, false)
+}
+
+/// Scale a glyph for `FT_LOAD_TARGET_LCD`.
+///
+/// LCD target hinting keeps vertical alignment but disables horizontal
+/// grid-fitting to preserve subpixel coverage.
+pub fn scale_glyph_lcd(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, true)
 }
 
 /// Scale a glyph without autohinting or native TrueType bytecode.
@@ -120,7 +139,7 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, false)
+    scale_glyph_impl(data, glyph_index, None, is_italic, false, false)
 }
 
 fn scale_glyph_impl(
@@ -129,6 +148,7 @@ fn scale_glyph_impl(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
     allow_bytecode: bool,
+    no_horizontal_hinting: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -232,7 +252,10 @@ fn scale_glyph_impl(
             &scale,
             glyph_index,
             latin_metrics,
-            is_italic,
+            HintStyle {
+                is_italic,
+                no_horizontal_hinting,
+            },
             data,
         );
     } else if allow_bytecode {
@@ -398,7 +421,7 @@ fn autohint_glyph(
     scale: &ScaleMetrics,
     glyph_index: u16,
     metrics: Option<&crate::autohint::AfLatinMetrics>,
-    is_italic: bool,
+    style: HintStyle,
     font_data: &FontData,
 ) {
     use crate::outline::Outline;
@@ -445,7 +468,8 @@ fn autohint_glyph(
         0,
         glyph_index,
         metrics,
-        is_italic,
+        style.is_italic,
+        style.no_horizontal_hinting,
         Some(font_data),
     );
 
