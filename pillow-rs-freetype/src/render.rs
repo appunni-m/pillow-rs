@@ -2005,14 +2005,6 @@ fn translate_outline(outline: &mut Outline, dx: i32, dy: i32) {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct PixelBox {
-    x_min: i32,
-    y_min: i32,
-    x_max: i32,
-    y_max: i32,
-}
-
 fn lcd_pixel_box(outline: &Outline, mode: RenderMode) -> PixelBox {
     let mut cbox = outline_cbox_26_6(outline);
     let mut pbox = PixelBox {

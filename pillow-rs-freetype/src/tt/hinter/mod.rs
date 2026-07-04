@@ -48,6 +48,13 @@ pub struct HintScale {
     pub storage_size: usize,
 }
 
+/// Metrics side effects produced by glyph bytecode hinting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HintOutcome {
+    /// Horizontal advance derived from hinted phantom points, in 26.6 pixels.
+    pub advance_width: i32,
+}
+
 /// Entry point: run bytecode hinting on scaled 26.6 coordinates.
 ///
 /// This is called once per glyph when:
@@ -87,7 +94,7 @@ pub fn hint_glyph(
     prep: &[u8],
     scale: &HintScale,
     glyph_ins: &[u8],
-) -> Result<(), FontError> {
+) -> Result<HintOutcome, FontError> {
     // ── Build the glyph zone ──────────────────────────────────────────
     // C: ttgload.c:874-891 — adds 4 phantom points to the zone.
     // Phantom points are at indices [n_points..n_points+3], not included
@@ -189,5 +196,14 @@ pub fn hint_glyph(
         pt.y = zone.cur_y[i];
     }
 
-    Ok(())
+    let pp1 = zone.cur_x.get(n_points).copied().unwrap_or(0);
+    let pp2 = zone
+        .cur_x
+        .get(n_points + 1)
+        .copied()
+        .unwrap_or(advance_width);
+
+    Ok(HintOutcome {
+        advance_width: pp2 - pp1,
+    })
 }
