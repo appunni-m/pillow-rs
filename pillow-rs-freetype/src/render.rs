@@ -93,6 +93,17 @@ impl Font {
         };
 
         if scaled.outline.n_contours == 0 {
+            if mode == RenderMode::Mono {
+                return Ok(RenderedBitmap {
+                    width: 1,
+                    rows: 1,
+                    pitch: 2,
+                    pixel_mode: PixelMode::Mono,
+                    left: 0,
+                    top: 1,
+                    buffer: vec![0, 0],
+                });
+            }
             return Ok(RenderedBitmap {
                 width: 0,
                 rows: 0,
