@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "paths": [
+    {
+      "path": "library/lifecycle",
+      "owner": "core",
+      "symbols": {
+        "FT_Init_FreeType": { "rust": null, "status": "planned" },
+        "FT_Done_FreeType": { "rust": null, "status": "planned" },
+        "FT_Library_Version": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "face/open",
+      "owner": "core",
+      "symbols": {
+        "FT_New_Memory_Face": { "rust": "Font::truetype", "status": "partial" },
+        "FT_New_Face": { "rust": null, "status": "planned" },
+        "FT_Open_Face": { "rust": null, "status": "planned" },
+        "FT_Done_Face": { "rust": "drop Font", "status": "partial" }
+      }
+    },
+    {
+      "path": "face/metadata",
+      "owner": "core",
+      "symbols": {
+        "FT_Get_Postscript_Name": { "rust": null, "status": "planned" },
+        "FT_Get_FSType_Flags": { "rust": null, "status": "planned" },
+        "FT_Get_Font_Format": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "size/select",
+      "owner": "core",
+      "symbols": {
+        "FT_Set_Char_Size": { "rust": "Font::truetype(size_pt)", "status": "partial" },
+        "FT_Set_Pixel_Sizes": { "rust": null, "status": "planned" },
+        "FT_Select_Size": { "rust": null, "status": "planned" },
+        "FT_Activate_Size": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "charmap",
+      "owner": "core",
+      "symbols": {
+        "FT_Get_Char_Index": { "rust": "FontData::cmap.lookup", "status": "partial" },
+        "FT_Select_Charmap": { "rust": null, "status": "planned" },
+        "FT_Set_Charmap": { "rust": null, "status": "planned" },
+        "FT_Get_First_Char": { "rust": null, "status": "planned" },
+        "FT_Get_Next_Char": { "rust": null, "status": "planned" },
+        "FT_Get_Name_Index": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "glyph/load",
+      "owner": "glyph",
+      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "symbols": {
+        "FT_Load_Glyph": { "rust": "scaler::scale_glyph", "status": "partial" },
+        "FT_Load_Char": { "rust": "Font::getmask/getbbox", "status": "partial" }
+      }
+    },
+    {
+      "path": "glyph/render",
+      "owner": "glyph",
+      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "symbols": {
+        "FT_Render_Glyph": { "rust": "grays::rasterize", "status": "partial" }
+      }
+    },
+    {
+      "path": "glyph/metrics",
+      "owner": "glyph",
+      "symbols": {
+        "FT_Get_Advance": { "rust": null, "status": "planned" },
+        "FT_Get_Advances": { "rust": null, "status": "planned" },
+        "FT_Get_Kerning": { "rust": null, "status": "planned" },
+        "FT_Get_Track_Kerning": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "bitmap",
+      "owner": "raster",
+      "symbols": {
+        "FT_Bitmap_Init": { "rust": "GlyphMask", "status": "partial" },
+        "FT_Bitmap_Copy": { "rust": null, "status": "planned" },
+        "FT_Bitmap_Convert": { "rust": null, "status": "planned" },
+        "FT_Bitmap_Embolden": { "rust": null, "status": "planned" },
+        "FT_Bitmap_Done": { "rust": "drop GlyphMask", "status": "partial" }
+      }
+    },
+    {
+      "path": "outline",
+      "owner": "outline",
+      "symbols": {
+        "FT_Outline_Decompose": { "rust": "grays::rasterize outline walk", "status": "partial" },
+        "FT_Outline_Get_CBox": { "rust": "scaler::scale_glyph", "status": "partial" },
+        "FT_Outline_Get_BBox": { "rust": null, "status": "planned" },
+        "FT_Outline_Translate": { "rust": "scaler::scale_glyph", "status": "partial" },
+        "FT_Outline_Transform": { "rust": null, "status": "planned" },
+        "FT_Outline_Embolden": { "rust": null, "status": "planned" },
+        "FT_Outline_Get_Orientation": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "raster/grays",
+      "owner": "raster",
+      "parity": { "family": "force_autohint", "passing": 22168, "total": 22168 },
+      "symbols": {
+        "FT_Render_Glyph": { "rust": "grays::rasterize", "status": "partial" }
+      }
+    },
+    {
+      "path": "sfnt/tables",
+      "owner": "tables",
+      "symbols": {
+        "FT_Load_Sfnt_Table": { "rust": "tt::TableDirectory::find", "status": "partial" },
+        "FT_Sfnt_Table_Info": { "rust": null, "status": "planned" },
+        "FT_Get_Sfnt_Table": { "rust": "tt table parsers", "status": "partial" },
+        "FT_Get_CMap_Language_ID": { "rust": null, "status": "planned" },
+        "FT_Get_CMap_Format": { "rust": null, "status": "planned" }
+      }
+    },
+    {
+      "path": "truetype/bytecode",
+      "owner": "hinting",
+      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "symbols": {
+        "FT_Load_Glyph": { "rust": "tt::hinter", "status": "partial" },
+        "FT_Load_Char": { "rust": "tt::hinter", "status": "partial" }
+      }
+    },
+    {
+      "path": "math",
+      "owner": "math",
+      "symbols": {
+        "FT_MulDiv": { "rust": "fixed::ft_mul_div", "status": "complete" },
+        "FT_MulFix": { "rust": "fixed::ft_mul_fix", "status": "complete" },
+        "FT_DivFix": { "rust": "fixed::ft_div_fix", "status": "complete" },
+        "FT_RoundFix": { "rust": "fixed::ft_round_fix", "status": "complete" },
+        "FT_CeilFix": { "rust": "fixed::ft_ceil_fix", "status": "complete" },
+        "FT_FloorFix": { "rust": "fixed::ft_floor_fix", "status": "complete" }
+      }
+    }
+  ]
+}
