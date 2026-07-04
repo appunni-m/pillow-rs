@@ -1081,16 +1081,16 @@ fn compare_outline_cbox_row(font: &Font, row: &MatrixRow) -> Result<(), (Failure
     })?;
     let actual = serde_json::json!({
         "outline_cbox_26_6": {
-            "x_min": scaled.bbox_x_min * 64,
-            "y_min": scaled.bbox_y_min * 64,
-            "x_max": scaled.bbox_x_max * 64,
-            "y_max": scaled.bbox_y_max * 64,
+            "x_min": scaled.outline_cbox_x_min,
+            "y_min": scaled.outline_cbox_y_min,
+            "x_max": scaled.outline_cbox_x_max,
+            "y_max": scaled.outline_cbox_y_max,
         },
         "outline_bbox_26_6": {
-            "x_min": scaled.bbox_x_min * 64,
-            "y_min": scaled.bbox_y_min * 64,
-            "x_max": scaled.bbox_x_max * 64,
-            "y_max": scaled.bbox_y_max * 64,
+            "x_min": scaled.outline_bbox_x_min,
+            "y_min": scaled.outline_bbox_y_min,
+            "x_max": scaled.outline_bbox_x_max,
+            "y_max": scaled.outline_bbox_y_max,
         },
         "bitmap_pixels": {
             "x_min": scaled.bbox_x_min,

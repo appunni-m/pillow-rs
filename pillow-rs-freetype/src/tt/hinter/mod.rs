@@ -82,6 +82,8 @@ pub fn hint_glyph(
     contours: &[u16],
     advance_width: i32,
     raw_advance_width: i32,
+    pp1_x: i32,
+    raw_pp1_x: i32,
     cvt: &[i32],
     fpgm: &[u8],
     prep: &[u8],
@@ -131,16 +133,17 @@ pub fn hint_glyph(
         zone.orus_y.push(p.y);
     }
 
-    // Add phantom points
-    // pp1: left side bearing (unhinted = 0)
-    zone.cur_x.push(0);
+    // Add phantom points.
+    // FreeType seeds horizontal phantoms as pp1 = xMin - lsb and
+    // pp2 = pp1 + advance, then translates the final outline by -pp1.x.
+    zone.cur_x.push(pp1_x);
     zone.cur_y.push(0);
-    zone.orus_x.push(0);
+    zone.orus_x.push(raw_pp1_x);
     zone.orus_y.push(0);
     // pp2: advance width in the shifted glyph coordinate system.
-    zone.cur_x.push(advance_width);
+    zone.cur_x.push(pp1_x + advance_width);
     zone.cur_y.push(0);
-    zone.orus_x.push(raw_advance_width);
+    zone.orus_x.push(raw_pp1_x + raw_advance_width);
     zone.orus_y.push(0);
     // pp3, pp4: vertical phantom points (unused)
     zone.cur_x.push(0);
@@ -185,7 +188,7 @@ pub fn hint_glyph(
 
     // ── Write hinted coordinates back ──────────────────────────────────
     for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
-        pt.x = zone.cur_x[i];
+        pt.x = zone.cur_x[i] - zone.cur_x[n_points];
         pt.y = zone.cur_y[i];
     }
 
