@@ -10,6 +10,7 @@
 
 use super::gs::GraphicsState;
 use super::zone::GlyphZone;
+use super::iup;
 use crate::error::FontError;
 use crate::fixed::{ft_mul_fix, ft_floor_fix, ft_ceil_fix, ft_div_fix};
 
@@ -778,42 +779,9 @@ impl ExecContext {
                 }
 
                 // ── IUP — Interpolate Untouched Points ────────────
-                0x30 | 0x31 => {
-                    let do_x = opcode == 0x30;
-                    // Simple IUP: walk point array, find touched neighbors, interp
-                    let n = zone.n_points as usize;
-                    let touch_bit = if do_x { 0x01u8 } else { 0x02u8 };
-                    let cur = if do_x { &mut zone.cur_x } else { &mut zone.cur_y };
-                    
-                    // Find consecutive touched ranges
-                    let mut first_touched: Option<usize> = None;
-                    for i in 0..n {
-                        if zone.tags[i] & touch_bit != 0 {
-                            if first_touched.is_none() { first_touched = Some(i); }
-                        }
-                    }
-                    
-                    if let Some(ft) = first_touched {
-                        // Find last touched
-                        let mut last_touched = ft;
-                        for i in (0..n).rev() {
-                            if zone.tags[i] & touch_bit != 0 {
-                                last_touched = i; break;
-                            }
-                        }
-                        // Interp from last_touched through wrap to first_touched
-                        if last_touched != ft {
-                            let delta = cur[ft] - cur[last_touched];
-                            let count = (n - last_touched + ft) as i32;
-                            for k in 1..((n - last_touched + ft).min(n)) {
-                                let idx = (last_touched + k) % n;
-                                if idx == ft { break; }
-                                let frac = k as i32 * delta / count;
-                                cur[idx] = cur[last_touched] + frac;
-                            }
-                        }
-                    }
-                }
+                // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
+                0x30 => { iup::iup_x(zone); }
+                0x31 => { iup::iup_y(zone); }
 
                 // ── Control flow ──────────────────────────────────
                 // SLOOP (0x17): set loop counter
