@@ -1,5 +1,38 @@
 # Bytecode Hinter — What We Learned (and Didn't Solve)
 
+## Current Review Notes
+
+### 2026-07-05: TrueType VM opcode fixes must be reviewed across lanes
+
+Two isolated subagent patches touched overlapping interpreter behavior after
+main `9116545a`:
+
+- `e5e9c57f` in `/home/appunni/work/pil-wasm-tt-pixel-coverage` changed
+  `MUL` plus `SPVFS`/`SFVFS`. It improved
+  `native_tt_default_matrix` from `6757/7640` to `6813/7640`, but local
+  orchestrator verification showed `outline_cbox_matrix` dropped from
+  `7546/11086` to `7543/11086`. Do not merge that patch as-is. The likely
+  split point is to test vector setup independently from `MUL`.
+- `3a1e5479` in `/home/appunni/work/pil-wasm-noto-thai-vertical` changed
+  glyph-program stack clearing, `MUL`, `FLOOR`/`CEILING`, `LOOPCALL`, and
+  `JROT`/`JROF`. The subagent reported broad gains:
+  `outline_cbox_matrix 7546/11086 -> 10959/11086`,
+  `metrics_only_matrix 8571/11086 -> 11065/11086`, and
+  `native_tt_default_matrix 6757/7640 -> 7413/7640`.
+
+Review requirement before merging either patch:
+
+1. Re-run the full matrix from the candidate worktree and compare every lane,
+   not just the owned bucket.
+2. Inspect each opcode against FreeType `ttinterp.c`; these handlers share VM
+   stack semantics, so a fix can move failures between native rendering,
+   metrics, and outline cbox lanes.
+3. Keep code comments at every non-obvious fix site with the C function/file
+   area and the reason. Do not leave this knowledge only in a subagent report.
+4. If `MUL` is correct but still regresses outline in one candidate, the
+   regression is probably an upstream VM-state dependency exposed by `MUL`,
+   not permission to keep the old arithmetic silently.
+
 ## The Goal
 
 Match Python Pillow's `ImageFont.getmask()` / `getbbox()` pixel output. Pillow
