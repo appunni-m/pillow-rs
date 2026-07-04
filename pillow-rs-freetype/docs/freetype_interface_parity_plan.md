@@ -34,6 +34,7 @@ If any item is missing, the endpoint is `partial` or `planned`, not complete.
 5. Threshold baselines are debt.
 6. Present-but-unexecuted fixture families are debt.
 7. Broad matrices cannot be replaced by smaller smoke tests.
+8. Fixture generators are maintained harness code and must be documented in `doc/GENERATOR_SYSTEM.md`.
 
 ## Interface Paths
 
@@ -119,6 +120,7 @@ Done criteria:
 Scope:
 
 - Generate references only from FreeType C oracle scripts.
+- Keep fixture generation reproducible through maintained scripts under `scripts/`.
 - Preserve row counts for broad matrices.
 - Require raw bytes for exact render gates.
 - Name unexecuted matrices as debt.
@@ -126,6 +128,7 @@ Scope:
 Verification:
 
 ```bash
+cargo test -p pillow-rs-freetype --test generator_contract --locked
 cargo test -p pillow-rs-freetype --test harness_contract --locked
 cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
 ```
@@ -135,6 +138,7 @@ Done criteria:
 - Exact gates fail on missing matrices and missing raw bytes.
 - Unsupported matrix operations fail.
 - Supplemental fixture families are either executable exact gates or explicit debt.
+- Every committed fixture family has a documented generator path.
 
 ### Chunk 3: Core Face, Size, Charmap, And Tables
 
@@ -241,6 +245,7 @@ Done criteria:
 The report is the release gate. A 100% parity claim is allowed only when:
 
 - Runtime FFI guard passes.
+- Generator contract passes.
 - Harness contract passes.
 - Every exact gate passes.
 - No threshold baseline remains.

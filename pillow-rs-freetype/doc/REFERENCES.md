@@ -1,5 +1,9 @@
 # References and Fixtures
 
+Fixture generation is part of the maintained harness. See
+`doc/GENERATOR_SYSTEM.md` for the generator contract, standard reproduction
+flow, and fixture update checklist.
+
 ## FreeType Fixture Matrices
 
 Reference fixtures in this crate are generated from vendored FreeType C.  The
@@ -21,14 +25,11 @@ cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
 
 ## Regenerating Fixtures
 
-Build FreeType from vendored source (one-time):
-```bash
-cd pillow-rs-freetype && bash scripts/build_ft.sh
-```
+Standard flow:
 
-Regenerate FreeType fixture matrices:
 ```bash
 cd pillow-rs-freetype
+bash scripts/build_ft.sh
 python3 scripts/build_ft_fixture.py --family force_autohint --build-ref-bin
 python3 scripts/build_ft_fixture.py --family native_tt_default
 python3 scripts/build_ft_fixture.py --family no_hinting --small
@@ -36,6 +37,7 @@ python3 scripts/build_ft_fixture.py --family metrics_only --small
 python3 scripts/build_ft_fixture.py --family outline_cbox --small
 python3 scripts/build_ft_fixture.py --family render_mono --small
 python3 scripts/build_ft_fixture.py --family render_lcd --small
+python3 scripts/build_render_mode_fixture.py
 ```
 
 ## Tracing a Failing Glyph

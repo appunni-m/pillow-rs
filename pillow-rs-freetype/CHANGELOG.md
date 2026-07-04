@@ -10,6 +10,7 @@
 - `BitmapBackend::FreeType` and `BitmapBackend::PIL` backends
 - Harness-first parity tracking: exact gates, threshold baselines, and unexecuted fixture debt are reported separately.
 - Runtime FFI guard: `tests/no_runtime_ffi.rs` prevents reintroducing FreeType C linking in crate runtime files.
+- Fixture generator contract: `doc/GENERATOR_SYSTEM.md` and `tests/generator_contract.rs` make C-oracle fixture reproduction part of the maintained harness.
 
 ### Fixed
 - Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); `BitmapBackend::PIL` now routes through the Rust scaler, TrueType hinting, and rasterizer path.

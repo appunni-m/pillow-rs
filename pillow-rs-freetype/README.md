@@ -112,6 +112,7 @@ cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
 Harness intent:
 
 - `no_runtime_ffi.rs` keeps runtime FreeType C impossible.
+- `generator_contract.rs` keeps fixture generation documented and reproducible.
 - `harness_contract.rs` locks fixture breadth and gate strength.
 - `coverage_matrix_tests.rs` runs exact and incomplete FreeType matrix gates.
 - `render_mode_matrix.rs` compares raw render-mode bytes and metadata.
@@ -120,7 +121,7 @@ Harness intent:
 
 Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C
 2.14.3 reference output. See `PROJECT_GOALS.md` and
-`doc/PURE_RUST_RUNTIME_PLAN.md` before changing fixtures or gates.
+`doc/GENERATOR_SYSTEM.md` before changing fixtures, generators, or gates.
 
 ## License
 
