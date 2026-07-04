@@ -627,12 +627,20 @@ impl MonoOutlineProfileBuilder {
 
     fn move_to(&mut self, point: crate::outline::OutlinePoint) {
         let point = self.transform(point);
+        self.move_to_scaled(point);
+    }
+
+    fn move_to_scaled(&mut self, point: Point) {
         self.last_x = point.x;
         self.last_y = point.y;
     }
 
     fn line_to_point(&mut self, point: crate::outline::OutlinePoint, contour: usize) {
         let point = self.transform(point);
+        self.line_to_scaled(point, contour);
+    }
+
+    fn line_to_scaled(&mut self, point: Point, contour: usize) {
         self.line_to(point.x, point.y, contour);
     }
 
@@ -644,6 +652,10 @@ impl MonoOutlineProfileBuilder {
     ) {
         let control = self.transform(control);
         let point = self.transform(point);
+        self.conic_to_scaled(control, point, contour);
+    }
+
+    fn conic_to_scaled(&mut self, control: Point, point: Point, contour: usize) {
         self.conic_to(control.x, control.y, point.x, point.y, contour);
     }
 
@@ -855,6 +867,7 @@ impl MonoOutlineProfileBuilder {
             let mut v_start = pts[first];
             let v_last = pts[limit];
             let mut limit_eff = limit;
+            let mut v_start_scaled = self.transform(v_start);
 
             let first_tag = curve_tag(pts[first].on_curve);
             if first_tag == CURVE_TAG_CUBIC {
@@ -865,16 +878,17 @@ impl MonoOutlineProfileBuilder {
             if first_tag == CURVE_TAG_CONIC {
                 if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
                     v_start = v_last;
+                    v_start_scaled = self.transform(v_start);
                     limit_eff = limit.checked_sub(1).ok_or_else(|| {
                         FontError::InvalidOutline("outline: conic start underflow".into())
                     })?;
                 } else {
-                    v_start.x = (v_start.x + v_last.x) / 2;
-                    v_start.y = (v_start.y + v_last.y) / 2;
+                    v_start_scaled =
+                        midpoint_trunc(self.transform(v_start), self.transform(v_last));
                 }
             }
 
-            self.move_to(v_start);
+            self.move_to_scaled(v_start_scaled);
             let start = if first_tag == CURVE_TAG_CONIC {
                 if first == 0 {
                     -1
@@ -884,7 +898,13 @@ impl MonoOutlineProfileBuilder {
             } else {
                 i32_from_usize(first)
             };
-            self.walk_contour(pts, start, i32_from_usize(limit_eff), v_start, contour)?;
+            self.walk_contour(
+                pts,
+                start,
+                i32_from_usize(limit_eff),
+                v_start_scaled,
+                contour,
+            )?;
             if self.contour_first.is_some() {
                 if self.last_y & 63 == 0 && self.last_y >= self.min_y && self.last_y <= self.max_y {
                     if let (Some(first), Some(current)) = (self.contour_first, self.current) {
@@ -905,7 +925,7 @@ impl MonoOutlineProfileBuilder {
         pts: &[crate::outline::OutlinePoint],
         mut cursor: i32,
         limit: i32,
-        v_start: crate::outline::OutlinePoint,
+        v_start_scaled: Point,
         contour: usize,
     ) -> Result<(), FontError> {
         while cursor < limit {
@@ -931,14 +951,12 @@ impl MonoOutlineProfileBuilder {
                                     "outline: expected conic tag".into(),
                                 ));
                             }
-                            let mut mid = control;
-                            mid.x = (control.x + next.x) / 2;
-                            mid.y = (control.y + next.y) / 2;
-                            self.conic_to_point(control, mid, contour);
+                            let mid = midpoint_trunc(self.transform(control), self.transform(next));
+                            self.conic_to_scaled(self.transform(control), mid, contour);
                             control = next;
                             continue;
                         }
-                        self.conic_to_point(control, v_start, contour);
+                        self.conic_to_scaled(self.transform(control), v_start_scaled, contour);
                         return Ok(());
                     }
                 }
@@ -950,7 +968,7 @@ impl MonoOutlineProfileBuilder {
                 _ => unreachable!(),
             }
         }
-        self.line_to_point(v_start, contour);
+        self.line_to_scaled(v_start_scaled, contour);
         Ok(())
     }
 }
@@ -1845,6 +1863,13 @@ fn midpoint(a: Point, b: Point) -> Point {
     Point {
         x: (a.x + b.x) >> 1,
         y: (a.y + b.y) >> 1,
+    }
+}
+
+fn midpoint_trunc(a: Point, b: Point) -> Point {
+    Point {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
     }
 }
 
