@@ -344,6 +344,7 @@ pub fn scale_glyph_no_hinting(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn scale_glyph_impl(
     data: &FontData,
     glyph_index: u16,
@@ -938,6 +939,7 @@ pub fn pixel_ceil(x: i32) -> i32 {
 /// Bridge: build temporary Outline, call `apply_hints`, write back coords.
 ///
 /// Uses adjusted vertical scale from `latin_metrics` if available (x-height optimization).
+#[allow(clippy::too_many_arguments)]
 fn autohint_glyph(
     scaled: &mut [OutlinePoint],
     raw_outline: &GlyphOutline,
