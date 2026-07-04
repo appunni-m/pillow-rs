@@ -1477,6 +1477,11 @@ impl ExecContext {
                     // C: old_range = DUALPROJ(orgs2 - orgs1), cur_range = PROJECT(curs2 - curs1)
                     let old_range = if use_twilight_org {
                         self.gs.dual_project(r2_ox - r1_ox, r2_oy - r1_oy)
+                    } else if self.x_scale == self.y_scale {
+                        // C: ttinterp.c Ins_IP projects unscaled ORUS directly
+                        // when x/y scales match; scaling here introduces 26.6
+                        // rounding drift in interpolated native TT outlines.
+                        self.gs.dual_project(r2_ox - r1_ox, r2_oy - r1_oy)
                     } else {
                         self.gs.dual_project(
                             crate::fixed::ft_mul_fix(r2_ox - r1_ox, self.x_scale),
@@ -1492,6 +1497,8 @@ impl ExecContext {
                             self.orus_in(zone, self.gs.zp2, p)
                         };
                         let p_old = if use_twilight_org {
+                            self.gs.dual_project(pox - r1_ox, poy - r1_oy)
+                        } else if self.x_scale == self.y_scale {
                             self.gs.dual_project(pox - r1_ox, poy - r1_oy)
                         } else {
                             self.gs.dual_project(
