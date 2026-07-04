@@ -19,8 +19,11 @@ main `9116545a`:
   `outline_cbox_matrix 7546/11086 -> 10959/11086`,
   `metrics_only_matrix 8571/11086 -> 11065/11086`, and
   `native_tt_default_matrix 6757/7640 -> 7413/7640`.
+  This was merged to main as `55999119` after local C-reference review,
+  added implementation-site comments, full matrix verification, no-runtime-FFI,
+  fmt, and clippy.
 
-Review requirement before merging either patch:
+Review requirement before merging similar patches:
 
 1. Re-run the full matrix from the candidate worktree and compare every lane,
    not just the owned bucket.
