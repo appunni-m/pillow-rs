@@ -573,6 +573,8 @@ impl<'a> MonoProfileBuilder<'a> {
     }
 
     fn link_contour_profiles(&mut self) {
+        self.contour_profiles
+            .retain(|&profile| self.profiles[profile].height > 0);
         let len = self.contour_profiles.len();
         if len == 0 {
             return;
@@ -825,6 +827,8 @@ impl MonoOutlineProfileBuilder {
     }
 
     fn link_contour_profiles(&mut self) {
+        self.contour_profiles
+            .retain(|&profile| self.profiles[profile].height > 0);
         let len = self.contour_profiles.len();
         if len == 0 {
             return;
