@@ -322,11 +322,11 @@ impl ExecContext {
         self.gs = GraphicsState::default();
         self.gs.auto_flip = true; // C default
 
-        // Scale CVT: face->cvt[i] is already FWORD*64 from the parser,
-        // matching FreeType's face-level CVT storage. Applying the 16.16
-        // size scale directly keeps the result in 26.6 pixels.
+        // Scale CVT: face-level CVT values are stored as FWORD*64.  FreeType
+        // intentionally divides by 64 before applying the 16.16 size scale;
+        // this rounding-sensitive order produces 26.6 pixel values.
         for i in 0..self.cvt.len() {
-            self.cvt[i] = crate::fixed::ft_mul_fix(self.cvt[i], self.y_scale);
+            self.cvt[i] = crate::fixed::ft_mul_fix(self.cvt[i] / 64, self.y_scale);
         }
 
         // Restore the post-fpgm storage snapshot saved by TT_Save_Context.
@@ -1527,29 +1527,25 @@ impl ExecContext {
                 0x50 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    let result = if self.cur_range == 0 { a < b } else { b < a };
-                    self.push(if result { 1 } else { 0 });
+                    self.push(if a < b { 1 } else { 0 });
                 }
                 // ── LTEQ (0x51) ─────────────────────────────────────
                 0x51 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    let result = if self.cur_range == 0 { a <= b } else { b <= a };
-                    self.push(if result { 1 } else { 0 });
+                    self.push(if a <= b { 1 } else { 0 });
                 }
                 // ── GT (0x52) ───────────────────────────────────────
                 0x52 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    let result = if self.cur_range == 0 { a > b } else { b > a };
-                    self.push(if result { 1 } else { 0 });
+                    self.push(if a > b { 1 } else { 0 });
                 }
                 // ── GTEQ (0x53) ─────────────────────────────────────
                 0x53 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    let result = if self.cur_range == 0 { a >= b } else { b >= a };
-                    self.push(if result { 1 } else { 0 });
+                    self.push(if a >= b { 1 } else { 0 });
                 }
                 // ── EQ (0x54) ───────────────────────────────────────
                 0x54 => {
@@ -1641,14 +1637,14 @@ impl ExecContext {
                 } // AA
                 // ── SROUND (0x76) — Super Round ─────────────────────
                 0x76 => {
-                    let _ = self.pop()?;
-                    // C: Ins_SROUND — parses period/phase/threshold from input
-                    // Super rounding is rarely used by our test fonts; apply as grid
+                    let selector = self.pop()?;
+                    self.gs.set_super_round(0x4000, selector);
                     self.gs.round_state = RoundMode::Super;
                 }
                 // ── S45ROUND (0x77) — Super Round 45 ────────────────
                 0x77 => {
-                    let _v = self.pop()?;
+                    let selector = self.pop()?;
+                    self.gs.set_super_round(0x2D41, selector);
                     self.gs.round_state = RoundMode::Super45;
                 }
                 // ── WCVTF (0x70) — Write CVT in Font Units ──────────
