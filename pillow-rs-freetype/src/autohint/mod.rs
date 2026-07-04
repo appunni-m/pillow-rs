@@ -27,22 +27,24 @@
 //!
 //! Reference: `freetype/src/autofit/` (VER-2-14-1).
 
-pub mod types;
-pub mod coverage;
-pub mod loader;
-pub mod latin;
 pub mod blue_strings;
-pub mod script;
-pub mod globals_data;
-pub mod globals;
 pub mod cjk;
+pub mod coverage;
+pub mod globals;
+pub mod globals_data;
+pub mod latin;
+pub mod loader;
+pub mod script;
+pub mod types;
 
-pub use latin::apply_hints;
-pub use latin::{metrics_init_blues, metrics_init_blues_greek, metrics_init_blues_impl, metrics_init_widths};
-pub use script::detect_script;
-pub use globals_data::{StyleClass, UniRange, STYLE_TABLE, STYLE_FALLBACK, STYLE_UNASSIGNED};
 pub use globals::FaceGlobals;
-pub use types::{GlyphHints, AxisHints, AFPoint, AFSegment, AFEdge, Direction, Dimension,
-    AfWidth, AfLatinBlue, AfLatinAxisMetrics, AfLatinMetrics,
-    AF_LATIN_MAX_WIDTHS,
+pub use globals_data::{StyleClass, UniRange, STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
+pub use latin::apply_hints;
+pub use latin::{
+    metrics_init_blues, metrics_init_blues_greek, metrics_init_blues_impl, metrics_init_widths,
+};
+pub use script::detect_script;
+pub use types::{
+    AFEdge, AFPoint, AFSegment, AfLatinAxisMetrics, AfLatinBlue, AfLatinMetrics, AfWidth,
+    AxisHints, Dimension, Direction, GlyphHints, AF_LATIN_MAX_WIDTHS,
 };

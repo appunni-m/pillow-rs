@@ -25,7 +25,7 @@
 
 use super::types::*;
 use crate::casts::i16_from_i32;
-use crate::fixed::{ft_mul_fix, ft_mul_div};
+use crate::fixed::{ft_mul_div, ft_mul_fix};
 
 /// Compute CJK-style stem widths from a standard character glyph.
 /// Port of af_cjk_metrics_init_widths (afcjk.c:63-270).
@@ -57,7 +57,11 @@ pub fn cjk_metrics_init_widths(
 
     // afcjk.c:166-202 — for each dimension: compute segments, link, extract widths
     for dim in 0..2 {
-        let d = if dim == 0 { Dimension::Horz } else { Dimension::Vert };
+        let d = if dim == 0 {
+            Dimension::Horz
+        } else {
+            Dimension::Vert
+        };
 
         // afcjk.c:184 — compute segments (shared Latin function)
         super::latin::compute_segments(&mut hints, d);
@@ -75,10 +79,14 @@ pub fn cjk_metrics_init_widths(
         for seg_idx in 0..axis.segments.len() {
             let seg = &axis.segments[seg_idx];
             let link_idx = seg.link;
-            if link_idx == usize::MAX { continue; }
+            if link_idx == usize::MAX {
+                continue;
+            }
             let link = &axis.segments[link_idx];
             // afcjk.c:225 — bidirectional check
-            if link.link != seg_idx || link_idx <= seg_idx { continue; }
+            if link.link != seg_idx || link_idx <= seg_idx {
+                continue;
+            }
 
             // afcjk.c:230-235 — distance as stem width
             let dist = (seg.pos as i32 - link.pos as i32).abs();
@@ -137,7 +145,7 @@ pub fn cjk_metrics_init_widths(
         m_axis.standard_width = stdw;
         // afcjk.c:259 — "let's try 20% of the smallest width"
         m_axis.edge_distance_threshold = stdw / 5;
-        m_axis.extra_light = false;  // afcjk.c:260
+        m_axis.extra_light = false; // afcjk.c:260
         m_axis.width_count = num_widths;
 
         // Copy widths (max AF_LATIN_MAX_WIDTHS)
@@ -162,16 +170,25 @@ pub fn cjk_metrics_init_widths(
 #[allow(dead_code)]
 pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: bool) {
     let axis = &mut hints.axis[dim as usize];
-    let scale = if dim == Dimension::Horz { hints.x_scale } else { hints.y_scale };
+    let scale = if dim == Dimension::Horz {
+        hints.x_scale
+    } else {
+        hints.y_scale
+    };
     axis.edges.clear();
 
     // afcjk.c:1032-1037 — edge_distance_threshold in font units
     let edge_dist_thresh = {
-        let raw = hints.metrics.as_ref()
+        let raw = hints
+            .metrics
+            .as_ref()
             .map_or(50, |m| m.axis[dim as usize].edge_distance_threshold);
         let mut edt = ft_mul_fix(raw, scale);
-        if edt > 16 { edt = ft_mul_div(16, 0x10000, scale); }
-        else { edt = raw; }
+        if edt > 16 {
+            edt = ft_mul_div(16, 0x10000, scale);
+        } else {
+            edt = raw;
+        }
         edt
     };
 
@@ -185,7 +202,9 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
         // afcjk.c:1050-1085 — find best-matching edge
         for e_idx in 0..axis.edges.len() {
             let edge = &axis.edges[e_idx];
-            if edge.dir != seg.dir { continue; }
+            if edge.dir != seg.dir {
+                continue;
+            }
             let dist = (edge.fpos as i32 - seg_pos).abs();
             if dist < edge_dist_thresh && dist < best_dist {
                 // afcjk.c:1065-1085 — linked segment compatibility
@@ -196,14 +215,22 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
                     loop {
                         let link1 = axis.segments[s1].link;
                         if link1 != usize::MAX {
-                            let d2 = (axis.segments[link].pos as i32 -
-                                      axis.segments[link1].pos as i32).abs();
-                            if d2 >= edge_dist_thresh { ok = false; break; }
+                            let d2 = (axis.segments[link].pos as i32
+                                - axis.segments[link1].pos as i32)
+                                .abs();
+                            if d2 >= edge_dist_thresh {
+                                ok = false;
+                                break;
+                            }
                         }
-                        if s1 == edge.last { break; }
+                        if s1 == edge.last {
+                            break;
+                        }
                         s1 = axis.segments[s1].edge_next;
                     }
-                    if !ok { continue; }
+                    if !ok {
+                        continue;
+                    }
                 }
                 best_dist = dist;
                 best_edge = Some(e_idx);
@@ -222,9 +249,16 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             let fpos = i16_from_i32(seg_pos);
             let opos = ft_mul_fix(fpos as i32, scale);
             let new_edge = AFEdge {
-                fpos, opos, pos: opos, flags: 0, dir: seg.dir,
-                link: usize::MAX, serif: usize::MAX,
-                first: seg_idx, last: seg_idx, blue_edge: None,
+                fpos,
+                opos,
+                pos: opos,
+                flags: 0,
+                dir: seg.dir,
+                link: usize::MAX,
+                serif: usize::MAX,
+                first: seg_idx,
+                last: seg_idx,
+                blue_edge: None,
             };
             // afcjk.c:1089 — af_axis_hints_new_edge with tb=0 for CJK
             // (CJK always uses af_axis_hints_new_edge(..., 0, ...)
@@ -232,7 +266,9 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
             // used in the BOUND checks in hint_edges)
             let insert_at = if top_to_bottom {
                 let mut p = 0;
-                while p < axis.edges.len() && axis.edges[p].fpos > fpos { p += 1; }
+                while p < axis.edges.len() && axis.edges[p].fpos > fpos {
+                    p += 1;
+                }
                 p
             } else {
                 axis.edges.len() // append to end
@@ -246,10 +282,14 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
         let mut s = axis.edges[e_idx].first;
         loop {
             axis.segments[s].edge = e_idx;
-            if s == axis.edges[e_idx].last { break; }
+            if s == axis.edges[e_idx].last {
+                break;
+            }
             s = axis.segments[s].edge_next;
         }
     }
     // afcjk.c:1170-1193 — edge flags (simplified for non-Hani scripts)
-    for e in &mut axis.edges { e.flags = AF_EDGE_NORMAL; }
+    for e in &mut axis.edges {
+        e.flags = AF_EDGE_NORMAL;
+    }
 }

@@ -3,205 +3,703 @@
 
 // ── Blue string character arrays ──────────────────────────────────
 const ADLAM_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{1E902}', '\u{1E916}'];
-const ADLAM_CAPITAL_TOP_CHARS: &[char] = &['\u{1E90C}', '\u{1E905}', '\u{1E908}', '\u{1E90F}', '\u{1E914}', '\u{1E91A}'];
-const ADLAM_SMALL_BOTTOM_CHARS: &[char] = &['\u{1E924}', '\u{1E928}', '\u{1E929}', '\u{1E92D}', '\u{1E934}', '\u{1E938}', '\u{1E93A}', '\u{1E940}'];
-const ADLAM_SMALL_TOP_CHARS: &[char] = &['\u{1E92C}', '\u{1E92E}', '\u{1E93B}', '\u{1E93C}', '\u{1E93E}'];
+const ADLAM_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{1E90C}',
+    '\u{1E905}',
+    '\u{1E908}',
+    '\u{1E90F}',
+    '\u{1E914}',
+    '\u{1E91A}',
+];
+const ADLAM_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{1E924}',
+    '\u{1E928}',
+    '\u{1E929}',
+    '\u{1E92D}',
+    '\u{1E934}',
+    '\u{1E938}',
+    '\u{1E93A}',
+    '\u{1E940}',
+];
+const ADLAM_SMALL_TOP_CHARS: &[char] = &[
+    '\u{1E92C}',
+    '\u{1E92E}',
+    '\u{1E93B}',
+    '\u{1E93C}',
+    '\u{1E93E}',
+];
 const ARABIC_BOTTOM_CHARS: &[char] = &['\u{062A}', '\u{062B}', '\u{0637}', '\u{0638}', '\u{0643}'];
 const ARABIC_JOIN_CHARS: &[char] = &['\u{0640}'];
-const ARABIC_TOP_CHARS: &[char] = &['\u{0627}', '\u{0625}', '\u{0644}', '\u{0643}', '\u{0637}', '\u{0638}'];
-const ARMENIAN_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{0552}', '\u{0548}', '\u{0534}', '\u{0543}', '\u{0547}', '\u{054D}', '\u{054F}', '\u{0555}'];
-const ARMENIAN_CAPITAL_TOP_CHARS: &[char] = &['\u{0531}', '\u{0544}', '\u{0552}', '\u{054D}', '\u{0532}', '\u{0533}', '\u{0534}', '\u{0555}'];
-const ARMENIAN_SMALL_ASCENDER_CHARS: &[char] = &['\u{0565}', '\u{0567}', '\u{056B}', '\u{0574}', '\u{057E}', '\u{0586}', '\u{0573}'];
-const ARMENIAN_SMALL_BOTTOM_CHARS: &[char] = &['\u{0570}', '\u{0578}', '\u{0573}', '\u{0561}', '\u{0565}', '\u{056E}', '\u{057D}', '\u{0585}'];
-const ARMENIAN_SMALL_DESCENDER_CHARS: &[char] = &['\u{0562}', '\u{0568}', '\u{056B}', '\u{056C}', '\u{0572}', '\u{057A}', '\u{0583}', '\u{0581}'];
-const ARMENIAN_SMALL_TOP_CHARS: &[char] = &['\u{0561}', '\u{0575}', '\u{0582}', '\u{057D}', '\u{0563}', '\u{0577}', '\u{0580}', '\u{0585}'];
+const ARABIC_TOP_CHARS: &[char] = &[
+    '\u{0627}', '\u{0625}', '\u{0644}', '\u{0643}', '\u{0637}', '\u{0638}',
+];
+const ARMENIAN_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{0552}', '\u{0548}', '\u{0534}', '\u{0543}', '\u{0547}', '\u{054D}', '\u{054F}', '\u{0555}',
+];
+const ARMENIAN_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{0531}', '\u{0544}', '\u{0552}', '\u{054D}', '\u{0532}', '\u{0533}', '\u{0534}', '\u{0555}',
+];
+const ARMENIAN_SMALL_ASCENDER_CHARS: &[char] = &[
+    '\u{0565}', '\u{0567}', '\u{056B}', '\u{0574}', '\u{057E}', '\u{0586}', '\u{0573}',
+];
+const ARMENIAN_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{0570}', '\u{0578}', '\u{0573}', '\u{0561}', '\u{0565}', '\u{056E}', '\u{057D}', '\u{0585}',
+];
+const ARMENIAN_SMALL_DESCENDER_CHARS: &[char] = &[
+    '\u{0562}', '\u{0568}', '\u{056B}', '\u{056C}', '\u{0572}', '\u{057A}', '\u{0583}', '\u{0581}',
+];
+const ARMENIAN_SMALL_TOP_CHARS: &[char] = &[
+    '\u{0561}', '\u{0575}', '\u{0582}', '\u{057D}', '\u{0563}', '\u{0577}', '\u{0580}', '\u{0585}',
+];
 const AVESTAN_BOTTOM_CHARS: &[char] = &['\u{10B00}', '\u{10B01}'];
 const AVESTAN_TOP_CHARS: &[char] = &['\u{10B00}', '\u{10B01}', '\u{10B10}', '\u{10B1B}'];
-const BAMUM_BOTTOM_CHARS: &[char] = &['\u{A6AD}', '\u{A6B3}', '\u{A6B6}', '\u{A6EC}', '\u{A6A2}', '\u{A6BD}', '\u{A6EF}', '\u{A6F2}'];
-const BAMUM_TOP_CHARS: &[char] = &['\u{A6A7}', '\u{A6A8}', '\u{A6DB}', '\u{A6C9}', '\u{A6C1}', '\u{A6C8}', '\u{A6EB}', '\u{A6EF}'];
-const BENGALI_BASE_CHARS: &[char] = &['\u{0985}', '\u{09A1}', '\u{09A4}', '\u{09A8}', '\u{09AC}', '\u{09AD}', '\u{09B2}', '\u{0995}'];
-const BENGALI_HEAD_CHARS: &[char] = &['\u{0993}', '\u{098F}', '\u{09A1}', '\u{09A4}', '\u{09A8}', '\u{09AC}', '\u{09B2}', '\u{0995}'];
-const BENGALI_TOP_CHARS: &[char] = &['\u{0987}', '\u{099F}', '\u{09A0}', '\u{09BF}', '\u{09C0}', '\u{09C8}', '\u{09D7}'];
-const BUHID_BOTTOM_CHARS: &[char] = &['\u{1740}', '\u{1743}', '\u{1746}', '\u{1749}', '\u{174B}', '\u{174F}', '\u{1751}'];
+const BAMUM_BOTTOM_CHARS: &[char] = &[
+    '\u{A6AD}', '\u{A6B3}', '\u{A6B6}', '\u{A6EC}', '\u{A6A2}', '\u{A6BD}', '\u{A6EF}', '\u{A6F2}',
+];
+const BAMUM_TOP_CHARS: &[char] = &[
+    '\u{A6A7}', '\u{A6A8}', '\u{A6DB}', '\u{A6C9}', '\u{A6C1}', '\u{A6C8}', '\u{A6EB}', '\u{A6EF}',
+];
+const BENGALI_BASE_CHARS: &[char] = &[
+    '\u{0985}', '\u{09A1}', '\u{09A4}', '\u{09A8}', '\u{09AC}', '\u{09AD}', '\u{09B2}', '\u{0995}',
+];
+const BENGALI_HEAD_CHARS: &[char] = &[
+    '\u{0993}', '\u{098F}', '\u{09A1}', '\u{09A4}', '\u{09A8}', '\u{09AC}', '\u{09B2}', '\u{0995}',
+];
+const BENGALI_TOP_CHARS: &[char] = &[
+    '\u{0987}', '\u{099F}', '\u{09A0}', '\u{09BF}', '\u{09C0}', '\u{09C8}', '\u{09D7}',
+];
+const BUHID_BOTTOM_CHARS: &[char] = &[
+    '\u{1740}', '\u{1743}', '\u{1746}', '\u{1749}', '\u{174B}', '\u{174F}', '\u{1751}',
+];
 const BUHID_LARGE_CHARS: &[char] = &['\u{1745}', '\u{174A}', '\u{174E}'];
 const BUHID_SMALL_CHARS: &[char] = &['\u{1742}', '\u{1743}', '\u{1749}', '\u{174C}'];
 const BUHID_TOP_CHARS: &[char] = &['\u{1750}', '\u{1748}'];
-const CANADIAN_SYLLABICS_BOTTOM_CHARS: &[char] = &['\u{15F6}', '\u{15B5}', '\u{14A7}', '\u{1403}', '\u{144C}', '\u{148D}', '\u{1511}', '\u{15E2}'];
-const CANADIAN_SYLLABICS_SMALL_BOTTOM_CHARS: &[char] = &['\u{1543}', '\u{14C2}', '\u{14C0}', '\u{1542}', '\u{14D7}', '\u{14DA}', '\u{1546}', '\u{1623}'];
-const CANADIAN_SYLLABICS_SMALL_TOP_CHARS: &[char] = &['\u{14D3}', '\u{14D5}', '\u{14C0}', '\u{14C2}', '\u{14C4}', '\u{1544}', '\u{1546}', '\u{1623}'];
-const CANADIAN_SYLLABICS_SUPS_BOTTOM_CHARS: &[char] = &['\u{1646}', '\u{15EE}', '\u{14BB}', '\u{141E}', '\u{1506}', '\u{14A1}', '\u{14A2}', '\u{14D1}'];
-const CANADIAN_SYLLABICS_SUPS_TOP_CHARS: &[char] = &['\u{142A}', '\u{1646}', '\u{18D8}', '\u{1422}', '\u{14BE}', '\u{18D7}', '\u{1506}'];
-const CANADIAN_SYLLABICS_TOP_CHARS: &[char] = &['\u{15DC}', '\u{15B4}', '\u{1401}', '\u{14A3}', '\u{146B}', '\u{144E}', '\u{1511}', '\u{15F0}'];
-const CARIAN_BOTTOM_CHARS: &[char] = &['\u{102A3}', '\u{102A7}', '\u{102B7}', '\u{102C0}', '\u{102AB}', '\u{102B8}', '\u{102C9}'];
-const CARIAN_TOP_CHARS: &[char] = &['\u{102A7}', '\u{102AB}', '\u{102AC}', '\u{102AD}', '\u{102B1}', '\u{102BA}', '\u{102BC}', '\u{102BF}'];
-const CHAKMA_BOTTOM_CHARS: &[char] = &['\u{11105}', '\u{1111B}', '\u{1111D}', '\u{11117}', '\u{11113}'];
-const CHAKMA_DESCENDER_CHARS: &[char] = &['\u{11116}', '\u{11118}', '\u{11119}', '\u{11124}', '\u{11125}'];
-const CHAKMA_TOP_CHARS: &[char] = &['\u{11103}', '\u{11105}', '\u{11109}', '\u{11119}', '\u{11117}'];
-const CHEROKEE_CAPITAL_CHARS: &[char] = &['\u{13C6}', '\u{13BB}', '\u{13AC}', '\u{13C3}', '\u{13A4}', '\u{13E3}', '\u{13A6}', '\u{13D5}'];
-const CHEROKEE_SMALL_CHARS: &[char] = &['\u{AB96}', '\u{AB7C}', '\u{AB93}', '\u{ABA0}', '\u{ABB3}', '\u{AB76}', '\u{ABA5}', '\u{ABBB}'];
-const CHEROKEE_SMALL_ASCENDER_CHARS: &[char] = &['\u{AB92}', '\u{ABA4}', '\u{ABB6}', '\u{AB74}', '\u{AB7E}', '\u{AB97}', '\u{AB9D}', '\u{ABBF}'];
+const CANADIAN_SYLLABICS_BOTTOM_CHARS: &[char] = &[
+    '\u{15F6}', '\u{15B5}', '\u{14A7}', '\u{1403}', '\u{144C}', '\u{148D}', '\u{1511}', '\u{15E2}',
+];
+const CANADIAN_SYLLABICS_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{1543}', '\u{14C2}', '\u{14C0}', '\u{1542}', '\u{14D7}', '\u{14DA}', '\u{1546}', '\u{1623}',
+];
+const CANADIAN_SYLLABICS_SMALL_TOP_CHARS: &[char] = &[
+    '\u{14D3}', '\u{14D5}', '\u{14C0}', '\u{14C2}', '\u{14C4}', '\u{1544}', '\u{1546}', '\u{1623}',
+];
+const CANADIAN_SYLLABICS_SUPS_BOTTOM_CHARS: &[char] = &[
+    '\u{1646}', '\u{15EE}', '\u{14BB}', '\u{141E}', '\u{1506}', '\u{14A1}', '\u{14A2}', '\u{14D1}',
+];
+const CANADIAN_SYLLABICS_SUPS_TOP_CHARS: &[char] = &[
+    '\u{142A}', '\u{1646}', '\u{18D8}', '\u{1422}', '\u{14BE}', '\u{18D7}', '\u{1506}',
+];
+const CANADIAN_SYLLABICS_TOP_CHARS: &[char] = &[
+    '\u{15DC}', '\u{15B4}', '\u{1401}', '\u{14A3}', '\u{146B}', '\u{144E}', '\u{1511}', '\u{15F0}',
+];
+const CARIAN_BOTTOM_CHARS: &[char] = &[
+    '\u{102A3}',
+    '\u{102A7}',
+    '\u{102B7}',
+    '\u{102C0}',
+    '\u{102AB}',
+    '\u{102B8}',
+    '\u{102C9}',
+];
+const CARIAN_TOP_CHARS: &[char] = &[
+    '\u{102A7}',
+    '\u{102AB}',
+    '\u{102AC}',
+    '\u{102AD}',
+    '\u{102B1}',
+    '\u{102BA}',
+    '\u{102BC}',
+    '\u{102BF}',
+];
+const CHAKMA_BOTTOM_CHARS: &[char] = &[
+    '\u{11105}',
+    '\u{1111B}',
+    '\u{1111D}',
+    '\u{11117}',
+    '\u{11113}',
+];
+const CHAKMA_DESCENDER_CHARS: &[char] = &[
+    '\u{11116}',
+    '\u{11118}',
+    '\u{11119}',
+    '\u{11124}',
+    '\u{11125}',
+];
+const CHAKMA_TOP_CHARS: &[char] = &[
+    '\u{11103}',
+    '\u{11105}',
+    '\u{11109}',
+    '\u{11119}',
+    '\u{11117}',
+];
+const CHEROKEE_CAPITAL_CHARS: &[char] = &[
+    '\u{13C6}', '\u{13BB}', '\u{13AC}', '\u{13C3}', '\u{13A4}', '\u{13E3}', '\u{13A6}', '\u{13D5}',
+];
+const CHEROKEE_SMALL_CHARS: &[char] = &[
+    '\u{AB96}', '\u{AB7C}', '\u{AB93}', '\u{ABA0}', '\u{ABB3}', '\u{AB76}', '\u{ABA5}', '\u{ABBB}',
+];
+const CHEROKEE_SMALL_ASCENDER_CHARS: &[char] = &[
+    '\u{AB92}', '\u{ABA4}', '\u{ABB6}', '\u{AB74}', '\u{AB7E}', '\u{AB97}', '\u{AB9D}', '\u{ABBF}',
+];
 const CHEROKEE_SMALL_DESCENDER_CHARS: &[char] = &['\u{13F8}', '\u{AB90}', '\u{AB79}', '\u{AB7B}'];
-const CJK_BOTTOM_CHARS: &[char] = &['\u{4E2A}', '\u{4E3A}', '\u{4EBA}', '\u{4ED6}', '\u{4EE5}', '\u{4EEC}', '\u{4F60}', '\u{4F86}', '\u{500B}', '\u{5011}', '\u{5230}', '\u{548C}', '\u{5927}', '\u{5BF9}', '\u{5C0D}', '\u{5C31}', '\u{6211}', '\u{65F6}', '\u{6642}', '\u{6709}', '\u{6765}', '\u{70BA}', '\u{8981}', '\u{8AAA}', '\u{8BF4}', '\u{007C}', '\u{4E3B}', '\u{4E9B}', '\u{56E0}', '\u{5B83}', '\u{60F3}', '\u{610F}', '\u{7406}', '\u{751F}', '\u{7576}', '\u{770B}', '\u{7740}', '\u{7F6E}', '\u{8005}', '\u{81EA}', '\u{8457}', '\u{88E1}', '\u{8FC7}', '\u{8FD8}', '\u{8FDB}', '\u{9032}', '\u{904E}', '\u{9053}', '\u{9084}', '\u{91CC}', '\u{9762}'];
-const CJK_LEFT_CHARS: &[char] = &['\u{4E9B}', '\u{4EEC}', '\u{4F60}', '\u{4F86}', '\u{5011}', '\u{5230}', '\u{548C}', '\u{5730}', '\u{5979}', '\u{5C06}', '\u{5C07}', '\u{5C31}', '\u{5E74}', '\u{5F97}', '\u{60C5}', '\u{6700}', '\u{6837}', '\u{6A23}', '\u{7406}', '\u{80FD}', '\u{8AAA}', '\u{8BF4}', '\u{8FD9}', '\u{9019}', '\u{901A}', '\u{007C}', '\u{5373}', '\u{5417}', '\u{5427}', '\u{542C}', '\u{5462}', '\u{54C1}', '\u{54CD}', '\u{55CE}', '\u{5E08}', '\u{5E2B}', '\u{6536}', '\u{65AD}', '\u{65B7}', '\u{660E}', '\u{773C}', '\u{9593}', '\u{95F4}', '\u{9645}', '\u{9648}', '\u{9650}', '\u{9664}', '\u{9673}', '\u{968F}', '\u{969B}', '\u{96A8}'];
-const CJK_RIGHT_CHARS: &[char] = &['\u{4E8B}', '\u{524D}', '\u{5B78}', '\u{5C06}', '\u{5C07}', '\u{60C5}', '\u{60F3}', '\u{6216}', '\u{653F}', '\u{65AF}', '\u{65B0}', '\u{6837}', '\u{6A23}', '\u{6C11}', '\u{6C92}', '\u{6CA1}', '\u{7136}', '\u{7279}', '\u{73B0}', '\u{73FE}', '\u{7403}', '\u{7B2C}', '\u{7D93}', '\u{8C01}', '\u{8D77}', '\u{007C}', '\u{4F8B}', '\u{5225}', '\u{522B}', '\u{5236}', '\u{52A8}', '\u{52D5}', '\u{5417}', '\u{55CE}', '\u{589E}', '\u{6307}', '\u{660E}', '\u{671D}', '\u{671F}', '\u{6784}', '\u{7269}', '\u{786E}', '\u{79CD}', '\u{8ABF}', '\u{8C03}', '\u{8CBB}', '\u{8D39}', '\u{90A3}', '\u{90FD}', '\u{9593}', '\u{95F4}'];
-const CJK_TOP_CHARS: &[char] = &['\u{4ED6}', '\u{4EEC}', '\u{4F60}', '\u{4F86}', '\u{5011}', '\u{5230}', '\u{548C}', '\u{5730}', '\u{5BF9}', '\u{5C0D}', '\u{5C31}', '\u{5E2D}', '\u{6211}', '\u{65F6}', '\u{6642}', '\u{6703}', '\u{6765}', '\u{70BA}', '\u{80FD}', '\u{8230}', '\u{8AAA}', '\u{8BF4}', '\u{8FD9}', '\u{9019}', '\u{9F4A}', '\u{007C}', '\u{519B}', '\u{540C}', '\u{5DF2}', '\u{613F}', '\u{65E2}', '\u{661F}', '\u{662F}', '\u{666F}', '\u{6C11}', '\u{7167}', '\u{73B0}', '\u{73FE}', '\u{7406}', '\u{7528}', '\u{7F6E}', '\u{8981}', '\u{8ECD}', '\u{90A3}', '\u{914D}', '\u{91CC}', '\u{958B}', '\u{96F7}', '\u{9732}', '\u{9762}', '\u{987E}'];
-const COPTIC_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{2CD0}', '\u{2CD8}', '\u{2CDE}', '\u{2C8E}', '\u{2C9E}', '\u{2C90}', '\u{2CDC}', '\u{2CB0}'];
-const COPTIC_CAPITAL_TOP_CHARS: &[char] = &['\u{2C8C}', '\u{2C8E}', '\u{2CA0}', '\u{2CDE}', '\u{2C9E}', '\u{2C90}', '\u{2CA4}', '\u{2CCA}'];
-const COPTIC_SMALL_BOTTOM_CHARS: &[char] = &['\u{2CD1}', '\u{2CD9}', '\u{2CDF}', '\u{2C8F}', '\u{2C9F}', '\u{2C91}', '\u{2CDD}', '\u{2CD2}'];
-const COPTIC_SMALL_TOP_CHARS: &[char] = &['\u{2C8D}', '\u{2C8F}', '\u{2CA1}', '\u{2CDF}', '\u{2C9F}', '\u{2C91}', '\u{2CA5}', '\u{2CCB}'];
-const CYPRIOT_BOTTOM_CHARS: &[char] = &['\u{10803}', '\u{1080A}', '\u{1081B}', '\u{10823}', '\u{10833}', '\u{10835}', '\u{10810}'];
+const CJK_BOTTOM_CHARS: &[char] = &[
+    '\u{4E2A}', '\u{4E3A}', '\u{4EBA}', '\u{4ED6}', '\u{4EE5}', '\u{4EEC}', '\u{4F60}', '\u{4F86}',
+    '\u{500B}', '\u{5011}', '\u{5230}', '\u{548C}', '\u{5927}', '\u{5BF9}', '\u{5C0D}', '\u{5C31}',
+    '\u{6211}', '\u{65F6}', '\u{6642}', '\u{6709}', '\u{6765}', '\u{70BA}', '\u{8981}', '\u{8AAA}',
+    '\u{8BF4}', '\u{007C}', '\u{4E3B}', '\u{4E9B}', '\u{56E0}', '\u{5B83}', '\u{60F3}', '\u{610F}',
+    '\u{7406}', '\u{751F}', '\u{7576}', '\u{770B}', '\u{7740}', '\u{7F6E}', '\u{8005}', '\u{81EA}',
+    '\u{8457}', '\u{88E1}', '\u{8FC7}', '\u{8FD8}', '\u{8FDB}', '\u{9032}', '\u{904E}', '\u{9053}',
+    '\u{9084}', '\u{91CC}', '\u{9762}',
+];
+const CJK_LEFT_CHARS: &[char] = &[
+    '\u{4E9B}', '\u{4EEC}', '\u{4F60}', '\u{4F86}', '\u{5011}', '\u{5230}', '\u{548C}', '\u{5730}',
+    '\u{5979}', '\u{5C06}', '\u{5C07}', '\u{5C31}', '\u{5E74}', '\u{5F97}', '\u{60C5}', '\u{6700}',
+    '\u{6837}', '\u{6A23}', '\u{7406}', '\u{80FD}', '\u{8AAA}', '\u{8BF4}', '\u{8FD9}', '\u{9019}',
+    '\u{901A}', '\u{007C}', '\u{5373}', '\u{5417}', '\u{5427}', '\u{542C}', '\u{5462}', '\u{54C1}',
+    '\u{54CD}', '\u{55CE}', '\u{5E08}', '\u{5E2B}', '\u{6536}', '\u{65AD}', '\u{65B7}', '\u{660E}',
+    '\u{773C}', '\u{9593}', '\u{95F4}', '\u{9645}', '\u{9648}', '\u{9650}', '\u{9664}', '\u{9673}',
+    '\u{968F}', '\u{969B}', '\u{96A8}',
+];
+const CJK_RIGHT_CHARS: &[char] = &[
+    '\u{4E8B}', '\u{524D}', '\u{5B78}', '\u{5C06}', '\u{5C07}', '\u{60C5}', '\u{60F3}', '\u{6216}',
+    '\u{653F}', '\u{65AF}', '\u{65B0}', '\u{6837}', '\u{6A23}', '\u{6C11}', '\u{6C92}', '\u{6CA1}',
+    '\u{7136}', '\u{7279}', '\u{73B0}', '\u{73FE}', '\u{7403}', '\u{7B2C}', '\u{7D93}', '\u{8C01}',
+    '\u{8D77}', '\u{007C}', '\u{4F8B}', '\u{5225}', '\u{522B}', '\u{5236}', '\u{52A8}', '\u{52D5}',
+    '\u{5417}', '\u{55CE}', '\u{589E}', '\u{6307}', '\u{660E}', '\u{671D}', '\u{671F}', '\u{6784}',
+    '\u{7269}', '\u{786E}', '\u{79CD}', '\u{8ABF}', '\u{8C03}', '\u{8CBB}', '\u{8D39}', '\u{90A3}',
+    '\u{90FD}', '\u{9593}', '\u{95F4}',
+];
+const CJK_TOP_CHARS: &[char] = &[
+    '\u{4ED6}', '\u{4EEC}', '\u{4F60}', '\u{4F86}', '\u{5011}', '\u{5230}', '\u{548C}', '\u{5730}',
+    '\u{5BF9}', '\u{5C0D}', '\u{5C31}', '\u{5E2D}', '\u{6211}', '\u{65F6}', '\u{6642}', '\u{6703}',
+    '\u{6765}', '\u{70BA}', '\u{80FD}', '\u{8230}', '\u{8AAA}', '\u{8BF4}', '\u{8FD9}', '\u{9019}',
+    '\u{9F4A}', '\u{007C}', '\u{519B}', '\u{540C}', '\u{5DF2}', '\u{613F}', '\u{65E2}', '\u{661F}',
+    '\u{662F}', '\u{666F}', '\u{6C11}', '\u{7167}', '\u{73B0}', '\u{73FE}', '\u{7406}', '\u{7528}',
+    '\u{7F6E}', '\u{8981}', '\u{8ECD}', '\u{90A3}', '\u{914D}', '\u{91CC}', '\u{958B}', '\u{96F7}',
+    '\u{9732}', '\u{9762}', '\u{987E}',
+];
+const COPTIC_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{2CD0}', '\u{2CD8}', '\u{2CDE}', '\u{2C8E}', '\u{2C9E}', '\u{2C90}', '\u{2CDC}', '\u{2CB0}',
+];
+const COPTIC_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{2C8C}', '\u{2C8E}', '\u{2CA0}', '\u{2CDE}', '\u{2C9E}', '\u{2C90}', '\u{2CA4}', '\u{2CCA}',
+];
+const COPTIC_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{2CD1}', '\u{2CD9}', '\u{2CDF}', '\u{2C8F}', '\u{2C9F}', '\u{2C91}', '\u{2CDD}', '\u{2CD2}',
+];
+const COPTIC_SMALL_TOP_CHARS: &[char] = &[
+    '\u{2C8D}', '\u{2C8F}', '\u{2CA1}', '\u{2CDF}', '\u{2C9F}', '\u{2C91}', '\u{2CA5}', '\u{2CCB}',
+];
+const CYPRIOT_BOTTOM_CHARS: &[char] = &[
+    '\u{10803}',
+    '\u{1080A}',
+    '\u{1081B}',
+    '\u{10823}',
+    '\u{10833}',
+    '\u{10835}',
+    '\u{10810}',
+];
 const CYPRIOT_SMALL_CHARS: &[char] = &['\u{10808}', '\u{1080F}', '\u{10816}'];
-const CYPRIOT_TOP_CHARS: &[char] = &['\u{1080D}', '\u{10819}', '\u{10833}', '\u{10831}', '\u{10805}', '\u{10813}', '\u{10823}', '\u{10826}'];
-const CYRILLIC_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{0411}', '\u{0412}', '\u{0415}', '\u{0428}', '\u{0417}', '\u{041E}', '\u{0421}', '\u{042D}'];
-const CYRILLIC_CAPITAL_TOP_CHARS: &[char] = &['\u{0411}', '\u{0412}', '\u{0415}', '\u{041F}', '\u{0417}', '\u{041E}', '\u{0421}', '\u{042D}'];
-const CYRILLIC_SMALL_CHARS: &[char] = &['\u{0445}', '\u{043F}', '\u{043D}', '\u{0448}', '\u{0435}', '\u{0437}', '\u{043E}', '\u{0441}'];
+const CYPRIOT_TOP_CHARS: &[char] = &[
+    '\u{1080D}',
+    '\u{10819}',
+    '\u{10833}',
+    '\u{10831}',
+    '\u{10805}',
+    '\u{10813}',
+    '\u{10823}',
+    '\u{10826}',
+];
+const CYRILLIC_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{0411}', '\u{0412}', '\u{0415}', '\u{0428}', '\u{0417}', '\u{041E}', '\u{0421}', '\u{042D}',
+];
+const CYRILLIC_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{0411}', '\u{0412}', '\u{0415}', '\u{041F}', '\u{0417}', '\u{041E}', '\u{0421}', '\u{042D}',
+];
+const CYRILLIC_SMALL_CHARS: &[char] = &[
+    '\u{0445}', '\u{043F}', '\u{043D}', '\u{0448}', '\u{0435}', '\u{0437}', '\u{043E}', '\u{0441}',
+];
 const CYRILLIC_SMALL_DESCENDER_CHARS: &[char] = &['\u{0440}', '\u{0443}', '\u{0444}'];
-const DESERET_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{10400}', '\u{10402}', '\u{10404}', '\u{10417}', '\u{1041B}'];
-const DESERET_CAPITAL_TOP_CHARS: &[char] = &['\u{10402}', '\u{10404}', '\u{1040B}', '\u{10417}', '\u{10411}'];
-const DESERET_SMALL_BOTTOM_CHARS: &[char] = &['\u{10428}', '\u{1042A}', '\u{1042C}', '\u{1043F}', '\u{10443}'];
-const DESERET_SMALL_TOP_CHARS: &[char] = &['\u{1042A}', '\u{1042C}', '\u{10433}', '\u{1043F}', '\u{10439}'];
-const DEVANAGARI_BASE_CHARS: &[char] = &['\u{0915}', '\u{0928}', '\u{092E}', '\u{0909}', '\u{091B}', '\u{091F}', '\u{0920}', '\u{0921}'];
+const DESERET_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{10400}',
+    '\u{10402}',
+    '\u{10404}',
+    '\u{10417}',
+    '\u{1041B}',
+];
+const DESERET_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{10402}',
+    '\u{10404}',
+    '\u{1040B}',
+    '\u{10417}',
+    '\u{10411}',
+];
+const DESERET_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{10428}',
+    '\u{1042A}',
+    '\u{1042C}',
+    '\u{1043F}',
+    '\u{10443}',
+];
+const DESERET_SMALL_TOP_CHARS: &[char] = &[
+    '\u{1042A}',
+    '\u{1042C}',
+    '\u{10433}',
+    '\u{1043F}',
+    '\u{10439}',
+];
+const DEVANAGARI_BASE_CHARS: &[char] = &[
+    '\u{0915}', '\u{0928}', '\u{092E}', '\u{0909}', '\u{091B}', '\u{091F}', '\u{0920}', '\u{0921}',
+];
 const DEVANAGARI_BOTTOM_CHARS: &[char] = &['\u{0941}', '\u{0943}'];
-const DEVANAGARI_HEAD_CHARS: &[char] = &['\u{0915}', '\u{092E}', '\u{0905}', '\u{0906}', '\u{0925}', '\u{0927}', '\u{092D}', '\u{0936}'];
-const DEVANAGARI_TOP_CHARS: &[char] = &['\u{0908}', '\u{0910}', '\u{0913}', '\u{0914}', '\u{093F}', '\u{0940}', '\u{094B}', '\u{094C}'];
-const ETHIOPIC_BOTTOM_CHARS: &[char] = &['\u{1208}', '\u{1210}', '\u{1260}', '\u{12D8}', '\u{1200}', '\u{122A}', '\u{12D0}', '\u{1328}'];
-const ETHIOPIC_TOP_CHARS: &[char] = &['\u{1200}', '\u{1203}', '\u{12D8}', '\u{1350}', '\u{121B}', '\u{1260}', '\u{12CB}', '\u{12D0}'];
-const GEORGIAN_ASOMTAVRULI_BOTTOM_CHARS: &[char] = &['\u{10A4}', '\u{10A5}', '\u{10A7}', '\u{10A8}', '\u{10A6}', '\u{10B1}', '\u{10AA}', '\u{10AB}'];
-const GEORGIAN_ASOMTAVRULI_TOP_CHARS: &[char] = &['\u{10B1}', '\u{10A7}', '\u{10B9}', '\u{10BC}', '\u{10A4}', '\u{10A5}', '\u{10B3}', '\u{10BA}'];
-const GEORGIAN_MKHEDRULI_ASCENDER_CHARS: &[char] = &['\u{10E1}', '\u{10EE}', '\u{10E5}', '\u{10D6}', '\u{10DB}', '\u{10E8}', '\u{10E9}', '\u{10EC}'];
-const GEORGIAN_MKHEDRULI_BOTTOM_CHARS: &[char] = &['\u{10D0}', '\u{10D6}', '\u{10DB}', '\u{10E1}', '\u{10E8}', '\u{10EB}', '\u{10EE}', '\u{10DE}'];
-const GEORGIAN_MKHEDRULI_DESCENDER_CHARS: &[char] = &['\u{10D4}', '\u{10D5}', '\u{10DF}', '\u{10E2}', '\u{10E3}', '\u{10E4}', '\u{10E5}', '\u{10E7}'];
-const GEORGIAN_MKHEDRULI_TOP_CHARS: &[char] = &['\u{10D2}', '\u{10D3}', '\u{10D4}', '\u{10D5}', '\u{10D7}', '\u{10D8}', '\u{10DD}', '\u{10E6}'];
-const GEORGIAN_MTAVRULI_BOTTOM_CHARS: &[char] = &['\u{1C98}', '\u{1CB2}', '\u{1C9D}', '\u{1CA9}', '\u{1C9B}', '\u{1CA8}', '\u{1CAF}', '\u{1CBD}'];
-const GEORGIAN_MTAVRULI_TOP_CHARS: &[char] = &['\u{1C9C}', '\u{1C9F}', '\u{1CB3}', '\u{1CB8}', '\u{1C92}', '\u{1C94}', '\u{1C9D}', '\u{1CB4}'];
-const GEORGIAN_NUSKHURI_ASCENDER_CHARS: &[char] = &['\u{2D10}', '\u{2D11}', '\u{2D13}', '\u{2D15}', '\u{2D19}', '\u{2D1B}', '\u{2D21}', '\u{2D23}'];
-const GEORGIAN_NUSKHURI_BOTTOM_CHARS: &[char] = &['\u{2D08}', '\u{2D0C}', '\u{2D16}', '\u{2D0E}', '\u{2D03}', '\u{2D06}', '\u{2D0B}', '\u{2D22}'];
-const GEORGIAN_NUSKHURI_DESCENDER_CHARS: &[char] = &['\u{2D04}', '\u{2D05}', '\u{2D14}', '\u{2D15}', '\u{2D01}', '\u{2D02}', '\u{2D18}', '\u{2D1D}'];
-const GEORGIAN_NUSKHURI_TOP_CHARS: &[char] = &['\u{2D01}', '\u{2D17}', '\u{2D02}', '\u{2D04}', '\u{2D05}', '\u{2D07}', '\u{2D14}', '\u{2D16}'];
-const GLAGOLITIC_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{2C05}', '\u{2C04}', '\u{2C02}', '\u{2C2A}', '\u{2C1E}', '\u{2C21}', '\u{2C0A}', '\u{2C14}'];
-const GLAGOLITIC_CAPITAL_TOP_CHARS: &[char] = &['\u{2C05}', '\u{2C14}', '\u{2C2A}', '\u{2C04}', '\u{2C02}', '\u{2C0A}', '\u{2C2B}', '\u{2C0B}'];
-const GLAGOLITIC_SMALL_BOTTOM_CHARS: &[char] = &['\u{2C35}', '\u{2C34}', '\u{2C32}', '\u{2C5A}', '\u{2C4E}', '\u{2C51}', '\u{2C3A}', '\u{2C44}'];
-const GLAGOLITIC_SMALL_TOP_CHARS: &[char] = &['\u{2C35}', '\u{2C44}', '\u{2C5A}', '\u{2C34}', '\u{2C32}', '\u{2C3A}', '\u{2C5B}', '\u{2C3B}'];
+const DEVANAGARI_HEAD_CHARS: &[char] = &[
+    '\u{0915}', '\u{092E}', '\u{0905}', '\u{0906}', '\u{0925}', '\u{0927}', '\u{092D}', '\u{0936}',
+];
+const DEVANAGARI_TOP_CHARS: &[char] = &[
+    '\u{0908}', '\u{0910}', '\u{0913}', '\u{0914}', '\u{093F}', '\u{0940}', '\u{094B}', '\u{094C}',
+];
+const ETHIOPIC_BOTTOM_CHARS: &[char] = &[
+    '\u{1208}', '\u{1210}', '\u{1260}', '\u{12D8}', '\u{1200}', '\u{122A}', '\u{12D0}', '\u{1328}',
+];
+const ETHIOPIC_TOP_CHARS: &[char] = &[
+    '\u{1200}', '\u{1203}', '\u{12D8}', '\u{1350}', '\u{121B}', '\u{1260}', '\u{12CB}', '\u{12D0}',
+];
+const GEORGIAN_ASOMTAVRULI_BOTTOM_CHARS: &[char] = &[
+    '\u{10A4}', '\u{10A5}', '\u{10A7}', '\u{10A8}', '\u{10A6}', '\u{10B1}', '\u{10AA}', '\u{10AB}',
+];
+const GEORGIAN_ASOMTAVRULI_TOP_CHARS: &[char] = &[
+    '\u{10B1}', '\u{10A7}', '\u{10B9}', '\u{10BC}', '\u{10A4}', '\u{10A5}', '\u{10B3}', '\u{10BA}',
+];
+const GEORGIAN_MKHEDRULI_ASCENDER_CHARS: &[char] = &[
+    '\u{10E1}', '\u{10EE}', '\u{10E5}', '\u{10D6}', '\u{10DB}', '\u{10E8}', '\u{10E9}', '\u{10EC}',
+];
+const GEORGIAN_MKHEDRULI_BOTTOM_CHARS: &[char] = &[
+    '\u{10D0}', '\u{10D6}', '\u{10DB}', '\u{10E1}', '\u{10E8}', '\u{10EB}', '\u{10EE}', '\u{10DE}',
+];
+const GEORGIAN_MKHEDRULI_DESCENDER_CHARS: &[char] = &[
+    '\u{10D4}', '\u{10D5}', '\u{10DF}', '\u{10E2}', '\u{10E3}', '\u{10E4}', '\u{10E5}', '\u{10E7}',
+];
+const GEORGIAN_MKHEDRULI_TOP_CHARS: &[char] = &[
+    '\u{10D2}', '\u{10D3}', '\u{10D4}', '\u{10D5}', '\u{10D7}', '\u{10D8}', '\u{10DD}', '\u{10E6}',
+];
+const GEORGIAN_MTAVRULI_BOTTOM_CHARS: &[char] = &[
+    '\u{1C98}', '\u{1CB2}', '\u{1C9D}', '\u{1CA9}', '\u{1C9B}', '\u{1CA8}', '\u{1CAF}', '\u{1CBD}',
+];
+const GEORGIAN_MTAVRULI_TOP_CHARS: &[char] = &[
+    '\u{1C9C}', '\u{1C9F}', '\u{1CB3}', '\u{1CB8}', '\u{1C92}', '\u{1C94}', '\u{1C9D}', '\u{1CB4}',
+];
+const GEORGIAN_NUSKHURI_ASCENDER_CHARS: &[char] = &[
+    '\u{2D10}', '\u{2D11}', '\u{2D13}', '\u{2D15}', '\u{2D19}', '\u{2D1B}', '\u{2D21}', '\u{2D23}',
+];
+const GEORGIAN_NUSKHURI_BOTTOM_CHARS: &[char] = &[
+    '\u{2D08}', '\u{2D0C}', '\u{2D16}', '\u{2D0E}', '\u{2D03}', '\u{2D06}', '\u{2D0B}', '\u{2D22}',
+];
+const GEORGIAN_NUSKHURI_DESCENDER_CHARS: &[char] = &[
+    '\u{2D04}', '\u{2D05}', '\u{2D14}', '\u{2D15}', '\u{2D01}', '\u{2D02}', '\u{2D18}', '\u{2D1D}',
+];
+const GEORGIAN_NUSKHURI_TOP_CHARS: &[char] = &[
+    '\u{2D01}', '\u{2D17}', '\u{2D02}', '\u{2D04}', '\u{2D05}', '\u{2D07}', '\u{2D14}', '\u{2D16}',
+];
+const GLAGOLITIC_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{2C05}', '\u{2C04}', '\u{2C02}', '\u{2C2A}', '\u{2C1E}', '\u{2C21}', '\u{2C0A}', '\u{2C14}',
+];
+const GLAGOLITIC_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{2C05}', '\u{2C14}', '\u{2C2A}', '\u{2C04}', '\u{2C02}', '\u{2C0A}', '\u{2C2B}', '\u{2C0B}',
+];
+const GLAGOLITIC_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{2C35}', '\u{2C34}', '\u{2C32}', '\u{2C5A}', '\u{2C4E}', '\u{2C51}', '\u{2C3A}', '\u{2C44}',
+];
+const GLAGOLITIC_SMALL_TOP_CHARS: &[char] = &[
+    '\u{2C35}', '\u{2C44}', '\u{2C5A}', '\u{2C34}', '\u{2C32}', '\u{2C3A}', '\u{2C5B}', '\u{2C3B}',
+];
 const GOTHIC_BOTTOM_CHARS: &[char] = &['\u{10336}', '\u{10334}', '\u{10343}', '\u{10348}'];
-const GOTHIC_TOP_CHARS: &[char] = &['\u{10332}', '\u{10336}', '\u{10340}', '\u{10344}', '\u{10334}', '\u{10343}', '\u{10348}', '\u{1033E}'];
-const GREEK_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{0392}', '\u{0394}', '\u{0396}', '\u{039E}', '\u{0398}', '\u{039F}'];
-const GREEK_CAPITAL_TOP_CHARS: &[char] = &['\u{0393}', '\u{0392}', '\u{0395}', '\u{0396}', '\u{0398}', '\u{039F}', '\u{03A9}'];
-const GREEK_SMALL_CHARS: &[char] = &['\u{03B1}', '\u{03B5}', '\u{03B9}', '\u{03BF}', '\u{03C0}', '\u{03C3}', '\u{03C4}', '\u{03C9}'];
-const GREEK_SMALL_BETA_TOP_CHARS: &[char] = &['\u{03B2}', '\u{03B8}', '\u{03B4}', '\u{03B6}', '\u{03BB}', '\u{03BE}'];
-const GREEK_SMALL_DESCENDER_CHARS: &[char] = &['\u{03B2}', '\u{03B3}', '\u{03B7}', '\u{03BC}', '\u{03C1}', '\u{03C6}', '\u{03C7}', '\u{03C8}'];
-const GUJARATI_ASCENDER_CHARS: &[char] = &['\u{0A88}', '\u{0A8A}', '\u{0ABF}', '\u{0AC0}', '\u{0AB2}', '\u{0AB6}', '\u{0A9C}', '\u{0AB8}'];
-const GUJARATI_BOTTOM_CHARS: &[char] = &['\u{0A96}', '\u{0A97}', '\u{0A98}', '\u{0A9E}', '\u{0A87}', '\u{0A88}', '\u{0AA0}', '\u{0A9C}'];
-const GUJARATI_DESCENDER_CHARS: &[char] = &['\u{0AC1}', '\u{0AC3}', '\u{0AC4}', '\u{0A96}', '\u{0A9B}', '\u{0A9B}'];
-const GUJARATI_DIGIT_TOP_CHARS: &[char] = &['\u{0AE6}', '\u{0AE7}', '\u{0AE8}', '\u{0AE9}', '\u{0AED}'];
-const GUJARATI_TOP_CHARS: &[char] = &['\u{0AA4}', '\u{0AA8}', '\u{0A8B}', '\u{0A8C}', '\u{0A9B}', '\u{0A9F}', '\u{0AB0}', '\u{0AE6}'];
-const GURMUKHI_BASE_CHARS: &[char] = &['\u{0A15}', '\u{0A17}', '\u{0A19}', '\u{0A1A}', '\u{0A1C}', '\u{0A24}', '\u{0A27}', '\u{0A38}'];
-const GURMUKHI_BOTTOM_CHARS: &[char] = &['\u{0A05}', '\u{0A0F}', '\u{0A13}', '\u{0A17}', '\u{0A1C}', '\u{0A20}', '\u{0A30}', '\u{0A38}'];
-const GURMUKHI_DIGIT_TOP_CHARS: &[char] = &['\u{0A66}', '\u{0A67}', '\u{0A68}', '\u{0A69}', '\u{0A6D}'];
-const GURMUKHI_HEAD_CHARS: &[char] = &['\u{0A15}', '\u{0A17}', '\u{0A19}', '\u{0A1A}', '\u{0A1C}', '\u{0A24}', '\u{0A27}', '\u{0A38}'];
-const GURMUKHI_TOP_CHARS: &[char] = &['\u{0A07}', '\u{0A08}', '\u{0A09}', '\u{0A0F}', '\u{0A13}', '\u{0A73}', '\u{0A3F}', '\u{0A40}'];
-const HEBREW_BOTTOM_CHARS: &[char] = &['\u{05D1}', '\u{05D8}', '\u{05DB}', '\u{05DD}', '\u{05E1}', '\u{05E6}'];
-const HEBREW_DESCENDER_CHARS: &[char] = &['\u{05E7}', '\u{05DA}', '\u{05DF}', '\u{05E3}', '\u{05E5}'];
-const HEBREW_TOP_CHARS: &[char] = &['\u{05D1}', '\u{05D3}', '\u{05D4}', '\u{05D7}', '\u{05DA}', '\u{05DB}', '\u{05DD}', '\u{05E1}'];
-const KANNADA_BOTTOM_CHARS: &[char] = &['\u{0C85}', '\u{0C89}', '\u{0C8E}', '\u{0CB2}', '\u{0CE6}', '\u{0CE8}', '\u{0CEC}', '\u{0CED}'];
-const KANNADA_TOP_CHARS: &[char] = &['\u{0C87}', '\u{0C8A}', '\u{0C90}', '\u{0CA3}', '\u{0CB8}', '\u{0CA8}', '\u{0CA6}', '\u{0CB0}'];
+const GOTHIC_TOP_CHARS: &[char] = &[
+    '\u{10332}',
+    '\u{10336}',
+    '\u{10340}',
+    '\u{10344}',
+    '\u{10334}',
+    '\u{10343}',
+    '\u{10348}',
+    '\u{1033E}',
+];
+const GREEK_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{0392}', '\u{0394}', '\u{0396}', '\u{039E}', '\u{0398}', '\u{039F}',
+];
+const GREEK_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{0393}', '\u{0392}', '\u{0395}', '\u{0396}', '\u{0398}', '\u{039F}', '\u{03A9}',
+];
+const GREEK_SMALL_CHARS: &[char] = &[
+    '\u{03B1}', '\u{03B5}', '\u{03B9}', '\u{03BF}', '\u{03C0}', '\u{03C3}', '\u{03C4}', '\u{03C9}',
+];
+const GREEK_SMALL_BETA_TOP_CHARS: &[char] = &[
+    '\u{03B2}', '\u{03B8}', '\u{03B4}', '\u{03B6}', '\u{03BB}', '\u{03BE}',
+];
+const GREEK_SMALL_DESCENDER_CHARS: &[char] = &[
+    '\u{03B2}', '\u{03B3}', '\u{03B7}', '\u{03BC}', '\u{03C1}', '\u{03C6}', '\u{03C7}', '\u{03C8}',
+];
+const GUJARATI_ASCENDER_CHARS: &[char] = &[
+    '\u{0A88}', '\u{0A8A}', '\u{0ABF}', '\u{0AC0}', '\u{0AB2}', '\u{0AB6}', '\u{0A9C}', '\u{0AB8}',
+];
+const GUJARATI_BOTTOM_CHARS: &[char] = &[
+    '\u{0A96}', '\u{0A97}', '\u{0A98}', '\u{0A9E}', '\u{0A87}', '\u{0A88}', '\u{0AA0}', '\u{0A9C}',
+];
+const GUJARATI_DESCENDER_CHARS: &[char] = &[
+    '\u{0AC1}', '\u{0AC3}', '\u{0AC4}', '\u{0A96}', '\u{0A9B}', '\u{0A9B}',
+];
+const GUJARATI_DIGIT_TOP_CHARS: &[char] =
+    &['\u{0AE6}', '\u{0AE7}', '\u{0AE8}', '\u{0AE9}', '\u{0AED}'];
+const GUJARATI_TOP_CHARS: &[char] = &[
+    '\u{0AA4}', '\u{0AA8}', '\u{0A8B}', '\u{0A8C}', '\u{0A9B}', '\u{0A9F}', '\u{0AB0}', '\u{0AE6}',
+];
+const GURMUKHI_BASE_CHARS: &[char] = &[
+    '\u{0A15}', '\u{0A17}', '\u{0A19}', '\u{0A1A}', '\u{0A1C}', '\u{0A24}', '\u{0A27}', '\u{0A38}',
+];
+const GURMUKHI_BOTTOM_CHARS: &[char] = &[
+    '\u{0A05}', '\u{0A0F}', '\u{0A13}', '\u{0A17}', '\u{0A1C}', '\u{0A20}', '\u{0A30}', '\u{0A38}',
+];
+const GURMUKHI_DIGIT_TOP_CHARS: &[char] =
+    &['\u{0A66}', '\u{0A67}', '\u{0A68}', '\u{0A69}', '\u{0A6D}'];
+const GURMUKHI_HEAD_CHARS: &[char] = &[
+    '\u{0A15}', '\u{0A17}', '\u{0A19}', '\u{0A1A}', '\u{0A1C}', '\u{0A24}', '\u{0A27}', '\u{0A38}',
+];
+const GURMUKHI_TOP_CHARS: &[char] = &[
+    '\u{0A07}', '\u{0A08}', '\u{0A09}', '\u{0A0F}', '\u{0A13}', '\u{0A73}', '\u{0A3F}', '\u{0A40}',
+];
+const HEBREW_BOTTOM_CHARS: &[char] = &[
+    '\u{05D1}', '\u{05D8}', '\u{05DB}', '\u{05DD}', '\u{05E1}', '\u{05E6}',
+];
+const HEBREW_DESCENDER_CHARS: &[char] =
+    &['\u{05E7}', '\u{05DA}', '\u{05DF}', '\u{05E3}', '\u{05E5}'];
+const HEBREW_TOP_CHARS: &[char] = &[
+    '\u{05D1}', '\u{05D3}', '\u{05D4}', '\u{05D7}', '\u{05DA}', '\u{05DB}', '\u{05DD}', '\u{05E1}',
+];
+const KANNADA_BOTTOM_CHARS: &[char] = &[
+    '\u{0C85}', '\u{0C89}', '\u{0C8E}', '\u{0CB2}', '\u{0CE6}', '\u{0CE8}', '\u{0CEC}', '\u{0CED}',
+];
+const KANNADA_TOP_CHARS: &[char] = &[
+    '\u{0C87}', '\u{0C8A}', '\u{0C90}', '\u{0CA3}', '\u{0CB8}', '\u{0CA8}', '\u{0CA6}', '\u{0CB0}',
+];
 const KAYAH_LI_ASCENDER_CHARS: &[char] = &['\u{A916}', '\u{A921}'];
-const KAYAH_LI_BOTTOM_CHARS: &[char] = &['\u{A908}', '\u{A918}', '\u{A900}', '\u{A90D}', '\u{A922}'];
+const KAYAH_LI_BOTTOM_CHARS: &[char] =
+    &['\u{A908}', '\u{A918}', '\u{A900}', '\u{A90D}', '\u{A922}'];
 const KAYAH_LI_DESCENDER_CHARS: &[char] = &['\u{A911}', '\u{A91C}', '\u{A91E}'];
 const KAYAH_LI_LARGE_DESCENDER_CHARS: &[char] = &['\u{A911}', '\u{A91C}', '\u{A914}'];
-const KAYAH_LI_TOP_CHARS: &[char] = &['\u{A905}', '\u{A90F}', '\u{A901}', '\u{A90B}', '\u{A900}', '\u{A90D}'];
-const KHMER_BOTTOM_CHARS: &[char] = &['\u{1781}', '\u{1783}', '\u{1785}', '\u{178B}', '\u{1794}', '\u{1798}', '\u{1799}', '\u{17B2}'];
+const KAYAH_LI_TOP_CHARS: &[char] = &[
+    '\u{A905}', '\u{A90F}', '\u{A901}', '\u{A90B}', '\u{A900}', '\u{A90D}',
+];
+const KHMER_BOTTOM_CHARS: &[char] = &[
+    '\u{1781}', '\u{1783}', '\u{1785}', '\u{178B}', '\u{1794}', '\u{1798}', '\u{1799}', '\u{17B2}',
+];
 const KHMER_DESCENDER_CHARS: &[char] = &['\u{178F}', '\u{179A}', '\u{17B2}', '\u{17A2}'];
-const KHMER_LARGE_DESCENDER_CHARS: &[char] = &['\u{1793}', '\u{1784}', '\u{1780}', '\u{1785}', '\u{1793}', '\u{179B}'];
+const KHMER_LARGE_DESCENDER_CHARS: &[char] = &[
+    '\u{1793}', '\u{1784}', '\u{1780}', '\u{1785}', '\u{1793}', '\u{179B}',
+];
 const KHMER_SUBSCRIPT_TOP_CHARS: &[char] = &['\u{1780}', '\u{1780}', '\u{1780}', '\u{1780}'];
 const KHMER_SYMBOLS_WANING_BOTTOM_CHARS: &[char] = &['\u{19F6}', '\u{19F9}'];
 const KHMER_SYMBOLS_WAXING_TOP_CHARS: &[char] = &['\u{19E0}', '\u{19E1}'];
-const KHMER_TOP_CHARS: &[char] = &['\u{1781}', '\u{1791}', '\u{1793}', '\u{17A7}', '\u{17A9}', '\u{17B6}'];
+const KHMER_TOP_CHARS: &[char] = &[
+    '\u{1781}', '\u{1791}', '\u{1793}', '\u{17A7}', '\u{17A9}', '\u{17B6}',
+];
 const LAO_ASCENDER_CHARS: &[char] = &['\u{0E9B}', '\u{0EA2}', '\u{0E9F}', '\u{0E9D}'];
-const LAO_BOTTOM_CHARS: &[char] = &['\u{0EB2}', '\u{0EAD}', '\u{0E9A}', '\u{0E8D}', '\u{0EA3}', '\u{0EAE}', '\u{0EA7}', '\u{0EA2}'];
-const LAO_DESCENDER_CHARS: &[char] = &['\u{0E87}', '\u{0E8A}', '\u{0E96}', '\u{0EBD}', '\u{0EC6}', '\u{0EAF}'];
+const LAO_BOTTOM_CHARS: &[char] = &[
+    '\u{0EB2}', '\u{0EAD}', '\u{0E9A}', '\u{0E8D}', '\u{0EA3}', '\u{0EAE}', '\u{0EA7}', '\u{0EA2}',
+];
+const LAO_DESCENDER_CHARS: &[char] = &[
+    '\u{0E87}', '\u{0E8A}', '\u{0E96}', '\u{0EBD}', '\u{0EC6}', '\u{0EAF}',
+];
 const LAO_LARGE_ASCENDER_CHARS: &[char] = &['\u{0EC2}', '\u{0EC4}', '\u{0EC3}'];
-const LAO_TOP_CHARS: &[char] = &['\u{0EB2}', '\u{0E94}', '\u{0EAD}', '\u{0EA1}', '\u{0EA5}', '\u{0EA7}', '\u{0EA3}', '\u{0E87}'];
-const LATIN_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{0048}', '\u{0045}', '\u{005A}', '\u{004C}', '\u{004F}', '\u{0043}', '\u{0055}', '\u{0053}'];
-const LATIN_CAPITAL_TOP_CHARS: &[char] = &['\u{0054}', '\u{0048}', '\u{0045}', '\u{005A}', '\u{004F}', '\u{0043}', '\u{0051}', '\u{0053}'];
-const LATIN_SMALL_BOTTOM_CHARS: &[char] = &['\u{006E}', '\u{0072}', '\u{0078}', '\u{007A}', '\u{006F}', '\u{0065}', '\u{0073}', '\u{0063}'];
-const LATIN_SMALL_DESCENDER_CHARS: &[char] = &['\u{0070}', '\u{0071}', '\u{0067}', '\u{006A}', '\u{0079}'];
-const LATIN_SMALL_F_TOP_CHARS: &[char] = &['\u{0066}', '\u{0069}', '\u{006A}', '\u{006B}', '\u{0064}', '\u{0062}', '\u{0068}'];
-const LATIN_SMALL_TOP_CHARS: &[char] = &['\u{0075}', '\u{0076}', '\u{0078}', '\u{007A}', '\u{006F}', '\u{0065}', '\u{0073}', '\u{0063}'];
-const LATIN_SUBS_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{2080}', '\u{2081}', '\u{2082}', '\u{2083}', '\u{2088}'];
-const LATIN_SUBS_CAPITAL_TOP_CHARS: &[char] = &['\u{2080}', '\u{2083}', '\u{2085}', '\u{2087}', '\u{2088}'];
-const LATIN_SUBS_SMALL_CHARS: &[char] = &['\u{2090}', '\u{2091}', '\u{2092}', '\u{2093}', '\u{2099}', '\u{209B}', '\u{1D65}', '\u{1D64}', '\u{1D63}'];
-const LATIN_SUBS_SMALL_DESCENDER_CHARS: &[char] = &['\u{1D66}', '\u{1D67}', '\u{1D68}', '\u{1D69}', '\u{209A}'];
-const LATIN_SUBS_SMALL_F_TOP_CHARS: &[char] = &['\u{1D62}', '\u{2C7C}', '\u{2095}', '\u{2096}', '\u{2097}'];
-const LATIN_SUPS_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{2070}', '\u{00B9}', '\u{00B2}', '\u{00B3}', '\u{1D31}', '\u{1D38}', '\u{1D3C}', '\u{1D41}'];
-const LATIN_SUPS_CAPITAL_TOP_CHARS: &[char] = &['\u{2070}', '\u{00B3}', '\u{2075}', '\u{2077}', '\u{1D40}', '\u{1D34}', '\u{1D31}', '\u{1D3C}'];
-const LATIN_SUPS_SMALL_CHARS: &[char] = &['\u{1D49}', '\u{1D52}', '\u{02B3}', '\u{02E2}', '\u{02E3}', '\u{1D9C}', '\u{1DBB}'];
+const LAO_TOP_CHARS: &[char] = &[
+    '\u{0EB2}', '\u{0E94}', '\u{0EAD}', '\u{0EA1}', '\u{0EA5}', '\u{0EA7}', '\u{0EA3}', '\u{0E87}',
+];
+const LATIN_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{0048}', '\u{0045}', '\u{005A}', '\u{004C}', '\u{004F}', '\u{0043}', '\u{0055}', '\u{0053}',
+];
+const LATIN_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{0054}', '\u{0048}', '\u{0045}', '\u{005A}', '\u{004F}', '\u{0043}', '\u{0051}', '\u{0053}',
+];
+const LATIN_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{006E}', '\u{0072}', '\u{0078}', '\u{007A}', '\u{006F}', '\u{0065}', '\u{0073}', '\u{0063}',
+];
+const LATIN_SMALL_DESCENDER_CHARS: &[char] =
+    &['\u{0070}', '\u{0071}', '\u{0067}', '\u{006A}', '\u{0079}'];
+const LATIN_SMALL_F_TOP_CHARS: &[char] = &[
+    '\u{0066}', '\u{0069}', '\u{006A}', '\u{006B}', '\u{0064}', '\u{0062}', '\u{0068}',
+];
+const LATIN_SMALL_TOP_CHARS: &[char] = &[
+    '\u{0075}', '\u{0076}', '\u{0078}', '\u{007A}', '\u{006F}', '\u{0065}', '\u{0073}', '\u{0063}',
+];
+const LATIN_SUBS_CAPITAL_BOTTOM_CHARS: &[char] =
+    &['\u{2080}', '\u{2081}', '\u{2082}', '\u{2083}', '\u{2088}'];
+const LATIN_SUBS_CAPITAL_TOP_CHARS: &[char] =
+    &['\u{2080}', '\u{2083}', '\u{2085}', '\u{2087}', '\u{2088}'];
+const LATIN_SUBS_SMALL_CHARS: &[char] = &[
+    '\u{2090}', '\u{2091}', '\u{2092}', '\u{2093}', '\u{2099}', '\u{209B}', '\u{1D65}', '\u{1D64}',
+    '\u{1D63}',
+];
+const LATIN_SUBS_SMALL_DESCENDER_CHARS: &[char] =
+    &['\u{1D66}', '\u{1D67}', '\u{1D68}', '\u{1D69}', '\u{209A}'];
+const LATIN_SUBS_SMALL_F_TOP_CHARS: &[char] =
+    &['\u{1D62}', '\u{2C7C}', '\u{2095}', '\u{2096}', '\u{2097}'];
+const LATIN_SUPS_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{2070}', '\u{00B9}', '\u{00B2}', '\u{00B3}', '\u{1D31}', '\u{1D38}', '\u{1D3C}', '\u{1D41}',
+];
+const LATIN_SUPS_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{2070}', '\u{00B3}', '\u{2075}', '\u{2077}', '\u{1D40}', '\u{1D34}', '\u{1D31}', '\u{1D3C}',
+];
+const LATIN_SUPS_SMALL_CHARS: &[char] = &[
+    '\u{1D49}', '\u{1D52}', '\u{02B3}', '\u{02E2}', '\u{02E3}', '\u{1D9C}', '\u{1DBB}',
+];
 const LATIN_SUPS_SMALL_DESCENDER_CHARS: &[char] = &['\u{1D56}', '\u{02B8}', '\u{1D4D}'];
-const LATIN_SUPS_SMALL_F_TOP_CHARS: &[char] = &['\u{1D47}', '\u{1D48}', '\u{1D4F}', '\u{02B0}', '\u{02B2}', '\u{1DA0}', '\u{2071}'];
-const LISU_BOTTOM_CHARS: &[char] = &['\u{A4D5}', '\u{A4DC}', '\u{A4DE}', '\u{A4E1}', '\u{A4DB}', '\u{A4E2}', '\u{A4F3}', '\u{A4F4}'];
-const LISU_TOP_CHARS: &[char] = &['\u{A4E1}', '\u{A4E7}', '\u{A4F1}', '\u{A4F6}', '\u{A4E9}', '\u{A4DA}', '\u{A4F5}', '\u{A4F3}'];
-const MALAYALAM_BOTTOM_CHARS: &[char] = &['\u{0D1F}', '\u{0D20}', '\u{0D27}', '\u{0D36}', '\u{0D18}', '\u{0D1A}', '\u{0D25}', '\u{0D32}'];
-const MALAYALAM_TOP_CHARS: &[char] = &['\u{0D12}', '\u{0D1F}', '\u{0D20}', '\u{0D31}', '\u{0D1A}', '\u{0D2A}', '\u{0D1A}', '\u{0D2A}'];
-const MEDEFAIDRIN_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{16E40}', '\u{16E41}', '\u{16E42}', '\u{16E43}', '\u{16E4F}', '\u{16E5A}', '\u{16E52}', '\u{16E53}'];
-const MEDEFAIDRIN_CAPITAL_TOP_CHARS: &[char] = &['\u{16E40}', '\u{16E41}', '\u{16E42}', '\u{16E43}', '\u{16E4F}', '\u{16E5A}', '\u{16E5F}'];
-const MEDEFAIDRIN_DIGIT_TOP_CHARS: &[char] = &['\u{16E80}', '\u{16E85}', '\u{16E88}', '\u{16E84}', '\u{16E8D}'];
-const MEDEFAIDRIN_SMALL_BOTTOM_CHARS: &[char] = &['\u{16E60}', '\u{16E61}', '\u{16E62}', '\u{16E73}', '\u{16E6D}', '\u{16E7D}'];
+const LATIN_SUPS_SMALL_F_TOP_CHARS: &[char] = &[
+    '\u{1D47}', '\u{1D48}', '\u{1D4F}', '\u{02B0}', '\u{02B2}', '\u{1DA0}', '\u{2071}',
+];
+const LISU_BOTTOM_CHARS: &[char] = &[
+    '\u{A4D5}', '\u{A4DC}', '\u{A4DE}', '\u{A4E1}', '\u{A4DB}', '\u{A4E2}', '\u{A4F3}', '\u{A4F4}',
+];
+const LISU_TOP_CHARS: &[char] = &[
+    '\u{A4E1}', '\u{A4E7}', '\u{A4F1}', '\u{A4F6}', '\u{A4E9}', '\u{A4DA}', '\u{A4F5}', '\u{A4F3}',
+];
+const MALAYALAM_BOTTOM_CHARS: &[char] = &[
+    '\u{0D1F}', '\u{0D20}', '\u{0D27}', '\u{0D36}', '\u{0D18}', '\u{0D1A}', '\u{0D25}', '\u{0D32}',
+];
+const MALAYALAM_TOP_CHARS: &[char] = &[
+    '\u{0D12}', '\u{0D1F}', '\u{0D20}', '\u{0D31}', '\u{0D1A}', '\u{0D2A}', '\u{0D1A}', '\u{0D2A}',
+];
+const MEDEFAIDRIN_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{16E40}',
+    '\u{16E41}',
+    '\u{16E42}',
+    '\u{16E43}',
+    '\u{16E4F}',
+    '\u{16E5A}',
+    '\u{16E52}',
+    '\u{16E53}',
+];
+const MEDEFAIDRIN_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{16E40}',
+    '\u{16E41}',
+    '\u{16E42}',
+    '\u{16E43}',
+    '\u{16E4F}',
+    '\u{16E5A}',
+    '\u{16E5F}',
+];
+const MEDEFAIDRIN_DIGIT_TOP_CHARS: &[char] = &[
+    '\u{16E80}',
+    '\u{16E85}',
+    '\u{16E88}',
+    '\u{16E84}',
+    '\u{16E8D}',
+];
+const MEDEFAIDRIN_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{16E60}',
+    '\u{16E61}',
+    '\u{16E62}',
+    '\u{16E73}',
+    '\u{16E6D}',
+    '\u{16E7D}',
+];
 const MEDEFAIDRIN_SMALL_DESCENDER_CHARS: &[char] = &['\u{16E65}', '\u{16E68}', '\u{16E69}'];
-const MEDEFAIDRIN_SMALL_F_TOP_CHARS: &[char] = &['\u{16E64}', '\u{16E6C}', '\u{16E67}', '\u{16E74}', '\u{16E76}', '\u{16E7E}'];
-const MEDEFAIDRIN_SMALL_TOP_CHARS: &[char] = &['\u{16E60}', '\u{16E61}', '\u{16E62}', '\u{16E79}', '\u{16E73}', '\u{16E6E}'];
+const MEDEFAIDRIN_SMALL_F_TOP_CHARS: &[char] = &[
+    '\u{16E64}',
+    '\u{16E6C}',
+    '\u{16E67}',
+    '\u{16E74}',
+    '\u{16E76}',
+    '\u{16E7E}',
+];
+const MEDEFAIDRIN_SMALL_TOP_CHARS: &[char] = &[
+    '\u{16E60}',
+    '\u{16E61}',
+    '\u{16E62}',
+    '\u{16E79}',
+    '\u{16E73}',
+    '\u{16E6E}',
+];
 const MONGOLIAN_BOTTOM_BASE_CHARS: &[char] = &['\u{1843}'];
-const MONGOLIAN_TOP_BASE_CHARS: &[char] = &['\u{1833}', '\u{1834}', '\u{1836}', '\u{183D}', '\u{1842}', '\u{184A}', '\u{200D}', '\u{200D}'];
-const MYANMAR_ASCENDER_CHARS: &[char] = &['\u{1029}', '\u{103C}', '\u{104D}', '\u{104F}', '\u{1046}', '\u{102B}', '\u{102D}'];
-const MYANMAR_BOTTOM_CHARS: &[char] = &['\u{1004}', '\u{100E}', '\u{1012}', '\u{1015}', '\u{1017}', '\u{101D}', '\u{104A}', '\u{104B}'];
-const MYANMAR_DESCENDER_CHARS: &[char] = &['\u{1009}', '\u{100A}', '\u{1025}', '\u{1029}', '\u{1028}', '\u{1042}', '\u{1045}', '\u{1049}'];
-const MYANMAR_TOP_CHARS: &[char] = &['\u{1001}', '\u{1002}', '\u{1004}', '\u{1012}', '\u{101D}', '\u{1065}', '\u{104A}', '\u{104B}'];
+const MONGOLIAN_TOP_BASE_CHARS: &[char] = &[
+    '\u{1833}', '\u{1834}', '\u{1836}', '\u{183D}', '\u{1842}', '\u{184A}', '\u{200D}', '\u{200D}',
+];
+const MYANMAR_ASCENDER_CHARS: &[char] = &[
+    '\u{1029}', '\u{103C}', '\u{104D}', '\u{104F}', '\u{1046}', '\u{102B}', '\u{102D}',
+];
+const MYANMAR_BOTTOM_CHARS: &[char] = &[
+    '\u{1004}', '\u{100E}', '\u{1012}', '\u{1015}', '\u{1017}', '\u{101D}', '\u{104A}', '\u{104B}',
+];
+const MYANMAR_DESCENDER_CHARS: &[char] = &[
+    '\u{1009}', '\u{100A}', '\u{1025}', '\u{1029}', '\u{1028}', '\u{1042}', '\u{1045}', '\u{1049}',
+];
+const MYANMAR_TOP_CHARS: &[char] = &[
+    '\u{1001}', '\u{1002}', '\u{1004}', '\u{1012}', '\u{101D}', '\u{1065}', '\u{104A}', '\u{104B}',
+];
 const NKO_BOTTOM_CHARS: &[char] = &['\u{07C0}', '\u{07D8}', '\u{07E1}', '\u{07E0}', '\u{07E5}'];
 const NKO_SMALL_BOTTOM_CHARS: &[char] = &['\u{07CE}', '\u{07CF}', '\u{07DB}', '\u{07CB}'];
 const NKO_SMALL_TOP_CHARS: &[char] = &['\u{07CF}', '\u{07DB}', '\u{07CB}'];
-const NKO_TOP_CHARS: &[char] = &['\u{07D0}', '\u{07C9}', '\u{07D2}', '\u{07DF}', '\u{07D6}', '\u{07DC}', '\u{07E0}', '\u{07E5}'];
+const NKO_TOP_CHARS: &[char] = &[
+    '\u{07D0}', '\u{07C9}', '\u{07D2}', '\u{07DF}', '\u{07D6}', '\u{07DC}', '\u{07E0}', '\u{07E5}',
+];
 const OLD_TURKIC_BOTTOM_CHARS: &[char] = &['\u{10C09}', '\u{10C17}', '\u{10C26}', '\u{10C27}'];
 const OLD_TURKIC_TOP_CHARS: &[char] = &['\u{10C17}', '\u{10C18}', '\u{10C27}'];
-const OL_CHIKI_CHARS: &[char] = &['\u{1C5B}', '\u{1C5C}', '\u{1C5D}', '\u{1C61}', '\u{1C62}', '\u{1C65}'];
-const OSAGE_CAPITAL_BOTTOM_CHARS: &[char] = &['\u{104B0}', '\u{104CD}', '\u{104C2}', '\u{104BF}', '\u{104CE}', '\u{104B9}'];
+const OL_CHIKI_CHARS: &[char] = &[
+    '\u{1C5B}', '\u{1C5C}', '\u{1C5D}', '\u{1C61}', '\u{1C62}', '\u{1C65}',
+];
+const OSAGE_CAPITAL_BOTTOM_CHARS: &[char] = &[
+    '\u{104B0}',
+    '\u{104CD}',
+    '\u{104C2}',
+    '\u{104BF}',
+    '\u{104CE}',
+    '\u{104B9}',
+];
 const OSAGE_CAPITAL_DESCENDER_CHARS: &[char] = &['\u{104BC}', '\u{104BD}', '\u{104BE}'];
-const OSAGE_CAPITAL_TOP_CHARS: &[char] = &['\u{104BE}', '\u{104CD}', '\u{104D2}', '\u{104D3}', '\u{104BB}', '\u{104C2}', '\u{104B5}', '\u{104C6}'];
-const OSAGE_SMALL_ASCENDER_CHARS: &[char] = &['\u{104E4}', '\u{104E6}', '\u{104F8}', '\u{104F9}', '\u{104DB}'];
-const OSAGE_SMALL_BOTTOM_CHARS: &[char] = &['\u{104D8}', '\u{104DA}', '\u{104E3}', '\u{104F5}', '\u{104E1}', '\u{104E7}', '\u{104EA}', '\u{104F6}'];
+const OSAGE_CAPITAL_TOP_CHARS: &[char] = &[
+    '\u{104BE}',
+    '\u{104CD}',
+    '\u{104D2}',
+    '\u{104D3}',
+    '\u{104BB}',
+    '\u{104C2}',
+    '\u{104B5}',
+    '\u{104C6}',
+];
+const OSAGE_SMALL_ASCENDER_CHARS: &[char] = &[
+    '\u{104E4}',
+    '\u{104E6}',
+    '\u{104F8}',
+    '\u{104F9}',
+    '\u{104DB}',
+];
+const OSAGE_SMALL_BOTTOM_CHARS: &[char] = &[
+    '\u{104D8}',
+    '\u{104DA}',
+    '\u{104E3}',
+    '\u{104F5}',
+    '\u{104E1}',
+    '\u{104E7}',
+    '\u{104EA}',
+    '\u{104F6}',
+];
 const OSAGE_SMALL_DESCENDER_CHARS: &[char] = &['\u{104E4}', '\u{104E5}', '\u{104E6}'];
-const OSAGE_SMALL_TOP_CHARS: &[char] = &['\u{104F5}', '\u{104F6}', '\u{104FA}', '\u{104FB}', '\u{104DD}', '\u{104E3}', '\u{104EA}', '\u{104EE}'];
-const OSMANYA_BOTTOM_CHARS: &[char] = &['\u{10480}', '\u{10482}', '\u{10486}', '\u{10488}', '\u{1048A}', '\u{10492}', '\u{104A0}', '\u{104A9}'];
-const OSMANYA_TOP_CHARS: &[char] = &['\u{10486}', '\u{10489}', '\u{10490}', '\u{10492}', '\u{10498}', '\u{1049B}', '\u{104A0}', '\u{104A3}'];
-const ROHINGYA_BOTTOM_CHARS: &[char] = &['\u{10D14}', '\u{10D16}', '\u{10D15}', '\u{10D11}', '\u{10D10}'];
+const OSAGE_SMALL_TOP_CHARS: &[char] = &[
+    '\u{104F5}',
+    '\u{104F6}',
+    '\u{104FA}',
+    '\u{104FB}',
+    '\u{104DD}',
+    '\u{104E3}',
+    '\u{104EA}',
+    '\u{104EE}',
+];
+const OSMANYA_BOTTOM_CHARS: &[char] = &[
+    '\u{10480}',
+    '\u{10482}',
+    '\u{10486}',
+    '\u{10488}',
+    '\u{1048A}',
+    '\u{10492}',
+    '\u{104A0}',
+    '\u{104A9}',
+];
+const OSMANYA_TOP_CHARS: &[char] = &[
+    '\u{10486}',
+    '\u{10489}',
+    '\u{10490}',
+    '\u{10492}',
+    '\u{10498}',
+    '\u{1049B}',
+    '\u{104A0}',
+    '\u{104A3}',
+];
+const ROHINGYA_BOTTOM_CHARS: &[char] = &[
+    '\u{10D14}',
+    '\u{10D16}',
+    '\u{10D15}',
+    '\u{10D11}',
+    '\u{10D10}',
+];
 const ROHINGYA_JOIN_CHARS: &[char] = &['\u{0640}'];
-const ROHINGYA_TOP_CHARS: &[char] = &['\u{10D03}', '\u{10D00}', '\u{10D06}', '\u{10D16}', '\u{10D15}'];
-const SAURASHTRA_BOTTOM_CHARS: &[char] = &['\u{A882}', '\u{A8A8}', '\u{A8BA}', '\u{A8A4}', '\u{A88E}'];
-const SAURASHTRA_TOP_CHARS: &[char] = &['\u{A89C}', '\u{A89E}', '\u{A8B3}', '\u{A882}', '\u{A896}', '\u{A892}', '\u{A89D}', '\u{A89B}'];
-const SHAVIAN_BOTTOM_CHARS: &[char] = &['\u{10454}', '\u{10456}', '\u{10457}', '\u{10479}', '\u{1047B}'];
+const ROHINGYA_TOP_CHARS: &[char] = &[
+    '\u{10D03}',
+    '\u{10D00}',
+    '\u{10D06}',
+    '\u{10D16}',
+    '\u{10D15}',
+];
+const SAURASHTRA_BOTTOM_CHARS: &[char] =
+    &['\u{A882}', '\u{A8A8}', '\u{A8BA}', '\u{A8A4}', '\u{A88E}'];
+const SAURASHTRA_TOP_CHARS: &[char] = &[
+    '\u{A89C}', '\u{A89E}', '\u{A8B3}', '\u{A882}', '\u{A896}', '\u{A892}', '\u{A89D}', '\u{A89B}',
+];
+const SHAVIAN_BOTTOM_CHARS: &[char] = &[
+    '\u{10454}',
+    '\u{10456}',
+    '\u{10457}',
+    '\u{10479}',
+    '\u{1047B}',
+];
 const SHAVIAN_DESCENDER_CHARS: &[char] = &['\u{1045F}', '\u{10463}'];
 const SHAVIAN_SMALL_BOTTOM_CHARS: &[char] = &['\u{10474}', '\u{1047B}', '\u{10479}'];
-const SHAVIAN_SMALL_TOP_CHARS: &[char] = &['\u{10471}', '\u{10472}', '\u{10473}', '\u{10474}', '\u{10478}', '\u{1047A}', '\u{1047C}'];
+const SHAVIAN_SMALL_TOP_CHARS: &[char] = &[
+    '\u{10471}',
+    '\u{10472}',
+    '\u{10473}',
+    '\u{10474}',
+    '\u{10478}',
+    '\u{1047A}',
+    '\u{1047C}',
+];
 const SHAVIAN_TOP_CHARS: &[char] = &['\u{10455}', '\u{10459}'];
-const SINHALA_BOTTOM_CHARS: &[char] = &['\u{0D91}', '\u{0D94}', '\u{0D9D}', '\u{0DA2}', '\u{0DA7}', '\u{0DAE}', '\u{0DB0}', '\u{0DBB}'];
-const SINHALA_DESCENDER_CHARS: &[char] = &['\u{0DAF}', '\u{0DB3}', '\u{0D8B}', '\u{0DBD}', '\u{0DAD}', '\u{0DAD}', '\u{0DB6}', '\u{0DAF}'];
-const SINHALA_TOP_CHARS: &[char] = &['\u{0D89}', '\u{0D9A}', '\u{0D9D}', '\u{0DB3}', '\u{0DB4}', '\u{0DBA}', '\u{0DBD}', '\u{0DC6}'];
-const SUNDANESE_BOTTOM_CHARS: &[char] = &['\u{1B84}', '\u{1B94}', '\u{1B95}', '\u{1B97}', '\u{1BB0}', '\u{1B86}', '\u{1B88}', '\u{1B89}'];
+const SINHALA_BOTTOM_CHARS: &[char] = &[
+    '\u{0D91}', '\u{0D94}', '\u{0D9D}', '\u{0DA2}', '\u{0DA7}', '\u{0DAE}', '\u{0DB0}', '\u{0DBB}',
+];
+const SINHALA_DESCENDER_CHARS: &[char] = &[
+    '\u{0DAF}', '\u{0DB3}', '\u{0D8B}', '\u{0DBD}', '\u{0DAD}', '\u{0DAD}', '\u{0DB6}', '\u{0DAF}',
+];
+const SINHALA_TOP_CHARS: &[char] = &[
+    '\u{0D89}', '\u{0D9A}', '\u{0D9D}', '\u{0DB3}', '\u{0DB4}', '\u{0DBA}', '\u{0DBD}', '\u{0DC6}',
+];
+const SUNDANESE_BOTTOM_CHARS: &[char] = &[
+    '\u{1B84}', '\u{1B94}', '\u{1B95}', '\u{1B97}', '\u{1BB0}', '\u{1B86}', '\u{1B88}', '\u{1B89}',
+];
 const SUNDANESE_DESCENDER_CHARS: &[char] = &['\u{1BBC}', '\u{1CC4}'];
-const SUNDANESE_TOP_CHARS: &[char] = &['\u{1B8B}', '\u{1B9E}', '\u{1BAE}', '\u{1BBD}', '\u{1BB0}', '\u{1B88}'];
+const SUNDANESE_TOP_CHARS: &[char] = &[
+    '\u{1B8B}', '\u{1B9E}', '\u{1BAE}', '\u{1BBD}', '\u{1BB0}', '\u{1B88}',
+];
 const TAI_VIET_BOTTOM_CHARS: &[char] = &['\u{AA89}', '\u{AAAB}', '\u{AAAE}'];
 const TAI_VIET_TOP_CHARS: &[char] = &['\u{AA86}', '\u{AA94}', '\u{AA92}', '\u{AA96}', '\u{AAAB}'];
-const TAMIL_BOTTOM_CHARS: &[char] = &['\u{0B95}', '\u{0B9A}', '\u{0BB2}', '\u{0BB6}', '\u{0B89}', '\u{0B99}', '\u{0B9F}', '\u{0BAA}'];
-const TAMIL_TOP_CHARS: &[char] = &['\u{0B89}', '\u{0B92}', '\u{0B93}', '\u{0BB1}', '\u{0B88}', '\u{0B95}', '\u{0B99}', '\u{0B9A}'];
-const TELUGU_BOTTOM_CHARS: &[char] = &['\u{0C05}', '\u{0C15}', '\u{0C1A}', '\u{0C30}', '\u{0C3D}', '\u{0C68}', '\u{0C6C}'];
-const TELUGU_TOP_CHARS: &[char] = &['\u{0C07}', '\u{0C0C}', '\u{0C19}', '\u{0C1E}', '\u{0C23}', '\u{0C31}', '\u{0C6F}'];
+const TAMIL_BOTTOM_CHARS: &[char] = &[
+    '\u{0B95}', '\u{0B9A}', '\u{0BB2}', '\u{0BB6}', '\u{0B89}', '\u{0B99}', '\u{0B9F}', '\u{0BAA}',
+];
+const TAMIL_TOP_CHARS: &[char] = &[
+    '\u{0B89}', '\u{0B92}', '\u{0B93}', '\u{0BB1}', '\u{0B88}', '\u{0B95}', '\u{0B99}', '\u{0B9A}',
+];
+const TELUGU_BOTTOM_CHARS: &[char] = &[
+    '\u{0C05}', '\u{0C15}', '\u{0C1A}', '\u{0C30}', '\u{0C3D}', '\u{0C68}', '\u{0C6C}',
+];
+const TELUGU_TOP_CHARS: &[char] = &[
+    '\u{0C07}', '\u{0C0C}', '\u{0C19}', '\u{0C1E}', '\u{0C23}', '\u{0C31}', '\u{0C6F}',
+];
 const THAI_ASCENDER_CHARS: &[char] = &['\u{0E1B}', '\u{0E1D}', '\u{0E1F}'];
-const THAI_BOTTOM_CHARS: &[char] = &['\u{0E1A}', '\u{0E1B}', '\u{0E29}', '\u{0E2F}', '\u{0E2D}', '\u{0E22}', '\u{0E2E}'];
+const THAI_BOTTOM_CHARS: &[char] = &[
+    '\u{0E1A}', '\u{0E1B}', '\u{0E29}', '\u{0E2F}', '\u{0E2D}', '\u{0E22}', '\u{0E2E}',
+];
 const THAI_DESCENDER_CHARS: &[char] = &['\u{0E0E}', '\u{0E0F}', '\u{0E24}', '\u{0E26}'];
 const THAI_DIGIT_TOP_CHARS: &[char] = &['\u{0E50}', '\u{0E51}', '\u{0E53}'];
 const THAI_LARGE_ASCENDER_CHARS: &[char] = &['\u{0E42}', '\u{0E43}', '\u{0E44}'];
 const THAI_LARGE_DESCENDER_CHARS: &[char] = &['\u{0E0D}', '\u{0E10}'];
-const THAI_TOP_CHARS: &[char] = &['\u{0E1A}', '\u{0E40}', '\u{0E41}', '\u{0E2D}', '\u{0E01}', '\u{0E32}'];
-const TIFINAGH_CHARS: &[char] = &['\u{2D54}', '\u{2D59}', '\u{2D5B}', '\u{2D5E}', '\u{2D35}', '\u{2D3C}', '\u{2D39}', '\u{2D4E}'];
-const VAI_BOTTOM_CHARS: &[char] = &['\u{A5CD}', '\u{A616}', '\u{A619}', '\u{A5DE}', '\u{A505}', '\u{A562}', '\u{A59C}', '\u{A506}'];
-const VAI_TOP_CHARS: &[char] = &['\u{A5CD}', '\u{A616}', '\u{A619}', '\u{A61C}', '\u{A59C}', '\u{A59D}', '\u{A505}', '\u{A562}'];
+const THAI_TOP_CHARS: &[char] = &[
+    '\u{0E1A}', '\u{0E40}', '\u{0E41}', '\u{0E2D}', '\u{0E01}', '\u{0E32}',
+];
+const TIFINAGH_CHARS: &[char] = &[
+    '\u{2D54}', '\u{2D59}', '\u{2D5B}', '\u{2D5E}', '\u{2D35}', '\u{2D3C}', '\u{2D39}', '\u{2D4E}',
+];
+const VAI_BOTTOM_CHARS: &[char] = &[
+    '\u{A5CD}', '\u{A616}', '\u{A619}', '\u{A5DE}', '\u{A505}', '\u{A562}', '\u{A59C}', '\u{A506}',
+];
+const VAI_TOP_CHARS: &[char] = &[
+    '\u{A5CD}', '\u{A616}', '\u{A619}', '\u{A61C}', '\u{A59C}', '\u{A59D}', '\u{A505}', '\u{A562}',
+];
 
 /// One blue string entry mapping characters to property flags.
 #[derive(Debug, Clone)]
@@ -212,379 +710,1012 @@ pub struct BlueStringEntry {
 
 // ── Per-script blue string entry arrays ───────────────────────────
 pub const SCRIPT_ADLM: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: ADLAM_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: ADLAM_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: ADLAM_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: ADLAM_SMALL_BOTTOM_CHARS, props: 0x00000040 },
+    BlueStringEntry {
+        chars: ADLAM_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: ADLAM_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: ADLAM_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: ADLAM_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
 ];
 
 pub const SCRIPT_ARAB: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: ARABIC_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: ARABIC_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: ARABIC_JOIN_CHARS, props: 0x00000004 },
+    BlueStringEntry {
+        chars: ARABIC_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: ARABIC_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: ARABIC_JOIN_CHARS,
+        props: 0x00000004,
+    },
 ];
 
 pub const SCRIPT_ARMN: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: ARMENIAN_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: ARMENIAN_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: ARMENIAN_SMALL_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: ARMENIAN_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: ARMENIAN_SMALL_BOTTOM_CHARS, props: 0x00000040 },
-    BlueStringEntry { chars: ARMENIAN_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: ARMENIAN_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: ARMENIAN_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: ARMENIAN_SMALL_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: ARMENIAN_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: ARMENIAN_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
+    BlueStringEntry {
+        chars: ARMENIAN_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_AVST: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: AVESTAN_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: AVESTAN_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: AVESTAN_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: AVESTAN_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_BAMU: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: BAMUM_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: BAMUM_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: BAMUM_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: BAMUM_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_BENG: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: BENGALI_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: BENGALI_HEAD_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: BENGALI_BASE_CHARS, props: 0x0000000d },
-    BlueStringEntry { chars: BENGALI_BASE_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: BENGALI_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: BENGALI_HEAD_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: BENGALI_BASE_CHARS,
+        props: 0x0000000d,
+    },
+    BlueStringEntry {
+        chars: BENGALI_BASE_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_BUHD: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: BUHID_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: BUHID_LARGE_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: BUHID_SMALL_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: BUHID_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: BUHID_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: BUHID_LARGE_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: BUHID_SMALL_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: BUHID_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_CAKM: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CHAKMA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CHAKMA_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CHAKMA_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: CHAKMA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CHAKMA_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CHAKMA_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_CANS: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CANADIAN_SYLLABICS_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CANADIAN_SYLLABICS_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CANADIAN_SYLLABICS_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: CANADIAN_SYLLABICS_SMALL_BOTTOM_CHARS, props: 0x00000040 },
-    BlueStringEntry { chars: CANADIAN_SYLLABICS_SUPS_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CANADIAN_SYLLABICS_SUPS_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: CANADIAN_SYLLABICS_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CANADIAN_SYLLABICS_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CANADIAN_SYLLABICS_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: CANADIAN_SYLLABICS_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
+    BlueStringEntry {
+        chars: CANADIAN_SYLLABICS_SUPS_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CANADIAN_SYLLABICS_SUPS_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_CARI: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CARIAN_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CARIAN_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: CARIAN_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CARIAN_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_CHER: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CHEROKEE_CAPITAL_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CHEROKEE_CAPITAL_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CHEROKEE_SMALL_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CHEROKEE_SMALL_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: CHEROKEE_SMALL_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CHEROKEE_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: CHEROKEE_CAPITAL_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CHEROKEE_CAPITAL_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CHEROKEE_SMALL_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CHEROKEE_SMALL_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: CHEROKEE_SMALL_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CHEROKEE_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_COPT: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: COPTIC_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: COPTIC_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: COPTIC_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: COPTIC_SMALL_BOTTOM_CHARS, props: 0x00000040 },
+    BlueStringEntry {
+        chars: COPTIC_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: COPTIC_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: COPTIC_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: COPTIC_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
 ];
 
 pub const SCRIPT_CPRT: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CYPRIOT_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CYPRIOT_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CYPRIOT_SMALL_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CYPRIOT_SMALL_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: CYPRIOT_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CYPRIOT_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CYPRIOT_SMALL_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CYPRIOT_SMALL_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_CYRL: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CYRILLIC_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CYRILLIC_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: CYRILLIC_SMALL_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: CYRILLIC_SMALL_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CYRILLIC_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: CYRILLIC_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CYRILLIC_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: CYRILLIC_SMALL_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: CYRILLIC_SMALL_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CYRILLIC_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_DEVA: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: DEVANAGARI_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: DEVANAGARI_HEAD_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: DEVANAGARI_BASE_CHARS, props: 0x0000000d },
-    BlueStringEntry { chars: DEVANAGARI_BASE_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: DEVANAGARI_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: DEVANAGARI_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: DEVANAGARI_HEAD_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: DEVANAGARI_BASE_CHARS,
+        props: 0x0000000d,
+    },
+    BlueStringEntry {
+        chars: DEVANAGARI_BASE_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: DEVANAGARI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_DSRT: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: DESERET_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: DESERET_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: DESERET_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: DESERET_SMALL_BOTTOM_CHARS, props: 0x00000040 },
+    BlueStringEntry {
+        chars: DESERET_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: DESERET_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: DESERET_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: DESERET_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
 ];
 
 pub const SCRIPT_ETHI: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: ETHIOPIC_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: ETHIOPIC_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: ETHIOPIC_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: ETHIOPIC_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_GEOK: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GEORGIAN_ASOMTAVRULI_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GEORGIAN_ASOMTAVRULI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GEORGIAN_NUSKHURI_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: GEORGIAN_NUSKHURI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GEORGIAN_NUSKHURI_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GEORGIAN_NUSKHURI_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: GEORGIAN_ASOMTAVRULI_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_ASOMTAVRULI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_NUSKHURI_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_NUSKHURI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_NUSKHURI_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_NUSKHURI_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_GEOR: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GEORGIAN_MKHEDRULI_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: GEORGIAN_MKHEDRULI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GEORGIAN_MKHEDRULI_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GEORGIAN_MKHEDRULI_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GEORGIAN_MTAVRULI_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GEORGIAN_MTAVRULI_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: GEORGIAN_MKHEDRULI_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_MKHEDRULI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_MKHEDRULI_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_MKHEDRULI_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_MTAVRULI_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GEORGIAN_MTAVRULI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_GLAG: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GLAGOLITIC_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GLAGOLITIC_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: GLAGOLITIC_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: GLAGOLITIC_SMALL_BOTTOM_CHARS, props: 0x00000040 },
+    BlueStringEntry {
+        chars: GLAGOLITIC_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GLAGOLITIC_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: GLAGOLITIC_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: GLAGOLITIC_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
 ];
 
 pub const SCRIPT_GOTH: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GOTHIC_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GOTHIC_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: GOTHIC_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GOTHIC_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_GREK: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GREEK_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GREEK_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: GREEK_SMALL_BETA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GREEK_SMALL_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: GREEK_SMALL_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GREEK_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: GREEK_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GREEK_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: GREEK_SMALL_BETA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GREEK_SMALL_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: GREEK_SMALL_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GREEK_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_GUJR: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GUJARATI_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: GUJARATI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GUJARATI_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GUJARATI_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GUJARATI_DIGIT_TOP_CHARS, props: 0x00000001 },
+    BlueStringEntry {
+        chars: GUJARATI_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: GUJARATI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GUJARATI_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GUJARATI_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GUJARATI_DIGIT_TOP_CHARS,
+        props: 0x00000001,
+    },
 ];
 
 pub const SCRIPT_GURU: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: GURMUKHI_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GURMUKHI_HEAD_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: GURMUKHI_BASE_CHARS, props: 0x0000000d },
-    BlueStringEntry { chars: GURMUKHI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: GURMUKHI_DIGIT_TOP_CHARS, props: 0x00000001 },
+    BlueStringEntry {
+        chars: GURMUKHI_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GURMUKHI_HEAD_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: GURMUKHI_BASE_CHARS,
+        props: 0x0000000d,
+    },
+    BlueStringEntry {
+        chars: GURMUKHI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: GURMUKHI_DIGIT_TOP_CHARS,
+        props: 0x00000001,
+    },
 ];
 
 pub const SCRIPT_HANI: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: CJK_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: CJK_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: CJK_LEFT_CHARS, props: 0x00000002 },
-    BlueStringEntry { chars: CJK_RIGHT_CHARS, props: 0x00000006 },
+    BlueStringEntry {
+        chars: CJK_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: CJK_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: CJK_LEFT_CHARS,
+        props: 0x00000002,
+    },
+    BlueStringEntry {
+        chars: CJK_RIGHT_CHARS,
+        props: 0x00000006,
+    },
 ];
 
 pub const SCRIPT_HEBR: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: HEBREW_TOP_CHARS, props: 0x00000011 },
-    BlueStringEntry { chars: HEBREW_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: HEBREW_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: HEBREW_TOP_CHARS,
+        props: 0x00000011,
+    },
+    BlueStringEntry {
+        chars: HEBREW_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: HEBREW_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_KALI: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: KAYAH_LI_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: KAYAH_LI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: KAYAH_LI_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: KAYAH_LI_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: KAYAH_LI_LARGE_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: KAYAH_LI_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: KAYAH_LI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: KAYAH_LI_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: KAYAH_LI_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: KAYAH_LI_LARGE_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_KHMR: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: KHMER_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: KHMER_SUBSCRIPT_TOP_CHARS, props: 0x00000002 },
-    BlueStringEntry { chars: KHMER_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: KHMER_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: KHMER_LARGE_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: KHMER_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: KHMER_SUBSCRIPT_TOP_CHARS,
+        props: 0x00000002,
+    },
+    BlueStringEntry {
+        chars: KHMER_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: KHMER_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: KHMER_LARGE_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_KHMS: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: KHMER_SYMBOLS_WAXING_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: KHMER_SYMBOLS_WANING_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: KHMER_SYMBOLS_WAXING_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: KHMER_SYMBOLS_WANING_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_KNDA: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: KANNADA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: KANNADA_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: KANNADA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: KANNADA_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_LAO: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: LAO_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: LAO_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: LAO_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LAO_LARGE_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LAO_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: LAO_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: LAO_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: LAO_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LAO_LARGE_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LAO_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_LATB: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: LATIN_SUBS_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LATIN_SUBS_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: LATIN_SUBS_SMALL_F_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LATIN_SUBS_SMALL_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: LATIN_SUBS_SMALL_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: LATIN_SUBS_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: LATIN_SUBS_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUBS_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUBS_SMALL_F_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUBS_SMALL_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUBS_SMALL_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUBS_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_LATN: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: LATIN_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LATIN_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: LATIN_SMALL_F_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LATIN_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: LATIN_SMALL_BOTTOM_CHARS, props: 0x00000040 },
-    BlueStringEntry { chars: LATIN_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: LATIN_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LATIN_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: LATIN_SMALL_F_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LATIN_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: LATIN_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
+    BlueStringEntry {
+        chars: LATIN_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_LATP: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: LATIN_SUPS_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LATIN_SUPS_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: LATIN_SUPS_SMALL_F_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LATIN_SUPS_SMALL_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: LATIN_SUPS_SMALL_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: LATIN_SUPS_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: LATIN_SUPS_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUPS_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUPS_SMALL_F_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUPS_SMALL_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUPS_SMALL_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: LATIN_SUPS_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_LISU: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: LISU_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: LISU_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: LISU_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: LISU_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_MEDF: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: MEDEFAIDRIN_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: MEDEFAIDRIN_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: MEDEFAIDRIN_SMALL_F_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: MEDEFAIDRIN_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: MEDEFAIDRIN_SMALL_BOTTOM_CHARS, props: 0x00000040 },
-    BlueStringEntry { chars: MEDEFAIDRIN_SMALL_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: MEDEFAIDRIN_DIGIT_TOP_CHARS, props: 0x00000001 },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_SMALL_F_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: MEDEFAIDRIN_DIGIT_TOP_CHARS,
+        props: 0x00000001,
+    },
 ];
 
 pub const SCRIPT_MLYM: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: MALAYALAM_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: MALAYALAM_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: MALAYALAM_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: MALAYALAM_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_MONG: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: MONGOLIAN_TOP_BASE_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: MONGOLIAN_BOTTOM_BASE_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: MONGOLIAN_TOP_BASE_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: MONGOLIAN_BOTTOM_BASE_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_MYMR: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: MYANMAR_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: MYANMAR_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: MYANMAR_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: MYANMAR_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: MYANMAR_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: MYANMAR_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: MYANMAR_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: MYANMAR_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_NKOO: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: NKO_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: NKO_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: NKO_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: NKO_SMALL_BOTTOM_CHARS, props: 0x00000040 },
+    BlueStringEntry {
+        chars: NKO_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: NKO_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: NKO_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: NKO_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
 ];
 
 pub const SCRIPT_OLCK: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: OL_CHIKI_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: OL_CHIKI_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: OL_CHIKI_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: OL_CHIKI_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_ORKH: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: OLD_TURKIC_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: OLD_TURKIC_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: OLD_TURKIC_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: OLD_TURKIC_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_OSGE: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: OSAGE_CAPITAL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: OSAGE_CAPITAL_BOTTOM_CHARS, props: 0x00000020 },
-    BlueStringEntry { chars: OSAGE_CAPITAL_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: OSAGE_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: OSAGE_SMALL_BOTTOM_CHARS, props: 0x00000040 },
-    BlueStringEntry { chars: OSAGE_SMALL_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: OSAGE_SMALL_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: OSAGE_CAPITAL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: OSAGE_CAPITAL_BOTTOM_CHARS,
+        props: 0x00000020,
+    },
+    BlueStringEntry {
+        chars: OSAGE_CAPITAL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: OSAGE_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: OSAGE_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
+    BlueStringEntry {
+        chars: OSAGE_SMALL_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: OSAGE_SMALL_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_OSMA: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: OSMANYA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: OSMANYA_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: OSMANYA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: OSMANYA_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_ROHG: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: ROHINGYA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: ROHINGYA_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: ROHINGYA_JOIN_CHARS, props: 0x00000004 },
+    BlueStringEntry {
+        chars: ROHINGYA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: ROHINGYA_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: ROHINGYA_JOIN_CHARS,
+        props: 0x00000004,
+    },
 ];
 
 pub const SCRIPT_SAUR: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: SAURASHTRA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: SAURASHTRA_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: SAURASHTRA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: SAURASHTRA_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_SHAW: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: SHAVIAN_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: SHAVIAN_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: SHAVIAN_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: SHAVIAN_SMALL_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: SHAVIAN_SMALL_BOTTOM_CHARS, props: 0x00000040 },
+    BlueStringEntry {
+        chars: SHAVIAN_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: SHAVIAN_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: SHAVIAN_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: SHAVIAN_SMALL_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: SHAVIAN_SMALL_BOTTOM_CHARS,
+        props: 0x00000040,
+    },
 ];
 
 pub const SCRIPT_SINH: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: SINHALA_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: SINHALA_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: SINHALA_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: SINHALA_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: SINHALA_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: SINHALA_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_SUND: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: SUNDANESE_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: SUNDANESE_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: SUNDANESE_DESCENDER_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: SUNDANESE_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: SUNDANESE_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: SUNDANESE_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_TAML: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: TAMIL_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: TAMIL_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: TAMIL_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: TAMIL_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_TAVT: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: TAI_VIET_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: TAI_VIET_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: TAI_VIET_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: TAI_VIET_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_TELU: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: TELUGU_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: TELUGU_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: TELUGU_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: TELUGU_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_TFNG: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: TIFINAGH_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: TIFINAGH_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: TIFINAGH_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: TIFINAGH_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_THAI: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: THAI_TOP_CHARS, props: 0x00000009 },
-    BlueStringEntry { chars: THAI_BOTTOM_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: THAI_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: THAI_LARGE_ASCENDER_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: THAI_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: THAI_LARGE_DESCENDER_CHARS, props: 0x00000000 },
-    BlueStringEntry { chars: THAI_DIGIT_TOP_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: THAI_TOP_CHARS,
+        props: 0x00000009,
+    },
+    BlueStringEntry {
+        chars: THAI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: THAI_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: THAI_LARGE_ASCENDER_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: THAI_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: THAI_LARGE_DESCENDER_CHARS,
+        props: 0x00000000,
+    },
+    BlueStringEntry {
+        chars: THAI_DIGIT_TOP_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 pub const SCRIPT_VAII: &[BlueStringEntry] = &[
-    BlueStringEntry { chars: VAI_TOP_CHARS, props: 0x00000001 },
-    BlueStringEntry { chars: VAI_BOTTOM_CHARS, props: 0x00000000 },
+    BlueStringEntry {
+        chars: VAI_TOP_CHARS,
+        props: 0x00000001,
+    },
+    BlueStringEntry {
+        chars: VAI_BOTTOM_CHARS,
+        props: 0x00000000,
+    },
 ];
 
 // ── Script detection table ────────────────────────────────────────

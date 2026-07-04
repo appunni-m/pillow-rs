@@ -70,7 +70,9 @@ impl Format12Subtable {
                 break;
             }
             if codepoint <= self.end_codes[i] {
-                return Some(u16_from_u32(self.start_glyph_ids[i] + (codepoint - self.start_codes[i])));
+                return Some(u16_from_u32(
+                    self.start_glyph_ids[i] + (codepoint - self.start_codes[i]),
+                ));
             }
         }
         None
@@ -176,7 +178,9 @@ fn parse_format4(
         .ok_or_else(|| FontError::InvalidFont("cmap format 4: length exceeds data".into()))?;
     let seg_count = (u16::from_be_bytes([body[6], body[7]]) / 2) as usize;
     if seg_count == 0 {
-        return Err(FontError::InvalidFont("cmap format 4: zero segments".into()));
+        return Err(FontError::InvalidFont(
+            "cmap format 4: zero segments".into(),
+        ));
     }
 
     let end_off = 14usize;
@@ -190,7 +194,10 @@ fn parse_format4(
     let mut id_deltas = Vec::with_capacity(seg_count);
     let mut id_range_offsets = Vec::with_capacity(seg_count);
     for i in 0..seg_count {
-        end_codes.push(u16::from_be_bytes([body[end_off + i * 2], body[end_off + i * 2 + 1]]));
+        end_codes.push(u16::from_be_bytes([
+            body[end_off + i * 2],
+            body[end_off + i * 2 + 1],
+        ]));
         start_codes.push(u16::from_be_bytes([
             body[start_off + i * 2],
             body[start_off + i * 2 + 1],
@@ -247,7 +254,12 @@ fn parse_format12(
     let mut start_glyph_ids = Vec::with_capacity(num_groups);
     for i in 0..num_groups {
         let o = 16 + i * 12;
-        start_codes.push(u32::from_be_bytes([body[o], body[o + 1], body[o + 2], body[o + 3]]));
+        start_codes.push(u32::from_be_bytes([
+            body[o],
+            body[o + 1],
+            body[o + 2],
+            body[o + 3],
+        ]));
         end_codes.push(u32::from_be_bytes([
             body[o + 4],
             body[o + 5],

@@ -17,15 +17,21 @@ fn main() {
 
     let data = fs::read(font_path).expect("read font");
     let font = pillow_rs_freetype::Font::truetype(
-        &data, size_pt,
+        &data,
+        size_pt,
         pillow_rs_freetype::BitmapBackend::FreeType,
-    ).expect("load font");
+    )
+    .expect("load font");
 
     let mask = font.getmask(&ch.to_string()).expect("getmask");
 
-    eprintln!("Bitmap: {}x{} left={} top={} advance={}",
-        mask.width, mask.height, mask.xmin, mask.ymin, mask.advance_width);
+    eprintln!(
+        "Bitmap: {}x{} left={} top={} advance={}",
+        mask.width, mask.height, mask.xmin, mask.ymin, mask.advance_width
+    );
     print!("PIXELS:");
-    for b in &mask.pixels { print!(" {:02x}", b); }
+    for b in &mask.pixels {
+        print!(" {:02x}", b);
+    }
     println!();
 }

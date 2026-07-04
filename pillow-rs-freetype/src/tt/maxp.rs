@@ -13,6 +13,8 @@ pub struct MaxpTable {
     pub max_points: u16,
     /// Maximum contours in a simple glyph.
     pub max_contours: u16,
+    /// Number of storage area locations available to TrueType bytecode.
+    pub max_storage: u16,
     /// Maximum component depth for composite glyphs.
     pub max_component_depth: u16,
 }
@@ -42,8 +44,13 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
     } else {
         0
     };
-    let max_component_depth = if data.len() >= 30 {
-        u16::from_be_bytes([data[28], data[29]])
+    let max_storage = if data.len() >= 20 {
+        u16::from_be_bytes([data[18], data[19]])
+    } else {
+        0
+    };
+    let max_component_depth = if data.len() >= 32 {
+        u16::from_be_bytes([data[30], data[31]])
     } else {
         0
     };
@@ -51,6 +58,7 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
         num_glyphs,
         max_points,
         max_contours,
+        max_storage,
         max_component_depth,
     })
 }

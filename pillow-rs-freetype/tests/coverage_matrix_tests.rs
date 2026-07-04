@@ -1,7 +1,7 @@
 //! Unified coverage matrix test — single runner for all scripts.
 //!
-//! Every test row has a SHA-256 reference from FreeType 2.14.3.
-//! SHA-256 must match EXACTLY or the test FAILS.
+//! getmask rows compare raw pixels when available, with SHA-256 as fallback.
+//! Failures include byte-level diff stats for rasterizer parity debugging.
 //!
 //! Summary shows per-script pass/fail clearly.
 
@@ -11,9 +11,9 @@
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::collections::{hash_map::Entry, HashMap, BTreeMap};
+use std::collections::{hash_map::Entry, BTreeMap, HashMap};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use pillow_rs_freetype::{BitmapBackend, Font};
 
@@ -42,24 +42,113 @@ struct MatrixRow {
     ref_value: Option<serde_json::Value>,
     #[serde(default)]
     ref_size: Option<Vec<u32>>,
+    #[serde(default)]
+    ref_raw: Option<String>,
 }
 
 fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data).iter().map(|b| format!("{:02x}", b)).collect()
+    Sha256::digest(data)
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
 }
 
 fn load_font_bytes(manifest_dir: &Path, name: &str) -> Vec<u8> {
     let font_dir = manifest_dir
-        .join("tests").join("fixtures").join("input").join("fonts_autohint");
+        .join("tests")
+        .join("fixtures")
+        .join("input")
+        .join("fonts_autohint");
     let path = font_dir.join(format!("{}.ttf", name));
     fs::read(&path).unwrap_or_else(|_| panic!("font file not found: {:?}", path))
 }
 
 fn get_text(row: &MatrixRow) -> String {
     if row.char.is_empty() {
-        char::from_u32(row.codepoint).map(|c| c.to_string()).unwrap_or_default()
+        char::from_u32(row.codepoint)
+            .map(|c| c.to_string())
+            .unwrap_or_default()
     } else {
         row.char.clone()
+    }
+}
+
+#[derive(Debug)]
+struct PixelDiff {
+    diff_count: u32,
+    max_diff: u32,
+    total_abs_diff: u64,
+    first_diff: Option<usize>,
+    size_delta: i32,
+    width_delta: i32,
+    height_delta: i32,
+}
+
+fn raw_pixel_paths(manifest_dir: &Path, row: &MatrixRow) -> Vec<PathBuf> {
+    let fixture_dir = manifest_dir.join("tests").join("fixtures");
+    let raw_dir = fixture_dir.join("outputs").join("raws");
+    let mut paths = Vec::new();
+
+    if let Some(ref_raw) = &row.ref_raw {
+        paths.push(fixture_dir.join(ref_raw));
+    }
+    paths.push(raw_dir.join(format!("{}.bin", row.id)));
+
+    if row.operation == "getmask" {
+        let size = row.size_pt.round() as u32;
+        paths.push(raw_dir.join(format!(
+            "{}_{}_{}_getmask.bin",
+            row.font, size, row.codepoint
+        )));
+    }
+
+    paths
+}
+
+fn load_raw_pixels(manifest_dir: &Path, row: &MatrixRow) -> Option<(PathBuf, Vec<u8>)> {
+    raw_pixel_paths(manifest_dir, row)
+        .into_iter()
+        .find_map(|path| fs::read(&path).ok().map(|pixels| (path, pixels)))
+}
+
+fn pixel_diff(
+    actual: &[u8],
+    expected: &[u8],
+    actual_w: u32,
+    actual_h: u32,
+    expected_w: u32,
+    expected_h: u32,
+) -> PixelDiff {
+    let min_len = actual.len().min(expected.len());
+    let mut diff_count = actual.len().max(expected.len()).saturating_sub(min_len) as u32;
+    let mut max_diff = 0u32;
+    let mut total_abs_diff = 0u64;
+    let mut first_diff = if actual.len() == expected.len() {
+        None
+    } else {
+        Some(min_len)
+    };
+
+    for i in 0..min_len {
+        let diff = (actual[i] as i32 - expected[i] as i32).unsigned_abs();
+        if diff != 0 {
+            diff_count += 1;
+            max_diff = max_diff.max(diff);
+            total_abs_diff += diff as u64;
+            if first_diff.is_none() {
+                first_diff = Some(i);
+            }
+        }
+    }
+
+    PixelDiff {
+        diff_count,
+        max_diff,
+        total_abs_diff,
+        first_diff,
+        size_delta: actual.len() as i32 - expected.len() as i32,
+        width_delta: actual_w as i32 - expected_w as i32,
+        height_delta: actual_h as i32 - expected_h as i32,
     }
 }
 
@@ -77,11 +166,20 @@ fn test_coverage_matrix_pil() {
     run_unified("coverage_matrix.json", BitmapBackend::PIL);
 }
 
+#[test]
+fn test_coverage_matrix_freetype_static() {
+    // Static FT parity: checks raw pixel refs generated from vendored FreeType.
+    run_unified("coverage_matrix_unified.json", BitmapBackend::FreeType);
+}
+
 // ── Single runner ─────────────────────────────────────────────────────────
 
 fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let matrix_path = manifest_dir.join("tests").join("fixtures").join(matrix_file);
+    let matrix_path = manifest_dir
+        .join("tests")
+        .join("fixtures")
+        .join(matrix_file);
 
     if !matrix_path.exists() {
         eprintln!("SKIP: {matrix_file} not found");
@@ -96,20 +194,27 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     let mut failed = 0u32;
 
     #[derive(Default)]
-    struct ScriptCounts { sha_ok: u32, sha_fail: u32 }
+    struct ScriptCounts {
+        sha_ok: u32,
+        sha_fail: u32,
+    }
     let mut script_counts: BTreeMap<String, ScriptCounts> = BTreeMap::new();
     let mut font_cache: HashMap<(String, u32), Font> = HashMap::new();
     let mut failures: Vec<String> = Vec::new();
 
     for row in &matrix.rows {
-        if row.status == "skip" { continue }
+        if row.status == "skip" {
+            continue;
+        }
         total += 1;
 
         // Extract script tag from row id: "FontName_10_1234_scripttag_getmask"
         let script = {
             let parts: Vec<&str> = row.id.rsplit('_').collect();
-            if parts.len() >= 3 && parts[1].len() <= 6
-                && parts[1].chars().all(|c| c.is_alphabetic() || c == '-') {
+            if parts.len() >= 3
+                && parts[1].len() <= 6
+                && parts[1].chars().all(|c| c.is_alphabetic() || c == '-')
+            {
                 parts[1].to_string()
             } else {
                 "latin".to_string()
@@ -142,29 +247,75 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                     }
                 };
 
-                match &row.ref_sha256 {
-                    Some(expected_sha) => {
-                        let actual = sha256_hex(&mask.pixels);
-                        if actual == *expected_sha {
-                            counts.sha_ok += 1;
-                            passed += 1;
-                        } else {
-                            failures.push(row.id.clone());
-                            counts.sha_fail += 1;
-                            failed += 1;
-                        }
+                let expected_size = row.ref_size.as_ref().and_then(|s| {
+                    if s.len() >= 2 {
+                        Some((s[0], s[1]))
+                    } else {
+                        None
                     }
-                    None => {
-                        // No SHA-256 reference — just check size
-                        if let Some(ref_size) = &row.ref_size {
-                            if ref_size[0] == mask.width && ref_size[1] == mask.height {
-                                passed += 1;
-                            } else {
-                                failures.push(row.id.clone());
-                                counts.sha_fail += 1;
-                                failed += 1;
-                            }
-                        }
+                });
+                let actual_sha = sha256_hex(&mask.pixels);
+
+                if let Some((raw_path, expected_pixels)) = load_raw_pixels(manifest_dir, row) {
+                    let (expected_w, expected_h) =
+                        expected_size.unwrap_or((mask.width, mask.height));
+                    if mask.pixels == expected_pixels
+                        && mask.width == expected_w
+                        && mask.height == expected_h
+                    {
+                        counts.sha_ok += 1;
+                        passed += 1;
+                    } else {
+                        let diff = pixel_diff(
+                            &mask.pixels,
+                            &expected_pixels,
+                            mask.width,
+                            mask.height,
+                            expected_w,
+                            expected_h,
+                        );
+                        failures.push(format!(
+                            "{} actual_sha={} raw={} actual={}x{} expected={}x{} diffs={} max={} total_abs={} first={:?} size_delta={} width_delta={} height_delta={}",
+                            row.id,
+                            actual_sha,
+                            raw_path.display(),
+                            mask.width,
+                            mask.height,
+                            expected_w,
+                            expected_h,
+                            diff.diff_count,
+                            diff.max_diff,
+                            diff.total_abs_diff,
+                            diff.first_diff,
+                            diff.size_delta,
+                            diff.width_delta,
+                            diff.height_delta,
+                        ));
+                        counts.sha_fail += 1;
+                        failed += 1;
+                    }
+                } else if let Some(expected_sha) = &row.ref_sha256 {
+                    if actual_sha == *expected_sha {
+                        counts.sha_ok += 1;
+                        passed += 1;
+                    } else {
+                        failures.push(format!(
+                            "{} actual_sha={} expected_sha={} raw=missing",
+                            row.id, actual_sha, expected_sha,
+                        ));
+                        counts.sha_fail += 1;
+                        failed += 1;
+                    }
+                } else if let Some((expected_w, expected_h)) = expected_size {
+                    if expected_w == mask.width && expected_h == mask.height {
+                        passed += 1;
+                    } else {
+                        failures.push(format!(
+                            "{} actual={}x{} expected={}x{} raw=missing sha=missing",
+                            row.id, mask.width, mask.height, expected_w, expected_h,
+                        ));
+                        counts.sha_fail += 1;
+                        failed += 1;
                     }
                 }
             }
@@ -175,14 +326,21 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
 
                 if let Some(ref expected) = row.ref_value {
                     let ea = expected.as_array().unwrap();
-                    let expect = (ea[0].as_i64().unwrap() as i32, ea[1].as_i64().unwrap() as i32,
-                                  ea[2].as_i64().unwrap() as i32, ea[3].as_i64().unwrap() as i32);
+                    let expect = (
+                        ea[0].as_i64().unwrap() as i32,
+                        ea[1].as_i64().unwrap() as i32,
+                        ea[2].as_i64().unwrap() as i32,
+                        ea[3].as_i64().unwrap() as i32,
+                    );
 
                     if bbox == expect {
                         counts.sha_ok += 1;
                         passed += 1;
                     } else {
-                        failures.push(row.id.clone());
+                        failures.push(format!(
+                            "{} actual={:?} expected={:?}",
+                            row.id, bbox, expect
+                        ));
                         counts.sha_fail += 1;
                         failed += 1;
                     }
@@ -193,26 +351,31 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                 let ok = match row.operation.as_str() {
                     "getmetrics" => {
                         let (a, d) = font.getmetrics();
-                        row.ref_value.as_ref().map_or(false, |ev| {
-                            &serde_json::json!([a, d]) == ev
-                        })
+                        row.ref_value
+                            .as_ref()
+                            .map_or(false, |ev| &serde_json::json!([a, d]) == ev)
                     }
                     "getname" => {
                         let (f, s) = font.getname();
-                        row.ref_value.as_ref().map_or(false, |ev| {
-                            &serde_json::json!([f, s]) == ev
-                        })
+                        row.ref_value
+                            .as_ref()
+                            .map_or(false, |ev| &serde_json::json!([f, s]) == ev)
                     }
                     "getlength" => {
                         let len = font.getlength("Hello");
-                        row.ref_value.as_ref().and_then(|ev| ev.as_f64()).map_or(false, |ef| {
-                            (len - ef as f32).abs() < 0.5
-                        })
+                        row.ref_value
+                            .as_ref()
+                            .and_then(|ev| ev.as_f64())
+                            .map_or(false, |ef| (len - ef as f32).abs() < 0.5)
                     }
                     _ => false,
                 };
-                if ok { passed += 1; }
-                else { failed += 1; failures.push(row.id.clone()); }
+                if ok {
+                    passed += 1;
+                } else {
+                    failed += 1;
+                    failures.push(row.id.clone());
+                }
             }
 
             _ => {}
@@ -232,7 +395,9 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
 
     for (script, counts) in &script_counts {
         let total_s = counts.sha_ok + counts.sha_fail;
-        if total_s == 0 { continue; }
+        if total_s == 0 {
+            continue;
+        }
         if counts.sha_fail == 0 {
             passing_scripts.push((script.clone(), total_s));
         } else {
@@ -240,7 +405,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
         }
     }
 
-    passing_scripts.sort_by(|a, b| b.0.cmp(&a.0));  // reverse alphabetical
+    passing_scripts.sort_by(|a, b| b.0.cmp(&a.0)); // reverse alphabetical
     failing_scripts.sort_by(|a, b| {
         let pa = (b.2 - b.1) as f64 / b.2 as f64;
         let pb = (a.2 - a.1) as f64 / a.2 as f64;
@@ -248,7 +413,10 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     });
 
     if !passing_scripts.is_empty() {
-        eprintln!("║  PASSING (SHA-256 match) — {} scripts", passing_scripts.len());
+        eprintln!(
+            "║  PASSING (pixel match) — {} scripts",
+            passing_scripts.len()
+        );
         for (s, total_s) in &passing_scripts {
             eprintln!("║    {s} {total_s}/{total_s}");
         }
@@ -256,7 +424,11 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     if !failing_scripts.is_empty() {
         eprintln!("║  FAILING — {} scripts", failing_scripts.len());
         for (s, ok, total_s) in &failing_scripts {
-            let fail_pct = if *total_s > 0 { 100.0 * (*total_s - ok) as f64 / *total_s as f64 } else { 0.0 };
+            let fail_pct = if *total_s > 0 {
+                100.0 * (*total_s - ok) as f64 / *total_s as f64
+            } else {
+                0.0
+            };
             eprintln!("║    {s} {ok}/{total_s} passed ({fail_pct:.0}% fail)");
         }
     }
@@ -269,7 +441,10 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
             eprintln!("║  {f}");
         }
         if failures.len() > 50 {
-            eprintln!("║  ... and {} more (see FAILURE_IDS for full list)", failures.len() - 50);
+            eprintln!(
+                "║  ... and {} more (see FAILURE_IDS for full list)",
+                failures.len() - 50
+            );
         }
         // Write full failure list to file for analysis
         let report_path = "/tmp/pillow_failure_ids.txt";
@@ -279,7 +454,10 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     eprintln!("╚══════════════════════════════════════════════════════════════╝");
 
     if failed > 0 {
-        panic!("{failed}/{total} SHA-256 mismatches in {matrix_file}");
+        panic!("{failed}/{total} pixel mismatches in {matrix_file}");
     }
-    assert!(passed > 0, "No tests passed — check font files for {matrix_file}");
+    assert!(
+        passed > 0,
+        "No tests passed — check font files for {matrix_file}"
+    );
 }

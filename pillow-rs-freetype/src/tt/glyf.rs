@@ -41,7 +41,10 @@ pub struct GlyphOutline {
     pub num_contours: u16,
     pub end_pts_of_contours: Vec<u16>,
     pub points: Vec<OutlinePoint>,
-    pub xmin: i32, pub ymin: i32, pub xmax: i32, pub ymax: i32,
+    pub xmin: i32,
+    pub ymin: i32,
+    pub xmax: i32,
+    pub ymax: i32,
     /// Whether composite. If true, xmin tracks last sub-glyph's glyf header
     /// (matching C's loader->bbox ttgload.c:324) and lsb tracks last sub's.
     pub is_composite: bool,
@@ -107,9 +110,8 @@ fn load_glyph_inner(
         ));
     }
 
-    let loc = get_glyph_location(loca, glyph_index, index_to_loc_format).ok_or_else(|| {
-        FontError::InvalidOutline("loca: glyph index out of range".into())
-    })?;
+    let loc = get_glyph_location(loca, glyph_index, index_to_loc_format)
+        .ok_or_else(|| FontError::InvalidOutline("loca: glyph index out of range".into()))?;
     if loc.length == 0 {
         return Ok(GlyphOutline::default());
     }
@@ -174,19 +176,26 @@ fn load_glyph_inner(
         let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
 
         for comp in components {
-            let sub =
-                load_glyph_inner(glyf, loca, index_to_loc_format, comp.glyph_index, hmtx, depth + 1)?;
+            let sub = load_glyph_inner(
+                glyf,
+                loca,
+                index_to_loc_format,
+                comp.glyph_index,
+                hmtx,
+                depth + 1,
+            )?;
             last_sub_xmin = sub.xmin;
             last_sub_lsb = sub.sub_lsb;
             let base = points.len();
             for pt in &sub.points {
-                points.push(transform_point(*pt, &comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax));
+                points.push(transform_point(
+                    *pt, &comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax,
+                ));
             }
             for &ep in &sub.end_pts_of_contours {
                 end_pts.push(u16_from_u32(u32_from_usize(base) + ep as u32));
             }
-            num_contours_total =
-                num_contours_total.saturating_add(sub.num_contours);
+            num_contours_total = num_contours_total.saturating_add(sub.num_contours);
         }
 
         Ok(GlyphOutline {
@@ -265,7 +274,9 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         flags.push(flag);
         if flag & REPEAT_FLAG != 0 {
             if pos >= data.len() {
-                return Err(FontError::InvalidOutline("glyf: repeat count overflow".into()));
+                return Err(FontError::InvalidOutline(
+                    "glyf: repeat count overflow".into(),
+                ));
             }
             let repeat = data[pos] as usize;
             pos += 1;
@@ -290,7 +301,11 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
             let dx = data[pos] as i32;
             pos += 1;
             // X_SHORT only → negative; X_SHORT | X_IS_SAME → positive.
-            x += if flag & X_IS_SAME_OR_POSITIVE_SHORT != 0 { dx } else { -dx };
+            x += if flag & X_IS_SAME_OR_POSITIVE_SHORT != 0 {
+                dx
+            } else {
+                -dx
+            };
         } else if flag & X_IS_SAME_OR_POSITIVE_SHORT == 0 {
             if pos + 2 > data.len() {
                 return Err(FontError::InvalidOutline("glyf: x long overflow".into()));
@@ -298,7 +313,11 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
             x += i16::from_be_bytes([data[pos], data[pos + 1]]) as i32;
             pos += 2;
         }
-        points.push(OutlinePoint { x, y: 0, on_curve: false });
+        points.push(OutlinePoint {
+            x,
+            y: 0,
+            on_curve: false,
+        });
     }
     // Decode Y coordinates.
     for (i, &flag) in flags.iter().enumerate() {
@@ -308,7 +327,11 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
             }
             let dy = data[pos] as i32;
             pos += 1;
-            y += if flag & Y_IS_SAME_OR_POSITIVE_SHORT != 0 { dy } else { -dy };
+            y += if flag & Y_IS_SAME_OR_POSITIVE_SHORT != 0 {
+                dy
+            } else {
+                -dy
+            };
         } else if flag & Y_IS_SAME_OR_POSITIVE_SHORT == 0 {
             if pos + 2 > data.len() {
                 return Err(FontError::InvalidOutline("glyf: y long overflow".into()));

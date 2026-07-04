@@ -85,18 +85,18 @@ pub struct AfWidth {
 /// Blue zone descriptor for one vertical position (top/bottom).  aflatin.h:86
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AfLatinBlue {
-    pub ref_width:   AfWidth, // flat-segment reference
+    pub ref_width: AfWidth,   // flat-segment reference
     pub shoot_width: AfWidth, // round-segment overshoot
-    pub ascender:    i32,
-    pub descender:   i32,
-    pub flags:       u32,     // AF_LATIN_BLUE_* bits
+    pub ascender: i32,
+    pub descender: i32,
+    pub flags: u32, // AF_LATIN_BLUE_* bits
 }
 
 /// Per-axis (Horz or Vert) font-wide metrics.  aflatin.h:97
 #[derive(Debug, Clone)]
 pub struct AfLatinAxisMetrics {
-    pub scale: i32,               // 16.16
-    pub delta: i32,               // 26.6
+    pub scale: i32, // 16.16
+    pub delta: i32, // 26.6
     pub width_count: usize,
     pub widths: [AfWidth; AF_LATIN_MAX_WIDTHS],
     pub edge_distance_threshold: i32, // font units
@@ -118,7 +118,8 @@ impl Default for AfLatinAxisMetrics {
 impl AfLatinAxisMetrics {
     pub fn new() -> Self {
         AfLatinAxisMetrics {
-            scale: 0, delta: 0,
+            scale: 0,
+            delta: 0,
             width_count: 0,
             widths: [AfWidth::default(); AF_LATIN_MAX_WIDTHS],
             edge_distance_threshold: 0,
@@ -126,7 +127,8 @@ impl AfLatinAxisMetrics {
             extra_light: false,
             blue_count: 0,
             blues: Vec::new(),
-            org_scale: 0, org_delta: 0,
+            org_scale: 0,
+            org_delta: 0,
         }
     }
 }
@@ -197,20 +199,20 @@ pub const AF_EDGE_NO_BLUE: u8 = 1 << 4;
 pub const AF_LATIN_MAX_WIDTHS: usize = 16;
 
 /// Blue zone property flags (from the blue stringset table).
-pub const AF_BLUE_PROP_LATIN_TOP:            u32 = 1 << 0;
-pub const AF_BLUE_PROP_LATIN_SUB_TOP:        u32 = 1 << 1;
-pub const AF_BLUE_PROP_LATIN_NEUTRAL:        u32 = 1 << 2;
-pub const AF_BLUE_PROP_LATIN_X_HEIGHT:       u32 = 1 << 3;
+pub const AF_BLUE_PROP_LATIN_TOP: u32 = 1 << 0;
+pub const AF_BLUE_PROP_LATIN_SUB_TOP: u32 = 1 << 1;
+pub const AF_BLUE_PROP_LATIN_NEUTRAL: u32 = 1 << 2;
+pub const AF_BLUE_PROP_LATIN_X_HEIGHT: u32 = 1 << 3;
 pub const AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM: u32 = 1 << 5;
-pub const AF_BLUE_PROP_LATIN_SMALL_BOTTOM:   u32 = 1 << 6;
+pub const AF_BLUE_PROP_LATIN_SMALL_BOTTOM: u32 = 1 << 6;
 
 /// Blue zone flags (runtime, stored on AF_LatinBlue.flags).
-pub const AF_LATIN_BLUE_ACTIVE:       u32 = 1 << 0;
-pub const AF_LATIN_BLUE_TOP:          u32 = 1 << 1;
-pub const AF_LATIN_BLUE_SUB_TOP:      u32 = 1 << 2;
-pub const AF_LATIN_BLUE_NEUTRAL:      u32 = 1 << 3;
-pub const AF_LATIN_BLUE_ADJUSTMENT:   u32 = 1 << 4;
-pub const AF_LATIN_BLUE_BOTTOM:       u32 = 1 << 5;
+pub const AF_LATIN_BLUE_ACTIVE: u32 = 1 << 0;
+pub const AF_LATIN_BLUE_TOP: u32 = 1 << 1;
+pub const AF_LATIN_BLUE_SUB_TOP: u32 = 1 << 2;
+pub const AF_LATIN_BLUE_NEUTRAL: u32 = 1 << 3;
+pub const AF_LATIN_BLUE_ADJUSTMENT: u32 = 1 << 4;
+pub const AF_LATIN_BLUE_BOTTOM: u32 = 1 << 5;
 pub const AF_LATIN_BLUE_BOTTOM_SMALL: u32 = 1 << 6;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -269,10 +271,15 @@ pub struct AFEdge {
 impl Default for AFEdge {
     fn default() -> Self {
         AFEdge {
-            fpos: 0, opos: 0, pos: 0,
-            flags: 0, dir: Direction::None,
-            link: usize::MAX, serif: usize::MAX,
-            first: usize::MAX, last: usize::MAX,
+            fpos: 0,
+            opos: 0,
+            pos: 0,
+            flags: 0,
+            dir: Direction::None,
+            link: usize::MAX,
+            serif: usize::MAX,
+            first: usize::MAX,
+            last: usize::MAX,
             blue_edge: None,
         }
     }
