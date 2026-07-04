@@ -901,8 +901,8 @@ impl ExecContext {
 
                 // ── MIAP — Move Indirect Absolute Point ──────────
                 0x3E | 0x3F => {
-                    let p = self.pop()? as usize;
                     let cvt_idx = self.pop()? as usize;
+                    let p = self.pop()? as usize;
                     let cvt_val = self.get_cvt(cvt_idx)?;
                     if self.gs.zp0 == 0 {
                         let (ox, oy) = self.gs.move_along_free(cvt_val);
@@ -994,8 +994,8 @@ impl ExecContext {
                 // C: Ins_MIRP at ttinterp.c:5520-5673
                 // Flag bits same as MDRP + auto-flip
                 0xE0..=0xFF => {
-                    let p = self.pop()? as usize;
                     let cvt_idx = self.pop()?;
+                    let p = self.pop()? as usize;
                     let mut cvt_dist = if cvt_idx < 0 {
                         0
                     } else {
