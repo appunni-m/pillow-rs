@@ -1516,25 +1516,29 @@ impl ExecContext {
                 0x50 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(if b < a { 1 } else { 0 });
+                    let result = if self.cur_range == 0 { a < b } else { b < a };
+                    self.push(if result { 1 } else { 0 });
                 }
                 // ── LTEQ (0x51) ─────────────────────────────────────
                 0x51 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(if b <= a { 1 } else { 0 });
+                    let result = if self.cur_range == 0 { a <= b } else { b <= a };
+                    self.push(if result { 1 } else { 0 });
                 }
                 // ── GT (0x52) ───────────────────────────────────────
                 0x52 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(if b > a { 1 } else { 0 });
+                    let result = if self.cur_range == 0 { a > b } else { b > a };
+                    self.push(if result { 1 } else { 0 });
                 }
                 // ── GTEQ (0x53) ─────────────────────────────────────
                 0x53 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(if b >= a { 1 } else { 0 });
+                    let result = if self.cur_range == 0 { a >= b } else { b >= a };
+                    self.push(if result { 1 } else { 0 });
                 }
                 // ── EQ (0x54) ───────────────────────────────────────
                 0x54 => {
