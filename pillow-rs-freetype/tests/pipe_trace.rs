@@ -10,7 +10,7 @@
 #![allow(unused_crate_dependencies)]
 
 use pillow_rs_freetype::autohint::latin;
-use pillow_rs_freetype::{scaler, tt, BitmapBackend, Font};
+use pillow_rs_freetype::{scaler, tt, BitmapBackend, Font, RenderMode};
 
 fn sha256(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
@@ -94,6 +94,7 @@ fn trace_one_glyph() {
         false,
         true,
         Some(&fd),
+        false,
     );
 
     let font2 = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
@@ -106,4 +107,43 @@ fn trace_one_glyph() {
         print!(" {:02x}", b);
     }
     println!();
+}
+
+#[test]
+#[ignore = "interactive debug: dump one render-mode glyph"]
+fn dump_render_mode_glyph() {
+    let font_name = std::env::var("PIPE_FONT").unwrap_or("DejaVuSans".into());
+    let size_pt: f32 = std::env::var("PIPE_SIZE")
+        .unwrap_or("10".into())
+        .parse()
+        .unwrap();
+    let ch: char = std::env::var("PIPE_CHAR")
+        .unwrap_or("\u{625}".into())
+        .chars()
+        .next()
+        .unwrap();
+
+    let font_path = format!("tests/fixtures/input/fonts_autohint/{font_name}.ttf");
+    let data = std::fs::read(&font_path).unwrap();
+    let font = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
+    let bitmap = font.render_char_mode(ch, RenderMode::Mono).unwrap();
+
+    eprintln!(
+        "BITMAP width={} rows={} pitch={} left={} top={} len={}",
+        bitmap.width,
+        bitmap.rows,
+        bitmap.pitch,
+        bitmap.left,
+        bitmap.top,
+        bitmap.buffer.len()
+    );
+    let pitch = usize::try_from(bitmap.pitch).unwrap();
+    for row in 0..bitmap.rows as usize {
+        print!("ROW {row:02}:");
+        let start = row * pitch;
+        for byte in &bitmap.buffer[start..start + pitch] {
+            print!(" {byte:02x}");
+        }
+        println!();
+    }
 }
