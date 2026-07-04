@@ -1343,7 +1343,10 @@ fn split_conic_arc(arc: [Point; 3]) -> ([Point; 3], [Point; 3]) {
     let start = arc[2];
     let end_control = midpoint(end, control);
     let start_control = midpoint(control, start);
-    let center = midpoint(end_control, start_control);
+    let center = Point {
+        x: (end.x + control.x + control.x + start.x) >> 2,
+        y: (end.y + control.y + control.y + start.y) >> 2,
+    };
     ([center, start_control, start], [end, end_control, center])
 }
 
