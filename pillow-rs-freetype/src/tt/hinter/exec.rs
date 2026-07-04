@@ -1557,9 +1557,21 @@ impl ExecContext {
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
-                // C: Ins_GETINFO. Returns flags about the engine. Push 0.
+                // C: Ins_GETINFO. Returns flags about the engine.
                 0x88 => {
-                    self.push(0);
+                    let selector = self.pop()?;
+                    let mut result = 0;
+                    if selector & 0x01 != 0 {
+                        // FreeType's bytecode interpreter advertises the v35
+                        // compatible instruction set for classic grayscale
+                        // hinting. Rotation/stretch/variation/ClearType flags
+                        // remain clear for this metrics-only load path.
+                        result |= 35;
+                    }
+                    if selector & 0x10 != 0 {
+                        result |= 0x0800;
+                    }
+                    self.push(result);
                 }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
