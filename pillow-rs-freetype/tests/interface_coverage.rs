@@ -28,6 +28,8 @@ struct SymbolMapping {
     #[allow(dead_code)]
     rust: Option<String>,
     status: Status,
+    #[serde(default)]
+    reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -59,7 +61,10 @@ struct PathStats {
 #[test]
 fn freetype_interface_coverage_report() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let header_root = manifest_dir.join("freetype").join("include").join("freetype");
+    let header_root = manifest_dir
+        .join("freetype")
+        .join("include")
+        .join("freetype");
     let exported_symbols = discover_ft_exports(&header_root);
 
     let map_path = manifest_dir
@@ -81,6 +86,15 @@ fn freetype_interface_coverage_report() {
             mapped_symbols.insert(symbol.clone());
             if !exported_symbols.contains(symbol) {
                 stats.missing_from_headers += 1;
+            }
+            if mapping.status == Status::OutOfScope {
+                assert!(
+                    mapping
+                        .reason
+                        .as_ref()
+                        .is_some_and(|reason| !reason.trim().is_empty()),
+                    "{symbol} is out_of_scope but has no reason"
+                );
             }
             match mapping.status {
                 Status::Complete => stats.complete += 1,
@@ -128,9 +142,7 @@ fn freetype_interface_coverage_report() {
         "║  implemented={} complete={} partial={} planned={}",
         implemented, complete, partial, planned
     );
-    eprintln!(
-        "║  api_coverage={api_coverage:.1}% complete_coverage={complete_coverage:.1}%"
-    );
+    eprintln!("║  api_coverage={api_coverage:.1}% complete_coverage={complete_coverage:.1}%");
     eprintln!("╠══════════════════════════════════════════════════════════════╣");
     eprintln!("║  Path coverage");
 
@@ -166,6 +178,7 @@ fn freetype_interface_coverage_report() {
         "FreeType export parser found too few symbols: {}",
         exported_symbols.len()
     );
+    assert_eq!(unmapped, 0, "all FreeType exports must be mapped");
 }
 
 fn count_status(interface_map: &InterfaceMap, status: Status) -> u32 {
