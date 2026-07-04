@@ -108,7 +108,7 @@ src/autohint/
 ```
 scripts/
 ├── build_fixtures.py          Main fixture pipeline
-├── build_pil_fixture.py       PIL backend fixture generator
+├── build_ft_fixture.py        FreeType-path fixture generator
 ├── extract_blues.py           afblue.dat → blue_strings.rs
 ├── generate_globals.py        afranges.c + afstyles.h → globals_data.rs
 ├── generate_script_meta.py    afscript.h → standard char + blue chars
@@ -119,17 +119,20 @@ scripts/
 ```
 tests/fixtures/
 ├── font_inventory.json              Font → script → codepoint mapping
-├── coverage_matrix_ft.json          FreeType 2.14.3 Latin (8 fonts, SHA-256)
-├── coverage_matrix_unified.json     55-script fixture (SHA-256 for all)
-└── coverage_matrix.json             PIL 12.2.0 Latin parity
+├── force_autohint_matrix.json       55-script FreeType force_autohint fixture
+├── native_tt_default_matrix.json    Native TrueType default fixture
+├── no_hinting_matrix.json           FreeType no_hinting fixture
+├── metrics_only_matrix.json         FreeType metrics_only fixture
+├── outline_cbox_matrix.json         FreeType outline_cbox fixture
+├── render_mono_matrix.json          FreeType mono render fixture
+└── render_lcd_matrix.json           FreeType LCD render fixture
 ```
 
 ## Test Results
 
 | Test | Rows | Pass | Status |
 |------|------|------|--------|
-| `test_coverage_matrix_freetype` | 7,600 | 7,600 | ✓ |
-| `test_unified_coverage` | 18,500 | 17,250 | 93.2% |
+| `test_coverage_matrix_force_autohint` | 22,168 | 22,168 | ✓ |
+| `test_coverage_matrix_native_tt_default` | 7,640 | partial | diagnostic |
 | Unit tests | 14 | 14 | ✓ |
 | Fixed parity | 6 | 6 | ✓ |
-| `test_coverage_matrix_pil` | 6,685 | varies | PIL API gap |

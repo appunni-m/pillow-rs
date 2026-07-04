@@ -16,13 +16,26 @@ use std::collections::{hash_map::Entry, BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use env_logger as _;
+use log as _;
 use pillow_rs_freetype::{BitmapBackend, Font};
+use thiserror as _;
 
 #[derive(Debug, Deserialize)]
 struct CoverageMatrix {
     rows: Vec<MatrixRow>,
     #[allow(dead_code)]
     summary: Option<serde_json::Value>,
+    #[serde(default)]
+    fixture_family: String,
+    #[serde(default)]
+    generator: String,
+    #[serde(default)]
+    load_flags: Vec<String>,
+    #[serde(default)]
+    render_mode: String,
+    #[serde(default = "default_assert_pixel_parity")]
+    assert_pixel_parity: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +58,32 @@ struct MatrixRow {
     ref_size: Option<Vec<u32>>,
     #[serde(default)]
     ref_raw: Option<String>,
+    #[serde(default)]
+    fixture_family: String,
+    #[serde(default)]
+    generator: String,
+    #[serde(default)]
+    load_flags: Vec<String>,
+    #[serde(default)]
+    render_mode: String,
+    #[serde(default)]
+    glyph_index: Option<u32>,
+    #[serde(default)]
+    script: Option<String>,
+    #[serde(default)]
+    metrics: serde_json::Value,
+    #[serde(default)]
+    bbox: serde_json::Value,
+    #[serde(default)]
+    bitmap: serde_json::Value,
+    #[serde(default)]
+    bitmap_placement: serde_json::Value,
+    #[serde(default)]
+    raw_pixels: String,
+}
+
+fn default_assert_pixel_parity() -> bool {
+    true
 }
 
 fn sha256_hex(data: &[u8]) -> String {
@@ -149,6 +188,74 @@ fn load_raw_pixels(manifest_dir: &Path, row: &MatrixRow) -> Option<(PathBuf, Vec
         .find_map(|path| fs::read(&path).ok().map(|pixels| (path, pixels)))
 }
 
+fn validate_fixture_provenance(matrix_file: &str, matrix: &CoverageMatrix) {
+    assert!(
+        !matrix.fixture_family.is_empty(),
+        "{matrix_file} is missing fixture_family"
+    );
+    assert!(
+        !matrix.generator.is_empty(),
+        "{matrix_file} is missing generator"
+    );
+    assert!(
+        !matrix.load_flags.is_empty(),
+        "{matrix_file} is missing load_flags"
+    );
+    assert!(
+        !matrix.render_mode.is_empty(),
+        "{matrix_file} is missing render_mode"
+    );
+
+    for row in &matrix.rows {
+        assert_eq!(
+            row.fixture_family, matrix.fixture_family,
+            "{} has mismatched fixture_family",
+            row.id
+        );
+        assert!(!row.generator.is_empty(), "{} is missing generator", row.id);
+        assert!(
+            !row.load_flags.is_empty(),
+            "{} is missing load_flags",
+            row.id
+        );
+        assert!(
+            !row.render_mode.is_empty(),
+            "{} is missing render_mode",
+            row.id
+        );
+        assert!(row.size_pt > 0.0, "{} is missing size", row.id);
+        assert!(!row.font.is_empty(), "{} is missing font", row.id);
+        assert!(
+            row.metrics.is_object(),
+            "{} is missing metrics object",
+            row.id
+        );
+        assert!(row.bbox.is_object(), "{} is missing bbox object", row.id);
+        assert!(
+            row.bitmap.is_object(),
+            "{} is missing bitmap object",
+            row.id
+        );
+        assert!(
+            row.bitmap_placement.is_object(),
+            "{} is missing bitmap placement object",
+            row.id
+        );
+        if row.operation == "getmask" {
+            assert!(
+                row.glyph_index.is_some() || row.codepoint > 0,
+                "{} is missing glyph/codepoint identity",
+                row.id
+            );
+            assert!(
+                row.ref_raw.is_some() || !row.raw_pixels.is_empty(),
+                "{} is missing raw pixels",
+                row.id
+            );
+        }
+    }
+}
+
 fn pixel_diff(
     actual: &[u8],
     expected: &[u8],
@@ -210,13 +317,32 @@ fn test_coverage_matrix_native_tt_default() {
 }
 
 #[test]
-fn test_coverage_matrix_freetype_static() {
+fn test_coverage_matrix_force_autohint() {
     // Static FT parity: checks raw pixel refs generated from vendored FreeType.
-    run_unified(
-        "coverage_matrix_unified.json",
-        BitmapBackend::FreeType,
-        None,
-    );
+    run_unified("force_autohint_matrix.json", BitmapBackend::FreeType, None);
+}
+
+#[test]
+fn test_fixture_matrix_provenance() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixture_dir = manifest_dir.join("tests").join("fixtures");
+    let expected = [
+        "native_tt_default_matrix.json",
+        "force_autohint_matrix.json",
+        "no_hinting_matrix.json",
+        "metrics_only_matrix.json",
+        "outline_cbox_matrix.json",
+        "render_mono_matrix.json",
+        "render_lcd_matrix.json",
+    ];
+
+    for matrix_file in expected {
+        let matrix_path = fixture_dir.join(matrix_file);
+        assert!(matrix_path.exists(), "{matrix_file} not found");
+        let matrix: CoverageMatrix =
+            serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap();
+        validate_fixture_provenance(matrix_file, &matrix);
+    }
 }
 
 // ── Single runner ─────────────────────────────────────────────────────────
@@ -235,6 +361,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
 
     let matrix: CoverageMatrix =
         serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap();
+    validate_fixture_provenance(matrix_file, &matrix);
 
     let mut total = 0u32;
     let mut passed = 0u32;
@@ -257,7 +384,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
         total += 1;
 
         // Extract script tag from row id: "FontName_10_1234_scripttag_getmask"
-        let script = {
+        let script = row.script.clone().unwrap_or_else(|| {
             let parts: Vec<&str> = row.id.rsplit('_').collect();
             if parts.len() >= 3
                 && parts[1].len() <= 6
@@ -267,7 +394,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
             } else {
                 "latin".to_string()
             }
-        };
+        });
         let counts = script_counts.entry(script.clone()).or_default();
 
         let font = match font_cache.entry((row.font.clone(), row.size_pt.to_bits())) {
@@ -554,6 +681,9 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
                 passed >= min_passed,
                 "{matrix_file} regressed below native TT baseline: {passed}/{total} < {min_passed}/{expected_total}"
             );
+            return;
+        }
+        if !matrix.assert_pixel_parity {
             return;
         }
         panic!("{failed}/{total} pixel mismatches in {matrix_file}");
