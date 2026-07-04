@@ -903,8 +903,6 @@ impl ExecContext {
                     // We don't track this precisely, just mark touched
                     zone.set_tag(p, 0x03);
                 }
-                // ── DELTAP1 (0x5D) — Delta exception ─────────────
-                0x5D | 0x71 | 0x72 => { let _ = self.pop()?; } // DELTAP1/2/3
                 // ── SCVTCI (0x6C) — Set CVT Cut-In ───────────────
                 0x6C => {
                     let v = self.pop()?;
@@ -1055,6 +1053,11 @@ impl ExecContext {
                 // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
                 0x81 => { let _ = self.pop()?; } // FLIPRGON
                 0x82 => { let _ = self.pop()?; } // FLIPRGOFF
+                // ── DELTAP1/2/3 (0x5D, 0x71, 0x72) — Delta exceptions ──
+                // C: Ins_DELTAP at ttinterp.c (various). Skips for now —
+                // delta exceptions are per-ppem adjustment tables that
+                // are rarely used at 72dpi 10-24pt.
+                0x5D | 0x5E | 0x5F | 0x71 | 0x72 | 0x73 | 0x74 => {}
                 // ── Unknown opcode ────────────────────────────
                 _ => {}
             }
