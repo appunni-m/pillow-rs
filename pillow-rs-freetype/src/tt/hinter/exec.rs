@@ -1060,11 +1060,11 @@ impl ExecContext {
                     }
                 }
 
-                // ── ALIGNRP (0x3A, 0x3C) — Align Relative Point ──
+                // ── ALIGNRP (0x3C) — Align Relative Point ──
                 // ✅ VERIFIED: C: Ins_ALIGNRP (ttinterp.c:5673-5720)
                 // Pops GS.loop counter points. For each, snaps position
                 // to rp0: distance = PROJECT(cur[p], cur[rp0]), move by -distance
-                0x3A | 0x3C => {
+                0x3C => {
                     let loop_count = self.gs.loop_counter as usize;
                     let rp = self.gs.rp0 as usize;
                     let (rcx, rcy) = zone.cur(rp);
@@ -1135,10 +1135,10 @@ impl ExecContext {
                 // ── IUP — Interpolate Untouched Points ────────────
                 // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
                 0x30 => {
-                    iup::iup_x(zone);
+                    iup::iup_y(zone);
                 }
                 0x31 => {
-                    iup::iup_y(zone);
+                    iup::iup_x(zone);
                 }
 
                 // ── Control flow ──────────────────────────────────
@@ -1549,14 +1549,35 @@ impl ExecContext {
                 // C: Ins_UTP (ttinterp.c:6016). Pops point, clears its touch.
                 0x29 => {
                     let p = self.pop()? as usize;
-                    zone.set_tag(p, 0x00); // clear touch flags
+                    zone.clear_tag(p);
                 }
-                // ── MSIRP (0x3B) — Move Single Indirect Relative Point ──
-                // C: Ins_MSIRP (ttinterp.c:5224-5276). Like MIRP but single.
-                // Rarely used. Skip with stack cleanup (pops 2 args).
-                0x3B => {
-                    let _ = self.pop()?;
-                    let _ = self.pop()?;
+                // ── MSIRP (0x3A-0x3B) — Move Single Indirect Relative Point ──
+                // C: Ins_MSIRP (ttinterp.c:5224-5276). Moves a point relative
+                // to rp0 by a stack distance, without CVT lookup.
+                0x3A | 0x3B => {
+                    let p = self.pop()? as usize;
+                    let distance = self.pop()?;
+                    let rp = self.gs.rp0 as usize;
+
+                    if self.gs.zp1 == 0 {
+                        let (rox, roy) = self.org_in(zone, self.gs.zp0, rp);
+                        let (dx, dy) = self.gs.move_along_free(distance);
+                        self.set_org_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
+                        self.set_cur_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
+                    }
+
+                    let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
+                    let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
+                    let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
+                    let (dx, dy) = self.gs.move_along_free(distance - cur_dist);
+                    self.set_cur_in(zone, self.gs.zp1, p, pcx + dx, pcy + dy);
+                    self.touch_in(zone, self.gs.zp1, p);
+
+                    self.gs.rp1 = self.gs.rp0;
+                    self.gs.rp2 = p as u32;
+                    if opcode & 1 != 0 {
+                        self.gs.rp0 = p as u32;
+                    }
                 }
                 // ── AND (0x5A) — Logical AND ───────────────────────
                 // C: Ins_AND (ttinterp.c:2588-2601)
@@ -1606,7 +1627,6 @@ impl ExecContext {
                     } else {
                         count
                     };
-                    // C: P = ppem*64 - delta_base, range offset by opcode
                     let base_ppem = self.ppem * 64;
                     let p = base_ppem
                         - self.gs.delta_base as i32
