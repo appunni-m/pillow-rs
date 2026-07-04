@@ -239,12 +239,23 @@ fn rasterize_mono_center(
     let segments = flatten_outline(outline)?;
     let pitch = mono_pitch(width);
     let mut buffer = vec![0u8; pitch * height];
+    rasterize_mono_profiles(&segments, &mut buffer, width, height, pitch);
+    apply_horizontal_center_edges(&segments, &mut buffer, width, height, pitch);
+    Ok(buffer)
+}
 
+fn rasterize_mono_intersections(
+    segments: &[Segment],
+    width: usize,
+    height: usize,
+    pitch: usize,
+) -> Vec<u8> {
+    let mut buffer = vec![0u8; pitch * height];
     for y in 0..height {
         let scan_y = (y as i32) * 64 + 32;
         let mut left = Vec::new();
         let mut right = Vec::new();
-        for segment in &segments {
+        for segment in segments {
             if let Some(intersection) = segment_intersection(*segment, scan_y) {
                 if intersection.flow_up {
                     left.push(intersection);
@@ -280,8 +291,503 @@ fn rasterize_mono_center(
             }
         }
     }
-    apply_horizontal_center_edges(&segments, &mut buffer, width, height, pitch);
-    Ok(buffer)
+    buffer
+}
+
+const MONO_FLOW_UP: u8 = 0x08;
+const MONO_OVERSHOOT_TOP: u8 = 0x10;
+const MONO_OVERSHOOT_BOTTOM: u8 = 0x20;
+const MONO_DROPOUT: u8 = 0x40;
+const MONO_DROPOUT_CONTROL: u8 = 1;
+
+#[derive(Debug, Clone)]
+struct MonoProfile {
+    xs: Vec<i32>,
+    start: i32,
+    offset: usize,
+    height: usize,
+    flags: u8,
+    x: i32,
+    link: Option<usize>,
+    next: Option<usize>,
+    contour: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MonoState {
+    Unknown,
+    Ascending,
+    Descending,
+}
+
+struct MonoProfileBuilder<'a> {
+    segments: &'a [Segment],
+    profiles: Vec<MonoProfile>,
+    current: Option<usize>,
+    contour_first: Option<usize>,
+    contour_profiles: Vec<usize>,
+    state: MonoState,
+    last_x: i32,
+    last_y: i32,
+    min_y: i32,
+    max_y: i32,
+}
+
+fn rasterize_mono_profiles(
+    segments: &[Segment],
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+) {
+    if width == 0 || height == 0 || segments.is_empty() {
+        return;
+    }
+
+    let profiles = MonoProfileBuilder::new(segments, 0, i32_from_usize(height) * 64).build();
+    if profiles.is_empty() {
+        return;
+    }
+
+    draw_mono_profile_sweep(profiles, buffer, width, height, pitch);
+}
+
+impl<'a> MonoProfileBuilder<'a> {
+    fn new(segments: &'a [Segment], min_y: i32, max_y: i32) -> Self {
+        Self {
+            segments,
+            profiles: Vec::new(),
+            current: None,
+            contour_first: None,
+            contour_profiles: Vec::new(),
+            state: MonoState::Unknown,
+            last_x: 0,
+            last_y: 0,
+            min_y,
+            max_y,
+        }
+    }
+
+    fn build(mut self) -> Vec<MonoProfile> {
+        let mut cursor = 0;
+        while cursor < self.segments.len() {
+            let contour = self.segments[cursor].contour;
+            self.state = MonoState::Unknown;
+            self.current = None;
+            self.contour_first = None;
+            self.contour_profiles.clear();
+
+            self.last_x = scaled_mono_coord(self.segments[cursor].x0);
+            self.last_y = scaled_mono_coord(self.segments[cursor].y0);
+            while cursor < self.segments.len() && self.segments[cursor].contour == contour {
+                let segment = self.segments[cursor];
+                self.line_to(
+                    scaled_mono_coord(segment.x1),
+                    scaled_mono_coord(segment.y1),
+                    contour,
+                );
+                cursor += 1;
+            }
+
+            if self.contour_first.is_some() {
+                if self.last_y & 63 == 0 && self.last_y >= self.min_y && self.last_y <= self.max_y {
+                    if let (Some(first), Some(current)) = (self.contour_first, self.current) {
+                        if same_profile_flow(&self.profiles[first], &self.profiles[current]) {
+                            self.profiles[current].xs.pop();
+                        }
+                    }
+                }
+                self.end_profile();
+                self.link_contour_profiles();
+            }
+        }
+        self.profiles
+    }
+
+    fn line_to(&mut self, x: i32, y: i32, contour: usize) {
+        if y == self.last_y {
+            self.last_x = x;
+            self.last_y = y;
+            return;
+        }
+
+        let state = if self.last_y < y {
+            MonoState::Ascending
+        } else {
+            MonoState::Descending
+        };
+        if self.state != state {
+            if self.state != MonoState::Unknown {
+                self.end_profile();
+            }
+            self.new_profile(state, contour);
+        }
+
+        if state == MonoState::Ascending {
+            let xs = line_up(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
+            self.push_profile_xs(xs);
+        } else {
+            let xs = line_down(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
+            self.push_profile_xs(xs);
+        }
+
+        self.last_x = x;
+        self.last_y = y;
+    }
+
+    fn new_profile(&mut self, state: MonoState, contour: usize) {
+        let mut flags = MONO_DROPOUT_CONTROL;
+        let e = match state {
+            MonoState::Ascending => {
+                flags |= MONO_FLOW_UP;
+                if is_bottom_overshoot(self.last_y) {
+                    flags |= MONO_OVERSHOOT_BOTTOM;
+                }
+                mono_ceiling_fixed(self.last_y)
+            }
+            MonoState::Descending => {
+                if is_top_overshoot(self.last_y) {
+                    flags |= MONO_OVERSHOOT_TOP;
+                }
+                mono_floor_fixed(self.last_y)
+            }
+            MonoState::Unknown => unreachable!(),
+        }
+        .clamp(self.min_y, self.max_y);
+
+        let mut xs = Vec::new();
+        if self.last_y == e {
+            xs.push(self.last_x);
+        }
+        let index = self.profiles.len();
+        self.profiles.push(MonoProfile {
+            xs,
+            start: e >> 6,
+            offset: 0,
+            height: 0,
+            flags,
+            x: self.last_x,
+            link: None,
+            next: self.contour_first,
+            contour,
+        });
+        if self.contour_first.is_none() {
+            self.contour_first = Some(index);
+        }
+        self.current = Some(index);
+        self.state = state;
+        self.contour_profiles.push(index);
+    }
+
+    fn end_profile(&mut self) {
+        let Some(index) = self.current else {
+            return;
+        };
+        let height = self.profiles[index].xs.len();
+        if height == 0 {
+            return;
+        }
+
+        if self.profiles[index].flags & MONO_FLOW_UP != 0 {
+            if is_top_overshoot(self.last_y) {
+                self.profiles[index].flags |= MONO_OVERSHOOT_TOP;
+            }
+            self.profiles[index].offset = 0;
+            self.profiles[index].x = self.profiles[index].xs[0];
+        } else {
+            if is_bottom_overshoot(self.last_y) {
+                self.profiles[index].flags |= MONO_OVERSHOOT_BOTTOM;
+            }
+            let top = self.profiles[index].start + 1;
+            self.profiles[index].start = top - i32_from_usize(height);
+            self.profiles[index].offset = height - 1;
+            self.profiles[index].x = self.profiles[index].xs[height - 1];
+        }
+        self.profiles[index].height = height;
+    }
+
+    fn link_contour_profiles(&mut self) {
+        let len = self.contour_profiles.len();
+        if len == 0 {
+            return;
+        }
+        for idx in 0..len {
+            let profile = self.contour_profiles[idx];
+            let next = self.contour_profiles[(idx + 1) % len];
+            self.profiles[profile].next = Some(next);
+        }
+    }
+
+    fn push_profile_xs(&mut self, xs: Vec<i32>) {
+        if let Some(index) = self.current {
+            self.profiles[index].xs.extend(xs);
+        }
+    }
+}
+
+fn draw_mono_profile_sweep(
+    mut profiles: Vec<MonoProfile>,
+    buffer: &mut [u8],
+    width: usize,
+    height: usize,
+    pitch: usize,
+) {
+    let mut waiting: Vec<usize> = (0..profiles.len())
+        .filter(|&index| profiles[index].height > 0)
+        .collect();
+    waiting.sort_by_key(|&index| profiles[index].start);
+    let Some(min_y) = waiting.first().map(|&index| profiles[index].start) else {
+        return;
+    };
+    let max_y = profiles
+        .iter()
+        .filter(|profile| profile.height > 0)
+        .map(|profile| profile.start + i32_from_usize(profile.height) - 1)
+        .max()
+        .unwrap_or(min_y);
+
+    let mut draw_left: Vec<usize> = Vec::new();
+    let mut draw_right: Vec<usize> = Vec::new();
+    for y in min_y..=max_y {
+        let mut index = 0;
+        while index < waiting.len() {
+            let profile = waiting[index];
+            if profiles[profile].start == y {
+                let profile = waiting.remove(index);
+                if profiles[profile].flags & MONO_FLOW_UP != 0 {
+                    insert_profile_sorted(&mut draw_left, profile, &profiles);
+                } else {
+                    insert_profile_sorted(&mut draw_right, profile, &profiles);
+                }
+            } else {
+                index += 1;
+            }
+        }
+
+        if y >= 0 && y < i32_from_usize(height) {
+            let row = height - 1 - usize_from_i32(y);
+            let row = &mut buffer[row * pitch..(row + 1) * pitch];
+            let pair_count = draw_left.len().min(draw_right.len());
+            let mut dropouts = Vec::new();
+            for pair in 0..pair_count {
+                let left = draw_left[pair];
+                let right = draw_right[pair];
+                let mut x1 = profiles[left].x;
+                let mut x2 = profiles[right].x;
+                if x1 > x2 {
+                    std::mem::swap(&mut x1, &mut x2);
+                }
+                if mono_ceiling_fixed(x1) <= mono_floor_fixed(x2) {
+                    fill_mono_span(row, width, x1_to_pixel_ceil(x1), x2_to_pixel_floor(x2));
+                } else if should_draw_profile_dropout(&profiles, left, right, x1, x2) {
+                    let drop = profile_dropout_pixels(x1, x2);
+                    profiles[left].x = drop.primary;
+                    profiles[right].x = drop.secondary;
+                    profiles[left].flags |= MONO_DROPOUT;
+                    dropouts.push((left, right));
+                }
+            }
+
+            for (left, right) in dropouts {
+                if profiles[left].flags & MONO_DROPOUT != 0 {
+                    set_mono_dropout_pixels(row, width, profiles[left].x, profiles[right].x);
+                    profiles[left].flags &= !MONO_DROPOUT;
+                }
+            }
+        }
+
+        increment_profiles(&mut draw_left, &mut profiles, 1);
+        increment_profiles(&mut draw_right, &mut profiles, -1);
+    }
+}
+
+fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
+    if y2 < min_y || y1 > max_y {
+        return Vec::new();
+    }
+    let e2 = if y2 > max_y {
+        max_y
+    } else {
+        mono_floor_fixed(y2)
+    };
+    let mut e = if y1 < min_y {
+        min_y
+    } else {
+        mono_ceiling_fixed(y1)
+    };
+    if y1 == e {
+        e += 64;
+    }
+    if e2 < e {
+        return Vec::new();
+    }
+
+    let mut size = ((e2 - e) >> 6) + 1;
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let mut out = Vec::with_capacity(usize_from_i32(size));
+    if dx == 0 {
+        out.resize(usize_from_i32(size), x1);
+        return out;
+    }
+
+    let ix = mul_div_trunc(e - y1, dx, dy);
+    let mut x = x1 + ix;
+    out.push(x);
+    size -= 1;
+    if size > 0 {
+        let mut ax = dx * (e - y1) - dy * ix;
+        let ix = mul_div_trunc(64, dx, dy);
+        let mut rx = dx * 64 - dy * ix;
+        let mut step = 1;
+        if x2 < x {
+            ax = -ax;
+            rx = -rx;
+            step = -1;
+        }
+        while size > 0 {
+            x += ix;
+            ax += rx;
+            if ax >= dy {
+                ax -= dy;
+                x += step;
+            }
+            out.push(x);
+            size -= 1;
+        }
+    }
+    out
+}
+
+fn line_down(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
+    line_up(x1, -y1, x2, -y2, -max_y, -min_y)
+}
+
+fn insert_profile_sorted(list: &mut Vec<usize>, profile: usize, profiles: &[MonoProfile]) {
+    let x = profiles[profile].x;
+    let pos = list
+        .iter()
+        .position(|&current| profiles[current].x >= x)
+        .unwrap_or(list.len());
+    list.insert(pos, profile);
+}
+
+fn increment_profiles(list: &mut Vec<usize>, profiles: &mut [MonoProfile], flow: isize) {
+    let mut index = 0;
+    while index < list.len() {
+        let profile = list[index];
+        profiles[profile].height -= 1;
+        if profiles[profile].height == 0 {
+            list.remove(index);
+            continue;
+        }
+        if flow > 0 {
+            profiles[profile].offset += 1;
+        } else {
+            profiles[profile].offset -= 1;
+        }
+        profiles[profile].x = profiles[profile].xs[profiles[profile].offset];
+        index += 1;
+    }
+    list.sort_by_key(|&profile| profiles[profile].x);
+}
+
+fn should_draw_profile_dropout(
+    profiles: &[MonoProfile],
+    left: usize,
+    right: usize,
+    x1: i32,
+    x2: i32,
+) -> bool {
+    let control = profiles[left].flags & 7;
+    if control & 2 != 0 {
+        return false;
+    }
+    if control & 1 == 0 {
+        return true;
+    }
+    if profiles[left].contour == profiles[right].contour {
+        if profiles[left].height == 1
+            && profiles[left].next == Some(right)
+            && (profiles[left].flags & MONO_OVERSHOOT_TOP == 0 || x2 - x1 < 32)
+        {
+            return false;
+        }
+        if profiles[left].offset == 0
+            && profiles[right].next == Some(left)
+            && (profiles[left].flags & MONO_OVERSHOOT_BOTTOM == 0 || x2 - x1 < 32)
+        {
+            return false;
+        }
+    }
+    true
+}
+
+struct DropoutPixels {
+    primary: i32,
+    secondary: i32,
+}
+
+fn profile_dropout_pixels(x1: i32, x2: i32) -> DropoutPixels {
+    DropoutPixels {
+        primary: x2_to_pixel_floor(x2),
+        secondary: x1_to_pixel_ceil(x1),
+    }
+}
+
+fn set_mono_dropout_pixels(row: &mut [u8], width: usize, mut primary: i32, secondary: i32) {
+    if width == 0 {
+        return;
+    }
+    if primary < 0 || primary >= i32_from_usize(width) {
+        primary = secondary;
+    } else if secondary >= 0 && secondary < i32_from_usize(width) {
+        let secondary = usize_from_i32(secondary);
+        if row[secondary / 8] & (0x80 >> (secondary & 7)) != 0 {
+            return;
+        }
+    }
+
+    if primary >= 0 && primary < i32_from_usize(width) {
+        let x = usize_from_i32(primary);
+        row[x / 8] |= 0x80 >> (x & 7);
+    }
+}
+
+fn same_profile_flow(left: &MonoProfile, right: &MonoProfile) -> bool {
+    (left.flags & MONO_FLOW_UP) == (right.flags & MONO_FLOW_UP)
+}
+
+fn scaled_mono_coord(value: i32) -> i32 {
+    value - 32
+}
+
+fn mono_floor_fixed(value: i32) -> i32 {
+    value & !63
+}
+
+fn mono_ceiling_fixed(value: i32) -> i32 {
+    (value + 63) & !63
+}
+
+fn x1_to_pixel_ceil(value: i32) -> i32 {
+    mono_ceiling_fixed(value) >> 6
+}
+
+fn x2_to_pixel_floor(value: i32) -> i32 {
+    mono_floor_fixed(value) >> 6
+}
+
+fn is_bottom_overshoot(value: i32) -> bool {
+    mono_ceiling_fixed(value) - value >= 32
+}
+
+fn is_top_overshoot(value: i32) -> bool {
+    value - mono_floor_fixed(value) >= 32
+}
+
+fn mul_div_trunc(a: i32, b: i32, c: i32) -> i32 {
+    ((a as i64 * b as i64) / c as i64) as i32
 }
 
 #[derive(Debug, Clone, Copy)]
