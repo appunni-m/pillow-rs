@@ -528,9 +528,9 @@ impl ExecContext {
 
     fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, u8, usize) {
         let (ref_zone, ref_pt) = if opcode & 1 != 0 {
-            (self.gs.zp1, self.gs.rp2 as usize)
-        } else {
             (self.gs.zp0, self.gs.rp1 as usize)
+        } else {
+            (self.gs.zp1, self.gs.rp2 as usize)
         };
         let (cx, cy) = self.cur_in(zone, ref_zone, ref_pt);
         let (ox, oy) = self.org_in(zone, ref_zone, ref_pt);
