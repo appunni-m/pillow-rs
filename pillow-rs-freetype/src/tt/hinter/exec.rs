@@ -1085,19 +1085,9 @@ impl ExecContext {
                         self.set_org_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
                         self.set_cur_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
                     }
-                    let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
-                    let org_dist = if is_twilight {
-                        let (rorg_x, rorg_y) = self.org_in(zone, self.gs.zp0, rp);
-                        let (oorg_x, oorg_y) = self.org_in(zone, self.gs.zp1, p);
-                        self.gs.dual_project(oorg_x - rorg_x, oorg_y - rorg_y)
-                    } else {
-                        let (rorus_x, rorus_y) = self.orus_in(zone, self.gs.zp0, rp);
-                        let (oorus_x, oorus_y) = self.orus_in(zone, self.gs.zp1, p);
-                        self.gs.dual_project(
-                            crate::fixed::ft_mul_fix(oorus_x - rorus_x, self.x_scale),
-                            crate::fixed::ft_mul_fix(oorus_y - rorus_y, self.y_scale),
-                        )
-                    };
+                    let (rorg_x, rorg_y) = self.org_in(zone, self.gs.zp0, rp);
+                    let (oorg_x, oorg_y) = self.org_in(zone, self.gs.zp1, p);
+                    let org_dist = self.gs.dual_project(oorg_x - rorg_x, oorg_y - rorg_y);
                     let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
                     let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
                     let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
