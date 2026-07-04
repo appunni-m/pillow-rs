@@ -24,6 +24,7 @@ Every reference fixture must be reproducible from maintained generator code in t
 | `scripts/build_native_tt_fixture.py` | Compatibility wrapper for native TT fixture generation | `native_tt_default_matrix.json` |
 | `scripts/build_render_mode_fixture.py` | Dedicated render-mode fixture generator | `render_mode_matrix.json`, `tests/fixtures/outputs/render_modes` |
 | `scripts/build_fixtures.py` | Legacy force-autohint inventory pipeline | `font_inventory.json`, `force_autohint_matrix.json` |
+| `scripts/classify_failure_ids.py` | Developer triage report from `coverage_matrix_tests` failure ID files | Markdown summary; no fixture changes |
 | `scripts/extract_blues.py` | Generates blue string Rust data from FreeType source | Rust source tables |
 | `scripts/generate_globals.py` | Generates script/style global data from FreeType source | Rust source tables |
 | `scripts/generate_script_meta.py` | Generates script metadata from FreeType source | Rust source tables |
@@ -73,3 +74,12 @@ Before committing fixture changes:
 7. Update this document if the reproduction command changes.
 
 The family is not an exact gate until the default tests execute every active row and fail on mismatches.
+
+## Failure Classification Reports
+
+Failure classification reports are maintained developer triage artifacts, not
+fixtures.  Use `scripts/classify_failure_ids.py` with the lane-specific
+`/tmp/pillow_failure_ids.txt` files emitted by `coverage_matrix_tests`.
+
+See `doc/PARITY_FAILURE_CLASSIFICATION.md` for the exact capture and report
+commands.
