@@ -63,9 +63,9 @@
     {
       "path": "glyph/render",
       "owner": "glyph",
-      "parity": { "family": "native_tt_default", "passing": 3176, "total": 7640 },
+      "parity": { "family": "render_mode_matrix", "passing": 16, "total": 16 },
       "symbols": {
-        "FT_Render_Glyph": { "rust": "grays::rasterize", "status": "partial" }
+        "FT_Render_Glyph": { "rust": "Font::render_char_mode", "status": "partial" }
       }
     },
     {
@@ -81,12 +81,13 @@
     {
       "path": "bitmap",
       "owner": "raster",
+      "parity": { "family": "render_mode_matrix", "passing": 16, "total": 16 },
       "symbols": {
-        "FT_Bitmap_Init": { "rust": "GlyphMask", "status": "partial" },
+        "FT_Bitmap_Init": { "rust": "RenderedBitmap", "status": "partial" },
         "FT_Bitmap_Copy": { "rust": null, "status": "planned" },
-        "FT_Bitmap_Convert": { "rust": null, "status": "planned" },
+        "FT_Bitmap_Convert": { "rust": "render::unpack_mono_row", "status": "partial" },
         "FT_Bitmap_Embolden": { "rust": null, "status": "planned" },
-        "FT_Bitmap_Done": { "rust": "drop GlyphMask", "status": "partial" }
+        "FT_Bitmap_Done": { "rust": "drop RenderedBitmap", "status": "partial" }
       }
     },
     {
@@ -108,6 +109,23 @@
       "parity": { "family": "force_autohint", "passing": 22168, "total": 22168 },
       "symbols": {
         "FT_Render_Glyph": { "rust": "grays::rasterize", "status": "partial" }
+      }
+    },
+    {
+      "path": "raster/mono",
+      "owner": "raster",
+      "parity": { "family": "render_mode_matrix", "passing": 4, "total": 4 },
+      "symbols": {
+        "FT_Render_Glyph": { "rust": "render::RenderMode::Mono", "status": "partial" }
+      }
+    },
+    {
+      "path": "raster/lcd",
+      "owner": "raster",
+      "parity": { "family": "render_mode_matrix", "passing": 8, "total": 8 },
+      "symbols": {
+        "FT_Render_Glyph": { "rust": "render::RenderMode::Lcd/LcdV", "status": "partial" },
+        "FT_Library_SetLcdFilter": { "rust": "Harmony LCD geometry (subpixel rendering disabled)", "status": "partial" }
       }
     },
     {

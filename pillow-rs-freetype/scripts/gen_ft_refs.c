@@ -6,6 +6,15 @@
 #include <openssl/sha.h>  /* fallback: compute SHA in python later */
 
 static FT_Int32 load_flags_for_mode(const char *mode) {
+    if (strcmp(mode, "render-mono") == 0) {
+        return FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO;
+    }
+    if (strcmp(mode, "render-lcd") == 0) {
+        return FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LCD;
+    }
+    if (strcmp(mode, "render-lcd-v") == 0) {
+        return FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LCD_V;
+    }
     if (strcmp(mode, "native") == 0 || strcmp(mode, "native-tt-default") == 0) {
         return FT_LOAD_RENDER;
     }
@@ -13,6 +22,19 @@ static FT_Int32 load_flags_for_mode(const char *mode) {
         return FT_LOAD_RENDER | FT_LOAD_NO_HINTING;
     }
     return FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT;
+}
+
+static FT_Render_Mode render_mode_for_mode(const char *mode) {
+    if (strcmp(mode, "render-mono") == 0) return FT_RENDER_MODE_MONO;
+    if (strcmp(mode, "render-lcd") == 0) return FT_RENDER_MODE_LCD;
+    if (strcmp(mode, "render-lcd-v") == 0) return FT_RENDER_MODE_LCD_V;
+    return FT_RENDER_MODE_NORMAL;
+}
+
+static int mode_needs_explicit_render(const char *mode) {
+    return strcmp(mode, "render-mono") == 0 ||
+           strcmp(mode, "render-lcd") == 0 ||
+           strcmp(mode, "render-lcd-v") == 0;
 }
 
 /* Simple hex dump of bitmap, then we'll compute SHA in python */
@@ -47,17 +69,29 @@ int main(int argc, char **argv) {
             if(!idx) continue;
             err = FT_Load_Glyph(face,idx,load_flags);
             if(err) continue;
+            if (mode_needs_explicit_render(mode)) {
+                err = FT_Render_Glyph(face->glyph, render_mode_for_mode(mode));
+                if(err) continue;
+            }
             
             FT_GlyphSlot slot = face->glyph;
             int w = slot->bitmap.width, h = slot->bitmap.rows;
             int left = slot->bitmap_left, top = slot->bitmap_top;
+            int pitch = slot->bitmap.pitch;
+            int pixel_mode = slot->bitmap.pixel_mode;
             FT_Long adv = slot->metrics.horiAdvance;
             
             printf("GLYPH %d %d %d %d %d %ld", c, w, h, left, top, adv);
+            if (mode_needs_explicit_render(mode)) {
+                printf(" PITCH %d PIXEL_MODE %d", pitch, pixel_mode);
+            }
             if(w>0 && h>0 && slot->bitmap.buffer) {
                 printf(" PIXELS");
                 unsigned char *p = slot->bitmap.buffer;
-                for(int i=0;i<w*h;i++) printf(" %02x",p[i]);
+                int bytes = mode_needs_explicit_render(mode)
+                    ? (pitch < 0 ? -pitch * h : pitch * h)
+                    : w * h;
+                for(int i=0;i<bytes;i++) printf(" %02x",p[i]);
             }
             printf("\n");
         }
