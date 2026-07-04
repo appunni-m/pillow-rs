@@ -586,7 +586,7 @@ impl Font {
     /// requested.
     pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
         let glyph = self.char_index(codepoint);
-        let scaled = scaler::scale_glyph(&self.data, glyph, None, self.is_italic)?;
+        let scaled = scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?;
         Ok(self.slot_metrics_from_scaled(glyph, &scaled))
     }
 

@@ -10,7 +10,7 @@ use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
 use crate::outline::{Outline, OutlinePoint};
 use crate::tables::FontData;
-use crate::tt::glyf::{load_glyph, GlyphOutline};
+use crate::tt::glyf::{load_glyph, load_glyph_with_scaled_component_offsets, GlyphOutline};
 
 /// Fixed-point scale factors derived from point size and units-per-em.
 ///
@@ -115,7 +115,15 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true)
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, false)
+}
+
+pub fn scale_glyph_for_metrics(
+    data: &FontData,
+    glyph_index: u16,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, None, is_italic, true, true)
 }
 
 /// Scale a glyph without autohinting or native TrueType bytecode.
@@ -126,7 +134,7 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, false)
+    scale_glyph_impl(data, glyph_index, None, is_italic, false, false)
 }
 
 fn scale_glyph_impl(
@@ -135,6 +143,7 @@ fn scale_glyph_impl(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
     allow_bytecode: bool,
+    round_component_offsets: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -143,13 +152,25 @@ fn scale_glyph_impl(
     let mut slot_advance_width = advance_width;
     let lsb = scale.scale_x(h_metric.lsb as i32);
 
-    let outline_raw = load_glyph(
-        &data.glyf_data,
-        &data.loca_data,
-        data.head.index_to_loc_format,
-        glyph_index,
-        &data.hmtx,
-    )?;
+    let outline_raw = if round_component_offsets {
+        load_glyph_with_scaled_component_offsets(
+            &data.glyf_data,
+            &data.loca_data,
+            data.head.index_to_loc_format,
+            glyph_index,
+            &data.hmtx,
+            scale.x_scale,
+            scale.y_scale,
+        )?
+    } else {
+        load_glyph(
+            &data.glyf_data,
+            &data.loca_data,
+            data.head.index_to_loc_format,
+            glyph_index,
+            &data.hmtx,
+        )?
+    };
 
     if outline_raw.num_contours == 0 || outline_raw.points.is_empty() {
         return Ok(ScaledGlyph {

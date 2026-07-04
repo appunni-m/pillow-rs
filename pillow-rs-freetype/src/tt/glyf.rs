@@ -8,6 +8,7 @@
 use crate::casts::{u16_from_i16, u16_from_u32, u32_from_usize};
 
 use crate::error::FontError;
+use crate::fixed::{ft_div_fix, ft_mul_fix};
 use crate::tt::loca::{get_glyph_location, GlyphLocation};
 
 // Simple glyph flag bits (TrueType spec, ttgload.c:53).
@@ -21,6 +22,7 @@ const Y_IS_SAME_OR_POSITIVE_SHORT: u8 = 0x20;
 // Composite glyph flag bits (ttgload.c:69).
 const ARG_1_AND_2_ARE_WORDS: u16 = 0x0001;
 const ARGS_ARE_XY_VALUES: u16 = 0x0002;
+const ROUND_XY_TO_GRID: u16 = 0x0004;
 const WE_HAVE_A_SCALE: u16 = 0x0008;
 const MORE_COMPONENTS: u16 = 0x0020;
 const WE_HAVE_AN_X_Y_SCALE: u16 = 0x0040;
@@ -81,6 +83,7 @@ struct CompositeComponent {
     arg1: i32,
     arg2: i32,
     args_are_xy: bool,
+    round_xy_to_grid: bool,
     transform: Affine,
 }
 
@@ -99,7 +102,27 @@ pub fn load_glyph(
     glyph_index: u16,
     hmtx: &crate::tt::hmtx::HmtxTable,
 ) -> Result<GlyphOutline, FontError> {
-    load_glyph_inner(glyf, loca, index_to_loc_format, glyph_index, hmtx, 0)
+    load_glyph_inner(glyf, loca, index_to_loc_format, glyph_index, hmtx, 0, None)
+}
+
+pub fn load_glyph_with_scaled_component_offsets(
+    glyf: &[u8],
+    loca: &[u8],
+    index_to_loc_format: i16,
+    glyph_index: u16,
+    hmtx: &crate::tt::hmtx::HmtxTable,
+    x_scale: i32,
+    y_scale: i32,
+) -> Result<GlyphOutline, FontError> {
+    load_glyph_inner(
+        glyf,
+        loca,
+        index_to_loc_format,
+        glyph_index,
+        hmtx,
+        0,
+        Some((x_scale, y_scale)),
+    )
 }
 
 fn load_glyph_inner(
@@ -109,6 +132,7 @@ fn load_glyph_inner(
     glyph_index: u16,
     hmtx: &crate::tt::hmtx::HmtxTable,
     depth: u8,
+    component_offset_scale: Option<(i32, i32)>,
 ) -> Result<GlyphOutline, FontError> {
     if depth > 8 {
         return Err(FontError::InvalidOutline(
@@ -189,14 +213,33 @@ fn load_glyph_inner(
                 comp.glyph_index,
                 hmtx,
                 depth + 1,
+                component_offset_scale,
             )?;
             last_sub_xmin = sub.xmin;
             last_sub_lsb = sub.sub_lsb;
             let base = points.len();
+            let mut transformed = Vec::with_capacity(sub.points.len());
             for pt in &sub.points {
-                points.push(transform_point(
-                    *pt, &comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax,
-                ));
+                transformed.push(transform_point(*pt, &comp, 0, 0));
+            }
+            let (dx, dy) = if comp.args_are_xy {
+                component_xy_offset(&comp, component_offset_scale)
+            } else {
+                let parent_point = comp.arg1 as usize;
+                let component_point = comp.arg2 as usize;
+                match (points.get(parent_point), transformed.get(component_point)) {
+                    (Some(parent), Some(component)) => {
+                        (parent.x - component.x, parent.y - component.y)
+                    }
+                    _ => (0, 0),
+                }
+            };
+            for pt in transformed {
+                points.push(OutlinePoint {
+                    x: pt.x + dx,
+                    y: pt.y + dy,
+                    on_curve: pt.on_curve,
+                });
             }
             for &ep in &sub.end_pts_of_contours {
                 end_pts.push(u16_from_u32(u32_from_usize(base) + ep as u32));
@@ -220,24 +263,12 @@ fn load_glyph_inner(
 }
 
 /// Apply a composite component's transform + translation to a point.
-fn transform_point(
-    pt: OutlinePoint,
-    comp: &CompositeComponent,
-    _sub_xmin: i32,
-    _sub_ymin: i32,
-    _sub_xmax: i32,
-    _sub_ymax: i32,
-) -> OutlinePoint {
+fn transform_point(pt: OutlinePoint, comp: &CompositeComponent, dx: i32, dy: i32) -> OutlinePoint {
     // FreeType applies the 2×2 in 16.16 (FT_MulFix) then adds the XY args.
     let x = crate::fixed::ft_mul_fix(pt.x, comp.transform.xx)
         + crate::fixed::ft_mul_fix(pt.y, comp.transform.xy);
     let y = crate::fixed::ft_mul_fix(pt.x, comp.transform.yx)
         + crate::fixed::ft_mul_fix(pt.y, comp.transform.yy);
-    let (dx, dy) = if comp.args_are_xy {
-        (comp.arg1, comp.arg2)
-    } else {
-        (0, 0) // point-matching variant is unsupported; component uses no offset.
-    };
     OutlinePoint {
         x: x + dx,
         y: y + dy,
@@ -435,6 +466,7 @@ fn parse_composite_components(data: &[u8], mut pos: usize) -> Result<CompositeGl
             arg1,
             arg2,
             args_are_xy,
+            round_xy_to_grid: flags & ROUND_XY_TO_GRID != 0,
             transform,
         });
 
@@ -465,6 +497,30 @@ fn parse_composite_components(data: &[u8], mut pos: usize) -> Result<CompositeGl
         components,
         instructions,
     })
+}
+
+fn component_xy_offset(comp: &CompositeComponent, scale: Option<(i32, i32)>) -> (i32, i32) {
+    if !comp.round_xy_to_grid {
+        return (comp.arg1, comp.arg2);
+    }
+
+    let Some((x_scale, y_scale)) = scale else {
+        return (comp.arg1, comp.arg2);
+    };
+
+    (
+        rounded_offset_font_units(comp.arg1, x_scale),
+        rounded_offset_font_units(comp.arg2, y_scale),
+    )
+}
+
+fn rounded_offset_font_units(value: i32, scale: i32) -> i32 {
+    if scale == 0 {
+        return value;
+    }
+    let scaled = ft_mul_fix(value, scale);
+    let rounded = (scaled + 32) & !63;
+    ft_div_fix(rounded, scale)
 }
 
 // Unused-warning suppressor for the unused `GlyphLocation` import path.
