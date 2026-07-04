@@ -895,9 +895,8 @@ impl ExecContext {
                     let (dx, dy) = self.gs.move_along_free(target - proj);
                     self.set_cur_in(zone, self.gs.zp0, p, cx + dx, cy + dy);
                     self.touch_in(zone, self.gs.zp0, p);
-                    if opcode == 0x2F {
-                        self.gs.rp0 = p as u32;
-                    }
+                    self.gs.rp0 = p as u32;
+                    self.gs.rp1 = p as u32;
                 }
 
                 // ── MIAP — Move Indirect Absolute Point ──────────
