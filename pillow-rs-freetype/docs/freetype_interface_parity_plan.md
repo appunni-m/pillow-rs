@@ -32,7 +32,7 @@ If any item is missing, the endpoint is `partial` or `planned`, not complete.
 3. Fixture families describe FreeType paths and flags.
 4. SHA-only render tests are insufficient for exact gates; raw bytes and metadata are required.
 5. Threshold baselines are debt.
-6. Present-but-unexecuted fixture families are debt.
+6. Present-but-unexecuted fixture families are debt; current committed supplemental families are executed baselines.
 7. Broad matrices cannot be replaced by smaller smoke tests.
 8. Fixture generators are maintained harness code and must be documented in `doc/GENERATOR_SYSTEM.md`.
 
@@ -82,9 +82,9 @@ If any item is missing, the endpoint is `partial` or `planned`, not complete.
 | `native_tt_default` | threshold baseline, `3176/7640` | promote to exact `7640/7640` |
 | `fixed_parity` | exact executable scalar gate | extend to more math endpoints |
 | `core_face_size_charmap` | exact executable API gate for current surface | add fixture families for remaining scalar paths |
-| `metrics_only` | C fixtures exist, unexecuted | implement exact runner support |
-| `no_hinting` | C fixtures exist, unexecuted | implement exact runner support |
-| `outline_cbox` | C fixtures exist, unexecuted | implement exact runner support |
+| `metrics_only` | executed baseline, `0/8` | promote to exact `8/8` |
+| `no_hinting` | executed small baseline, `8/8` | expand and promote to broad exact gate |
+| `outline_cbox` | executed baseline, `0/8` | promote to exact `8/8` |
 | `render_mono` | executed baseline, `0/8` | promote to exact `8/8` |
 | `render_lcd` | executed baseline, `0/8` | promote to exact `8/8` |
 | `render_lcd_v` | in scope if LCD_V remains exposed | add C fixtures and exact runner support |
@@ -123,7 +123,7 @@ Scope:
 - Keep fixture generation reproducible through maintained scripts under `scripts/`.
 - Preserve row counts for broad matrices.
 - Require raw bytes for exact render gates.
-- Name unexecuted matrices as debt.
+- Name any future unexecuted matrices as debt and keep current committed matrices executable in the default runner.
 
 Verification:
 
@@ -183,11 +183,11 @@ Done criteria:
 - The threshold bypass is removed.
 - `interface_map.json` reports `7640/7640` only after the exact gate passes.
 
-### Chunk 5: Unexecuted Fixture Promotion
+### Chunk 5: Executed Fixture Baseline Promotion
 
 Scope:
 
-- Execute existing C-oracle fixture families in the default runner:
+- Promote existing C-oracle fixture families in the default runner:
   `metrics_only`, `no_hinting`, `outline_cbox`.
 - Promote the already executed `render_mono` and `render_lcd` baselines to exact gates.
 
@@ -202,7 +202,7 @@ Done criteria:
 
 - Each family has operation-specific runner support.
 - Each active row compares exact expected data.
-- Each family moves from "unexecuted debt" to "exact gate" only after all rows pass.
+- Each family moves from "executed baseline" to "exact gate" only after all rows pass and coverage is broad enough for the endpoint.
 
 ### Chunk 6: Rasterizers And Render Modes
 
@@ -250,5 +250,5 @@ The report is the release gate. A 100% parity claim is allowed only when:
 - Harness contract passes.
 - Every exact gate passes.
 - No threshold baseline remains.
-- No present-but-unexecuted fixture family remains.
+- No incomplete executed baseline or present-but-unexecuted fixture family remains.
 - Every in-scope interface path reports complete exact parity.

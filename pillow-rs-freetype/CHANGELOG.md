@@ -8,10 +8,10 @@
 - Latin script auto-hinter: reload, segment detection, edge grouping, 4-phase hinting, IUP
 - Smooth anti-aliased rasterizer (FT_INT64 DDA path from ftgrays.c)
 - `BitmapBackend::FreeType` and `BitmapBackend::PIL` backends
-- Harness-first parity tracking: exact gates, threshold baselines, and unexecuted fixture debt are reported separately.
+- Harness-first parity tracking: exact gates, threshold baselines, incomplete executed baselines, and unexecuted fixture debt are reported separately.
 - Runtime FFI guard: `tests/no_runtime_ffi.rs` prevents reintroducing FreeType C linking in crate runtime files.
 - Fixture generator contract: `doc/GENERATOR_SYSTEM.md` and `tests/generator_contract.rs` make C-oracle fixture reproduction part of the maintained harness.
-- Unified runner now executes `render_mono_matrix.json` and `render_lcd_matrix.json` as incomplete baselines instead of leaving them as unexecuted fixture debt.
+- Unified runner now executes `render_mono_matrix.json`, `render_lcd_matrix.json`, `metrics_only_matrix.json`, `no_hinting_matrix.json`, and `outline_cbox_matrix.json`; current failures are exposed as implementation gaps instead of hidden fixture debt.
 
 ### Fixed
 - Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); `BitmapBackend::PIL` now routes through the Rust scaler, TrueType hinting, and rasterizer path.

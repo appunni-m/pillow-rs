@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use env_logger as _;
 use log as _;
-use pillow_rs_freetype::{BitmapBackend, Font, RenderMode};
+use pillow_rs_freetype::{grays, scaler, BitmapBackend, Font, RenderMode};
 use thiserror as _;
 
 #[derive(Debug, Deserialize)]
@@ -350,6 +350,25 @@ fn test_render_lcd_matrix_baseline_is_executed() {
 }
 
 #[test]
+fn test_no_hinting_matrix_baseline_is_executed() {
+    run_unified(
+        "no_hinting_matrix.json",
+        BitmapBackend::FreeType,
+        Some((8, 8)),
+    );
+}
+
+#[test]
+fn test_metrics_only_matrix_baseline_is_executed() {
+    run_unified("metrics_only_matrix.json", BitmapBackend::PIL, Some((0, 8)));
+}
+
+#[test]
+fn test_outline_cbox_matrix_baseline_is_executed() {
+    run_unified("outline_cbox_matrix.json", BitmapBackend::PIL, Some((0, 8)));
+}
+
+#[test]
 fn test_fixture_matrix_provenance() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let fixture_dir = manifest_dir.join("tests").join("fixtures");
@@ -445,6 +464,22 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
 
         match row.operation.as_str() {
             "getmask" => {
+                if matrix.fixture_family == "no_hinting" {
+                    match compare_no_hinting_row(font, row, manifest_dir) {
+                        Ok(()) => {
+                            counts.sha_ok += 1;
+                            passed += 1;
+                        }
+                        Err((stage, failure)) => {
+                            *stage_counts.entry(stage).or_default() += 1;
+                            failures.push(failure);
+                            counts.sha_fail += 1;
+                            failed += 1;
+                        }
+                    }
+                    continue;
+                }
+
                 if let Some(mode) = render_mode_for_family(&matrix.fixture_family) {
                     match compare_render_mode_row(font, row, manifest_dir, mode) {
                         Ok(()) => {
@@ -577,6 +612,32 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
                     }
                 }
             }
+
+            "metrics_only" => match compare_metrics_only_row(font, row) {
+                Ok(()) => {
+                    counts.sha_ok += 1;
+                    passed += 1;
+                }
+                Err((stage, failure)) => {
+                    *stage_counts.entry(stage).or_default() += 1;
+                    failures.push(failure);
+                    counts.sha_fail += 1;
+                    failed += 1;
+                }
+            },
+
+            "outline_cbox" => match compare_outline_cbox_row(font, row) {
+                Ok(()) => {
+                    counts.sha_ok += 1;
+                    passed += 1;
+                }
+                Err((stage, failure)) => {
+                    *stage_counts.entry(stage).or_default() += 1;
+                    failures.push(failure);
+                    counts.sha_fail += 1;
+                    failed += 1;
+                }
+            },
 
             "getbbox" => {
                 let text = get_text(row);
@@ -730,18 +791,21 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
     }
     eprintln!("╚══════════════════════════════════════════════════════════════╝");
 
-    if failed > 0 {
-        if let Some((min_passed, expected_total)) = expected_partial {
-            assert_eq!(
-                total, expected_total,
-                "{matrix_file} total changed; refresh the native TT baseline intentionally"
-            );
-            assert!(
-                passed >= min_passed,
-                "{matrix_file} regressed below native TT baseline: {passed}/{total} < {min_passed}/{expected_total}"
-            );
+    if let Some((min_passed, expected_total)) = expected_partial {
+        assert_eq!(
+            total, expected_total,
+            "{matrix_file} total changed; refresh the executed baseline intentionally"
+        );
+        assert!(
+            passed >= min_passed,
+            "{matrix_file} regressed below executed baseline: {passed}/{total} < {min_passed}/{expected_total}"
+        );
+        if failed > 0 {
             return;
         }
+    }
+
+    if failed > 0 {
         if !matrix.assert_pixel_parity {
             return;
         }
@@ -867,6 +931,220 @@ fn bitmap_i32(row: &MatrixRow, key: &str) -> Option<i32> {
         .get(key)
         .and_then(serde_json::Value::as_i64)
         .and_then(|value| i32::try_from(value).ok())
+}
+
+fn compare_no_hinting_row(
+    font: &Font,
+    row: &MatrixRow,
+    manifest_dir: &Path,
+) -> Result<(), (FailureStage, String)> {
+    let glyph = font.data.cmap.char_index(row.codepoint).unwrap_or(0);
+    let scaled =
+        scaler::scale_glyph_no_hinting(&font.data, glyph, font.is_italic).map_err(|err| {
+            (
+                FailureStage::LoadError,
+                format!(
+                    "{} stage={} error={}",
+                    row.id,
+                    FailureStage::LoadError.label(),
+                    err
+                ),
+            )
+        })?;
+    let raster = grays::rasterize(scaled.outline).map_err(|err| {
+        (
+            FailureStage::PixelCoverage,
+            format!(
+                "{} stage={} error={}",
+                row.id,
+                FailureStage::PixelCoverage.label(),
+                err
+            ),
+        )
+    })?;
+
+    let Some((raw_path, expected_pixels)) = load_raw_pixels(manifest_dir, row) else {
+        return Err((
+            FailureStage::PixelCoverage,
+            format!(
+                "{} stage={} raw=missing",
+                row.id,
+                FailureStage::PixelCoverage.label()
+            ),
+        ));
+    };
+
+    let actual_width = u32_from_usize_for_test(raster.width);
+    let actual_rows = u32_from_usize_for_test(raster.height);
+    let actual_pitch = i32_from_usize_for_test(raster.width);
+    let actual_left = scaled.bbox_x_min;
+    let actual_top = scaled.bbox_y_max;
+    let expected_width = bitmap_u32(row, "width").unwrap_or(actual_width);
+    let expected_rows = bitmap_u32(row, "rows").unwrap_or(actual_rows);
+    let expected_pitch = bitmap_i32(row, "pitch").unwrap_or(actual_pitch);
+    let expected_left = bitmap_i32(row, "left").unwrap_or(actual_left);
+    let expected_top = bitmap_i32(row, "top").unwrap_or(actual_top);
+
+    if raster.pixels == expected_pixels
+        && actual_width == expected_width
+        && actual_rows == expected_rows
+        && actual_pitch == expected_pitch
+        && actual_left == expected_left
+        && actual_top == expected_top
+    {
+        return Ok(());
+    }
+
+    let diff = pixel_diff(
+        &raster.pixels,
+        &expected_pixels,
+        actual_width,
+        actual_rows,
+        expected_width,
+        expected_rows,
+    );
+    let stage = if actual_pitch != expected_pitch
+        || actual_left != expected_left
+        || actual_top != expected_top
+    {
+        FailureStage::BitmapPlacement
+    } else {
+        classify_pixel_failure(&diff)
+    };
+    Err((
+        stage,
+        format!(
+            "{} stage={} actual={}x{} pitch={} left={} top={} raw={} expected={}x{} pitch={} left={} top={} diffs={} max={} total_abs={} first={:?} size_delta={} width_delta={} height_delta={}",
+            row.id,
+            stage.label(),
+            actual_width,
+            actual_rows,
+            actual_pitch,
+            actual_left,
+            actual_top,
+            raw_path.display(),
+            expected_width,
+            expected_rows,
+            expected_pitch,
+            expected_left,
+            expected_top,
+            diff.diff_count,
+            diff.max_diff,
+            diff.total_abs_diff,
+            diff.first_diff,
+            diff.size_delta,
+            diff.width_delta,
+            diff.height_delta,
+        ),
+    ))
+}
+
+fn compare_metrics_only_row(font: &Font, row: &MatrixRow) -> Result<(), (FailureStage, String)> {
+    let actual = rust_slot_metrics(font, row)?;
+    let expected = row.ref_value.as_ref().unwrap_or(&row.metrics);
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err((
+            FailureStage::Metrics,
+            format!(
+                "{} stage={} actual={} expected={}",
+                row.id,
+                FailureStage::Metrics.label(),
+                actual,
+                expected
+            ),
+        ))
+    }
+}
+
+fn compare_outline_cbox_row(font: &Font, row: &MatrixRow) -> Result<(), (FailureStage, String)> {
+    let glyph = font.data.cmap.char_index(row.codepoint).unwrap_or(0);
+    let scaled = scaler::scale_glyph(&font.data, glyph, None, font.is_italic).map_err(|err| {
+        (
+            FailureStage::LoadError,
+            format!(
+                "{} stage={} error={}",
+                row.id,
+                FailureStage::LoadError.label(),
+                err
+            ),
+        )
+    })?;
+    let actual = serde_json::json!({
+        "outline_cbox_26_6": {
+            "x_min": scaled.bbox_x_min * 64,
+            "y_min": scaled.bbox_y_min * 64,
+            "x_max": scaled.bbox_x_max * 64,
+            "y_max": scaled.bbox_y_max * 64,
+        },
+        "outline_bbox_26_6": {
+            "x_min": scaled.bbox_x_min * 64,
+            "y_min": scaled.bbox_y_min * 64,
+            "x_max": scaled.bbox_x_max * 64,
+            "y_max": scaled.bbox_y_max * 64,
+        },
+        "bitmap_pixels": {
+            "x_min": scaled.bbox_x_min,
+            "y_min": scaled.bbox_y_min,
+            "x_max": scaled.bbox_x_max,
+            "y_max": scaled.bbox_y_max,
+        },
+    });
+    let expected = row.ref_value.as_ref().unwrap_or(&row.bbox);
+    if &actual == expected {
+        Ok(())
+    } else {
+        Err((
+            FailureStage::Bbox,
+            format!(
+                "{} stage={} actual={} expected={}",
+                row.id,
+                FailureStage::Bbox.label(),
+                actual,
+                expected
+            ),
+        ))
+    }
+}
+
+fn rust_slot_metrics(
+    font: &Font,
+    row: &MatrixRow,
+) -> Result<serde_json::Value, (FailureStage, String)> {
+    let glyph = font.data.cmap.char_index(row.codepoint).unwrap_or(0);
+    let scaled = scaler::scale_glyph(&font.data, glyph, None, font.is_italic).map_err(|err| {
+        (
+            FailureStage::LoadError,
+            format!(
+                "{} stage={} error={}",
+                row.id,
+                FailureStage::LoadError.label(),
+                err
+            ),
+        )
+    })?;
+    let width = (scaled.bbox_x_max - scaled.bbox_x_min) * 64;
+    let height = (scaled.bbox_y_max - scaled.bbox_y_min) * 64;
+    let vert_advance = font.size_metrics().y_ppem as i32 * 64;
+    Ok(serde_json::json!({
+        "width": width,
+        "height": height,
+        "hori_bearing_x": scaled.bbox_x_min * 64,
+        "hori_bearing_y": scaled.bbox_y_max * 64,
+        "hori_advance": scaled.advance_width,
+        "vert_bearing_x": -(width / 2),
+        "vert_bearing_y": (vert_advance - height) / 2,
+        "vert_advance": vert_advance,
+    }))
+}
+
+fn u32_from_usize_for_test(value: usize) -> u32 {
+    u32::try_from(value).unwrap()
+}
+
+fn i32_from_usize_for_test(value: usize) -> i32 {
+    i32::try_from(value).unwrap()
 }
 
 #[test]
