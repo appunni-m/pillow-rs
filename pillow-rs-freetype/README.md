@@ -104,18 +104,23 @@ Key modules:
 ## Testing
 
 ```bash
-# Run FreeType fixture tests
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
-
-# Run all tests
-cargo test -p pillow-rs-freetype
-
-# Test with output
-cargo test -p pillow-rs-freetype -- --nocapture
+cargo fmt --all --check
+cargo test -p pillow-rs-freetype --locked
+cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
 ```
 
-Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C.
-2.14.3 C reference output. See `doc/REFERENCES.md` for fixture regeneration.
+Harness intent:
+
+- `no_runtime_ffi.rs` keeps runtime FreeType C impossible.
+- `harness_contract.rs` locks fixture breadth and gate strength.
+- `coverage_matrix_tests.rs` runs exact and incomplete FreeType matrix gates.
+- `render_mode_matrix.rs` compares raw render-mode bytes and metadata.
+- `fixed_parity.rs` runs mandatory scalar C-oracle parity.
+- `interface_coverage.rs` keeps FreeType endpoint status truthful.
+
+Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C
+2.14.3 reference output. See `PROJECT_GOALS.md` and
+`doc/PURE_RUST_RUNTIME_PLAN.md` before changing fixtures or gates.
 
 ## License
 

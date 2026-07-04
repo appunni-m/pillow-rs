@@ -8,7 +8,7 @@
 - Latin script auto-hinter: reload, segment detection, edge grouping, 4-phase hinting, IUP
 - Smooth anti-aliased rasterizer (FT_INT64 DDA path from ftgrays.c)
 - `BitmapBackend::FreeType` and `BitmapBackend::PIL` backends
-- FT fixture test matrix: 27,686/27,695 pass (99.97%)
+- Harness-first parity tracking: exact gates, threshold baselines, and unexecuted fixture debt are reported separately.
 - Runtime FFI guard: `tests/no_runtime_ffi.rs` prevents reintroducing FreeType C linking in crate runtime files.
 
 ### Fixed
