@@ -10,10 +10,10 @@
 
 use super::gs::GraphicsState;
 use super::gs::RoundMode;
-use super::zone::GlyphZone;
 use super::iup;
+use super::zone::GlyphZone;
 use crate::error::FontError;
-use crate::fixed::{ft_mul_fix, ft_floor_fix, ft_ceil_fix, ft_div_fix};
+use crate::fixed::{ft_ceil_fix, ft_div_fix, ft_floor_fix, ft_mul_fix};
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -141,6 +141,9 @@ pub struct ExecContext {
 
     /// The prep/CVT program bytecode (executed once per size change).
     pub cvt_program: Vec<u8>,
+
+    /// Persistent twilight zone for prep and glyph programs.
+    pub twilight: GlyphZone,
 }
 
 impl ExecContext {
@@ -158,6 +161,7 @@ impl ExecContext {
         ppem: i32,
         cvt: &[i32],
         fpgm: &[u8],
+        storage_size: usize,
     ) -> Self {
         ExecContext {
             gs: GraphicsState::default(),
@@ -172,7 +176,7 @@ impl ExecContext {
             glyph_range: CodeRange::default(),
             font_program: fpgm.to_vec(),
             stack: Vec::with_capacity(DEFAULT_MAX_STACK),
-            storage: vec![0; 32], // default: 32 entries
+            storage: vec![0; storage_size.max(1)],
             cvt: cvt.to_vec(),
             functions: vec![None; MAX_FUNCTIONS],
             instruction_defs: vec![None; MAX_INSTRUCTION_DEFS],
@@ -183,6 +187,23 @@ impl ExecContext {
             pedantic_hinting: false,
             glyph_program: Vec::new(),
             cvt_program: Vec::new(),
+            twilight: Self::new_twilight_zone(16),
+        }
+    }
+
+    fn new_twilight_zone(n_points: usize) -> GlyphZone {
+        GlyphZone {
+            cur_x: vec![0; n_points],
+            cur_y: vec![0; n_points],
+            org_x: vec![0; n_points],
+            org_y: vec![0; n_points],
+            orus_x: vec![0; n_points],
+            orus_y: vec![0; n_points],
+            tags: vec![0; n_points],
+            contours: vec![],
+            n_points: n_points as u16,
+            n_contours: 0,
+            first_point: 0,
         }
     }
 
@@ -202,9 +223,10 @@ impl ExecContext {
     /// Peek at the top of the stack without removing it.
     #[allow(dead_code)]
     pub fn top(&self) -> Result<i32, FontError> {
-        self.stack.last().copied().ok_or(FontError::InvalidOutline(
-            "bytecode: stack empty".into(),
-        ))
+        self.stack
+            .last()
+            .copied()
+            .ok_or(FontError::InvalidOutline("bytecode: stack empty".into()))
     }
 
     /// Read a byte from the active code range at the current IP,
@@ -241,26 +263,30 @@ impl ExecContext {
     /// This is called once when the execution context is initialized.
     /// The fpgm bytecode starts with push operations to load function
     /// numbers and parameter values, then FDEF/ENDF pairs to define them.
-        pub fn run_fpgm(&mut self) -> Result<(), FontError> {
+    pub fn run_fpgm(&mut self) -> Result<(), FontError> {
         if self.font_range.size == 0 {
             return Ok(());
         }
         // C executes fpgm through the full VM (TT_Run_Context) on an empty zone.
-        // This ensures all function body opcodes execute, keeping stack state
-        // accurate for subsequent FDEF pops.
-        // Previously we had a custom parser that skipped body opcodes, causing
-        // stack desyncs after ~10 functions.
+        // FDEF records are registered while their bodies are skipped; CALL later
+        // runs those bodies from the font-program code range.
         self.stack.clear();
-        self.glyph_program = self.font_program.clone();
         self.ip = 0;
-        self.cur_range = 2; // glyph range (uses glyph_program for fetch)
+        self.cur_range = 1;
 
         // Empty zone: fpgm runs without glyph points (C: exec->pts.n_points = 0)
         let mut empty_zone = GlyphZone {
-            cur_x: vec![], cur_y: vec![], org_x: vec![], org_y: vec![],
-            orus_x: vec![], orus_y: vec![],
-            tags: vec![], contours: vec![],
-            n_points: 0, n_contours: 0, first_point: 0,
+            cur_x: vec![],
+            cur_y: vec![],
+            org_x: vec![],
+            org_y: vec![],
+            orus_x: vec![],
+            orus_y: vec![],
+            tags: vec![],
+            contours: vec![],
+            n_points: 0,
+            n_contours: 0,
+            first_point: 0,
         };
 
         // Save/restore GS — fpgm may modify it but glyph programs need defaults
@@ -275,14 +301,12 @@ impl ExecContext {
     /// The prep program uses WCVTP to write pixel-specific CVT values
     /// and may set up the twilight zone for control value scaling.
     /// We run it with a minimal twilight zone (enough for point ops).
-    pub fn run_prep(&mut self, prep_bytes: &[u8]) -> Result<(), FontError> {
-        if prep_bytes.is_empty() { return Ok(()); }
-
+    pub fn run_prep(&mut self, prep_bytes: &[u8], saved_storage: &[i32]) -> Result<(), FontError> {
         // ── TT_Load_Context equivalent (C: ttobjs.c:891-957) ──────
         // C calls this before EVERY program execution (fpgm, prep, glyph).
         // It resets GS, scales CVT from FU to pixel units, zeroes storage.
         self.gs = GraphicsState::default();
-        self.gs.auto_flip = true;  // C default
+        self.gs.auto_flip = true; // C default
 
         // Scale CVT: face->cvt[i] / 64 → FT_MulFix(_, scale)
         // Our CVT entries are in FU*64 from the parser. Divide by 64 to get FU.
@@ -292,20 +316,13 @@ impl ExecContext {
             self.cvt[i] = crate::fixed::ft_mul_fix(fu, self.y_scale);
         }
 
-        // Zero storage (C: FT_ARRAY_ZERO(exec->storage, exec->storeSize))
-        for s in &mut self.storage {
-            *s = 0;
+        // Restore the post-fpgm storage snapshot saved by TT_Save_Context.
+        for (idx, slot) in self.storage.iter_mut().enumerate() {
+            *slot = saved_storage.get(idx).copied().unwrap_or(0);
         }
 
         // Zero twilight zone (C: FT_ARRAY_ZERO)
-        let n_twilight = 16; // maxTwilightPoints from maxp
-        let mut twilight = GlyphZone {
-            cur_x: vec![0i32; n_twilight], cur_y: vec![0i32; n_twilight],
-            org_x: vec![0i32; n_twilight], org_y: vec![0i32; n_twilight],
-            orus_x: vec![0i32; n_twilight], orus_y: vec![0i32; n_twilight],
-            tags: vec![0u8; n_twilight], contours: vec![],
-            n_points: n_twilight as u16, n_contours: 0, first_point: 0,
-        };
+        self.twilight = Self::new_twilight_zone(self.twilight.n_points as usize);
 
         // Set up prep as a glyph program
         self.stack.clear();
@@ -320,7 +337,8 @@ impl ExecContext {
         self.gs.set_vectors_to_y();
 
         // Run prep against twilight zone
-        self.run_program(&mut twilight)?;
+        let mut empty_glyph = Self::new_twilight_zone(0);
+        self.run_program(&mut empty_glyph)?;
 
         // Restore zone pointers for glyph hinting
         self.gs.zp0 = 1;
@@ -333,9 +351,12 @@ impl ExecContext {
     /// Get a value from the storage area.
     #[allow(dead_code)]
     pub fn get_storage(&self, idx: usize) -> Result<i32, FontError> {
-        self.storage.get(idx).copied().ok_or(FontError::InvalidOutline(
-            "bytecode: storage index out of range".into(),
-        ))
+        self.storage
+            .get(idx)
+            .copied()
+            .ok_or(FontError::InvalidOutline(
+                "bytecode: storage index out of range".into(),
+            ))
     }
 
     /// Set a value in the storage area.
@@ -365,12 +386,237 @@ impl ExecContext {
         Ok(())
     }
 
+    fn touch_point(&self, zone: &mut GlyphZone, p: usize) {
+        let mut tag = 0u8;
+        if self.gs.freedom_vector.0 != 0 {
+            tag |= 0x01;
+        }
+        if self.gs.freedom_vector.1 != 0 {
+            tag |= 0x02;
+        }
+        zone.set_tag(p, tag);
+    }
+
+    fn cur_in(&self, glyph: &GlyphZone, zp: u8, p: usize) -> (i32, i32) {
+        if zp == 0 {
+            self.twilight.cur(p)
+        } else {
+            glyph.cur(p)
+        }
+    }
+
+    fn org_in(&self, glyph: &GlyphZone, zp: u8, p: usize) -> (i32, i32) {
+        if zp == 0 {
+            self.twilight.org(p)
+        } else {
+            glyph.org(p)
+        }
+    }
+
+    fn orus_in(&self, glyph: &GlyphZone, zp: u8, p: usize) -> (i32, i32) {
+        if zp == 0 {
+            self.twilight.orus(p)
+        } else {
+            glyph.orus(p)
+        }
+    }
+
+    fn set_cur_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize, x: i32, y: i32) {
+        if zp == 0 {
+            self.twilight.set_cur(p, x, y);
+        } else {
+            glyph.set_cur(p, x, y);
+        }
+    }
+
+    fn set_org_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize, x: i32, y: i32) {
+        let zone = if zp == 0 { &mut self.twilight } else { glyph };
+        if p < zone.org_x.len() {
+            zone.org_x[p] = x;
+            zone.org_y[p] = y;
+        }
+    }
+
+    fn touch_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize) {
+        let mut tag = 0u8;
+        if self.gs.freedom_vector.0 != 0 {
+            tag |= 0x01;
+        }
+        if self.gs.freedom_vector.1 != 0 {
+            tag |= 0x02;
+        }
+        if zp == 0 {
+            self.twilight.set_tag(p, tag);
+        } else {
+            glyph.set_tag(p, tag);
+        }
+    }
+
+    fn active_program_len(&self) -> usize {
+        match self.cur_range {
+            0 => self.cvt_program.len(),
+            1 => self.font_program.len(),
+            _ => self.glyph_program.len(),
+        }
+    }
+
+    fn skip_instruction_operands(program: &[u8], ip: &mut usize, opcode: u8) {
+        match opcode {
+            0xB0..=0xB7 => {
+                *ip = ip.saturating_add((opcode - 0xB0 + 1) as usize);
+            }
+            0xB8..=0xBF => {
+                *ip = ip.saturating_add((opcode - 0xB8 + 1) as usize * 2);
+            }
+            0x40 => {
+                if *ip < program.len() {
+                    let count = program[*ip] as usize;
+                    *ip = ip.saturating_add(1 + count);
+                }
+            }
+            0x41 => {
+                if *ip < program.len() {
+                    let count = program[*ip] as usize;
+                    *ip = ip.saturating_add(1 + count * 2);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn define_function(&mut self) -> Result<(), FontError> {
+        let func_num = self.pop()? as u16;
+        let range = self.cur_range;
+        let program = match range {
+            0 => &self.cvt_program,
+            1 => &self.font_program,
+            _ => &self.glyph_program,
+        };
+        let start = self.ip;
+        let mut scan_ip = self.ip;
+        let mut depth = 1u32;
+
+        while scan_ip < program.len() {
+            let op_ip = scan_ip;
+            let op = program[scan_ip];
+            scan_ip += 1;
+            match op {
+                0x2C => depth += 1,
+                0x2D => {
+                    depth -= 1;
+                    if depth == 0 {
+                        if (func_num as usize) < self.functions.len() {
+                            self.functions[func_num as usize] = Some(DefRecord {
+                                range,
+                                start,
+                                end: op_ip,
+                                opc: func_num,
+                                active: true,
+                            });
+                        }
+                        self.ip = scan_ip;
+                        return Ok(());
+                    }
+                }
+                _ => Self::skip_instruction_operands(program, &mut scan_ip, op),
+            }
+        }
+
+        Err(FontError::InvalidOutline(
+            "bytecode: unterminated FDEF".into(),
+        ))
+    }
+
+    fn point_displacement(&self, opcode: u8, zone: &GlyphZone) -> (i32, i32, usize) {
+        let ref_pt = if opcode & 1 != 0 {
+            self.gs.rp1 as usize
+        } else {
+            self.gs.rp2 as usize
+        };
+        let (cx, cy) = self.cur_in(zone, self.gs.zp2, ref_pt);
+        let (ox, oy) = self.org_in(zone, self.gs.zp2, ref_pt);
+        let dist = self.gs.project(cx - ox, cy - oy);
+        let (dx, dy) = self.gs.move_along_free(dist);
+        (dx, dy, ref_pt)
+    }
+
+    fn skip_to_else_or_eif(&mut self) -> Result<(), FontError> {
+        let mut depth = 1u32;
+        while self.ip < self.active_program_len() {
+            let op = self.fetch_byte_glyph()?;
+            match op {
+                0x58 => depth += 1,
+                0x1B if depth == 1 => break,
+                0x59 => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {
+                    let program = match self.cur_range {
+                        0 => &self.cvt_program,
+                        1 => &self.font_program,
+                        _ => &self.glyph_program,
+                    };
+                    Self::skip_instruction_operands(program, &mut self.ip, op);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn skip_to_eif(&mut self) -> Result<(), FontError> {
+        let mut depth = 1u32;
+        while self.ip < self.active_program_len() {
+            let op = self.fetch_byte_glyph()?;
+            match op {
+                0x58 => depth += 1,
+                0x59 => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {
+                    let program = match self.cur_range {
+                        0 => &self.cvt_program,
+                        1 => &self.font_program,
+                        _ => &self.glyph_program,
+                    };
+                    Self::skip_instruction_operands(program, &mut self.ip, op);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn line_vector(dx: i32, dy: i32, perpendicular: bool) -> Option<(i32, i32)> {
+        let (vx, vy) = if perpendicular { (-dy, dx) } else { (dx, dy) };
+        if vx == 0 && vy == 0 {
+            return None;
+        }
+
+        let len = ((vx as i64 * vx as i64 + vy as i64 * vy as i64) as f64).sqrt() as i64;
+        if len == 0 {
+            return None;
+        }
+
+        Some((
+            (vx as i64 * 0x4000 / len) as i32,
+            (vy as i64 * 0x4000 / len) as i32,
+        ))
+    }
+
     // ── Glyph program execution ────────────────────────────────────
 
     /// Set the glyph instruction stream for execution.
     pub fn set_glyph_program(&mut self, ins: &[u8]) {
         self.glyph_program = ins.to_vec();
-        self.glyph_range = CodeRange { base: 0, size: ins.len() };
+        self.glyph_range = CodeRange {
+            base: 0,
+            size: ins.len(),
+        };
         self.ip = 0;
         self.cur_range = 2; // glyph
     }
@@ -396,11 +642,12 @@ impl ExecContext {
     /// Main opcode dispatch loop for the glyph program.
     pub fn run_program(&mut self, zone: &mut GlyphZone) -> Result<(), FontError> {
         let mut step_count = 0u32;
-        while self.ip < self.glyph_program.len() {
-            if step_count > 5000 { return Err(FontError::InvalidOutline("VM: max steps".into())); }
+        while self.ip < self.active_program_len() {
+            if step_count > 5000 {
+                return Err(FontError::InvalidOutline("VM: max steps".into()));
+            }
             step_count += 1;
             let opcode = self.fetch_byte_glyph()?;
-
 
             match opcode {
                 // ── Push small bytes (0xB0-0xB7) ────────────────
@@ -416,9 +663,9 @@ impl ExecContext {
                 0xB8..=0xBF => {
                     let count = (opcode - 0xB8 + 1) as usize;
                     for _ in 0..count {
-                        let hi = self.fetch_byte_glyph()? as i16;
-                        let lo = self.fetch_byte_glyph()? as i16;
-                        self.push(((hi as i32) << 8) | (lo as i32));
+                        let hi = self.fetch_byte_glyph()? as u16;
+                        let lo = self.fetch_byte_glyph()? as u16;
+                        self.push(i16::from_be_bytes([hi as u8, lo as u8]) as i32);
                     }
                 }
 
@@ -435,9 +682,9 @@ impl ExecContext {
                     // NPUSHW
                     let count = self.fetch_byte_glyph()? as usize;
                     for _ in 0..count {
-                        let hi = self.fetch_byte_glyph()? as i16;
-                        let lo = self.fetch_byte_glyph()? as i16;
-                        self.push(((hi as i32) << 8) | (lo as i32));
+                        let hi = self.fetch_byte_glyph()? as u8;
+                        let lo = self.fetch_byte_glyph()? as u8;
+                        self.push(i16::from_be_bytes([hi, lo]) as i32);
                     }
                 }
 
@@ -446,7 +693,9 @@ impl ExecContext {
                     let v = self.top()?;
                     self.push(v);
                 } // DUP
-                0x21 => { let _ = self.pop()?; } // POP
+                0x21 => {
+                    let _ = self.pop()?;
+                } // POP
                 0x22 => self.stack.clear(), // CLEAR
                 0x23 => {
                     // SWAP
@@ -457,25 +706,53 @@ impl ExecContext {
                 }
 
                 // ── Math ─────────────────────────────────────────
-                0x60 => { let b = self.pop()?; let a = self.pop()?; self.push(a + b); } // ADD
-                0x61 => { let b = self.pop()?; let a = self.pop()?; self.push(a - b); } // SUB
+                0x60 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(a + b);
+                } // ADD
+                0x61 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(a - b);
+                } // SUB
                 0x62 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    if b == 0 { return Err(FontError::InvalidOutline("bytecode: division by zero".into())); }
+                    if b == 0 {
+                        return Err(FontError::InvalidOutline(
+                            "bytecode: division by zero".into(),
+                        ));
+                    }
                     self.push(ft_div_fix(a, b));
                 } // DIV
-                0x63 => { let b = self.pop()?; let a = self.pop()?; self.push(ft_mul_fix(a, b)); } // MUL
-                0x64 => { let a = self.pop()?; self.push(a.abs()); } // ABS
-                0x65 => { let a = self.pop()?; self.push(-a); } // NEG
-                0x66 => { let a = self.pop()?; self.push(ft_floor_fix(a)); } // FLOOR
-                0x67 => { let a = self.pop()?; self.push(ft_ceil_fix(a)); } // CEILING
+                0x63 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(ft_mul_fix(a, b));
+                } // MUL
+                0x64 => {
+                    let a = self.pop()?;
+                    self.push(a.abs());
+                } // ABS
+                0x65 => {
+                    let a = self.pop()?;
+                    self.push(-a);
+                } // NEG
+                0x66 => {
+                    let a = self.pop()?;
+                    self.push(ft_floor_fix(a));
+                } // FLOOR
+                0x67 => {
+                    let a = self.pop()?;
+                    self.push(ft_ceil_fix(a));
+                } // CEILING
 
                 // ── Storage ──────────────────────────────────────
                 0x42 => {
                     // WS: pops index (deeper) then value (top)
-                    let val = self.pop()?;  // top = value
-                    let idx = self.pop()? as usize;  // deeper = index
+                    let val = self.pop()?; // top = value
+                    let idx = self.pop()? as usize; // deeper = index
                     self.set_storage(idx, val)?;
                 }
                 0x43 => {
@@ -489,8 +766,8 @@ impl ExecContext {
                 0x44 => {
                     // WCVTP: pops index (deeper) then value (top)
                     // Stack before: [..., index, value] where value is top
-                    let val = self.pop()?;  // top = value
-                    let idx = self.pop()? as usize;  // deeper = index
+                    let val = self.pop()?; // top = value
+                    let idx = self.pop()? as usize; // deeper = index
                     self.set_cvt(idx, val)?;
                 }
                 0x45 => {
@@ -501,12 +778,24 @@ impl ExecContext {
                 }
 
                 // ── Graphics state — vectors ─────────────────────
-                0x00 => { self.gs.set_vectors_to_y(); } // SVTCA[y]
-                0x01 => { self.gs.set_vectors_to_x(); } // SVTCA[x]
-                0x02 => { self.gs.set_proj_to_y(); }   // SPVTCA[y]
-                0x03 => { self.gs.set_proj_to_x(); }   // SPVTCA[x]
-                0x04 => { self.gs.set_free_to_y(); }    // SFVTCA[y]
-                0x05 => { self.gs.set_free_to_x(); }    // SFVTCA[x]
+                0x00 => {
+                    self.gs.set_vectors_to_y();
+                } // SVTCA[y]
+                0x01 => {
+                    self.gs.set_vectors_to_x();
+                } // SVTCA[x]
+                0x02 => {
+                    self.gs.set_proj_to_y();
+                } // SPVTCA[y]
+                0x03 => {
+                    self.gs.set_proj_to_x();
+                } // SPVTCA[x]
+                0x04 => {
+                    self.gs.set_free_to_y();
+                } // SFVTCA[y]
+                0x05 => {
+                    self.gs.set_free_to_x();
+                } // SFVTCA[x]
 
                 // ── Reference points ─────────────────────────────
                 0x10 => {
@@ -523,14 +812,28 @@ impl ExecContext {
                 } // SRP2
 
                 // ── MPPEM / MPS ────────────────────────────────
-                0x4B|0x4C => { self.push(self.ppem * 64); } // 26.6 format
+                0x4B => {
+                    self.push(self.ppem);
+                }
+                0x4C => {
+                    self.push(self.ppem);
+                }
 
-                // ── ROUND ────────────────────────────────────────
-                0x49 => {
-                    // ROUND — pop value, round, push back
-                    let v = self.pop()?;
-                    let r = self.gs.round(v);
-                    self.push(r);
+                // ── MD — Measure Distance ────────────────────────
+                // MD[0] uses current positions; MD[1] uses original positions.
+                0x49 | 0x4A => {
+                    let p1 = self.pop()? as usize;
+                    let p2 = self.pop()? as usize;
+                    let (x1, y1, x2, y2) = if opcode == 0x4A {
+                        let (x1, y1) = zone.org(p1);
+                        let (x2, y2) = zone.org(p2);
+                        (x1, y1, x2, y2)
+                    } else {
+                        let (x1, y1) = zone.cur(p1);
+                        let (x2, y2) = zone.cur(p2);
+                        (x1, y1, x2, y2)
+                    };
+                    self.push(self.gs.project(x1 - x2, y1 - y2));
                 }
 
                 // ── GC — Get Coordinate ──────────────────────────
@@ -539,15 +842,14 @@ impl ExecContext {
                     // Uses zp2 zone pointer to select zone, then
                     // projects the point's cur position onto proj vector
                     let p = self.pop()? as usize;
-                    // Always use glyph zone (zp2=1 by default)
-                    let (px, py) = zone.cur(p);
+                    let (px, py) = self.cur_in(zone, self.gs.zp2, p);
                     let proj = self.gs.project(px, py);
                     self.push(proj);
                 }
                 0x47 => {
                     // GC[1] = get original coordinate
                     let p = self.pop()? as usize;
-                    let (px, py) = zone.org(p);
+                    let (px, py) = self.org_in(zone, self.gs.zp2, p);
                     let proj = self.gs.project(px, py);
                     self.push(proj);
                 }
@@ -555,29 +857,31 @@ impl ExecContext {
                 // ── SCFS — Set Coordinate From Stack ─────────────
                 0x48 => {
                     // pops point (deeper) then value (top)
-                    let val = self.pop()?;  // top = value
-                    let p = self.pop()? as usize;  // deeper = point
-                    // Move point along freedom vector to match the value
-                    let (ox, oy) = zone.org(p);
-                    let old_proj = self.gs.project(ox, oy);
+                    let val = self.pop()?; // top = value
+                    let p = self.pop()? as usize; // deeper = point
+                                                  // Move point along freedom vector to match the value
+                    let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
+                    let old_proj = self.gs.project(cx, cy);
                     let dist = val - old_proj;
                     let (dx, dy) = self.gs.move_along_free(dist);
-                    let (cx, cy) = zone.cur(p);
-                    zone.set_cur(p, cx + dx, cy + dy);
-                    zone.set_tag(p, 0x01); // TOUCH_X
-                    zone.set_tag(p, 0x02); // TOUCH_Y
+                    self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                    self.touch_in(zone, self.gs.zp2, p);
                 }
 
                 // ── MDAP — Move Direct Absolute Point ────────────
                 0x2E | 0x2F => {
-                    // MDAP[0]/MDAP[1]: round point, optionally set rp0
+                    // MDAP[0]/MDAP[1]: move projected coordinate, optionally rounded.
                     let p = self.pop()? as usize;
-                    // Get current position, round it
-                    let (cx, cy) = zone.cur(p);
-                    let rx = self.gs.round(cx);
-                    let ry = self.gs.round(cy);
-                    zone.set_cur(p, rx, ry);
-                    zone.set_tag(p, 0x03); // TOUCH_X | TOUCH_Y
+                    let (cx, cy) = self.cur_in(zone, self.gs.zp0, p);
+                    let proj = self.gs.project(cx, cy);
+                    let target = if opcode == 0x2F {
+                        self.gs.round(proj)
+                    } else {
+                        proj
+                    };
+                    let (dx, dy) = self.gs.move_along_free(target - proj);
+                    self.set_cur_in(zone, self.gs.zp0, p, cx + dx, cy + dy);
+                    self.touch_in(zone, self.gs.zp0, p);
                     if opcode == 0x2F {
                         self.gs.rp0 = p as u32;
                     }
@@ -585,11 +889,10 @@ impl ExecContext {
 
                 // ── MIAP — Move Indirect Absolute Point ──────────
                 0x3E | 0x3F => {
-                    // pops cvt_index (deeper) then point (top)
-                    let p = self.pop()? as usize;  // top = point
-                    let cvt_idx = self.pop()? as usize;  // deeper = cvt index
+                    let p = self.pop()? as usize;
+                    let cvt_idx = self.pop()? as usize;
                     let cvt_val = self.get_cvt(cvt_idx)?;
-                    let (cx, cy) = zone.cur(p);
+                    let (cx, cy) = self.cur_in(zone, self.gs.zp0, p);
                     // Project original and current coords onto freedom vector
                     let org_dist = self.gs.project(cx, cy);
                     // Round CVT value
@@ -597,8 +900,13 @@ impl ExecContext {
                     // Move: calculate delta from current position
                     let delta = rnd_cvt - org_dist;
                     let (dx, dy) = self.gs.move_along_free(delta);
-                    zone.set_cur(p, cx + dx, cy + dy);
-                    zone.set_tag(p, 0x03);
+                    if self.gs.zp0 == 0 {
+                        let (ox, oy) = self.gs.move_along_free(cvt_val);
+                        self.set_org_in(zone, self.gs.zp0, p, ox, oy);
+                        self.set_cur_in(zone, self.gs.zp0, p, ox, oy);
+                    }
+                    self.set_cur_in(zone, self.gs.zp0, p, cx + dx, cy + dy);
+                    self.touch_in(zone, self.gs.zp0, p);
                     if opcode == 0x3F {
                         self.gs.rp0 = p as u32;
                     }
@@ -611,50 +919,53 @@ impl ExecContext {
                     let p = self.pop()? as usize;
                     let rp = self.gs.rp0 as usize;
 
-                    // Reference point current coords (always from cur)
-                    let (rcx, rcy) = zone.cur(rp);
-
-                    // Original distance: C uses orus for glyph zone, org for twilight
                     let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
-                    let org_dist = if is_twilight {
-                        // Twilight zone: use org (scaled 26.6) arrays directly
-                        let (rorg_x, rorg_y) = zone.org(rp);
-                        let (oorg_x, oorg_y) = zone.org(p);
-                        self.gs.project(oorg_x - rorg_x, oorg_y - rorg_y)
+                    let mut org_dist = if is_twilight {
+                        let (rorg_x, rorg_y) = self.org_in(zone, self.gs.zp0, rp);
+                        let (oorg_x, oorg_y) = self.org_in(zone, self.gs.zp1, p);
+                        self.gs.dual_project(oorg_x - rorg_x, oorg_y - rorg_y)
                     } else {
-                        // Glyph zone: use orus (unscaled font units), then scale
-                        let (rorus_x, rorus_y) = zone.orus(rp);
-                        let (oorus_x, oorus_y) = zone.orus(p);
-                        let du = self.gs.project(oorus_x - rorus_x, oorus_y - rorus_y);
-                        crate::fixed::ft_mul_fix(du, self.x_scale)
+                        let (rorus_x, rorus_y) = self.orus_in(zone, self.gs.zp0, rp);
+                        let (oorus_x, oorus_y) = self.orus_in(zone, self.gs.zp1, p);
+                        self.gs.dual_project(
+                            crate::fixed::ft_mul_fix(oorus_x - rorus_x, self.x_scale),
+                            crate::fixed::ft_mul_fix(oorus_y - rorus_y, self.y_scale),
+                        )
                     };
 
-                    // Round if flag bit 2 (0x04) is set
-                    let rnd_dist = if (opcode & 0x04) != 0 {
+                    if self.gs.single_width_cutin > 0
+                        && org_dist < self.gs.single_width_value + self.gs.single_width_cutin
+                        && org_dist > self.gs.single_width_value - self.gs.single_width_cutin
+                    {
+                        org_dist = if org_dist >= 0 {
+                            self.gs.single_width_value
+                        } else {
+                            -self.gs.single_width_value
+                        };
+                    }
+
+                    let mut distance = if (opcode & 0x04) != 0 {
                         self.gs.round(org_dist)
                     } else {
                         org_dist
                     };
 
-                    // Minimum distance if flag bit 3 (0x08) is set
-                    let dist = if (opcode & 0x08) != 0
-                        && self.gs.minimum_distance > 0
-                        && rnd_dist.abs() < self.gs.minimum_distance
-                    {
+                    if (opcode & 0x08) != 0 {
                         if org_dist >= 0 {
-                            self.gs.minimum_distance
-                        } else {
-                            -self.gs.minimum_distance
+                            if distance < self.gs.minimum_distance {
+                                distance = self.gs.minimum_distance;
+                            }
+                        } else if distance > -self.gs.minimum_distance {
+                            distance = -self.gs.minimum_distance;
                         }
-                    } else {
-                        rnd_dist
-                    };
+                    }
 
-                    // Move point along freedom vector relative to reference
-                    let (dx, dy) = self.gs.move_along_free(dist);
-                    zone.set_cur(p, rcx + dx, rcy + dy);
-                    zone.set_tag(p, 0x03);
-
+                    let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
+                    let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
+                    let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
+                    let (dx, dy) = self.gs.move_along_free(distance - cur_dist);
+                    self.set_cur_in(zone, self.gs.zp1, p, pcx + dx, pcy + dy);
+                    self.touch_in(zone, self.gs.zp1, p);
                     // C: rp1 = rp0, rp2 = point
                     self.gs.rp1 = rp as u32;
                     self.gs.rp2 = p as u32;
@@ -668,62 +979,76 @@ impl ExecContext {
                 // C: Ins_MIRP at ttinterp.c:5520-5673
                 // Flag bits same as MDRP + auto-flip
                 0xE0..=0xFF => {
-                    // Pops: point (top), cvt_index (deeper)
                     let p = self.pop()? as usize;
-                    let cvt_idx = self.pop()? as usize;
-                    let cvt_val = self.get_cvt(cvt_idx)?;
+                    let cvt_idx = self.pop()?;
+                    let mut cvt_dist = if cvt_idx < 0 {
+                        0
+                    } else {
+                        self.get_cvt(cvt_idx as usize)?
+                    };
 
                     let rp = self.gs.rp0 as usize;
-                    let (rcx, rcy) = zone.cur(rp);
 
-                    // Original distance: C uses orus for glyph zone
                     let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
                     let org_dist = if is_twilight {
-                        let (rorg_x, rorg_y) = zone.org(rp);
-                        let (oorg_x, oorg_y) = zone.org(p);
-                        self.gs.project(oorg_x - rorg_x, oorg_y - rorg_y)
+                        let (rorg_x, rorg_y) = self.org_in(zone, self.gs.zp0, rp);
+                        let (oorg_x, oorg_y) = self.org_in(zone, self.gs.zp1, p);
+                        self.gs.dual_project(oorg_x - rorg_x, oorg_y - rorg_y)
                     } else {
-                        let (rorus_x, rorus_y) = zone.orus(rp);
-                        let (oorus_x, oorus_y) = zone.orus(p);
-                        let du = self.gs.project(oorus_x - rorus_x, oorus_y - rorus_y);
-                        crate::fixed::ft_mul_fix(du, self.x_scale)
+                        let (rorus_x, rorus_y) = self.orus_in(zone, self.gs.zp0, rp);
+                        let (oorus_x, oorus_y) = self.orus_in(zone, self.gs.zp1, p);
+                        self.gs.dual_project(
+                            crate::fixed::ft_mul_fix(oorus_x - rorus_x, self.x_scale),
+                            crate::fixed::ft_mul_fix(oorus_y - rorus_y, self.y_scale),
+                        )
                     };
+                    if self.gs.zp1 == 0 {
+                        let (dx, dy) = self.gs.move_along_free(cvt_dist);
+                        let (rox, roy) = self.org_in(zone, self.gs.zp0, rp);
+                        self.set_org_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
+                        self.set_cur_in(zone, self.gs.zp1, p, rox + dx, roy + dy);
+                    }
+                    let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
+                    let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
+                    let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
 
-                    // Round CVT value
-                    let rnd_cvt = self.gs.round(cvt_val);
-
-                    // Auto-flip: C uses org_dist sign vs cvt_val, not rnd_cvt
-                    let cvt_dist = if self.gs.auto_flip && (org_dist ^ cvt_val) < 0 {
-                        -rnd_cvt
-                    } else {
-                        rnd_cvt
-                    };
-
-                    // CVT cut-in: C compares |org_dist - cvt_dist|, not |org_dist - rnd_cvt|
-                    let dist = if (org_dist - cvt_dist).abs() < self.gs.cvt_cut_in {
-                        cvt_dist
-                    } else {
-                        let rnd_org = if (opcode & 0x04) != 0 { self.gs.round(org_dist) } else { org_dist };
-                        rnd_org
-                    };
-
-                    // Minimum distance (flag bit 3)
-                    let dist = if (opcode & 0x08) != 0
-                        && self.gs.minimum_distance > 0
-                        && dist.abs() < self.gs.minimum_distance
-                    {
-                        if org_dist >= 0 {
-                            self.gs.minimum_distance
+                    let delta = (cvt_dist - self.gs.single_width_value).abs();
+                    if delta < self.gs.single_width_cutin {
+                        cvt_dist = if cvt_dist >= 0 {
+                            self.gs.single_width_value
                         } else {
-                            -self.gs.minimum_distance
+                            -self.gs.single_width_value
+                        };
+                    }
+
+                    if self.gs.auto_flip && (org_dist ^ cvt_dist) < 0 {
+                        cvt_dist = -cvt_dist;
+                    }
+
+                    let mut distance = if (opcode & 0x04) != 0 {
+                        if self.gs.zp0 == self.gs.zp1
+                            && (cvt_dist - org_dist).abs() > self.gs.control_value_cutin
+                        {
+                            cvt_dist = org_dist;
                         }
+                        self.gs.round(cvt_dist)
                     } else {
-                        dist
+                        cvt_dist
                     };
 
-                    let (dx, dy) = self.gs.move_along_free(dist);
-                    zone.set_cur(p, rcx + dx, rcy + dy);
-                    zone.set_tag(p, 0x03);
+                    if (opcode & 0x08) != 0 {
+                        if org_dist >= 0 {
+                            if distance < self.gs.minimum_distance {
+                                distance = self.gs.minimum_distance;
+                            }
+                        } else if distance > -self.gs.minimum_distance {
+                            distance = -self.gs.minimum_distance;
+                        }
+                    }
+
+                    let (dx, dy) = self.gs.move_along_free(distance - cur_dist);
+                    self.set_cur_in(zone, self.gs.zp1, p, pcx + dx, pcy + dy);
+                    self.touch_in(zone, self.gs.zp1, p);
 
                     // C: rp1 = rp0, rp2 = point
                     self.gs.rp1 = rp as u32;
@@ -747,34 +1072,73 @@ impl ExecContext {
                         let dist = self.gs.project(pcx - rcx, pcy - rcy);
                         let (dx, dy) = self.gs.move_along_free(-dist);
                         zone.set_cur(p, pcx + dx, pcy + dy);
-                        zone.set_tag(p, 0x03);
+                        self.touch_point(zone, p);
                     }
                     self.gs.loop_counter = 1; // C: GS.loop = 1
                 }
 
-                // ── SHP — Shift Point by last point (0x32-0x37) ──
-                0x32..=0x37 => {
-                    // SHP[rpX]: shift rp2 using the relationship between
-                    // rpX and rp2 in original coords, projected onto freedom vec
-                    let ref_pt = match opcode & 3 {
-                        0 => self.gs.rp0 as usize,
-                        1 => self.gs.rp1 as usize,
-                        _ => self.gs.rp2 as usize,
+                // ── SHP — Shift points by reference-point displacement ──
+                0x32 | 0x33 => {
+                    let loop_count = self.gs.loop_counter as usize;
+                    let (dx, dy, _) = self.point_displacement(opcode, zone);
+                    for _ in 0..loop_count {
+                        let p = self.pop()? as usize;
+                        let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
+                        self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                        self.touch_in(zone, self.gs.zp2, p);
+                    }
+                    self.gs.loop_counter = 1;
+                }
+
+                // ── SHC — Shift contour by reference-point displacement ──
+                0x34 | 0x35 => {
+                    let contour = self.pop()? as usize;
+                    if contour < zone.contours.len() {
+                        let (dx, dy, ref_pt) = self.point_displacement(opcode, zone);
+                        let start = if contour == 0 {
+                            0
+                        } else {
+                            zone.contours[contour - 1] as usize + 1
+                        };
+                        let limit = zone.contours[contour] as usize + 1;
+                        for p in start..limit {
+                            if p != ref_pt {
+                                let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
+                                self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                                self.touch_in(zone, self.gs.zp2, p);
+                            }
+                        }
+                    }
+                }
+
+                // ── SHZ — Shift zone by reference-point displacement ──
+                0x36 | 0x37 => {
+                    let zone_arg = self.pop()?;
+                    let (dx, dy, ref_pt) = self.point_displacement(opcode, zone);
+                    let target_zp = (zone_arg & 1) as u8;
+                    let limit = if target_zp == 0 {
+                        self.twilight.n_points as usize
+                    } else if zone_arg == 1 {
+                        zone.n_real_points()
+                    } else {
+                        zone.n_points as usize
                     };
-                    let (rcx, rcy) = zone.cur(ref_pt);
-                    let (rorg_x, rorg_y) = zone.org(ref_pt);
-                    let p = self.gs.rp2 as usize;
-                    let (porg_x, porg_y) = zone.org(p);
-                    let orig_rel = self.gs.project(porg_x - rorg_x, porg_y - rorg_y);
-                    let (dx, dy) = self.gs.move_along_free(orig_rel);
-                    zone.set_cur(p, rcx + dx, rcy + dy);
-                    zone.set_tag(p, 0x03);
+                    for p in 0..limit {
+                        if p != ref_pt {
+                            let (cx, cy) = self.cur_in(zone, target_zp, p);
+                            self.set_cur_in(zone, target_zp, p, cx + dx, cy + dy);
+                        }
+                    }
                 }
 
                 // ── IUP — Interpolate Untouched Points ────────────
                 // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
-                0x30 => { iup::iup_x(zone); }
-                0x31 => { iup::iup_y(zone); }
+                0x30 => {
+                    iup::iup_x(zone);
+                }
+                0x31 => {
+                    iup::iup_y(zone);
+                }
 
                 // ── Control flow ──────────────────────────────────
                 // SLOOP (0x17): set loop counter
@@ -784,8 +1148,8 @@ impl ExecContext {
                 }
                 // LOOPCALL (0x2A): pop count (deeper), func_num (top)
                 0x2A => {
-                    let func_num = self.pop()? as u16;  // top
-                    let count = self.pop()?;  // deeper
+                    let func_num = self.pop()? as u16; // top
+                    let count = self.pop()?; // deeper
                     if (func_num as usize) < self.functions.len() {
                         if let Some(ref def) = self.functions[func_num as usize] {
                             if def.active {
@@ -822,37 +1186,50 @@ impl ExecContext {
                 0x2D => {
                     // ENDF: return from function
                     if let Some(call) = self.call_stack.pop() {
-                        self.ip = call.caller_ip;
-                        self.cur_range = call.caller_range;
+                        if call.cur_count > 1 {
+                            let def = self.functions[call.def_index].as_ref().ok_or_else(|| {
+                                FontError::InvalidOutline(
+                                    "bytecode: missing function definition".into(),
+                                )
+                            })?;
+                            self.call_stack.push(CallRecord {
+                                cur_count: call.cur_count - 1,
+                                ..call
+                            });
+                            self.ip = def.start;
+                            self.cur_range = def.range;
+                        } else {
+                            self.ip = call.caller_ip;
+                            self.cur_range = call.caller_range;
+                        }
                     }
                 }
                 0x2C => {
-                    // FDEF inside glyph program — should not happen.
-                    // Defined in fpgm, just skip.
+                    self.define_function()?;
                 }
 
+                // ── IF (0x58) / ELSE (0x1B) ──────────────────────
                 0x58 => {
-                    // ELSE: skip to EIF
-                    let mut depth = 1;
-                    while depth > 0 && self.ip < self.glyph_program.len() {
-                        let b = self.fetch_byte_glyph()?;
-                        match b {
-                            0x59 | 0x1B => depth += 1,
-                            0x2D => { depth -= 1; if depth == 0 { break; } }
-                            _ => {}
-                        }
+                    let condition = self.pop()?;
+                    if condition == 0 {
+                        self.skip_to_else_or_eif()?;
                     }
+                }
+                0x1B => {
+                    self.skip_to_eif()?;
                 }
 
                 // ── SHPIX — Shift Pixel ───────────────────────────
                 0x38 => {
-                    // pops point (deeper) then amount (top)
-                    let p = self.pop()? as usize;  // deeper = point
-                    let amount = self.pop()?;  // top = amount
+                    let amount = self.pop()?;
                     let (dx, dy) = self.gs.move_along_free(amount);
-                    let (cx, cy) = zone.cur(p);
-                    zone.set_cur(p, cx + dx, cy + dy);
-                    zone.set_tag(p, 0x03);
+                    for _ in 0..self.gs.loop_counter {
+                        let p = self.pop()? as usize;
+                        let (cx, cy) = zone.cur(p);
+                        zone.set_cur(p, cx + dx, cy + dy);
+                        self.touch_point(zone, p);
+                    }
+                    self.gs.loop_counter = 1;
                 }
 
                 // ── ALIGNPTS (0x27) — Align points ──────────
@@ -866,7 +1243,7 @@ impl ExecContext {
                     let dist = self.gs.project(porg_x - qorg_x, porg_y - qorg_y);
                     let (dx, dy) = self.gs.move_along_free(dist);
                     zone.set_cur(p, qx + dx, qy + dy);
-                    zone.set_tag(p, 0x03);
+                    self.touch_point(zone, p);
                 }
                 // ── CINDEX (0x25) — Copy indexed element ─────────
                 0x25 => {
@@ -894,22 +1271,7 @@ impl ExecContext {
                     let p = self.pop()? as usize;
                     // Toggle on-curve flag
                     // We don't track this precisely, just mark touched
-                    zone.set_tag(p, 0x03);
-                }
-                // ── SCVTCI (0x6C) — Set CVT Cut-In ───────────────
-                0x6C => {
-                    let v = self.pop()?;
-                    self.gs.control_value_cutin = v;
-                }
-                // ── SSW (0x6E) — Set Single Width ────────────────
-                0x6E => {
-                    let v = self.pop()?;
-                    self.gs.single_width_value = v;
-                }
-                // ── SSWCI (0x6D) — Set Single Width Cut-In ───────
-                0x6D => {
-                    let v = self.pop()?;
-                    self.gs.single_width_cutin = v;
+                    self.touch_point(zone, p);
                 }
                 // ── SDB (0x8B) — Set Delta Base ──────────────────
                 0x8B => {
@@ -928,40 +1290,32 @@ impl ExecContext {
                 }
                 // ── JROT (0x78) — pops e1(top), e2, offset(deeper)
                 0x78 => {
-                    let e1 = self.pop()?;  // top
+                    let e1 = self.pop()?; // top
                     let e2 = self.pop()?;
-                    let offset = self.pop()?;  // deeper
+                    let offset = self.pop()?; // deeper
                     if e1 > e2 {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
                 }
                 // ── JROF (0x79) — pops e1(top), e2, offset(deeper)
                 0x79 => {
-                    let e1 = self.pop()?;  // top
+                    let e1 = self.pop()?; // top
                     let e2 = self.pop()?;
-                    let offset = self.pop()?;  // deeper
+                    let offset = self.pop()?; // deeper
                     if e1 <= e2 {
                         self.ip = (self.ip as i32 + offset - 1) as usize;
                     }
                 }
                 // ── SFVTL (0x08-0x09) — Set Freedom Vector To Line ──
                 0x08 | 0x09 => {
-                    // Sets freedom vector to be parallel to line from rp1 to rp2
-                    let p1 = self.gs.rp1 as usize;
-                    let p2 = self.gs.rp2 as usize;
-                    let (x1, y1) = if self.gs.zp1 == 0 { zone.cur(p1) } else { zone.org(p1) };
-                    let (x2, y2) = if self.gs.zp2 == 0 { zone.cur(p2) } else { zone.org(p2) };
-                    let dx = x2 - x1;
-                    let dy = y2 - y1;
-                    // Project (dx,dy) onto freedom vector as 2.14 fixed
-                    if dx == 0 && dy == 0 {} else {
-                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
-                        if len > 0 {
-                            self.gs.freedom_vector = (
-                                ((dx as i64 * 0x4000 / len) as i32),
-                                ((dy as i64 * 0x4000 / len) as i32)
-                            );
-                        }
+                    let p_top = self.pop()? as usize;
+                    let p_deeper = self.pop()? as usize;
+                    let (x1, y1) = zone.cur(p_deeper);
+                    let (x2, y2) = zone.cur(p_top);
+                    if let Some(vector) = Self::line_vector(x2 - x1, y2 - y1, opcode & 1 != 0) {
+                        self.gs.freedom_vector = vector;
+                    } else {
+                        self.gs.freedom_vector = (0x4000, 0);
                     }
                 }
                 // ── SPVFS (0x0A) — Set Proj Vector From Stack ──────
@@ -993,64 +1347,121 @@ impl ExecContext {
                     let loop_count = self.gs.loop_counter;
                     let rp1 = self.gs.rp1 as usize;
                     let rp2 = self.gs.rp2 as usize;
-                    let is_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0;
-                    // C: orgs = org arrays (always) for the projection
-                    let (r1_ox, r1_oy) = zone.org(rp1);
-                    let (r2_ox, r2_oy) = zone.org(rp2);
-                    let (r1_cx, r1_cy) = zone.cur(rp1);
-                    let (r2_cx, r2_cy) = zone.cur(rp2);
+                    let use_twilight_org = self.gs.zp0 == 0 || self.gs.zp1 == 0;
+                    let (r1_ox, r1_oy) = if use_twilight_org {
+                        self.org_in(zone, self.gs.zp1, rp1)
+                    } else {
+                        self.orus_in(zone, self.gs.zp1, rp1)
+                    };
+                    let (r2_ox, r2_oy) = if use_twilight_org {
+                        self.org_in(zone, self.gs.zp0, rp2)
+                    } else {
+                        self.orus_in(zone, self.gs.zp0, rp2)
+                    };
+                    let (r1_cx, r1_cy) = self.cur_in(zone, self.gs.zp1, rp1);
+                    let (r2_cx, r2_cy) = self.cur_in(zone, self.gs.zp0, rp2);
                     // C: old_range = DUALPROJ(orgs2 - orgs1), cur_range = PROJECT(curs2 - curs1)
-                    let old_range = self.gs.dual_project(r2_ox - r1_ox, r2_oy - r1_oy);
+                    let old_range = if use_twilight_org {
+                        self.gs.dual_project(r2_ox - r1_ox, r2_oy - r1_oy)
+                    } else {
+                        self.gs.dual_project(
+                            crate::fixed::ft_mul_fix(r2_ox - r1_ox, self.x_scale),
+                            crate::fixed::ft_mul_fix(r2_oy - r1_oy, self.y_scale),
+                        )
+                    };
                     let cur_range = self.gs.project(r2_cx - r1_cx, r2_cy - r1_cy);
                     for _ in 0..loop_count {
                         let p = self.pop()? as usize;
-                        let (pox, poy) = zone.org(p);
-                        let _pux = if is_twilight { zone.org(p) } else { zone.orus(p) };
+                        let (pox, poy) = if use_twilight_org {
+                            self.org_in(zone, self.gs.zp2, p)
+                        } else {
+                            self.orus_in(zone, self.gs.zp2, p)
+                        };
                         // C: FT_MulDiv_No_Round(p_old, cur_range, old_range)
-                        let p_old = self.gs.dual_project(pox - r1_ox, poy - r1_oy);
+                        let p_old = if use_twilight_org {
+                            self.gs.dual_project(pox - r1_ox, poy - r1_oy)
+                        } else {
+                            self.gs.dual_project(
+                                crate::fixed::ft_mul_fix(pox - r1_ox, self.x_scale),
+                                crate::fixed::ft_mul_fix(poy - r1_oy, self.y_scale),
+                            )
+                        };
                         let new_val = if old_range != 0 {
-                            ((p_old as i64 * cur_range as i64 + (old_range as i64 >> 1)) / old_range as i64) as i32
-                        } else { 0 };
+                            ((p_old as i64 * cur_range as i64 + (old_range as i64 >> 1))
+                                / old_range as i64) as i32
+                        } else {
+                            0
+                        };
                         let (dx, dy) = self.gs.move_along_free(new_val);
-                        zone.set_cur(p, r1_cx + dx, r1_cy + dy);
-                        zone.set_tag(p, 0x03);
+                        self.set_cur_in(zone, self.gs.zp2, p, r1_cx + dx, r1_cy + dy);
+                        self.touch_in(zone, self.gs.zp2, p);
                     }
                     self.gs.loop_counter = 1; // C: GS.loop = 1
                 }
                 // ── LT (0x50) — Less Than ───────────────────────────
-                0x50 => { let b = self.pop()?; let a = self.pop()?; self.push(if a < b {1} else {0}); }
+                0x50 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if b < a { 1 } else { 0 });
+                }
                 // ── LTEQ (0x51) ─────────────────────────────────────
-                0x51 => { let b = self.pop()?; let a = self.pop()?; self.push(if a <= b {1} else {0}); }
+                0x51 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if b <= a { 1 } else { 0 });
+                }
                 // ── GT (0x52) ───────────────────────────────────────
-                0x52 => { let b = self.pop()?; let a = self.pop()?; self.push(if a > b {1} else {0}); }
+                0x52 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if b > a { 1 } else { 0 });
+                }
                 // ── GTEQ (0x53) ─────────────────────────────────────
-                0x53 => { let b = self.pop()?; let a = self.pop()?; self.push(if a >= b {1} else {0}); }
+                0x53 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if b >= a { 1 } else { 0 });
+                }
                 // ── EQ (0x54) ───────────────────────────────────────
-                0x54 => { let b = self.pop()?; let a = self.pop()?; self.push(if a == b {1} else {0}); }
+                0x54 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if a == b { 1 } else { 0 });
+                }
                 // ── NEQ (0x55) ──────────────────────────────────────
-                0x55 => { let b = self.pop()?; let a = self.pop()?; self.push(if a != b {1} else {0}); }
+                0x55 => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if a != b { 1 } else { 0 });
+                }
                 // ── OR (0x5B) — Logical OR ──────────────────────────
-                0x5B => { let b = self.pop()?; let a = self.pop()?; self.push(if a != 0 || b != 0 {1} else {0}); }
+                0x5B => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if a != 0 || b != 0 { 1 } else { 0 });
+                }
                 // ── FLIPRGON (0x81) / FLIPRGOFF (0x82) ─────────────
-                0x81 => { let _ = self.pop()?; } // FLIPRGON
-                0x82 => { let _ = self.pop()?; } // FLIPRGOFF
+                0x81 => {
+                    let _ = self.pop()?;
+                } // FLIPRGON
+                0x82 => {
+                    let _ = self.pop()?;
+                } // FLIPRGOFF
                 // ── SPVTL (0x06-0x07) — Set Projection Vector To Line ──
                 // C: Ins_SPVTL (ttinterp.c) — same logic as SFVTL but for proj
                 0x06 | 0x07 => {
-                    let p1 = self.gs.rp1 as usize;
-                    let p2 = self.gs.rp2 as usize;
-                    let (x1, y1) = if self.gs.zp1 == 0 { zone.cur(p1) } else { zone.org(p1) };
-                    let (x2, y2) = if self.gs.zp2 == 0 { zone.cur(p2) } else { zone.org(p2) };
-                    let dx = x2.wrapping_sub(x1);
-                    let dy = y2.wrapping_sub(y1);
-                    if dx != 0 || dy != 0 {
-                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
-                        if len > 0 {
-                            self.gs.proj_vector = (
-                                ((dx as i64 * 0x4000 / len) as i32),
-                                ((dy as i64 * 0x4000 / len) as i32)
-                            );
-                        }
+                    let p_top = self.pop()? as usize;
+                    let p_deeper = self.pop()? as usize;
+                    let (x1, y1) = zone.cur(p_deeper);
+                    let (x2, y2) = zone.cur(p_top);
+                    if let Some(vector) =
+                        Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
+                    {
+                        self.gs.proj_vector = vector;
+                        self.gs.dual_proj_vector = vector;
+                    } else {
+                        self.gs.proj_vector = (0x4000, 0);
+                        self.gs.dual_proj_vector = (0x4000, 0);
                     }
                 }
                 // ── GPV (0x0C) — Get Projection Vector ─────────────
@@ -1067,16 +1478,35 @@ impl ExecContext {
                 // ── ISECT (0x0F) — Move point to intersection of two lines ──
                 // C: Ins_ISECT. Rarely used. Skip with stack cleanup.
                 0x0F => {
-                    for _ in 0..5 { let _ = self.pop()?; }
+                    for _ in 0..5 {
+                        let _ = self.pop()?;
+                    }
                 }
                 // ── Rounding modes ────────────────────────────────
-                0x18 => { self.gs.round_state = RoundMode::Grid; } // RTG
-                0x19 => { self.gs.round_state = RoundMode::HalfGrid; } // RTHG
-                0x3D => { self.gs.round_state = RoundMode::DoubleGrid; } // RTDG
-                0x7C => { self.gs.round_state = RoundMode::HalfGrid; } // RTHG (alt)
-                0x7D => { self.gs.round_state = RoundMode::DownToGrid; } // RDTG
-                0x7E => { self.gs.round_state = RoundMode::UpToGrid; } // RUTG
-                0x7F => { self.gs.round_state = RoundMode::Off; } // ROFF
+                0x18 => {
+                    self.gs.round_state = RoundMode::Grid;
+                } // RTG
+                0x19 => {
+                    self.gs.round_state = RoundMode::HalfGrid;
+                } // RTHG
+                0x3D => {
+                    self.gs.round_state = RoundMode::DoubleGrid;
+                } // RTDG
+                0x7A => {
+                    self.gs.round_state = RoundMode::Off;
+                } // ROFF
+                0x7C => {
+                    self.gs.round_state = RoundMode::UpToGrid;
+                } // RUTG
+                0x7D => {
+                    self.gs.round_state = RoundMode::DownToGrid;
+                } // RDTG
+                0x7E => {
+                    let _ = self.pop()?;
+                } // SANGW
+                0x7F => {
+                    let _ = self.pop()?;
+                } // AA
                 // ── SROUND (0x76) — Super Round ─────────────────────
                 0x76 => {
                     let _ = self.pop()?;
@@ -1092,15 +1522,17 @@ impl ExecContext {
                 // ── WCVTF (0x70) — Write CVT in Font Units ──────────
                 // C: Ins_WCVTF. Scales value by metrics.scale before writing.
                 0x70 => {
-                    let val = self.pop()?;  // top = value
-                    let idx = self.pop()? as usize;  // deeper = index
-                    // Scale: FT_MulFix(value, scale) then write to CVT
+                    let val = self.pop()?; // top = value
+                    let idx = self.pop()? as usize; // deeper = index
+                                                    // Scale: FT_MulFix(value, scale) then write to CVT
                     let scaled = crate::fixed::ft_mul_fix(val, self.y_scale);
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
                 // C: Ins_GETINFO. Returns flags about the engine. Push 0.
-                0x88 => { self.push(0); }
+                0x88 => {
+                    self.push(0);
+                }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
                 // C: Ins_UTP (ttinterp.c:6016). Pops point, clears its touch.
@@ -1112,12 +1544,14 @@ impl ExecContext {
                 // C: Ins_MSIRP (ttinterp.c:5224-5276). Like MIRP but single.
                 // Rarely used. Skip with stack cleanup (pops 2 args).
                 0x3B => {
-                    let _ = self.pop()?; let _ = self.pop()?;
+                    let _ = self.pop()?;
+                    let _ = self.pop()?;
                 }
                 // ── AND (0x5A) — Logical AND ───────────────────────
                 // C: Ins_AND (ttinterp.c:2588-2601)
                 0x5A => {
-                    let b = self.pop()?; let a = self.pop()?;
+                    let b = self.pop()?;
+                    let a = self.pop()?;
                     self.push(if a != 0 && b != 0 { 1 } else { 0 });
                 }
                 // ── SDB (0x5E) — Set Delta Base ────────────────────
@@ -1130,22 +1564,18 @@ impl ExecContext {
                     let v = self.pop()?;
                     self.gs.delta_shift = v as u32;
                 }
-                // ── SDPVTL (0x87) — Set Dual Projection Vector To Line ──
-                0x87 => {
-                    let p1 = self.gs.rp1 as usize;
-                    let p2 = self.gs.rp2 as usize;
-                    let (x1, y1) = if self.gs.zp1 == 0 { zone.cur(p1) } else { zone.org(p1) };
-                    let (x2, y2) = if self.gs.zp2 == 0 { zone.cur(p2) } else { zone.org(p2) };
-                    let dx = x2.wrapping_sub(x1);
-                    let dy = y2.wrapping_sub(y1);
-                    if dx != 0 || dy != 0 {
-                        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt() as i64;
-                        if len > 0 {
-                            self.gs.dual_proj_vector = (
-                                ((dx as i64 * 0x4000 / len) as i32),
-                                ((dy as i64 * 0x4000 / len) as i32)
-                            );
-                        }
+                // ── SDPVTL (0x86-0x87) — Set Dual Projection Vector To Line ──
+                0x86 | 0x87 => {
+                    let p_top = self.pop()? as usize;
+                    let p_deeper = self.pop()? as usize;
+                    let (x1, y1) = zone.org(p_deeper);
+                    let (x2, y2) = zone.org(p_top);
+                    if let Some(vector) =
+                        Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
+                    {
+                        self.gs.dual_proj_vector = vector;
+                    } else {
+                        self.gs.dual_proj_vector = (0x4000, 0);
                     }
                 }
 
@@ -1161,14 +1591,25 @@ impl ExecContext {
                     let count = self.pop()?;
                     let nump = if count < 0 || count > self.stack.len() as i32 / 2 {
                         self.stack.len() as i32 / 2
-                    } else { count };
+                    } else {
+                        count
+                    };
                     // C: P = ppem*64 - delta_base, range offset by opcode
                     let base_ppem = self.ppem * 64;
-                    let p = base_ppem - self.gs.delta_base as i32
-                        - match opcode { 0x71 => 16, 0x72 => 32, _ => 0 };
-                    if (p & !0xF) != 0 { // P < 0 || P > 15 → skip
+                    let p = base_ppem
+                        - self.gs.delta_base as i32
+                        - match opcode {
+                            0x71 => 16,
+                            0x72 => 32,
+                            _ => 0,
+                        };
+                    if (p & !0xF) != 0 {
+                        // P < 0 || P > 15 → skip
                         // Consume the args without processing
-                        for _ in 0..nump { let _ = self.pop()?; let _ = self.pop()?; }
+                        for _ in 0..nump {
+                            let _ = self.pop()?;
+                            let _ = self.pop()?;
+                        }
                     } else {
                         let ppem_bits = p << 4; // P << 4 for matching
                         let f = 1i32 << (6 - self.gs.delta_shift as i32); // F scale
@@ -1177,12 +1618,14 @@ impl ExecContext {
                             let a = self.pop()? as usize; // point index
                             if a < zone.n_points as usize && (b & 0xF0) == ppem_bits {
                                 let mut d = (b & 0x0F) - 8;
-                                if d >= 0 { d += 1; }
+                                if d >= 0 {
+                                    d += 1;
+                                }
                                 d *= f;
                                 let (dx, dy) = self.gs.move_along_free(d);
                                 let (cx, cy) = zone.cur(a);
                                 zone.set_cur(a, cx + dx, cy + dy);
-                                zone.set_tag(a, 0x03);
+                                self.touch_point(zone, a);
                             }
                         }
                     }
@@ -1192,12 +1635,22 @@ impl ExecContext {
                     let count = self.pop()?;
                     let nump = if count < 0 || count > self.stack.len() as i32 / 2 {
                         self.stack.len() as i32 / 2
-                    } else { count };
+                    } else {
+                        count
+                    };
                     let base_ppem = self.ppem * 64;
-                    let p = base_ppem - self.gs.delta_base as i32
-                        - match opcode { 0x74 => 16, 0x75 => 32, _ => 0 };
+                    let p = base_ppem
+                        - self.gs.delta_base as i32
+                        - match opcode {
+                            0x74 => 16,
+                            0x75 => 32,
+                            _ => 0,
+                        };
                     if (p & !0xF) != 0 {
-                        for _ in 0..nump { let _ = self.pop()?; let _ = self.pop()?; }
+                        for _ in 0..nump {
+                            let _ = self.pop()?;
+                            let _ = self.pop()?;
+                        }
                     } else {
                         let ppem_bits = p << 4;
                         let f = 1i32 << (6 - self.gs.delta_shift as i32);
@@ -1206,7 +1659,9 @@ impl ExecContext {
                             let a = self.pop()? as usize;
                             if a < self.cvt.len() && (b & 0xF0) == ppem_bits {
                                 let mut d = (b & 0x0F) - 8;
-                                if d >= 0 { d += 1; }
+                                if d >= 0 {
+                                    d += 1;
+                                }
                                 d *= f;
                                 let cv = self.cvt[a].wrapping_add(d);
                                 let _ = self.set_cvt(a, cv);
@@ -1214,6 +1669,138 @@ impl ExecContext {
                         }
                     }
                 }
+                // ── SZP0 (0x13) — Set Zone Pointer 0 ─────────────
+                // C: Ins_SZP0 (ttinterp.h). Pops zp selector, sets GS.zp0.
+                0x13 => {
+                    self.gs.zp0 = (self.pop()? & 1) as u8;
+                }
+                // ── SZP1 (0x14) — Set Zone Pointer 1 ─────────────
+                0x14 => {
+                    self.gs.zp1 = (self.pop()? & 1) as u8;
+                }
+                // ── SZP2 (0x15) — Set Zone Pointer 2 ─────────────
+                0x15 => {
+                    self.gs.zp2 = (self.pop()? & 1) as u8;
+                }
+                // ── SZPS (0x16) — Set Zone Pointers ───────────────
+                // C: Sets all three zone pointers from single stack value.
+                0x16 => {
+                    let v = (self.pop()? & 1) as u8;
+                    self.gs.zp0 = v;
+                    self.gs.zp1 = v;
+                    self.gs.zp2 = v;
+                }
+                // ── SCVTCI (0x1D) — Set Control Value Table Cut-In ─
+                // C: Ins_SCVTCI (ttinterp.c:4087). Pops value → GS.control_value_cutin.
+                0x1D => {
+                    self.gs.control_value_cutin = self.pop()?;
+                }
+                // ── SSWCI (0x1E) — Set Single Width Cut-In ────────
+                // C: Ins_SSWCI (ttinterp.c:4101). Pops value → GS.single_width_cutin.
+                0x1E => {
+                    self.gs.single_width_cutin = self.pop()?;
+                }
+                // ── SSW (0x1F) — Set Single Width ──────────────────
+                // C: Ins_SSW (ttinterp.c:4115). Pops value → GS.single_width_value.
+                0x1F => {
+                    let v = self.pop()?;
+                    self.gs.single_width_value = crate::fixed::ft_mul_fix(v, self.y_scale);
+                }
+                // ── RAW (0x28) — ??? ───────────────────────────────
+                // C: Undocumented. Skip.
+                0x28 => {}
+                // ── FLIPON (0x4D) ──────────────────────────────────
+                // C: Ins_FLIPON (ttinterp.c:4130). Sets auto_flip=true.
+                0x4D => {
+                    self.gs.auto_flip = true;
+                }
+                // ── FLIPOFF (0x4E) ─────────────────────────────────
+                // C: Ins_FLIPOFF (ttinterp.c:4143). Sets auto_flip=false.
+                0x4E => {
+                    self.gs.auto_flip = false;
+                }
+                // ── DEBUG (0x4F) ───────────────────────────────────
+                // C: Ins_DEBUG. No-op in release mode.
+                0x4F => {}
+                // ── ODD (0x56) — Is Odd ────────────────────────────
+                0x56 => {
+                    let a = self.pop()?;
+                    self.push(if a & 1 != 0 { a } else { 0 });
+                }
+                // ── EVEN (0x57) — Is Even ──────────────────────────
+                0x57 => {
+                    let a = self.pop()?;
+                    self.push(if a & 1 == 0 { a } else { 0 });
+                }
+                // ── EIF (0x59) — End If ──────────────────────────
+                0x59 => {}
+                // ── NOT (0x5C) — Logical NOT ────────────────────────
+                0x5C => {
+                    let a = self.pop()?;
+                    self.push(if a == 0 { 1 } else { 0 });
+                }
+                // ── DELTAP1 (0x5D) — already handled above ─────────
+                // ── ROUND (0x68-0x6B) — Round variants ────────────
+                0x68 | 0x69 | 0x6A | 0x6B => {
+                    let v = self.pop()?;
+                    self.push(self.gs.round(v));
+                }
+                // ── NROUND (0x6C-0x6F) — No Round ─────────────────
+                0x6C | 0x6D | 0x6E | 0x6F => {
+                    let v = self.pop()?;
+                    self.push(v);
+                }
+                // ── DELTAC1 (0x73) — already handled above ─────────
+                // ── Unknown (0x7B) ─────────────────────────────────
+                0x7B => {}
+                // ── FLIPRGOFF (0x83) ────────────────────────────
+                0x83 => {
+                    let _ = self.pop()?;
+                }
+                // ── FLIPRGON (0x84) ─────────────────────────────
+                0x84 => {
+                    let _ = self.pop()?;
+                }
+                // ── SCANCTRL (0x85) ──────────────────────────────
+                // C: Ins_SCANCTRL. Sets scan control. Pop and ignore.
+                0x85 => {
+                    let _ = self.pop()?;
+                }
+                // ── SDPVTL (0x86) — already covered by 0x87 above ──
+                // ── IDEF (0x89) — Instruction Definition ────────────
+                // C: Ins_IDEF. Registers a new opcode. Skip for now.
+                0x89 => {
+                    let _ = self.pop()?;
+                }
+
+                // ── MAX (0x8C) — Maximum ────────────────────────
+                // C: Ins_MAX. Pops a, b, pushes max(a,b).
+                0x8C => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if a > b { a } else { b });
+                }
+                // ── MIN (0x8D) — Minimum ────────────────────────
+                0x8D => {
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if a < b { a } else { b });
+                }
+                // ── SCANTYPE (0x8E) — Set Scan Type ──────────────
+                // C: Ins_SCANTYPE. Pops value, sets GS.scan_type.
+                0x8E => {
+                    self.gs.scan_type = self.pop()? as u8;
+                }
+                // ── INSTCTRL (0x8F) — Set Instruction Control ────
+                // C: Ins_INSTCTRL. Pops selector,value. Sets instruct_control.
+                0x8F => {
+                    let _val = self.pop()?;
+                    let _sel = self.pop()?;
+                }
+                // ── ADJUST (0x90-0x92) — GX adjustment ───────────
+                // C: Ins_UNKNOWN. GX/MIRP variations. Pop N args.
+                0x90 | 0x91 | 0x92 => {}
+
                 // ── Unknown opcode ────────────────────────────
                 _ => {}
             }
