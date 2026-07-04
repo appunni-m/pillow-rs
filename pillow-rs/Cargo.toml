@@ -14,7 +14,7 @@ gpu = ["wgpu", "pollster"]
 
 [dependencies]
 pillow-rs-image = { path = "../pillow-rs-image" }
-pillow-rs-font = { path = "../pillow-rs-font" }
+pillow-rs-freetype = { path = "../pillow-rs-freetype" }
 log = "0.4"
 png = "0.18"
 thiserror = "2"

@@ -61,7 +61,9 @@ mod tests {
 
     #[test]
     fn test_parse_cvt_empty() {
-        let cvt = parse_cvt(&[]).unwrap();
+        let cvt = parse_cvt(&[]).unwrap_or_else(|err| {
+            panic!("empty cvt parses successfully: {err}");
+        });
         assert!(cvt.is_empty());
     }
 
@@ -69,7 +71,9 @@ mod tests {
     fn test_parse_cvt_single() {
         // Single FWORD value: 0x0135 = 309 FU → 309 * 64 = 19776 (26.6)
         let data = [0x01u8, 0x35];
-        let cvt = parse_cvt(&data).unwrap();
+        let cvt = parse_cvt(&data).unwrap_or_else(|err| {
+            panic!("single cvt value parses successfully: {err}");
+        });
         assert_eq!(cvt.len(), 1);
         assert_eq!(cvt[0], 309 * 64);
     }
@@ -78,7 +82,9 @@ mod tests {
     fn test_parse_cvt_negative() {
         // Negative FWORD: 0xFF9C = -100 FU → -100 * 64 = -6400
         let data = [0xFFu8, 0x9C];
-        let cvt = parse_cvt(&data).unwrap();
+        let cvt = parse_cvt(&data).unwrap_or_else(|err| {
+            panic!("negative cvt value parses successfully: {err}");
+        });
         assert_eq!(cvt[0], -100 * 64);
     }
 
@@ -86,7 +92,9 @@ mod tests {
     fn test_parse_cvt_multiple() {
         // Two entries: 0x0064 (100) and 0xFFCE (-50)
         let data = [0x00, 0x64, 0xFF, 0xCE];
-        let cvt = parse_cvt(&data).unwrap();
+        let cvt = parse_cvt(&data).unwrap_or_else(|err| {
+            panic!("multiple cvt values parse successfully: {err}");
+        });
         assert_eq!(cvt.len(), 2);
         assert_eq!(cvt[0], 100 * 64);
         assert_eq!(cvt[1], -50 * 64);

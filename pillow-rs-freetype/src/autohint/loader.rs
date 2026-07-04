@@ -315,10 +315,8 @@ pub fn reload(
             } else {
                 false
             }
-        } else if in_dir == out_dir.opposite() {
-            true
         } else {
-            false
+            in_dir == out_dir.opposite()
         };
 
         if is_weak {

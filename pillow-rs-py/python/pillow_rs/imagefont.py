@@ -1,4 +1,4 @@
-"""ImageFont — font loading and text rendering via pillow-rs-font (pure Rust FreeType compatible)."""
+"""ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
 from . import _core
 from .image import Image
 
@@ -51,7 +51,7 @@ class ImageFont:
 
 
 class FreeTypeFont:
-    """TrueType/OpenType font loaded via pillow-rs-font.
+    """TrueType/OpenType font loaded via pillow-rs-freetype.
 
     Pure Rust font rendering — no PIL dependency required.
     """
@@ -70,7 +70,7 @@ class FreeTypeFont:
         self.encoding = encoding
         self.layout_engine = layout_engine
         # Note: PIL fallback for pixel-identical font rendering was removed.
-        # Font rendering uses pillow-rs-font. Font rendering may differ
+        # Font rendering uses pillow-rs-freetype. Font rendering may differ
         # slightly from PIL's FreeType output in edge cases.
         self._pil_font = None
 
@@ -84,14 +84,14 @@ class FreeTypeFont:
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
-        """Return glyph mask as L-mode Image using pillow-rs-font."""
+        """Return glyph mask as L-mode Image using pillow-rs-freetype."""
         from .image import Image as PILImage
         w, h, alpha = self._rust_font.getmask_alpha(str(text))
         return PILImage.frombytes("L", (w, h), bytes(alpha))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
-        """Create a bitmap for the text and return the text offset using pillow-rs-font.
+        """Create a bitmap for the text and return the text offset using pillow-rs-freetype.
 
         :param text: Text to render.
         :param mode: Used by some graphics drivers to indicate what mode the

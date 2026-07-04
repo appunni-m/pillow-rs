@@ -8,6 +8,10 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_in_result)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::unnecessary_map_or)]
 #![allow(unused_crate_dependencies)]
 
 use serde::Deserialize;
@@ -420,7 +424,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
 
         match row.operation.as_str() {
             "getmask" => {
-                let text = get_text(&row);
+                let text = get_text(row);
                 let mask = match font.getmask(&text) {
                     Ok(m) => m,
                     Err(e) => {
@@ -525,7 +529,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
             }
 
             "getbbox" => {
-                let text = get_text(&row);
+                let text = get_text(row);
                 let bbox = font.getbbox(&text);
 
                 if let Some(ref expected) = row.ref_value {

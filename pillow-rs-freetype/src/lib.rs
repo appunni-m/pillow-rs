@@ -1,11 +1,13 @@
 //! Pure-Rust TrueType font rendering: auto-hinter, rasterizer, table parsers.
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use pillow_rs_freetype::{BitmapBackend, Font};
 //! let data = std::fs::read("font.ttf")?;
 //! let font = Font::truetype(&data, 12.0, BitmapBackend::FreeType)?;
 //! let mask = font.getmask("A")?;
-//! # Ok::<(), pillow_rs_freetype::FontError>(())
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! The Rust renderer owns the force-autohint path.  The native TrueType
@@ -30,7 +32,12 @@
 // The single remaining allow (arithmetic_side_effects) covers 579 sites
 // of i32 +/×/- operations inherent to the 26.6 domain. See casts.rs for why
 // wrapping_add/saturating_add are incorrect alternatives.
-#![allow(clippy::arithmetic_side_effects, clippy::if_same_then_else)]
+#![allow(
+    clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::if_same_then_else
+)]
 // sha2/serde/serde_json are dev-deps used by the coverage test.
 #![cfg_attr(test, allow(unused_crate_dependencies))]
 // Internal helpers exercised by integration tests (coverage_matrix_tests.rs)

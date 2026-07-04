@@ -89,7 +89,7 @@ pub fn cjk_metrics_init_widths(
             }
 
             // afcjk.c:230-235 — distance as stem width
-            let dist = (seg.pos as i32 - link.pos as i32).abs();
+            let dist = i32::from(seg.pos).wrapping_sub(i32::from(link.pos)).abs();
             if num_widths < 16 {
                 widths[num_widths].org = dist;
                 num_widths += 1;
@@ -111,18 +111,18 @@ pub fn cjk_metrics_init_widths(
             // afcjk.c:247 — cluster within threshold = upem/100 (heuristic)
             let threshold = upem / 100;
             let mut out: usize = 0;
-            let mut cur_org = widths[0].org as i32;
-            let mut cur_sum = widths[0].org as i32;
+            let mut cur_org = widths[0].org;
+            let mut cur_sum = widths[0].org;
             let mut cur_count: i32 = 1;
             for i in 1..num_widths {
-                if (widths[i].org as i32 - cur_org).abs() <= threshold {
-                    cur_sum += widths[i].org as i32;
+                if (widths[i].org - cur_org).abs() <= threshold {
+                    cur_sum += widths[i].org;
                     cur_count += 1;
                 } else {
                     widths[out].org = cur_sum / cur_count;
                     out += 1;
-                    cur_org = widths[i].org as i32;
-                    cur_sum = widths[i].org as i32;
+                    cur_org = widths[i].org;
+                    cur_sum = widths[i].org;
                     cur_count = 1;
                 }
             }
@@ -136,10 +136,10 @@ pub fn cjk_metrics_init_widths(
         // afcjk.c:252-269 — set standard_width and edge_distance_threshold
         let m_axis = &mut metrics.axis[dim];
         let stdw = if num_widths > 0 {
-            widths[0].org as i32
+            widths[0].org
         } else {
             // afcjk.c:256 — AF_LATIN_CONSTANT(metrics, 50) = 50 * upem / 2048
-            (50 * upem / 2048) as i32
+            50 * upem / 2048
         };
 
         m_axis.standard_width = stdw;
@@ -149,11 +149,7 @@ pub fn cjk_metrics_init_widths(
         m_axis.width_count = num_widths;
 
         // Copy widths (max AF_LATIN_MAX_WIDTHS)
-        for i in 0..num_widths {
-            if i < 16 {
-                m_axis.widths[i] = widths[i];
-            }
-        }
+        m_axis.widths[..num_widths].copy_from_slice(&widths[..num_widths]);
     }
 }
 

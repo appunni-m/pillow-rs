@@ -681,8 +681,8 @@ impl ExecContext {
                     // NPUSHW
                     let count = self.fetch_byte_glyph()? as usize;
                     for _ in 0..count {
-                        let hi = self.fetch_byte_glyph()? as u8;
-                        let lo = self.fetch_byte_glyph()? as u8;
+                        let hi = self.fetch_byte_glyph()?;
+                        let lo = self.fetch_byte_glyph()?;
                         self.push(i16::from_be_bytes([hi, lo]) as i32);
                     }
                 }
@@ -1642,7 +1642,7 @@ impl ExecContext {
                         }
                     }
                 }
-                0x73 | 0x74 | 0x75 => {
+                0x73..=0x75 => {
                     // DELTAC: Adjust CVT values by delta
                     let count = self.pop()?;
                     let nump = if count < 0 || count > self.stack.len() as i32 / 2 {
@@ -1753,12 +1753,12 @@ impl ExecContext {
                 }
                 // ── DELTAP1 (0x5D) — already handled above ─────────
                 // ── ROUND (0x68-0x6B) — Round variants ────────────
-                0x68 | 0x69 | 0x6A | 0x6B => {
+                0x68..=0x6B => {
                     let v = self.pop()?;
                     self.push(self.gs.round(v));
                 }
                 // ── NROUND (0x6C-0x6F) — No Round ─────────────────
-                0x6C | 0x6D | 0x6E | 0x6F => {
+                0x6C..=0x6F => {
                     let v = self.pop()?;
                     self.push(v);
                 }
@@ -1811,7 +1811,7 @@ impl ExecContext {
                 }
                 // ── ADJUST (0x90-0x92) — GX adjustment ───────────
                 // C: Ins_UNKNOWN. GX/MIRP variations. Pop N args.
-                0x90 | 0x91 | 0x92 => {}
+                0x90..=0x92 => {}
 
                 // ── Unknown opcode ────────────────────────────
                 _ => {}

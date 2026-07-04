@@ -1,4 +1,11 @@
 //! Debug tool: compare Our output vs FreeType 2.14.3 pixel by pixel.
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(unused_crate_dependencies)]
+
 use pillow_rs_freetype::{BitmapBackend, Font};
 use sha2::{Digest, Sha256};
 use std::fs;
