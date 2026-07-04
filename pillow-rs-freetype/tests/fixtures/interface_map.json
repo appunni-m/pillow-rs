@@ -13,28 +13,31 @@
     {
       "path": "face/open",
       "owner": "core",
+      "parity": { "family": "core_face_size_charmap", "passing": 2, "total": 2 },
       "symbols": {
-        "FT_New_Memory_Face": { "rust": "Font::truetype", "status": "partial" },
+        "FT_New_Memory_Face": { "rust": "Font::truetype_face", "status": "complete" },
         "FT_New_Face": { "rust": null, "status": "planned" },
         "FT_Open_Face": { "rust": null, "status": "planned" },
-        "FT_Done_Face": { "rust": "drop Font", "status": "partial" }
+        "FT_Done_Face": { "rust": "drop Font", "status": "complete" }
       }
     },
     {
       "path": "face/metadata",
       "owner": "core",
+      "parity": { "family": "core_face_size_charmap", "passing": 1, "total": 1 },
       "symbols": {
-        "FT_Get_Postscript_Name": { "rust": null, "status": "planned" },
-        "FT_Get_FSType_Flags": { "rust": null, "status": "planned" },
-        "FT_Get_Font_Format": { "rust": null, "status": "planned" }
+        "FT_Get_Postscript_Name": { "rust": "Font::postscript_name", "status": "complete" },
+        "FT_Get_FSType_Flags": { "rust": "Font::get_fstype_flags", "status": "complete" },
+        "FT_Get_Font_Format": { "rust": "Font::font_format", "status": "complete" }
       }
     },
     {
       "path": "size/select",
       "owner": "core",
+      "parity": { "family": "core_face_size_charmap", "passing": 1, "total": 1 },
       "symbols": {
-        "FT_Set_Char_Size": { "rust": "Font::truetype(size_pt)", "status": "partial" },
-        "FT_Set_Pixel_Sizes": { "rust": null, "status": "planned" },
+        "FT_Set_Char_Size": { "rust": "Font::set_char_size", "status": "complete" },
+        "FT_Set_Pixel_Sizes": { "rust": "Font::set_pixel_sizes", "status": "complete" },
         "FT_Select_Size": { "rust": null, "status": "planned" },
         "FT_Activate_Size": { "rust": null, "status": "planned" }
       }
@@ -42,12 +45,14 @@
     {
       "path": "charmap",
       "owner": "core",
+      "parity": { "family": "core_face_size_charmap", "passing": 2, "total": 2 },
       "symbols": {
-        "FT_Get_Char_Index": { "rust": "FontData::cmap.lookup", "status": "partial" },
-        "FT_Select_Charmap": { "rust": null, "status": "planned" },
-        "FT_Set_Charmap": { "rust": null, "status": "planned" },
-        "FT_Get_First_Char": { "rust": null, "status": "planned" },
-        "FT_Get_Next_Char": { "rust": null, "status": "planned" },
+        "FT_Get_Char_Index": { "rust": "Font::char_index", "status": "complete" },
+        "FT_Select_Charmap": { "rust": "Font::select_charmap", "status": "complete" },
+        "FT_Set_Charmap": { "rust": "Font::set_charmap", "status": "complete" },
+        "FT_Get_Charmap_Index": { "rust": "Font::charmap_index", "status": "complete" },
+        "FT_Get_First_Char": { "rust": "Font::first_char", "status": "complete" },
+        "FT_Get_Next_Char": { "rust": "Font::next_char", "status": "complete" },
         "FT_Get_Name_Index": { "rust": null, "status": "planned" }
       }
     },
@@ -113,12 +118,13 @@
     {
       "path": "sfnt/tables",
       "owner": "tables",
+      "parity": { "family": "core_face_size_charmap", "passing": 1, "total": 1 },
       "symbols": {
-        "FT_Load_Sfnt_Table": { "rust": "tt::TableDirectory::find", "status": "partial" },
-        "FT_Sfnt_Table_Info": { "rust": null, "status": "planned" },
+        "FT_Load_Sfnt_Table": { "rust": "Font::load_sfnt_table", "status": "complete" },
+        "FT_Sfnt_Table_Info": { "rust": "Font::sfnt_table_info", "status": "complete" },
         "FT_Get_Sfnt_Table": { "rust": "tt table parsers", "status": "partial" },
         "FT_Get_CMap_Language_ID": { "rust": null, "status": "planned" },
-        "FT_Get_CMap_Format": { "rust": null, "status": "planned" }
+        "FT_Get_CMap_Format": { "rust": "Font::charmaps", "status": "complete" }
       }
     },
     {

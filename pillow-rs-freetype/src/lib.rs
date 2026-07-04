@@ -47,4 +47,4 @@ pub mod tables;
 pub mod tt;
 
 pub use error::FontError;
-pub use font::{BitmapBackend, Font, GlyphMask};
+pub use font::{BitmapBackend, CharmapInfo, FaceInfo, Font, GlyphMask, SfntTableInfo, SizeMetrics};
