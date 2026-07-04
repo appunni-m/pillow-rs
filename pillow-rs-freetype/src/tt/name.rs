@@ -11,11 +11,14 @@ pub struct NameTable {
     pub family: String,
     /// Font subfamily / style name (nameID 2).
     pub subfamily: String,
+    /// PostScript name (nameID 6), when present.
+    pub postscript_name: Option<String>,
 }
 
 /// nameID constants we read.
 const NAME_ID_FAMILY: u16 = 1;
 const NAME_ID_SUBFAMILY: u16 = 2;
+const NAME_ID_POSTSCRIPT: u16 = 6;
 const NAME_ID_TYPO_FAMILY: u16 = 16;
 const NAME_ID_TYPO_SUBFAMILY: u16 = 17;
 
@@ -65,8 +68,13 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
     let subfamily = find_name_string(data, string_offset, &records, NAME_ID_TYPO_SUBFAMILY)
         .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_SUBFAMILY))
         .unwrap_or_else(|| "Regular".into());
+    let postscript_name = find_name_string(data, string_offset, &records, NAME_ID_POSTSCRIPT);
 
-    Ok(NameTable { family, subfamily })
+    Ok(NameTable {
+        family,
+        subfamily,
+        postscript_name,
+    })
 }
 
 /// Search for a name string by name_id, preferring platform 3/encoding 1.
