@@ -1,9 +1,14 @@
 # pillow-rs-freetype
 
-Pure-Rust font rendering engine — a byte-perfect port of FreeType 2.14.1's
-TrueType loader, Latin auto-hinter, and smooth anti-aliased rasterizer.
+Pure-Rust font rendering engine — a FreeType-compatible TrueType loader,
+Latin auto-hinter, bytecode hinter, and smooth anti-aliased rasterizer.
 
-**27,686/27,695 FT fixture tests pass (99.97%). Zero FFI, zero unsafe.**
+**Runtime is 100% Rust: zero FreeType FFI, zero unsafe.**
+
+Project goal: exact FreeType C pixel/byte parity produced by Rust code. C is an
+oracle for fixtures only. Broad parity matrices must not be reduced to smoke
+tests; incomplete threshold baselines are tracked as unfinished parity work.
+See `PROJECT_GOALS.md`.
 
 ## Quick Start
 
@@ -40,7 +45,7 @@ fn main() -> Result<(), FontError> {
 - **Smooth rasterizer**: FT_INT64 DDA path from `ftgrays.c` — 8-bit alpha output
 - **Table parsing**: `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `name`, `OS/2`
 - **Two backends**: `FreeType` (raw), `PIL` (PIL-compatible padded masks)
-- **No dependencies on FreeType C library**: Vendored C source is read-only reference
+- **No runtime FreeType C dependency**: Vendored C source and scripts are offline fixture references only
 
 ## Backends
 

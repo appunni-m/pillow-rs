@@ -1,7 +1,7 @@
 //! Fixed-point arithmetic — ✅ VERIFIED against FreeType 2.14.3 C library.
 //!
 //! Each function carries a verification marker documenting comparison status
-//! vs the C reference at /tmp/ftecho (built against vendored FreeType 2.14.3).
+//! vs offline C reference fixtures generated from vendored FreeType 2.14.3.
 //!
 //! Parity tests in `tests/fixed_parity.rs` exhaustively compare all functions
 //! against the C oracle across 2M+ test cases.

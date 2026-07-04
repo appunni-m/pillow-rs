@@ -8,19 +8,21 @@
 #![allow(unused_crate_dependencies)]
 
 use pillow_rs_freetype::{BitmapBackend, Font, PixelMode, RenderMode};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Matrix {
+    #[allow(dead_code)]
     version: String,
+    #[allow(dead_code)]
     generator: String,
     rows: Vec<Row>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Row {
     id: String,
     font: String,
@@ -44,11 +46,6 @@ fn render_modes_match_static_fixture_matrix() {
         .join("tests")
         .join("fixtures")
         .join("render_mode_matrix.json");
-
-    if std::env::var_os("PILLOW_RS_UPDATE_RENDER_FIXTURES").is_some() {
-        write_fixture(manifest_dir, &fixture_path);
-        return;
-    }
 
     let matrix: Matrix = serde_json::from_str(&fs::read_to_string(&fixture_path).unwrap()).unwrap();
     let mut failures = Vec::new();
@@ -117,69 +114,6 @@ fn render_modes_match_static_fixture_matrix() {
     }
 }
 
-fn write_fixture(manifest_dir: &Path, fixture_path: &Path) {
-    let raw_dir = manifest_dir
-        .join("tests")
-        .join("fixtures")
-        .join("outputs")
-        .join("render_modes");
-    fs::create_dir_all(&raw_dir).unwrap();
-
-    let cases = [
-        ("DejaVuSans", 20.0, 'A'),
-        ("DejaVuSans", 20.0, 'g'),
-        ("LiberationSans-Regular", 16.0, 'Q'),
-        ("NotoSans-Bold", 24.0, '8'),
-    ];
-    let modes = [
-        RenderMode::Normal,
-        RenderMode::Mono,
-        RenderMode::Lcd,
-        RenderMode::LcdV,
-    ];
-
-    let mut rows = Vec::new();
-    for (font_name, size_pt, ch) in cases {
-        let font = load_font(manifest_dir, font_name, size_pt);
-        for mode in modes {
-            let bitmap = font.render_char_mode(ch, mode).unwrap();
-            let id = format!(
-                "{}_{}_{}_render_{}",
-                font_name,
-                size_pt as u32,
-                ch as u32,
-                mode.fixture_name()
-            );
-            let raw_name = format!("{id}.bin");
-            fs::write(raw_dir.join(&raw_name), &bitmap.buffer).unwrap();
-            rows.push(Row {
-                id,
-                font: font_name.to_string(),
-                size_pt,
-                codepoint: ch as u32,
-                mode: mode.fixture_name().to_string(),
-                pixel_mode: bitmap.pixel_mode.fixture_name().to_string(),
-                width: bitmap.width,
-                rows: bitmap.rows,
-                pitch: bitmap.pitch,
-                left: bitmap.left,
-                top: bitmap.top,
-                ref_sha256: sha256_hex(&bitmap.buffer),
-                ref_raw: format!("outputs/render_modes/{raw_name}"),
-            });
-        }
-    }
-
-    let matrix = Matrix {
-        version: "1.0.0".to_string(),
-        generator:
-            "pillow-rs-freetype render_mode_matrix.rs; FreeType render mode metadata parity fixture"
-                .to_string(),
-        rows,
-    };
-    fs::write(fixture_path, serde_json::to_string_pretty(&matrix).unwrap()).unwrap();
-}
-
 fn load_font(manifest_dir: &Path, name: &str, size_pt: f32) -> Font {
     let path = manifest_dir
         .join("tests")
@@ -233,6 +167,3 @@ fn sha256_hex(data: &[u8]) -> String {
         .map(|b| format!("{:02x}", b))
         .collect()
 }
-
-#[allow(dead_code)]
-fn _fixture_path(_: PathBuf) {}

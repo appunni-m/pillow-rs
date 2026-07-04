@@ -1,6 +1,7 @@
-//! Unified coverage matrix test — single runner for all scripts.
+//! Unified coverage matrix test: one runner for static FreeType oracle matrices.
 //!
-//! getmask rows compare raw pixels when available, with SHA-256 as fallback.
+//! Exact parity gates require raw pixel bytes. SHA-256/size fallbacks are only
+//! allowed for explicitly incomplete threshold baselines.
 //! Failures include byte-level diff stats for rasterizer parity debugging.
 //!
 //! Summary shows per-script pass/fail clearly.
@@ -310,9 +311,13 @@ fn pixel_diff(
 /// against a FreeType-compatible default TrueType fixture.
 
 #[test]
-fn test_coverage_matrix_native_tt_default() {
+fn test_native_tt_default_threshold_baseline_not_parity_gate() {
     // Native TrueType default parity: FreeType's default load/render path runs
     // embedded TrueType bytecode instead of forcing the autohinter.
+    //
+    // This is intentionally not a parity gate yet. The threshold locks the
+    // current incomplete baseline so the Rust bytecode path cannot regress
+    // while we promote it to exact pixel/byte parity.
     run_unified(
         "native_tt_default_matrix.json",
         BitmapBackend::PIL,
@@ -358,14 +363,12 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
         .join("fixtures")
         .join(matrix_file);
 
-    if !matrix_path.exists() {
-        eprintln!("SKIP: {matrix_file} not found");
-        return;
-    }
+    assert!(matrix_path.exists(), "{matrix_file} not found");
 
     let matrix: CoverageMatrix =
         serde_json::from_str(&fs::read_to_string(&matrix_path).unwrap()).unwrap();
     validate_fixture_provenance(matrix_file, &matrix);
+    let exact_pixel_gate = matrix.assert_pixel_parity && expected_partial.is_none();
 
     let mut total = 0u32;
     let mut passed = 0u32;
@@ -449,7 +452,20 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
                 });
                 let actual_sha = sha256_hex(&mask.pixels);
 
-                if let Some((raw_path, expected_pixels)) = load_raw_pixels(manifest_dir, row) {
+                let raw_pixels = load_raw_pixels(manifest_dir, row);
+                if exact_pixel_gate && raw_pixels.is_none() {
+                    failed += 1;
+                    *stage_counts.entry(FailureStage::PixelCoverage).or_default() += 1;
+                    failures.push(format!(
+                        "{} stage={} raw=missing exact_pixel_gate=true",
+                        row.id,
+                        FailureStage::PixelCoverage.label(),
+                    ));
+                    counts.sha_fail += 1;
+                    continue;
+                }
+
+                if let Some((raw_path, expected_pixels)) = raw_pixels {
                     let (expected_w, expected_h) =
                         expected_size.unwrap_or((mask.width, mask.height));
                     if mask.pixels == expected_pixels
@@ -595,7 +611,12 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
                 }
             }
 
-            _ => {}
+            other => {
+                panic!(
+                    "{matrix_file} row {} has unsupported operation {other}",
+                    row.id
+                );
+            }
         }
     }
 

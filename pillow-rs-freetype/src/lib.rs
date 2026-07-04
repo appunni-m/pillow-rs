@@ -10,9 +10,9 @@
 //! # }
 //! ```
 //!
-//! The Rust renderer owns the force-autohint path.  The native TrueType
-//! default path uses a narrow FreeType bridge for bytecode-compatible glyph
-//! loading.
+//! The renderer, table parsers, rasterizer, autohinter, and TrueType bytecode
+//! path are implemented in Rust. FreeType C is used only by offline fixture
+//! generators under `scripts/`, never by runtime crate code.
 //!
 //! # Architecture
 //!
@@ -50,8 +50,6 @@ pub mod error;
 pub mod fixed;
 pub mod font;
 pub mod grays;
-#[allow(unsafe_code)]
-mod native_ft;
 pub mod outline;
 pub mod render;
 pub mod scaler;
