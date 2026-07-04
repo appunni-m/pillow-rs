@@ -255,6 +255,12 @@ fn scale_glyph_impl(
                 storage_size: data.maxp.max_storage as usize,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
+            let (raw_ascender, raw_descender) = data
+                .os2
+                .as_ref()
+                .map_or((data.hhea.ascent as i32, data.hhea.descent as i32), |os2| {
+                    (os2.s_typo_ascender as i32, os2.s_typo_descender as i32)
+                });
             let hint_result = crate::tt::hinter::hint_glyph(
                 &mut scaled,
                 &raw_pts,
@@ -262,6 +268,8 @@ fn scale_glyph_impl(
                 advance_width,
                 h_metric.advance_width as i32,
                 h_metric.lsb as i32,
+                raw_ascender,
+                raw_descender,
                 cvt,
                 fpgm,
                 prep,

@@ -607,6 +607,29 @@ impl ExecContext {
         ))
     }
 
+    fn get_info(selector: i32) -> i32 {
+        let mut result = 0;
+        if selector & 1 != 0 {
+            result = 40;
+        }
+        if selector & 32 != 0 {
+            result |= 1 << 12;
+        }
+        if selector & 64 != 0 {
+            result |= 1 << 13;
+        }
+        if selector & 1024 != 0 {
+            result |= 1 << 17;
+        }
+        if selector & 2048 != 0 {
+            result |= 1 << 18;
+        }
+        if selector & 4096 != 0 {
+            result |= 1 << 19;
+        }
+        result
+    }
+
     // ── Glyph program execution ────────────────────────────────────
 
     /// Set the glyph instruction stream for execution.
@@ -1540,9 +1563,9 @@ impl ExecContext {
                     let _ = self.set_cvt(idx, scaled);
                 }
                 // ── GetINFO (0x88) — Get Info ───────────────────────
-                // C: Ins_GETINFO. Returns flags about the engine. Push 0.
                 0x88 => {
-                    self.push(0);
+                    let selector = self.pop()?;
+                    self.push(Self::get_info(selector));
                 }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
@@ -1756,13 +1779,15 @@ impl ExecContext {
                 0x4F => {}
                 // ── ODD (0x56) — Is Odd ────────────────────────────
                 0x56 => {
-                    let a = self.pop()?;
-                    self.push(if a & 1 != 0 { a } else { 0 });
+                    let value = self.pop()?;
+                    let rounded = self.gs.round(value);
+                    self.push(if ((rounded >> 6) & 1) != 0 { 1 } else { 0 });
                 }
                 // ── EVEN (0x57) — Is Even ──────────────────────────
                 0x57 => {
-                    let a = self.pop()?;
-                    self.push(if a & 1 == 0 { a } else { 0 });
+                    let value = self.pop()?;
+                    let rounded = self.gs.round(value);
+                    self.push(if ((rounded >> 6) & 1) == 0 { 1 } else { 0 });
                 }
                 // ── EIF (0x59) — End If ──────────────────────────
                 0x59 => {}
