@@ -24,6 +24,8 @@ Incomplete executable baseline:
 | Baseline | Current status | Meaning |
 |---|---|---|
 | `native_tt_default_matrix.json` | `3176/7640` | unfinished TrueType bytecode/default load parity |
+| `render_mono_matrix.json` | `0/8` | unfinished monochrome render parity |
+| `render_lcd_matrix.json` | `0/8` | unfinished LCD render parity |
 
 Present-but-unexecuted fixture debt:
 
@@ -32,8 +34,6 @@ Present-but-unexecuted fixture debt:
 | `metrics_only_matrix.json` | add exact runner support |
 | `no_hinting_matrix.json` | add exact runner support |
 | `outline_cbox_matrix.json` | add exact runner support |
-| `render_mono_matrix.json` | add exact runner support |
-| `render_lcd_matrix.json` | add exact runner support |
 
 ## Harness-First Roadmap
 
@@ -66,8 +66,8 @@ Work items:
 1. Add `metrics_only` operation support to the unified runner.
 2. Add `outline_cbox` operation support to the unified runner.
 3. Add load-flag mode support for `no_hinting`.
-4. Add render-mode support for `render_mono`.
-5. Add render-mode support for `render_lcd`.
+4. Promote `render_mono` from executed `0/8` baseline to exact.
+5. Promote `render_lcd` from executed `0/8` baseline to exact.
 6. Add or regenerate `render_lcd_v` fixtures if LCD_V remains in scope.
 
 Done criteria:

@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use env_logger as _;
 use log as _;
-use pillow_rs_freetype::{BitmapBackend, Font};
+use pillow_rs_freetype::{BitmapBackend, Font, RenderMode};
 use thiserror as _;
 
 #[derive(Debug, Deserialize)]
@@ -332,6 +332,24 @@ fn test_coverage_matrix_force_autohint() {
 }
 
 #[test]
+fn test_render_mono_matrix_baseline_is_executed() {
+    run_unified(
+        "render_mono_matrix.json",
+        BitmapBackend::FreeType,
+        Some((0, 8)),
+    );
+}
+
+#[test]
+fn test_render_lcd_matrix_baseline_is_executed() {
+    run_unified(
+        "render_lcd_matrix.json",
+        BitmapBackend::FreeType,
+        Some((0, 8)),
+    );
+}
+
+#[test]
 fn test_fixture_matrix_provenance() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let fixture_dir = manifest_dir.join("tests").join("fixtures");
@@ -427,6 +445,22 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
 
         match row.operation.as_str() {
             "getmask" => {
+                if let Some(mode) = render_mode_for_family(&matrix.fixture_family) {
+                    match compare_render_mode_row(font, row, manifest_dir, mode) {
+                        Ok(()) => {
+                            counts.sha_ok += 1;
+                            passed += 1;
+                        }
+                        Err((stage, failure)) => {
+                            *stage_counts.entry(stage).or_default() += 1;
+                            failures.push(failure);
+                            counts.sha_fail += 1;
+                            failed += 1;
+                        }
+                    }
+                    continue;
+                }
+
                 let text = get_text(row);
                 let mask = match font.getmask(&text) {
                     Ok(m) => m,
@@ -717,6 +751,122 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
         passed > 0,
         "No tests passed — check font files for {matrix_file}"
     );
+}
+
+fn render_mode_for_family(fixture_family: &str) -> Option<RenderMode> {
+    match fixture_family {
+        "render_mono" => Some(RenderMode::Mono),
+        "render_lcd" => Some(RenderMode::Lcd),
+        _ => None,
+    }
+}
+
+fn compare_render_mode_row(
+    font: &Font,
+    row: &MatrixRow,
+    manifest_dir: &Path,
+    mode: RenderMode,
+) -> Result<(), (FailureStage, String)> {
+    let bitmap = font
+        .render_char_mode(char::from_u32(row.codepoint).unwrap_or('\0'), mode)
+        .map_err(|err| {
+            (
+                FailureStage::LoadError,
+                format!(
+                    "{} stage={} error={}",
+                    row.id,
+                    FailureStage::LoadError.label(),
+                    err
+                ),
+            )
+        })?;
+
+    let Some((raw_path, expected_pixels)) = load_raw_pixels(manifest_dir, row) else {
+        return Err((
+            FailureStage::PixelCoverage,
+            format!(
+                "{} stage={} raw=missing render_mode={}",
+                row.id,
+                FailureStage::PixelCoverage.label(),
+                mode.fixture_name()
+            ),
+        ));
+    };
+
+    let expected_width = bitmap_u32(row, "width").unwrap_or(bitmap.width);
+    let expected_rows = bitmap_u32(row, "rows").unwrap_or(bitmap.rows);
+    let expected_pitch = bitmap_i32(row, "pitch").unwrap_or(bitmap.pitch);
+    let expected_left = bitmap_i32(row, "left").unwrap_or(bitmap.left);
+    let expected_top = bitmap_i32(row, "top").unwrap_or(bitmap.top);
+
+    if bitmap.buffer == expected_pixels
+        && bitmap.width == expected_width
+        && bitmap.rows == expected_rows
+        && bitmap.pitch == expected_pitch
+        && bitmap.left == expected_left
+        && bitmap.top == expected_top
+    {
+        return Ok(());
+    }
+
+    let diff = pixel_diff(
+        &bitmap.buffer,
+        &expected_pixels,
+        bitmap.width,
+        bitmap.rows,
+        expected_width,
+        expected_rows,
+    );
+    let stage = if bitmap.pitch != expected_pitch
+        || bitmap.left != expected_left
+        || bitmap.top != expected_top
+    {
+        FailureStage::BitmapPlacement
+    } else {
+        classify_pixel_failure(&diff)
+    };
+
+    Err((
+        stage,
+        format!(
+            "{} stage={} render_mode={} actual={}x{} pitch={} left={} top={} raw={} expected={}x{} pitch={} left={} top={} diffs={} max={} total_abs={} first={:?} size_delta={} width_delta={} height_delta={}",
+            row.id,
+            stage.label(),
+            mode.fixture_name(),
+            bitmap.width,
+            bitmap.rows,
+            bitmap.pitch,
+            bitmap.left,
+            bitmap.top,
+            raw_path.display(),
+            expected_width,
+            expected_rows,
+            expected_pitch,
+            expected_left,
+            expected_top,
+            diff.diff_count,
+            diff.max_diff,
+            diff.total_abs_diff,
+            diff.first_diff,
+            diff.size_delta,
+            diff.width_delta,
+            diff.height_delta,
+        ),
+    ))
+}
+
+fn bitmap_u32(row: &MatrixRow, key: &str) -> Option<u32> {
+    row.bitmap
+        .get(key)
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+}
+
+fn bitmap_i32(row: &MatrixRow, key: &str) -> Option<i32> {
+    row.bitmap
+        .get(key)
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok())
 }
 
 #[test]

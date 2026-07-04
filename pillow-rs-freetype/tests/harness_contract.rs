@@ -225,6 +225,35 @@ fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
     assert_eq!(counts.get("getmetrics"), Some(&40));
     assert_eq!(counts.get("getname"), Some(&40));
     assert_eq!(counts.get("getlength"), Some(&40));
+
+    for name in ["render_mono_matrix.json", "render_lcd_matrix.json"] {
+        let matrix = read_coverage_matrix(name);
+        assert_coverage_header(name, &matrix);
+        assert!(
+            !matrix.assert_pixel_parity,
+            "{name} must stay marked incomplete until its executed baseline is exact"
+        );
+        assert_eq!(
+            matrix.rows.len(),
+            8,
+            "{name} coverage changed; update the executed baseline intentionally"
+        );
+
+        let counts = operation_counts(&matrix.rows);
+        assert_eq!(counts.get("getmask"), Some(&8));
+        for row in matrix.rows.iter().filter(|row| row.operation == "getmask") {
+            assert!(
+                row.ref_size.as_ref().is_some_and(|size| size.len() >= 2),
+                "{} is missing bitmap dimensions",
+                row.id
+            );
+            assert!(
+                raw_pixel_paths(row).iter().any(|path| path.exists()),
+                "{} is missing raw byte fixture",
+                row.id
+            );
+        }
+    }
 }
 
 #[test]
@@ -233,8 +262,6 @@ fn supplemental_matrices_are_present_broad_and_explicitly_unexecuted() {
         ("metrics_only_matrix.json", 8usize),
         ("no_hinting_matrix.json", 8),
         ("outline_cbox_matrix.json", 8),
-        ("render_mono_matrix.json", 8),
-        ("render_lcd_matrix.json", 8),
     ];
 
     for (name, min_rows) in known_unexecuted {

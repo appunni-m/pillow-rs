@@ -106,6 +106,8 @@ Current exact matrix:
 Current incomplete matrix:
 
 - `native_tt_default_matrix.json`: `3176/7640`, threshold baseline only.
+- `render_mono_matrix.json`: `0/8`, executed baseline only.
+- `render_lcd_matrix.json`: `0/8`, executed baseline only.
 
 Plan:
 
@@ -114,8 +116,8 @@ Plan:
 3. Add execution support for `no_hinting_matrix.json`.
 4. Add execution support for `metrics_only_matrix.json`.
 5. Add execution support for `outline_cbox_matrix.json`.
-6. Add execution support for `render_mono_matrix.json`.
-7. Add execution support for `render_lcd_matrix.json`.
+6. Promote `render_mono_matrix.json` from executed baseline to exact.
+7. Promote `render_lcd_matrix.json` from executed baseline to exact.
 8. Add `render_lcd_v_matrix.json` if LCD_V is in scope.
 
 Promotion rule: once a matrix is executable, it must fail on any row mismatch. Threshold mode is temporary debt only.
