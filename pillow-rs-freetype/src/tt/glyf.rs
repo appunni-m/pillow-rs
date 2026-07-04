@@ -96,6 +96,32 @@ pub fn load_glyph(
     load_glyph_inner(glyf, loca, index_to_loc_format, glyph_index, hmtx, 0)
 }
 
+/// Load a glyph outline scaled to 26.6 for the TrueType no-hinting path.
+///
+/// FreeType scales simple subglyphs and component offsets independently while
+/// resolving composites.  This preserves that rounding instead of flattening
+/// in font units and scaling the summed coordinates later.
+pub fn load_glyph_scaled_no_hinting(
+    glyf: &[u8],
+    loca: &[u8],
+    index_to_loc_format: i16,
+    glyph_index: u16,
+    hmtx: &crate::tt::hmtx::HmtxTable,
+    x_scale: i32,
+    y_scale: i32,
+) -> Result<GlyphOutline, FontError> {
+    load_glyph_scaled_inner(
+        glyf,
+        loca,
+        index_to_loc_format,
+        glyph_index,
+        hmtx,
+        x_scale,
+        y_scale,
+        0,
+    )
+}
+
 fn load_glyph_inner(
     glyf: &[u8],
     loca: &[u8],
@@ -213,6 +239,111 @@ fn load_glyph_inner(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn load_glyph_scaled_inner(
+    glyf: &[u8],
+    loca: &[u8],
+    index_to_loc_format: i16,
+    glyph_index: u16,
+    hmtx: &crate::tt::hmtx::HmtxTable,
+    x_scale: i32,
+    y_scale: i32,
+    depth: u8,
+) -> Result<GlyphOutline, FontError> {
+    if depth > 8 {
+        return Err(FontError::InvalidOutline(
+            "glyf: composite recursion too deep".into(),
+        ));
+    }
+
+    let loc = get_glyph_location(loca, glyph_index, index_to_loc_format)
+        .ok_or_else(|| FontError::InvalidOutline("loca: glyph index out of range".into()))?;
+    if loc.length == 0 {
+        return Ok(GlyphOutline::default());
+    }
+
+    let bytes = glyf
+        .get(loc.offset as usize..loc.offset as usize + loc.length as usize)
+        .ok_or_else(|| FontError::InvalidOutline("glyf: data out of range".into()))?;
+    if bytes.len() < 10 {
+        return Err(FontError::InvalidOutline("glyf: glyph too short".into()));
+    }
+
+    let num_contours = i16::from_be_bytes([bytes[0], bytes[1]]);
+    let xmin = i16::from_be_bytes([bytes[2], bytes[3]]) as i32;
+    let ymin = i16::from_be_bytes([bytes[4], bytes[5]]) as i32;
+    let xmax = i16::from_be_bytes([bytes[6], bytes[7]]) as i32;
+    let ymax = i16::from_be_bytes([bytes[8], bytes[9]]) as i32;
+
+    if num_contours >= 0 {
+        let mut outline = parse_simple_glyph(bytes, u16_from_i16(num_contours))?;
+        for point in &mut outline.points {
+            point.x = crate::fixed::ft_mul_fix(point.x, x_scale);
+            point.y = crate::fixed::ft_mul_fix(point.y, y_scale);
+        }
+        outline.xmin = xmin;
+        outline.ymin = ymin;
+        outline.xmax = xmax;
+        outline.ymax = ymax;
+        outline.is_composite = false;
+        outline.sub_lsb = hmtx.get(glyph_index).lsb as i32;
+        return Ok(outline);
+    }
+
+    let components = parse_composite_components(bytes, 10)?;
+    let mut points: Vec<OutlinePoint> = Vec::new();
+    let mut end_pts: Vec<u16> = Vec::new();
+    let mut num_contours_total = 0u16;
+    let mut last_sub_xmin = xmin;
+    let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
+
+    for comp in components {
+        let sub = load_glyph_scaled_inner(
+            glyf,
+            loca,
+            index_to_loc_format,
+            comp.glyph_index,
+            hmtx,
+            x_scale,
+            y_scale,
+            depth + 1,
+        )?;
+        last_sub_xmin = sub.xmin;
+        last_sub_lsb = sub.sub_lsb;
+        let base = points.len();
+        let dx = if comp.args_are_xy {
+            crate::fixed::ft_mul_fix(comp.arg1, x_scale)
+        } else {
+            0
+        };
+        let dy = if comp.args_are_xy {
+            crate::fixed::ft_mul_fix(comp.arg2, y_scale)
+        } else {
+            0
+        };
+        for pt in &sub.points {
+            points.push(transform_scaled_point(*pt, &comp, dx, dy));
+        }
+        for &ep in &sub.end_pts_of_contours {
+            end_pts.push(u16_from_u32(u32_from_usize(base) + ep as u32));
+        }
+        num_contours_total = num_contours_total.saturating_add(sub.num_contours);
+    }
+
+    Ok(GlyphOutline {
+        num_contours: num_contours_total,
+        end_pts_of_contours: end_pts,
+        points,
+        xmin: last_sub_xmin,
+        ymin,
+        xmax,
+        ymax,
+        is_composite: true,
+        sub_lsb: last_sub_lsb,
+        instructions: Vec::new(),
+    })
+}
+
 /// Apply a composite component's transform + translation to a point.
 fn transform_point(
     pt: OutlinePoint,
@@ -232,6 +363,23 @@ fn transform_point(
     } else {
         (0, 0) // point-matching variant is unsupported; component uses no offset.
     };
+    OutlinePoint {
+        x: x + dx,
+        y: y + dy,
+        on_curve: pt.on_curve,
+    }
+}
+
+fn transform_scaled_point(
+    pt: OutlinePoint,
+    comp: &CompositeComponent,
+    dx: i32,
+    dy: i32,
+) -> OutlinePoint {
+    let x = crate::fixed::ft_mul_fix(pt.x, comp.transform.xx)
+        + crate::fixed::ft_mul_fix(pt.y, comp.transform.xy);
+    let y = crate::fixed::ft_mul_fix(pt.x, comp.transform.yx)
+        + crate::fixed::ft_mul_fix(pt.y, comp.transform.yy);
     OutlinePoint {
         x: x + dx,
         y: y + dy,

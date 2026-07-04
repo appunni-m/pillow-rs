@@ -214,6 +214,19 @@ fn scale_glyph_impl(
     };
 
     let use_autohint = latin_metrics.is_some();
+    let no_hinting_scaled = if !use_autohint && !allow_bytecode && outline_raw.is_composite {
+        Some(crate::tt::glyf::load_glyph_scaled_no_hinting(
+            &data.glyf_data,
+            &data.loca_data,
+            data.head.index_to_loc_format,
+            glyph_index,
+            &data.hmtx,
+            scale.x_scale,
+            y_adj,
+        )?)
+    } else {
+        None
+    };
     // FreeType translates TrueType outlines back by the scaled left phantom
     // point after loading. Apply it after scaling so FT_MulFix rounding stays
     // separate from point-coordinate rounding.
@@ -223,11 +236,21 @@ fn scale_glyph_impl(
         0
     };
     let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
-    for p in &outline_raw.points {
-        let x = if use_autohint { p.x - pp1x_fu } else { p.x };
+    for (index, p) in outline_raw.points.iter().enumerate() {
+        let scaled_point = no_hinting_scaled
+            .as_ref()
+            .and_then(|outline| outline.points.get(index));
+        let x = if let Some(point) = scaled_point {
+            point.x
+        } else if use_autohint {
+            scale.scale_x(p.x - pp1x_fu)
+        } else {
+            scale.scale_x(p.x)
+        };
+        let y = scaled_point.map_or_else(|| ft_mul_fix(p.y, y_adj), |point| point.y);
         scaled.push(OutlinePoint {
-            x: scale.scale_x(x) - no_hinting_origin_shift_x,
-            y: ft_mul_fix(p.y, y_adj),
+            x: x - no_hinting_origin_shift_x,
+            y,
             on_curve: p.on_curve,
         });
     }
