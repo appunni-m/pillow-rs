@@ -287,39 +287,70 @@ impl MonoFlattener {
     fn conic_to(&mut self, cx: i32, cy: i32, x: i32, y: i32) {
         let x0 = self.current_x;
         let y0 = self.current_y;
-        let steps = conic_steps(x0, y0, cx, cy, x, y);
-        for step in 1..=steps {
-            let t = step as i64;
-            let n = steps as i64;
-            let mt = n - t;
-            let nx = ((mt * mt * x0 as i64 + 2 * mt * t * cx as i64 + t * t * x as i64) / (n * n))
-                as i32;
-            let ny = ((mt * mt * y0 as i64 + 2 * mt * t * cy as i64 + t * t * y as i64) / (n * n))
-                as i32;
-            self.line_to(nx, ny);
-        }
+        self.flatten_conic(
+            [
+                Point { x: x0, y: y0 },
+                Point { x: cx, y: cy },
+                Point { x, y },
+            ],
+            0,
+        );
     }
 
     fn cubic_to(&mut self, c1x: i32, c1y: i32, c2x: i32, c2y: i32, x: i32, y: i32) {
         let x0 = self.current_x;
         let y0 = self.current_y;
-        let steps = 16;
-        for step in 1..=steps {
-            let t = step as i64;
-            let n = steps as i64;
-            let mt = n - t;
-            let nx = ((mt * mt * mt * x0 as i64
-                + 3 * mt * mt * t * c1x as i64
-                + 3 * mt * t * t * c2x as i64
-                + t * t * t * x as i64)
-                / (n * n * n)) as i32;
-            let ny = ((mt * mt * mt * y0 as i64
-                + 3 * mt * mt * t * c1y as i64
-                + 3 * mt * t * t * c2y as i64
-                + t * t * t * y as i64)
-                / (n * n * n)) as i32;
-            self.line_to(nx, ny);
+        self.flatten_cubic(
+            [
+                Point { x: x0, y: y0 },
+                Point { x: c1x, y: c1y },
+                Point { x: c2x, y: c2y },
+                Point { x, y },
+            ],
+            0,
+        );
+    }
+
+    fn flatten_conic(&mut self, points: [Point; 3], depth: u8) {
+        let y_min = points[0].y.min(points[2].y);
+        let y_max = points[0].y.max(points[2].y);
+        let monotonic = points[1].y >= y_min && points[1].y <= y_max;
+        let dx = points[2].x - points[0].x;
+        let dy = points[2].y - points[0].y;
+        if depth >= 32 || (monotonic && dx.abs() <= 32 && dy.abs() <= 32) {
+            self.line_to(points[2].x, points[2].y);
+            return;
         }
+
+        let left_mid = midpoint(points[0], points[1]);
+        let right_mid = midpoint(points[1], points[2]);
+        let center = midpoint(left_mid, right_mid);
+        self.flatten_conic([points[0], left_mid, center], depth + 1);
+        self.flatten_conic([center, right_mid, points[2]], depth + 1);
+    }
+
+    fn flatten_cubic(&mut self, points: [Point; 4], depth: u8) {
+        let y_min = points[0].y.min(points[3].y);
+        let y_max = points[0].y.max(points[3].y);
+        let monotonic = points[1].y >= y_min
+            && points[1].y <= y_max
+            && points[2].y >= y_min
+            && points[2].y <= y_max;
+        let dx = points[3].x - points[0].x;
+        let dy = points[3].y - points[0].y;
+        if depth >= 32 || (monotonic && dx.abs() <= 32 && dy.abs() <= 32) {
+            self.line_to(points[3].x, points[3].y);
+            return;
+        }
+
+        let p01 = midpoint(points[0], points[1]);
+        let p12 = midpoint(points[1], points[2]);
+        let p23 = midpoint(points[2], points[3]);
+        let p012 = midpoint(p01, p12);
+        let p123 = midpoint(p12, p23);
+        let center = midpoint(p012, p123);
+        self.flatten_cubic([points[0], p01, p012, center], depth + 1);
+        self.flatten_cubic([center, p123, p23, points[3]], depth + 1);
     }
 
     fn decompose(
@@ -459,10 +490,17 @@ fn curve_tag(on_curve: bool) -> u8 {
     }
 }
 
-fn conic_steps(x0: i32, y0: i32, cx: i32, cy: i32, x1: i32, y1: i32) -> i32 {
-    let dx = (x0 - 2 * cx + x1).abs();
-    let dy = (y0 - 2 * cy + y1).abs();
-    ((dx.max(dy) + 31) / 32).clamp(4, 24)
+#[derive(Debug, Clone, Copy)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn midpoint(a: Point, b: Point) -> Point {
+    Point {
+        x: (a.x + b.x) >> 1,
+        y: (a.y + b.y) >> 1,
+    }
 }
 
 fn winding_contains(segments: &[Segment], x: i32, y: i32) -> bool {
