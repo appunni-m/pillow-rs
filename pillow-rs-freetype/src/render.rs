@@ -282,12 +282,12 @@ struct Intersection {
 fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
     let flow_up;
     if segment.y0 < segment.y1 {
-        if scan_y <= segment.y0 || scan_y > segment.y1 {
+        if scan_y < segment.y0 || scan_y >= segment.y1 {
             return None;
         }
         flow_up = true;
     } else if segment.y1 < segment.y0 {
-        if scan_y < segment.y1 || scan_y >= segment.y0 {
+        if scan_y <= segment.y1 || scan_y > segment.y0 {
             return None;
         }
         flow_up = false;
