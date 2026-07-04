@@ -1192,6 +1192,8 @@ pub fn apply_hints(
     glyph_index: u16,
     metrics: Option<&AfLatinMetrics>,
     is_italic: bool,
+    no_horizontal_hinting: bool,
+    stem_adjust: bool,
     font_data: Option<&crate::tables::FontData>,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
@@ -1206,14 +1208,18 @@ pub fn apply_hints(
     if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
         return;
     }
-    // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
-    // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
-    hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
+    // Smooth anti-aliased hinting normally enables stem adjustment. LCD target
+    // clears it in FreeType to preserve horizontal subpixel coverage.
+    if stem_adjust {
+        hints.other_flags |= AF_LATIN_HINTS_STEM_ADJUST;
+    }
 
-    // Italic fonts: disable horizontal hinting (C: aflatin.c:2720-2726).
-    if is_italic {
+    // Italic, light, and LCD targets disable horizontal hinting.
+    if is_italic || no_horizontal_hinting {
         hints.scaler_flags |= AF_SCALER_FLAG_NO_HORIZONTAL;
-        crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_NO_HORZ);
+        if is_italic {
+            crate::autohint::coverage::record(crate::autohint::coverage::COV_ITALIC_NO_HORZ);
+        }
     }
 
     // Compute ppem for bdelta in compute_stem_width
