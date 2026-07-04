@@ -280,11 +280,10 @@ fn rasterize_mono_center(
     width: usize,
     height: usize,
 ) -> Result<Vec<u8>, FontError> {
-    let segments = flatten_outline(outline)?;
     let pitch = mono_pitch(width);
     let mut buffer = vec![0u8; pitch * height];
-    rasterize_mono_profiles(&segments, &mut buffer, width, height, pitch);
-    rasterize_mono_horizontal_profiles(&segments, &mut buffer, width, height, pitch);
+    rasterize_mono_profiles(outline, &mut buffer, width, height, pitch)?;
+    rasterize_mono_horizontal_profiles(outline, &mut buffer, width, height, pitch)?;
     Ok(buffer)
 }
 
@@ -378,53 +377,45 @@ struct MonoProfileBuilder<'a> {
 }
 
 fn rasterize_mono_profiles(
-    segments: &[Segment],
+    outline: &Outline,
     buffer: &mut [u8],
     width: usize,
     height: usize,
     pitch: usize,
-) {
-    if width == 0 || height == 0 || segments.is_empty() {
-        return;
+) -> Result<(), FontError> {
+    if width == 0 || height == 0 || outline.is_empty() {
+        return Ok(());
     }
 
-    let profiles = MonoProfileBuilder::new(segments, 0, i32_from_usize(height) * 64).build();
+    let profiles =
+        MonoOutlineProfileBuilder::new(0, i32_from_usize(height - 1) * 64, false).build(outline)?;
     if profiles.is_empty() {
-        return;
+        return Ok(());
     }
 
     draw_mono_profile_sweep(profiles, buffer, width, height, pitch);
+    Ok(())
 }
 
 fn rasterize_mono_horizontal_profiles(
-    segments: &[Segment],
+    outline: &Outline,
     buffer: &mut [u8],
     width: usize,
     height: usize,
     pitch: usize,
-) {
-    if width == 0 || height == 0 || segments.is_empty() {
-        return;
+) -> Result<(), FontError> {
+    if width == 0 || height == 0 || outline.is_empty() {
+        return Ok(());
     }
 
-    let flipped: Vec<Segment> = segments
-        .iter()
-        .map(|segment| Segment {
-            x0: segment.y0,
-            y0: segment.x0,
-            x1: segment.y1,
-            y1: segment.x1,
-            contour: segment.contour,
-            order: segment.order,
-            contour_len: segment.contour_len,
-        })
-        .collect();
-    let profiles = MonoProfileBuilder::new(&flipped, 0, i32_from_usize(width) * 64).build();
+    let profiles =
+        MonoOutlineProfileBuilder::new(0, i32_from_usize(width - 1) * 64, true).build(outline)?;
     if profiles.is_empty() {
-        return;
+        return Ok(());
     }
 
     draw_mono_horizontal_profile_sweep(profiles, buffer, width, height, pitch);
+    Ok(())
 }
 
 impl<'a> MonoProfileBuilder<'a> {
@@ -597,6 +588,370 @@ impl<'a> MonoProfileBuilder<'a> {
         if let Some(index) = self.current {
             self.profiles[index].xs.extend(xs);
         }
+    }
+}
+
+struct MonoOutlineProfileBuilder {
+    profiles: Vec<MonoProfile>,
+    current: Option<usize>,
+    contour_first: Option<usize>,
+    contour_profiles: Vec<usize>,
+    state: MonoState,
+    last_x: i32,
+    last_y: i32,
+    min_y: i32,
+    max_y: i32,
+    flipped: bool,
+}
+
+impl MonoOutlineProfileBuilder {
+    fn new(min_y: i32, max_y: i32, flipped: bool) -> Self {
+        Self {
+            profiles: Vec::new(),
+            current: None,
+            contour_first: None,
+            contour_profiles: Vec::new(),
+            state: MonoState::Unknown,
+            last_x: 0,
+            last_y: 0,
+            min_y,
+            max_y,
+            flipped,
+        }
+    }
+
+    fn build(mut self, outline: &Outline) -> Result<Vec<MonoProfile>, FontError> {
+        self.decompose(&outline.points, &outline.contours, outline.n_contours)?;
+        Ok(self.profiles)
+    }
+
+    fn move_to(&mut self, point: crate::outline::OutlinePoint) {
+        let point = self.transform(point);
+        self.last_x = point.x;
+        self.last_y = point.y;
+    }
+
+    fn line_to_point(&mut self, point: crate::outline::OutlinePoint, contour: usize) {
+        let point = self.transform(point);
+        self.line_to(point.x, point.y, contour);
+    }
+
+    fn conic_to_point(
+        &mut self,
+        control: crate::outline::OutlinePoint,
+        point: crate::outline::OutlinePoint,
+        contour: usize,
+    ) {
+        let control = self.transform(control);
+        let point = self.transform(point);
+        self.conic_to(control.x, control.y, point.x, point.y, contour);
+    }
+
+    fn transform(&self, point: crate::outline::OutlinePoint) -> Point {
+        if self.flipped {
+            Point {
+                x: scaled_mono_coord(point.y),
+                y: scaled_mono_coord(point.x),
+            }
+        } else {
+            Point {
+                x: scaled_mono_coord(point.x),
+                y: scaled_mono_coord(point.y),
+            }
+        }
+    }
+
+    fn line_to(&mut self, x: i32, y: i32, contour: usize) {
+        if y == self.last_y {
+            self.last_x = x;
+            self.last_y = y;
+            return;
+        }
+
+        let state = if self.last_y < y {
+            MonoState::Ascending
+        } else {
+            MonoState::Descending
+        };
+        self.ensure_profile_state(state, contour);
+
+        if state == MonoState::Ascending {
+            let xs = line_up(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
+            self.push_profile_xs(xs);
+        } else {
+            let xs = line_down(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
+            self.push_profile_xs(xs);
+        }
+
+        self.last_x = x;
+        self.last_y = y;
+    }
+
+    fn conic_to(&mut self, cx: i32, cy: i32, x: i32, y: i32, contour: usize) {
+        let mut stack = vec![[
+            Point { x, y },
+            Point { x: cx, y: cy },
+            Point {
+                x: self.last_x,
+                y: self.last_y,
+            },
+        ]];
+
+        while let Some(arc) = stack.pop() {
+            let y1 = arc[2].y;
+            let y2 = arc[1].y;
+            let y3 = arc[0].y;
+            let x3 = arc[0].x;
+            let ymin = y1.min(y3);
+            let ymax = y1.max(y3);
+
+            if y2 < mono_floor_fixed(ymin) || y2 > mono_ceiling_fixed(ymax) {
+                let (first, second) = split_conic_arc(arc);
+                stack.push(second);
+                stack.push(first);
+                continue;
+            }
+
+            if y1 != y3 {
+                let state = if y1 < y3 {
+                    MonoState::Ascending
+                } else {
+                    MonoState::Descending
+                };
+                self.ensure_profile_state(state, contour);
+                let xs = if state == MonoState::Ascending {
+                    bezier_up_2(arc, self.min_y, self.max_y)
+                } else {
+                    bezier_down_2(arc, self.min_y, self.max_y)
+                };
+                self.push_profile_xs(xs);
+            }
+
+            self.last_x = x3;
+            self.last_y = y3;
+        }
+    }
+
+    fn ensure_profile_state(&mut self, state: MonoState, contour: usize) {
+        if self.state != state {
+            if self.state != MonoState::Unknown {
+                self.end_profile();
+            }
+            self.new_profile(state, contour);
+        }
+    }
+
+    fn new_profile(&mut self, state: MonoState, contour: usize) {
+        let mut flags = MONO_DROPOUT_CONTROL;
+        let e = match state {
+            MonoState::Ascending => {
+                flags |= MONO_FLOW_UP;
+                if is_bottom_overshoot(self.last_y) {
+                    flags |= MONO_OVERSHOOT_BOTTOM;
+                }
+                mono_ceiling_fixed(self.last_y)
+            }
+            MonoState::Descending => {
+                if is_top_overshoot(self.last_y) {
+                    flags |= MONO_OVERSHOOT_TOP;
+                }
+                mono_floor_fixed(self.last_y)
+            }
+            MonoState::Unknown => unreachable!(),
+        }
+        .clamp(self.min_y, self.max_y);
+
+        let mut xs = Vec::new();
+        if self.last_y == e {
+            xs.push(self.last_x);
+        }
+        let index = self.profiles.len();
+        self.profiles.push(MonoProfile {
+            xs,
+            start: e >> 6,
+            offset: 0,
+            height: 0,
+            flags,
+            x: self.last_x,
+            link: None,
+            next: self.contour_first,
+            contour,
+        });
+        if self.contour_first.is_none() {
+            self.contour_first = Some(index);
+        }
+        self.current = Some(index);
+        self.state = state;
+        self.contour_profiles.push(index);
+    }
+
+    fn end_profile(&mut self) {
+        let Some(index) = self.current else {
+            return;
+        };
+        let height = self.profiles[index].xs.len();
+        if height == 0 {
+            return;
+        }
+
+        if self.profiles[index].flags & MONO_FLOW_UP != 0 {
+            if is_top_overshoot(self.last_y) {
+                self.profiles[index].flags |= MONO_OVERSHOOT_TOP;
+            }
+            self.profiles[index].offset = 0;
+            self.profiles[index].x = self.profiles[index].xs[0];
+        } else {
+            if is_bottom_overshoot(self.last_y) {
+                self.profiles[index].flags |= MONO_OVERSHOOT_BOTTOM;
+            }
+            let top = self.profiles[index].start + 1;
+            self.profiles[index].start = top - i32_from_usize(height);
+            self.profiles[index].offset = height - 1;
+            self.profiles[index].x = self.profiles[index].xs[height - 1];
+        }
+        self.profiles[index].height = height;
+    }
+
+    fn link_contour_profiles(&mut self) {
+        let len = self.contour_profiles.len();
+        if len == 0 {
+            return;
+        }
+        for idx in 0..len {
+            let profile = self.contour_profiles[idx];
+            let next = self.contour_profiles[(idx + 1) % len];
+            self.profiles[profile].next = Some(next);
+        }
+    }
+
+    fn push_profile_xs(&mut self, xs: Vec<i32>) {
+        if let Some(index) = self.current {
+            self.profiles[index].xs.extend(xs);
+        }
+    }
+
+    fn decompose(
+        &mut self,
+        pts: &[crate::outline::OutlinePoint],
+        contours: &[i16],
+        n_contours: i32,
+    ) -> Result<(), FontError> {
+        let mut last: i64 = -1;
+        for (contour, &contour_end) in contours.iter().take(usize_from_i32(n_contours)).enumerate()
+        {
+            self.state = MonoState::Unknown;
+            self.current = None;
+            self.contour_first = None;
+            self.contour_profiles.clear();
+
+            let first = usize_from_i64(last + 1);
+            last = contour_end as i64;
+            if last < first as i64 {
+                return Err(FontError::InvalidOutline(
+                    "outline: contour end before start".into(),
+                ));
+            }
+            let limit = usize_from_i64(last);
+            let mut v_start = pts[first];
+            let v_last = pts[limit];
+            let mut limit_eff = limit;
+
+            let first_tag = curve_tag(pts[first].on_curve);
+            if first_tag == CURVE_TAG_CUBIC {
+                return Err(FontError::InvalidOutline(
+                    "outline: contour starts with cubic".into(),
+                ));
+            }
+            if first_tag == CURVE_TAG_CONIC {
+                if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
+                    v_start = v_last;
+                    limit_eff = limit.checked_sub(1).ok_or_else(|| {
+                        FontError::InvalidOutline("outline: conic start underflow".into())
+                    })?;
+                } else {
+                    v_start.x = (v_start.x + v_last.x) / 2;
+                    v_start.y = (v_start.y + v_last.y) / 2;
+                }
+            }
+
+            self.move_to(v_start);
+            let start = if first_tag == CURVE_TAG_CONIC {
+                if first == 0 {
+                    -1
+                } else {
+                    i32_from_usize(first) - 1
+                }
+            } else {
+                i32_from_usize(first)
+            };
+            self.walk_contour(pts, start, i32_from_usize(limit_eff), v_start, contour)?;
+            if self.contour_first.is_some() {
+                if self.last_y & 63 == 0 && self.last_y >= self.min_y && self.last_y <= self.max_y {
+                    if let (Some(first), Some(current)) = (self.contour_first, self.current) {
+                        if same_profile_flow(&self.profiles[first], &self.profiles[current]) {
+                            self.profiles[current].xs.pop();
+                        }
+                    }
+                }
+                self.end_profile();
+                self.link_contour_profiles();
+            }
+        }
+        Ok(())
+    }
+
+    fn walk_contour(
+        &mut self,
+        pts: &[crate::outline::OutlinePoint],
+        mut cursor: i32,
+        limit: i32,
+        v_start: crate::outline::OutlinePoint,
+        contour: usize,
+    ) -> Result<(), FontError> {
+        while cursor < limit {
+            cursor += 1;
+            let idx = usize_from_i32(cursor);
+            match curve_tag(pts[idx].on_curve) {
+                CURVE_TAG_ON => {
+                    self.line_to_point(pts[idx], contour);
+                }
+                CURVE_TAG_CONIC => {
+                    let mut control = pts[idx];
+                    loop {
+                        if cursor < limit {
+                            cursor += 1;
+                            let next = pts[usize_from_i32(cursor)];
+                            let tag = curve_tag(next.on_curve);
+                            if tag == CURVE_TAG_ON {
+                                self.conic_to_point(control, next, contour);
+                                break;
+                            }
+                            if tag != CURVE_TAG_CONIC {
+                                return Err(FontError::InvalidOutline(
+                                    "outline: expected conic tag".into(),
+                                ));
+                            }
+                            let mut mid = control;
+                            mid.x = (control.x + next.x) / 2;
+                            mid.y = (control.y + next.y) / 2;
+                            self.conic_to_point(control, mid, contour);
+                            control = next;
+                            continue;
+                        }
+                        self.conic_to_point(control, v_start, contour);
+                        return Ok(());
+                    }
+                }
+                CURVE_TAG_CUBIC => {
+                    return Err(FontError::InvalidOutline(
+                        "outline: cubic mono outline unsupported".into(),
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+        self.line_to_point(v_start, contour);
+        Ok(())
     }
 }
 
@@ -898,6 +1253,76 @@ fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i3
 
 fn line_down(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
     line_up(x1, -y1, x2, -y2, -max_y, -min_y)
+}
+
+fn bezier_up_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
+    let y1 = arc[2].y;
+    let y2 = arc[0].y;
+    if y2 < min_y || y1 > max_y {
+        return Vec::new();
+    }
+
+    let e2 = if y2 > max_y {
+        max_y
+    } else {
+        mono_floor_fixed(y2)
+    };
+    let mut e = if y1 < min_y {
+        min_y
+    } else {
+        mono_ceiling_fixed(y1)
+    };
+    if y1 == e {
+        e += 64;
+    }
+    if e2 < e {
+        return Vec::new();
+    }
+
+    let mut out = Vec::with_capacity(usize_from_i32(((e2 - e) >> 6) + 1));
+    let mut stack = Vec::new();
+    while e <= e2 {
+        let end_y = arc[0].y;
+        let end_x = arc[0].x;
+        if end_y > e {
+            let dy = end_y - arc[2].y;
+            let dx = end_x - arc[2].x;
+            if dy > 32 || dx.abs() > 32 {
+                let (first, second) = split_conic_arc(arc);
+                stack.push(second);
+                arc = first;
+                continue;
+            }
+            out.push(end_x - mul_div_trunc(end_y - e, dx, dy));
+            e += 64;
+        } else if end_y == e {
+            out.push(end_x);
+            e += 64;
+        }
+
+        let Some(next) = stack.pop() else {
+            break;
+        };
+        arc = next;
+    }
+    out
+}
+
+fn bezier_down_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
+    arc[0].y = -arc[0].y;
+    arc[1].y = -arc[1].y;
+    arc[2].y = -arc[2].y;
+    bezier_up_2(arc, -max_y, -min_y)
+}
+
+fn split_conic_arc(arc: [Point; 3]) -> ([Point; 3], [Point; 3]) {
+    let end = arc[0];
+    let control = arc[1];
+    let start = arc[2];
+    let end_control = midpoint(end, control);
+    let start_control = midpoint(control, start);
+    let center = midpoint(end_control, start_control);
+    ([center, start_control, start], [end, end_control, center])
 }
 
 fn insert_profile_sorted(list: &mut Vec<usize>, profile: usize, profiles: &[MonoProfile]) {
