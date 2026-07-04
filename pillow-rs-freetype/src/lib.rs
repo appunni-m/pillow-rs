@@ -19,6 +19,7 @@
 //! | [`tt`] | TrueType table parsers (glyf, cmap, hmtx, head, hhea, maxp, name, OS/2, loca) |
 //! | [`scaler`] | Glyph scaling (FU→26.6), pp1.x shift, cbox computation |
 //! | [`grays`] | Smooth anti-aliased rasterizer (FT_INT64 DDA) |
+//! | [`render`] | FreeType render modes and bitmap metadata |
 //! | [`font`] | High-level API: `Font::truetype`, `getmask`, `getbbox` |
 //! | [`fixed`] | Fixed-point math: `ft_mul_fix`, `ft_div_fix`, `ft_ceil_fix`, etc. |
 
@@ -42,9 +43,11 @@ pub mod fixed;
 pub mod font;
 pub mod grays;
 pub mod outline;
+pub mod render;
 pub mod scaler;
 pub mod tables;
 pub mod tt;
 
 pub use error::FontError;
 pub use font::{BitmapBackend, Font, GlyphMask};
+pub use render::{PixelMode, RenderMode, RenderedBitmap};
