@@ -11,7 +11,7 @@
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{hash_map::Entry, HashMap, BTreeMap};
 use std::fs;
 use std::path::Path;
 
@@ -98,7 +98,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     #[derive(Default)]
     struct ScriptCounts { sha_ok: u32, sha_fail: u32 }
     let mut script_counts: BTreeMap<String, ScriptCounts> = BTreeMap::new();
-    let mut font_cache: HashMap<String, Vec<u8>> = HashMap::new();
+    let mut font_cache: HashMap<(String, u32), Font> = HashMap::new();
     let mut failures: Vec<String> = Vec::new();
 
     for row in &matrix.rows {
@@ -117,15 +117,17 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
         };
         let counts = script_counts.entry(script.clone()).or_default();
 
-        let font_data = font_cache.entry(row.font.clone()).or_insert_with(|| {
-            load_font_bytes(manifest_dir, &row.font)
-        }).clone();
-
-        let font = match Font::truetype(&font_data, row.size_pt, backend) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("  SKIP [{}]: {}", row.id, e);
-                continue;
+        let font = match font_cache.entry((row.font.clone(), row.size_pt.to_bits())) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let font_data = load_font_bytes(manifest_dir, &row.font);
+                match Font::truetype(&font_data, row.size_pt, backend) {
+                    Ok(font) => entry.insert(font),
+                    Err(e) => {
+                        eprintln!("  SKIP [{}]: {}", row.id, e);
+                        continue;
+                    }
+                }
             }
         };
 
