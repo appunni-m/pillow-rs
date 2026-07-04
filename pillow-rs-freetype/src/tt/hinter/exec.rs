@@ -13,7 +13,7 @@ use super::gs::RoundMode;
 use super::iup;
 use super::zone::GlyphZone;
 use crate::error::FontError;
-use crate::fixed::{ft_ceil_fix, ft_div_fix, ft_floor_fix, ft_mul_fix};
+use crate::fixed::{ft_ceil_fix, ft_floor_fix, ft_mul_fix};
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -746,7 +746,7 @@ impl ExecContext {
                             "bytecode: division by zero".into(),
                         ));
                     }
-                    self.push(ft_div_fix(a, b));
+                    self.push(crate::fixed::ft_mul_div(a, 64, b));
                 } // DIV
                 0x63 => {
                     let b = self.pop()?;
