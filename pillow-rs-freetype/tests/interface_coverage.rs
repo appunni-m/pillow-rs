@@ -56,10 +56,21 @@ struct PathStats {
     parity: Option<Parity>,
 }
 
+#[derive(Default)]
+struct StatusCounts {
+    complete: u32,
+    partial: u32,
+    planned: u32,
+    out_of_scope: u32,
+}
+
 #[test]
 fn freetype_interface_coverage_report() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let header_root = manifest_dir.join("freetype").join("include").join("freetype");
+    let header_root = manifest_dir
+        .join("freetype")
+        .join("include")
+        .join("freetype");
     let exported_symbols = discover_ft_exports(&header_root);
 
     let map_path = manifest_dir
@@ -70,7 +81,7 @@ fn freetype_interface_coverage_report() {
         serde_json::from_str(&fs::read_to_string(&map_path).expect("read interface_map.json"))
             .expect("parse interface_map.json");
 
-    let mut mapped_symbols = BTreeSet::new();
+    let mut mapped_symbols = BTreeMap::new();
     let mut path_stats = BTreeMap::<String, PathStats>::new();
 
     for path in &interface_map.paths {
@@ -78,7 +89,15 @@ fn freetype_interface_coverage_report() {
         stats.parity = path.parity.clone();
 
         for (symbol, mapping) in &path.symbols {
-            mapped_symbols.insert(symbol.clone());
+            if let Some((existing_path, existing_status)) =
+                mapped_symbols.insert(symbol.clone(), (path.path.clone(), mapping.status))
+            {
+                assert_eq!(
+                    existing_status, mapping.status,
+                    "symbol {symbol} has conflicting statuses in {existing_path} and {}",
+                    path.path
+                );
+            }
             if !exported_symbols.contains(symbol) {
                 stats.missing_from_headers += 1;
             }
@@ -91,28 +110,20 @@ fn freetype_interface_coverage_report() {
         }
     }
 
-    let in_scope_exports = exported_symbols
-        .iter()
-        .filter(|symbol| {
-            interface_map.paths.iter().all(|path| {
-                path.symbols
-                    .get(*symbol)
-                    .is_none_or(|mapping| mapping.status != Status::OutOfScope)
-            })
-        })
-        .count() as u32;
-    let complete = count_status(&interface_map, Status::Complete);
-    let partial = count_status(&interface_map, Status::Partial);
-    let planned = count_status(&interface_map, Status::Planned);
-    let out_of_scope = count_status(&interface_map, Status::OutOfScope);
+    let counts = count_unique_statuses(&mapped_symbols);
+    let in_scope_exports = exported_symbols.len() as u32 - counts.out_of_scope;
     let mapped_in_headers = mapped_symbols
-        .iter()
+        .keys()
         .filter(|symbol| exported_symbols.contains(*symbol))
         .count() as u32;
     let unmapped = exported_symbols.len() as u32 - mapped_in_headers;
-    let implemented = complete + partial;
+    let implemented = counts.complete + counts.partial;
     let api_coverage = percent(implemented, in_scope_exports);
-    let complete_coverage = percent(complete, in_scope_exports);
+    let complete_coverage = percent(counts.complete, in_scope_exports);
+    let missing_from_headers = path_stats
+        .values()
+        .map(|stats| stats.missing_from_headers)
+        .sum::<u32>();
 
     eprintln!("╔══════════════════════════════════════════════════════════════╗");
     eprintln!("║  FreeType Interface Coverage");
@@ -122,20 +133,19 @@ fn freetype_interface_coverage_report() {
         exported_symbols.len(),
         mapped_in_headers,
         unmapped,
-        out_of_scope
+        counts.out_of_scope
     );
     eprintln!(
         "║  implemented={} complete={} partial={} planned={}",
-        implemented, complete, partial, planned
+        implemented, counts.complete, counts.partial, counts.planned
     );
-    eprintln!(
-        "║  api_coverage={api_coverage:.1}% complete_coverage={complete_coverage:.1}%"
-    );
+    eprintln!("║  api_coverage={api_coverage:.1}% complete_coverage={complete_coverage:.1}%");
     eprintln!("╠══════════════════════════════════════════════════════════════╣");
     eprintln!("║  Path coverage");
 
     for (path, stats) in &path_stats {
         let total = stats.complete + stats.partial + stats.planned + stats.out_of_scope;
+        let in_scope_total = total - stats.out_of_scope;
         let implemented = stats.complete + stats.partial;
         let parity = stats
             .parity
@@ -151,11 +161,12 @@ fn freetype_interface_coverage_report() {
             })
             .unwrap_or_else(|| "no parity fixture".to_string());
         eprintln!(
-            "║  {path:<24} api {implemented:>3}/{total:<3} {:>5.1}%  complete {:>3} partial {:>3} planned {:>3}  parity {parity}",
-            percent(implemented, total),
+            "║  {path:<24} api {implemented:>3}/{in_scope_total:<3} {:>5.1}%  complete {:>3} partial {:>3} planned {:>3} out_of_scope {:>3}  parity {parity}",
+            percent(implemented, in_scope_total),
             stats.complete,
             stats.partial,
-            stats.planned
+            stats.planned,
+            stats.out_of_scope
         );
     }
 
@@ -166,15 +177,29 @@ fn freetype_interface_coverage_report() {
         "FreeType export parser found too few symbols: {}",
         exported_symbols.len()
     );
+    assert_eq!(unmapped, 0, "unmapped FreeType exports: {:?}", {
+        exported_symbols
+            .difference(&mapped_symbols.keys().cloned().collect::<BTreeSet<_>>())
+            .cloned()
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        missing_from_headers, 0,
+        "interface_map.json contains symbols that are not declared with FT_EXPORT"
+    );
 }
 
-fn count_status(interface_map: &InterfaceMap, status: Status) -> u32 {
-    interface_map
-        .paths
-        .iter()
-        .flat_map(|path| path.symbols.values())
-        .filter(|mapping| mapping.status == status)
-        .count() as u32
+fn count_unique_statuses(mapped_symbols: &BTreeMap<String, (String, Status)>) -> StatusCounts {
+    let mut counts = StatusCounts::default();
+    for (_, status) in mapped_symbols.values() {
+        match status {
+            Status::Complete => counts.complete += 1,
+            Status::Partial => counts.partial += 1,
+            Status::Planned => counts.planned += 1,
+            Status::OutOfScope => counts.out_of_scope += 1,
+        }
+    }
+    counts
 }
 
 fn percent(numerator: u32, denominator: u32) -> f64 {
@@ -196,8 +221,8 @@ fn discover_ft_exports(root: &Path) -> BTreeSet<String> {
         });
         let lines: Vec<&str> = text.lines().collect();
         for (idx, line) in lines.iter().enumerate() {
-            if line.contains("FT_EXPORT(") {
-                if let Some(symbol) = parse_symbol_after_export(&lines[idx + 1..]) {
+            if line.trim_start().starts_with("FT_EXPORT(") {
+                if let Some(symbol) = parse_export_symbol(&lines[idx..]) {
                     symbols.insert(symbol);
                 }
             }
@@ -219,13 +244,27 @@ fn collect_headers(dir: &Path, headers: &mut Vec<PathBuf>) {
     }
 }
 
-fn parse_symbol_after_export(lines: &[&str]) -> Option<String> {
+fn parse_export_symbol(lines: &[&str]) -> Option<String> {
     let mut signature = String::new();
-    for line in lines.iter().take(8) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('*') {
+    for (index, line) in lines.iter().take(16).enumerate() {
+        let mut trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with('*')
+            || trimmed.starts_with("/*")
+            || trimmed.starts_with('#')
+        {
             continue;
         }
+
+        if index == 0 {
+            trimmed = trimmed.strip_prefix("FT_EXPORT(")?;
+            let close = trimmed.find(')')?;
+            trimmed = trimmed[close + 1..].trim_start();
+            if trimmed.is_empty() {
+                continue;
+            }
+        }
+
         signature.push_str(trimmed);
         signature.push(' ');
         if trimmed.contains('(') {
