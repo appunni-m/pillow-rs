@@ -261,6 +261,7 @@ fn scale_glyph_impl(
                 &outline_raw.end_pts_of_contours,
                 advance_width,
                 h_metric.advance_width as i32,
+                h_metric.lsb as i32,
                 cvt,
                 fpgm,
                 prep,

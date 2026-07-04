@@ -82,6 +82,7 @@ pub fn hint_glyph(
     contours: &[u16],
     advance_width: i32,
     raw_advance_width: i32,
+    raw_lsb: i32,
     cvt: &[i32],
     fpgm: &[u8],
     prep: &[u8],
@@ -131,16 +132,20 @@ pub fn hint_glyph(
         zone.orus_y.push(p.y);
     }
 
+    let raw_x_min = raw.iter().map(|p| p.x).min().unwrap_or(0);
+    let pp1_raw = raw_x_min - raw_lsb;
+    let pp1 = crate::fixed::ft_mul_fix(pp1_raw, scale.x_scale);
+
     // Add phantom points
-    // pp1: left side bearing (unhinted = 0)
-    zone.cur_x.push(0);
+    // pp1: left side bearing
+    zone.cur_x.push(pp1);
     zone.cur_y.push(0);
-    zone.orus_x.push(0);
+    zone.orus_x.push(pp1_raw);
     zone.orus_y.push(0);
-    // pp2: advance width in the shifted glyph coordinate system.
-    zone.cur_x.push(advance_width);
+    // pp2: advance width in the same coordinate system.
+    zone.cur_x.push(pp1 + advance_width);
     zone.cur_y.push(0);
-    zone.orus_x.push(raw_advance_width);
+    zone.orus_x.push(pp1_raw + raw_advance_width);
     zone.orus_y.push(0);
     // pp3, pp4: vertical phantom points (unused)
     zone.cur_x.push(0);
