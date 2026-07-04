@@ -589,7 +589,18 @@ impl Font {
     pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
         let glyph = self.char_index(codepoint);
         let scaled = if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?
+            let scaled = scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?;
+            if is_pathological_metrics_cbox(&scaled) {
+                let metrics_cache = self.face_globals.get_metrics(glyph);
+                scaler::scale_glyph_for_metrics_with_autohint(
+                    &self.data,
+                    glyph,
+                    metrics_cache.as_ref(),
+                    self.is_italic,
+                )?
+            } else {
+                scaled
+            }
         } else {
             let metrics_cache = self.face_globals.get_metrics(glyph);
             scaler::scale_glyph_for_metrics_with_autohint(
@@ -819,6 +830,17 @@ fn vertical_advance_font_units(data: &FontData) -> i32 {
         return os2.s_typo_ascender as i32 - os2.s_typo_descender as i32;
     }
     data.hhea.ascent as i32 - data.hhea.descent as i32
+}
+
+fn is_pathological_metrics_cbox(scaled: &scaler::ScaledGlyph) -> bool {
+    let width = scaled.cbox_x_max.saturating_sub(scaled.cbox_x_min);
+    let height = scaled.cbox_y_max.saturating_sub(scaled.cbox_y_min);
+    width > 16_384
+        || height > 16_384
+        || scaled.cbox_x_min.abs() > 16_384
+        || scaled.cbox_x_max.abs() > 16_384
+        || scaled.cbox_y_min.abs() > 16_384
+        || scaled.cbox_y_max.abs() > 16_384
 }
 
 fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> usize {
