@@ -236,17 +236,101 @@ fn rasterize_mono_center(
     let segments = flatten_outline(outline)?;
     let pitch = mono_pitch(width);
     let mut buffer = vec![0u8; pitch * height];
-    for row in 0..height {
-        let y = ((height - 1 - row) as i32) * 64 + 32;
+
+    for y in 0..height {
+        let scan_y = (y as i32) * 64 + 32;
+        let mut intersections = Vec::new();
+        for segment in &segments {
+            if let Some(intersection) = segment_intersection(*segment, scan_y) {
+                intersections.push(intersection);
+            }
+        }
+        intersections.sort_by_key(|intersection| intersection.x);
+
+        let row = height - 1 - y;
         let dst_row = row * pitch;
-        for x in 0..width {
-            let px = (x as i32) * 64 + 32;
-            if winding_contains(&segments, px, y) {
-                buffer[dst_row + x / 8] |= 0x80 >> (x & 7);
+        for pair in intersections.chunks_exact(2) {
+            let x1 = pair[0].x;
+            let x2 = pair[1].x;
+            let e1 = pixel_ceiling(x1);
+            let e2 = pixel_floor(x2);
+            if e1 <= e2 {
+                fill_mono_span(&mut buffer[dst_row..dst_row + pitch], width, e1, e2);
+            } else {
+                set_mono_dropout(&mut buffer[dst_row..dst_row + pitch], width, x1, x2);
             }
         }
     }
     Ok(buffer)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Intersection {
+    x: i32,
+}
+
+fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
+    if segment.y0 < segment.y1 {
+        if scan_y <= segment.y0 || scan_y > segment.y1 {
+            return None;
+        }
+    } else if segment.y1 < segment.y0 {
+        if scan_y < segment.y1 || scan_y >= segment.y0 {
+            return None;
+        }
+    } else {
+        return None;
+    }
+
+    let dx = segment.x1 - segment.x0;
+    let dy = segment.y1 - segment.y0;
+    let x = segment.x0 - 32 + ((scan_y - segment.y0) as i64 * dx as i64 / dy as i64) as i32;
+    Some(Intersection { x })
+}
+
+fn pixel_ceiling(x: i32) -> i32 {
+    (x + 63) >> 6
+}
+
+fn pixel_floor(x: i32) -> i32 {
+    x >> 6
+}
+
+fn fill_mono_span(row: &mut [u8], width: usize, mut x1: i32, mut x2: i32) {
+    if width == 0 {
+        return;
+    }
+    x1 = x1.max(0);
+    x2 = x2.min(i32_from_usize(width - 1));
+    if x1 > x2 {
+        return;
+    }
+
+    for x in usize_from_i32(x1)..=usize_from_i32(x2) {
+        row[x / 8] |= 0x80 >> (x & 7);
+    }
+}
+
+fn set_mono_dropout(row: &mut [u8], width: usize, x1: i32, x2: i32) {
+    if width == 0 {
+        return;
+    }
+
+    let mut primary = pixel_floor(x2);
+    let secondary = pixel_ceiling(x1);
+    if primary < 0 || primary >= i32_from_usize(width) {
+        primary = secondary;
+    } else if secondary >= 0 && secondary < i32_from_usize(width) {
+        let secondary = usize_from_i32(secondary);
+        if row[secondary / 8] & (0x80 >> (secondary & 7)) != 0 {
+            return;
+        }
+    }
+
+    if primary >= 0 && primary < i32_from_usize(width) {
+        let x = usize_from_i32(primary);
+        row[x / 8] |= 0x80 >> (x & 7);
+    }
 }
 
 fn flatten_outline(outline: &Outline) -> Result<Vec<Segment>, FontError> {
