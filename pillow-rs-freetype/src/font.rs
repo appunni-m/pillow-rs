@@ -262,6 +262,8 @@ impl Font {
             font_data.head.units_per_em,
         );
 
+        let selected_charmap = default_unicode_charmap_index(&font_data.cmap);
+
         Ok(Font {
             data: font_data,
             size_pt,
@@ -269,7 +271,7 @@ impl Font {
             face_globals,
             is_italic,
             size_metrics,
-            selected_charmap: 0,
+            selected_charmap,
         })
     }
 
@@ -817,6 +819,30 @@ fn vertical_advance_font_units(data: &FontData) -> i32 {
         return os2.s_typo_ascender as i32 - os2.s_typo_descender as i32;
     }
     data.hhea.ascent as i32 - data.hhea.descent as i32
+}
+
+fn default_unicode_charmap_index(cmap: &tt::cmap::CmapTable) -> usize {
+    cmap.charmaps
+        .iter()
+        .position(|record| {
+            record.format == 12 && record.platform_id == 3 && record.encoding_id == 10
+        })
+        .or_else(|| {
+            cmap.charmaps
+                .iter()
+                .position(|record| record.format == 12 && record.platform_id == 0)
+        })
+        .or_else(|| {
+            cmap.charmaps
+                .iter()
+                .position(|record| record.format == 4 && record.platform_id == 3)
+        })
+        .or_else(|| {
+            cmap.charmaps
+                .iter()
+                .position(|record| record.format == 4 && record.platform_id == 0)
+        })
+        .unwrap_or(0)
 }
 
 fn grid_fit_horizontal_metrics(metrics: &mut GlyphSlotMetrics) {
