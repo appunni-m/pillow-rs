@@ -805,6 +805,7 @@ impl ExecContext {
             }
             step_count += 1;
             let opcode = self.fetch_byte_glyph()?;
+
             match opcode {
                 // ── Push small bytes (0xB0-0xB7) ────────────────
                 0xB0..=0xB7 => {
@@ -885,7 +886,7 @@ impl ExecContext {
                 0x63 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(crate::fixed::ft_mul_div(a, b, 64));
+                    self.push(ft_mul_fix(a, b));
                 } // MUL
                 0x64 => {
                     let a = self.pop()?;
