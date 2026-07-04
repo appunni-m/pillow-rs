@@ -482,11 +482,7 @@ impl ExecContext {
     }
 
     fn minimum_distance(&self) -> i32 {
-        if self.backward_compatibility != 0 {
-            0
-        } else {
-            self.gs.minimum_distance
-        }
+        self.gs.minimum_distance
     }
 
     fn touch_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize) {
@@ -1052,11 +1048,13 @@ impl ExecContext {
 
                     if (opcode & 0x08) != 0 {
                         let minimum_distance = self.minimum_distance();
-                        if org_dist != 0 && org_dist >= 0 {
+                        // FreeType's Ins_MDRP treats a zero original distance
+                        // as non-negative for the minimum-distance branch.
+                        if org_dist >= 0 {
                             if distance < minimum_distance {
                                 distance = minimum_distance;
                             }
-                        } else if org_dist != 0 && distance > -minimum_distance {
+                        } else if distance > -minimum_distance {
                             distance = -minimum_distance;
                         }
                     }
@@ -1090,6 +1088,15 @@ impl ExecContext {
 
                     let rp = self.gs.rp0 as usize;
 
+                    let delta = (cvt_dist - self.gs.single_width_value).abs();
+                    if delta < self.gs.single_width_cutin {
+                        cvt_dist = if cvt_dist >= 0 {
+                            self.gs.single_width_value
+                        } else {
+                            -self.gs.single_width_value
+                        };
+                    }
+
                     if self.gs.zp1 == 0 {
                         let (dx, dy) = self.gs.move_along_free(cvt_dist);
                         let (rox, roy) = self.org_in(zone, self.gs.zp0, rp);
@@ -1102,15 +1109,6 @@ impl ExecContext {
                     let (rcx, rcy) = self.cur_in(zone, self.gs.zp0, rp);
                     let (pcx, pcy) = self.cur_in(zone, self.gs.zp1, p);
                     let cur_dist = self.gs.project(pcx - rcx, pcy - rcy);
-
-                    let delta = (cvt_dist - self.gs.single_width_value).abs();
-                    if delta < self.gs.single_width_cutin {
-                        cvt_dist = if cvt_dist >= 0 {
-                            self.gs.single_width_value
-                        } else {
-                            -self.gs.single_width_value
-                        };
-                    }
 
                     if self.gs.auto_flip && (org_dist ^ cvt_dist) < 0 {
                         cvt_dist = -cvt_dist;
@@ -1129,11 +1127,13 @@ impl ExecContext {
 
                     if (opcode & 0x08) != 0 {
                         let minimum_distance = self.minimum_distance();
-                        if org_dist != 0 && org_dist >= 0 {
+                        // FreeType's Ins_MIRP treats a zero original distance
+                        // as non-negative for the minimum-distance branch.
+                        if org_dist >= 0 {
                             if distance < minimum_distance {
                                 distance = minimum_distance;
                             }
-                        } else if org_dist != 0 && distance > -minimum_distance {
+                        } else if distance > -minimum_distance {
                             distance = -minimum_distance;
                         }
                     }
