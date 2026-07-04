@@ -54,7 +54,11 @@ impl GlyphZone {
     /// Get the current (x, y) of a point as a tuple.
     #[inline]
     pub fn cur(&self, idx: usize) -> (i32, i32) {
-        if idx >= self.cur_x.len() { (0, 0) } else { (self.cur_x[idx], self.cur_y[idx]) }
+        if idx >= self.cur_x.len() {
+            (0, 0)
+        } else {
+            (self.cur_x[idx], self.cur_y[idx])
+        }
     }
 
     /// Set the current (x, y) of a point.
@@ -69,13 +73,21 @@ impl GlyphZone {
     /// Get the original (x, y) of a point as a tuple.
     #[inline]
     pub fn org(&self, idx: usize) -> (i32, i32) {
-        if idx >= self.org_x.len() { (0, 0) } else { (self.org_x[idx], self.org_y[idx]) }
+        if idx >= self.org_x.len() {
+            (0, 0)
+        } else {
+            (self.org_x[idx], self.org_y[idx])
+        }
     }
 
     /// Get the unscaled original (x, y) of a point as a tuple.
     #[inline]
     pub fn orus(&self, idx: usize) -> (i32, i32) {
-        if idx >= self.orus_x.len() { (0, 0) } else { (self.orus_x[idx], self.orus_y[idx]) }
+        if idx >= self.orus_x.len() {
+            (0, 0)
+        } else {
+            (self.orus_x[idx], self.orus_y[idx])
+        }
     }
 
     /// Get the tag byte for a point.

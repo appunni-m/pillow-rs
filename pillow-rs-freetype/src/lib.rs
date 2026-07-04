@@ -28,10 +28,7 @@
 // The single remaining allow (arithmetic_side_effects) covers 579 sites
 // of i32 +/×/- operations inherent to the 26.6 domain. See casts.rs for why
 // wrapping_add/saturating_add are incorrect alternatives.
-#![allow(
-    clippy::arithmetic_side_effects,
-    clippy::if_same_then_else
-)]
+#![allow(clippy::arithmetic_side_effects, clippy::if_same_then_else)]
 // sha2/serde/serde_json are dev-deps used by the coverage test.
 #![cfg_attr(test, allow(unused_crate_dependencies))]
 // Internal helpers exercised by integration tests (coverage_matrix_tests.rs)

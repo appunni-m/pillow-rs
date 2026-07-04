@@ -20,5 +20,8 @@ fn main() {
     }
 
     println!("cargo:rustc-env=FREETYPE_REF_TAG={EXPECTED_TAG}");
-    println!("cargo:rustc-env=FREETYPE_REF_PATH={}", freetype_root.display());
+    println!(
+        "cargo:rustc-env=FREETYPE_REF_PATH={}",
+        freetype_root.display()
+    );
 }

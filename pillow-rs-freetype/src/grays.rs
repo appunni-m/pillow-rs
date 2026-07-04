@@ -15,7 +15,10 @@
 //!
 //! Reference: `freetype/src/smooth/ftgrays.c` (lines ~329–2043).
 
-use crate::casts::{i32_from_i64, i32_from_u64, i32_from_usize, u32_from_i32, u64_from_i64, u8_from_i32, usize_from_i32, usize_from_i64};
+use crate::casts::{
+    i32_from_i64, i32_from_u64, i32_from_usize, u32_from_i32, u64_from_i64, u8_from_i32,
+    usize_from_i32, usize_from_i64,
+};
 use crate::error::FontError;
 use crate::outline::Outline;
 
@@ -27,12 +30,16 @@ const UPSCALE: i64 = ONE_PIXEL >> 6; // 4 — multiply 26.6 by this → subpixel
 #[inline]
 // ✅ TRIVIAL: >> PIXEL_BITS.
 /// `(x >> 8)`: extract integer pixel coordinate from subpixel.
-fn trunc(x: i64) -> i32 { i32_from_i64(x >> PIXEL_BITS) }
+fn trunc(x: i64) -> i32 {
+    i32_from_i64(x >> PIXEL_BITS)
+}
 
 #[inline]
 // ✅ TRIVIAL: & (ONE_PIXEL-1).
 /// `(x & 255)`: extract subpixel fraction (0..255).
-fn fract(x: i64) -> i32 { i32_from_i64(x & (ONE_PIXEL - 1)) }
+fn fract(x: i64) -> i32 {
+    i32_from_i64(x & (ONE_PIXEL - 1))
+}
 
 #[inline]
 // ✅ TRIVIAL: wrapping_add.
@@ -334,9 +341,7 @@ impl Worker {
                 self.x, self.y, to_x, to_y);
         }
 
-        if (ey1 >= self.max_ey && ey2 >= self.max_ey)
-            || (ey1 < self.min_ey && ey2 < self.min_ey)
-        {
+        if (ey1 >= self.max_ey && ey2 >= self.max_ey) || (ey1 < self.min_ey && ey2 < self.min_ey) {
             self.x = to_x;
             self.y = to_y;
             return;
@@ -400,9 +405,7 @@ impl Worker {
                     fx1 = i32_from_i64(ONE_PIXEL);
                     fy1 = fy2;
                     ex1 -= 1;
-                } else if prod - dx * ONE_PIXEL + dy * ONE_PIXEL > 0
-                    && prod - dx * ONE_PIXEL <= 0
-                {
+                } else if prod - dx * ONE_PIXEL + dy * ONE_PIXEL > 0 && prod - dx * ONE_PIXEL <= 0 {
                     // up
                     prod -= dx * ONE_PIXEL;
                     let fx2 = ft_udiv(-prod, dy_r);
@@ -411,8 +414,7 @@ impl Worker {
                     fx1 = fx2;
                     fy1 = 0;
                     ey1 += 1;
-                } else if prod + dy * ONE_PIXEL >= 0
-                    && prod - dx * ONE_PIXEL + dy * ONE_PIXEL <= 0
+                } else if prod + dy * ONE_PIXEL >= 0 && prod - dx * ONE_PIXEL + dy * ONE_PIXEL <= 0
                 {
                     // right
                     prod += dy * ONE_PIXEL;
@@ -457,12 +459,8 @@ impl Worker {
         let p2x = UPSCALE * to_x;
         let p2y = UPSCALE * to_y;
 
-        if (trunc(p0y) >= self.max_ey
-            && trunc(p1y) >= self.max_ey
-            && trunc(p2y) >= self.max_ey)
-            || (trunc(p0y) < self.min_ey
-                && trunc(p1y) < self.min_ey
-                && trunc(p2y) < self.min_ey)
+        if (trunc(p0y) >= self.max_ey && trunc(p1y) >= self.max_ey && trunc(p2y) >= self.max_ey)
+            || (trunc(p0y) < self.min_ey && trunc(p1y) < self.min_ey && trunc(p2y) < self.min_ey)
         {
             self.x = p2x;
             self.y = p2y;
@@ -495,7 +493,8 @@ impl Worker {
         }
         let count = 0x10000u32 >> shift;
 
-        let left_shift = |a: i64, b: i32| -> i64 { u64_from_i64(a).wrapping_shl(u32_from_i32(b)) as i64 };
+        let left_shift =
+            |a: i64, b: i32| -> i64 { u64_from_i64(a).wrapping_shl(u32_from_i32(b)) as i64 };
         let rx = left_shift(ax, shift + shift);
         let ry = left_shift(ay, shift + shift);
         let mut qx = left_shift(bx, shift + 17) + rx;
@@ -515,15 +514,7 @@ impl Worker {
     }
 
     // ── gray_render_cubic (ftgrays.c:1280) ────────────────────────────────
-    fn render_cubic(
-        &mut self,
-        c1x: i64,
-        c1y: i64,
-        c2x: i64,
-        c2y: i64,
-        to_x: i64,
-        to_y: i64,
-    ) {
+    fn render_cubic(&mut self, c1x: i64, c1y: i64, c2x: i64, c2y: i64, to_x: i64, to_y: i64) {
         let mut stack: Vec<[i64; 8]> = Vec::with_capacity(64);
         // arc layout (FT): [to, c2, c1, p0]
         stack.push([
@@ -629,9 +620,9 @@ impl Worker {
             if first_tag == CURVE_TAG_CONIC {
                 if curve_tag(pts[limit].on_curve) == CURVE_TAG_ON {
                     v_start = v_last;
-                    limit_eff = limit
-                        .checked_sub(1)
-                        .ok_or_else(|| FontError::InvalidOutline("outline: conic start underflow".into()))?;
+                    limit_eff = limit.checked_sub(1).ok_or_else(|| {
+                        FontError::InvalidOutline("outline: conic start underflow".into())
+                    })?;
                 } else {
                     v_start.x = (v_start.x + v_last.x) / 2;
                     v_start.y = (v_start.y + v_last.y) / 2;
@@ -640,7 +631,11 @@ impl Worker {
 
             self.move_to(v_start.x as i64, v_start.y as i64);
             let start: i32 = if first_tag == CURVE_TAG_CONIC {
-                if first == 0 { -1 } else { i32_from_usize(first) - 1 }
+                if first == 0 {
+                    -1
+                } else {
+                    i32_from_usize(first) - 1
+                }
             } else {
                 i32_from_usize(first)
             };
@@ -676,8 +671,10 @@ impl Worker {
                             let ntag = curve_tag(pts[idx2].on_curve);
                             if ntag == CURVE_TAG_ON {
                                 self.render_conic(
-                                    v_control.x as i64, v_control.y as i64,
-                                    vec.x as i64, vec.y as i64,
+                                    v_control.x as i64,
+                                    v_control.y as i64,
+                                    vec.x as i64,
+                                    vec.y as i64,
                                 );
                                 break;
                             }
@@ -689,15 +686,19 @@ impl Worker {
                             let mid_x = (v_control.x + vec.x) / 2;
                             let mid_y = (v_control.y + vec.y) / 2;
                             self.render_conic(
-                                v_control.x as i64, v_control.y as i64,
-                                mid_x as i64, mid_y as i64,
+                                v_control.x as i64,
+                                v_control.y as i64,
+                                mid_x as i64,
+                                mid_y as i64,
                             );
                             v_control = vec;
                             continue;
                         }
                         self.render_conic(
-                            v_control.x as i64, v_control.y as i64,
-                            v_start.x as i64, v_start.y as i64,
+                            v_control.x as i64,
+                            v_control.y as i64,
+                            v_start.x as i64,
+                            v_start.y as i64,
                         );
                         return Ok(());
                     }
@@ -716,15 +717,21 @@ impl Worker {
                     if cursor <= limit {
                         let vec = pts[usize_from_i32(cursor)];
                         self.render_cubic(
-                            vec1.x as i64, vec1.y as i64,
-                            vec2.x as i64, vec2.y as i64,
-                            vec.x as i64, vec.y as i64,
+                            vec1.x as i64,
+                            vec1.y as i64,
+                            vec2.x as i64,
+                            vec2.y as i64,
+                            vec.x as i64,
+                            vec.y as i64,
                         );
                     } else {
                         self.render_cubic(
-                            vec1.x as i64, vec1.y as i64,
-                            vec2.x as i64, vec2.y as i64,
-                            v_start.x as i64, v_start.y as i64,
+                            vec1.x as i64,
+                            vec1.y as i64,
+                            vec2.x as i64,
+                            vec2.y as i64,
+                            v_start.x as i64,
+                            v_start.y as i64,
                         );
                         return Ok(());
                     }
@@ -751,8 +758,10 @@ impl Worker {
         }
 
         if std::env::var("GRAYS_DUMP_CELLS").is_ok() {
-            eprintln!("[RUST CELLS] min_ey={} max_ey={} min_ex={} max_ex={}",
-                self.min_ey, self.max_ey, self.min_ex, self.max_ex);
+            eprintln!(
+                "[RUST CELLS] min_ey={} max_ey={} min_ex={} max_ex={}",
+                self.min_ey, self.max_ey, self.min_ex, self.max_ex
+            );
             for y in self.min_ey..self.max_ey {
                 let yi = usize_from_i32(y - self.min_ey);
                 eprint!("{y:3}:");

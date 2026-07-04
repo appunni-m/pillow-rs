@@ -250,7 +250,6 @@ pub(super) fn progressive_reconstruct(info: &JpegInfo, data: &[u8]) -> Option<De
             continue;
         }
 
-
         let is_dc_scan = scan.ss == 0 && scan.se == 0;
         let is_dc_first = is_dc_scan && scan.ah == 0;
         let is_dc_refine = is_dc_scan && scan.ah > 0;

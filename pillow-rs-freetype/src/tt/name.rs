@@ -66,10 +66,7 @@ pub fn parse_name(data: &[u8]) -> Result<NameTable, FontError> {
         .or_else(|| find_name_string(data, string_offset, &records, NAME_ID_SUBFAMILY))
         .unwrap_or_else(|| "Regular".into());
 
-    Ok(NameTable {
-        family,
-        subfamily,
-    })
+    Ok(NameTable { family, subfamily })
 }
 
 /// Search for a name string by name_id, preferring platform 3/encoding 1.
@@ -128,9 +125,9 @@ fn decode_utf16be(data: &[u8], base: usize, r: &NameRecord) -> Result<String, Fo
 fn decode_mac_roman(data: &[u8], base: usize, r: &NameRecord) -> Result<String, FontError> {
     let start = base + r.offset as usize;
     let end = start + r.length as usize;
-    let bytes = data
-        .get(start..end)
-        .ok_or_else(|| FontError::InvalidFont("name: Mac Roman string offset out of range".into()))?;
+    let bytes = data.get(start..end).ok_or_else(|| {
+        FontError::InvalidFont("name: Mac Roman string offset out of range".into())
+    })?;
     // Mac Roman 0x00–0x7F is ASCII; higher bytes would need a table (rare in test fonts).
     Ok(bytes.iter().map(|&b| b as char).collect())
 }

@@ -12,7 +12,11 @@ use crate::casts::{i16_from_i32, i32_from_usize, usize_from_i32};
 fn ft_hypot(x: i32, y: i32) -> i32 {
     let ax = x.abs();
     let ay = y.abs();
-    if ax > ay { ax + ((3 * ay) >> 3) } else { ay + ((3 * ax) >> 3) }
+    if ax > ay {
+        ax + ((3 * ay) >> 3)
+    } else {
+        ay + ((3 * ax) >> 3)
+    }
 }
 
 /// Port of `ft_corner_is_flat` (ftcalc.c:1006-1042).
@@ -42,9 +46,17 @@ pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ay = dy.abs();
 
     if ax * 14 < ay {
-        if dy > 0 { Direction::Up } else { Direction::Down }
+        if dy > 0 {
+            Direction::Up
+        } else {
+            Direction::Down
+        }
     } else if ay * 14 < ax {
-        if dx > 0 { Direction::Right } else { Direction::Left }
+        if dx > 0 {
+            Direction::Right
+        } else {
+            Direction::Left
+        }
     } else {
         Direction::None
     }
@@ -89,7 +101,11 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 /// - [ ] WEAK flags after reload match C? → **classification diverged — check here**
 /// - [ ] `build_direction_chain` u/v pointers match C? → chain topology differs
 /// - [ ] `corner_is_flat` inputs same neighbors as C? → `near_limit` threshold issue
-pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutline, scaled_points: &[crate::outline::OutlinePoint]) {
+pub fn reload(
+    hints: &mut GlyphHints,
+    raw_outline: &crate::tt::glyf::GlyphOutline,
+    scaled_points: &[crate::outline::OutlinePoint],
+) {
     let num_points = scaled_points.len();
     let num_contours = raw_outline.num_contours as usize;
 
@@ -151,7 +167,9 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
                 let p1 = &hints.points[p0.next];
                 area += (p0.fx as i64) * (p1.fy as i64) - (p1.fx as i64) * (p0.fy as i64);
                 let next = p0.next;
-                if next == c_start { break; }
+                if next == c_start {
+                    break;
+                }
                 idx = next;
             }
         }
@@ -172,7 +190,9 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
             y_min = y_min.min(fy);
             y_max = y_max.max(fy);
             let next = pt.next;
-            if next == c_start { break; }
+            if next == c_start {
+                break;
+            }
             idx = next;
         }
         hints.contour_y_minima.push(y_min);
@@ -212,12 +232,26 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
     // Merge same-quadrant consecutive None/None vectors — update u/v to
     // skip merged points, mark them WEAK.
     for i in 0..hints.points.len() {
-        if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 { continue; }
-        if hints.points[i].in_dir != Direction::None { continue; }
-        if hints.points[i].out_dir != Direction::None { continue; }
+        if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 {
+            continue;
+        }
+        if hints.points[i].in_dir != Direction::None {
+            continue;
+        }
+        if hints.points[i].out_dir != Direction::None {
+            continue;
+        }
         let pt = &hints.points[i];
-        let nu = if pt.u != 0 { usize_from_i32(i32_from_usize(i) + pt.u) } else { i };
-        let pv = if pt.v != 0 { usize_from_i32(i32_from_usize(i) + pt.v) } else { i };
+        let nu = if pt.u != 0 {
+            usize_from_i32(i32_from_usize(i) + pt.u)
+        } else {
+            i
+        };
+        let pv = if pt.v != 0 {
+            usize_from_i32(i32_from_usize(i) + pt.v)
+        } else {
+            i
+        };
         let in_x = pt.fx as i32 - hints.points[pv].fx as i32;
         let in_y = pt.fy as i32 - hints.points[pv].fy as i32;
         let out_x = hints.points[nu].fx as i32 - pt.fx as i32;
@@ -248,7 +282,9 @@ pub fn reload(hints: &mut GlyphHints, raw_outline: &crate::tt::glyf::GlyphOutlin
     //    documented in CLAUDE.md case study.
     for i in 0..hints.points.len() {
         // C (afhints.c:1249): skip already-WEAK points from Pass 1
-        if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 { continue; }
+        if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 {
+            continue;
+        }
 
         let in_dir = hints.points[i].in_dir;
         let out_dir = hints.points[i].out_dir;

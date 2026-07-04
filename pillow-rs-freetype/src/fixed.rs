@@ -37,7 +37,11 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     let d = (ua.wrapping_mul(ub) + (uc >> 1)) / uc;
     let d32 = i32_from_u64(d);
     let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
-    if negate { 0i32.wrapping_sub(d32) } else { d32 }
+    if negate {
+        0i32.wrapping_sub(d32)
+    } else {
+        d32
+    }
 }
 
 /// FT_MulFix — ✅ VERIFIED: matches C FT_MulFix_64 (ftcalc.h:91-102).
@@ -80,7 +84,11 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     let q = ((ua << 16) + (ub >> 1)) / ub;
     let q32 = i32_from_u64(q);
     let negate = (a < 0) ^ (b < 0);
-    if negate { 0i32.wrapping_sub(q32) } else { q32 }
+    if negate {
+        0i32.wrapping_sub(q32)
+    } else {
+        q32
+    }
 }
 
 /// FT_RoundFix — ✅ VERIFIED: matches C FT_RoundFix (ftcalc.c:75).

@@ -30,14 +30,12 @@
 //!
 //! Full 52-script support via generated data from afranges.c + afstyles.h.
 
-use super::globals_data::{
-    STYLE_TABLE, STYLE_FALLBACK, STYLE_UNASSIGNED,
-};
-use super::blue_strings::{BlueStringEntry, SCRIPT_TABLE, SCRIPT_LATN};
-use super::types::AfLatinMetrics;
+use super::blue_strings::{BlueStringEntry, SCRIPT_LATN, SCRIPT_TABLE};
+use super::globals_data::{STYLE_FALLBACK, STYLE_TABLE, STYLE_UNASSIGNED};
 use super::latin::{metrics_init_blues_impl, metrics_init_widths};
-use crate::tt::cmap::CmapTable;
+use super::types::AfLatinMetrics;
 use crate::tables::FontData;
+use crate::tt::cmap::CmapTable;
 
 use std::cell::RefCell;
 
@@ -71,11 +69,21 @@ impl FaceGlobals {
 
         // Build non-base glyph table (Latin diacritics etc.)
         let nonbase_ranges: &[(u32, u32)] = &[
-            (0x005E, 0x0060), (0x007E, 0x007E), (0x00A8, 0x00A9),
-            (0x00AE, 0x00B0), (0x00B4, 0x00B4), (0x00B8, 0x00B8),
-            (0x00BC, 0x00BE), (0x02B9, 0x02DF), (0x02E5, 0x02FF),
-            (0x0300, 0x036F), (0x1AB0, 0x1AEB), (0x1DC0, 0x1DFF),
-            (0x2017, 0x2017), (0x203E, 0x203E), (0xA788, 0xA788),
+            (0x005E, 0x0060),
+            (0x007E, 0x007E),
+            (0x00A8, 0x00A9),
+            (0x00AE, 0x00B0),
+            (0x00B4, 0x00B4),
+            (0x00B8, 0x00B8),
+            (0x00BC, 0x00BE),
+            (0x02B9, 0x02DF),
+            (0x02E5, 0x02FF),
+            (0x0300, 0x036F),
+            (0x1AB0, 0x1AEB),
+            (0x1DC0, 0x1DFF),
+            (0x2017, 0x2017),
+            (0x203E, 0x203E),
+            (0xA788, 0xA788),
             (0xA7F8, 0xA7FA),
         ];
         let mut non_base = vec![false; ng];
@@ -83,9 +91,13 @@ impl FaceGlobals {
             let mut ch = first;
             loop {
                 if let Some(gi) = font_data.cmap.char_index(ch) {
-                    if (gi as usize) < ng { non_base[gi as usize] = true; }
+                    if (gi as usize) < ng {
+                        non_base[gi as usize] = true;
+                    }
                 }
-                if ch >= last { break; }
+                if ch >= last {
+                    break;
+                }
                 ch += 1;
             }
         }
@@ -105,10 +117,14 @@ impl FaceGlobals {
                 let mut cp = range.first;
                 while cp <= range.last {
                     if let Some(gi) = font_data.cmap.char_index(cp) {
-                        if (gi as usize) < ng { non_base[gi as usize] = true; }
+                        if (gi as usize) < ng {
+                            non_base[gi as usize] = true;
+                        }
                     }
                     cp += 1;
-                    if cp > range.last { break; }
+                    if cp > range.last {
+                        break;
+                    }
                 }
             }
         }
@@ -144,7 +160,9 @@ impl FaceGlobals {
 
             // Copy non-base flags
             for (i, &nb) in self.non_base_glyphs.iter().enumerate() {
-                if nb { m.non_base_glyphs[i] = true; }
+                if nb {
+                    m.non_base_glyphs[i] = true;
+                }
             }
 
             // Set hinting direction from script tag
@@ -170,24 +188,39 @@ impl FaceGlobals {
                 // C Latin superscript: "ᵒ ᴼ ⁰" = U+1D52 U+1D3C U+2070
                 "latp" => &['\u{1D52}', '\u{1D3C}', '\u{2070}'],
                 // Most scripts have a single standard character.
-                _ => &[super::globals_data::standard_char_for_script(style.script_tag), '\0'],
+                _ => &[
+                    super::globals_data::standard_char_for_script(style.script_tag),
+                    '\0',
+                ],
             };
             let mut char_glyph: u16 = 0;
             for &sc in std_chars {
-                if sc == '\0' { break; }
+                if sc == '\0' {
+                    break;
+                }
                 let g = self.font_data.cmap.char_index(sc as u32).unwrap_or(0);
-                if g > 0 { char_glyph = g; break; }
+                if g > 0 {
+                    char_glyph = g;
+                    break;
+                }
             }
             if char_glyph > 0 {
                 if let Ok(outline_raw) = crate::tt::glyf::load_glyph(
-                    &self.font_data.glyf_data, &self.font_data.loca_data,
-                    self.font_data.head.index_to_loc_format, char_glyph,
+                    &self.font_data.glyf_data,
+                    &self.font_data.loca_data,
+                    self.font_data.head.index_to_loc_format,
+                    char_glyph,
                     &self.font_data.hmtx,
                 ) {
-                    let sp: Vec<_> = outline_raw.points.iter()
+                    let sp: Vec<_> = outline_raw
+                        .points
+                        .iter()
                         .map(|p| crate::outline::OutlinePoint {
-                            x: p.x, y: p.y, on_curve: p.on_curve,
-                        }).collect();
+                            x: p.x,
+                            y: p.y,
+                            on_curve: p.on_curve,
+                        })
+                        .collect();
                     metrics_init_widths(&mut m, char_glyph, &outline_raw, &sp);
                 }
             } else {
@@ -204,11 +237,10 @@ impl FaceGlobals {
 
             // Scale
             let bs = crate::scaler::ScaleMetrics::new(
-                self.font_data.size_pt, self.font_data.head.units_per_em,
+                self.font_data.size_pt,
+                self.font_data.head.units_per_em,
             );
-            let (_, ya) = super::latin::metrics_scale_dim(
-                &mut m, bs.x_scale, bs.y_scale, 0, 0,
-            );
+            let (_, ya) = super::latin::metrics_scale_dim(&mut m, bs.x_scale, bs.y_scale, 0, 0);
             m.axis[1].org_scale = ya;
 
             cache[si] = Some(m);
@@ -223,13 +255,11 @@ impl FaceGlobals {
 /// Scan all 52+ scripts' Unicode ranges through the cmap.
 /// First script whose range covers a codepoint wins that glyph.
 /// Matches `af_face_globals_compute_style_coverage` (afglobal.c:137-230).
-fn compute_style_coverage(
-    cmap: &CmapTable,
-    num_glyphs: u16,
-    glyph_styles: &mut [usize],
-) {
+fn compute_style_coverage(cmap: &CmapTable, num_glyphs: u16, glyph_styles: &mut [usize]) {
     let ng = num_glyphs as usize;
-    for g in glyph_styles.iter_mut() { *g = STYLE_UNASSIGNED; }
+    for g in glyph_styles.iter_mut() {
+        *g = STYLE_UNASSIGNED;
+    }
 
     for (si, style) in STYLE_TABLE.iter().enumerate() {
         for range in style.uni_ranges {
@@ -248,7 +278,9 @@ fn compute_style_coverage(
 
     // Fill unassigned with fallback
     for g in glyph_styles.iter_mut() {
-        if *g == STYLE_UNASSIGNED { *g = STYLE_FALLBACK; }
+        if *g == STYLE_UNASSIGNED {
+            *g = STYLE_FALLBACK;
+        }
     }
 }
 

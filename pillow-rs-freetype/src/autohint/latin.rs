@@ -56,34 +56,28 @@
 //!   `[PIPE] final: pN: y=X`
 
 use crate::casts::{i16_from_i32, i32_from_i64, usize_from_i32};
-use crate::fixed::{ft_mul_fix, ft_mul_div, ft_div_fix};
+use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use log::trace;
 
 use super::types::{
-    AFSegment, AFEdge, AFPoint, GlyphHints,
-    Direction, Dimension,
-    AF_FLAG_IGNORE, AF_FLAG_CONTROL, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y,
-    AF_FLAG_WEAK_INTERPOLATION,
-    AF_EDGE_ROUND, AF_EDGE_NORMAL, AF_EDGE_SERIF, AF_EDGE_DONE,
-    AF_EDGE_NEUTRAL, AF_EDGE_NO_BLUE,
-    AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_VERT_SNAP,
-    AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_MONO,
+    AFEdge, AFPoint, AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, Dimension, Direction,
+    GlyphHints, AF_EDGE_DONE, AF_EDGE_NEUTRAL, AF_EDGE_NORMAL, AF_EDGE_NO_BLUE, AF_EDGE_ROUND,
+    AF_EDGE_SERIF, AF_FLAG_CONTROL, AF_FLAG_IGNORE, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y,
+    AF_FLAG_WEAK_INTERPOLATION, AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_MONO,
+    AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_VERT_SNAP, AF_LATIN_MAX_WIDTHS,
     AF_SCALER_FLAG_NO_HORIZONTAL,
-    AfLatinMetrics, AfWidth, AfLatinBlue, AF_LATIN_MAX_WIDTHS,
 };
 use super::types::{
-    AF_LATIN_BLUE_ACTIVE, AF_LATIN_BLUE_TOP, AF_LATIN_BLUE_SUB_TOP,
-    AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_ADJUSTMENT, AF_LATIN_BLUE_BOTTOM,
-    AF_LATIN_BLUE_BOTTOM_SMALL,
-    AF_BLUE_PROP_LATIN_TOP, AF_BLUE_PROP_LATIN_SUB_TOP, AF_BLUE_PROP_LATIN_NEUTRAL,
-    AF_BLUE_PROP_LATIN_X_HEIGHT,
-    AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_SMALL_BOTTOM,
+    AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_NEUTRAL, AF_BLUE_PROP_LATIN_SMALL_BOTTOM,
+    AF_BLUE_PROP_LATIN_SUB_TOP, AF_BLUE_PROP_LATIN_TOP, AF_BLUE_PROP_LATIN_X_HEIGHT,
+    AF_LATIN_BLUE_ACTIVE, AF_LATIN_BLUE_ADJUSTMENT, AF_LATIN_BLUE_BOTTOM,
+    AF_LATIN_BLUE_BOTTOM_SMALL, AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_SUB_TOP, AF_LATIN_BLUE_TOP,
 };
 
 // ── Vertical separation adjustment constants (from afadjust.h) ──────────────
-pub const AF_ADJUST_UP:    u32 = 0x0001;
-pub const AF_ADJUST_UP2:   u32 = 0x0002;
-pub const AF_ADJUST_DOWN:  u32 = 0x0004;
+pub const AF_ADJUST_UP: u32 = 0x0001;
+pub const AF_ADJUST_UP2: u32 = 0x0002;
+pub const AF_ADJUST_DOWN: u32 = 0x0004;
 pub const AF_ADJUST_DOWN2: u32 = 0x0008;
 
 /// Port of FreeType's af_adjustment_database_lookup (afadjust.c).
@@ -137,7 +131,9 @@ fn latin_constant(upem: i32, c: i32) -> i32 {
 /// flat_threshold for round/straight classification.  aflatin.c:39
 // ✅ TRIVIAL: upem / 14.
 /// `upem / 14` — threshold for detecting round vs flat segments.
-fn flat_threshold(upem: i32) -> i32 { upem / 14 }
+fn flat_threshold(upem: i32) -> i32 {
+    upem / 14
+}
 
 // ── Sort utilities (afhints.c:36-131) ────────────────────────────────────────
 
@@ -162,7 +158,9 @@ fn sort_pos(table: &mut [i32]) {
 /// Sort stem widths, merge duplicates within `threshold`, assign canonical values.
 /// Reduces raw width measurements to a small set of standard widths.
 fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold: i32) {
-    if *count <= 1 { return; }
+    if *count <= 1 {
+        return;
+    }
 
     // insertion-sort by .org
     for i in 1..*count {
@@ -180,11 +178,19 @@ fn sort_and_quantize_widths(count: &mut usize, widths: &mut [AfWidth], threshold
     let mut cur_val = widths[0].org;
     for i in 1..*count {
         if widths[i].org - cur_val > threshold || i == *count - 1 {
-            let end = if widths[i].org - cur_val <= threshold && i == *count - 1 { i + 1 } else { i };
+            let end = if widths[i].org - cur_val <= threshold && i == *count - 1 {
+                i + 1
+            } else {
+                i
+            };
             let mut sum: i64 = 0;
-            for w in &widths[cur_idx..end] { sum += w.org as i64; }
+            for w in &widths[cur_idx..end] {
+                sum += w.org as i64;
+            }
             // zero out merged entries, keep the first
-            for w in &mut widths[cur_idx + 1..end] { w.org = 0; }
+            for w in &mut widths[cur_idx + 1..end] {
+                w.org = 0;
+            }
             widths[cur_idx].org = i32_from_i64(sum / (end as i64));
             if i < *count - 1 {
                 cur_idx = i + 1;
@@ -249,13 +255,20 @@ pub fn metrics_init_widths(
     // Build temp hints: scale=1.0, deltas=0
     let mut hints = GlyphHints::new(0x10000, 0x10000, 0, 0);
     hints.metrics = Some(metrics.clone());
-    hints.other_flags = AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
+    hints.other_flags =
+        AF_LATIN_HINTS_HORZ_SNAP | AF_LATIN_HINTS_VERT_SNAP | AF_LATIN_HINTS_STEM_ADJUST;
     loader::reload(&mut hints, raw_outline, scaled_points);
 
-    if hints.num_points() == 0 { return; }
+    if hints.num_points() == 0 {
+        return;
+    }
 
     for dim in 0..2 {
-        let dimension = if dim == 0 { Dimension::Horz } else { Dimension::Vert };
+        let dimension = if dim == 0 {
+            Dimension::Horz
+        } else {
+            Dimension::Vert
+        };
         compute_segments(&mut hints, dimension);
         // link with width_count=0 (no widths yet — uses the else branch: dist_demerit=dist)
         link_segments_inner(&mut hints, dimension, 0, &[]);
@@ -275,8 +288,11 @@ pub fn metrics_init_widths(
             }
         }
 
-        sort_and_quantize_widths(&mut num_widths, &mut metrics.axis[dim].widths,
-                                  metrics.units_per_em / 100);
+        sort_and_quantize_widths(
+            &mut num_widths,
+            &mut metrics.axis[dim].widths,
+            metrics.units_per_em / 100,
+        );
         metrics.axis[dim].width_count = num_widths;
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
@@ -318,15 +334,31 @@ fn extract_widths(hints: &GlyphHints, dim: Dimension) -> (usize, [AfWidth; AF_LA
 
 // ── Blue zone strings — dynamically selected from afblue.dat ───────────────
 
-use super::script::detect_script;
-use super::blue_strings::SCRIPT_GREK;
 use super::blue_strings::BlueStringEntry;
+use super::blue_strings::SCRIPT_GREK;
+use super::script::detect_script;
 
 // Macros for checking blue property bits.
-macro_rules! is_top_blue   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_TOP) != 0 } }
-macro_rules! is_sub_top    { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_SUB_TOP) != 0 } }
-macro_rules! is_neutral    { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_NEUTRAL) != 0 } }
-macro_rules! is_x_height   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) != 0 } }
+macro_rules! is_top_blue {
+    ($p:expr) => {
+        ($p & AF_BLUE_PROP_LATIN_TOP) != 0
+    };
+}
+macro_rules! is_sub_top {
+    ($p:expr) => {
+        ($p & AF_BLUE_PROP_LATIN_SUB_TOP) != 0
+    };
+}
+macro_rules! is_neutral {
+    ($p:expr) => {
+        ($p & AF_BLUE_PROP_LATIN_NEUTRAL) != 0
+    };
+}
+macro_rules! is_x_height {
+    ($p:expr) => {
+        ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) != 0
+    };
+}
 
 /// Port of `af_latin_metrics_init_blues` (aflatin.c:311-1039).
 /// Scans the 6 Latin blue character strings to find median flat (reference) and
@@ -341,20 +373,14 @@ macro_rules! is_x_height   { ($p:expr) => { ($p & AF_BLUE_PROP_LATIN_X_HEIGHT) !
 /// # Debug: blue zone positions differ from C
 /// - [ ] `shoot_width` computation correct? (uses `latin_constant` for UPEM scaling)
 /// - [ ] Zone ordering: cap-top > ascender > x-height > baseline > descender?
-pub fn metrics_init_blues(
-    metrics: &mut AfLatinMetrics,
-    font_data: &crate::tables::FontData,
-) {
+pub fn metrics_init_blues(metrics: &mut AfLatinMetrics, font_data: &crate::tables::FontData) {
     let script_strings = detect_script(&font_data.cmap);
     metrics_init_blues_impl(metrics, font_data, script_strings);
 }
 
 /// Initialize blue zones using SCRIPT_GREK entries.
 /// Used for fonts where Latin characters share glyphs with Greek codepoints.
-pub fn metrics_init_blues_greek(
-    metrics: &mut AfLatinMetrics,
-    font_data: &crate::tables::FontData,
-) {
+pub fn metrics_init_blues_greek(metrics: &mut AfLatinMetrics, font_data: &crate::tables::FontData) {
     metrics_init_blues_impl(metrics, font_data, SCRIPT_GREK);
 }
 
@@ -379,16 +405,22 @@ pub fn metrics_init_blues_impl(
 
         for &ch in entry.chars {
             let gid = font_data.cmap.char_index(ch as u32).unwrap_or(0);
-            if gid == 0 { continue; }
+            if gid == 0 {
+                continue;
+            }
             let outline = match crate::tt::glyf::load_glyph(
-                &font_data.glyf_data, &font_data.loca_data,
-                font_data.head.index_to_loc_format, gid,
+                &font_data.glyf_data,
+                &font_data.loca_data,
+                font_data.head.index_to_loc_format,
+                gid,
                 &font_data.hmtx,
             ) {
                 Ok(o) => o,
                 Err(_) => continue,
             };
-            if outline.num_contours == 0 || outline.points.len() <= 2 { continue; }
+            if outline.num_contours == 0 || outline.points.len() <= 2 {
+                continue;
+            }
 
             let points = &outline.points;
             let end_pts = &outline.end_pts_of_contours;
@@ -407,11 +439,17 @@ pub fn metrics_init_blues_impl(
             let mut best_contour_last: i32 = -1;
 
             let mut last: i32 = -1;
-            for (ncontour, &end_pt) in end_pts.iter().enumerate().take(outline.num_contours as usize) {
+            for (ncontour, &end_pt) in end_pts
+                .iter()
+                .enumerate()
+                .take(outline.num_contours as usize)
+            {
                 let first: i32 = last + 1;
                 let _unused_ncontour = ncontour;
                 last = end_pt as i32;
-                if last <= first { continue; } // skip single-point contours
+                if last <= first {
+                    continue;
+                } // skip single-point contours
 
                 for pp in first..=last {
                     let y = points[usize_from_i32(pp)].y;
@@ -419,13 +457,21 @@ pub fn metrics_init_blues_impl(
                         if best_point < 0 || y > best_y {
                             best_point = pp;
                             best_y = y;
-                            if y + y_offset > ascender { ascender = y + y_offset; }
-                        } else if y + y_offset < descender { descender = y + y_offset; }
+                            if y + y_offset > ascender {
+                                ascender = y + y_offset;
+                            }
+                        } else if y + y_offset < descender {
+                            descender = y + y_offset;
+                        }
                     } else if best_point < 0 || y < best_y {
                         best_point = pp;
                         best_y = y;
-                        if y + y_offset < descender { descender = y + y_offset; }
-                    } else if y + y_offset > ascender { ascender = y + y_offset; }
+                        if y + y_offset < descender {
+                            descender = y + y_offset;
+                        }
+                    } else if y + y_offset > ascender {
+                        ascender = y + y_offset;
+                    }
                 }
                 if best_point > best_contour_last {
                     best_contour_first = first;
@@ -441,13 +487,21 @@ pub fn metrics_init_blues_impl(
                 let mut best_seg_first = best_point;
                 let mut best_seg_last = best_point;
                 // Track ON-curve endpoints of the flat segment.
-                let mut best_on_first: i32 = if points[usize_from_i32(best_point)].on_curve { best_point } else { -1 };
+                let mut best_on_first: i32 = if points[usize_from_i32(best_point)].on_curve {
+                    best_point
+                } else {
+                    -1
+                };
                 let mut best_on_last: i32 = best_on_first;
 
                 // Walk previous (aflatin.c:597-620).
                 let mut prev = best_point;
                 loop {
-                    prev = if prev > best_contour_first { prev - 1 } else { best_contour_last };
+                    prev = if prev > best_contour_first {
+                        prev - 1
+                    } else {
+                        best_contour_last
+                    };
                     let dist = (points[usize_from_i32(prev)].y - best_y).abs();
                     let x_diff = (points[usize_from_i32(prev)].x - best_x).abs();
                     let stop = dist > 5 && x_diff <= 20 * dist;
@@ -459,19 +513,29 @@ pub fn metrics_init_blues_impl(
                         trace!(target: "autohint::pipeline", "[BLUE_WALK] ch=c prev={prev} x={} y={} dist={dist} x_diff={x_diff} stop={stop}",
                             points[usize_from_i32(prev)].x, points[usize_from_i32(prev)].y);
                     }
-                    if stop { break; }
+                    if stop {
+                        break;
+                    }
                     best_seg_first = prev;
                     if points[usize_from_i32(prev)].on_curve {
                         best_on_first = prev;
-                        if best_on_last < 0 { best_on_last = prev; }
+                        if best_on_last < 0 {
+                            best_on_last = prev;
+                        }
                     }
-                    if prev == best_point { break; }
+                    if prev == best_point {
+                        break;
+                    }
                 }
 
                 // Walk next (aflatin.c:622-643).
                 let mut next = best_point;
                 loop {
-                    next = if next < best_contour_last { next + 1 } else { best_contour_first };
+                    next = if next < best_contour_last {
+                        next + 1
+                    } else {
+                        best_contour_first
+                    };
                     let dist = (points[usize_from_i32(next)].y - best_y).abs();
                     let x_diff = (points[usize_from_i32(next)].x - best_x).abs();
                     let stop = dist > 5 && x_diff <= 20 * dist;
@@ -483,50 +547,73 @@ pub fn metrics_init_blues_impl(
                         trace!(target: "autohint::pipeline", "[BLUE_WALK] ch=c next={next} x={} y={} dist={dist} x_diff={x_diff} stop={stop}",
                             points[usize_from_i32(next)].x, points[usize_from_i32(next)].y);
                     }
-                    if stop { break; }
+                    if stop {
+                        break;
+                    }
                     best_seg_last = next;
                     if points[usize_from_i32(next)].on_curve {
                         best_on_last = next;
-                        if best_on_first < 0 { best_on_first = next; }
+                        if best_on_first < 0 {
+                            best_on_first = next;
+                        }
                     }
-                    if next == best_point { break; }
+                    if next == best_point {
+                        break;
+                    }
                 }
 
                 // Round vs flat (aflatin.c:846-857). LONG-blue variant skipped.
-                if best_on_first >= 0 && best_on_last >= 0
-                    && (points[usize_from_i32(best_on_first)].x - points[usize_from_i32(best_on_last)].x).abs() > flat_thresh
+                if best_on_first >= 0
+                    && best_on_last >= 0
+                    && (points[usize_from_i32(best_on_first)].x
+                        - points[usize_from_i32(best_on_last)].x)
+                        .abs()
+                        > flat_thresh
                 {
                     round = false;
                 } else {
                     round = !points[usize_from_i32(best_seg_first)].on_curve
-                         || !points[usize_from_i32(best_seg_last)].on_curve;
+                        || !points[usize_from_i32(best_seg_last)].on_curve;
                 }
                 trace!(target: "autohint::pipeline", "[BLUE_ROUND] ch={ch} round={round} best_x={best_x} best_y={best_y} on_first={} on_last={} seg_first={} seg_last={} on_curve={}",
                     points[usize_from_i32(best_on_first)].on_curve, points[usize_from_i32(best_on_last)].on_curve,
                     best_seg_first, best_seg_last,
                     points[usize_from_i32(best_seg_first)].on_curve);
 
-                if round && is_neutral!(entry.props) { continue; } // neutral uses flats only
+                if round && is_neutral!(entry.props) {
+                    continue;
+                } // neutral uses flats only
             }
 
             // Track best extremum across the (single) element (aflatin.c:869-884).
             if best_point >= 0 {
                 let by = best_y + y_offset;
                 if is_top {
-                    if best_y_extremum.is_none_or(|b| by > b) { best_y_extremum = Some(by); best_round = round; }
-                } else if best_y_extremum.is_none_or(|b| by < b) { best_y_extremum = Some(by); best_round = round; }
+                    if best_y_extremum.is_none_or(|b| by > b) {
+                        best_y_extremum = Some(by);
+                        best_round = round;
+                    }
+                } else if best_y_extremum.is_none_or(|b| by < b) {
+                    best_y_extremum = Some(by);
+                    best_round = round;
+                }
             }
             // (best_round unused beyond here since Latin has 1 element; keep for clarity.)
 
             if let Some(best_y_val) = best_y_extremum {
-                if best_round { rounds.push(best_y_val); }
-                else { flats.push(best_y_val); }
+                if best_round {
+                    rounds.push(best_y_val);
+                } else {
+                    flats.push(best_y_val);
+                }
                 trace!(target: "autohint::pipeline", "[BLUE_METRIC] ch={ch} round={best_round} y={best_y_val}", ch = entry.chars[0]);
             }
         }
 
         // Skip if no data (aflatin.c:899-907).
-        if flats.is_empty() && rounds.is_empty() { continue; }
+        if flats.is_empty() && rounds.is_empty() {
+            continue;
+        }
 
         sort_pos(&mut flats);
         sort_pos(&mut rounds);
@@ -598,20 +685,42 @@ pub fn metrics_init_blues_impl(
             && metrics.units_per_em == 2048
         {
             ref_val = 1133;
-            if shoot_val > ref_val { shoot_val = 1133; }
+            if shoot_val > ref_val {
+                shoot_val = 1133;
+            }
         }
 
         let mut flags: u32 = 0;
-        if is_top_blue!(entry.props) { flags |= AF_LATIN_BLUE_TOP; }
-        if is_sub_top!(entry.props) { flags |= AF_LATIN_BLUE_SUB_TOP; }
-        if is_neutral!(entry.props) { flags |= AF_LATIN_BLUE_NEUTRAL; }
-        if (entry.props & AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM) != 0 { flags |= AF_LATIN_BLUE_BOTTOM; }
-        if (entry.props & AF_BLUE_PROP_LATIN_SMALL_BOTTOM) != 0 { flags |= AF_LATIN_BLUE_BOTTOM_SMALL; }
-        if is_x_height!(entry.props) { flags |= AF_LATIN_BLUE_ADJUSTMENT; }
+        if is_top_blue!(entry.props) {
+            flags |= AF_LATIN_BLUE_TOP;
+        }
+        if is_sub_top!(entry.props) {
+            flags |= AF_LATIN_BLUE_SUB_TOP;
+        }
+        if is_neutral!(entry.props) {
+            flags |= AF_LATIN_BLUE_NEUTRAL;
+        }
+        if (entry.props & AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM) != 0 {
+            flags |= AF_LATIN_BLUE_BOTTOM;
+        }
+        if (entry.props & AF_BLUE_PROP_LATIN_SMALL_BOTTOM) != 0 {
+            flags |= AF_LATIN_BLUE_BOTTOM_SMALL;
+        }
+        if is_x_height!(entry.props) {
+            flags |= AF_LATIN_BLUE_ADJUSTMENT;
+        }
 
         axis.blues.push(AfLatinBlue {
-            ref_width: AfWidth { org: ref_val, cur: 0, fit: 0 },
-            shoot_width: AfWidth { org: shoot_val, cur: 0, fit: 0 },
+            ref_width: AfWidth {
+                org: ref_val,
+                cur: 0,
+                fit: 0,
+            },
+            shoot_width: AfWidth {
+                org: shoot_val,
+                cur: 0,
+                fit: 0,
+            },
             ascender,
             descender,
             flags,
@@ -627,30 +736,49 @@ pub fn metrics_init_blues_impl(
         for i in 1..blues.len() {
             let mut j = i;
             while j > 0 {
-                let a_pos = if blues[j-1].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0
-                    { blues[j-1].ref_width.org } else { blues[j-1].shoot_width.org };
-                let b_pos = if blues[j].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0
-                    { blues[j].ref_width.org } else { blues[j].shoot_width.org };
-                if b_pos >= a_pos { break; }
-                blues.swap(j-1, j);
+                let a_pos = if blues[j - 1].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0
+                {
+                    blues[j - 1].ref_width.org
+                } else {
+                    blues[j - 1].shoot_width.org
+                };
+                let b_pos = if blues[j].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0 {
+                    blues[j].ref_width.org
+                } else {
+                    blues[j].shoot_width.org
+                };
+                if b_pos >= a_pos {
+                    break;
+                }
+                blues.swap(j - 1, j);
                 j -= 1;
             }
         }
         // resolve overlaps: clamp upper zone's effective top to lower zone's bottom
-        for i in 0..blues.len()-1 {
-            let use_shoot_a = blues[i].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
-            let use_shoot_b = blues[i+1].flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
-            let a_org = if use_shoot_a { blues[i].shoot_width.org } else { blues[i].ref_width.org };
-            let b_org = if use_shoot_b { blues[i+1].shoot_width.org } else { blues[i+1].ref_width.org };
+        for i in 0..blues.len() - 1 {
+            let use_shoot_a = blues[i].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
+            let use_shoot_b = blues[i + 1].flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
+            let a_org = if use_shoot_a {
+                blues[i].shoot_width.org
+            } else {
+                blues[i].ref_width.org
+            };
+            let b_org = if use_shoot_b {
+                blues[i + 1].shoot_width.org
+            } else {
+                blues[i + 1].ref_width.org
+            };
             if a_org > b_org {
                 // *a = *b  (rare; clamp to avoid inversion)
-                if use_shoot_a { blues[i].shoot_width.org = b_org; }
-                else { blues[i].ref_width.org = b_org; }
+                if use_shoot_a {
+                    blues[i].shoot_width.org = b_org;
+                } else {
+                    blues[i].ref_width.org = b_org;
+                }
             }
         }
     }
 }
-
 
 /// Scale the metrics axes for the current size (base x_scale/y_scale), applying
 /// the x-height scale optimization on the vertical axis, then scale the stem
@@ -688,19 +816,19 @@ pub fn metrics_scale_dim(
             w.fit = w.cur;
         }
         axis.extra_light = ft_mul_fix(axis.standard_width, x_scale) < 32 + 8;
-    #[cfg(debug_assertions)]
-    if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-        log::trace!(target: "autohint::pipeline", "[EL] dim=HORZ std_width={} scale={} ft_mul={} wc={} extra_light={}",
+        #[cfg(debug_assertions)]
+        if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
+            log::trace!(target: "autohint::pipeline", "[EL] dim=HORZ std_width={} scale={} ft_mul={} wc={} extra_light={}",
             axis.standard_width, x_scale, ft_mul_fix(axis.standard_width, x_scale), axis.width_count, axis.extra_light);
-    }
+        }
     }
 
     // Vertical axis: x-height scale optimization first (aflatin.c:1211-1306).
     let mut v_scale = y_scale;
     {
         let vaxis = &mut metrics.axis[Dimension::Vert as usize];
-        let adj_idx = (0..vaxis.blue_count)
-            .find(|&i| vaxis.blues[i].flags & AF_LATIN_BLUE_ADJUSTMENT != 0);
+        let adj_idx =
+            (0..vaxis.blue_count).find(|&i| vaxis.blues[i].flags & AF_LATIN_BLUE_ADJUSTMENT != 0);
         if let Some(ai) = adj_idx {
             let shoot_org = vaxis.blues[ai].shoot_width.org;
             let scaled = ft_mul_fix(shoot_org, v_scale);
@@ -737,8 +865,8 @@ pub fn metrics_scale_dim(
 
         // Blue zones (aflatin.c:1357-1437).
         for blue in &mut axis.blues {
-            blue.ref_width.cur   = ft_mul_fix(blue.ref_width.org, v_scale) + y_delta;
-            blue.ref_width.fit   = blue.ref_width.cur;
+            blue.ref_width.cur = ft_mul_fix(blue.ref_width.org, v_scale) + y_delta;
+            blue.ref_width.fit = blue.ref_width.cur;
             blue.shoot_width.cur = ft_mul_fix(blue.shoot_width.org, v_scale) + y_delta;
             blue.shoot_width.fit = blue.shoot_width.cur;
             blue.flags &= !AF_LATIN_BLUE_ACTIVE;
@@ -747,9 +875,15 @@ pub fn metrics_scale_dim(
             if (-48..=48).contains(&dist) {
                 // Zone height <= 3/4px → active
                 let delta2 = dist.abs();
-                let delta2 = if delta2 < 32 { 0 } else if delta2 < 48 { 32 } else { 64 };
+                let delta2 = if delta2 < 32 {
+                    0
+                } else if delta2 < 48 {
+                    32
+                } else {
+                    64
+                };
                 let delta2 = if dist < 0 { -delta2 } else { delta2 };
-                blue.ref_width.fit   = ft_pix_round(blue.ref_width.cur);
+                blue.ref_width.fit = ft_pix_round(blue.ref_width.cur);
                 blue.shoot_width.fit = blue.ref_width.fit - delta2;
                 blue.flags |= AF_LATIN_BLUE_ACTIVE;
             }
@@ -779,35 +913,48 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
         None => return,
     };
     let axis = &mut hints.axis[dim as usize];
-    let scale = if dim == Dimension::Horz { hints.x_scale } else { hints.y_scale };
+    let scale = if dim == Dimension::Horz {
+        hints.x_scale
+    } else {
+        hints.y_scale
+    };
     let major_dir = axis.major_dir;
     let upem = metrics.units_per_em;
     let blues = &metrics.axis[dim as usize];
 
-
     for e_idx in 0..axis.edges.len() {
-        if axis.edges[e_idx].flags & AF_EDGE_NO_BLUE != 0 { continue; }
+        if axis.edges[e_idx].flags & AF_EDGE_NO_BLUE != 0 {
+            continue;
+        }
 
         let edge_fpos = axis.edges[e_idx].fpos as i32;
         let edge_flags = axis.edges[e_idx].flags;
-        if e_idx <= 3 { trace!(target: "autohint::pipeline", "[BLU_FLAGS] E{e_idx}: flags=0x{:02x} round={}", edge_flags, edge_flags & 0x01 != 0); }
+        if e_idx <= 3 {
+            trace!(target: "autohint::pipeline", "[BLU_FLAGS] E{e_idx}: flags=0x{:02x} round={}", edge_flags, edge_flags & 0x01 != 0);
+        }
 
         // best_dist = min(upem/40, 0.5px), scaled
         let mut best_dist = ft_mul_fix(upem / 40, scale);
-        if best_dist > 32 { best_dist = 32; }
+        if best_dist > 32 {
+            best_dist = 32;
+        }
 
         let mut best_blue: Option<AfWidth> = None;
         let mut best_neutral = false;
 
         for blue_idx in 0..blues.blue_count {
             let blue = &blues.blues[blue_idx];
-            if blue.flags & AF_LATIN_BLUE_ACTIVE == 0 { continue; }
+            if blue.flags & AF_LATIN_BLUE_ACTIVE == 0 {
+                continue;
+            }
 
-            let is_top = blue.flags & (AF_LATIN_BLUE_TOP|AF_LATIN_BLUE_SUB_TOP) != 0;
+            let is_top = blue.flags & (AF_LATIN_BLUE_TOP | AF_LATIN_BLUE_SUB_TOP) != 0;
             let is_neutral = blue.flags & AF_LATIN_BLUE_NEUTRAL != 0;
             let is_major = axis.edges[e_idx].dir == major_dir;
             let enter = (is_top ^ is_major) || is_neutral;
-            if e_idx == 2 { trace!(target: "autohint::pipeline", "[BLU2] E2 b{blue_idx}: flags=0x{:x} top={is_top} neut={is_neutral} major={is_major} enter={enter}", blue.flags); }
+            if e_idx == 2 {
+                trace!(target: "autohint::pipeline", "[BLU2] E2 b{blue_idx}: flags=0x{:x} top={is_top} neut={is_neutral} major={is_major} enter={enter}", blue.flags);
+            }
 
             if enter {
                 // Compare to reference position
@@ -850,7 +997,9 @@ fn compute_blue_edges(hints: &mut GlyphHints) {
 
 /// Helper: FT_PIX_ROUND(x) = (x + 32) & !63  (26.6 → 6-bit rounding).
 #[inline]
-fn ft_pix_round(x: i32) -> i32 { (x + 32) & !63 }
+fn ft_pix_round(x: i32) -> i32 {
+    (x + 32) & !63
+}
 
 /// Port of af_glyph_hints_apply_vertical_separation_adjustments (aflatin.c:3602-3975).
 /// For 2-contour dot-above-body glyphs (i, j), moves contours below the top
@@ -882,15 +1031,25 @@ fn adjustment_database_lookup(codepoint: u32) -> u32 {
     while high >= low {
         let mid = (low + high) / 2;
         let mid_cp = ADJUSTMENT_DATABASE[mid].0;
-        if mid_cp < codepoint { low = mid + 1; }
-        else if mid_cp > codepoint { high = mid - 1; }
-        else { return ADJUSTMENT_DATABASE[mid].1; }
+        if mid_cp < codepoint {
+            low = mid + 1;
+        } else if mid_cp > codepoint {
+            high = mid - 1;
+        } else {
+            return ADJUSTMENT_DATABASE[mid].1;
+        }
     }
     0
 }
 
-fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, font_data: &crate::tables::FontData) {
-    if hints.contours.len() < 2 { return; }
+fn vertical_separation_adjustments(
+    hints: &mut GlyphHints,
+    glyph_index: u16,
+    font_data: &crate::tables::FontData,
+) {
+    if hints.contours.len() < 2 {
+        return;
+    }
 
     // C uses reverse_charmap + af_adjustment_database_lookup.
     // We replicate via direct cmap scan on known adjustment codepoints.
@@ -898,15 +1057,20 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
         .map(|cp| adjustment_database_lookup(cp))
         .unwrap_or(0);
 
-    if adj_type == 0 { return; }
+    if adj_type == 0 {
+        return;
+    }
 
-    let adjust_top       = (adj_type & AF_ADJUST_UP) != 0;
+    let adjust_top = (adj_type & AF_ADJUST_UP) != 0;
     let adjust_below_top = (adj_type & AF_ADJUST_UP2) != 0;
-    let adjust_bottom       = (adj_type & AF_ADJUST_DOWN) != 0;
+    let adjust_bottom = (adj_type & AF_ADJUST_DOWN) != 0;
     let adjust_above_bottom = (adj_type & AF_ADJUST_DOWN2) != 0;
 
     if !((adjust_top || adjust_bottom) && hints.contours.len() >= 2
-        || (adjust_below_top || adjust_above_bottom) && hints.contours.len() >= 3) { return; }
+        || (adjust_below_top || adjust_above_bottom) && hints.contours.len() >= 3)
+    {
+        return;
+    }
 
     // Recompute vertical extrema from hinted y values (C: af_compute_vertical_extrema)
     let mut new_minima: Vec<i32> = vec![0; hints.contours.len()];
@@ -920,7 +1084,9 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
             y_min = y_min.min(pt.y);
             y_max = y_max.max(pt.y);
             let next = pt.next;
-            if next == c_start { break; }
+            if next == c_start {
+                break;
+            }
             idx = next;
         }
         new_minima[ci] = y_min;
@@ -949,7 +1115,9 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
     // Find min gap between high contour bottom and nearest other contour top
     let mut min_distance: i32 = 256;
     for ci in 0..hints.contours.len() {
-        if ci == high_contour { continue; }
+        if ci == high_contour {
+            continue;
+        }
         let other_max = new_maxima[ci];
         let other_min = new_minima[ci];
         let dist = high_min_y - other_max;
@@ -961,13 +1129,17 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
     // Only adjust if gap is small (< 1px = 64 26.6 units).
     // C uses `if (min_distance < 64)` which allows negative values
     // (occurs when a contour slightly overlaps another).
-    if min_distance >= 64 { return; }
+    if min_distance >= 64 {
+        return;
+    }
 
     let adjustment = 64 - min_distance;
     // C: calculated_amount >= -2 && (calculated_amount <= 66 || adjustment_amount <= 66)
     // (aflatin.c:3807). We don't have calculated_amount (no tilde centering),
     // so the check simplifies to adjustment <= 66.
-    if adjustment <= -3 || adjustment > 66 { return; }
+    if adjustment <= -3 || adjustment > 66 {
+        return;
+    }
 
     // C: af_move_contours_up(hints, limit, delta)
     // Moves ENTIRE CONTOURS where y_min > limit, i.e. contours above limit
@@ -980,7 +1152,9 @@ fn vertical_separation_adjustments(hints: &mut GlyphHints, glyph_index: u16, fon
             loop {
                 hints.points[idx].y += adjustment;
                 let next = hints.points[idx].next;
-                if next == c_start { break; }
+                if next == c_start {
+                    break;
+                }
                 idx = next;
             }
         }
@@ -1047,9 +1221,9 @@ pub fn apply_hints(
 
     // Compute ppem for bdelta in compute_stem_width
     // At 72dpi: x_scale = (ppem * 64 * 0x10000) / upem → ppem = x_scale * upem / 0x10000 / 64
-    let ppem = i32_from_i64((x_scale as i64).abs()
-        * metrics.map_or(2048, |m| m.units_per_em as i64)
-        / 65536 / 64);
+    let ppem = i32_from_i64(
+        (x_scale as i64).abs() * metrics.map_or(2048, |m| m.units_per_em as i64) / 65536 / 64,
+    );
     let ppem = ppem.clamp(1, 100);
 
     // Step 1: Load outline into hints (raw font units → fx/fy; scaled 26.6 → ox/oy)
@@ -1082,24 +1256,38 @@ pub fn apply_hints(
         link_segments_inner(&mut hints, Dimension::Vert, wc, &widths);
     }
     compute_edges(&mut hints, Dimension::Vert);
-    let is_nonbase = hints.metrics.as_ref()
-        .is_some_and(|m| (glyph_index as usize) < m.non_base_glyphs.len()
-            && m.non_base_glyphs[glyph_index as usize]);
+    let is_nonbase = hints.metrics.as_ref().is_some_and(|m| {
+        (glyph_index as usize) < m.non_base_glyphs.len() && m.non_base_glyphs[glyph_index as usize]
+    });
     if !is_nonbase {
         compute_blue_edges(&mut hints);
     }
 
     // Phase C: grid-fit the outline — for-loop over both dims (aflatin.c:5169-5177).
     for dim_i in 0..2 {
-        let dim = if dim_i == 0 { Dimension::Horz } else { Dimension::Vert };
+        let dim = if dim_i == 0 {
+            Dimension::Horz
+        } else {
+            Dimension::Vert
+        };
         let do_dim = if dim_i == 0 { do_horz } else { true };
-        if !do_dim { continue; }
-        let widths = if dim_i == 0 { &horz_widths_26_6 } else { &vert_widths_26_6 };
+        if !do_dim {
+            continue;
+        }
+        let widths = if dim_i == 0 {
+            &horz_widths_26_6
+        } else {
+            &vert_widths_26_6
+        };
         hint_edges(&mut hints, dim, widths, ppem);
         align_edge_points(&mut hints, dim);
         align_strong_points(&mut hints, dim);
         align_weak_points(&mut hints, dim);
-        vertical_separation_adjustments(&mut hints, glyph_index, font_data.unwrap_or_else(|| unreachable!()));
+        vertical_separation_adjustments(
+            &mut hints,
+            glyph_index,
+            font_data.unwrap_or_else(|| unreachable!()),
+        );
     }
 
     // ── Post-hinting phantom-point adjustment (afloader.c:419-530) ──────
@@ -1114,11 +1302,11 @@ pub fn apply_hints(
             log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
         }
         if num_horz_edges > 1 {
-            let edge1 = &haxis.edges[0];                    // leftmost
-            let edge2 = &haxis.edges[num_horz_edges - 1];   // rightmost
+            let edge1 = &haxis.edges[0]; // leftmost
+            let edge2 = &haxis.edges[num_horz_edges - 1]; // rightmost
 
-            let old_lsb = edge1.opos;   // original scaled LSB (pp1.x = 0)
-            let new_lsb = edge1.pos;    // hinted LSB
+            let old_lsb = edge1.opos; // original scaled LSB (pp1.x = 0)
+            let new_lsb = edge1.pos; // hinted LSB
 
             let mut pp1x_uh = new_lsb - old_lsb;
 
@@ -1211,8 +1399,14 @@ pub fn apply_hints(
             trace!(target: "autohint::pipeline", "[PIPE] HS{si}: p{}..p{} dir={:?} pos={}",
                 s.first, s.last, s.dir, s.pos);
         }
-        let el_horz = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
-        let el_vert = hints.metrics.as_ref().map_or(false, |m| m.axis[Dimension::Vert as usize].extra_light);
+        let el_horz = hints
+            .metrics
+            .as_ref()
+            .map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
+        let el_vert = hints
+            .metrics
+            .as_ref()
+            .map_or(false, |m| m.axis[Dimension::Vert as usize].extra_light);
         trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light_h={el_horz} extra_light_v={el_vert}", ha.edges.len());
         for (ei, e) in ha.edges.iter().enumerate() {
             trace!(target: "autohint::pipeline", "[PIPE] HE{ei}: fpos={} opos={} pos={} link={} serif={}",
@@ -1256,8 +1450,13 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     // Per-point u/v axis swap (aflatin.c:1582). Stored on the point's u/v fields.
     let is_horz = dim == Dimension::Horz;
     for pt in &mut hints.points {
-        if is_horz { pt.u = pt.fx as i32; pt.v = pt.fy as i32; }
-        else       { pt.u = pt.fy as i32; pt.v = pt.fx as i32; }
+        if is_horz {
+            pt.u = pt.fx as i32;
+            pt.v = pt.fy as i32;
+        } else {
+            pt.u = pt.fy as i32;
+            pt.v = pt.fx as i32;
+        }
     }
 
     // major_dir: per-glyph orientation from loader::reload.
@@ -1268,15 +1467,23 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     // direction matching.
     let major_dir = {
         let cw = hints.cw_orientation; // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
-        // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
-        // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
-        // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
-        // CW→TrueType→no flip: HORZ=UP, VERT=LEFT
-        // CCW→PostScript→flip: HORZ=DOWN, VERT=RIGHT
-        // Our cw_orientation=true means CW (=TrueType), so NO flip.
+                                       // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
+                                       // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
+                                       // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
+                                       // CW→TrueType→no flip: HORZ=UP, VERT=LEFT
+                                       // CCW→PostScript→flip: HORZ=DOWN, VERT=RIGHT
+                                       // Our cw_orientation=true means CW (=TrueType), so NO flip.
         let d = if is_horz {
-            if cw { Direction::Up } else { Direction::Down }
-        } else if cw { Direction::Left } else { Direction::Right };
+            if cw {
+                Direction::Up
+            } else {
+                Direction::Down
+            }
+        } else if cw {
+            Direction::Left
+        } else {
+            Direction::Right
+        };
         axis.major_dir = d;
         abs_dir(d) // ABSOLUTIFY for segment detection (aflatin.c:1577)
     };
@@ -1291,19 +1498,27 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
         // segment_dir tracks the direction of the current open segment.
         let mut segment_dir = major_dir;
 
-        let mut min_pos: i32 = 32000; let mut max_pos: i32 = -32000;
-        let mut min_coord: i32 = 32000; let mut max_coord: i32 = -32000;
-        let mut min_flags: u16 = 0; let mut max_flags: u16 = 0;
-        let mut min_on_coord: i32 = 32000; let mut max_on_coord: i32 = -32000;
+        let mut min_pos: i32 = 32000;
+        let mut max_pos: i32 = -32000;
+        let mut min_coord: i32 = 32000;
+        let mut max_coord: i32 = -32000;
+        let mut min_flags: u16 = 0;
+        let mut max_flags: u16 = 0;
+        let mut min_on_coord: i32 = 32000;
+        let mut max_on_coord: i32 = -32000;
 
         let mut seg_first: usize = 0; // index of first point of current segment
         let mut prev_seg: Option<usize> = None; // index of previous segment in axis.segments
 
         // prev_* buffers for merge logic (aflatin.c:1631-1638).
-        let mut prev_min_pos = min_pos; let mut prev_max_pos = max_pos;
-        let mut prev_min_coord = min_coord; let mut prev_max_coord = max_coord;
-        let mut prev_min_flags = min_flags; let mut _prev_max_flags = max_flags;
-        let mut _prev_min_on_coord = min_on_coord; let mut _prev_max_on_coord = max_on_coord;
+        let mut prev_min_pos = min_pos;
+        let mut prev_max_pos = max_pos;
+        let mut prev_min_coord = min_coord;
+        let mut prev_max_coord = max_coord;
+        let mut prev_min_flags = min_flags;
+        let mut _prev_max_flags = max_flags;
+        let mut _prev_min_on_coord = min_on_coord;
+        let mut _prev_max_on_coord = max_on_coord;
 
         // If we're already on an edge at the start, walk backwards to its start (aflatin.c:1644).
         if points[point].flags & AF_FLAG_IGNORE == 0
@@ -1317,7 +1532,9 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                     point = points[point].next;
                     break;
                 }
-                if point == last { break; }
+                if point == last {
+                    break;
+                }
             }
         }
 
@@ -1327,26 +1544,35 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
         loop {
             let p = &points[point];
             if on_edge {
-                let u = p.u; min_pos = min_pos.min(u); max_pos = max_pos.max(u);
+                let u = p.u;
+                min_pos = min_pos.min(u);
+                max_pos = max_pos.max(u);
                 let v = p.v;
-                if v < min_coord { min_coord = v; min_flags = p.flags; }
-                if v > max_coord { max_coord = v; max_flags = p.flags; }
+                if v < min_coord {
+                    min_coord = v;
+                    min_flags = p.flags;
+                }
+                if v > max_coord {
+                    max_coord = v;
+                    max_flags = p.flags;
+                }
                 if p.flags & AF_FLAG_CONTROL == 0 {
-                    if v < min_on_coord { min_on_coord = v; }
-                    if v > max_on_coord { max_on_coord = v; }
+                    if v < min_on_coord {
+                        min_on_coord = v;
+                    }
+                    if v > max_on_coord {
+                        max_on_coord = v;
+                    }
                 }
 
-                if p.flags & AF_FLAG_IGNORE != 0
-                    || p.out_dir != segment_dir
-                    || point == last
-                {
+                if p.flags & AF_FLAG_IGNORE != 0 || p.out_dir != segment_dir || point == last {
                     // End of segment.
                     let same_start_as_prev = match prev_seg {
                         Some(v) => seg_first == axis.segments[v].last,
                         None => false,
                     };
-                    let new_seg = p.flags & AF_FLAG_IGNORE != 0 || prev_seg.is_none()
-                        || !same_start_as_prev;
+                    let new_seg =
+                        p.flags & AF_FLAG_IGNORE != 0 || prev_seg.is_none() || !same_start_as_prev;
 
                     if new_seg {
                         // Record a new segment.
@@ -1360,36 +1586,56 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                         }
                         let h = max_coord - min_coord;
                         axis.segments.push(AFSegment {
-                            flags, dir: segment_dir, pos, delta,
-                            min_coord: i16_from_i32(min_coord), max_coord: i16_from_i32(max_coord),
+                            flags,
+                            dir: segment_dir,
+                            pos,
+                            delta,
+                            min_coord: i16_from_i32(min_coord),
+                            max_coord: i16_from_i32(max_coord),
                             height: i16_from_i32(h),
-                            first: seg_first, last: point,
-                            edge: usize::MAX, edge_next: usize::MAX,
-                            link: usize::MAX, serif: usize::MAX, score: 32000,
+                            first: seg_first,
+                            last: point,
+                            edge: usize::MAX,
+                            edge_next: usize::MAX,
+                            link: usize::MAX,
+                            serif: usize::MAX,
+                            score: 32000,
                         });
                         let cur = axis.segments.len() - 1;
                         prev_seg = Some(cur);
-                        prev_min_pos = min_pos; prev_max_pos = max_pos;
-                        prev_min_coord = min_coord; prev_max_coord = max_coord;
-                        prev_min_flags = min_flags; let _ = &mut _prev_max_flags;
-                        let _ = &mut _prev_min_on_coord; let _ = &mut _prev_max_on_coord;
+                        prev_min_pos = min_pos;
+                        prev_max_pos = max_pos;
+                        prev_min_coord = min_coord;
+                        prev_max_coord = max_coord;
+                        prev_min_flags = min_flags;
+                        let _ = &mut _prev_max_flags;
+                        let _ = &mut _prev_min_on_coord;
+                        let _ = &mut _prev_max_on_coord;
                     } else {
                         // Merge with previous segment (same start point). Port of aflatin.c:1741-1851.
                         // Compare in_dir at the join point (aflatin.c:1746).
-                        let prev = match prev_seg { Some(v) => v, None => unreachable!() };
+                        let prev = match prev_seg {
+                            Some(v) => v,
+                            None => unreachable!(),
+                        };
                         let prev_last_idx = axis.segments[prev].last;
                         let prev_last_in = points[prev_last_idx].in_dir;
                         let curr_in = points[point].in_dir;
                         if prev_last_in == curr_in {
                             // C: identical directions → unify (aflatin.c:1746-1791)
                             // prev_segment->first stays correct (it's the earlier point).
-                            min_pos = min_pos.min(prev_min_pos); max_pos = max_pos.max(prev_max_pos);
-                            min_coord = min_coord.min(prev_min_coord); max_coord = max_coord.max(prev_max_coord);
+                            min_pos = min_pos.min(prev_min_pos);
+                            max_pos = max_pos.max(prev_max_pos);
+                            min_coord = min_coord.min(prev_min_coord);
+                            max_coord = max_coord.max(prev_max_coord);
                             let pos = i16_from_i32((min_pos + max_pos) >> 1);
                             let delta = i16_from_i32((max_pos - min_pos) >> 1);
                             let s = &mut axis.segments[prev];
-                            s.last = point; s.pos = pos; s.delta = delta;
-                            s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
+                            s.last = point;
+                            s.pos = pos;
+                            s.delta = delta;
+                            s.min_coord = i16_from_i32(min_coord);
+                            s.max_coord = i16_from_i32(max_coord);
                             if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
                                 && (max_on_coord - min_on_coord) < flat_threshold
                             {
@@ -1398,23 +1644,34 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                                 s.flags &= !AF_EDGE_ROUND;
                             }
                             s.height = i16_from_i32(max_coord - min_coord);
-                        } else if (prev_max_coord - prev_min_coord).abs() > (max_coord - min_coord).abs() {
+                        } else if (prev_max_coord - prev_min_coord).abs()
+                            > (max_coord - min_coord).abs()
+                        {
                             // C: different directions, prev is longer — keep prev (aflatin.c:1798-1811)
                             // ⚠️ C copies the discarded current segment's min/max_pos into
                             // prev_min_pos/prev_max_pos (aflatin.c:1803-1804). Without this,
                             // subsequent 3+ segment merges use stale boundaries.
-                            if min_pos < prev_min_pos { prev_min_pos = min_pos; }
-                            if max_pos > prev_max_pos { prev_max_pos = max_pos; }
+                            if min_pos < prev_min_pos {
+                                prev_min_pos = min_pos;
+                            }
+                            if max_pos > prev_max_pos {
+                                prev_max_pos = max_pos;
+                            }
                             let pos = i16_from_i32((prev_min_pos + prev_max_pos) >> 1);
                             let s = &mut axis.segments[prev];
-                            s.last = point; s.pos = pos;
+                            s.last = point;
+                            s.pos = pos;
                         } else {
                             // C: different directions, current is longer — replace prev (aflatin.c:1812-1843)
                             // *prev_segment = *segment copies ALL fields, including `first`.
-                            let pos = i16_from_i32((min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1);
+                            let pos = i16_from_i32(
+                                (min_pos.min(prev_min_pos) + max_pos.max(prev_max_pos)) >> 1,
+                            );
                             let s = &mut axis.segments[prev];
-                            s.last = point; s.pos = pos;
-                            s.min_coord = i16_from_i32(min_coord); s.max_coord = i16_from_i32(max_coord);
+                            s.last = point;
+                            s.pos = pos;
+                            s.min_coord = i16_from_i32(min_coord);
+                            s.max_coord = i16_from_i32(max_coord);
                             s.dir = segment_dir;
                             s.first = seg_first;
                             if (min_flags | max_flags) & AF_FLAG_CONTROL != 0
@@ -1433,7 +1690,9 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
             }
 
             if point == last {
-                if passed { break; }
+                if passed {
+                    break;
+                }
                 passed = true;
             }
 
@@ -1452,16 +1711,24 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
                 && !on_edge
                 && (abs_dir(p.out_dir) == major_dir || point == p.prev)
             {
-                if axis.segments.len() > 1000 { axis.segments.clear(); return; }
+                if axis.segments.len() > 1000 {
+                    axis.segments.clear();
+                    return;
+                }
                 segment_dir = p.out_dir;
                 seg_first = point;
-                min_pos = p.u; max_pos = p.u;
-                min_coord = p.v; max_coord = p.v;
-                min_flags = p.flags; max_flags = p.flags;
+                min_pos = p.u;
+                max_pos = p.u;
+                min_coord = p.v;
+                max_coord = p.v;
+                min_flags = p.flags;
+                max_flags = p.flags;
                 if p.flags & AF_FLAG_CONTROL != 0 {
-                    min_on_coord = 32000; max_on_coord = -32000;
+                    min_on_coord = 32000;
+                    max_on_coord = -32000;
                 } else {
-                    min_on_coord = p.v; max_on_coord = p.v;
+                    min_on_coord = p.v;
+                    max_on_coord = p.v;
                 }
                 on_edge = true;
             }
@@ -1538,7 +1805,11 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     axis.edges.clear();
 
     // ── Compute thresholds (aflatin.c:2182-2232) ────────────────────────
-    let scale = if dim == Dimension::Horz { hints.x_scale } else { hints.y_scale };
+    let scale = if dim == Dimension::Horz {
+        hints.x_scale
+    } else {
+        hints.y_scale
+    };
 
     // segment_length_threshold: skip segments shorter than 1px (Horz only).
     let seg_len_thresh = if dim == Dimension::Horz {
@@ -1556,7 +1827,9 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             50 // fallback
         };
         let mut edt = ft_mul_fix(raw, scale);
-        if edt > 16 { edt = 16; } // cap at 0.25px (= 64/4 in 26.6)
+        if edt > 16 {
+            edt = 16;
+        } // cap at 0.25px (= 64/4 in 26.6)
         ft_mul_div(edt, 0x10000, scale) // convert back to font units
     };
 
@@ -1566,14 +1839,22 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         {
             let seg = &axis.segments[seg_idx];
             // Skip one-point segments without a direction
-            if seg.dir == Direction::None { continue; }
+            if seg.dir == Direction::None {
+                continue;
+            }
             // Too short
-            if (seg.height as i32) < seg_len_thresh { continue; }
+            if (seg.height as i32) < seg_len_thresh {
+                continue;
+            }
             // Too wide (delta > 0.5px)
-            if (seg.delta as i32) > seg_width_thresh { continue; }
+            if (seg.delta as i32) > seg_width_thresh {
+                continue;
+            }
             // Tiny serif: height < 1.5× the length threshold
             // aflatin.c:2247-2250 (serif filter, no round-flag check)
-            if seg.serif != usize::MAX && 2 * (seg.height as i32) < 3 * seg_len_thresh { continue; }
+            if seg.serif != usize::MAX && 2 * (seg.height as i32) < 3 * seg_len_thresh {
+                continue;
+            }
         }
         let seg_pos = axis.segments[seg_idx].pos as i32;
         let seg_dir = axis.segments[seg_idx].dir;
@@ -1600,7 +1881,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
             let edge = AFEdge {
                 fpos,
                 opos,
-                pos: opos,  // ⚠️ C: edge->pos = edge->opos (aflatin.c:2293)
+                pos: opos, // ⚠️ C: edge->pos = edge->opos (aflatin.c:2293)
                 flags: 0,
                 dir: seg_dir,
                 link: usize::MAX,
@@ -1620,8 +1901,12 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
                 let mut pos = axis.edges.len();
                 while pos > 0 {
                     let prev = &axis.edges[pos - 1];
-                    if prev.fpos < fpos { break; }
-                    if prev.fpos == fpos && seg_dir == major_dir { break; }
+                    if prev.fpos < fpos {
+                        break;
+                    }
+                    if prev.fpos == fpos && seg_dir == major_dir {
+                        break;
+                    }
                     pos -= 1;
                 }
                 pos
@@ -1636,7 +1921,9 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
                     if axis.segments[s].edge >= insert_pos {
                         axis.segments[s].edge += 1;
                     }
-                    if s == axis.edges[i].last { break; }
+                    if s == axis.edges[i].last {
+                        break;
+                    }
                     s = axis.segments[s].edge_next;
                 }
             }
@@ -1682,8 +1969,11 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
     // runs. Without sorting first, SERIF can persist on edges processed too early.
     // For top_to_bottom scripts (Indic/Mongolian), sort descending.
     if axis.edges.len() > 1 {
-        let top_to_bottom = hints.metrics.as_ref()
-            .map_or(false, |m| m.top_to_bottom_hinting) && dim == Dimension::Vert;
+        let top_to_bottom = hints
+            .metrics
+            .as_ref()
+            .map_or(false, |m| m.top_to_bottom_hinting)
+            && dim == Dimension::Vert;
         let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
         if top_to_bottom {
             indices.sort_by(|&a, &b| axis.edges[b].fpos.cmp(&axis.edges[a].fpos));
@@ -1713,14 +2003,19 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         let mut is_straight = 0i32;
 
         let first_seg = axis.edges[e_idx].first;
-        if first_seg == usize::MAX { continue; }
+        if first_seg == usize::MAX {
+            continue;
+        }
         let mut seg_idx = first_seg;
         loop {
             let seg = &axis.segments[seg_idx];
 
             // Track round/straight counts (aflatin.c:2393-2395).
-            if seg.flags & AF_EDGE_ROUND != 0 { is_round += 1; }
-            else { is_straight += 1; }
+            if seg.flags & AF_EDGE_ROUND != 0 {
+                is_round += 1;
+            } else {
+                is_straight += 1;
+            }
 
             // Check for serif (aflatin.c:2397-2400).
             let mut is_serif = false;
@@ -1743,10 +2038,9 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 
                 // Compare segment gap vs edge gap (aflatin.c:2416-2430).
                 if edge2_idx != usize::MAX {
-                    let edge_delta = (axis.edges[e_idx].fpos as i32
-                        - axis.edges[edge2_idx].fpos as i32).abs();
-                    let seg_delta = (seg.pos as i32
-                        - axis.segments[linked_seg].pos as i32).abs();
+                    let edge_delta =
+                        (axis.edges[e_idx].fpos as i32 - axis.edges[edge2_idx].fpos as i32).abs();
+                    let seg_delta = (seg.pos as i32 - axis.segments[linked_seg].pos as i32).abs();
                     if seg_delta < edge_delta {
                         // Segment pair is closer → trust the segment's edge.
                         edge2_idx = axis.segments[linked_seg].edge;
@@ -1766,7 +2060,9 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
                 }
             }
 
-            if seg_idx == axis.edges[e_idx].last { break; }
+            if seg_idx == axis.edges[e_idx].last {
+                break;
+            }
             seg_idx = axis.segments[seg_idx].edge_next;
         }
 
@@ -1830,7 +2126,11 @@ fn link_segments_inner(
 
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-        let dim_name = if dim == Dimension::Horz { "HORZ" } else { "VERT" };
+        let dim_name = if dim == Dimension::Horz {
+            "HORZ"
+        } else {
+            "VERT"
+        };
         log::trace!(target: "autohint::pipeline", "[LINK_IN] dim={dim_name} n={n} major={:?} wc={width_count} max_width={max_width}",
             major_dir);
         for (i, seg) in axis.segments.iter().enumerate() {
@@ -1912,7 +2212,11 @@ fn link_segments_inner(
     // Compute serif segments: if seg.link != seg.link.link, seg is a serif.
     #[cfg(debug_assertions)]
     if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
-        let dim_name = if dim == Dimension::Horz { "HORZ" } else { "VERT" };
+        let dim_name = if dim == Dimension::Horz {
+            "HORZ"
+        } else {
+            "VERT"
+        };
         for (i, seg) in axis.segments.iter().enumerate() {
             if seg.link != usize::MAX || seg.serif != usize::MAX {
                 log::trace!(target: "autohint::pipeline", "[LINK_OUT] dim={dim_name} S{i}: link={} serif={} score={}",
@@ -1932,7 +2236,6 @@ fn link_segments_inner(
             }
         }
     }
-
 }
 
 // ── Helper: snap stem width ────────────────────────────────────────────────
@@ -1989,8 +2292,11 @@ fn align_linked_edge(
     let base_delta = base_edge.pos - base_edge.opos;
 
     let fitted_width = compute_stem_width(
-        other_flags, ppem, dim,
-        dist, base_delta,
+        other_flags,
+        ppem,
+        dim,
+        dist,
+        base_delta,
         base_edge.flags,
         stem_edge.flags,
         std_widths,
@@ -2054,7 +2360,9 @@ fn compute_stem_width(
             "[CSW] dim={:?} width={width} base_delta={base_delta} el={extra_light} stem_adj={stem_adjust} bf=0x{base_flags:x} sf=0x{stem_flags:x}",
             dim);
     }
-    if !stem_adjust { return width; }
+    if !stem_adjust {
+        return width;
+    }
     if extra_light {
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
@@ -2082,7 +2390,9 @@ fn compute_stem_width(
         // Step 1: Leave serif widths alone (aflatin.c:3998-4001).
         if (stem_flags & AF_EDGE_SERIF) != 0 && vertical && dist < 3 * 64 {
             // goto Done_Width → return immediately, no quantization
-            if sign != 0 { dist = -dist; }
+            if sign != 0 {
+                dist = -dist;
+            }
             return dist;
         }
 
@@ -2101,14 +2411,20 @@ fn compute_stem_width(
         if !std_widths.is_empty() {
             let stdw = std_widths[0]; // axis->widths[0].cur
             let mut delta = dist - stdw;
-            if delta < 0 { delta = -delta; }
+            if delta < 0 {
+                delta = -delta;
+            }
 
             if delta < 40 {
                 // Within tolerance of standard width → snap to it, clamp min.
                 dist = stdw;
-                if dist < 48 { dist = 48; }
+                if dist < 48 {
+                    dist = 48;
+                }
                 // goto Done_Width
-                if sign != 0 { dist = -dist; }
+                if sign != 0 {
+                    dist = -dist;
+                }
                 #[cfg(debug_assertions)]
                 if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
                     log::trace!(target: "autohint::pipeline", "[CSW_RET] smooth-stdw → return {dist}");
@@ -2121,10 +2437,15 @@ fn compute_stem_width(
                 delta = dist & 63;
                 dist &= -64; // truncate to integer pixel
 
-                if delta < 10 { dist += delta; }
-                else if delta < 32 { dist += 10; }
-                else if delta < 54 { dist += 54; }
-                else { dist += delta; }
+                if delta < 10 {
+                    dist += delta;
+                } else if delta < 32 {
+                    dist += 10;
+                } else if delta < 54 {
+                    dist += 54;
+                } else {
+                    dist += delta;
+                }
             } else {
                 // bdelta adjustment + round (aflatin.c:4050-4075).
                 // ⚠️ C compensates for double-rounding when base_delta and
@@ -2137,7 +2458,9 @@ fn compute_stem_width(
                     } else if ppem < 30 {
                         bdelta = (base_delta * (30 - ppem)) / 20;
                     }
-                    if bdelta < 0 { bdelta = -bdelta; }
+                    if bdelta < 0 {
+                        bdelta = -bdelta;
+                    }
                 }
                 dist = (dist - bdelta + 32) & !63;
             }
@@ -2241,7 +2564,9 @@ fn dump_edge_phase(_phase: &str, _dim: &str, _edges: &[AFEdge]) {}
 /// - [ ] Phase 4: anchor chain propagation reaches all unaligned edges?
 fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: i32) {
     let other_flags = hints.other_flags;
-    let extra_light = hints.metrics.as_ref()
+    let extra_light = hints
+        .metrics
+        .as_ref()
         .is_some_and(|m| m.axis[dim as usize].extra_light);
     let axis = &mut hints.axis[dim as usize];
     let num_edges = axis.edges.len();
@@ -2250,7 +2575,11 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         return;
     }
 
-    let dim_label = if dim == Dimension::Vert { "VERT" } else { "HORZ" };
+    let dim_label = if dim == Dimension::Vert {
+        "VERT"
+    } else {
+        "HORZ"
+    };
     dump_edge_phase("INITIAL", dim_label, &axis.edges);
 
     // C: top_to_bottom_hinting only applies to VERT dimension (aflatin.c:4271-4273).
@@ -2259,8 +2588,11 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     //    C: `if (dim == AF_DIMENSION_VERT) top_to_bottom = script_class->top_to_bottom`
     //    Our old: applied to BOTH dims, HORZ BOUND checks collapsed stem edges in Indic
     //    Verified: C fprintf trace showing BOUND check skipped for HORZ dim
-    let top_to_bottom_hinting = dim == Dimension::Vert && hints.metrics.as_ref()
-        .map_or(false, |m| m.top_to_bottom_hinting);
+    let top_to_bottom_hinting = dim == Dimension::Vert
+        && hints
+            .metrics
+            .as_ref()
+            .map_or(false, |m| m.top_to_bottom_hinting);
 
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;
@@ -2268,7 +2600,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     // ── Phase 1: Blue-zone alignment (aflatin.c:4247-4336) ──────────────
     if dim == Dimension::Vert && hints.metrics.is_some() {
         for i in 0..num_edges {
-            if axis.edges[i].flags & AF_EDGE_DONE != 0 { continue; }
+            if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+                continue;
+            }
 
             let mut edge1_idx: Option<usize> = None;
             let mut edge2_idx: Option<usize> = None;
@@ -2309,22 +2643,40 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 }
             }
 
-            if edge1_idx.is_none() { continue; }
+            if edge1_idx.is_none() {
+                continue;
+            }
 
-            let e1 = match edge1_idx { Some(v) => v, None => unreachable!() };
-            let blue = match blue { Some(b) => b, None => unreachable!() };
+            let e1 = match edge1_idx {
+                Some(v) => v,
+                None => unreachable!(),
+            };
+            let blue = match blue {
+                Some(b) => b,
+                None => unreachable!(),
+            };
             trace!(target: "autohint::pipeline", "[P1] E{e1}: snap to blue.fit={}", blue.fit);
             axis.edges[e1].pos = blue.fit;
             axis.edges[e1].flags |= AF_EDGE_DONE;
 
             if let Some(e2) = edge2_idx {
                 if axis.edges[e2].blue_edge.is_none() {
-                    align_linked_edge(other_flags, dim, &axis.edges[e1].clone(), &mut axis.edges[e2], std_widths, ppem, extra_light);
+                    align_linked_edge(
+                        other_flags,
+                        dim,
+                        &axis.edges[e1].clone(),
+                        &mut axis.edges[e2],
+                        std_widths,
+                        ppem,
+                        extra_light,
+                    );
                     axis.edges[e2].flags |= AF_EDGE_DONE;
                 }
             }
 
-            if anchor == usize::MAX { anchor = i; }
+            if anchor == usize::MAX {
+                anchor = i;
+            }
         }
         dump_edge_phase("PHASE1", dim_label, &axis.edges);
     }
@@ -2335,7 +2687,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     // has_non_stem_edges = true.
     for i in 0..num_edges {
         if axis.edges[i].flags & AF_EDGE_DONE != 0 {
-            if dim == Dimension::Vert { trace!(target: "autohint::pipeline", "[P2] E{i} dim=Vert: DONE → skip"); }
+            if dim == Dimension::Vert {
+                trace!(target: "autohint::pipeline", "[P2] E{i} dim=Vert: DONE → skip");
+            }
             continue;
         }
 
@@ -2359,7 +2713,15 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
 
             let org_len = edge2_opos - edge_opos;
             let cur_len = compute_stem_width(
-                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
+                other_flags,
+                ppem,
+                dim,
+                org_len,
+                0,
+                edge_flags,
+                edge2_flags,
+                std_widths,
+                extra_light,
             );
 
             if cur_len <= 64 {
@@ -2414,7 +2776,15 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 let dist = stem_opos - base_opos;
                 let base_delta = base_pos - base_opos;
                 let fitted_width = compute_stem_width(
-                    other_flags, ppem, dim, dist, base_delta, base_flags, stem_flags, std_widths, extra_light,
+                    other_flags,
+                    ppem,
+                    dim,
+                    dist,
+                    base_delta,
+                    base_flags,
+                    stem_flags,
+                    std_widths,
+                    extra_light,
                 );
                 axis.edges[edge2_idx].pos = base_pos + fitted_width;
             }
@@ -2433,7 +2803,15 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             trace!(target: "autohint::pipeline", "[P2_REL] E{i}↔E{edge2_idx} dim={dim:?}: anchor={anchor} org_pos={org_pos} org_len={org_len} el={extra_light}");
 
             let cur_len = compute_stem_width(
-                other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
+                other_flags,
+                ppem,
+                dim,
+                org_len,
+                0,
+                edge_flags,
+                edge2_flags,
+                std_widths,
+                extra_light,
             );
 
             // ✅ VERIFIED (2026-06-27): C sets edge2->pos = cur_pos1 + cur_len/2
@@ -2445,11 +2823,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             } else if cur_len < 96 {
                 let cur_pos1 = (org_center + 32) & !63; // FT_PIX_ROUND
 
-                let (u_off, d_off): (i32, i32) = if cur_len <= 64 {
-                    (32, 32)
-                } else {
-                    (38, 26)
-                };
+                let (u_off, d_off): (i32, i32) = if cur_len <= 64 { (32, 32) } else { (38, 26) };
 
                 let delta1 = (org_center - (cur_pos1 - u_off)).abs();
                 let delta2 = (org_center - (cur_pos1 + d_off)).abs();
@@ -2466,7 +2840,15 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                 axis.edges[edge2_idx].flags |= AF_EDGE_DONE;
             } else {
                 let cur_len2 = compute_stem_width(
-                    other_flags, ppem, dim, org_len, 0, edge_flags, edge2_flags, std_widths, extra_light,
+                    other_flags,
+                    ppem,
+                    dim,
+                    org_len,
+                    0,
+                    edge_flags,
+                    edge2_flags,
+                    std_widths,
+                    extra_light,
                 );
 
                 let cur_pos1 = (org_pos + 32) & !63; // FT_PIX_ROUND
@@ -2513,21 +2895,19 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     // If a glyph has 3 stems (6 edges) or 3 stems with serifs (12 edges),
     // make the outer stems symmetric around the middle stem.
     if dim == Dimension::Horz && (num_edges == 6 || num_edges == 12) {
-        let (e1_idx, e2_idx, e3_idx) = if num_edges == 6 {
-            (0, 2, 4)
-        } else {
-            (1, 5, 9)
-        };
+        let (e1_idx, e2_idx, e3_idx) = if num_edges == 6 { (0, 2, 4) } else { (1, 5, 9) };
         let e1_opos = axis.edges[e1_idx].opos;
         let e2_opos = axis.edges[e2_idx].opos;
         let e3_opos = axis.edges[e3_idx].opos;
         let dist1 = e2_opos - e1_opos;
         let dist2 = e3_opos - e2_opos;
         let mut span = dist1 - dist2;
-        if span < 0 { span = -span; }
+        if span < 0 {
+            span = -span;
+        }
         if span < 8 {
-            let delta = axis.edges[e3_idx].pos
-                - (2 * axis.edges[e2_idx].pos - axis.edges[e1_idx].pos);
+            let delta =
+                axis.edges[e3_idx].pos - (2 * axis.edges[e2_idx].pos - axis.edges[e1_idx].pos);
             axis.edges[e3_idx].pos -= delta;
             axis.edges[e3_idx].flags |= AF_EDGE_DONE;
             let link = axis.edges[e3_idx].link;
@@ -2564,7 +2944,9 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
             let serif_idx = axis.edges[i].serif;
             if serif_idx != usize::MAX {
                 delta = axis.edges[serif_idx].opos - axis.edges[i].opos;
-                if delta < 0 { delta = -delta; }
+                if delta < 0 {
+                    delta = -delta;
+                }
                 // Only check overlap when delta < 1.5px (C: aflatin.c:4767)
                 if delta < 64 + 32 {
                     // C: reads first/last points of first/last segments (4 pts per edge)
@@ -2580,22 +2962,32 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                     let s_li = axis.edges[i].last;
                     let s_fs = axis.edges[serif_idx].first;
                     let s_ls = axis.edges[serif_idx].last;
-                    let v_min = i32::min(i32::min(seg_v_min(s_fi), seg_v_min(s_li)),
-                                         i32::min(seg_v_min(s_fs), seg_v_min(s_ls)));
-                    let v_max = i32::max(i32::max(seg_v_max(s_fi), seg_v_max(s_li)),
-                                         i32::max(seg_v_max(s_fs), seg_v_max(s_ls)));
+                    let v_min = i32::min(
+                        i32::min(seg_v_min(s_fi), seg_v_min(s_li)),
+                        i32::min(seg_v_min(s_fs), seg_v_min(s_ls)),
+                    );
+                    let v_max = i32::max(
+                        i32::max(seg_v_max(s_fi), seg_v_max(s_li)),
+                        i32::max(seg_v_max(s_fs), seg_v_max(s_ls)),
+                    );
                     // Walk intermediate edges for v-overlap
                     let lo = serif_idx.min(i);
                     let hi = serif_idx.max(i);
                     let mut overlap = false;
                     for j in (lo + 1)..hi {
-                        if j == i || j == serif_idx { continue; }
+                        if j == i || j == serif_idx {
+                            continue;
+                        }
                         let sj_f = axis.edges[j].first;
                         let sj_l = axis.edges[j].last;
-                        if sj_f == usize::MAX || sj_l == usize::MAX { continue; }
+                        if sj_f == usize::MAX || sj_l == usize::MAX {
+                            continue;
+                        }
                         let ej_min = i32::min(seg_v_min(sj_f), seg_v_min(sj_l));
                         let ej_max = i32::max(seg_v_max(sj_f), seg_v_max(sj_l));
-                        if !((ej_min < v_min && ej_max < v_min) || (ej_min > v_max && ej_max > v_max)) {
+                        if !((ej_min < v_min && ej_max < v_min)
+                            || (ej_min > v_max && ej_max > v_max))
+                        {
                             overlap = true;
                             break;
                         }
@@ -2662,8 +3054,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
                     // Anchor-relative: round delta to nearest half-pixel.
                     let anchor_pos = axis.edges[anchor].pos;
                     let anchor_opos = axis.edges[anchor].opos;
-                    axis.edges[i].pos = anchor_pos
-                        + ((edge_opos - anchor_opos + 16) & !31);
+                    axis.edges[i].pos = anchor_pos + ((edge_opos - anchor_opos + 16) & !31);
                 }
             }
 
@@ -2738,7 +3129,9 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
         let pos = edge.pos;
         let mut seg_idx = edge.first;
         loop {
-            if seg_idx == usize::MAX { break; }
+            if seg_idx == usize::MAX {
+                break;
+            }
             let seg = &axis.segments[seg_idx];
             let mut pt_idx = seg.first;
             loop {
@@ -2749,10 +3142,14 @@ fn align_edge_points(hints: &mut GlyphHints, dim: Dimension) {
                     hints.points[pt_idx].x = pos;
                     hints.points[pt_idx].flags |= AF_FLAG_TOUCH_X;
                 }
-                if pt_idx == seg.last { break; }
+                if pt_idx == seg.last {
+                    break;
+                }
                 pt_idx = hints.points[pt_idx].next;
             }
-            if seg_idx == edge.last { break; }
+            if seg_idx == edge.last {
+                break;
+            }
             seg_idx = seg.edge_next;
         }
     }
@@ -2811,26 +3208,49 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
             // Point after last edge: shift by edge delta (afhints.c:1460-1470)
             let last = &axis.edges[axis.edges.len() - 1];
             let delta = last.pos - last.opos;
-            let val = if is_vert { pt.oy + delta } else { pt.ox + delta };
-            if is_vert { hints.points[i].y = val; hints.points[i].flags |= AF_FLAG_TOUCH_Y; }
-            else { hints.points[i].x = val; hints.points[i].flags |= AF_FLAG_TOUCH_X; }
+            let val = if is_vert {
+                pt.oy + delta
+            } else {
+                pt.ox + delta
+            };
+            if is_vert {
+                hints.points[i].y = val;
+                hints.points[i].flags |= AF_FLAG_TOUCH_Y;
+            } else {
+                hints.points[i].x = val;
+                hints.points[i].flags |= AF_FLAG_TOUCH_X;
+            }
             continue;
         }
         if nn == 0 {
             // Point before first edge: shift by edge delta (afhints.c:1456-1469)
             let first = &axis.edges[0];
             let delta = first.pos - first.opos;
-            let val = if is_vert { pt.oy + delta } else { pt.ox + delta };
-            if is_vert { hints.points[i].y = val; hints.points[i].flags |= AF_FLAG_TOUCH_Y; }
-            else { hints.points[i].x = val; hints.points[i].flags |= AF_FLAG_TOUCH_X; }
+            let val = if is_vert {
+                pt.oy + delta
+            } else {
+                pt.ox + delta
+            };
+            if is_vert {
+                hints.points[i].y = val;
+                hints.points[i].flags |= AF_FLAG_TOUCH_Y;
+            } else {
+                hints.points[i].x = val;
+                hints.points[i].flags |= AF_FLAG_TOUCH_X;
+            }
             continue;
         }
 
         // C: if exact match, snap to edge (afhints.c:1496-1499)
         if axis.edges[nn].fpos as i32 == pt_fpos {
             let val = axis.edges[nn].pos;
-            if is_vert { hints.points[i].y = val; hints.points[i].flags |= AF_FLAG_TOUCH_Y; }
-            else { hints.points[i].x = val; hints.points[i].flags |= AF_FLAG_TOUCH_X; }
+            if is_vert {
+                hints.points[i].y = val;
+                hints.points[i].flags |= AF_FLAG_TOUCH_Y;
+            } else {
+                hints.points[i].x = val;
+                hints.points[i].flags |= AF_FLAG_TOUCH_X;
+            }
             continue;
         }
 
@@ -2864,7 +3284,9 @@ fn align_strong_points(hints: &mut GlyphHints, dim: Dimension) {
 /// Used when a contour has only one touched point. `delta = points[ref_idx].u - points[ref_idx].v`.
 fn iup_shift(points: &mut [AFPoint], p1: usize, p2: usize, ref_idx: usize) {
     let delta = points[ref_idx].u - points[ref_idx].v;
-    if delta == 0 { return; }
+    if delta == 0 {
+        return;
+    }
     for (j, pt) in points[p1..=p2].iter_mut().enumerate() {
         if p1 + j != ref_idx {
             pt.u = pt.v + delta;
@@ -2878,7 +3300,9 @@ fn iup_shift(points: &mut [AFPoint], p1: usize, p2: usize, ref_idx: usize) {
 /// `scale = ft_mul_div(u2-u1, 0x10000, v2-v1)`.
 /// For each weak point: if v ≤ v1 → d1 shift, if v ≥ v2 → d2 shift, else → u1 + ft_mul_fix(v-v1, scale).
 fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: usize) {
-    if p1 > p2 { return; }
+    if p1 > p2 {
+        return;
+    }
 
     let (ref1, ref2) = if points[ref1].v > points[ref2].v {
         (ref2, ref1)
@@ -2896,17 +3320,25 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
     if u1 == u2 || v1 == v2 {
         for p in points[p1..=p2].iter_mut() {
             let u = p.v;
-            if u <= v1 { p.u = u + d1; }
-            else if u >= v2 { p.u = u + d2; }
-            else { p.u = u1; }
+            if u <= v1 {
+                p.u = u + d1;
+            } else if u >= v2 {
+                p.u = u + d2;
+            } else {
+                p.u = u1;
+            }
         }
     } else {
         let scale = ft_mul_div(u2 - u1, 0x10000, v2 - v1); // FT_DivFix
         for p in points[p1..=p2].iter_mut() {
             let u = p.v;
-            if u <= v1 { p.u = u + d1; }
-            else if u >= v2 { p.u = u + d2; }
-            else { p.u = u1 + ft_mul_fix(u - v1, scale); }
+            if u <= v1 {
+                p.u = u + d1;
+            } else if u >= v2 {
+                p.u = u + d2;
+            } else {
+                p.u = u1 + ft_mul_fix(u - v1, scale);
+            }
         }
     }
 }
@@ -2927,7 +3359,11 @@ fn iup_interp(points: &mut [AFPoint], p1: usize, p2: usize, ref1: usize, ref2: u
 /// - [ ] scale computation same as C? → `ft_mul_div` verbose
 fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
     let is_vert = dim == Dimension::Vert;
-    let touch_flag = if is_vert { AF_FLAG_TOUCH_Y } else { AF_FLAG_TOUCH_X };
+    let touch_flag = if is_vert {
+        AF_FLAG_TOUCH_Y
+    } else {
+        AF_FLAG_TOUCH_X
+    };
 
     // PASS 1: Set u = hinted (current x/y), v = original (ox/oy)
     for pt in &mut hints.points {
@@ -2948,11 +3384,17 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
         // Find first touched point
         let mut idx = c_start;
         let first_touched: usize = loop {
-            if idx > end_idx { break usize::MAX; } // no touched point in contour
-            if hints.points[idx].flags & touch_flag != 0 { break idx; }
+            if idx > end_idx {
+                break usize::MAX;
+            } // no touched point in contour
+            if hints.points[idx].flags & touch_flag != 0 {
+                break idx;
+            }
             idx += 1;
         };
-        if first_touched == usize::MAX { continue; }
+        if first_touched == usize::MAX {
+            continue;
+        }
 
         let mut last_touched = first_touched;
 
@@ -2965,14 +3407,24 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
             // Find next touched point
             let mut next = last_touched + 1;
             let next_touched: Option<usize> = loop {
-                if next > end_idx { break None; }
-                if hints.points[next].flags & touch_flag != 0 { break Some(next); }
+                if next > end_idx {
+                    break None;
+                }
+                if hints.points[next].flags & touch_flag != 0 {
+                    break Some(next);
+                }
                 next += 1;
             };
 
             if let Some(nt) = next_touched {
                 // Interpolate between last_touched and next_touched
-                iup_interp(&mut hints.points, last_touched + 1, nt - 1, last_touched, nt);
+                iup_interp(
+                    &mut hints.points,
+                    last_touched + 1,
+                    nt - 1,
+                    last_touched,
+                    nt,
+                );
                 last_touched = nt;
             } else {
                 // End of contour
@@ -2982,10 +3434,22 @@ fn align_weak_points(hints: &mut GlyphHints, dim: Dimension) {
                 } else {
                     // Interpolate tail segments
                     if last_touched < end_idx {
-                        iup_interp(&mut hints.points, last_touched + 1, end_idx, last_touched, first_touched);
+                        iup_interp(
+                            &mut hints.points,
+                            last_touched + 1,
+                            end_idx,
+                            last_touched,
+                            first_touched,
+                        );
                     }
                     if first_touched > c_start {
-                        iup_interp(&mut hints.points, c_start, first_touched - 1, last_touched, first_touched);
+                        iup_interp(
+                            &mut hints.points,
+                            c_start,
+                            first_touched - 1,
+                            last_touched,
+                            first_touched,
+                        );
                     }
                 }
                 break;

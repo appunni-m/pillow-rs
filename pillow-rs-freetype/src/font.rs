@@ -3,7 +3,7 @@
 //! Mirrors the subset of PIL's `FreeTypeFont` API used by the coverage matrix:
 //! `truetype`, `getmask`, `getbbox`, `getmetrics`, `getname`, `getlength`.
 
-use crate::casts::{i32_from_f32, i32_from_usize, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
+use crate::casts::{i32_from_f32, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
 
 use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
@@ -16,7 +16,7 @@ use std::sync::Arc;
 /// Selects the rendering pipeline for `getmask` / `getbbox`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BitmapBackend {
-    /// PIL-style mask: padded to ascender/descender, advance-based width.
+    /// PIL-style mask: baseline-padded with advance-aware width.
     /// bbox uses ascender-relative screen coords.
     #[default]
     PIL,
@@ -78,29 +78,29 @@ impl Font {
     pub fn truetype(data: &[u8], size_pt: f32, backend: BitmapBackend) -> Result<Self, FontError> {
         let dir = tt::parse_table_directory(data)?;
 
-        let head_bytes = dir.find(data, tag(b"head")).ok_or_else(|| {
-            FontError::InvalidFont("missing 'head' table".into())
-        })?;
+        let head_bytes = dir
+            .find(data, tag(b"head"))
+            .ok_or_else(|| FontError::InvalidFont("missing 'head' table".into()))?;
         let head = tt::head::parse_head(head_bytes)?;
 
-        let maxp_bytes = dir.find(data, tag(b"maxp")).ok_or_else(|| {
-            FontError::InvalidFont("missing 'maxp' table".into())
-        })?;
+        let maxp_bytes = dir
+            .find(data, tag(b"maxp"))
+            .ok_or_else(|| FontError::InvalidFont("missing 'maxp' table".into()))?;
         let maxp = tt::maxp::parse_maxp(maxp_bytes)?;
 
-        let cmap_bytes = dir.find(data, tag(b"cmap")).ok_or_else(|| {
-            FontError::InvalidFont("missing 'cmap' table".into())
-        })?;
+        let cmap_bytes = dir
+            .find(data, tag(b"cmap"))
+            .ok_or_else(|| FontError::InvalidFont("missing 'cmap' table".into()))?;
         let cmap = tt::cmap::parse_cmap(cmap_bytes)?;
 
-        let hhea_bytes = dir.find(data, tag(b"hhea")).ok_or_else(|| {
-            FontError::InvalidFont("missing 'hhea' table".into())
-        })?;
+        let hhea_bytes = dir
+            .find(data, tag(b"hhea"))
+            .ok_or_else(|| FontError::InvalidFont("missing 'hhea' table".into()))?;
         let hhea = tt::hhea::parse_hhea(hhea_bytes)?;
 
-        let hmtx_bytes = dir.find(data, tag(b"hmtx")).ok_or_else(|| {
-            FontError::InvalidFont("missing 'hmtx' table".into())
-        })?;
+        let hmtx_bytes = dir
+            .find(data, tag(b"hmtx"))
+            .ok_or_else(|| FontError::InvalidFont("missing 'hmtx' table".into()))?;
         let hmtx = tt::hmtx::parse_hmtx(hmtx_bytes, hhea.num_hmetrics, maxp.num_glyphs)?;
 
         let name = match dir.find(data, tag(b"name")) {
@@ -150,10 +150,7 @@ impl Font {
 
         let _upem = font_data.head.units_per_em as i32;
         let is_italic = (font_data.head.mac_style & 2) != 0;
-        let face_globals = crate::autohint::globals::FaceGlobals::new(
-            font_data.clone(),
-            is_italic,
-        );
+        let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), is_italic);
 
         Ok(Font {
             data: font_data,
@@ -223,7 +220,9 @@ impl Font {
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
         let advance = pixel_round(ft_mul_fix(
-            data.hmtx.get(glyph).advance_width as i32, scale.x_scale));
+            data.hmtx.get(glyph).advance_width as i32,
+            scale.x_scale,
+        ));
         let metrics_cache = self.face_globals.get_metrics(glyph);
         // PIL backend: skip autohinting
         let metrics_for_scale = match self.backend {
@@ -236,8 +235,8 @@ impl Font {
                     BitmapBackend::PIL => {
                         let gx_min = 0_i32.min(g.bbox_x_min);
                         let gx_max = advance.max(g.bbox_x_max);
-                        let gy_min = asc_px - g.bbox_y_max;
-                        let gy_max = (asc_px - g.bbox_y_min).max(asc_px);
+                        let gy_min = asc_px - g.bbox_y_max.max(0);
+                        let gy_max = asc_px - g.bbox_y_min.min(0);
                         (gx_min, gy_min, gx_max, gy_max)
                     }
                     BitmapBackend::FreeType => {
@@ -257,8 +256,8 @@ impl Font {
         }
     }
 
-    /// `getmask(char)` → 8-bit alpha bitmap sized to the glyph's full mask
-    /// box (origin + advance), matching PIL's `getmask` on an `L` image.
+    /// `getmask(char)` → 8-bit alpha bitmap sized to PIL's glyph mask box,
+    /// matching PIL's `getmask` on an `L` image.
     ///
     /// # Errors
     ///
@@ -318,9 +317,12 @@ impl Font {
 
         match self.backend {
             BitmapBackend::PIL => {
-                // PIL mask: padded to ascender/descender extent.
-                let new_width = u32_from_i32(advance_px.max(i32_from_usize(raster.width)));
-                let new_height = u32_from_i32(scaled.bbox_y_max - scaled.bbox_y_min.min(0));
+                // PIL mask: x is advance-aware; y is padded to include the
+                // baseline when the glyph is wholly above or below it.
+                let x_min = scaled.bbox_x_min.min(0);
+                let x_max = scaled.bbox_x_max.max(advance_px);
+                let new_width = u32_from_i32(x_max - x_min);
+                let new_height = u32_from_i32(scaled.bbox_y_max.max(0) - scaled.bbox_y_min.min(0));
                 let nw = new_width as usize;
                 let nh = new_height as usize;
 
@@ -336,12 +338,12 @@ impl Font {
                 }
 
                 let mut pixels = vec![0u8; nw * nh];
-                let x_offs = usize_from_i32((scaled.bbox_x_min).max(0));
-                let y_offs = 0usize;
+                let x_offs = usize_from_i32(scaled.bbox_x_min - x_min);
+                let y_offs = usize_from_i32(scaled.bbox_y_max.max(0) - scaled.bbox_y_max);
                 let rw = raster.width;
                 for y in 0..raster.height {
                     let src = y * rw;
-                    let dst = y_offs + y * nw + x_offs;
+                    let dst = (y_offs + y) * nw + x_offs;
                     if dst + rw <= pixels.len() && x_offs + rw <= nw {
                         let copy = rw.min(nw.saturating_sub(x_offs));
                         pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
