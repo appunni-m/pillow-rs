@@ -81,6 +81,15 @@ pub struct GraphicsState {
     /// Rounding mode. Default: Grid (1).
     pub round_state: RoundMode,
 
+    /// Super-rounding period in 26.6.
+    pub period: i32,
+
+    /// Super-rounding phase in 26.6.
+    pub phase: i32,
+
+    /// Super-rounding threshold in 26.6.
+    pub threshold: i32,
+
     /// Auto-flip flag. When set, MIRP automatically flips the sign of
     /// the CVT distance if the original contour direction opposes the
     /// freedom vector direction.
@@ -147,6 +156,9 @@ impl Default for GraphicsState {
             freedom_vector: (0x4000, 0),
             move_vector: (0x10000, 0),
             round_state: RoundMode::Grid,
+            period: 64,
+            phase: 0,
+            threshold: 0,
             auto_flip: true,
             cvt_cut_in: DEFAULT_CVT_CUT_IN,
             minimum_distance: DEFAULT_MINIMUM_DISTANCE,
@@ -271,6 +283,73 @@ impl GraphicsState {
         (dx, dy)
     }
 
+    /// Configure SROUND/S45ROUND period, phase, and threshold.
+    pub fn set_super_round(&mut self, grid_period: i32, selector: i32) {
+        let mut period = match selector & 0xC0 {
+            0x00 => grid_period / 2,
+            0x40 => grid_period,
+            0x80 => grid_period * 2,
+            _ => grid_period,
+        };
+
+        let mut phase = match selector & 0x30 {
+            0x00 => 0,
+            0x10 => period / 4,
+            0x20 => period / 2,
+            _ => period * 3 / 4,
+        };
+
+        let mut threshold = if selector & 0x0F == 0 {
+            period - 1
+        } else {
+            ((selector & 0x0F) - 4) * period / 8
+        };
+
+        period >>= 8;
+        phase >>= 8;
+        threshold >>= 8;
+
+        self.period = period.max(1);
+        self.phase = phase;
+        self.threshold = threshold;
+    }
+
+    fn round_super(&self, distance: i32) -> i32 {
+        if distance >= 0 {
+            let mut val = (distance + self.threshold - self.phase) & -self.period;
+            val += self.phase;
+            if val < 0 {
+                val = self.phase;
+            }
+            val
+        } else {
+            let mut val = -((self.threshold - self.phase - distance) & -self.period);
+            val -= self.phase;
+            if val > 0 {
+                val = -self.phase;
+            }
+            val
+        }
+    }
+
+    fn round_super_45(&self, distance: i32) -> i32 {
+        if distance >= 0 {
+            let mut val = ((distance + self.threshold - self.phase) / self.period) * self.period;
+            val += self.phase;
+            if val < 0 {
+                val = self.phase;
+            }
+            val
+        } else {
+            let mut val = -(((self.threshold - self.phase - distance) / self.period) * self.period);
+            val -= self.phase;
+            if val > 0 {
+                val = -self.phase;
+            }
+            val
+        }
+    }
+
     /// Round a 26.6 value using the current rounding mode.
     /// C: `TT_RoundFunc` dispatch.
     pub fn round(&self, distance: i32) -> i32 {
@@ -314,11 +393,8 @@ impl GraphicsState {
             RoundMode::DownToGrid => floor_grid(distance),
             RoundMode::UpToGrid => ceil_grid(distance),
             RoundMode::Off => distance,
-            RoundMode::Super | RoundMode::Super45 => {
-                // SROUND/S45ROUND need period/phase/threshold from exec context
-                // For now, fall through to Grid rounding
-                round_grid(distance)
-            }
+            RoundMode::Super => self.round_super(distance),
+            RoundMode::Super45 => self.round_super_45(distance),
         }
     }
 }
