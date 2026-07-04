@@ -229,18 +229,25 @@ fn scale_glyph_impl(
         is_composite: outline_raw.is_composite,
         sub_lsb: outline_raw.sub_lsb,
         instructions: outline_raw.instructions.clone(),
+        components: Vec::new(),
     };
 
     let use_autohint = latin_metrics.is_some();
-    let mut scaled: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
-    for p in &outline_raw.points {
-        let x = if use_autohint { p.x - pp1x_fu } else { p.x };
-        scaled.push(OutlinePoint {
-            x: scale.scale_x(x),
-            y: ft_mul_fix(p.y, y_adj),
-            on_curve: p.on_curve,
-        });
-    }
+    let mut scaled: Vec<OutlinePoint> =
+        if outline_raw.is_composite && !use_autohint && allow_bytecode {
+            scale_composite_components(data, &outline_raw, is_italic, &scale)?
+        } else {
+            let mut scaled = Vec::with_capacity(outline_raw.points.len());
+            for p in &outline_raw.points {
+                let x = if use_autohint { p.x - pp1x_fu } else { p.x };
+                scaled.push(OutlinePoint {
+                    x: scale.scale_x(x),
+                    y: ft_mul_fix(p.y, y_adj),
+                    on_curve: p.on_curve,
+                });
+            }
+            scaled
+        };
 
     // ── Hinting dispatch ────────────────────────────────────────────────
     if use_autohint {
@@ -362,6 +369,50 @@ fn scale_glyph_impl(
         bbox_x_max: px_x_max,
         bbox_y_max: px_y_max,
     })
+}
+
+fn scale_composite_components(
+    data: &FontData,
+    outline_raw: &GlyphOutline,
+    is_italic: bool,
+    scale: &ScaleMetrics,
+) -> Result<Vec<OutlinePoint>, FontError> {
+    let mut points = Vec::with_capacity(outline_raw.points.len());
+    for comp in &outline_raw.components {
+        let sub = scale_glyph_impl(data, comp.glyph_index, None, is_italic, true)?;
+        let off_x = ft_pix_floor(sub.outline_cbox_x_min);
+        let off_y = ft_pix_floor(sub.outline_cbox_y_min);
+        let dx = if comp.args_are_xy {
+            let scaled = scale.scale_x(comp.arg1);
+            if comp.round_xy_to_grid {
+                ft_pix_round(scaled)
+            } else {
+                scaled
+            }
+        } else {
+            0
+        };
+        let dy = if comp.args_are_xy {
+            let scaled = scale.scale_y(comp.arg2);
+            if comp.round_xy_to_grid {
+                ft_pix_round(scaled)
+            } else {
+                scaled
+            }
+        } else {
+            0
+        };
+        for point in &sub.outline.points {
+            let x = point.x + off_x;
+            let y = point.y + off_y;
+            points.push(OutlinePoint {
+                x: ft_mul_fix(x, comp.transform.xx) + ft_mul_fix(y, comp.transform.xy) + dx,
+                y: ft_mul_fix(x, comp.transform.yx) + ft_mul_fix(y, comp.transform.yy) + dy,
+                on_curve: point.on_curve,
+            });
+        }
+    }
+    Ok(points)
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -21,6 +21,7 @@ const Y_IS_SAME_OR_POSITIVE_SHORT: u8 = 0x20;
 // Composite glyph flag bits (ttgload.c:69).
 const ARG_1_AND_2_ARE_WORDS: u16 = 0x0001;
 const ARGS_ARE_XY_VALUES: u16 = 0x0002;
+const ROUND_XY_TO_GRID: u16 = 0x0004;
 const WE_HAVE_A_SCALE: u16 = 0x0008;
 const MORE_COMPONENTS: u16 = 0x0020;
 const WE_HAVE_AN_X_Y_SCALE: u16 = 0x0040;
@@ -52,6 +53,8 @@ pub struct GlyphOutline {
     /// TrueType bytecode instructions for this glyph (from glyf table).
     /// Only populated for simple glyphs; empty for composites and empty glyphs.
     pub instructions: Vec<u8>,
+    /// Component records for composite glyphs. Empty for simple glyphs.
+    pub components: Vec<CompositeComponent>,
 }
 
 /// A 2×2 fixed-point transform for a composite component (16.16).
@@ -74,13 +77,14 @@ impl Affine {
 
 /// One component of a composite glyph.
 #[derive(Debug, Clone)]
-struct CompositeComponent {
-    glyph_index: u16,
+pub struct CompositeComponent {
+    pub glyph_index: u16,
     /// Translation args (font units when ARGS_ARE_XY_VALUES).
-    arg1: i32,
-    arg2: i32,
-    args_are_xy: bool,
-    transform: Affine,
+    pub arg1: i32,
+    pub arg2: i32,
+    pub args_are_xy: bool,
+    pub transform: Affine,
+    pub round_xy_to_grid: bool,
 }
 
 /// Load a glyph outline from 'glyf'/'loca', resolving composite glyphs recursively.
@@ -175,7 +179,7 @@ fn load_glyph_inner(
         let mut last_sub_xmin = xmin;
         let mut last_sub_lsb = hmtx.get(glyph_index).lsb as i32;
 
-        for comp in components {
+        for comp in &components {
             let sub = load_glyph_inner(
                 glyf,
                 loca,
@@ -189,7 +193,7 @@ fn load_glyph_inner(
             let base = points.len();
             for pt in &sub.points {
                 points.push(transform_point(
-                    *pt, &comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax,
+                    *pt, comp, sub.xmin, sub.ymin, sub.xmax, sub.ymax,
                 ));
             }
             for &ep in &sub.end_pts_of_contours {
@@ -209,6 +213,7 @@ fn load_glyph_inner(
             is_composite: true,
             sub_lsb: last_sub_lsb,
             instructions: Vec::new(),
+            components,
         })
     }
 }
@@ -354,6 +359,7 @@ fn parse_simple_glyph(data: &[u8], num_contours: u16) -> Result<GlyphOutline, Fo
         is_composite: false,
         sub_lsb: 0,
         instructions,
+        components: Vec::new(),
     })
 }
 
@@ -431,6 +437,7 @@ fn parse_composite_components(
             arg2,
             args_are_xy,
             transform,
+            round_xy_to_grid: flags & ROUND_XY_TO_GRID != 0,
         });
 
         if flags & MORE_COMPONENTS == 0 {
