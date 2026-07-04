@@ -157,15 +157,22 @@ fn render_mono(
         (bbox_x_min - mono_box.x_min) * 64,
         (bbox_y_min - mono_box.y_min) * 64,
     );
-    let buffer = rasterize_mono_center(&outline, width, height)?;
+    let mut buffer = rasterize_mono_center(&outline, width, height)?;
     let pitch = mono_pitch(width);
+    let mut rows = height;
+    let mut top = mono_box.y_max;
+    if should_collapse_mono_two_row_stroke(&outline, &buffer, pitch, height) {
+        buffer.truncate(pitch);
+        rows = 1;
+        top -= 1;
+    }
     Ok(RenderedBitmap {
         width: u32_from_usize(width),
-        rows: u32_from_usize(height),
+        rows: u32_from_usize(rows),
         pitch: i32_from_usize(pitch),
         pixel_mode: PixelMode::Mono,
         left: mono_box.x_min,
-        top: mono_box.y_max,
+        top,
         buffer,
     })
 }
@@ -217,6 +224,32 @@ impl PixelBox {
         }
         self
     }
+}
+
+fn should_collapse_mono_two_row_stroke(
+    outline: &Outline,
+    buffer: &[u8],
+    pitch: usize,
+    height: usize,
+) -> bool {
+    if height != 2 || buffer.len() != pitch * 2 {
+        return false;
+    }
+    let Some((y_min, y_max)) = outline_y_range(outline) else {
+        return false;
+    };
+    y_max - y_min < 128 && buffer[..pitch] == buffer[pitch..pitch * 2]
+}
+
+fn outline_y_range(outline: &Outline) -> Option<(i32, i32)> {
+    let first = outline.points.first()?;
+    let mut y_min = first.y;
+    let mut y_max = first.y;
+    for point in &outline.points {
+        y_min = y_min.min(point.y);
+        y_max = y_max.max(point.y);
+    }
+    Some((y_min, y_max))
 }
 
 fn mono_round_min(base: i32, value: i32) -> i32 {
