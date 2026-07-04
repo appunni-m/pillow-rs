@@ -226,6 +226,8 @@ struct Segment {
     y0: i32,
     x1: i32,
     y1: i32,
+    contour: usize,
+    order: usize,
 }
 
 fn rasterize_mono_center(
@@ -266,7 +268,14 @@ fn rasterize_mono_center(
             if e1 <= e2 {
                 fill_mono_span(&mut buffer[dst_row..dst_row + pitch], width, e1, e2);
             } else {
-                set_mono_dropout(&mut buffer[dst_row..dst_row + pitch], width, x1, x2);
+                set_mono_dropout(
+                    &mut buffer[dst_row..dst_row + pitch],
+                    width,
+                    left,
+                    right,
+                    x1,
+                    x2,
+                );
             }
         }
     }
@@ -278,6 +287,8 @@ fn rasterize_mono_center(
 struct Intersection {
     x: i32,
     flow_up: bool,
+    contour: usize,
+    order: usize,
 }
 
 fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
@@ -299,7 +310,12 @@ fn segment_intersection(segment: Segment, scan_y: i32) -> Option<Intersection> {
     let dx = segment.x1 - segment.x0;
     let dy = segment.y1 - segment.y0;
     let x = segment.x0 - 32 + ((scan_y - segment.y0) as i64 * dx as i64 / dy as i64) as i32;
-    Some(Intersection { x, flow_up })
+    Some(Intersection {
+        x,
+        flow_up,
+        contour: segment.contour,
+        order: segment.order,
+    })
 }
 
 fn pixel_ceiling(x: i32) -> i32 {
@@ -325,8 +341,18 @@ fn fill_mono_span(row: &mut [u8], width: usize, mut x1: i32, mut x2: i32) {
     }
 }
 
-fn set_mono_dropout(row: &mut [u8], width: usize, x1: i32, x2: i32) {
+fn set_mono_dropout(
+    row: &mut [u8],
+    width: usize,
+    left: &Intersection,
+    right: &Intersection,
+    x1: i32,
+    x2: i32,
+) {
     if width == 0 {
+        return;
+    }
+    if left.contour == right.contour && left.order.abs_diff(right.order) == 1 && x2 - x1 < 32 {
         return;
     }
 
@@ -377,6 +403,8 @@ fn flatten_outline(outline: &Outline) -> Result<Vec<Segment>, FontError> {
         segments: Vec::new(),
         current_x: 0,
         current_y: 0,
+        contour: 0,
+        order: 0,
     };
     flattener.decompose(&outline.points, &outline.contours, outline.n_contours)?;
     Ok(flattener.segments)
@@ -386,6 +414,8 @@ struct MonoFlattener {
     segments: Vec<Segment>,
     current_x: i32,
     current_y: i32,
+    contour: usize,
+    order: usize,
 }
 
 impl MonoFlattener {
@@ -401,7 +431,10 @@ impl MonoFlattener {
                 y0: self.current_y,
                 x1: x,
                 y1: y,
+                contour: self.contour,
+                order: self.order,
             });
+            self.order += 1;
         }
         self.current_x = x;
         self.current_y = y;
@@ -483,7 +516,10 @@ impl MonoFlattener {
         n_contours: i32,
     ) -> Result<(), FontError> {
         let mut last: i64 = -1;
-        for &contour_end in contours.iter().take(usize_from_i32(n_contours)) {
+        for (contour, &contour_end) in contours.iter().take(usize_from_i32(n_contours)).enumerate()
+        {
+            self.contour = contour;
+            self.order = 0;
             let first = usize_from_i64(last + 1);
             last = contour_end as i64;
             if last < first as i64 {
