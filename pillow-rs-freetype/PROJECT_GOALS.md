@@ -71,14 +71,14 @@ Incomplete gates:
 - `native_tt_default_matrix.json`: threshold baseline only, currently `3176/7640`. This is not complete parity. It must become `7640/7640` exact before the native TrueType bytecode path can be called done.
 - `render_mono_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
 - `render_lcd_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
+- `metrics_only_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
+- `outline_cbox_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
 
-Present-but-unexecuted fixture debt:
+Executed small baseline:
 
-- `metrics_only_matrix.json`
-- `no_hinting_matrix.json`
-- `outline_cbox_matrix.json`
+- `no_hinting_matrix.json`: currently `8/8`, executed by the default coverage runner. It remains a small baseline until it is expanded and promoted as a broad exact gate.
 
-These fixtures are evidence that C references exist. They are not success until the runner executes them as exact gates.
+Current committed fixture families are executed by the default coverage runner. They are not success until every row is exact, broad enough for the endpoint family, and promoted out of threshold or small-baseline status.
 
 ## Promotion Rules
 
@@ -102,4 +102,4 @@ When changing renderer, scaler, bytecode hinter, rasterizer, table parser, fixtu
 3. Use C only to produce expected data.
 4. Make Rust output match the C expected data.
 5. Tighten the harness before trusting a new pass count.
-6. Document threshold, partial, and unexecuted states as unfinished work.
+6. Document threshold, partial, small-baseline, and unexecuted states as unfinished work.

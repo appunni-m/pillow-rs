@@ -109,6 +109,27 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true)
+}
+
+/// Scale a glyph without autohinting or native TrueType bytecode.
+///
+/// This models the Rust side of `FT_LOAD_NO_HINTING` fixture execution.
+pub fn scale_glyph_no_hinting(
+    data: &FontData,
+    glyph_index: u16,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, None, is_italic, false)
+}
+
+fn scale_glyph_impl(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+    allow_bytecode: bool,
+) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
     let h_metric = data.hmtx.get(glyph_index);
@@ -214,39 +235,41 @@ pub fn scale_glyph(
             is_italic,
             data,
         );
-    } else if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
-        // Bytecode VM: run on glyphs with per-glyph instructions.
-        // Falls through to unhinted on error (graceful degradation).
-        let raw_pts: Vec<OutlinePoint> = outline_raw
-            .points
-            .iter()
-            .map(|p| OutlinePoint {
-                x: p.x,
-                y: p.y,
-                on_curve: p.on_curve,
-            })
-            .collect();
-        let hs = crate::tt::hinter::HintScale {
-            x_scale: scale.x_scale,
-            y_scale: y_adj,
-            ppem: scale.ppem,
-            storage_size: data.maxp.max_storage as usize,
-        };
-        let prep = data.prep.as_deref().unwrap_or(&[]);
-        let hint_result = crate::tt::hinter::hint_glyph(
-            &mut scaled,
-            &raw_pts,
-            &outline_raw.end_pts_of_contours,
-            advance_width,
-            h_metric.advance_width as i32,
-            cvt,
-            fpgm,
-            prep,
-            &hs,
-            &outline_raw.instructions,
-        );
-        if let Err(e) = hint_result {
-            log::debug!("[VM] gi={glyph_index}: {e}");
+    } else if allow_bytecode {
+        if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
+            // Bytecode VM: run on glyphs with per-glyph instructions.
+            // Falls through to unhinted on error (graceful degradation).
+            let raw_pts: Vec<OutlinePoint> = outline_raw
+                .points
+                .iter()
+                .map(|p| OutlinePoint {
+                    x: p.x,
+                    y: p.y,
+                    on_curve: p.on_curve,
+                })
+                .collect();
+            let hs = crate::tt::hinter::HintScale {
+                x_scale: scale.x_scale,
+                y_scale: y_adj,
+                ppem: scale.ppem,
+                storage_size: data.maxp.max_storage as usize,
+            };
+            let prep = data.prep.as_deref().unwrap_or(&[]);
+            let hint_result = crate::tt::hinter::hint_glyph(
+                &mut scaled,
+                &raw_pts,
+                &outline_raw.end_pts_of_contours,
+                advance_width,
+                h_metric.advance_width as i32,
+                cvt,
+                fpgm,
+                prep,
+                &hs,
+                &outline_raw.instructions,
+            );
+            if let Err(e) = hint_result {
+                log::debug!("[VM] gi={glyph_index}: {e}");
+            }
         }
     }
 

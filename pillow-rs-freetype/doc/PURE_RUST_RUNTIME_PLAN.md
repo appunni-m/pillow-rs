@@ -61,11 +61,11 @@ Intent:
 - Lock broad matrix sizes and operation counts.
 - Require raw bytes for exact render gates.
 - Prevent `native_tt_default` from pretending to be complete.
-- Keep present-but-unexecuted matrices named as debt.
+- Keep every committed fixture family classified as exact, incomplete executed baseline, or explicit unexecuted debt.
 
 Next promotions:
 
-1. Add operation-specific contract checks for `metrics_only`, `outline_cbox`, `no_hinting`, `render_mono`, `render_lcd`, and `render_lcd_v`.
+1. Keep operation-specific contract checks for `metrics_only`, `outline_cbox`, `no_hinting`, `render_mono`, `render_lcd`, and `render_lcd_v`.
 2. Fail the contract if any implemented endpoint has no executable parity family.
 3. Fail the contract if any exact gate can pass using SHA-only or size-only fallback.
 
@@ -108,14 +108,20 @@ Current incomplete matrix:
 - `native_tt_default_matrix.json`: `3176/7640`, threshold baseline only.
 - `render_mono_matrix.json`: `0/8`, executed baseline only.
 - `render_lcd_matrix.json`: `0/8`, executed baseline only.
+- `metrics_only_matrix.json`: `0/8`, executed baseline only.
+- `outline_cbox_matrix.json`: `0/8`, executed baseline only.
+
+Current small executed baseline:
+
+- `no_hinting_matrix.json`: `8/8`, executed by the default runner; expand before calling the endpoint family complete.
 
 Plan:
 
 1. Keep `force_autohint_matrix.json` exact and broad.
 2. Promote `native_tt_default_matrix.json` from threshold to exact.
-3. Add execution support for `no_hinting_matrix.json`.
-4. Add execution support for `metrics_only_matrix.json`.
-5. Add execution support for `outline_cbox_matrix.json`.
+3. Expand and promote `no_hinting_matrix.json` from small executed baseline to exact.
+4. Promote `metrics_only_matrix.json` from executed baseline to exact.
+5. Promote `outline_cbox_matrix.json` from executed baseline to exact.
 6. Promote `render_mono_matrix.json` from executed baseline to exact.
 7. Promote `render_lcd_matrix.json` from executed baseline to exact.
 8. Add `render_lcd_v_matrix.json` if LCD_V is in scope.
@@ -185,7 +191,7 @@ Plan:
 1. Preserve runtime purity.
 2. Preserve generator reproducibility.
 3. Preserve exact existing gates.
-4. Convert unexecuted fixture families into executable gates.
+4. Keep every committed fixture family executable in the default runner.
 5. Fix Rust implementation failures exposed by those gates.
 6. Promote `native_tt_default` from threshold baseline to exact gate.
 7. Expand endpoint coverage only with matching C-oracle fixtures and default test execution.
@@ -212,4 +218,4 @@ cargo test -p pillow-rs-freetype --test fixed_parity --locked
 cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
 ```
 
-Passing tests are not enough if the plan still lists threshold or unexecuted debt. Those debts must be promoted into exact gates.
+Passing tests are not enough if the plan still lists threshold, incomplete, small-baseline, or unexecuted debt. Those debts must be promoted into exact gates.
