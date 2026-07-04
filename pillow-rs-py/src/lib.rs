@@ -1188,7 +1188,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 // --- ImageFont ---
 
-#[pyclass(name = "ImageFont")]
+#[pyclass(name = "ImageFont", unsendable)]
 pub struct PyFont {
     inner: pillow_rs::font::Font,
 }

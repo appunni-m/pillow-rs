@@ -5,6 +5,9 @@
 //!   cargo test -p pillow-rs-freetype --test pipe_trace -- --nocapture --include-ignored
 
 #![allow(unused_variables)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::unwrap_used)]
+#![allow(unused_crate_dependencies)]
 
 use pillow_rs_freetype::autohint::latin;
 use pillow_rs_freetype::{scaler, tt, BitmapBackend, Font};

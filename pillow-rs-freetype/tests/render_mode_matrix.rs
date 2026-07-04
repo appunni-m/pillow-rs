@@ -1,5 +1,9 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::unnecessary_cast)]
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
 

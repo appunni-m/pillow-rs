@@ -1016,12 +1016,10 @@ fn reverse_cmap_lookup(font_data: &crate::tables::FontData, glyph_index: u16) ->
     // In production, this would use the real reverse charmap from
     // af_reverse_character_map_new. For our parity tests, we just
     // check the cmap for all known adjustment codepoints.
-    for &(cp, _) in ADJUSTMENT_DATABASE {
-        if font_data.cmap.char_index(cp).unwrap_or(0) == glyph_index {
-            return Some(cp);
-        }
-    }
-    None
+    ADJUSTMENT_DATABASE
+        .iter()
+        .map(|&(cp, _)| cp)
+        .find(|&cp| font_data.cmap.char_index(cp).unwrap_or(0) == glyph_index)
 }
 
 /// Binary search the adjustment database for a codepoint.
@@ -1053,9 +1051,8 @@ fn vertical_separation_adjustments(
 
     // C uses reverse_charmap + af_adjustment_database_lookup.
     // We replicate via direct cmap scan on known adjustment codepoints.
-    let adj_type = reverse_cmap_lookup(font_data, glyph_index)
-        .map(|cp| adjustment_database_lookup(cp))
-        .unwrap_or(0);
+    let adj_type =
+        reverse_cmap_lookup(font_data, glyph_index).map_or(0, adjustment_database_lookup);
 
     if adj_type == 0 {
         return;
@@ -1206,7 +1203,7 @@ pub fn apply_hints(
     // Our pipeline with blue_count==0 produces different results than
     // C's NONE_DFLT path. Match C by skipping hinting entirely when
     // the VERT axis has no blue zones.
-    if metrics.map_or(true, |m| m.axis[1].blue_count == 0) {
+    if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
         return;
     }
     // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
@@ -1402,11 +1399,11 @@ pub fn apply_hints(
         let el_horz = hints
             .metrics
             .as_ref()
-            .map_or(false, |m| m.axis[Dimension::Horz as usize].extra_light);
+            .is_some_and(|m| m.axis[Dimension::Horz as usize].extra_light);
         let el_vert = hints
             .metrics
             .as_ref()
-            .map_or(false, |m| m.axis[Dimension::Vert as usize].extra_light);
+            .is_some_and(|m| m.axis[Dimension::Vert as usize].extra_light);
         trace!(target: "autohint::pipeline", "[PIPE] horz_edges {} extra_light_h={el_horz} extra_light_v={el_vert}", ha.edges.len());
         for (ei, e) in ha.edges.iter().enumerate() {
             trace!(target: "autohint::pipeline", "[PIPE] HE{ei}: fpos={} opos={} pos={} link={} serif={}",
@@ -1972,7 +1969,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
         let top_to_bottom = hints
             .metrics
             .as_ref()
-            .map_or(false, |m| m.top_to_bottom_hinting)
+            .is_some_and(|m| m.top_to_bottom_hinting)
             && dim == Dimension::Vert;
         let mut indices: Vec<usize> = (0..axis.edges.len()).collect();
         if top_to_bottom {
@@ -2097,6 +2094,7 @@ fn compute_edges(hints: &mut GlyphHints, dim: Dimension) {
 /// # Debug: stem pairs differ from C
 /// - [ ] Distance demerit scoring same as C?
 /// - [ ] Serif candidate detection: `seg.serif` pointer matches C?
+///
 /// Public wrapper: links segments using default width/demerit scoring.
 /// Used by CJK stem width detection in cjk.rs.
 pub fn link_segments(hints: &mut GlyphHints, dim: Dimension) {
@@ -2592,7 +2590,7 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
         && hints
             .metrics
             .as_ref()
-            .map_or(false, |m| m.top_to_bottom_hinting);
+            .is_some_and(|m| m.top_to_bottom_hinting);
 
     let mut anchor: usize = usize::MAX;
     let mut has_non_stem_edges = false;

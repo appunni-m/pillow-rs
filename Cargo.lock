@@ -1021,20 +1021,13 @@ dependencies = [
  "bytemuck",
  "csscolorparser",
  "log",
- "pillow-rs-font",
+ "pillow-rs-freetype",
  "pillow-rs-image",
  "png",
  "pollster",
  "rayon",
  "thiserror 2.0.18",
  "wgpu",
-]
-
-[[package]]
-name = "pillow-rs-font"
-version = "0.1.0"
-dependencies = [
- "pillow-rs-freetype",
 ]
 
 [[package]]

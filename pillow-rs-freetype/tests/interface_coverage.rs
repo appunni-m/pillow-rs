@@ -1,4 +1,7 @@
 #![allow(clippy::expect_used)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::map_unwrap_or)]
 #![allow(clippy::unwrap_used)]
 #![allow(unused_crate_dependencies)]
 #![allow(missing_docs)]

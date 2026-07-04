@@ -1,5 +1,7 @@
 //! Trace single glyph through autohinter — dump reload coords, edges, hinted output.
 //! Usage: RUST_LOG=autohint::pipeline=trace cargo run --example trace_glyph -- <font.ttf> <size_pt> <char>
+#![allow(clippy::expect_used)]
+#![allow(unused_crate_dependencies)]
 
 use std::env;
 use std::fs;

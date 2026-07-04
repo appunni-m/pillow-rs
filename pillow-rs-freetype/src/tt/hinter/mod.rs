@@ -75,6 +75,7 @@ pub struct HintScale {
 ///
 /// Phase 2 (VM opcodes): ✅ glyph opcodes implemented — 30+ opcodes operational.
 /// Phase 3 (prep + IUP): 🚧 in progress.
+#[allow(clippy::too_many_arguments)]
 pub fn hint_glyph(
     scaled: &mut [OutlinePoint],
     raw: &[OutlinePoint],

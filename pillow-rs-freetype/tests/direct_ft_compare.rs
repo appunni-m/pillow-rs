@@ -7,6 +7,11 @@
 //! Run: cargo test -p pillow-rs-freetype --test direct_ft_compare -- --test-threads=1
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::type_complexity)]
+#![allow(unused_crate_dependencies)]
 
 use pillow_rs_freetype::{BitmapBackend, Font};
 use sha2::{Digest, Sha256};

@@ -1,7 +1,7 @@
 //! Font loading and text rendering.
 //!
 //! Supports two font backends:
-//! - **TrueTypeFont** — uses pillow-rs-font (pure-Rust FreeType compatible) for font rendering
+//! - **TrueTypeFont** — uses pillow-rs-freetype (pure-Rust FreeType compatible) for font rendering
 //! - **BitmapFont** — uses pre-rendered glyphs from PIL's default font for exact parity
 //!
 //! Both implement the same text rendering interface.
@@ -14,23 +14,24 @@ use crate::error::PilError;
 
 /// A loaded font that can render text to bitmaps.
 pub enum Font {
-    /// TrueType/OpenType font rendered via pillow-rs-font (pure-Rust FreeType-compatible).
+    /// TrueType/OpenType font rendered via pillow-rs-freetype (pure-Rust FreeType-compatible).
     TrueType(TrueTypeFont),
     /// Pre-rendered bitmap font matching PIL's default font exactly.
     Bitmap(BitmapFont),
 }
 
-/// A TrueType font loaded via pillow-rs-font (pure-Rust FreeType equivalent).
+/// A TrueType font loaded via pillow-rs-freetype (pure-Rust FreeType equivalent).
 pub struct TrueTypeFont {
-    inner: Arc<pillow_rs_font::Font>,
+    inner: Arc<pillow_rs_freetype::Font>,
     size: f32,
 }
 
 impl Font {
     /// Load a TrueType font from raw bytes at a given point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
-        let inner = pillow_rs_font::Font::truetype(&data, size, pillow_rs_font::BitmapBackend::PIL)
-            .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
+        let inner =
+            pillow_rs_freetype::Font::truetype(&data, size, pillow_rs_freetype::BitmapBackend::PIL)
+                .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
         Ok(Font::TrueType(TrueTypeFont {
             inner: Arc::new(inner),
             size,
@@ -74,7 +75,7 @@ impl Font {
 
                 let mut total_w = 0f32;
                 let mut total_h = 0u32;
-                let mut glyphs: Vec<pillow_rs_font::GlyphMask> = Vec::new();
+                let mut glyphs: Vec<pillow_rs_freetype::GlyphMask> = Vec::new();
 
                 for ch in text.chars() {
                     // Render each character individually to build the composite canvas
@@ -159,7 +160,7 @@ impl Font {
                 }
 
                 // Layout: gather all glyphs with positions
-                let mut glyphs: Vec<pillow_rs_font::GlyphMask> = Vec::new();
+                let mut glyphs: Vec<pillow_rs_freetype::GlyphMask> = Vec::new();
                 let mut total_w = 0f32;
                 let mut total_h = 0u32;
 
