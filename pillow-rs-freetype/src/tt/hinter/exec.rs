@@ -731,12 +731,12 @@ impl ExecContext {
                 0x60 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(a + b);
+                    self.push(a.wrapping_add(b));
                 } // ADD
                 0x61 => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(a - b);
+                    self.push(a.wrapping_sub(b));
                 } // SUB
                 0x62 => {
                     let b = self.pop()?;
@@ -755,11 +755,11 @@ impl ExecContext {
                 } // MUL
                 0x64 => {
                     let a = self.pop()?;
-                    self.push(a.abs());
+                    self.push(a.wrapping_abs());
                 } // ABS
                 0x65 => {
                     let a = self.pop()?;
-                    self.push(-a);
+                    self.push(a.wrapping_neg());
                 } // NEG
                 0x66 => {
                     let a = self.pop()?;
@@ -1308,15 +1308,19 @@ impl ExecContext {
                     }
                     self.gs.loop_counter = 1;
                 }
-                // ── SDB (0x8B) — Set Delta Base ──────────────────
+                // ── MAX (0x8B) — Maximum ─────────────────────────
                 0x8B => {
-                    let v = self.pop()?;
-                    self.gs.delta_base = v as u32;
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(if a > b { a } else { b });
                 }
-                // ── SDS (0x8A) — Set Delta Shift ─────────────────
+                // ── ROLL (0x8A) — rotate top three stack elements ─
                 0x8A => {
-                    let v = self.pop()?;
-                    self.gs.delta_shift = v as u32;
+                    if self.stack.len() >= 3 {
+                        let len = self.stack.len();
+                        self.stack.swap(len - 3, len - 2);
+                        self.stack.swap(len - 2, len - 1);
+                    }
                 }
                 // ── JMPR (0x1C) — Jump Relative ──────────────────
                 0x1C => {
@@ -1846,14 +1850,13 @@ impl ExecContext {
                     let _ = self.pop()?;
                 }
 
-                // ── MAX (0x8C) — Maximum ────────────────────────
-                // C: Ins_MAX. Pops a, b, pushes max(a,b).
+                // ── MIN (0x8C) — Minimum ────────────────────────
                 0x8C => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(if a > b { a } else { b });
+                    self.push(if a < b { a } else { b });
                 }
-                // ── MIN (0x8D) — Minimum ────────────────────────
+                // ── MIN (0x8D) — compatibility fallback ──────────
                 0x8D => {
                     let b = self.pop()?;
                     let a = self.pop()?;
