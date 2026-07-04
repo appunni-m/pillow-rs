@@ -45,7 +45,7 @@
         },
         "FT_Done_Face": {
           "rust": "drop Font",
-          "status": "partial"
+          "status": "complete"
         },
         "FT_GetFilePath_From_Mac_ATS_Name": {
           "rust": null,
@@ -76,8 +76,8 @@
           "status": "out_of_scope"
         },
         "FT_New_Memory_Face": {
-          "rust": "Font::truetype",
-          "status": "partial"
+          "rust": "Font::truetype_face",
+          "status": "complete"
         },
         "FT_Open_Face": {
           "rust": null,
@@ -87,6 +87,11 @@
           "rust": null,
           "status": "planned"
         }
+      },
+      "parity": {
+        "family": "core_face_size_charmap",
+        "passing": 2,
+        "total": 2
       }
     },
     {
@@ -106,20 +111,20 @@
           "status": "out_of_scope"
         },
         "FT_Get_FSType_Flags": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::get_fstype_flags",
+          "status": "complete"
         },
         "FT_Get_Font_Format": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::font_format",
+          "status": "complete"
         },
         "FT_Get_Glyph_Name": {
           "rust": null,
           "status": "planned"
         },
         "FT_Get_Postscript_Name": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::postscript_name",
+          "status": "complete"
         },
         "FT_Get_Sfnt_LangTag": {
           "rust": null,
@@ -141,6 +146,11 @@
           "rust": null,
           "status": "out_of_scope"
         }
+      },
+      "parity": {
+        "family": "core_face_size_charmap",
+        "passing": 1,
+        "total": 1
       }
     },
     {
@@ -168,13 +178,18 @@
           "status": "planned"
         },
         "FT_Set_Char_Size": {
-          "rust": "Font::truetype(size_pt)",
-          "status": "partial"
+          "rust": "Font::set_char_size",
+          "status": "complete"
         },
         "FT_Set_Pixel_Sizes": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::set_pixel_sizes",
+          "status": "complete"
         }
+      },
+      "parity": {
+        "family": "core_face_size_charmap",
+        "passing": 1,
+        "total": 1
       }
     },
     {
@@ -202,33 +217,38 @@
           "status": "planned"
         },
         "FT_Get_Char_Index": {
-          "rust": "FontData::cmap.lookup",
-          "status": "partial"
+          "rust": "Font::char_index",
+          "status": "complete"
         },
         "FT_Get_Charmap_Index": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::charmap_index",
+          "status": "complete"
         },
         "FT_Get_First_Char": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::first_char",
+          "status": "complete"
         },
         "FT_Get_Name_Index": {
           "rust": null,
           "status": "planned"
         },
         "FT_Get_Next_Char": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::next_char",
+          "status": "complete"
         },
         "FT_Select_Charmap": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::select_charmap",
+          "status": "complete"
         },
         "FT_Set_Charmap": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::set_charmap",
+          "status": "complete"
         }
+      },
+      "parity": {
+        "family": "core_face_size_charmap",
+        "passing": 2,
+        "total": 2
       }
     },
     {
@@ -454,8 +474,8 @@
       "owner": "tables",
       "symbols": {
         "FT_Get_CMap_Format": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::charmaps",
+          "status": "complete"
         },
         "FT_Get_CMap_Language_ID": {
           "rust": null,
@@ -466,13 +486,18 @@
           "status": "partial"
         },
         "FT_Load_Sfnt_Table": {
-          "rust": "tt::TableDirectory::find",
-          "status": "partial"
+          "rust": "Font::load_sfnt_table",
+          "status": "complete"
         },
         "FT_Sfnt_Table_Info": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Font::sfnt_table_info",
+          "status": "complete"
         }
+      },
+      "parity": {
+        "family": "core_face_size_charmap",
+        "passing": 1,
+        "total": 1
       }
     },
     {

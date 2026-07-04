@@ -12,10 +12,27 @@ use log::warn;
 /// A character-to-glyph mapping table holding all decoded Unicode subtables.
 #[derive(Debug, Clone, Default)]
 pub struct CmapTable {
+    /// Parsed charmap records in font directory order.
+    pub charmaps: Vec<CharmapRecord>,
     /// Format 4 subtables (BMP, U+0000–U+FFFF).
     pub format4: Vec<Format4Subtable>,
     /// Format 12 subtables (full Unicode, U+0000–U+10FFFF).
     pub format12: Vec<Format12Subtable>,
+}
+
+/// A selectable charmap entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CharmapRecord {
+    pub platform_id: u16,
+    pub encoding_id: u16,
+    pub format: u16,
+    kind: CharmapKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CharmapKind {
+    Format4(usize),
+    Format12(usize),
 }
 
 /// Format 4: Segment mapping for the Unicode BMP.
@@ -61,6 +78,34 @@ impl CmapTable {
         }
         None
     }
+
+    /// Map a codepoint with a specific selectable charmap.
+    pub fn char_index_in_charmap(&self, charmap_index: usize, codepoint: u32) -> Option<u16> {
+        match self.charmaps.get(charmap_index)?.kind {
+            CharmapKind::Format4(index) => {
+                if codepoint <= 0xFFFF {
+                    self.format4[index].char_index(u16_from_u32(codepoint))
+                } else {
+                    None
+                }
+            }
+            CharmapKind::Format12(index) => self.format12[index].char_index(codepoint),
+        }
+    }
+
+    /// Return the first mapped codepoint and glyph index for a charmap.
+    pub fn first_char(&self, charmap_index: usize) -> Option<(u32, u16)> {
+        self.next_char(charmap_index, 0)
+    }
+
+    /// Return the next mapped codepoint strictly greater than `after`.
+    pub fn next_char(&self, charmap_index: usize, after: u32) -> Option<(u32, u16)> {
+        let record = self.charmaps.get(charmap_index)?;
+        match record.kind {
+            CharmapKind::Format4(index) => self.format4[index].next_char(after),
+            CharmapKind::Format12(index) => self.format12[index].next_char(after),
+        }
+    }
 }
 
 impl Format12Subtable {
@@ -73,6 +118,19 @@ impl Format12Subtable {
                 return Some(u16_from_u32(
                     self.start_glyph_ids[i] + (codepoint - self.start_codes[i]),
                 ));
+            }
+        }
+        None
+    }
+
+    fn next_char(&self, after: u32) -> Option<(u32, u16)> {
+        for i in 0..self.start_codes.len() {
+            let candidate = self.start_codes[i].max(after.saturating_add(1));
+            if candidate <= self.end_codes[i] {
+                let glyph = self.start_glyph_ids[i] + (candidate - self.start_codes[i]);
+                if glyph != 0 {
+                    return Some((candidate, u16_from_u32(glyph)));
+                }
             }
         }
         None
@@ -113,6 +171,25 @@ impl Format4Subtable {
         }
         None
     }
+
+    fn next_char(&self, after: u32) -> Option<(u32, u16)> {
+        let start = after.saturating_add(1);
+        if start > u16::MAX as u32 {
+            return None;
+        }
+        let mut cp = u16_from_u32(start);
+        loop {
+            if cp == 0xFFFF {
+                return None;
+            }
+            if let Some(glyph) = self.char_index(cp) {
+                if glyph != 0 {
+                    return Some((cp as u32, glyph));
+                }
+            }
+            cp = cp.wrapping_add(1);
+        }
+    }
 }
 
 /// Parse the 'cmap' table.
@@ -146,11 +223,29 @@ pub fn parse_cmap(data: &[u8]) -> Result<CmapTable, FontError> {
         let format = u16::from_be_bytes([data[sub_off], data[sub_off + 1]]);
         match format {
             4 => match parse_format4(data, sub_off, *platform_id, *encoding_id) {
-                Ok(sub) => table.format4.push(sub),
+                Ok(sub) => {
+                    let index = table.format4.len();
+                    table.format4.push(sub);
+                    table.charmaps.push(CharmapRecord {
+                        platform_id: *platform_id,
+                        encoding_id: *encoding_id,
+                        format,
+                        kind: CharmapKind::Format4(index),
+                    });
+                }
                 Err(e) => warn!("[cmap] format 4 parse failed: {e}"),
             },
             12 => match parse_format12(data, sub_off, *platform_id, *encoding_id) {
-                Ok(sub) => table.format12.push(sub),
+                Ok(sub) => {
+                    let index = table.format12.len();
+                    table.format12.push(sub);
+                    table.charmaps.push(CharmapRecord {
+                        platform_id: *platform_id,
+                        encoding_id: *encoding_id,
+                        format,
+                        kind: CharmapKind::Format12(index),
+                    });
+                }
                 Err(e) => warn!("[cmap] format 12 parse failed: {e}"),
             },
             other => warn!("[cmap] unsupported format {other}: skipping"),

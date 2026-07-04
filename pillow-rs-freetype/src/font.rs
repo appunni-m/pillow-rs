@@ -6,7 +6,7 @@
 use crate::casts::{i32_from_f32, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
 
 use crate::error::FontError;
-use crate::fixed::ft_mul_fix;
+use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::grays::{self, RasterResult};
 use crate::scaler::{self, pixel_ceil, pixel_round, ScaleMetrics};
 use crate::tables::FontData;
@@ -37,6 +37,66 @@ pub struct Font {
     pub face_globals: crate::autohint::globals::FaceGlobals,
     /// Whether the font is italic/oblique (from head.mac_style bit 1).
     pub is_italic: bool,
+    size_metrics: SizeMetrics,
+    selected_charmap: usize,
+}
+
+/// FreeType-like size metrics for the active size object.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SizeMetrics {
+    /// Horizontal pixels per EM.
+    pub x_ppem: u16,
+    /// Vertical pixels per EM.
+    pub y_ppem: u16,
+    /// Horizontal font-unit to 26.6 scale in 16.16.
+    pub x_scale: i32,
+    /// Vertical font-unit to 26.6 scale in 16.16.
+    pub y_scale: i32,
+    /// Requested horizontal DPI.
+    pub x_dpi: u32,
+    /// Requested vertical DPI.
+    pub y_dpi: u32,
+    /// Requested character width in 26.6 points.
+    pub char_width: i32,
+    /// Requested character height in 26.6 points.
+    pub char_height: i32,
+}
+
+/// Public face metadata matching the scalar fields exposed by `FT_Face`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FaceInfo {
+    pub num_faces: usize,
+    pub face_index: usize,
+    pub family_name: String,
+    pub style_name: String,
+    pub postscript_name: Option<String>,
+    pub font_format: &'static str,
+    pub units_per_em: u16,
+    pub num_glyphs: u16,
+    pub ascender: i16,
+    pub descender: i16,
+    pub height: i16,
+    pub face_flags: u32,
+    pub style_flags: u32,
+    pub fs_type_flags: u16,
+}
+
+/// A selectable charmap descriptor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CharmapInfo {
+    pub index: usize,
+    pub platform_id: u16,
+    pub encoding_id: u16,
+    pub format: u16,
+}
+
+/// Raw SFNT table descriptor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SfntTableInfo {
+    pub index: usize,
+    pub tag: u32,
+    pub offset: u32,
+    pub length: u32,
 }
 
 /// A rendered glyph alpha mask.
@@ -76,7 +136,20 @@ impl Font {
     /// assert_eq!(font.getname(), ("DejaVu Sans", "Book"));
     /// ```
     pub fn truetype(data: &[u8], size_pt: f32, backend: BitmapBackend) -> Result<Self, FontError> {
-        let dir = tt::parse_table_directory(data)?;
+        Self::truetype_face(data, 0, size_pt, backend)
+    }
+
+    /// Load a specific face from raw SFNT/TTC bytes.
+    ///
+    /// `face_index` follows FreeType's zero-based face selection semantics.
+    pub fn truetype_face(
+        data: &[u8],
+        face_index: usize,
+        size_pt: f32,
+        backend: BitmapBackend,
+    ) -> Result<Self, FontError> {
+        let (num_faces, face_offset) = tt::resolve_face_index(data, face_index)?;
+        let dir = tt::parse_table_directory_at(data, face_offset)?;
 
         let head_bytes = dir
             .find(data, tag(b"head"))
@@ -108,6 +181,7 @@ impl Font {
             None => crate::tt::name::NameTable {
                 family: "Unknown".into(),
                 subfamily: "Regular".into(),
+                postscript_name: None,
             },
         };
 
@@ -133,6 +207,11 @@ impl Font {
 
         // Build FontData first, then compute Latin autohinter metrics.
         let font_data = Arc::new(FontData {
+            raw_data: data.to_vec(),
+            face_offset,
+            face_index,
+            num_faces,
+            table_directory: dir,
             cmap,
             head,
             hhea,
@@ -151,6 +230,13 @@ impl Font {
         let _upem = font_data.head.units_per_em as i32;
         let is_italic = (font_data.head.mac_style & 2) != 0;
         let face_globals = crate::autohint::globals::FaceGlobals::new(font_data.clone(), is_italic);
+        let size_metrics = SizeMetrics::from_char_size(
+            i32_from_f32((size_pt * 64.0).round()),
+            i32_from_f32((size_pt * 64.0).round()),
+            72,
+            72,
+            font_data.head.units_per_em,
+        );
 
         Ok(Font {
             data: font_data,
@@ -158,7 +244,271 @@ impl Font {
             backend,
             face_globals,
             is_italic,
+            size_metrics,
+            selected_charmap: 0,
         })
+    }
+
+    /// Return the number of faces in an SFNT/TTC byte slice.
+    pub fn face_count(data: &[u8]) -> Result<usize, FontError> {
+        Ok(tt::face_offsets(data)?.len())
+    }
+
+    /// Return the active face index.
+    pub fn face_index(&self) -> usize {
+        self.data.face_index
+    }
+
+    /// Return the number of faces in the original font resource.
+    pub fn num_faces(&self) -> usize {
+        self.data.num_faces
+    }
+
+    /// Return scalar face metadata.
+    pub fn face_info(&self) -> FaceInfo {
+        FaceInfo {
+            num_faces: self.data.num_faces,
+            face_index: self.data.face_index,
+            family_name: self.data.name.family.clone(),
+            style_name: self.data.name.subfamily.clone(),
+            postscript_name: self.data.name.postscript_name.clone(),
+            font_format: self.font_format(),
+            units_per_em: self.data.head.units_per_em,
+            num_glyphs: self.data.maxp.num_glyphs,
+            ascender: self.data.hhea.ascent,
+            descender: self.data.hhea.descent,
+            height: self.data.hhea.ascent - self.data.hhea.descent + self.data.hhea.line_gap,
+            face_flags: self.face_flags(),
+            style_flags: self.style_flags(),
+            fs_type_flags: self.get_fstype_flags(),
+        }
+    }
+
+    /// Equivalent to `FT_Get_Font_Format` for the supported SFNT wrappers.
+    pub fn font_format(&self) -> &'static str {
+        let tag = u32::from_be_bytes([
+            self.data.raw_data[self.data.face_offset],
+            self.data.raw_data[self.data.face_offset + 1],
+            self.data.raw_data[self.data.face_offset + 2],
+            self.data.raw_data[self.data.face_offset + 3],
+        ]);
+        if tag == tt::OTTO_MAGIC {
+            "CFF"
+        } else {
+            "TrueType"
+        }
+    }
+
+    /// Equivalent to `FT_Get_Postscript_Name`.
+    pub fn postscript_name(&self) -> Option<&str> {
+        self.data.name.postscript_name.as_deref()
+    }
+
+    /// Equivalent to `FT_Get_FSType_Flags`.
+    pub fn get_fstype_flags(&self) -> u16 {
+        self.data.os2.as_ref().map_or(0, |os2| os2.fs_type)
+    }
+
+    /// Approximate `FT_FaceRec::face_flags` for supported SFNT outline faces.
+    pub fn face_flags(&self) -> u32 {
+        const FT_FACE_FLAG_SCALABLE: u32 = 1 << 0;
+        const FT_FACE_FLAG_SFNT: u32 = 1 << 3;
+        const FT_FACE_FLAG_HORIZONTAL: u32 = 1 << 4;
+        const FT_FACE_FLAG_GLYPH_NAMES: u32 = 1 << 9;
+
+        let mut flags = FT_FACE_FLAG_SCALABLE | FT_FACE_FLAG_SFNT | FT_FACE_FLAG_HORIZONTAL;
+        if self.data.table_directory.record(tag(b"post")).is_some() {
+            flags |= FT_FACE_FLAG_GLYPH_NAMES;
+        }
+        flags
+    }
+
+    /// Approximate `FT_FaceRec::style_flags` from `head.macStyle`.
+    pub fn style_flags(&self) -> u32 {
+        const FT_STYLE_FLAG_ITALIC: u32 = 1 << 0;
+        const FT_STYLE_FLAG_BOLD: u32 = 1 << 1;
+
+        let mut flags = 0;
+        if self.data.head.mac_style & 2 != 0 {
+            flags |= FT_STYLE_FLAG_ITALIC;
+        }
+        if self.data.head.mac_style & 1 != 0 {
+            flags |= FT_STYLE_FLAG_BOLD;
+        }
+        flags
+    }
+
+    /// Selected size metrics.
+    pub fn size_metrics(&self) -> SizeMetrics {
+        self.size_metrics
+    }
+
+    /// Equivalent to `FT_Set_Char_Size`.
+    pub fn set_char_size(&mut self, char_width: i32, char_height: i32, x_dpi: u32, y_dpi: u32) {
+        let height = if char_height == 0 {
+            char_width
+        } else {
+            char_height
+        };
+        let width = if char_width == 0 { height } else { char_width };
+        self.size_pt = height as f32 / 64.0;
+        self.size_metrics = SizeMetrics::from_char_size(
+            width,
+            height,
+            normalize_dpi(x_dpi),
+            normalize_dpi(y_dpi),
+            self.data.head.units_per_em,
+        );
+        Arc::make_mut(&mut self.data).size_pt = self.size_pt;
+        self.face_globals =
+            crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
+    }
+
+    /// Equivalent to `FT_Set_Pixel_Sizes`.
+    pub fn set_pixel_sizes(&mut self, pixel_width: u32, pixel_height: u32) {
+        let height = if pixel_height == 0 {
+            pixel_width
+        } else {
+            pixel_height
+        };
+        self.size_pt = height as f32;
+        self.size_metrics =
+            SizeMetrics::from_pixel_size(pixel_width, height, self.data.head.units_per_em);
+        Arc::make_mut(&mut self.data).size_pt = self.size_pt;
+        self.face_globals =
+            crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
+    }
+
+    /// Return all selectable charmaps.
+    pub fn charmaps(&self) -> Vec<CharmapInfo> {
+        self.data
+            .cmap
+            .charmaps
+            .iter()
+            .enumerate()
+            .map(|(index, record)| CharmapInfo {
+                index,
+                platform_id: record.platform_id,
+                encoding_id: record.encoding_id,
+                format: record.format,
+            })
+            .collect()
+    }
+
+    /// Return the selected charmap.
+    pub fn charmap(&self) -> Option<CharmapInfo> {
+        self.charmaps().into_iter().nth(self.selected_charmap)
+    }
+
+    /// Equivalent to `FT_Get_Charmap_Index` for the active charmap.
+    pub fn charmap_index(&self) -> Option<usize> {
+        if self.selected_charmap < self.data.cmap.charmaps.len() {
+            Some(self.selected_charmap)
+        } else {
+            None
+        }
+    }
+
+    /// Equivalent to `FT_Select_Charmap` for platform/encoding pairs.
+    pub fn select_charmap(&mut self, platform_id: u16, encoding_id: u16) -> Result<(), FontError> {
+        let Some(index) = self.data.cmap.charmaps.iter().position(|record| {
+            record.platform_id == platform_id && record.encoding_id == encoding_id
+        }) else {
+            return Err(FontError::InvalidFont(format!(
+                "charmap {platform_id}/{encoding_id} not found"
+            )));
+        };
+        self.selected_charmap = index;
+        Ok(())
+    }
+
+    /// Equivalent to `FT_Set_Charmap` by index.
+    pub fn set_charmap(&mut self, index: usize) -> Result<(), FontError> {
+        if index >= self.data.cmap.charmaps.len() {
+            return Err(FontError::InvalidFont(format!(
+                "charmap index {index} out of range"
+            )));
+        }
+        self.selected_charmap = index;
+        Ok(())
+    }
+
+    /// Equivalent to `FT_Get_Char_Index`.
+    pub fn char_index(&self, codepoint: u32) -> u16 {
+        self.data
+            .cmap
+            .char_index_in_charmap(self.selected_charmap, codepoint)
+            .unwrap_or(0)
+    }
+
+    /// Equivalent to `FT_Get_First_Char`.
+    pub fn first_char(&self) -> Option<(u32, u16)> {
+        self.data.cmap.first_char(self.selected_charmap)
+    }
+
+    /// Equivalent to `FT_Get_Next_Char`.
+    pub fn next_char(&self, after: u32) -> Option<(u32, u16)> {
+        self.data.cmap.next_char(self.selected_charmap, after)
+    }
+
+    /// Equivalent to `FT_Sfnt_Table_Info`.
+    pub fn sfnt_table_info(&self, index: usize) -> Option<SfntTableInfo> {
+        self.data
+            .table_directory
+            .records
+            .get(index)
+            .map(|record| SfntTableInfo {
+                index,
+                tag: record.tag,
+                offset: record.offset,
+                length: record.length,
+            })
+    }
+
+    /// Iterate raw SFNT table descriptors.
+    pub fn sfnt_tables(&self) -> Vec<SfntTableInfo> {
+        self.data
+            .table_directory
+            .records
+            .iter()
+            .enumerate()
+            .map(|(index, record)| SfntTableInfo {
+                index,
+                tag: record.tag,
+                offset: record.offset,
+                length: record.length,
+            })
+            .collect()
+    }
+
+    /// Equivalent to `FT_Load_Sfnt_Table`.
+    pub fn load_sfnt_table(
+        &self,
+        tag: u32,
+        offset: usize,
+        length: Option<usize>,
+    ) -> Result<Vec<u8>, FontError> {
+        let record =
+            self.data.table_directory.record(tag).ok_or_else(|| {
+                FontError::InvalidFont(format!("SFNT table 0x{tag:08X} not found"))
+            })?;
+        let start = record.offset as usize + offset;
+        let table_end = record.offset as usize + record.length as usize;
+        if start > table_end {
+            return Err(FontError::InvalidFont(format!(
+                "SFNT table offset {offset} exceeds table length {}",
+                record.length
+            )));
+        }
+        let end = match length {
+            Some(length) => start + length,
+            None => table_end,
+        };
+        self.data
+            .raw_data
+            .get(start..end)
+            .map(|bytes| bytes.to_vec())
+            .ok_or_else(|| FontError::InvalidFont("SFNT table read exceeds data".into()))
     }
 
     /// `getname()` → `(family, style)`.
@@ -374,6 +724,71 @@ impl Font {
             }
         }
     }
+}
+
+impl SizeMetrics {
+    fn from_char_size(
+        char_width: i32,
+        char_height: i32,
+        x_dpi: u32,
+        y_dpi: u32,
+        units_per_em: u16,
+    ) -> Self {
+        let x_dpi = normalize_dpi(x_dpi);
+        let y_dpi = normalize_dpi(y_dpi);
+        let x_ppem = ppem_from_char_size(char_width, x_dpi);
+        let y_ppem = ppem_from_char_size(char_height, y_dpi);
+        let x_scale = ft_div_fix((x_ppem as i32) << 6, units_per_em as i32);
+        let y_scale = ft_div_fix((y_ppem as i32) << 6, units_per_em as i32);
+        SizeMetrics {
+            x_ppem,
+            y_ppem,
+            x_scale,
+            y_scale,
+            x_dpi,
+            y_dpi,
+            char_width,
+            char_height,
+        }
+    }
+
+    fn from_pixel_size(pixel_width: u32, pixel_height: u32, units_per_em: u16) -> Self {
+        let width = if pixel_width == 0 {
+            pixel_height
+        } else {
+            pixel_width
+        };
+        let height = if pixel_height == 0 {
+            pixel_width
+        } else {
+            pixel_height
+        };
+        let x_scale = ft_div_fix((width as i32) << 6, units_per_em as i32);
+        let y_scale = ft_div_fix((height as i32) << 6, units_per_em as i32);
+        SizeMetrics {
+            x_ppem: width as u16,
+            y_ppem: height as u16,
+            x_scale,
+            y_scale,
+            x_dpi: 72,
+            y_dpi: 72,
+            char_width: (width as i32) << 6,
+            char_height: (height as i32) << 6,
+        }
+    }
+}
+
+fn normalize_dpi(dpi: u32) -> u32 {
+    if dpi == 0 {
+        72
+    } else {
+        dpi
+    }
+}
+
+fn ppem_from_char_size(char_size_26dot6: i32, dpi: u32) -> u16 {
+    let ppem_26dot6 = ft_mul_div(char_size_26dot6, dpi as i32, 72);
+    (((ppem_26dot6 + 32) & !63) >> 6).max(1) as u16
 }
 
 /// Pick (ascender, descender) as positive font-unit magnitudes.
