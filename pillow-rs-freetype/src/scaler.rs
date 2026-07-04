@@ -7,7 +7,7 @@
 use crate::casts::i32_from_f32;
 
 use crate::error::FontError;
-use crate::fixed::ft_mul_fix;
+use crate::fixed::{ft_mul_div, ft_mul_fix};
 use crate::outline::{Outline, OutlinePoint};
 use crate::tables::FontData;
 use crate::tt::glyf::{load_glyph, GlyphOutline};
@@ -82,6 +82,16 @@ pub struct ScaledGlyph {
     pub outline: Outline,
     pub advance_width: i32, // 26.6
     pub lsb: i32,           // 26.6
+    /// Raw `FT_Outline_Get_CBox` result before bitmap-origin translation.
+    pub outline_cbox_x_min: i32,
+    pub outline_cbox_y_min: i32,
+    pub outline_cbox_x_max: i32,
+    pub outline_cbox_y_max: i32,
+    /// Exact `FT_Outline_Get_BBox` result before bitmap-origin translation.
+    pub outline_bbox_x_min: i32,
+    pub outline_bbox_y_min: i32,
+    pub outline_bbox_x_max: i32,
+    pub outline_bbox_y_max: i32,
     /// Pixel CBox (FT_GLYPH_BBOX_PIXELS): x/yMin floored, x/yMax ceiled.
     pub bbox_x_min: i32,
     pub bbox_y_min: i32,
@@ -149,6 +159,14 @@ fn scale_glyph_impl(
             outline: Outline::default(),
             advance_width,
             lsb,
+            outline_cbox_x_min: 0,
+            outline_cbox_y_min: 0,
+            outline_cbox_x_max: 0,
+            outline_cbox_y_max: 0,
+            outline_bbox_x_min: 0,
+            outline_bbox_y_min: 0,
+            outline_bbox_x_max: 0,
+            outline_bbox_y_max: 0,
             bbox_x_min: 0,
             bbox_y_min: 0,
             bbox_x_max: 0,
@@ -261,6 +279,8 @@ fn scale_glyph_impl(
                 &outline_raw.end_pts_of_contours,
                 advance_width,
                 h_metric.advance_width as i32,
+                scale.scale_x(pp1x_fu),
+                pp1x_fu,
                 cvt,
                 fpgm,
                 prep,
@@ -284,6 +304,14 @@ fn scale_glyph_impl(
         x_max = x_max.max(p.x);
         y_max = y_max.max(p.y);
     }
+    let outline_cbox = BBox {
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    };
+    let outline_bbox =
+        outline_exact_bbox(&scaled, &outline_raw.end_pts_of_contours).unwrap_or(outline_cbox);
 
     // FT_GLYPH_BBOX_PIXELS: floor the min, ceil the max (FT_PIX_FLOOR/CEIL on 26.6),
     // then convert to integer pixels.
@@ -321,11 +349,158 @@ fn scale_glyph_impl(
         outline,
         advance_width,
         lsb,
+        outline_cbox_x_min: outline_cbox.x_min,
+        outline_cbox_y_min: outline_cbox.y_min,
+        outline_cbox_x_max: outline_cbox.x_max,
+        outline_cbox_y_max: outline_cbox.y_max,
+        outline_bbox_x_min: outline_bbox.x_min,
+        outline_bbox_y_min: outline_bbox.y_min,
+        outline_bbox_x_max: outline_bbox.x_max,
+        outline_bbox_y_max: outline_bbox.y_max,
         bbox_x_min: px_x_min,
         bbox_y_min: px_y_min,
         bbox_x_max: px_x_max,
         bbox_y_max: px_y_max,
     })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BBox {
+    x_min: i32,
+    y_min: i32,
+    x_max: i32,
+    y_max: i32,
+}
+
+fn update_bbox_point(bbox: &mut BBox, point: OutlinePoint) {
+    bbox.x_min = bbox.x_min.min(point.x);
+    bbox.y_min = bbox.y_min.min(point.y);
+    bbox.x_max = bbox.x_max.max(point.x);
+    bbox.y_max = bbox.y_max.max(point.y);
+}
+
+fn outline_exact_bbox(points: &[OutlinePoint], contours: &[u16]) -> Option<BBox> {
+    if points.is_empty() || contours.is_empty() {
+        return Some(BBox {
+            x_min: 0,
+            y_min: 0,
+            x_max: 0,
+            y_max: 0,
+        });
+    }
+
+    let mut cbox = BBox {
+        x_min: i32::MAX,
+        y_min: i32::MAX,
+        x_max: i32::MIN + 1,
+        y_max: i32::MIN + 1,
+    };
+    let mut bbox = cbox;
+    for &point in points {
+        update_bbox_point(&mut cbox, point);
+        if point.on_curve {
+            update_bbox_point(&mut bbox, point);
+        }
+    }
+
+    if cbox.x_min >= bbox.x_min
+        && cbox.x_max <= bbox.x_max
+        && cbox.y_min >= bbox.y_min
+        && cbox.y_max <= bbox.y_max
+    {
+        return Some(bbox);
+    }
+
+    decompose_bbox(points, contours, bbox)
+}
+
+fn decompose_bbox(points: &[OutlinePoint], contours: &[u16], mut bbox: BBox) -> Option<BBox> {
+    let mut first = 0usize;
+    for &last_u16 in contours {
+        let last = last_u16 as usize;
+        if last < first || last >= points.len() {
+            return None;
+        }
+
+        let mut start = points[first];
+        let last_point = points[last];
+        let mut point_index = first as isize;
+        let mut limit = last;
+
+        if !start.on_curve {
+            if last_point.on_curve {
+                start = last_point;
+                limit = limit.saturating_sub(1);
+            } else {
+                start = OutlinePoint {
+                    x: (start.x + last_point.x) / 2,
+                    y: (start.y + last_point.y) / 2,
+                    on_curve: true,
+                };
+            }
+            point_index = first as isize - 1;
+        }
+
+        update_bbox_point(&mut bbox, start);
+        let mut last_emitted = start;
+
+        while point_index < limit as isize {
+            point_index += 1;
+            let point = points[point_index as usize];
+            if point.on_curve {
+                last_emitted = point;
+                continue;
+            }
+
+            let mut control = point;
+            loop {
+                if point_index < limit as isize {
+                    point_index += 1;
+                    let next = points[point_index as usize];
+                    if next.on_curve {
+                        bbox_conic_to(last_emitted, control, next, &mut bbox);
+                        last_emitted = next;
+                        break;
+                    }
+
+                    let middle = OutlinePoint {
+                        x: (control.x + next.x) / 2,
+                        y: (control.y + next.y) / 2,
+                        on_curve: true,
+                    };
+                    bbox_conic_to(last_emitted, control, middle, &mut bbox);
+                    last_emitted = middle;
+                    control = next;
+                } else {
+                    bbox_conic_to(last_emitted, control, start, &mut bbox);
+                    last_emitted = start;
+                    break;
+                }
+            }
+        }
+
+        first = last + 1;
+    }
+
+    Some(bbox)
+}
+
+fn bbox_conic_to(from: OutlinePoint, control: OutlinePoint, to: OutlinePoint, bbox: &mut BBox) {
+    update_bbox_point(bbox, to);
+    if control.x < bbox.x_min || control.x > bbox.x_max {
+        bbox_conic_check(from.x, control.x, to.x, &mut bbox.x_min, &mut bbox.x_max);
+    }
+    if control.y < bbox.y_min || control.y > bbox.y_max {
+        bbox_conic_check(from.y, control.y, to.y, &mut bbox.y_min, &mut bbox.y_max);
+    }
+}
+
+fn bbox_conic_check(y1: i32, y2: i32, y3: i32, min: &mut i32, max: &mut i32) {
+    let y1 = y1 - y2;
+    let y3 = y3 - y2;
+    let y = y2 + ft_mul_div(y1, y3, y1 + y3);
+    *min = (*min).min(y);
+    *max = (*max).max(y);
 }
 
 /// `FT_PIX_ROUND(x)` on a 26.6 value → rounded pixel (in 26.6, subpixel cleared).
