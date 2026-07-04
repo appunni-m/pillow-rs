@@ -234,24 +234,43 @@ impl GraphicsState {
     /// Round a 26.6 value using the current rounding mode.
     /// C: `TT_RoundFunc` dispatch.
     pub fn round(&self, distance: i32) -> i32 {
+        fn round_grid(v: i32) -> i32 {
+            if v >= 0 {
+                (v + 32) & !63
+            } else {
+                -(((-v) + 32) & !63)
+            }
+        }
+        fn floor_grid(v: i32) -> i32 {
+            v & !63
+        }
+        fn ceil_grid(v: i32) -> i32 {
+            if v <= 0 {
+                -((-v) & !63)
+            } else {
+                (v + 63) & !63
+            }
+        }
         match self.round_state {
             RoundMode::HalfGrid => {
-                // Round to nearest half pixel: (val + 32) & !63
-                crate::fixed::ft_round_fix(distance)
+                let base = floor_grid(distance);
+                base + 32
             }
-            RoundMode::Grid => crate::fixed::ft_round_fix(distance),
+            RoundMode::Grid => round_grid(distance),
             RoundMode::DoubleGrid => {
-                // Double grid: round to nearest 2-pixel boundary
-                // (val + 64) & !127
-                (distance + 64) & !127
+                if distance >= 0 {
+                    (distance + 16) & !31
+                } else {
+                    -(((-distance) + 16) & !31)
+                }
             }
-            RoundMode::DownToGrid => crate::fixed::ft_floor_fix(distance),
-            RoundMode::UpToGrid => crate::fixed::ft_ceil_fix(distance),
+            RoundMode::DownToGrid => floor_grid(distance),
+            RoundMode::UpToGrid => ceil_grid(distance),
             RoundMode::Off => distance,
             RoundMode::Super | RoundMode::Super45 => {
                 // SROUND/S45ROUND need period/phase/threshold from exec context
                 // For now, fall through to Grid rounding
-                crate::fixed::ft_round_fix(distance)
+                round_grid(distance)
             }
         }
     }

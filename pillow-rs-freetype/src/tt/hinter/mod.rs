@@ -30,11 +30,11 @@
 //! 3. **Cleanup**: Copy hinted coordinates from `zone.cur` back to the
 //!    scaled outline, restore freedom/projection vectors.
 
-pub mod zone;
-pub mod tables;
-pub mod gs;
 pub mod exec;
+pub mod gs;
 pub mod iup;
+pub mod tables;
+pub mod zone;
 
 use crate::error::FontError;
 use crate::outline::OutlinePoint;
@@ -45,6 +45,7 @@ pub struct HintScale {
     pub x_scale: i32,
     pub y_scale: i32,
     pub ppem: i32,
+    pub storage_size: usize,
 }
 
 /// Entry point: run bytecode hinting on scaled 26.6 coordinates.
@@ -77,6 +78,9 @@ pub struct HintScale {
 pub fn hint_glyph(
     scaled: &mut [OutlinePoint],
     raw: &[OutlinePoint],
+    contours: &[u16],
+    advance_width: i32,
+    raw_advance_width: i32,
     cvt: &[i32],
     fpgm: &[u8],
     prep: &[u8],
@@ -109,9 +113,9 @@ pub fn hint_glyph(
         orus_x: Vec::with_capacity(total),
         orus_y: Vec::with_capacity(total),
         tags: vec![0u8; total],
-        contours: vec![],
+        contours: contours.to_vec(),
         n_points: n_pts,
-        n_contours: 0,
+        n_contours: contours.len() as u16,
         first_point: 0,
     };
 
@@ -132,10 +136,10 @@ pub fn hint_glyph(
     zone.cur_y.push(0);
     zone.orus_x.push(0);
     zone.orus_y.push(0);
-    // pp2: advance width (scaled, will be rounded by run_program)
-    zone.cur_x.push(0);
+    // pp2: advance width in the shifted glyph coordinate system.
+    zone.cur_x.push(advance_width);
     zone.cur_y.push(0);
-    zone.orus_x.push(0);
+    zone.orus_x.push(raw_advance_width);
     zone.orus_y.push(0);
     // pp3, pp4: vertical phantom points (unused)
     zone.cur_x.push(0);
@@ -158,42 +162,19 @@ pub fn hint_glyph(
         scale.ppem,
         cvt,
         fpgm,
+        scale.storage_size,
     );
 
     // Run the font program to set up function definitions
     if !fpgm.is_empty() {
         ctx.run_fpgm()?;
     }
+    let saved_storage = ctx.storage.clone();
 
-    // Run prep program to scale CVT values for the current ppem.
-    // prep calls TT_Load_Context equivalent (reset GS, scale CVT, clear storage)
-    // and executes the bytecode against the twilight zone.
-    if !prep.is_empty() {
-        if let Err(e) = ctx.run_prep(prep) {
-            log::info!("[VM] prep failed: {e}");
-            // Fall back to linear CVT scaling below
-        }
-    }
-
-    // Linear CVT scaling fallback: applies if prep is missing or failed.
-    // Scaled CVT entries that were already handled by prep will be
-    // re-scaled here too but FT_MulFix on already-scaled pixel values
-    // with y_scale produces garbage. So we skip entries already in
-    // pixel range (small values < y_scale).
-    let y_scale = scale.y_scale;
-    for cv in &mut ctx.cvt {
-        let abs_val = cv.abs();
-        // If value looks like it's in pixel units (smaller than typical
-        // font_unit * 64 value at this ppem), skip — prep already scaled it.
-        let typical_raw_fu64 = 100 * 64; // 100 FU * 64 = 6400
-        if abs_val < typical_raw_fu64 || abs_val == 0 {
-            continue; // Already in pixel units (prep-scaled)
-        }
-        // Still in FU*64 format — apply linear scaling
-        let fu = *cv / 64;
-        *cv = crate::fixed::ft_mul_fix(fu, y_scale);
-        *cv = crate::fixed::ft_round_fix(*cv);
-    }
+    // Run prep setup for every hinted size. This scales CVT into 26.6 pixel
+    // units even when the font has no prep bytecode, then executes prep against
+    // the twilight zone when present.
+    ctx.run_prep(prep, &saved_storage)?;
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {

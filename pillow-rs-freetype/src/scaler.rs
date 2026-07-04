@@ -9,8 +9,8 @@ use crate::casts::i32_from_f32;
 use crate::error::FontError;
 use crate::fixed::ft_mul_fix;
 use crate::outline::{Outline, OutlinePoint};
-use crate::tt::glyf::{load_glyph, GlyphOutline};
 use crate::tables::FontData;
+use crate::tt::glyf::{load_glyph, GlyphOutline};
 
 /// Fixed-point scale factors derived from point size and units-per-em.
 ///
@@ -137,10 +137,16 @@ pub fn scale_glyph(
 
     // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
     // vertical scale (x-height optimization) from latin_metrics if available.
-    let y_adj = latin_metrics.and_then(|m| {
-        let s = m.axis[1].scale;
-        if s != 0 { Some(s) } else { None }
-    }).unwrap_or(scale.y_scale);
+    let y_adj = latin_metrics
+        .and_then(|m| {
+            let s = m.axis[1].scale;
+            if s != 0 {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(scale.y_scale);
     // pp1.x origin shift (ttgload.c:2582). Without this, italic fonts
     // produce 26.6 coords that differ from C by 1 unit (e.g. 344→345),
     // changing the DDA prod init → pixel mismatch.
@@ -169,10 +175,18 @@ pub fn scale_glyph(
     let shifted_raw = crate::tt::glyf::GlyphOutline {
         num_contours: outline_raw.num_contours,
         end_pts_of_contours: outline_raw.end_pts_of_contours.clone(),
-        points: outline_raw.points.iter()
-            .map(|p| crate::tt::glyf::OutlinePoint { x: p.x - pp1x_fu, ..*p })
+        points: outline_raw
+            .points
+            .iter()
+            .map(|p| crate::tt::glyf::OutlinePoint {
+                x: p.x - pp1x_fu,
+                ..*p
+            })
             .collect(),
-        xmin: 0, ymin: 0, xmax: 0, ymax: 0,
+        xmin: 0,
+        ymin: 0,
+        xmax: 0,
+        ymax: 0,
         is_composite: outline_raw.is_composite,
         sub_lsb: outline_raw.sub_lsb,
         instructions: outline_raw.instructions.clone(),
@@ -189,19 +203,47 @@ pub fn scale_glyph(
 
     // ── Hinting dispatch ────────────────────────────────────────────────
     if latin_metrics.is_some() {
-        autohint_glyph(&mut scaled, &shifted_raw, &scale, glyph_index, latin_metrics, is_italic, data);
+        autohint_glyph(
+            &mut scaled,
+            &shifted_raw,
+            &scale,
+            glyph_index,
+            latin_metrics,
+            is_italic,
+            data,
+        );
     } else if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
         // Bytecode VM: run on glyphs with per-glyph instructions.
         // Falls through to unhinted on error (graceful degradation).
-        let raw_pts: Vec<OutlinePoint> = shifted_raw.points.iter()
-            .map(|p| OutlinePoint { x: p.x, y: p.y, on_curve: p.on_curve }).collect();
+        let raw_pts: Vec<OutlinePoint> = shifted_raw
+            .points
+            .iter()
+            .map(|p| OutlinePoint {
+                x: p.x,
+                y: p.y,
+                on_curve: p.on_curve,
+            })
+            .collect();
         let hs = crate::tt::hinter::HintScale {
-            x_scale: scale.x_scale, y_scale: y_adj, ppem: scale.ppem,
+            x_scale: scale.x_scale,
+            y_scale: y_adj,
+            ppem: scale.ppem,
+            storage_size: data.maxp.max_storage as usize,
         };
         let prep = data.prep.as_deref().unwrap_or(&[]);
-        if let Err(e) = crate::tt::hinter::hint_glyph(
-            &mut scaled, &raw_pts, cvt, fpgm, prep, &hs, &outline_raw.instructions,
-        ) {
+        let hint_result = crate::tt::hinter::hint_glyph(
+            &mut scaled,
+            &raw_pts,
+            &outline_raw.end_pts_of_contours,
+            advance_width,
+            h_metric.advance_width as i32,
+            cvt,
+            fpgm,
+            prep,
+            &hs,
+            &outline_raw.instructions,
+        );
+        if let Err(e) = hint_result {
             log::debug!("[VM] gi={glyph_index}: {e}");
         }
     }
@@ -344,7 +386,11 @@ fn autohint_glyph(
     // Build a temporary Outline with scaled 26.6 coords.
     let mut outline = Outline {
         n_contours: num_contours,
-        contours: raw_outline.end_pts_of_contours.iter().map(|&e| e as i16).collect(),
+        contours: raw_outline
+            .end_pts_of_contours
+            .iter()
+            .map(|&e| e as i16)
+            .collect(),
         points: scaled.to_vec(),
         flags: 0,
         cbox_x_min: 0,
@@ -355,10 +401,16 @@ fn autohint_glyph(
 
     // Run the auto-hinter.  `apply_hints` modifies `outline.points` in-place.
     // Use the adjusted vertical scale if the autohinter computed one.
-    let y_adj = metrics.and_then(|m| {
-        let s = m.axis[1].scale;
-        if s != 0 { Some(s) } else { None }
-    }).unwrap_or(scale.y_scale);
+    let y_adj = metrics
+        .and_then(|m| {
+            let s = m.axis[1].scale;
+            if s != 0 {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(scale.y_scale);
     crate::autohint::apply_hints(
         &mut outline,
         raw_outline,
