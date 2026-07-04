@@ -14,6 +14,7 @@ use crate::tt::os2::Os2Table;
 /// All parsed font tables for one face, plus the requested point size.
 #[derive(Debug)]
 pub struct FontData {
+    pub font_bytes: Vec<u8>,
     pub cmap: CmapTable,
     pub head: HeadTable,
     pub hhea: HheaTable,

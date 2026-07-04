@@ -84,6 +84,43 @@ struct PixelDiff {
     height_delta: i32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum FailureStage {
+    GlyphIndex,
+    LoadError,
+    RawOutline,
+    ScaledOutline,
+    HintedOutline,
+    Metrics,
+    Bbox,
+    BitmapPlacement,
+    PixelCoverage,
+}
+
+impl FailureStage {
+    fn label(self) -> &'static str {
+        match self {
+            FailureStage::GlyphIndex => "glyph index",
+            FailureStage::LoadError => "load error",
+            FailureStage::RawOutline => "raw outline",
+            FailureStage::ScaledOutline => "scaled outline",
+            FailureStage::HintedOutline => "hinted outline",
+            FailureStage::Metrics => "metrics",
+            FailureStage::Bbox => "bbox",
+            FailureStage::BitmapPlacement => "bitmap placement",
+            FailureStage::PixelCoverage => "pixel coverage",
+        }
+    }
+}
+
+fn classify_pixel_failure(diff: &PixelDiff) -> FailureStage {
+    if diff.size_delta != 0 || diff.width_delta != 0 || diff.height_delta != 0 {
+        FailureStage::BitmapPlacement
+    } else {
+        FailureStage::PixelCoverage
+    }
+}
+
 fn raw_pixel_paths(manifest_dir: &Path, row: &MatrixRow) -> Vec<PathBuf> {
     let fixture_dir = manifest_dir.join("tests").join("fixtures");
     let raw_dir = fixture_dir.join("outputs").join("raws");
@@ -202,6 +239,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     let mut script_counts: BTreeMap<String, ScriptCounts> = BTreeMap::new();
     let mut font_cache: HashMap<(String, u32), Font> = HashMap::new();
     let mut failures: Vec<String> = Vec::new();
+    let mut stage_counts: BTreeMap<FailureStage, u32> = BTreeMap::new();
 
     for row in &matrix.rows {
         if row.status == "skip" {
@@ -230,7 +268,14 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                 match Font::truetype(&font_data, row.size_pt, backend) {
                     Ok(font) => entry.insert(font),
                     Err(e) => {
-                        eprintln!("  SKIP [{}]: {}", row.id, e);
+                        failed += 1;
+                        *stage_counts.entry(FailureStage::LoadError).or_default() += 1;
+                        failures.push(format!(
+                            "{} stage={} error={}",
+                            row.id,
+                            FailureStage::LoadError.label(),
+                            e
+                        ));
                         continue;
                     }
                 }
@@ -243,7 +288,14 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                 let mask = match font.getmask(&text) {
                     Ok(m) => m,
                     Err(e) => {
-                        eprintln!("  SKIP [{}]: {}", row.id, e);
+                        failed += 1;
+                        *stage_counts.entry(FailureStage::LoadError).or_default() += 1;
+                        failures.push(format!(
+                            "{} stage={} error={}",
+                            row.id,
+                            FailureStage::LoadError.label(),
+                            e
+                        ));
                         continue;
                     }
                 };
@@ -275,9 +327,12 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                             expected_w,
                             expected_h,
                         );
+                        let stage = classify_pixel_failure(&diff);
+                        *stage_counts.entry(stage).or_default() += 1;
                         failures.push(format!(
-                            "{} actual_sha={} raw={} actual={}x{} expected={}x{} diffs={} max={} total_abs={} first={:?} size_delta={} width_delta={} height_delta={}",
+                            "{} stage={} actual_sha={} raw={} actual={}x{} expected={}x{} diffs={} max={} total_abs={} first={:?} size_delta={} width_delta={} height_delta={}",
                             row.id,
+                            stage.label(),
                             actual_sha,
                             raw_path.display(),
                             mask.width,
@@ -300,9 +355,13 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                         counts.sha_ok += 1;
                         passed += 1;
                     } else {
+                        *stage_counts.entry(FailureStage::PixelCoverage).or_default() += 1;
                         failures.push(format!(
-                            "{} actual_sha={} expected_sha={} raw=missing",
-                            row.id, actual_sha, expected_sha,
+                            "{} stage={} actual_sha={} expected_sha={} raw=missing",
+                            row.id,
+                            FailureStage::PixelCoverage.label(),
+                            actual_sha,
+                            expected_sha,
                         ));
                         counts.sha_fail += 1;
                         failed += 1;
@@ -311,9 +370,17 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                     if expected_w == mask.width && expected_h == mask.height {
                         passed += 1;
                     } else {
+                        *stage_counts
+                            .entry(FailureStage::BitmapPlacement)
+                            .or_default() += 1;
                         failures.push(format!(
-                            "{} actual={}x{} expected={}x{} raw=missing sha=missing",
-                            row.id, mask.width, mask.height, expected_w, expected_h,
+                            "{} stage={} actual={}x{} expected={}x{} raw=missing sha=missing",
+                            row.id,
+                            FailureStage::BitmapPlacement.label(),
+                            mask.width,
+                            mask.height,
+                            expected_w,
+                            expected_h,
                         ));
                         counts.sha_fail += 1;
                         failed += 1;
@@ -338,9 +405,13 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                         counts.sha_ok += 1;
                         passed += 1;
                     } else {
+                        *stage_counts.entry(FailureStage::Bbox).or_default() += 1;
                         failures.push(format!(
-                            "{} actual={:?} expected={:?}",
-                            row.id, bbox, expect
+                            "{} stage={} actual={:?} expected={:?}",
+                            row.id,
+                            FailureStage::Bbox.label(),
+                            bbox,
+                            expect
                         ));
                         counts.sha_fail += 1;
                         failed += 1;
@@ -375,7 +446,12 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
                     passed += 1;
                 } else {
                     failed += 1;
-                    failures.push(row.id.clone());
+                    *stage_counts.entry(FailureStage::Metrics).or_default() += 1;
+                    failures.push(format!(
+                        "{} stage={}",
+                        row.id,
+                        FailureStage::Metrics.label()
+                    ));
                 }
             }
 
@@ -437,6 +513,11 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     // Print failure IDs
     if failed > 0 {
         eprintln!("╠══════════════════════════════════════════════════════════════╣");
+        eprintln!("║  Failure stages:");
+        for (stage, count) in &stage_counts {
+            eprintln!("║    {} {count}", stage.label());
+        }
+        eprintln!("╠══════════════════════════════════════════════════════════════╣");
         eprintln!("║  Failure IDs (first 50 of {failed}):");
         for f in failures.iter().take(50) {
             eprintln!("║  {f}");
@@ -460,5 +541,46 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend) {
     assert!(
         passed > 0,
         "No tests passed — check font files for {matrix_file}"
+    );
+}
+
+#[test]
+fn stage_failure_classification_covers_native_tt_pipeline() {
+    let stages = [
+        FailureStage::GlyphIndex,
+        FailureStage::LoadError,
+        FailureStage::RawOutline,
+        FailureStage::ScaledOutline,
+        FailureStage::HintedOutline,
+        FailureStage::Metrics,
+        FailureStage::Bbox,
+        FailureStage::BitmapPlacement,
+        FailureStage::PixelCoverage,
+    ];
+    assert_eq!(stages.len(), 9);
+
+    let placement = PixelDiff {
+        diff_count: 1,
+        max_diff: 0,
+        total_abs_diff: 0,
+        first_diff: None,
+        size_delta: 1,
+        width_delta: 0,
+        height_delta: 0,
+    };
+    assert_eq!(
+        classify_pixel_failure(&placement),
+        FailureStage::BitmapPlacement
+    );
+
+    let coverage = PixelDiff {
+        size_delta: 0,
+        width_delta: 0,
+        height_delta: 0,
+        ..placement
+    };
+    assert_eq!(
+        classify_pixel_failure(&coverage),
+        FailureStage::PixelCoverage
     );
 }
