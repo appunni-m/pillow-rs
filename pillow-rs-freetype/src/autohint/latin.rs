@@ -1193,6 +1193,7 @@ pub fn apply_hints(
     metrics: Option<&AfLatinMetrics>,
     is_italic: bool,
     font_data: Option<&crate::tables::FontData>,
+    target_mono: bool,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
@@ -1206,9 +1207,16 @@ pub fn apply_hints(
     if metrics.is_none_or(|m| m.axis[1].blue_count == 0) {
         return;
     }
-    // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
-    // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
-    hints.other_flags = AF_LATIN_HINTS_STEM_ADJUST;
+    hints.other_flags = if target_mono {
+        AF_LATIN_HINTS_HORZ_SNAP
+            | AF_LATIN_HINTS_VERT_SNAP
+            | AF_LATIN_HINTS_STEM_ADJUST
+            | AF_LATIN_HINTS_MONO
+    } else {
+        // Smooth anti-aliased hinting: enable stem adjustment for anti-aliased rendering.
+        // FT_RENDER_MODE_NORMAL sets only STEM_ADJUST, not HORZ_SNAP/VERT_SNAP (aflatin.c:2673-2695).
+        AF_LATIN_HINTS_STEM_ADJUST
+    };
 
     // Italic fonts: disable horizontal hinting (C: aflatin.c:2720-2726).
     if is_italic {

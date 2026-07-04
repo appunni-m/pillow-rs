@@ -109,7 +109,17 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true)
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, false)
+}
+
+/// Scale a glyph for `FT_LOAD_TARGET_MONO` autohint behavior.
+pub fn scale_glyph_mono(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, true)
 }
 
 /// Scale a glyph without autohinting or native TrueType bytecode.
@@ -120,7 +130,7 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, false)
+    scale_glyph_impl(data, glyph_index, None, is_italic, false, false)
 }
 
 fn scale_glyph_impl(
@@ -129,6 +139,7 @@ fn scale_glyph_impl(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
     allow_bytecode: bool,
+    target_mono: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -232,8 +243,11 @@ fn scale_glyph_impl(
             &scale,
             glyph_index,
             latin_metrics,
-            is_italic,
             data,
+            HintTarget {
+                is_italic,
+                mono: target_mono,
+            },
         );
     } else if allow_bytecode {
         if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
@@ -398,8 +412,8 @@ fn autohint_glyph(
     scale: &ScaleMetrics,
     glyph_index: u16,
     metrics: Option<&crate::autohint::AfLatinMetrics>,
-    is_italic: bool,
     font_data: &FontData,
+    target: HintTarget,
 ) {
     use crate::outline::Outline;
 
@@ -445,8 +459,9 @@ fn autohint_glyph(
         0,
         glyph_index,
         metrics,
-        is_italic,
+        target.is_italic,
         Some(font_data),
+        target.mono,
     );
 
     // Write hinted coordinates back.
@@ -456,6 +471,12 @@ fn autohint_glyph(
             s.y = p.y;
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HintTarget {
+    is_italic: bool,
+    mono: bool,
 }
 
 // Suppress unused-import warning for GlyphOutline (kept for clarity).

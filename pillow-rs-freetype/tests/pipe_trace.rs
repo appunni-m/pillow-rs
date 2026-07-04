@@ -92,6 +92,7 @@ fn trace_one_glyph() {
         metrics.as_ref(),
         is_italic,
         Some(&fd),
+        false,
     );
 
     let font2 = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
