@@ -77,13 +77,13 @@
           "id": "depth_1",
           "ref_bytes": 2048,
           "ref_mode": "1",
-          "ref_sha256": "b73f7cbd2e75fb2128203993c9e95855f2f62a6e54de9ec2078da285dfb28b30",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_1bit_bmp.bin"
         },
         {
           "asset": "4bit.bmp",
@@ -93,7 +93,14 @@
           "format": "bmp",
           "id": "depth_4",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_4bit_bmp.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "8bit.bmp",
@@ -105,13 +112,13 @@
           "id": "depth_8",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_8bit_bmp.bin"
         },
         {
           "asset": "16bit.bmp",
@@ -121,7 +128,14 @@
           "format": "bmp",
           "id": "depth_16",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_16bit_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "24bit.bmp",
@@ -133,13 +147,13 @@
           "id": "depth_24",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_24bit_bmp.bin"
         },
         {
           "asset": "32bit.bmp",
@@ -151,13 +165,13 @@
           "id": "depth_32",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_32bit_bmp.bin"
         },
         {
           "asset": "uncompressed.bmp",
@@ -167,7 +181,14 @@
           "format": "bmp",
           "id": "compression_none",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_uncompressed_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "rle8.bmp",
@@ -177,15 +198,15 @@
           "expect_error": false,
           "format": "bmp",
           "id": "compression_rle8",
-          "ref_bytes": 49152,
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_rle8_bmp.bin"
         },
         {
           "asset": "rle4.bmp",
@@ -195,7 +216,14 @@
           "format": "bmp",
           "id": "compression_rle4",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_rle4_bmp.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "bitfields.bmp",
@@ -205,7 +233,14 @@
           "format": "bmp",
           "id": "compression_bitfields",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_bitfields_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "top_down.bmp",
@@ -215,7 +250,14 @@
           "format": "bmp",
           "id": "top_down",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_top_down_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "bottom_up.bmp",
@@ -225,7 +267,14 @@
           "format": "bmp",
           "id": "bottom_up",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_bottom_up_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "os2v1.bmp",
@@ -235,7 +284,14 @@
           "format": "bmp",
           "id": "os2_v1",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_os2v1_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "v4header.bmp",
@@ -245,7 +301,14 @@
           "format": "bmp",
           "id": "v4_header",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_v4header_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "v5header.bmp",
@@ -255,7 +318,14 @@
           "format": "bmp",
           "id": "v5_header",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_v5header_bmp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "1x1.bmp",
@@ -267,13 +337,13 @@
           "id": "size_1x1",
           "ref_bytes": 3,
           "ref_mode": "Rgb8",
-          "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
           "ref_size": [
             1,
             1
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_1x1_bmp.bin"
         },
         {
           "asset": "odd_width.bmp",
@@ -285,13 +355,13 @@
           "id": "size_odd",
           "ref_bytes": 867,
           "ref_mode": "Rgb8",
-          "ref_sha256": "a5a079480cee6b3b538113144e01f7c268a18f6989396239f5ad6f97075cadd9",
           "ref_size": [
             17,
             17
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_odd_width_bmp.bin"
         },
         {
           "asset": "not_bmp.bmp",
@@ -304,6 +374,57 @@
           "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>",
           "status": "active",
           "type": "decode"
+        },
+        {
+          "id": "size_odd_width2",
+          "type": "decode",
+          "format": "bmp",
+          "category": "size",
+          "description": "Odd width (row padding required)",
+          "asset": "width2.bmp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_width2_bmp.bin",
+          "ref_bytes": 30,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            2,
+            5
+          ]
+        },
+        {
+          "id": "size_odd_width3",
+          "type": "decode",
+          "format": "bmp",
+          "category": "size",
+          "description": "Odd width (row padding required)",
+          "asset": "width3.bmp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_width3_bmp.bin",
+          "ref_bytes": 45,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            3,
+            5
+          ]
+        },
+        {
+          "id": "size_odd_width31",
+          "type": "decode",
+          "format": "bmp",
+          "category": "size",
+          "description": "Odd width (row padding required)",
+          "asset": "width31.bmp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_width31_bmp.bin",
+          "ref_bytes": 651,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            31,
+            7
+          ]
         }
       ],
       "encode": [
@@ -316,11 +437,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_1bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -331,11 +456,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_4bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -346,11 +475,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_8bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -361,11 +494,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_16bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -376,11 +513,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_24bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -391,11 +532,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_32bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -406,11 +551,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_bi_rgb.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -421,11 +570,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_bi_rle8.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -436,11 +589,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_bi_rle4.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -451,11 +608,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_bi_bitfields.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -466,11 +627,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_top_down.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -481,11 +646,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_bottom_up.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -496,11 +665,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_v3_header.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -511,11 +684,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_v4_header.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -526,11 +703,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_v5_header.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -544,11 +725,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_1x1.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -562,11 +747,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_odd_width.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "24-bit BMP",
@@ -577,11 +766,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_24bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "32-bit BMP with alpha",
@@ -592,11 +785,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_32bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "8-bit indexed BMP",
@@ -607,11 +804,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_8bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "1-bit bilevel",
@@ -622,11 +823,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "24bit.bmp",
           "source_format": "bmp",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.bmp_enc_1bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ]
     },
@@ -642,13 +847,13 @@
           "id": "static_gif",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_static_gif.bin"
         },
         {
           "asset": "animated.gif",
@@ -660,13 +865,13 @@
           "id": "animated_gif",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_animated_gif.bin"
         },
         {
           "asset": "transparent.gif",
@@ -678,13 +883,13 @@
           "id": "transparent",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_transparent_gif.bin"
         },
         {
           "asset": "interlaced.gif",
@@ -696,13 +901,13 @@
           "id": "interlaced",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_interlaced_gif.bin"
         },
         {
           "asset": "global_ct.gif",
@@ -712,7 +917,14 @@
           "format": "gif",
           "id": "color_table_global",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_global_ct_gif.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "local_ct.gif",
@@ -722,7 +934,14 @@
           "format": "gif",
           "id": "color_table_local",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_local_ct_gif.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "gce.gif",
@@ -734,13 +953,13 @@
           "id": "extension_gce",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_gce_gif.bin"
         },
         {
           "asset": "1x1.gif",
@@ -752,13 +971,13 @@
           "id": "size_1x1",
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "ref_size": [
             1,
             1
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_1x1_gif.bin"
         },
         {
           "asset": "empty.gif",
@@ -771,6 +990,23 @@
           "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>",
           "status": "active",
           "type": "decode"
+        },
+        {
+          "id": "animated_gif_animated_3frame",
+          "type": "decode",
+          "format": "gif",
+          "category": "animated",
+          "description": "Animated GIF (decode first frame)",
+          "asset": "animated_3frame.gif",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.gif_animated_3frame_gif.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ],
       "encode": [
@@ -783,11 +1019,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_static.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -799,11 +1039,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_animated.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -816,11 +1060,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_animated_loop.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -831,11 +1079,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_opaque.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -846,11 +1098,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_transparent.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -861,11 +1117,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_interlaced.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -876,11 +1136,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_non_interlaced.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -891,11 +1155,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_dispose_none.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -906,11 +1174,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_dispose_background.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -921,11 +1193,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_dispose_previous.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -936,11 +1212,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_global_ct.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -951,11 +1231,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_local_ct.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": null,
@@ -969,11 +1253,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_1x1.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": "Static GIF",
@@ -984,11 +1272,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_static.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": "Transparent GIF",
@@ -999,11 +1291,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_transparent.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         },
         {
           "description": "Interlaced GIF",
@@ -1014,11 +1310,15 @@
           },
           "ref_bytes": 1,
           "ref_mode": "P",
-          "ref_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
           "source_asset": "1x1.gif",
           "source_format": "gif",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.gif_enc_interlaced.bin",
+          "ref_size": [
+            1,
+            1
+          ]
         }
       ]
     },
@@ -1032,15 +1332,15 @@
           "expect_error": false,
           "format": "ico",
           "id": "single_icon",
-          "ref_bytes": 1024,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+          "ref_bytes": 768,
+          "ref_mode": "Rgb8",
           "ref_size": [
             16,
             16
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.ico_single_ico.bin"
         },
         {
           "asset": "multi.ico",
@@ -1050,15 +1350,15 @@
           "expect_error": false,
           "format": "ico",
           "id": "multi_res",
-          "ref_bytes": 1024,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+          "ref_bytes": 768,
+          "ref_mode": "Rgb8",
           "ref_size": [
             16,
             16
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.ico_multi_ico.bin"
         },
         {
           "asset": "png_entry.ico",
@@ -1070,13 +1370,13 @@
           "id": "png_entry",
           "ref_bytes": 4096,
           "ref_mode": "Rgba8",
-          "ref_sha256": "725602d207f5bfda0cb87fa30b8bda67ac4fc857c6c6f9408a229cc460db15ad",
           "ref_size": [
             32,
             32
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.ico_png_entry_ico.bin"
         },
         {
           "asset": "bmp_entry.ico",
@@ -1086,7 +1386,14 @@
           "format": "ico",
           "id": "bmp_entry",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.ico_bmp_entry_ico.bin",
+          "ref_bytes": 768,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            16,
+            16
+          ]
         },
         {
           "asset": "16x16.ico",
@@ -1096,15 +1403,15 @@
           "expect_error": false,
           "format": "ico",
           "id": "size_16x16",
-          "ref_bytes": 1024,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "5fb0941eabe053519ea9a9038a355d19863caf80f8d16ec1ac8b81ed13ba1444",
+          "ref_bytes": 768,
+          "ref_mode": "Rgb8",
           "ref_size": [
             16,
             16
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.ico_16x16_ico.bin"
         },
         {
           "asset": "256x256.ico",
@@ -1114,7 +1421,14 @@
           "format": "ico",
           "id": "size_256x256",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.ico_256x256_ico.bin",
+          "ref_bytes": 196608,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            256,
+            256
+          ]
         }
       ],
       "encode": [
@@ -1130,11 +1444,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_16x16.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1148,11 +1466,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_32x32.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1166,11 +1488,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_48x48.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1184,11 +1510,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_256x256.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1204,11 +1534,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_multi_2.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1228,11 +1562,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_multi_4.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1243,11 +1581,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_bmp_entry.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1258,11 +1600,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_png_entry.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1273,11 +1619,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_24bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1288,11 +1638,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_32bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1303,11 +1657,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_no_hotspot.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -1321,11 +1679,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_hotspot.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "16x16 icon",
@@ -1341,11 +1703,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_16x16.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "32x32 icon",
@@ -1361,11 +1727,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_32x32.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Multi-resolution",
@@ -1385,11 +1755,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_multi.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "PNG-encoded entry",
@@ -1400,11 +1774,15 @@
           },
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "source_asset": "rgba.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_png_entry.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ]
     },
@@ -1420,13 +1798,13 @@
           "id": "subsampling_444",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "cddc03e6707d5495567b129ba0eca7b1cf9503fa8621239f826fab6a2cfeddda",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_444_jpg.bin"
         },
         {
           "asset": "baseline_422.jpg",
@@ -1438,13 +1816,13 @@
           "id": "subsampling_422",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "c2a5160b3ac6f226ac66d2ea7a5fdec5df133c49610c1d372c5cc7f0382eb4d6",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_422_jpg.bin"
         },
         {
           "asset": "baseline_420.jpg",
@@ -1456,13 +1834,13 @@
           "id": "subsampling_420",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_420_jpg.bin"
         },
         {
           "asset": "baseline_411.jpg",
@@ -1474,13 +1852,13 @@
           "id": "subsampling_411",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_411_jpg.bin"
         },
         {
           "asset": "baseline_gray.jpg",
@@ -1492,13 +1870,13 @@
           "id": "subsampling_gray",
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "fd81696ebff9ce6428781dc41d3492cf67b7a00f20afa4207044212cfbdabc98",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_gray_jpg.bin"
         },
         {
           "asset": "baseline_ycbcr.jpg",
@@ -1508,7 +1886,14 @@
           "format": "jpeg",
           "id": "color_ycbcr",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_ycbcr_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "baseline_rgb_jpeg.jpg",
@@ -1518,7 +1903,14 @@
           "format": "jpeg",
           "id": "color_rgb",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_rgb_jpeg_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "baseline_cmyk.jpg",
@@ -1527,7 +1919,7 @@
           "expect_error": false,
           "format": "jpeg",
           "id": "color_cmyk",
-          "status": "active",
+          "status": "planned",
           "type": "decode"
         },
         {
@@ -1538,7 +1930,14 @@
           "format": "jpeg",
           "id": "huffman_default",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_default_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "baseline_optimized.jpg",
@@ -1548,7 +1947,14 @@
           "format": "jpeg",
           "id": "huffman_optimized",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_optimized_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "progressive.jpg",
@@ -1560,13 +1966,13 @@
           "id": "huffman_progressive",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "86c63fac9e0a7fa00c4aa58b4999458f778c3972e9c2eff0ed925004e1f98ffa",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_progressive_jpg.bin"
         },
         {
           "asset": "q100.jpg",
@@ -1578,13 +1984,13 @@
           "id": "quality_100",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "120032d46a6d1c86eb9a23155ae30836a37e6587d681e980ab5817c9aceeff73",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q100_jpg.bin"
         },
         {
           "asset": "q50.jpg",
@@ -1596,13 +2002,13 @@
           "id": "quality_50",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "884634b00728ba4a3afb9e88f3805a7930ba0e495b429acbf1a8d2851baa583f",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q50_jpg.bin"
         },
         {
           "asset": "q10.jpg",
@@ -1614,13 +2020,13 @@
           "id": "quality_10",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "98368f88c8281349f7434dcef60927e1d51d0dee05c524dd8cc7340604aa90f0",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q10_jpg.bin"
         },
         {
           "asset": "q1.jpg",
@@ -1632,13 +2038,13 @@
           "id": "quality_1",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "d2cc5bf13d549fe040b688c2168d4947b5d0e8110cd7eadf38293e93d10c96c6",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q1_jpg.bin"
         },
         {
           "asset": "8x8.jpg",
@@ -1650,13 +2056,13 @@
           "id": "size_minimal",
           "ref_bytes": 192,
           "ref_mode": "Rgb8",
-          "ref_sha256": "7f733356482b5a2090a00500ef34843e63449c585023b37e58812cd3431e47c6",
           "ref_size": [
             8,
             8
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_8x8_jpg.bin"
         },
         {
           "asset": "17x17.jpg",
@@ -1668,13 +2074,13 @@
           "id": "size_odd",
           "ref_bytes": 867,
           "ref_mode": "Rgb8",
-          "ref_sha256": "01c788256ea34397bf5164476d9436c46d4d71bcad67c4f359f5179c961b1bb2",
           "ref_size": [
             17,
             17
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_17x17_jpg.bin"
         },
         {
           "asset": "large.jpg",
@@ -1684,7 +2090,14 @@
           "format": "jpeg",
           "id": "size_large",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_large_jpg.bin",
+          "ref_bytes": 99459,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            257,
+            129
+          ]
         },
         {
           "asset": "1x1.jpg",
@@ -1696,13 +2109,13 @@
           "id": "size_1x1",
           "ref_bytes": 3,
           "ref_mode": "Rgb8",
-          "ref_sha256": "e9141d64beeaee8e8dbf6e033b89aa5977bf8ada4a7917a50932e69eac549c37",
           "ref_size": [
             1,
             1
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_1x1_jpg.bin"
         },
         {
           "asset": "baseline_default.jpg",
@@ -1724,13 +2137,13 @@
           "id": "restart_interval",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_restart_jpg.bin"
         },
         {
           "asset": "exif_orientation.jpg",
@@ -1740,7 +2153,14 @@
           "format": "jpeg",
           "id": "exif_orientation",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_exif_orientation_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "exif_thumbnail.jpg",
@@ -1750,7 +2170,14 @@
           "format": "jpeg",
           "id": "exif_thumbnail",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_exif_thumbnail_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "no_exif.jpg",
@@ -1760,7 +2187,14 @@
           "format": "jpeg",
           "id": "no_exif",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_no_exif_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "trailing_data.jpg",
@@ -1770,7 +2204,14 @@
           "format": "jpeg",
           "id": "trailing_data",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_trailing_data_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "multiple_eoi.jpg",
@@ -1780,7 +2221,14 @@
           "format": "jpeg",
           "id": "multiple_eoi",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_multiple_eoi_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "empty.jpg",
@@ -1828,13 +2276,13 @@
           "id": "baseline_standard",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "7ec9bcc05daf93cb508eba080d911e58ab2e79d7c5e5a0ddfc857b81c4e6ade4",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_baseline_jpg.bin"
         },
         {
           "asset": "progressive_spectral.jpg",
@@ -1846,13 +2294,81 @@
           "id": "progressive_spectral",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "86c63fac9e0a7fa00c4aa58b4999458f778c3972e9c2eff0ed925004e1f98ffa",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_progressive_spectral_jpg.bin"
+        },
+        {
+          "id": "quality_100_q90",
+          "type": "decode",
+          "format": "jpeg",
+          "category": "quality",
+          "description": "Quality 100 (minimal compression)",
+          "asset": "q90.jpg",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q90_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "quality_100_q75",
+          "type": "decode",
+          "format": "jpeg",
+          "category": "quality",
+          "description": "Quality 100 (minimal compression)",
+          "asset": "q75.jpg",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q75_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "quality_50_q25",
+          "type": "decode",
+          "format": "jpeg",
+          "category": "quality",
+          "description": "Quality 50 (medium compression)",
+          "asset": "q25.jpg",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_q25_jpg.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "size_odd_33x33",
+          "type": "decode",
+          "format": "jpeg",
+          "category": "size",
+          "description": "Odd dimensions requiring edge MCU handling",
+          "asset": "33x33.jpg",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.jpeg_33x33_jpg.bin",
+          "ref_bytes": 3267,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            33,
+            33
+          ]
         }
       ],
       "encode": [
@@ -1985,7 +2501,7 @@
           },
           "source_asset": "baseline_444.jpg",
           "source_format": "jpeg",
-          "status": "active",
+          "status": "planned",
           "type": "encode"
         },
         {
@@ -2246,7 +2762,7 @@
           },
           "source_asset": "baseline_444.jpg",
           "source_format": "jpeg",
-          "status": "active",
+          "status": "planned",
           "type": "encode"
         },
         {
@@ -2275,13 +2791,13 @@
           "id": "color_gray",
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_gray_png.bin"
         },
         {
           "asset": "gray_alpha.png",
@@ -2293,13 +2809,13 @@
           "id": "color_gray_alpha",
           "ref_bytes": 32768,
           "ref_mode": "La8",
-          "ref_sha256": "b6dcbaf7b5a0b3225e7586f65b10fddca0a8f56c1aa22ba684411c0682c09f4b",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_gray_alpha_png.bin"
         },
         {
           "asset": "rgb.png",
@@ -2311,13 +2827,13 @@
           "id": "color_rgb",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_rgb_png.bin"
         },
         {
           "asset": "rgba.png",
@@ -2329,13 +2845,13 @@
           "id": "color_rgba",
           "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_rgba_png.bin"
         },
         {
           "asset": "indexed.png",
@@ -2347,13 +2863,13 @@
           "id": "color_indexed",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_indexed_png.bin"
         },
         {
           "asset": "indexed_alpha.png",
@@ -2365,13 +2881,13 @@
           "id": "color_indexed_alpha",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_indexed_alpha_png.bin"
         },
         {
           "asset": "1bit.png",
@@ -2383,13 +2899,13 @@
           "id": "depth_1",
           "ref_bytes": 2048,
           "ref_mode": "1",
-          "ref_sha256": "b73f7cbd2e75fb2128203993c9e95855f2f62a6e54de9ec2078da285dfb28b30",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_1bit_png.bin"
         },
         {
           "asset": "2bit.png",
@@ -2401,13 +2917,13 @@
           "id": "depth_2",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "2863dcbb27cf09a29a2024b1711bd87091edf82707afd785e5d8f68a40e656fd",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_2bit_png.bin"
         },
         {
           "asset": "4bit.png",
@@ -2419,13 +2935,13 @@
           "id": "depth_4",
           "ref_bytes": 16384,
           "ref_mode": "P",
-          "ref_sha256": "2fc3bb12799a0cd683c22bc041e1bc0f371eda4f025b5f58310d7769e4aaf1b5",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_4bit_png.bin"
         },
         {
           "asset": "8bit.png",
@@ -2437,13 +2953,13 @@
           "id": "depth_8",
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_8bit_png.bin"
         },
         {
           "asset": "16bit.png",
@@ -2455,13 +2971,13 @@
           "id": "depth_16",
           "ref_bytes": 32768,
           "ref_mode": "I;16",
-          "ref_sha256": "468493084ad08ed060c794c5055ddd0ee667fb059a096d2a2f1647f3f6347b6e",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_16bit_png.bin"
         },
         {
           "asset": "no_interlace.png",
@@ -2473,13 +2989,13 @@
           "id": "no_interlace",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_no_interlace_png.bin"
         },
         {
           "asset": "adam7.png",
@@ -2491,13 +3007,13 @@
           "id": "interlace_adam7",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_adam7_png.bin"
         },
         {
           "asset": "filter_none.png",
@@ -2509,13 +3025,13 @@
           "id": "filter_none",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_none_png.bin"
         },
         {
           "asset": "filter_sub.png",
@@ -2527,13 +3043,13 @@
           "id": "filter_sub",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_sub_png.bin"
         },
         {
           "asset": "filter_up.png",
@@ -2545,13 +3061,13 @@
           "id": "filter_up",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_up_png.bin"
         },
         {
           "asset": "filter_average.png",
@@ -2563,13 +3079,13 @@
           "id": "filter_average",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_average_png.bin"
         },
         {
           "asset": "filter_paeth.png",
@@ -2581,13 +3097,13 @@
           "id": "filter_paeth",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_paeth_png.bin"
         },
         {
           "asset": "filter_mixed.png",
@@ -2599,13 +3115,13 @@
           "id": "filter_mixed",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_filter_mixed_png.bin"
         },
         {
           "asset": "compress_default.png",
@@ -2617,13 +3133,13 @@
           "id": "compress_default",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_default_png.bin"
         },
         {
           "asset": "compress_none.png",
@@ -2635,13 +3151,13 @@
           "id": "compress_none",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_none_png.bin"
         },
         {
           "asset": "compress_max.png",
@@ -2653,13 +3169,13 @@
           "id": "compress_max",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_max_png.bin"
         },
         {
           "asset": "gama.png",
@@ -2671,13 +3187,13 @@
           "id": "chunk_gama",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_gama_png.bin"
         },
         {
           "asset": "srgb.png",
@@ -2689,13 +3205,13 @@
           "id": "chunk_srgb",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_srgb_png.bin"
         },
         {
           "asset": "iccp.png",
@@ -2705,7 +3221,14 @@
           "format": "png",
           "id": "chunk_iccp",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_iccp_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "text_chunks.png",
@@ -2717,13 +3240,13 @@
           "id": "chunk_text",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_text_chunks_png.bin"
         },
         {
           "asset": "time_chunk.png",
@@ -2733,7 +3256,14 @@
           "format": "png",
           "id": "chunk_time",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_time_chunk_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "bkgd.png",
@@ -2743,7 +3273,14 @@
           "format": "png",
           "id": "chunk_background",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_bkgd_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "phys.png",
@@ -2753,7 +3290,14 @@
           "format": "png",
           "id": "chunk_phys",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_phys_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "1x1.png",
@@ -2765,13 +3309,13 @@
           "id": "size_1x1",
           "ref_bytes": 3,
           "ref_mode": "Rgb8",
-          "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
           "ref_size": [
             1,
             1
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_1x1_png.bin"
         },
         {
           "asset": "16x16.png",
@@ -2781,7 +3325,14 @@
           "format": "png",
           "id": "size_small",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_16x16_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "large.png",
@@ -2791,7 +3342,14 @@
           "format": "png",
           "id": "size_large",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_large_png.bin",
+          "ref_bytes": 395523,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            513,
+            257
+          ]
         },
         {
           "asset": "odd_size.png",
@@ -2803,13 +3361,13 @@
           "id": "size_odd",
           "ref_bytes": 867,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ffd87a1ba3408876b7f22fb205642480b6c8e5487f8f370e801bc58033ee30d3",
           "ref_size": [
             17,
             17
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_odd_size_png.bin"
         },
         {
           "asset": "truncated.png",
@@ -2853,7 +3411,14 @@
           "format": "png",
           "id": "apng_static",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_apng_static_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "apng_animated.png",
@@ -2863,7 +3428,167 @@
           "format": "png",
           "id": "apng_animated",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_apng_animated_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "color_rgba_alpha_checker",
+          "type": "decode",
+          "format": "png",
+          "category": "color",
+          "description": "RGBA (color type 6)",
+          "asset": "alpha_checker.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_alpha_checker_png.bin",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "color_rgba_alpha_partial",
+          "type": "decode",
+          "format": "png",
+          "category": "color",
+          "description": "RGBA (color type 6)",
+          "asset": "alpha_partial.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_alpha_partial_png.bin",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "color_indexed_palette_2color",
+          "type": "decode",
+          "format": "png",
+          "category": "color",
+          "description": "Indexed/Palette (color type 3)",
+          "asset": "palette_2color.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_palette_2color_png.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "color_indexed_palette_256color",
+          "type": "decode",
+          "format": "png",
+          "category": "color",
+          "description": "Indexed/Palette (color type 3)",
+          "asset": "palette_256color.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_palette_256color_png.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "P",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "compress_default_compress_fast",
+          "type": "decode",
+          "format": "png",
+          "category": "compress",
+          "description": "Default zlib compression (level 6)",
+          "asset": "compress_fast.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_fast_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "compress_default_compress_mid",
+          "type": "decode",
+          "format": "png",
+          "category": "compress",
+          "description": "Default zlib compression (level 6)",
+          "asset": "compress_mid.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_compress_mid_png.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "size_odd_2x3",
+          "type": "decode",
+          "format": "png",
+          "category": "size",
+          "description": "Non-power-of-2 dimensions",
+          "asset": "2x3.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_2x3_png.bin",
+          "ref_bytes": 18,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "size_odd_1x255",
+          "type": "decode",
+          "format": "png",
+          "category": "size",
+          "description": "Non-power-of-2 dimensions",
+          "asset": "1x255.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_1x255_png.bin",
+          "ref_bytes": 765,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            1,
+            255
+          ]
+        },
+        {
+          "id": "size_odd_255x1",
+          "type": "decode",
+          "format": "png",
+          "category": "size",
+          "description": "Non-power-of-2 dimensions",
+          "asset": "255x1.png",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.png_255x1_png.bin",
+          "ref_bytes": 765,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            255,
+            1
+          ]
         }
       ],
       "encode": [
@@ -2876,11 +3601,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_0.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2891,11 +3620,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_3.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2906,11 +3639,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_6.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2921,11 +3658,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_9.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2936,11 +3677,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_l8.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2951,11 +3696,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_la8.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2966,11 +3715,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_rgb8.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2981,11 +3734,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_rgba8.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -2996,11 +3753,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_indexed.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3011,11 +3772,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_1bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3026,11 +3791,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_adam7.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3041,11 +3810,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_no_interlace.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3056,11 +3829,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_8bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3071,11 +3848,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_16bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3086,11 +3867,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_filter_none.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3101,11 +3886,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_filter_sub.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3116,11 +3905,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_filter_up.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3131,11 +3924,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_filter_avg.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3146,11 +3943,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_filter_paeth.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3161,11 +3962,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_filter_adaptive.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3176,11 +3981,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_chunk_text.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3191,11 +4000,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_chunk_gamma.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3206,11 +4019,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_chunk_srgb.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3221,11 +4038,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_chunk_phys.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3236,11 +4057,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_chunk_time.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3254,11 +4079,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_1x1.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3272,11 +4101,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_odd_size.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Default compression",
@@ -3287,11 +4120,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_default.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Max compression (9)",
@@ -3302,11 +4139,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_max.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "No compression",
@@ -3317,11 +4158,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_compress_none.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Adam7 interlaced",
@@ -3332,11 +4177,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_interlaced.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "RGB output",
@@ -3347,11 +4196,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_rgb.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "RGBA output",
@@ -3362,11 +4215,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_rgba.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Grayscale output",
@@ -3377,11 +4234,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_grayscale.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Grayscale+alpha output",
@@ -3392,11 +4253,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_grayscale_alpha.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Palette output",
@@ -3407,11 +4272,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_indexed.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "1-bit bilevel",
@@ -3422,11 +4291,15 @@
           },
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "source_asset": "8bit.png",
           "source_format": "png",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.png_enc_1bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ]
     },
@@ -3442,13 +4315,13 @@
           "id": "byte_order_le",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_le_tiff.bin"
         },
         {
           "asset": "be.tiff",
@@ -3458,7 +4331,14 @@
           "format": "tiff",
           "id": "byte_order_be",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_be_tiff.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "uncompressed.tiff",
@@ -3470,13 +4350,13 @@
           "id": "compression_none",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_uncompressed_tiff.bin"
         },
         {
           "asset": "lzw.tiff",
@@ -3488,13 +4368,13 @@
           "id": "compression_lzw",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_lzw_tiff.bin"
         },
         {
           "asset": "deflate.tiff",
@@ -3506,13 +4386,13 @@
           "id": "compression_deflate",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_deflate_tiff.bin"
         },
         {
           "asset": "packbits.tiff",
@@ -3522,7 +4402,14 @@
           "format": "tiff",
           "id": "compression_packbits",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_packbits_tiff.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "bilevel.tiff",
@@ -3532,15 +4419,15 @@
           "expect_error": false,
           "format": "tiff",
           "id": "bilevel",
-          "ref_bytes": 32,
+          "ref_bytes": 2048,
           "ref_mode": "1",
-          "ref_sha256": "3d92f194e3d8ff64db82b9d6d7c8888526665cbcbee3f4c5e3a6c097076c67c5",
           "ref_size": [
-            16,
-            16
+            128,
+            128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_bilevel_tiff.bin"
         },
         {
           "asset": "gray.tiff",
@@ -3552,13 +4439,13 @@
           "id": "grayscale",
           "ref_bytes": 16384,
           "ref_mode": "L8",
-          "ref_sha256": "27e9e95f4a84f3d856b625ebb665aacff6cb0df795d55306d6422af8fac6b9ca",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_gray_tiff.bin"
         },
         {
           "asset": "palette.tiff",
@@ -3567,7 +4454,7 @@
           "expect_error": false,
           "format": "tiff",
           "id": "palette",
-          "status": "active",
+          "status": "planned",
           "type": "decode"
         },
         {
@@ -3580,13 +4467,13 @@
           "id": "rgb",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_rgb_tiff.bin"
         },
         {
           "asset": "rgba.tiff",
@@ -3596,15 +4483,15 @@
           "expect_error": false,
           "format": "tiff",
           "id": "rgba",
-          "ref_bytes": 1024,
+          "ref_bytes": 65536,
           "ref_mode": "Rgba8",
-          "ref_sha256": "98f4b65a00baf17d30ebb2a9250399ab01972aaa17610fe55aebeda5f0e04fbe",
           "ref_size": [
-            16,
-            16
+            128,
+            128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_rgba_tiff.bin"
         },
         {
           "asset": "cmyk.tiff",
@@ -3613,7 +4500,7 @@
           "expect_error": false,
           "format": "tiff",
           "id": "cmyk",
-          "status": "active",
+          "status": "planned",
           "type": "decode"
         },
         {
@@ -3623,7 +4510,7 @@
           "expect_error": false,
           "format": "tiff",
           "id": "ycbcr",
-          "status": "active",
+          "status": "planned",
           "type": "decode"
         },
         {
@@ -3634,7 +4521,14 @@
           "format": "tiff",
           "id": "depth_1",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_1bit_tiff.bin",
+          "ref_bytes": 2048,
+          "ref_mode": "1",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "8bit.tiff",
@@ -3644,7 +4538,14 @@
           "format": "tiff",
           "id": "depth_8",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_8bit_tiff.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "L8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "16bit.tiff",
@@ -3653,7 +4554,7 @@
           "expect_error": false,
           "format": "tiff",
           "id": "depth_16",
-          "status": "active",
+          "status": "planned",
           "type": "decode"
         },
         {
@@ -3663,7 +4564,7 @@
           "expect_error": false,
           "format": "tiff",
           "id": "depth_float",
-          "status": "active",
+          "status": "planned",
           "type": "decode"
         },
         {
@@ -3674,7 +4575,14 @@
           "format": "tiff",
           "id": "stripped",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_stripped_tiff.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "tiled.tiff",
@@ -3684,7 +4592,14 @@
           "format": "tiff",
           "id": "tiled",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_tiled_tiff.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "single.tiff",
@@ -3694,7 +4609,14 @@
           "format": "tiff",
           "id": "single_page",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_single_tiff.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "multipage.tiff",
@@ -3704,7 +4626,14 @@
           "format": "tiff",
           "id": "multi_page",
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_multipage_tiff.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "asset": "bad_ifd.tiff",
@@ -3717,6 +4646,57 @@
           "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>",
           "status": "active",
           "type": "decode"
+        },
+        {
+          "id": "compression_lzw_gray_lzw",
+          "type": "decode",
+          "format": "tiff",
+          "category": "compression",
+          "description": "LZW compression",
+          "asset": "gray_lzw.tiff",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_gray_lzw_tiff.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "L8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "compression_lzw_rgba_lzw",
+          "type": "decode",
+          "format": "tiff",
+          "category": "compression",
+          "description": "LZW compression",
+          "asset": "rgba_lzw.tiff",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_rgba_lzw_tiff.bin",
+          "ref_bytes": 65536,
+          "ref_mode": "Rgba8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "compression_deflate_gray_deflate",
+          "type": "decode",
+          "format": "tiff",
+          "category": "compression",
+          "description": "Deflate/ZIP compression",
+          "asset": "gray_deflate.tiff",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.tiff_gray_deflate_tiff.bin",
+          "ref_bytes": 16384,
+          "ref_mode": "L8",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ],
       "encode": [
@@ -3729,11 +4709,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_none.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3744,11 +4728,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_lzw.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3759,11 +4747,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_deflate.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3774,11 +4766,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_packbits.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3789,11 +4785,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_byte_le.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3804,11 +4804,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_byte_be.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3819,11 +4823,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_bilevel.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3834,11 +4842,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_grayscale.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3849,11 +4861,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgb.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3864,11 +4880,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgba.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3879,11 +4899,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_cmyk.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3894,11 +4918,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_8bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3909,11 +4937,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_16bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3924,11 +4956,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_32bit.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3939,11 +4975,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_stripped.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3954,11 +4994,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_tiled.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3969,11 +5013,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_single_page.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3984,11 +5032,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_multi_page.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -3999,11 +5051,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_predictor_none.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -4014,11 +5070,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_predictor_horiz.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": null,
@@ -4032,11 +5092,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_1x1.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Uncompressed",
@@ -4047,11 +5111,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_uncompressed.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "LZW compression",
@@ -4062,11 +5130,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_lzw.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Deflate compression",
@@ -4077,11 +5149,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_deflate.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Little-endian",
@@ -4092,11 +5168,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_le.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Big-endian",
@@ -4107,11 +5187,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_be.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "RGB TIFF",
@@ -4122,11 +5206,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgb.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "RGBA TIFF",
@@ -4137,11 +5225,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgba.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Grayscale TIFF",
@@ -4152,11 +5244,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_grayscale.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         },
         {
           "description": "Bilevel TIFF",
@@ -4167,11 +5263,15 @@
           },
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "le.tiff",
           "source_format": "tiff",
           "status": "active",
-          "type": "encode"
+          "type": "encode",
+          "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_bilevel.bin",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ]
     },
@@ -4187,13 +5287,13 @@
           "id": "lossy_vp8",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_lossy_webp.bin"
         },
         {
           "asset": "lossless.webp",
@@ -4205,13 +5305,13 @@
           "id": "lossless_vp8l",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_lossless_webp.bin"
         },
         {
           "asset": "extended.webp",
@@ -4221,15 +5321,15 @@
           "expect_error": false,
           "format": "webp",
           "id": "extended",
-          "ref_bytes": 65536,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "71a9c4aa75886102d187b8262d2f535cc285a4588d77e1841ab085bb8e89b3e6",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_extended_webp.bin"
         },
         {
           "asset": "no_alpha.webp",
@@ -4241,13 +5341,13 @@
           "id": "no_alpha",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_no_alpha_webp.bin"
         },
         {
           "asset": "with_alpha.webp",
@@ -4257,15 +5357,15 @@
           "expect_error": false,
           "format": "webp",
           "id": "with_alpha",
-          "ref_bytes": 65536,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "e3ee2530af855f0499fcac0ef6d3a5daeb478fa49bbfbe3a02b93a41f48108da",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_with_alpha_webp.bin"
         },
         {
           "asset": "alpha_lossless.webp",
@@ -4275,15 +5375,15 @@
           "expect_error": false,
           "format": "webp",
           "id": "alpha_lossless",
-          "ref_bytes": 65536,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "be15abeef6ce4c4ea153b2b689094466b4d8820f55f118a18387473db720253d",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_alpha_lossless_webp.bin"
         },
         {
           "asset": "animated.webp",
@@ -4293,15 +5393,15 @@
           "expect_error": false,
           "format": "webp",
           "id": "animated",
-          "ref_bytes": 12288,
+          "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "6511649f0bc814fa7838013ec9c644187d1ca7ec48e4376acf758f6fffc63da8",
           "ref_size": [
-            64,
-            64
+            128,
+            128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_animated_webp.bin"
         },
         {
           "asset": "16x16.webp",
@@ -4311,15 +5411,15 @@
           "expect_error": false,
           "format": "webp",
           "id": "size_small",
-          "ref_bytes": 1024,
-          "ref_mode": "Rgba8",
-          "ref_sha256": "3b82045c0d52cec1f0b719075b518d95b88610e1ab94baba7534fb489796edce",
+          "ref_bytes": 768,
+          "ref_mode": "Rgb8",
           "ref_size": [
             16,
             16
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_16x16_webp.bin"
         },
         {
           "asset": "odd.webp",
@@ -4329,15 +5429,15 @@
           "expect_error": false,
           "format": "webp",
           "id": "size_odd",
-          "ref_bytes": 867,
+          "ref_bytes": 969,
           "ref_mode": "Rgb8",
-          "ref_sha256": "e3f171665697c7e09bc6f44fa2cac3949e99dfab168f17afe8cf855517dbe0c3",
           "ref_size": [
             17,
-            17
+            19
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_odd_webp.bin"
         },
         {
           "asset": "icc.webp",
@@ -4349,13 +5449,13 @@
           "id": "icc_profile",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "dabb65bce1b30d63aeeb14df67e4479b06ad0ec4c9ce098a7f8860795c9e0769",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_icc_webp.bin"
         },
         {
           "asset": "xmp.webp",
@@ -4367,13 +5467,13 @@
           "id": "xmp_metadata",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "dabb65bce1b30d63aeeb14df67e4479b06ad0ec4c9ce098a7f8860795c9e0769",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_xmp_webp.bin"
         },
         {
           "asset": "exif.webp",
@@ -4385,13 +5485,13 @@
           "id": "exif_metadata",
           "ref_bytes": 49152,
           "ref_mode": "Rgb8",
-          "ref_sha256": "dabb65bce1b30d63aeeb14df67e4479b06ad0ec4c9ce098a7f8860795c9e0769",
           "ref_size": [
             128,
             128
           ],
           "status": "active",
-          "type": "decode"
+          "type": "decode",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_exif_webp.bin"
         },
         {
           "asset": "truncated.webp",
@@ -4404,6 +5504,91 @@
           "ref_error": "<module 'PIL.Image' from '/home/appunni/work/pil-wasm/.venv/lib/python3.12/site-packages/PIL/Image.py'>",
           "status": "active",
           "type": "decode"
+        },
+        {
+          "id": "lossy_vp8_lossy_q10",
+          "type": "decode",
+          "format": "webp",
+          "category": "lossy",
+          "description": "Lossy WebP (VP8 codec)",
+          "asset": "lossy_q10.webp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_lossy_q10_webp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "lossy_vp8_lossy_q50",
+          "type": "decode",
+          "format": "webp",
+          "category": "lossy",
+          "description": "Lossy WebP (VP8 codec)",
+          "asset": "lossy_q50.webp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_lossy_q50_webp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "lossy_vp8_lossy_q90",
+          "type": "decode",
+          "format": "webp",
+          "category": "lossy",
+          "description": "Lossy WebP (VP8 codec)",
+          "asset": "lossy_q90.webp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_lossy_q90_webp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "lossy_vp8_lossy_q100",
+          "type": "decode",
+          "format": "webp",
+          "category": "lossy",
+          "description": "Lossy WebP (VP8 codec)",
+          "asset": "lossy_q100.webp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_lossy_q100_webp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
+        },
+        {
+          "id": "with_alpha_alpha_lossy",
+          "type": "decode",
+          "format": "webp",
+          "category": "with",
+          "description": "WebP with alpha channel",
+          "asset": "alpha_lossy.webp",
+          "expect_error": false,
+          "status": "active",
+          "ref_path": "tests/fixtures/outputs/raws/Decode.webp_alpha_lossy_webp.bin",
+          "ref_bytes": 49152,
+          "ref_mode": "Rgb8",
+          "ref_size": [
+            128,
+            128
+          ]
         }
       ],
       "encode": [
@@ -4415,17 +5600,10 @@
             "lossless": false,
             "quality": 100
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4435,17 +5613,10 @@
             "lossless": false,
             "quality": 80
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4455,17 +5626,10 @@
             "lossless": false,
             "quality": 50
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4475,17 +5639,10 @@
             "lossless": false,
             "quality": 10
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4495,17 +5652,10 @@
             "lossless": false,
             "quality": 1
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": "Lossless WebP",
@@ -4515,7 +5665,6 @@
             "lossless": true
           },
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
           "status": "active",
@@ -4524,7 +5673,8 @@
           "ref_size": [
             128,
             128
-          ]
+          ],
+          "ref_path": "tests/fixtures/outputs/raws/Encode.webp_enc_lossless.bin"
         },
         {
           "description": "Lossy with alpha",
@@ -4534,17 +5684,10 @@
             "alpha": true,
             "lossless": false
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": "Lossless with alpha",
@@ -4555,7 +5698,6 @@
             "lossless": true
           },
           "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
           "status": "active",
@@ -4564,7 +5706,8 @@
           "ref_size": [
             128,
             128
-          ]
+          ],
+          "ref_path": "tests/fixtures/outputs/raws/Encode.webp_enc_lossless_alpha.bin"
         },
         {
           "description": null,
@@ -4573,17 +5716,10 @@
           "params": {
             "alpha": false
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4592,17 +5728,10 @@
           "params": {
             "hint": "photo"
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4611,17 +5740,10 @@
           "params": {
             "hint": "graph"
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4630,17 +5752,10 @@
           "params": {
             "hint": "picture"
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4649,17 +5764,10 @@
           "params": {
             "method": 0
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4668,17 +5776,10 @@
           "params": {
             "method": 6
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4687,17 +5788,10 @@
           "params": {
             "exif": true
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4706,17 +5800,10 @@
           "params": {
             "xmp": true
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4725,17 +5812,10 @@
           "params": {
             "icc": true
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": null,
@@ -4747,17 +5827,10 @@
               1
             ]
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": "Lossy WebP",
@@ -4766,17 +5839,10 @@
           "params": {
             "lossless": false
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": "Lossy quality 100",
@@ -4786,17 +5852,10 @@
             "lossless": false,
             "quality": 100
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         },
         {
           "description": "Lossy quality 10",
@@ -4806,17 +5865,10 @@
             "lossless": false,
             "quality": 10
           },
-          "ref_mode": "Rgb8",
-          "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
           "source_asset": "lossless.webp",
           "source_format": "webp",
-          "status": "active",
-          "type": "encode",
-          "ref_bytes": 49152,
-          "ref_size": [
-            128,
-            128
-          ]
+          "status": "planned",
+          "type": "encode"
         }
       ]
     }

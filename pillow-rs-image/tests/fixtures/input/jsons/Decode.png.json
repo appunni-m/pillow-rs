@@ -156,6 +156,42 @@
     {
       "id": "apng_animated",
       "asset": "apng_animated.png"
+    },
+    {
+      "id": "color_rgba_alpha_checker",
+      "asset": "alpha_checker.png"
+    },
+    {
+      "id": "color_rgba_alpha_partial",
+      "asset": "alpha_partial.png"
+    },
+    {
+      "id": "color_indexed_palette_2color",
+      "asset": "palette_2color.png"
+    },
+    {
+      "id": "color_indexed_palette_256color",
+      "asset": "palette_256color.png"
+    },
+    {
+      "id": "compress_default_compress_fast",
+      "asset": "compress_fast.png"
+    },
+    {
+      "id": "compress_default_compress_mid",
+      "asset": "compress_mid.png"
+    },
+    {
+      "id": "size_odd_2x3",
+      "asset": "2x3.png"
+    },
+    {
+      "id": "size_odd_1x255",
+      "asset": "1x255.png"
+    },
+    {
+      "id": "size_odd_255x1",
+      "asset": "255x1.png"
     }
   ]
 }

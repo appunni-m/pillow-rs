@@ -7,99 +7,163 @@
   "cases": [
     {
       "id": "enc_16x16",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_16x16.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_32x32",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_32x32.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_48x48",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_48x48.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_256x256",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_256x256.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_multi_2",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_multi_2.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_multi_4",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_multi_4.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_bmp_entry",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_bmp_entry.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_png_entry",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_png_entry.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_24bit",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_24bit.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_32bit",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_32bit.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_no_hotspot",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_no_hotspot.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_hotspot",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_hotspot.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_16x16",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_16x16.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_32x32",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_32x32.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_multi",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_multi.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_png_entry",
-      "ref_sha256": "be10576c0060ec9798939879ea4670e5c4654890853f61d5dcca3d576a1162b5",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.ico_enc_png_entry.bin",
       "ref_bytes": 65536,
-      "ref_mode": "Rgba8"
+      "ref_mode": "Rgba8",
+      "ref_size": [
+        128,
+        128
+      ]
     }
   ]
 }

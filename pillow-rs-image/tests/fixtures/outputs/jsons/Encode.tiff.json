@@ -7,183 +7,303 @@
   "cases": [
     {
       "id": "enc_compress_none",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_none.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_compress_lzw",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_lzw.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_compress_deflate",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_deflate.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_compress_packbits",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_compress_packbits.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_byte_le",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_byte_le.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_byte_be",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_byte_be.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_bilevel",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_bilevel.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_grayscale",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_grayscale.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_rgb",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgb.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_rgba",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgba.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_cmyk",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_cmyk.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_8bit",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_8bit.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_16bit",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_16bit.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_32bit",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_32bit.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_stripped",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_stripped.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_tiled",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_tiled.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_single_page",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_single_page.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_multi_page",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_multi_page.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_predictor_none",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_predictor_none.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_predictor_horiz",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_predictor_horiz.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_1x1",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_1x1.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_uncompressed",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_uncompressed.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_lzw",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_lzw.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_deflate",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_deflate.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_le",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_le.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_be",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_be.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_rgb",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgb.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_rgba",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_rgba.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_grayscale",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_grayscale.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_bilevel",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.tiff_enc_bilevel.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     }
   ]
 }

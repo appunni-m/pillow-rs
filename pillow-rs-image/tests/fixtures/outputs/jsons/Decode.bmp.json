@@ -7,45 +7,203 @@
   "cases": [
     {
       "id": "depth_1",
-      "ref_sha256": "b73f7cbd2e75fb2128203993c9e95855f2f62a6e54de9ec2078da285dfb28b30",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_1bit_bmp.bin",
       "ref_bytes": 2048,
-      "ref_mode": "1"
+      "ref_mode": "1",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "depth_4",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_4bit_bmp.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_8",
-      "ref_sha256": "b97eb05a345cb6e495ad036350d5278cf7202f8203fe74de4b672faaf5d94feb",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_8bit_bmp.bin",
       "ref_bytes": 16384,
-      "ref_mode": "P"
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "depth_16",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_16bit_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_24",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_24bit_bmp.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "depth_32",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_32bit_bmp.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_none",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_uncompressed_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "compression_rle8",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_rle8_bmp.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_rle4",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_rle4_bmp.bin",
+      "ref_bytes": 16384,
+      "ref_mode": "P",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "compression_bitfields",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_bitfields_bmp.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "top_down",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_top_down_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "bottom_up",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_bottom_up_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "os2_v1",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_os2v1_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "v4_header",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_v4header_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "v5_header",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_v5header_bmp.bin",
+      "ref_bytes": 49152,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "size_1x1",
-      "ref_sha256": "4c49d655fe7448a2661e069503bc28be3a9842916826447d193cb2e20d641e36",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_1x1_bmp.bin",
       "ref_bytes": 3,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        1,
+        1
+      ]
     },
     {
       "id": "size_odd",
-      "ref_sha256": "a5a079480cee6b3b538113144e01f7c268a18f6989396239f5ad6f97075cadd9",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_odd_width_bmp.bin",
       "ref_bytes": 867,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        17,
+        17
+      ]
+    },
+    {
+      "id": "size_odd_width2",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_width2_bmp.bin",
+      "ref_bytes": 30,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        2,
+        5
+      ]
+    },
+    {
+      "id": "size_odd_width3",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_width3_bmp.bin",
+      "ref_bytes": 45,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        3,
+        5
+      ]
+    },
+    {
+      "id": "size_odd_width31",
+      "ref_path": "tests/fixtures/outputs/raws/Decode.bmp_width31_bmp.bin",
+      "ref_bytes": 651,
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        31,
+        7
+      ]
     }
   ]
 }

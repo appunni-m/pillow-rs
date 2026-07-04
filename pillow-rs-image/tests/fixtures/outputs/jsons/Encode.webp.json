@@ -6,148 +6,24 @@
   },
   "cases": [
     {
-      "id": "enc_lossy_q100",
-      "ref_sha256": "9ff1ef8649d609f833a3cb8542517e341c7f73da4663be43e6ab1a58a15dbbbe",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_q80",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_q50",
-      "ref_sha256": "57cd1838ecb10fffd928e0862e5dff09212909c1897b55dc0c560e3dd3f1fbd1",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_q10",
-      "ref_sha256": "35c752c39041d25276745e68864f9535e4d68f7edce36cc531d36f59e19dc8f7",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_q1",
-      "ref_sha256": "25a3f7c72a21c39571fa88a7f45564bd9e3b92faba6df56da91cf53f0be5ead2",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
       "id": "enc_lossless",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.webp_enc_lossless.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_alpha",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     },
     {
       "id": "enc_lossless_alpha",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
+      "ref_path": "tests/fixtures/outputs/raws/Encode.webp_enc_lossless_alpha.bin",
       "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_no_alpha",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_hint_photo",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_hint_graph",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_hint_picture",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_method_0",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_method_6",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_exif",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_xmp",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_icc",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_1x1",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossless",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_alpha",
-      "ref_sha256": "f55e4423aa10900a8e62268733b50f53d69d6554138830ccc5054a7dbcf1019c",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossless_alpha",
-      "ref_sha256": "ab5b857b84f4c67a0a08d1f7995ad3b70a2b7e93cc2f615a0831b8e64e9efcf2",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_quality_100",
-      "ref_sha256": "9ff1ef8649d609f833a3cb8542517e341c7f73da4663be43e6ab1a58a15dbbbe",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
-    },
-    {
-      "id": "enc_lossy_quality_10",
-      "ref_sha256": "35c752c39041d25276745e68864f9535e4d68f7edce36cc531d36f59e19dc8f7",
-      "ref_bytes": 49152,
-      "ref_mode": "Rgb8"
+      "ref_mode": "Rgb8",
+      "ref_size": [
+        128,
+        128
+      ]
     }
   ]
 }

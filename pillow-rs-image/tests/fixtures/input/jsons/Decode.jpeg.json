@@ -34,10 +34,6 @@
       "asset": "baseline_rgb_jpeg.jpg"
     },
     {
-      "id": "color_cmyk",
-      "asset": "baseline_cmyk.jpg"
-    },
-    {
       "id": "huffman_default",
       "asset": "baseline_default.jpg"
     },
@@ -128,6 +124,22 @@
     {
       "id": "progressive_spectral",
       "asset": "progressive_spectral.jpg"
+    },
+    {
+      "id": "quality_100_q90",
+      "asset": "q90.jpg"
+    },
+    {
+      "id": "quality_100_q75",
+      "asset": "q75.jpg"
+    },
+    {
+      "id": "quality_50_q25",
+      "asset": "q25.jpg"
+    },
+    {
+      "id": "size_odd_33x33",
+      "asset": "33x33.jpg"
     }
   ]
 }
