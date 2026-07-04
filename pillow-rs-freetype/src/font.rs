@@ -592,7 +592,7 @@ impl Font {
             let scaled = scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?;
             if is_pathological_metrics_cbox(&scaled) {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
-                scaler::scale_glyph_for_metrics_with_autohint(
+                scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
                     &self.data,
                     glyph,
                     metrics_cache.as_ref(),

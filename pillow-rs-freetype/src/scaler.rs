@@ -115,7 +115,15 @@ pub fn scale_glyph(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, false)
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        is_italic,
+        true,
+        false,
+        false,
+    )
 }
 
 pub fn scale_glyph_for_metrics(
@@ -123,7 +131,7 @@ pub fn scale_glyph_for_metrics(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, true, true)
+    scale_glyph_impl(data, glyph_index, None, is_italic, true, true, false)
 }
 
 pub fn scale_glyph_for_metrics_with_autohint(
@@ -132,7 +140,32 @@ pub fn scale_glyph_for_metrics_with_autohint(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, latin_metrics, is_italic, true, true)
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        is_italic,
+        true,
+        true,
+        true,
+    )
+}
+
+pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        is_italic,
+        true,
+        true,
+        false,
+    )
 }
 
 /// Scale a glyph without autohinting or native TrueType bytecode.
@@ -143,7 +176,7 @@ pub fn scale_glyph_no_hinting(
     glyph_index: u16,
     is_italic: bool,
 ) -> Result<ScaledGlyph, FontError> {
-    scale_glyph_impl(data, glyph_index, None, is_italic, false, false)
+    scale_glyph_impl(data, glyph_index, None, is_italic, false, false, false)
 }
 
 fn scale_glyph_impl(
@@ -153,6 +186,7 @@ fn scale_glyph_impl(
     is_italic: bool,
     allow_bytecode: bool,
     round_component_offsets: bool,
+    use_autohint_advance: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -268,7 +302,7 @@ fn scale_glyph_impl(
 
     // ── Hinting dispatch ────────────────────────────────────────────────
     if use_autohint {
-        autohint_glyph(
+        let hinted_advance = autohint_glyph(
             &mut scaled,
             &shifted_raw,
             &scale,
@@ -277,6 +311,11 @@ fn scale_glyph_impl(
             is_italic,
             data,
         );
+        if use_autohint_advance {
+            if let Some(advance_width) = hinted_advance {
+                slot_advance_width = advance_width;
+            }
+        }
     } else if allow_bytecode {
         if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
             // Bytecode VM: run on glyphs with per-glyph instructions.
@@ -452,12 +491,12 @@ fn autohint_glyph(
     metrics: Option<&crate::autohint::AfLatinMetrics>,
     is_italic: bool,
     font_data: &FontData,
-) {
+) -> Option<i32> {
     use crate::outline::Outline;
 
     let num_contours = raw_outline.num_contours as i32;
     if num_contours == 0 {
-        return;
+        return None;
     }
 
     // Build a temporary Outline with scaled 26.6 coords.
@@ -488,7 +527,7 @@ fn autohint_glyph(
             }
         })
         .unwrap_or(scale.y_scale);
-    crate::autohint::apply_hints(
+    let output = crate::autohint::apply_hints(
         &mut outline,
         raw_outline,
         scale.x_scale,
@@ -508,6 +547,7 @@ fn autohint_glyph(
             s.y = p.y;
         }
     }
+    output.advance_width
 }
 
 // Suppress unused-import warning for GlyphOutline (kept for clarity).
