@@ -1758,8 +1758,8 @@ impl ExecContext {
                         let ppem_bits = p << 4; // P << 4 for matching
                         let f = delta_step(self.gs.delta_shift);
                         for _ in 0..nump {
-                            let b = self.pop()?; // delta + ppem bits
                             let a = self.pop()? as usize; // point index
+                            let b = self.pop()?; // delta + ppem bits
                             if a < zone.n_points as usize && (b & 0xF0) == ppem_bits {
                                 let mut d = (b & 0x0F) - 8;
                                 if d >= 0 {
@@ -1804,8 +1804,8 @@ impl ExecContext {
                         let ppem_bits = p << 4;
                         let f = delta_step(self.gs.delta_shift);
                         for _ in 0..nump {
-                            let b = self.pop()?;
                             let a = self.pop()? as usize;
+                            let b = self.pop()?;
                             if a < self.cvt.len() && (b & 0xF0) == ppem_bits {
                                 let mut d = (b & 0x0F) - 8;
                                 if d >= 0 {
