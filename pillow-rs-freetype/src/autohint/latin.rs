@@ -1195,6 +1195,7 @@ pub fn apply_hints(
     no_horizontal_hinting: bool,
     stem_adjust: bool,
     font_data: Option<&crate::tables::FontData>,
+    target_mono: bool,
 ) {
     let mut hints = GlyphHints::new(x_scale, y_scale, x_delta, y_delta);
     hints.metrics = metrics.cloned();
@@ -1210,8 +1211,15 @@ pub fn apply_hints(
     }
     // Smooth anti-aliased hinting normally enables stem adjustment. LCD target
     // clears it in FreeType to preserve horizontal subpixel coverage.
-    if stem_adjust {
+    if target_mono {
+        hints.other_flags |= AF_LATIN_HINTS_HORZ_SNAP
+            | AF_LATIN_HINTS_VERT_SNAP
+            | AF_LATIN_HINTS_STEM_ADJUST
+            | AF_LATIN_HINTS_MONO;
+    } else if stem_adjust {
         hints.other_flags |= AF_LATIN_HINTS_STEM_ADJUST;
+    } else {
+        hints.other_flags &= !AF_LATIN_HINTS_STEM_ADJUST;
     }
 
     // Italic, light, and LCD targets disable horizontal hinting.

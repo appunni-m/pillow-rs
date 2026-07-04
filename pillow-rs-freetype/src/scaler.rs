@@ -126,6 +126,7 @@ pub fn scale_glyph(
             stem_adjust: true,
         },
         true,
+        false,
     )
 }
 
@@ -149,6 +150,7 @@ pub fn scale_glyph_lcd(
             stem_adjust: false,
         },
         true,
+        false,
     )
 }
 
@@ -172,6 +174,28 @@ pub fn scale_glyph_lcd_v(
             stem_adjust: true,
         },
         true,
+        false,
+    )
+}
+
+/// Scale a glyph for `FT_LOAD_TARGET_MONO` autohint behavior.
+pub fn scale_glyph_mono(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+        true,
     )
 }
 
@@ -193,6 +217,7 @@ pub fn scale_glyph_no_hinting(
             stem_adjust: true,
         },
         false,
+        false,
     )
 }
 
@@ -202,6 +227,7 @@ fn scale_glyph_impl(
     latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
     style: HintStyle,
     allow_bytecode: bool,
+    target_mono: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -338,6 +364,10 @@ fn scale_glyph_impl(
             latin_metrics,
             style,
             data,
+            HintTarget {
+                is_italic: style.is_italic,
+                mono: target_mono,
+            },
         );
     } else if allow_bytecode {
         if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
@@ -504,6 +534,7 @@ fn autohint_glyph(
     metrics: Option<&crate::autohint::AfLatinMetrics>,
     style: HintStyle,
     font_data: &FontData,
+    target: HintTarget,
 ) {
     use crate::outline::Outline;
 
@@ -553,6 +584,7 @@ fn autohint_glyph(
         style.no_horizontal_hinting,
         style.stem_adjust,
         Some(font_data),
+        target.mono,
     );
 
     // Write hinted coordinates back.
@@ -562,6 +594,12 @@ fn autohint_glyph(
             s.y = p.y;
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HintTarget {
+    is_italic: bool,
+    mono: bool,
 }
 
 // Suppress unused-import warning for GlyphOutline (kept for clarity).
