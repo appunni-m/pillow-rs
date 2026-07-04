@@ -68,17 +68,190 @@ Goal: make `pillow-rs-freetype` measurable against the public FreeType API surfa
 | `sfnt_tables` | `FT_Load_Sfnt_Table` and typed table APIs |
 | `charmap` | charmap select and iteration APIs |
 
-## Execution Plan
+## Executable Chunks
 
-1. Generate API coverage from vendored FreeType headers.
-2. Maintain `tests/fixtures/interface_map.json` as the source of Rust mappings and path ownership.
-3. Run `cargo test -p pillow-rs-freetype --test interface_coverage -- --nocapture`.
-4. Rename existing `coverage_matrix.json` away from PIL semantics into `native_tt_default`.
-5. Add C generation paths for `native_tt_default`, `force_autohint`, and `no_hinting`.
-6. Wire each fixture family into `interface_map.json` with live parity counters.
-7. Continue implementation by descending path priority:
-   - `glyph/load + glyph/render + truetype/bytecode + raster/grays`
-   - `face/open + size/select + charmap + sfnt/tables`
-   - remaining render modes and font formats
+Each chunk is independently executable in its own worktree.  Chunks can land in
+any order unless a dependency is listed.
+
+### Chunk 1: Interface Inventory And Report
+
+Scope:
+- Parse vendored FreeType headers for every `FT_EXPORT` symbol.
+- Maintain `tests/fixtures/interface_map.json`.
+- Report API coverage by interface path and status.
+
+Primary files:
+- `tests/interface_coverage.rs`
+- `tests/fixtures/interface_map.json`
+- `docs/freetype_interface_parity_plan.md`
+
+Done criteria:
+- `interface_coverage` discovers the public FreeType API surface.
+- Every mapped symbol has one of `complete`, `partial`, `planned`, or `out_of_scope`.
+- Report prints `exports`, `mapped`, `unmapped`, `api_coverage`, and per-path parity.
+
+Verification:
+```bash
+cargo test -p pillow-rs-freetype --test interface_coverage -- --nocapture
+```
+
+Current status:
+- Started. Baseline report: `224` exports, `50` mapped, `10.3%` API coverage.
+
+### Chunk 2: Fixture Provenance And Generation
+
+Scope:
+- Remove Pillow naming from `pillow-rs-freetype` fixture paths.
+- Generate FreeType C references by explicit load/render path.
+- Keep Pillow fixtures/tests in `pillow-rs`, not this crate.
+
+Primary files:
+- `scripts/gen_ft_refs.c`
+- `scripts/build_native_tt_fixture.py`
+- future generators for `no_hinting`, `metrics_only`, `render_mono`, `render_lcd`
+- `tests/fixtures/*_matrix.json`
+- `tests/coverage_matrix_tests.rs`
+
+Done criteria:
+- Fixture families are named by FreeType path: `native_tt_default`, `force_autohint`, `no_hinting`, etc.
+- Reference JSON includes generator, load flags, render mode, font, size, glyph/codepoint, metrics, bbox, bitmap placement, and raw pixels.
+- Test failure output reports pixel/size/bbox deltas, not SHA only.
+
+Verification:
+```bash
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
+```
+
+Current status:
+- Started. `native_tt_default_matrix` exists and `force_autohint` static fixtures remain green.
+
+### Chunk 3: FreeType Core Face/Size/Charmap API
+
+Scope:
+- Build a FreeType-like Rust interface for face loading, size selection, table access, and charmaps.
+- Keep names Rust-native, but map each method to FreeType symbols in `interface_map.json`.
+
+Primary paths:
+- `face/open`
+- `face/metadata`
+- `size/select`
+- `charmap`
+- `sfnt/tables`
+- `truetype/tables`
+
+Primary files:
+- `src/font.rs`
+- `src/tables.rs`
+- `src/tt/*.rs`
+- `tests/fixtures/interface_map.json`
+- new fixtures for `charmap`, `sfnt_tables`, and `metrics_only`
+
+Done criteria:
+- Font construction exposes face count/index semantics.
+- Size APIs distinguish char size, pixel size, ppem, x/y scale, and DPI.
+- Charmap APIs cover select/set/get/index iteration.
+- SFNT raw table access is parity-tested against `FT_Load_Sfnt_Table`.
+
+Verification:
+```bash
+cargo test -p pillow-rs-freetype --test interface_coverage -- --nocapture
+cargo test -p pillow-rs-freetype --test core_face_size_charmap -- --nocapture
+```
+
+### Chunk 4: Native TrueType Load/Hint Pipeline
+
+Scope:
+- Complete `FT_LOAD_DEFAULT` / native TrueType behavior for `glyf` fonts.
+- Match FreeType's fpgm, prep, glyph bytecode, CVT, twilight zone, phantom points, and IUP behavior.
+
+Primary paths:
+- `glyph/load`
+- `glyph/metrics`
+- `truetype/bytecode`
+- `outline`
+
+Primary files:
+- `src/scaler.rs`
+- `src/tt/hinter/*.rs`
+- `src/tt/glyf.rs`
+- `tests/coverage_matrix_tests.rs`
+- stage-level native TT fixture tests
+
+Done criteria:
+- `native_tt_default_matrix` reaches `100%`.
+- Stage tests identify whether failures are glyph index, load error, raw outline, scaled outline, hinted outline, metrics, bbox, bitmap placement, or pixel coverage.
+- `force_autohint` fixtures do not regress.
+
+Verification:
+```bash
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
+```
+
+Current status:
+- In progress. Baseline after current fixes: `native_tt_default_matrix` `3176/7640`; `force_autohint` `22168/22168`.
+
+### Chunk 5: Rasterizers And Render Modes
+
+Scope:
+- Match FreeType renderers after the hinted outline is correct.
+- Cover grayscale, mono, LCD, LCD_V, bitmap conversion, and LCD filtering.
+
+Primary paths:
+- `glyph/render`
+- `raster/grays`
+- `raster/mono`
+- `raster/lcd`
+- `bitmap`
+
+Primary files:
+- `src/grays.rs`
+- future `src/mono.rs`, `src/lcd.rs`, or equivalent renderer modules
+- `tests/fixtures/render_mono_matrix.json`
+- `tests/fixtures/render_lcd_matrix.json`
+
+Done criteria:
+- Grayscale DDA matches `ftgrays.c`.
+- Mono output matches bit packing and pitch.
+- LCD/LCD_V output matches dimensions, pitch, subpixel layout, and filtering.
+- Bitmap helper APIs have parity fixtures.
+
+Verification:
+```bash
+cargo test -p pillow-rs-freetype --test render_mode_matrix -- --nocapture
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
+```
+
+### Chunk 6: Extended FreeType Surface
+
+Scope:
+- Implement or explicitly mark out of scope the remaining FreeType public paths.
+- This chunk can be split again once core TrueType/rendering is stable.
+
+Primary paths:
+- `truetype/variations`
+- `cff`
+- `type1/cid`
+- `bitmap/fonts`
+- `color/fonts`
+- `stroker`
+- `synthesis`
+- `advances`
+- `kerning`
+- `properties/modules`
+- `cache`
+- `validation`
+- `compression`
+- `math`
+- `error/logging`
+
+Done criteria:
+- Every FreeType export is mapped in `interface_map.json`.
+- In-scope paths have parity fixtures or exact numeric/unit tests.
+- Out-of-scope paths have an explicit reason in the mapping manifest.
+
+Verification:
+```bash
+cargo test -p pillow-rs-freetype --test interface_coverage -- --nocapture
+```
 
 The report is the release gate: a claimed 100% parity milestone requires all in-scope symbols to be `complete` and all fixture-backed paths to show `passing == total`.
