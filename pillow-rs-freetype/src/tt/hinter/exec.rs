@@ -1263,16 +1263,16 @@ impl ExecContext {
                 // ── CINDEX (0x25) — Copy indexed element ─────────
                 0x25 => {
                     let k = self.pop()? as usize;
-                    if k < self.stack.len() {
-                        let v = self.stack[self.stack.len() - 1 - k];
+                    if k > 0 && k <= self.stack.len() {
+                        let v = self.stack[self.stack.len() - k];
                         self.push(v);
                     }
                 }
                 // ── MINDEX (0x26) — Move indexed element ─────────
                 0x26 => {
                     let k = self.pop()? as usize;
-                    if k < self.stack.len() {
-                        let v = self.stack.remove(self.stack.len() - 1 - k);
+                    if k > 0 && k <= self.stack.len() {
+                        let v = self.stack.remove(self.stack.len() - k);
                         self.push(v);
                     }
                 }
