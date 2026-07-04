@@ -59,7 +59,10 @@ struct PathStats {
 #[test]
 fn freetype_interface_coverage_report() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let header_root = manifest_dir.join("freetype").join("include").join("freetype");
+    let header_root = manifest_dir
+        .join("freetype")
+        .join("include")
+        .join("freetype");
     let exported_symbols = discover_ft_exports(&header_root);
 
     let map_path = manifest_dir
@@ -128,9 +131,7 @@ fn freetype_interface_coverage_report() {
         "║  implemented={} complete={} partial={} planned={}",
         implemented, complete, partial, planned
     );
-    eprintln!(
-        "║  api_coverage={api_coverage:.1}% complete_coverage={complete_coverage:.1}%"
-    );
+    eprintln!("║  api_coverage={api_coverage:.1}% complete_coverage={complete_coverage:.1}%");
     eprintln!("╠══════════════════════════════════════════════════════════════╣");
     eprintln!("║  Path coverage");
 
