@@ -122,10 +122,10 @@ pub(crate) fn u16_from_i16(x: i16) -> u16 {
     }
 }
 
-/// Infallible: u64 → i32. FT_UDIV result always within i32 range.
+/// Infallible: u64 → i32. Used both for bounded fixed-point magnitudes and
+/// FreeType's FT_UDIV bit reinterpretation path.
 #[inline(always)]
 pub(crate) fn i32_from_u64(x: u64) -> i32 {
-    debug_assert!(x <= i32::MAX as u64);
     #[allow(clippy::cast_possible_truncation)]
     {
         x as i32

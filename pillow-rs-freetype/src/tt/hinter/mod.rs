@@ -46,6 +46,7 @@ pub struct HintScale {
     pub y_scale: i32,
     pub ppem: i32,
     pub storage_size: usize,
+    pub reset_vectors_at_glyph_entry: bool,
 }
 
 /// Metrics side effects produced by glyph bytecode hinting.
@@ -91,6 +92,8 @@ pub fn hint_glyph(
     raw_advance_width: i32,
     pp1_x: i32,
     raw_pp1_x: i32,
+    raw_ascender: i32,
+    raw_descender: i32,
     cvt: &[i32],
     fpgm: &[u8],
     prep: &[u8],
@@ -152,19 +155,31 @@ pub fn hint_glyph(
     zone.cur_y.push(0);
     zone.orus_x.push(raw_pp1_x + raw_advance_width);
     zone.orus_y.push(0);
-    // pp3, pp4: vertical phantom points (unused)
+    // pp3, pp4: vertical phantom points.  Without vmtx, FreeType synthesizes
+    // them from OS/2 typo metrics or hhea ascender/descender in font units.
     zone.cur_x.push(0);
-    zone.cur_y.push(0);
+    zone.cur_y
+        .push(crate::fixed::ft_mul_fix(raw_ascender, scale.y_scale));
     zone.orus_x.push(0);
-    zone.orus_y.push(0);
+    zone.orus_y.push(raw_ascender);
     zone.cur_x.push(0);
-    zone.cur_y.push(0);
+    zone.cur_y
+        .push(crate::fixed::ft_mul_fix(raw_descender, scale.y_scale));
     zone.orus_x.push(0);
-    zone.orus_y.push(0);
+    zone.orus_y.push(raw_descender);
 
     // Copy cur → org for the bytecode interpreter's initial state
     zone.org_x = zone.cur_x.clone();
     zone.org_y = zone.cur_y.clone();
+
+    let pp1_idx = n_points;
+    let pp2_idx = n_points + 1;
+    let pp3_idx = n_points + 2;
+    let pp4_idx = n_points + 3;
+    zone.cur_x[pp1_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp1_idx]);
+    zone.cur_x[pp2_idx] = crate::scaler::ft_pix_round(zone.cur_x[pp2_idx]);
+    zone.cur_y[pp3_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp3_idx]);
+    zone.cur_y[pp4_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp4_idx]);
 
     // ── Initialize execution context ──────────────────────────────────
     let mut ctx = exec::ExecContext::new(
@@ -190,6 +205,9 @@ pub fn hint_glyph(
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
         ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
+        if scale.reset_vectors_at_glyph_entry {
+            ctx.gs.set_vectors_to_x();
+        }
         ctx.set_glyph_program(glyph_ins);
         ctx.run_program(&mut zone)?;
     }

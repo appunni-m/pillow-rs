@@ -145,6 +145,7 @@ pub fn scale_glyph(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -165,6 +166,7 @@ pub fn scale_glyph_for_metrics(
         true,
         false,
         true,
+        false,
         false,
     )
 }
@@ -188,6 +190,7 @@ pub fn scale_glyph_for_metrics_with_autohint(
         false,
         true,
         true,
+        false,
     )
 }
 
@@ -210,6 +213,31 @@ pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
         false,
         true,
         false,
+        false,
+    )
+}
+
+/// Scale a glyph through the PIL native TrueType default load path.
+pub fn scale_glyph_native_default(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: false,
+            stem_adjust: true,
+        },
+        true,
+        false,
+        false,
+        false,
+        true,
     )
 }
 
@@ -233,6 +261,7 @@ pub fn scale_glyph_lcd(
             stem_adjust: false,
         },
         true,
+        false,
         false,
         false,
         false,
@@ -262,6 +291,7 @@ pub fn scale_glyph_lcd_v(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -283,6 +313,7 @@ pub fn scale_glyph_mono(
         },
         true,
         true,
+        false,
         false,
         false,
     )
@@ -309,6 +340,7 @@ pub fn scale_glyph_no_hinting(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -321,6 +353,7 @@ fn scale_glyph_impl(
     target_mono: bool,
     round_component_offsets: bool,
     use_autohint_advance: bool,
+    reset_vectors_at_glyph_entry: bool,
 ) -> Result<ScaledGlyph, FontError> {
     let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
 
@@ -530,8 +563,15 @@ fn scale_glyph_impl(
                 y_scale: y_adj,
                 ppem: scale.ppem,
                 storage_size: data.maxp.max_storage as usize,
+                reset_vectors_at_glyph_entry,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
+            let (raw_ascender, raw_descender) = data
+                .os2
+                .as_ref()
+                .map_or((data.hhea.ascent as i32, data.hhea.descent as i32), |os2| {
+                    (os2.s_typo_ascender as i32, os2.s_typo_descender as i32)
+                });
             let hint_result = crate::tt::hinter::hint_glyph(
                 &mut scaled,
                 &raw_pts,
@@ -540,6 +580,8 @@ fn scale_glyph_impl(
                 h_metric.advance_width as i32,
                 scale.scale_x(pp1x_fu),
                 pp1x_fu,
+                raw_ascender,
+                raw_descender,
                 cvt,
                 fpgm,
                 prep,
@@ -658,6 +700,7 @@ fn scale_composite_components(
                 stem_adjust: true,
             },
             true,
+            false,
             false,
             false,
             false,

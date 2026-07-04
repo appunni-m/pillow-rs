@@ -282,19 +282,26 @@ impl GraphicsState {
             }
         }
         fn floor_grid(v: i32) -> i32 {
-            v & !63
+            if v >= 0 {
+                v & !63
+            } else {
+                -((-v) & !63)
+            }
         }
         fn ceil_grid(v: i32) -> i32 {
             if v <= 0 {
-                -((-v) & !63)
+                -(((-v) + 63) & !63)
             } else {
                 (v + 63) & !63
             }
         }
         match self.round_state {
             RoundMode::HalfGrid => {
-                let base = floor_grid(distance);
-                base + 32
+                if distance >= 0 {
+                    floor_grid(distance) + 32
+                } else {
+                    -(floor_grid(-distance) + 32)
+                }
             }
             RoundMode::Grid => round_grid(distance),
             RoundMode::DoubleGrid => {
