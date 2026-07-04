@@ -69,14 +69,14 @@ Exact gates:
 Incomplete gates:
 
 - `native_tt_default_matrix.json`: threshold baseline only, currently `3176/7640`. This is not complete parity. It must become `7640/7640` exact before the native TrueType bytecode path can be called done.
+- `render_mono_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
+- `render_lcd_matrix.json`: executed baseline only, currently `0/8`. This is not complete parity.
 
 Present-but-unexecuted fixture debt:
 
 - `metrics_only_matrix.json`
 - `no_hinting_matrix.json`
 - `outline_cbox_matrix.json`
-- `render_mono_matrix.json`
-- `render_lcd_matrix.json`
 
 These fixtures are evidence that C references exist. They are not success until the runner executes them as exact gates.
 

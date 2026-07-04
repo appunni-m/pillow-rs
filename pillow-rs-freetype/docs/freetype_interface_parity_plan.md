@@ -85,8 +85,8 @@ If any item is missing, the endpoint is `partial` or `planned`, not complete.
 | `metrics_only` | C fixtures exist, unexecuted | implement exact runner support |
 | `no_hinting` | C fixtures exist, unexecuted | implement exact runner support |
 | `outline_cbox` | C fixtures exist, unexecuted | implement exact runner support |
-| `render_mono` | C fixtures exist, unexecuted | implement exact runner support |
-| `render_lcd` | C fixtures exist, unexecuted | implement exact runner support |
+| `render_mono` | executed baseline, `0/8` | promote to exact `8/8` |
+| `render_lcd` | executed baseline, `0/8` | promote to exact `8/8` |
 | `render_lcd_v` | in scope if LCD_V remains exposed | add C fixtures and exact runner support |
 | `sfnt_tables` | partially covered by API tests | make fixture family explicit |
 | `charmap` | partially covered by API tests | make fixture family explicit |
@@ -188,7 +188,8 @@ Done criteria:
 Scope:
 
 - Execute existing C-oracle fixture families in the default runner:
-  `metrics_only`, `no_hinting`, `outline_cbox`, `render_mono`, `render_lcd`.
+  `metrics_only`, `no_hinting`, `outline_cbox`.
+- Promote the already executed `render_mono` and `render_lcd` baselines to exact gates.
 
 Verification:
 
