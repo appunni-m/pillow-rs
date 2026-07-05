@@ -29,8 +29,8 @@ impl ScaleMetrics {
     /// FreeType derives `ppem` from the request and computes
     /// `x_scale = FT_DivFix( ppem << 6, units_per_em )` in `tt_size_reset`.
     pub fn new(size_pt: f32, units_per_em: u16) -> Self {
-        // PIL requests a size in points; FreeType rounds ppem via the request
-        // machinery. For 72 DPI, ppem == round(size_pt). We match PIL/FreeType's
+        // FreeType rounds ppem via the request machinery. For 72 DPI,
+        // ppem == round(size_pt). We match FreeType's
         // `FT_MulFix(ppem<<6, 64)/upem`-equivalent by using the rounded ppem.
         let ppem = ppem_from_size(size_pt);
         let ppem_26dot6 = ppem << 6;
@@ -61,7 +61,7 @@ fn ft_div_fix_local(a: i32, b: i32) -> i32 {
     crate::fixed::ft_div_fix(a, b)
 }
 
-/// PIL/FreeType ppem computation from a point size at 72 DPI.
+/// FreeType ppem computation from a point size at 72 DPI.
 ///
 /// FreeType's default request (`FT_Request_Size`) rounds ppem via
 /// `FT_PIX_ROUND( size * 64 ) >> 6`, which for integral/half sizes matches
@@ -200,7 +200,7 @@ pub fn scale_glyph_for_metrics_with_autohint(
         },
         true,
         false,
-        true,
+        false,
         true,
         false,
         true,
@@ -231,7 +231,7 @@ pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
     )
 }
 
-/// Scale a glyph through the PIL native TrueType default load path.
+/// Scale a glyph through the native TrueType default load path.
 pub fn scale_glyph_native_default(
     data: &FontData,
     glyph_index: u16,
@@ -594,6 +594,7 @@ fn scale_glyph_impl(
                 y_scale: y_adj,
                 ppem: scale.ppem,
                 storage_size: data.maxp.max_storage as usize,
+                twilight_points: data.maxp.max_twilight_points as usize,
                 is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
@@ -629,6 +630,20 @@ fn scale_glyph_impl(
                     log::debug!("[VM] gi={glyph_index}: {e}");
                 }
             }
+        }
+    }
+
+    if legacy_hinter_phantoms && allow_bytecode {
+        if let Some(width) = data
+            .hdmx
+            .as_ref()
+            .and_then(|hdmx| hdmx.width_for_ppem(scale.ppem, glyph_index))
+        {
+            // C `compute_glyph_metrics` prefers `loader->widthp[glyph] * 64`
+            // for hinted native TrueType loads when an hdmx ppem record is
+            // active (ttgload.c:1974-1977). It affects only slot metrics, not
+            // the outline cbox/bbox.
+            slot_advance_width = i32::from(width) * 64;
         }
     }
 

@@ -10,7 +10,7 @@
 #![allow(unused_crate_dependencies)]
 
 use pillow_rs_freetype::autohint::latin;
-use pillow_rs_freetype::{scaler, tt, BitmapBackend, Font, RenderMode};
+use pillow_rs_freetype::{scaler, tt, Font, RenderMode};
 
 fn sha256(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
@@ -36,7 +36,7 @@ fn trace_one_glyph() {
 
     let font_path = format!("tests/fixtures/input/fonts_autohint/{font_name}.ttf");
     let data = std::fs::read(&font_path).unwrap();
-    let font = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
+    let font = Font::truetype(&data, size_pt).unwrap();
     let fd = &font.data;
     let gid = fd.cmap.char_index(ch as u32).unwrap();
 
@@ -98,7 +98,7 @@ fn trace_one_glyph() {
         false,
     );
 
-    let font2 = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
+    let font2 = Font::truetype(&data, size_pt).unwrap();
     let mask = font2.getmask(&ch.to_string()).unwrap();
 
     let sha = sha256(&mask.pixels);
@@ -126,7 +126,7 @@ fn dump_render_mode_glyph() {
 
     let font_path = format!("tests/fixtures/input/fonts_autohint/{font_name}.ttf");
     let data = std::fs::read(&font_path).unwrap();
-    let font = Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap();
+    let font = Font::truetype(&data, size_pt).unwrap();
     let bitmap = font.render_char_mode(ch, RenderMode::Mono).unwrap();
 
     eprintln!(

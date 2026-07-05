@@ -13,13 +13,13 @@ See `PROJECT_GOALS.md`.
 ## Quick Start
 
 ```rust
-use pillow_rs_freetype::{BitmapBackend, Font, FontError};
+use pillow_rs_freetype::{Font, FontError};
 
 fn main() -> Result<(), FontError> {
     let font_data = std::fs::read("DejaVuSans.ttf")?;
 
     // Create a font at 12pt
-    let font = Font::truetype(&font_data, 12.0, BitmapBackend::FreeType)?;
+    let font = Font::truetype(&font_data, 12.0)?;
 
     // Get family and style name
     let (family, style) = font.getname();
@@ -44,19 +44,11 @@ fn main() -> Result<(), FontError> {
   — grid-fits edges to pixel boundaries for crisp small-size text
 - **Smooth rasterizer**: FT_INT64 DDA path from `ftgrays.c` — 8-bit alpha output
 - **Table parsing**: `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `name`, `OS/2`
-- **Two backends**: `FreeType` (raw), `PIL` (PIL-compatible padded masks)
 - **No runtime FreeType C dependency**: Vendored C source and scripts are offline fixture references only
-
-## Backends
-
-| Backend | Mask behavior | Use case |
-|---------|--------------|----------|
-| `BitmapBackend::FreeType` | Raw raster output, no padding | Comparing against FreeType C output |
-| `BitmapBackend::PIL` | Padded to ascender/descender extent, PIL-compatible | Drop-in PIL replacement |
 
 ## API
 
-### `Font::truetype(data, size_pt, backend) -> Result<Font, FontError>`
+### `Font::truetype(data, size_pt) -> Result<Font, FontError>`
 Load a TrueType font from memory. Computes auto-hinter metrics (stem widths,
 blue zones) at font creation time.
 

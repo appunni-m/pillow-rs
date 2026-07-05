@@ -28,7 +28,7 @@ If any item is missing, the endpoint is `partial` or `planned`, not complete.
 ## Global Rules
 
 1. FreeType C is the source of reference data, not runtime behavior.
-2. Pillow compatibility belongs above this crate, in `pillow-rs`.
+2. Framework-specific text compatibility belongs above this crate, in `pillow-rs`.
 3. Fixture families describe FreeType paths and flags.
 4. SHA-only render tests are insufficient for exact gates; raw bytes and metadata are required.
 5. Threshold baselines are debt.

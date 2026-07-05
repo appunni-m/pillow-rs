@@ -2,9 +2,9 @@
 //!
 //! ```rust,no_run
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use pillow_rs_freetype::{BitmapBackend, Font};
+//! use pillow_rs_freetype::Font;
 //! let data = std::fs::read("font.ttf")?;
-//! let font = Font::truetype(&data, 12.0, BitmapBackend::FreeType)?;
+//! let font = Font::truetype(&data, 12.0)?;
 //! let mask = font.getmask("A")?;
 //! # Ok(())
 //! # }
@@ -57,5 +57,5 @@ pub mod tables;
 pub mod tt;
 
 pub use error::FontError;
-pub use font::{BitmapBackend, CharmapInfo, FaceInfo, Font, GlyphMask, SfntTableInfo, SizeMetrics};
+pub use font::{CharmapInfo, FaceInfo, Font, GlyphMask, LoadMode, SfntTableInfo, SizeMetrics};
 pub use render::{PixelMode, RenderMode, RenderedBitmap};

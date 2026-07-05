@@ -4,6 +4,7 @@
 //! holds the parsed results of all required TrueType tables.
 
 use crate::tt::cmap::CmapTable;
+use crate::tt::hdmx::HdmxTable;
 use crate::tt::head::HeadTable;
 use crate::tt::hhea::HheaTable;
 use crate::tt::hmtx::HmtxTable;
@@ -30,6 +31,7 @@ pub struct FontData {
     pub os2: Option<Os2Table>,
     pub vhea: Option<VheaTable>,
     pub vmtx: Option<VmtxTable>,
+    pub hdmx: Option<HdmxTable>,
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
     pub size_pt: f32,

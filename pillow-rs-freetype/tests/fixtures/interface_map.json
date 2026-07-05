@@ -912,27 +912,27 @@
     {
       "path": "synthesis",
       "owner": "glyph",
-      "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current Pillow-compatible TrueType path.",
+      "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current FreeType-compatible TrueType path.",
       "symbols": {
         "FT_GlyphSlot_Embolden": {
           "rust": null,
           "status": "out_of_scope",
-          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current Pillow-compatible TrueType path."
+          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current FreeType-compatible TrueType path."
         },
         "FT_GlyphSlot_AdjustWeight": {
           "rust": null,
           "status": "out_of_scope",
-          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current Pillow-compatible TrueType path."
+          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current FreeType-compatible TrueType path."
         },
         "FT_GlyphSlot_Oblique": {
           "rust": null,
           "status": "out_of_scope",
-          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current Pillow-compatible TrueType path."
+          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current FreeType-compatible TrueType path."
         },
         "FT_GlyphSlot_Slant": {
           "rust": null,
           "status": "out_of_scope",
-          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current Pillow-compatible TrueType path."
+          "reason": "Synthetic embolden, weight adjustment, and oblique transforms are not part of the current FreeType-compatible TrueType path."
         }
       }
     },

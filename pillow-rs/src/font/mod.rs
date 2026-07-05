@@ -40,9 +40,8 @@ impl Font {
     ///
     /// Returns [`PilError::ValueError`] when the font bytes cannot be parsed.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
-        let inner =
-            pillow_rs_freetype::Font::truetype(&data, size, pillow_rs_freetype::BitmapBackend::PIL)
-                .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
+        let inner = pillow_rs_freetype::Font::truetype(&data, size)
+            .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
         Ok(Font::TrueType(TrueTypeFont {
             inner: Rc::new(inner),
             size,
