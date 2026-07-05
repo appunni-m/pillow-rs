@@ -10,7 +10,7 @@
 #![allow(unused_crate_dependencies)]
 
 use pillow_rs_freetype::autohint::latin;
-use pillow_rs_freetype::{scaler, tt, Font, RenderMode};
+use pillow_rs_freetype::{Font, RenderMode, scaler, tt};
 
 fn sha256(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};

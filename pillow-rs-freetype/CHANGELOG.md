@@ -15,6 +15,7 @@
 - Supplemental FreeType fixture generation now defaults to broad inventory coverage; the five supplemental matrices each contain 11,086 C-oracle rows.
 - Standalone project infrastructure: explicit package metadata and lints, crate-local toolchain policy, CI workflow, Makefile, supply-chain policy, contributor/security/code-of-conduct docs, agent instructions, and `doc/INDEPENDENCE_PLAN.md`.
 - Toolchain policy now keeps MSRV at Rust 1.87 while pinning local development and primary CI gates to Rust 1.96.1.
+- Rust edition is now 2024 for the standalone crate.
 
 ### Fixed
 - Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); runtime behavior now routes through the Rust scaler, TrueType hinting, and rasterizer path.

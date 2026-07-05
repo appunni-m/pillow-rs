@@ -1777,7 +1777,7 @@ impl ExecContext {
                 0x70 => {
                     let val = self.pop()?; // top = value
                     let idx = self.pop()? as usize; // deeper = index
-                                                    // Scale: FT_MulFix(value, scale) then write to CVT
+                    // Scale: FT_MulFix(value, scale) then write to CVT
                     let scaled = crate::fixed::ft_mul_fix(val, self.y_scale);
                     let _ = self.set_cvt(idx, scaled);
                 }

@@ -17,13 +17,13 @@
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::collections::{hash_map::Entry, BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, hash_map::Entry};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
 use log as _;
-use pillow_rs_freetype::{grays, scaler, Font, LoadMode, RenderMode};
+use pillow_rs_freetype::{Font, LoadMode, RenderMode, grays, scaler};
 use thiserror as _;
 
 #[derive(Debug, Deserialize)]

@@ -866,7 +866,7 @@ impl PyImage {
                 _ => {
                     return Err(pyo3::exceptions::PyValueError::new_err(
                         "invalid color length",
-                    ))
+                    ));
                 }
             };
             return self

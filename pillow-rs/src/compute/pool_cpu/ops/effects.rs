@@ -1,7 +1,7 @@
 // ── Effects + Module fns + Point + Mutating operations extracted from image.rs execute_op() ──
 
 use crate::error::PilError;
-use crate::image::{preserve_mode, Image};
+use crate::image::{Image, preserve_mode};
 use crate::pipeline::{ColorMode, ResampleFilter, TransformMethod};
 use pillow_rs_image::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
@@ -300,7 +300,7 @@ pub fn op_merge(
             return Err(PilError::ValueError(format!(
                 "Unsupported merge mode: {:?}",
                 mode
-            )))
+            )));
         }
     };
     // Get pixel data from each band

@@ -1,7 +1,7 @@
 [package]
 name = "pillow-rs-freetype"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 rust-version = "1.87"
 license = "MIT"
 description = "Pure-Rust TrueType font renderer — auto-hinter, rasterizer, and table parsers"

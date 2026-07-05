@@ -9,7 +9,7 @@ use crate::casts::{u16_from_i16, u16_from_u32, u32_from_usize};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_fix};
-use crate::tt::loca::{get_glyph_location, GlyphLocation};
+use crate::tt::loca::{GlyphLocation, get_glyph_location};
 
 // Simple glyph flag bits (TrueType spec, ttgload.c:53).
 const ON_CURVE: u8 = 0x01;

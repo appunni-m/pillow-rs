@@ -209,11 +209,7 @@ fn simple_filter(seg: &[u8; 8], limit: u8, blimit: u8, interior_limit: u8) -> Op
 #[inline]
 fn compute_blimit(filter_level: u8) -> u8 {
     let v = (filter_level as u16) * 2 + 60;
-    if v > 255 {
-        255
-    } else {
-        v as u8
-    }
+    if v > 255 { 255 } else { v as u8 }
 }
 
 /// Compute the interior (flatness) threshold from filter level and sharpness.
@@ -238,11 +234,7 @@ fn compute_interior_limit(filter_level: u8, sharpness: u8) -> u8 {
 /// Absolute difference between two `u8` values.
 #[inline]
 fn abs_diff(a: u8, b: u8) -> u8 {
-    if a > b {
-        a - b
-    } else {
-        b - a
-    }
+    if a > b { a - b } else { b - a }
 }
 
 /// Clamp a `i16` pixel value to `[0, 255]`.

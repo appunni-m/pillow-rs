@@ -13,7 +13,7 @@
 //! Reference: `freetype/src/smooth/ftgrays.c` (lines ~329–2043).
 
 use crate::casts::{
-    i32_from_i64, i32_from_u64, i32_from_usize, u32_from_i32, u64_from_i64, u8_from_i32,
+    i32_from_i64, i32_from_u64, i32_from_usize, u8_from_i32, u32_from_i32, u64_from_i64,
     usize_from_i32, usize_from_i64,
 };
 use crate::error::FontError;
@@ -66,11 +66,7 @@ fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
 #[inline]
 /// `FT_UDIVPREP`: precompute `0xFFFF_FFFF / b` reciprocal for fast division.
 fn ft_udivprep(c: bool, b: i64) -> i64 {
-    if c {
-        0xFFFF_FFFFi64 / b
-    } else {
-        0
-    }
+    if c { 0xFFFF_FFFFi64 / b } else { 0 }
 }
 
 // Port of FT_UDIV (ftgrays.c:394-397).

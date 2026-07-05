@@ -1258,7 +1258,7 @@ pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) 
     let k_edges = inv_scale; // edges = 1/13
     let k_center = 5.0f32 * inv_scale; // center = 5/13
     let rounding_bias = 0.5f32; // offset=0 => 0.0 + 0.5
-                                // Blend weight: factor_fp / 1000
+    // Blend weight: factor_fp / 1000
     let t = factor_fp as f32 / 1000.0;
     let one_minus_t = 1.0 - t;
 

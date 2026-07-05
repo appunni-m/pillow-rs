@@ -129,8 +129,16 @@ impl BenchOutput {
             json_escape(&row.font),
             row.size,
             json_escape(&row.text),
-            json_escape(if row.load_mode.is_empty() { "default" } else { &row.load_mode }),
-            json_escape(if row.render_mode.is_empty() { "normal" } else { &row.render_mode }),
+            json_escape(if row.load_mode.is_empty() {
+                "default"
+            } else {
+                &row.load_mode
+            }),
+            json_escape(if row.render_mode.is_empty() {
+                "normal"
+            } else {
+                &row.render_mode
+            }),
             self.iterations,
             self.elapsed_ns,
             self.elapsed_ns

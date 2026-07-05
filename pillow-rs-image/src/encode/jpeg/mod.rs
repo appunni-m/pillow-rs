@@ -855,7 +855,7 @@ fn encode_ac_refine(
         .iter()
         .enumerate()
         .rev()
-        .find(|(_, &v)| v == 1)
+        .find(|(_, v)| **v == 1)
         .map_or(usize::MAX, |(i, _)| i);
 
     // Flush any pending cross-block EOBRUN+BE from previous blocks.
@@ -872,8 +872,8 @@ fn encode_ac_refine(
     let nonzero: Vec<(usize, u32)> = absvalues
         .iter()
         .enumerate()
-        .filter(|(_, &v)| v > 0)
-        .map(|(i, &v)| (i, v))
+        .filter(|(_, v)| **v > 0)
+        .map(|(i, v)| (i, *v))
         .collect();
     let has_new = nonzero.iter().any(|&(_, v)| v == 1);
 

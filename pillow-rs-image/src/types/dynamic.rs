@@ -8,8 +8,8 @@ use super::buffer::{
 };
 use super::color::{self, ColorType, Luma, LumaA, Rgb, Rgba};
 use super::traits::{GenericImageView, Pixel, Primitive};
-use crate::types::color::FromColor;
 use crate::types::DecodedImage;
+use crate::types::color::FromColor;
 
 macro_rules! dynamic_map(
     ($dynimage: expr, $image: pat => $action: expr) => ({
@@ -1191,32 +1191,32 @@ impl GenericImageTrait for DynamicImage {
 
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
         match self {
-            DynamicImage::ImageLuma8(ref mut img) => {
+            DynamicImage::ImageLuma8(img) => {
                 let p = pixel.to_luma();
                 img.put_pixel(x, y, p);
             }
-            DynamicImage::ImageLumaA8(ref mut img) => {
+            DynamicImage::ImageLumaA8(img) => {
                 let p = pixel.to_luma_alpha();
                 img.put_pixel(x, y, p);
             }
-            DynamicImage::ImageRgb8(ref mut img) => {
+            DynamicImage::ImageRgb8(img) => {
                 let p = pixel.to_rgb();
                 img.put_pixel(x, y, p);
             }
-            DynamicImage::ImageRgba8(ref mut img) => {
+            DynamicImage::ImageRgba8(img) => {
                 img.put_pixel(x, y, pixel);
             }
-            DynamicImage::ImageLuma16(ref mut img) => {
+            DynamicImage::ImageLuma16(img) => {
                 let p = pixel.to_luma();
                 let p16 = Luma([(p[0] as u16 * 257)]);
                 img.put_pixel(x, y, p16);
             }
-            DynamicImage::ImageLumaA16(ref mut img) => {
+            DynamicImage::ImageLumaA16(img) => {
                 let p = pixel.to_luma_alpha();
                 let pa16 = LumaA([(p[0] as u16 * 257), (p[1] as u16 * 257)]);
                 img.put_pixel(x, y, pa16);
             }
-            DynamicImage::ImageRgb16(ref mut img) => {
+            DynamicImage::ImageRgb16(img) => {
                 let p = pixel.to_rgb();
                 let pr16 = Rgb([
                     (p[0] as u16 * 257),
@@ -1225,7 +1225,7 @@ impl GenericImageTrait for DynamicImage {
                 ]);
                 img.put_pixel(x, y, pr16);
             }
-            DynamicImage::ImageRgba16(ref mut img) => {
+            DynamicImage::ImageRgba16(img) => {
                 let p16 = Rgba([
                     (pixel[0] as u16 * 257),
                     (pixel[1] as u16 * 257),
@@ -1234,7 +1234,7 @@ impl GenericImageTrait for DynamicImage {
                 ]);
                 img.put_pixel(x, y, p16);
             }
-            DynamicImage::ImageRgb32F(ref mut img) => {
+            DynamicImage::ImageRgb32F(img) => {
                 let p = pixel.to_rgb();
                 let pf = Rgb([
                     p[0] as f32 / 255.0,
@@ -1243,7 +1243,7 @@ impl GenericImageTrait for DynamicImage {
                 ]);
                 img.put_pixel(x, y, pf);
             }
-            DynamicImage::ImageRgba32F(ref mut img) => {
+            DynamicImage::ImageRgba32F(img) => {
                 let pf = Rgba([
                     pixel[0] as f32 / 255.0,
                     pixel[1] as f32 / 255.0,

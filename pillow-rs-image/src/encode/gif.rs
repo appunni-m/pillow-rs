@@ -75,11 +75,7 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
         }
         _ => None,
     };
-    if _result.is_some() {
-        Some(buf)
-    } else {
-        None
-    }
+    if _result.is_some() { Some(buf) } else { None }
 }
 /// Quantize RGB8 pixels to a palette (max 256 colors).
 ///

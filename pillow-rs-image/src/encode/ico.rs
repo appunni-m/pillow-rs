@@ -51,8 +51,8 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     data.extend_from_slice(&[0u8; 2]); // reserved
     data.extend_from_slice(&1u16.to_le_bytes()); // type = ICO (1)
     data.extend_from_slice(&1u16.to_le_bytes()); // count = 1
-                                                 // --- Directory entry (16 bytes) ---
-                                                 // Width/height: 0 means 256; otherwise actual value
+    // --- Directory entry (16 bytes) ---
+    // Width/height: 0 means 256; otherwise actual value
     if w == 256 {
         data.push(0);
     } else {
@@ -69,10 +69,10 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     data.extend_from_slice(&32u16.to_le_bytes()); // bits per pixel
     data.extend_from_slice(&(bmp_data_size as u32).to_le_bytes()); // size of BMP data
     data.extend_from_slice(&(data_offset as u32).to_le_bytes()); // offset of BMP data
-                                                                 // --- BMP data: BITMAPINFOHEADER (40 bytes) ---
+    // --- BMP data: BITMAPINFOHEADER (40 bytes) ---
     data.extend_from_slice(&dib_header_size.to_le_bytes()); // biSize
     data.extend_from_slice(&(w as u32).to_le_bytes()); // biWidth
-                                                       // ICO convention: height is doubled to include AND mask rows
+    // ICO convention: height is doubled to include AND mask rows
     data.extend_from_slice(&((h as u32) * 2).to_le_bytes()); // biHeight
     data.extend_from_slice(&1u16.to_le_bytes()); // biPlanes
     data.extend_from_slice(&32u16.to_le_bytes()); // biBitCount
@@ -82,7 +82,7 @@ pub fn encode(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>> {
     data.extend_from_slice(&0i32.to_le_bytes()); // biYPelsPerMeter
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
-                                                 // --- Pixel data (bottom-up BGRA) ---
+    // --- Pixel data (bottom-up BGRA) ---
     for y in (0..h).rev() {
         let row_start = y * row_bytes;
         data.extend_from_slice(&bgra[row_start..row_start + row_bytes]);

@@ -141,7 +141,7 @@ impl Image {
                         return Err(PilError::NotImplementedError(format!(
                             "Filter '{}' not yet implemented",
                             name
-                        )))
+                        )));
                     }
                 };
                 Ok(Image::push_op(
