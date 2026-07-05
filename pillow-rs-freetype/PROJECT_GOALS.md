@@ -59,23 +59,31 @@ The harness is the project control system. It must enforce all of these rules:
 Exact gates:
 
 - `force_autohint_matrix.json`: exact broad `getmask` and `getbbox` gate, 22,168 rows.
+- `native_tt_default_matrix.json`: exact native TrueType default-load gate, 7,640 rows.
+- `no_hinting_matrix.json`: exact no-hinting gate, 11,086 rows.
+- `render_mono_matrix.json`: exact monochrome render gate, 11,086 rows.
+- `render_lcd_matrix.json`: exact LCD render gate, 11,086 rows.
+- `metrics_only_matrix.json`: exact metrics gate, 11,086 rows.
+- `outline_cbox_matrix.json`: exact outline cbox gate, 11,086 rows.
 - `render_mode_matrix.json`: exact raw byte and metadata gate for the current render-mode matrix.
 - `fixed_parity.rs`: mandatory scalar C-oracle comparison for fixed-point math.
 - `core_face_size_charmap.rs`: exact API behavior checks for current face, size, charmap, and SFNT table coverage.
 - `no_runtime_ffi.rs`: runtime boundary guard.
 - `harness_contract.rs`: gate strength and fixture breadth guard.
 - `generator_contract.rs`: generator documentation and reproducibility guard.
+- `pillow-rs --test imagingft_matrix_tests`: exact PIL 12.2.0 `_imagingft.c` connector gate; every fixture row must match, including historical incomplete rows and the 7,520-row pixel matrix.
 
-Incomplete gates:
+Current committed fixture families are executed by the default coverage runner.
+They are not success unless every row is exact. A new incomplete or threshold
+lane is debt until the harness forces exact parity and passes.
 
-- `native_tt_default_matrix.json`: threshold baseline only, currently `3176/7640`. This is not complete parity. It must become `7640/7640` exact before the native TrueType bytecode path can be called done.
-- `no_hinting_matrix.json`: executed broad baseline only, currently `10029/11086`. This is not complete parity.
-- `render_mono_matrix.json`: executed broad baseline only, currently `915/11086`. This is not complete parity.
-- `render_lcd_matrix.json`: executed broad baseline only, currently `215/11086`. This is not complete parity.
-- `metrics_only_matrix.json`: executed broad baseline only, currently `13/11086`. This is not complete parity.
-- `outline_cbox_matrix.json`: executed broad baseline only, currently `7/11086`. This is not complete parity.
+## Refactor Quality Plan
 
-Current committed fixture families are executed by the default coverage runner. They are not success until every row is exact and promoted out of threshold or incomplete-baseline status.
+Future Rust quality work must follow
+[`doc/PERFORMANCE_DOCUMENTATION_REFACTOR_PLAN.md`](doc/PERFORMANCE_DOCUMENTATION_REFACTOR_PLAN.md).
+That plan defines the benchmark framework, documentation gates, allocation/clone
+audit, and review checklist for performance-focused refactors. Refactors are
+accepted only when parity remains exact and performance claims are measured.
 
 ## Promotion Rules
 
