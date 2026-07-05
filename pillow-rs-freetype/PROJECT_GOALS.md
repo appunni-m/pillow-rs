@@ -65,16 +65,22 @@ The target interface is FreeType C, not Servo `rust-freetype`. Servo is useful
 as a binding comparison because it mirrors many C records, constants, and raw
 functions, but it is not the compatibility target.
 
-Active public API must be classified into one of three layers:
+Active public API must be classified into one of four layers, in this order:
 
 - Internal pure-Rust engine: implementation details, preferably `pub(crate)`.
-- Safe Rust FreeType API: ergonomic wrappers preserving FreeType semantics.
-- Future C ABI layer: exported `FT_*` symbols, `#[repr(C)]` records, and exact
-  numeric constants for C users migrating from FreeType.
+- Idiomatic public Rust API: ergonomic wrappers preserving FreeType semantics.
+- `fontdone::ffi` compatibility API: public, non-idiomatic, 1:1
+  FreeType-shaped Rust functions, constants, and records that wrap the
+  idiomatic/core layer.
+- Future exported C ABI layer: exported `FT_*` symbols, `#[repr(C)]` records,
+  and exact numeric constants for C users migrating from FreeType.
 
 Do not treat internal parser/hinter/rasterizer modules or Pillow-style helpers
 as proof of FreeType interface compatibility. See
 [`doc/C_API_COMPATIBILITY_PLAN.md`](doc/C_API_COMPATIBILITY_PLAN.md).
+Parity harnesses target `fontdone::ffi`. Idiomatic Rust APIs count toward
+parity only when their behavior is exposed through a matching `fontdone::ffi`
+endpoint and compared there.
 
 ## Generator System
 

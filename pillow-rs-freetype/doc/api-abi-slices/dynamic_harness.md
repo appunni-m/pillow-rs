@@ -9,17 +9,28 @@ implementation.
 
 ## Goal
 
-Build one generator-driven harness family that compares C FreeType and Rust
-`fontdone` for every public surface by output type instead of writing one-off
-tests for each function. Similar functions should feed the same runner and
-comparator.
+Build one generator-driven harness family that compares C FreeType and
+`fontdone::ffi` for every public FreeType-shaped surface by output type instead
+of writing one-off tests for each function. Similar functions should feed the
+same runner and comparator.
+
+The architecture under test is:
+
+```text
+pure Rust core -> idiomatic public Rust API -> fontdone::ffi compatibility API -> future exported C ABI
+```
+
+`fontdone::ffi` is public Rust API, but it is deliberately non-idiomatic and
+1:1 FreeType-shaped. It wraps the idiomatic/core layer and is the parity target.
+Idiomatic Rust APIs do not count for parity unless a matching `fontdone::ffi`
+endpoint maps to them and is compared by the harness.
 
 ## Harness Layers
 
 | Layer | Purpose | Runtime FFI status |
 | --- | --- | --- |
 | C oracle runner | Compile tiny C programs against pinned FreeType headers/source and emit structured JSON. | Allowed only in scripts/generators/tests. |
-| Rust semantic runner | Call safe Rust APIs and emit the same JSON schema. | Pure Rust only. |
+| Rust compatibility runner | Call `fontdone::ffi` endpoints and emit the same JSON schema. | Pure Rust only. |
 | Future C ABI runner | Compile tiny C programs against `fontdone` exported `FT_*` headers/library. | Test-only boundary for replacement validation. |
 | Comparator | Compare normalized JSON by output kind. | Pure Rust or script, no production FFI. |
 | Coverage gate | Fail when a public symbol lacks a mapped runner, explicit planned status, or accepted exclusion. | Pure Rust test. |
@@ -109,11 +120,14 @@ Example groups:
 - `layout_runner.c`: `sizeof`, `_Alignof`, and `offsetof` for C records.
 - `constants_runner.c`: numeric values for macros/enums.
 
-## Rust Runner Shape
+## Rust Compatibility Runner Shape
 
-Rust tests should use the same row files and emit the same normalized structs.
-Avoid per-symbol assertion code where the output type is identical. The
-comparator should report:
+Rust tests should use the same row files, call the matching `fontdone::ffi`
+endpoint, and emit the same normalized structs. They should not bypass
+`fontdone::ffi` by calling only idiomatic Rust wrappers or internal modules,
+because those layers are implementation paths, not the FreeType-shaped parity
+surface. Avoid per-symbol assertion code where the output type is identical.
+The comparator should report:
 
 - `case_id`;
 - operation;
@@ -136,7 +150,7 @@ When `fontdone` exposes a C library, add a second C compile/link path:
 4. Compare JSON exactly.
 
 This validates function interface, import/link interface, usage lifecycle, and
-output parity separately from the safe Rust facade.
+output parity separately from the idiomatic Rust facade.
 
 ## Coverage Gates
 

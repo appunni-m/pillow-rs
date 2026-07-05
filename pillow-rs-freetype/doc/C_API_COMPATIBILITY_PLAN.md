@@ -30,22 +30,35 @@ endpoint:
 6. **Output parity**: rendered bytes, bitmap metadata, metrics, bbox/cbox,
    outline geometry, table bytes, and public errors match C FreeType exactly.
 
-Semantic Rust wrappers are allowed only as a layer above the C-compatible
-surface. They cannot be used as evidence of C ABI compatibility.
+Idiomatic Rust wrappers are allowed as public APIs, but they are not the
+FreeType-shaped compatibility surface. They count toward parity only when a
+matching `fontdone::ffi` endpoint maps to them and the harness compares that
+endpoint against the C oracle.
 
 ## Layers
 
-The project should have three deliberate layers:
+The project should have four deliberate layers:
 
 | Layer | Purpose | Public Shape |
 |---|---|---|
-| Core engine | Pure Rust implementation of parsing, hinting, metrics, rasterization | Internal Rust modules, mostly `pub(crate)` |
-| Safe Rust FreeType API | Ergonomic Rust access to FreeType semantics | `Library`, `Face`, `GlyphSlot`, `LoadFlags`, `RenderedBitmap` |
-| C ABI replacement | Drop-in surface for C FreeType users | exported `FT_*` functions, `#[repr(C)]` records, exact constants |
+| Pure Rust core | Implementation of parsing, hinting, metrics, rasterization | Internal Rust modules, mostly `pub(crate)` |
+| Idiomatic public Rust API | Ergonomic Rust access to FreeType semantics | `Library`, `Face`, `GlyphSlot`, `LoadFlags`, `RenderedBitmap` |
+| `fontdone::ffi` compatibility API | Public, non-idiomatic, 1:1 FreeType-shaped Rust API that wraps the idiomatic/core layer | `FT_*`-shaped functions, C numeric constants, C-shaped records exposed as Rust items |
+| Future exported C ABI | Drop-in surface for C FreeType users | exported `FT_*` symbols, `#[repr(C)]` records, exact constants |
 
-The C ABI layer may contain `extern "C"` exports because that is its purpose.
-It must still not call C FreeType or link to FreeType. The current runtime core
-must remain pure Rust.
+The flow is:
+
+```text
+pure Rust core -> idiomatic public Rust API -> fontdone::ffi compatibility API -> future exported C ABI
+```
+
+`fontdone::ffi` is not a native FreeType binding. It is the public Rust
+compatibility surface that intentionally keeps FreeType's non-idiomatic names,
+types, constants, ownership shape, and lifecycle so each C endpoint has a
+matching Rust endpoint before C symbols are exported. The future C ABI layer may
+contain `extern "C"` exports because that is its purpose. It must still not
+call C FreeType or link to FreeType. The current runtime core must remain pure
+Rust.
 
 ## What We Are Doing Extra Today
 
@@ -77,6 +90,7 @@ replacement API:
    - C params and ownership rules
    - Rust core implementation path
    - safe Rust wrapper path, if any
+   - `fontdone::ffi` compatibility endpoint path
    - future C ABI symbol path
    - fixture or scalar test proving output parity
 3. Add exact numeric constant checks for load flags, render modes, pixel modes,
@@ -119,8 +133,9 @@ An endpoint is not complete for C replacement until it has:
 
 1. C interface mapping.
 2. Safe Rust or internal implementation.
-3. Future C ABI mapping when applicable.
-4. Exact output fixture/scalar/error parity.
-5. Constant/record exactness where the endpoint exposes public C data.
+3. `fontdone::ffi` compatibility endpoint.
+4. Future C ABI mapping when applicable.
+5. Exact output fixture/scalar/error parity through `fontdone::ffi`.
+6. Constant/record exactness where the endpoint exposes public C data.
 
 If any of those are missing, the endpoint is partial or planned, not complete.
