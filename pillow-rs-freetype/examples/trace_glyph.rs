@@ -28,12 +28,7 @@ fn main() {
     };
 
     let data = fs::read(font_path).expect("read font");
-    let backend = if args.get(4).is_some_and(|arg| arg == "pil") {
-        pillow_rs_freetype::BitmapBackend::PIL
-    } else {
-        pillow_rs_freetype::BitmapBackend::FreeType
-    };
-    let font = pillow_rs_freetype::Font::truetype(&data, size_pt, backend).expect("load font");
+    let font = pillow_rs_freetype::Font::truetype(&data, size_pt).expect("load font");
 
     if env::var_os("FT_RS_DUMP_METRICS").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
@@ -107,20 +102,9 @@ fn main() {
 
     if env::var_os("FT_RS_DUMP_OUTLINE").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
-        let scaled = match backend {
-            pillow_rs_freetype::BitmapBackend::PIL => {
-                pillow_rs_freetype::scaler::scale_glyph_native_default(
-                    &font.data,
-                    glyph,
-                    None,
-                    font.is_italic,
-                )
-            }
-            pillow_rs_freetype::BitmapBackend::FreeType => {
-                pillow_rs_freetype::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
-            }
-        }
-        .expect("scale glyph");
+        let scaled =
+            pillow_rs_freetype::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
+                .expect("scale glyph");
         eprintln!(
             "[R OUTLINE] glyph={} contours={} points={} cbox=({}, {}, {}, {})",
             glyph,

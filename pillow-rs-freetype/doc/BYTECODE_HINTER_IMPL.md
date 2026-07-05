@@ -2,19 +2,19 @@
 
 ## 0. Problem Statement
 
-PIL uses `FT_LOAD_DEFAULT` which runs the font's embedded TrueType bytecode
+FreeType `FT_LOAD_DEFAULT` which runs the font's embedded TrueType bytecode
 programs through FreeType's interpreter. Our autohinter produces different
-grid-fit positions. The result: 4,607/7,640 PIL parity test mismatches
+grid-fit positions. The result: 4,607/7,640 FreeType parity test mismatches
 (every character with off-pixel-grid coordinates differs by 1-2px).
 
 We need a bytecode VM that executes the raw glyph instruction stream to
-match PIL's pixel output. This must be a **separate module** with zero
+match 's pixel output. This must be a **separate module** with zero
 changes to the existing autohinter pipeline.
 
 ## 1. Architecture
 
 ```
-Font::truetype(data, size, BitmapBackend::PIL)
+Font::truetype(data, size, LoadMode::Default)
   └─ getmask() / getbbox()
        └─ scaler::scale_glyph(data, gi, metrics=None, is_italic)
             ├─ Scale coords to 26.6 (no pp1x shift needed for bytecode)
@@ -223,7 +223,7 @@ let hinted = if latin_metrics.is_some() {
     )?;
     true
 } else {
-    false  // unhinted — used for both PIL and FreeType backends
+    false  // unhinted — used for both FreeType backends
 };
 
 // Then proceed to bbox computation as before
@@ -480,7 +480,7 @@ grid-fit points. They use the freedom/proj vectors and rounding.
 1. Hook into `scaler.rs:scale_glyph()` in the `None` metrics branch
 2. Add phantom point setup before bytecode execution
 3. Copy hinted coords out of the zone
-4. Integration test: single character, compare against PIL
+4. Integration test: single character, compare against FreeType C
 
 ### Phase 5: IUP + Polish (200 lines)
 
@@ -496,15 +496,15 @@ Level 0: Opcode unit tests
 
 Level 1: Integration test — single character
   └─ Run bytecode on '_' at 10pt DejaVuSans-ExtraLight
-  └─ Compare pixel output vs PIL
+  └─ Compare pixel output vs FreeType C
 
 Level 2: Full font test
-  └─ Run every glyph in 8 test fonts, check getmask/getbbox vs PIL
+  └─ Run every glyph in 8 test fonts, check getmask/getbbox vs FreeType C
   └─ Track pass/fail per font
 
 Level 3: Regression guard
   └─ Autohinter path unchanged — direct_ft_compare still 100%
-  └─ PIL backend test coverage_matrix_pil target: 6,000+/7,640
+  └─ native TrueType test native_tt_default_matrix target: 6,000+/7,640
 ```
 
 ## 10. File Manifest

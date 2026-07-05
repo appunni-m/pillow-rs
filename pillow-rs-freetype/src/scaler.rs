@@ -29,8 +29,8 @@ impl ScaleMetrics {
     /// FreeType derives `ppem` from the request and computes
     /// `x_scale = FT_DivFix( ppem << 6, units_per_em )` in `tt_size_reset`.
     pub fn new(size_pt: f32, units_per_em: u16) -> Self {
-        // PIL requests a size in points; FreeType rounds ppem via the request
-        // machinery. For 72 DPI, ppem == round(size_pt). We match PIL/FreeType's
+        // FreeType rounds ppem via the request machinery. For 72 DPI,
+        // ppem == round(size_pt). We match FreeType's
         // `FT_MulFix(ppem<<6, 64)/upem`-equivalent by using the rounded ppem.
         let ppem = ppem_from_size(size_pt);
         let ppem_26dot6 = ppem << 6;
@@ -61,7 +61,7 @@ fn ft_div_fix_local(a: i32, b: i32) -> i32 {
     crate::fixed::ft_div_fix(a, b)
 }
 
-/// PIL/FreeType ppem computation from a point size at 72 DPI.
+/// FreeType ppem computation from a point size at 72 DPI.
 ///
 /// FreeType's default request (`FT_Request_Size`) rounds ppem via
 /// `FT_PIX_ROUND( size * 64 ) >> 6`, which for integral/half sizes matches
@@ -231,7 +231,7 @@ pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
     )
 }
 
-/// Scale a glyph through the PIL native TrueType default load path.
+/// Scale a glyph through the native TrueType default load path.
 pub fn scale_glyph_native_default(
     data: &FontData,
     glyph_index: u16,

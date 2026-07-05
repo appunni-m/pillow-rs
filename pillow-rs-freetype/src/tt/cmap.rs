@@ -1,7 +1,7 @@
 //! 'cmap' table — character to glyph index mapping.
 //!
 //! Faithful port of FreeType's `src/sfnt/ttcmap.c` format-4 and format-12
-//! decoders (the Unicode subtables PIL/DejaVu/Liberation use). The
+//! decoders (the Unicode subtables used by DejaVu/Liberation and the test fonts). The
 //! `char_index` lookup reproduces `tt_cmap4_char_index` / `tt_cmap12_char_index`.
 
 use crate::casts::{u16_from_i16, u16_from_u32};
@@ -61,7 +61,7 @@ pub struct Format12Subtable {
 impl CmapTable {
     /// Map a Unicode codepoint to a glyph index, or `None` if unmapped.
     ///
-    /// PIL's FreeType selects a single Unicode subtable at load time; we mirror
+    /// FreeType selects a single Unicode subtable at load time; we mirror
     /// the resolution priority (12 preferred over 4) and search all candidates.
     pub fn char_index(&self, codepoint: u32) -> Option<u16> {
         for sub in &self.format12 {
