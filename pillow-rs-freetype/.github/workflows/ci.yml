@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.task }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [fmt, clippy, tests, docs, benchmark-contract]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        if: matrix.task == 'fmt'
+        run: cargo fmt -- --check
+
+      - name: Clippy
+        if: matrix.task == 'clippy'
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: Tests
+        if: matrix.task == 'tests'
+        run: |
+          cargo test --test coverage_matrix_tests --locked -- --nocapture
+          cargo test --test no_runtime_ffi --locked -- --nocapture
+          cargo test --locked
+
+      - name: Docs
+        if: matrix.task == 'docs'
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked
+
+      - name: Benchmark Contract
+        if: matrix.task == 'benchmark-contract'
+        run: |
+          PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
+          python3 scripts/bench_freetype.py --self-test
+          cargo test --test perf_benchmark_contract --locked
+
+  supply-chain:
+    name: Supply Chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+      - run: |
+          cargo deny check advisories
+          cargo deny check bans
+          cargo deny check licenses
+          cargo deny check sources
+          cargo audit

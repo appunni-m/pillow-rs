@@ -16,15 +16,15 @@ after the test completes.  The next lane overwrites that file.
 From the repository root:
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked \
+cargo test --test coverage_matrix_tests --locked \
   test_native_tt_default_threshold_baseline_not_parity_gate -- --nocapture
 cp /tmp/pillow_failure_ids.txt /tmp/native_tt_default_failure_ids.txt
 
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked \
+cargo test --test coverage_matrix_tests --locked \
   test_metrics_only_matrix_baseline_is_executed -- --nocapture
 cp /tmp/pillow_failure_ids.txt /tmp/metrics_only_failure_ids.txt
 
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked \
+cargo test --test coverage_matrix_tests --locked \
   test_outline_cbox_matrix_baseline_is_executed -- --nocapture
 cp /tmp/pillow_failure_ids.txt /tmp/outline_cbox_failure_ids.txt
 ```
@@ -35,7 +35,7 @@ names, for example `/tmp/native_tt_default_after_sdpvtl_trial_failure_ids.txt`.
 ## Generate The Report
 
 ```bash
-python3 pillow-rs-freetype/scripts/classify_failure_ids.py \
+python3 scripts/classify_failure_ids.py \
   --source-commit "$(git rev-parse --short HEAD)" \
   --lane native_tt_default=/tmp/native_tt_default_failure_ids.txt \
   --lane metrics_only=/tmp/metrics_only_failure_ids.txt \
@@ -47,7 +47,7 @@ If the three default `/tmp/*_failure_ids.txt` files exist, the `--lane`
 arguments can be omitted:
 
 ```bash
-python3 pillow-rs-freetype/scripts/classify_failure_ids.py \
+python3 scripts/classify_failure_ids.py \
   --source-commit "$(git rev-parse --short HEAD)" \
   --output /tmp/ft_parity_classification.md
 ```

@@ -54,7 +54,7 @@ No external dependencies needed. The `-C instrument-coverage` flag is built into
 
 ## 3. Test Structure (How Fixture Tests Work)
 
-The test lives in `pillow-rs-freetype/tests/coverage_matrix_tests.rs`:
+The test lives in `tests/coverage_matrix_tests.rs`:
 
 ```rust
 #[test]
@@ -124,7 +124,7 @@ For manual coverage measurement and comparison:
 cd <repo_root>
 
 # Single build with coverage enabled (faster for multiple runs)
-RUSTFLAGS="-C instrument-coverage" cargo test -p pillow-rs-freetype --no-run
+RUSTFLAGS="-C instrument-coverage" cargo test --no-run
 ```
 
 ### 5.2 Run Tests and Collect Profiles
@@ -137,7 +137,7 @@ mkdir -p /tmp/coverage
 # Run with profraw output
 RUSTFLAGS="-C instrument-coverage" \
 LLVM_PROFILE_FILE="/tmp/coverage/freetype-%m-%p.profraw" \
-cargo test -p pillow-rs-freetype test_font_coverage_matrix_freetype -- --nocapture
+cargo test test_font_coverage_matrix_freetype -- --nocapture
 ```
 
 The `%m` in `LLVM_PROFILE_FILE` expands to a binary signature (separates profiles from different binaries). The test will panic on failures — **this is expected**. Profile data is still written.
@@ -243,7 +243,7 @@ import json
 
 KEEP = {"DejaVuSans-Oblique", "LiberationSans-Regular", ...}
 
-with open("pillow-rs-freetype/tests/fixtures/coverage_matrix_ft.json") as f:
+with open("tests/fixtures/coverage_matrix_ft.json") as f:
     data = json.load(f)
 
 data["rows"] = [r for r in data["rows"] if r["font"] in KEEP]
@@ -324,12 +324,12 @@ To add coverage tracking to CI:
     rustup component add llvm-tools-preview
 
 - name: Build with coverage
-  run: RUSTFLAGS="-C instrument-coverage" cargo test -p pillow-rs-freetype --no-run
+  run: RUSTFLAGS="-C instrument-coverage" cargo test --no-run
 
 - name: Run coverage
   run: |
     LLVM_PROFILE_FILE="coverage-%m-%p.profraw" \
-    cargo test -p pillow-rs-freetype test_font_coverage_matrix_freetype -- --nocapture || true
+    cargo test test_font_coverage_matrix_freetype -- --nocapture || true
 
 - name: Generate report
   run: |

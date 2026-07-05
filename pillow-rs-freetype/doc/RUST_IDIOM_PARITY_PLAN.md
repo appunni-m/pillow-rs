@@ -11,13 +11,13 @@ Use fixture/parity tests as the verification gate, not unit tests alone.
 Primary gate for this branch:
 
 ```bash
-cargo test -p pillow-rs-freetype --test direct_ft_compare -- --test-threads=1 --nocapture
+cargo test --test direct_ft_compare -- --test-threads=1 --nocapture
 ```
 
 Current exact-branch baseline:
 
 - Live FreeType fixture comparison: `11084/11084 passed`.
-- `cargo clippy -p pillow-rs-freetype --all-targets`: passes.
+- `cargo clippy --all-targets`: passes.
 - Static FreeType matrix currently fails at `2149/7640 passed`; treat that as a
   separate stale/static-fixture issue unless the task is specifically about
   `coverage_matrix.json`.

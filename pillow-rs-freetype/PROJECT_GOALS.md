@@ -13,6 +13,23 @@ The project succeeds only when the harness makes false success impossible. Rust 
 - A test that passes by threshold, skipped oracle, missing raw bytes, or unexecuted fixture presence is not a parity gate.
 - Incomplete work must be named as debt until it becomes an exact executable gate.
 - Fixture generation and reproducibility are part of the harness, not ad hoc maintenance work.
+- The crate must be independently buildable, testable, benchmarkable, audited,
+  documented, and releasable from this directory.
+
+## Standalone Project Boundary
+
+This repository must not depend on a parent workspace for correctness gates or
+release mechanics. Parent integrations may consume the crate and run their own
+adapter tests, but this project owns:
+
+- package metadata, lockfile, lints, and toolchain policy
+- CI, Makefile targets, supply-chain checks, and release dry runs
+- fixture generation, parity harnesses, and benchmark reports
+- contributor, security, code of conduct, and agent instructions
+
+Commands in maintained docs should assume the repository root is this directory.
+Historical notes may mention older worktrees, but active workflow docs must be
+standalone.
 
 ## Runtime Boundary
 

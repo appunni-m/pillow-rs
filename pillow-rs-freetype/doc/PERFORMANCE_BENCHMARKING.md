@@ -11,14 +11,14 @@ numbers that another contributor can reproduce, audit, and challenge.
 Use repeated samples and the standalone C helper:
 
 ```bash
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --table
+python3 scripts/bench_freetype.py --compare-c --samples 10 --table
 ```
 
 The output is written to:
 
 ```text
-pillow-rs-freetype/target/freetype-bench/latest.json
-pillow-rs-freetype/target/freetype-bench/latest.md
+target/freetype-bench/latest.json
+target/freetype-bench/latest.md
 ```
 
 The JSON contains:
@@ -85,7 +85,7 @@ The matrix defines named `workload_profiles`.
 Use the default profile unless the report explicitly says otherwise:
 
 ```bash
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
+python3 scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
 ```
 
 Available profiles currently include:
@@ -155,20 +155,24 @@ cross-machine behavior.
 Before accepting benchmark tooling changes:
 
 ```bash
-python3 -m py_compile pillow-rs-freetype/scripts/bench_freetype.py
-python3 pillow-rs-freetype/scripts/bench_freetype.py --self-test
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 2 --table
-cargo test -p pillow-rs-freetype --test perf_benchmark_contract --locked
-cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture
+PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
+python3 scripts/bench_freetype.py --self-test
+python3 scripts/bench_freetype.py --compare-c --samples 2 --table
+cargo test --test perf_benchmark_contract --locked
+cargo test --test no_runtime_ffi --locked -- --nocapture
 ```
 
 Before accepting runtime performance claims, also run:
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
-cargo test -p pillow-rs --test imagingft_matrix_tests --locked -- --nocapture
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --table
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+cargo test --locked
+python3 scripts/bench_freetype.py --compare-c --samples 10 --table
 ```
+
+Parent-project integration gates, such as a Pillow connector matrix, belong in
+the downstream integration repository. They can catch adapter regressions, but
+they are not required to validate this standalone crate.
 
 ## Non-Negotiable Rules
 

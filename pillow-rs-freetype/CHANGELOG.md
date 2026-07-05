@@ -13,9 +13,11 @@
 - Fixture generator contract: `doc/GENERATOR_SYSTEM.md` and `tests/generator_contract.rs` make C-oracle fixture reproduction part of the maintained harness.
 - Unified runner now executes `render_mono_matrix.json`, `render_lcd_matrix.json`, `metrics_only_matrix.json`, `no_hinting_matrix.json`, and `outline_cbox_matrix.json`; current failures are exposed as implementation gaps instead of hidden fixture debt.
 - Supplemental FreeType fixture generation now defaults to broad inventory coverage; the five supplemental matrices each contain 11,086 C-oracle rows.
+- Standalone project infrastructure: explicit package metadata and lints, crate-local toolchain policy, CI workflow, Makefile, supply-chain policy, contributor/security/code-of-conduct docs, agent instructions, and `doc/INDEPENDENCE_PLAN.md`.
 
 ### Fixed
 - Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); runtime behavior now routes through the Rust scaler, TrueType hinting, and rasterizer path.
+- Benchmark runner no longer depends on the parent workspace package selector; it invokes the standalone crate manifest and reports both repository root and crate root in generated metadata.
 - `1ecd364`: WEAK_INTERPOLATION classification — 18→9 failures. The "both-None" case
   XOR check and `corner_is_flat` must run sequentially (not OR'd) because
   `corner_is_flat` updates direction-chain deltas that downstream classifications

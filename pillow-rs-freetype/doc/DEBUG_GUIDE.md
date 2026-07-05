@@ -22,13 +22,13 @@ eprintln!("[PP1X] gi={glyph_index} outline_raw.xmin={} lsb={} pp1x_fu={pp1x_fu}"
     outline_raw.xmin, h_metric.lsb);
 
 # 2. Run for failing composite glyph:
-RUST_LOG=off cargo run -p pillow-rs-freetype --example debug_glyph -- \
-  pillow-rs-freetype/tests/fixtures/input/fonts_autohint/DejaVuSerif-BoldItalic.ttf 20 2088
+RUST_LOG=off cargo run --example debug_glyph -- \
+  tests/fixtures/input/fonts_autohint/DejaVuSerif-BoldItalic.ttf 20 2088
 
 # 3. Compare with C:
 # C uses xMin from glyf header, same as us. But C's composite decomposition
 # may produce different overall xMin. Check C's reload trace:
-/tmp/gen_refs_v4 pillow-rs-freetype/tests/fixtures/input/fonts_autohint/DejaVuSerif-BoldItalic.ttf 2088 20 2>/dev/null | head -10
+/tmp/gen_refs_v4 tests/fixtures/input/fonts_autohint/DejaVuSerif-BoldItalic.ttf 2088 20 2>/dev/null | head -10
 ```
 
 ### Category B: Edge link mismatches (~5 failures)
@@ -54,10 +54,10 @@ eprintln!("[RUST LINK_IN] dim={dim:?} n={n} major={major_dir:?} wc={width_count}
 # The first segment where pos/dir/min_coord/max_coord differs is the root cause.
 
 # 4. Build and run:
-cd pillow-rs-freetype/freetype/build && cmake --build . -j$(nproc)
-cd /home/appunni/work/pil-wasm
+cd freetype/build && cmake --build . -j$(nproc)
+cd ../..
 gcc -o /tmp/gen_refs_v4 /tmp/gen_refs_v2.c ... (rebuild C binary with traces)
-RUST_LOG=off cargo run -p pillow-rs-freetype --example debug_glyph -- ... 2>&1 | grep "LINK_IN"
+RUST_LOG=off cargo run --example debug_glyph -- ... 2>&1 | grep "LINK_IN"
 /tmp/gen_refs_v4 ... 2>&1 | grep "C LINK_IN"
 
 # 5. If segment positions match but scores differ, the max_width (from standard
@@ -72,8 +72,8 @@ RUST_LOG=off cargo run -p pillow-rs-freetype --example debug_glyph -- ... 2>&1 |
 **Debugging method:**
 ```bash
 # 1. Enable cell dumps for a failing glyph:
-GRAYS_DUMP_CELLS=1 RUST_LOG=off cargo run -p pillow-rs-freetype --example debug_glyph -- \
-  pillow-rs-freetype/tests/fixtures/input/fonts_autohint/FONT.ttf 10 CP_HEX \
+GRAYS_DUMP_CELLS=1 RUST_LOG=off cargo run --example debug_glyph -- \
+  tests/fixtures/input/fonts_autohint/FONT.ttf 10 CP_HEX \
   2>&1 | grep "RUST CELLS" -A20 > rust_cells.txt
 
 # 2. C cell dump (need to enable in ftgrays.c):
@@ -106,12 +106,12 @@ For any single failing glyph, run this to classify the failure:
 FONT="$1" CP="$2" SZ="$3"
 
 # Get our edges
-RUST_LOG=autohint::pipeline=trace cargo run -p pillow-rs-freetype --example debug_glyph -- \
-  "pillow-rs-freetype/tests/fixtures/input/fonts_autohint/$FONT.ttf" $SZ $CP \
+RUST_LOG=autohint::pipeline=trace cargo run --example debug_glyph -- \
+  "tests/fixtures/input/fonts_autohint/$FONT.ttf" $SZ $CP \
   2>&1 | grep "TR_PHASE4" -A20 | grep "edge\[" > our_edges.txt
 
 # Get C edges
-/tmp/gen_refs_v4 "pillow-rs-freetype/tests/fixtures/input/fonts_autohint/$FONT.ttf" $CP $SZ \
+/tmp/gen_refs_v4 "tests/fixtures/input/fonts_autohint/$FONT.ttf" $CP $SZ \
   2>&1 | grep "TRACE PHASE4" -A20 | grep "edge\[" > c_edges.txt
 
 # Compare
@@ -119,8 +119,8 @@ echo "=== EDGE DIFFS ==="
 diff <(sort our_edges.txt) <(sort c_edges.txt)
 
 # Get cells
-GRAYS_DUMP_CELLS=1 RUST_LOG=off cargo run -p pillow-rs-freetype --example debug_glyph -- \
-  "pillow-rs-freetype/tests/fixtures/input/fonts_autohint/$FONT.ttf" $SZ $CP \
+GRAYS_DUMP_CELLS=1 RUST_LOG=off cargo run --example debug_glyph -- \
+  "tests/fixtures/input/fonts_autohint/$FONT.ttf" $SZ $CP \
   2>&1 | grep "RUST CELLS" -A20 > our_cells.txt
 
 echo "=== PIXEL MATCH ==="
@@ -146,8 +146,8 @@ grep "OUR:\|FT:" from stderr
 
 ## Proven Workflow for Each Fix
 1. Add `eprintln!`/`fprintf` at the suspected divergence point
-2. Rebuild C binary: `cd pillow-rs-freetype/freetype/build && cmake --build . -j$(nproc) && cd /home/appunni/work/pil-wasm && gcc -o /tmp/gen_refs_v4 /tmp/gen_refs_v2.c ...`
+2. Rebuild C binary: `cd freetype/build && cmake --build . -j$(nproc) && cd ../.. && gcc -o /tmp/gen_refs_v4 /tmp/gen_refs_v2.c ...`
 3. Run both and capture to files: `RUST_LOG=off cargo run ... 2>rust_out.txt; /tmp/gen_refs_v4 ... 2>c_out.txt`
 4. Diff the raw values
-5. Apply fix, verify with `cargo test -p pillow-rs-freetype --test direct_ft_compare`
+5. Apply fix, verify with `cargo test --test direct_ft_compare`
 6. Commit with C file:line reference in commit message

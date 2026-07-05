@@ -48,8 +48,8 @@ Required behavior:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --locked
-cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
 ```
 
 ### Phase 2: Promote Executed Fixture Baselines Into Exact Gates
@@ -132,20 +132,20 @@ Normal change gate:
 
 ```bash
 cargo fmt --all --check
-cargo test -p pillow-rs-freetype --locked
-cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
 ```
 
 Project parity audit gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked
-cargo test -p pillow-rs-freetype --test generator_contract --locked
-cargo test -p pillow-rs-freetype --test harness_contract --locked
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
-cargo test -p pillow-rs-freetype --test render_mode_matrix --locked
-cargo test -p pillow-rs-freetype --test fixed_parity --locked
-cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
+cargo test --test no_runtime_ffi --locked
+cargo test --test generator_contract --locked
+cargo test --test harness_contract --locked
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test render_mode_matrix --locked
+cargo test --test fixed_parity --locked
+cargo test --test interface_coverage --locked -- --nocapture
 ```
 
 The project is not at 100% while any threshold, incomplete, small-baseline, or unexecuted fixture debt remains.

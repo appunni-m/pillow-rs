@@ -54,14 +54,14 @@ rounding differences.
 
 ```bash
 # Rebuild C reference binary with trace-enabled lib
-cd pillow-rs-freetype/freetype/build
+cd freetype/build
 cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-DFT_DEBUG_LEVEL_TRACE"
 cmake --build . -j$(nproc)
-cd /home/appunni/work/pil-wasm
+cd ../..
 gcc -o /tmp/gen_refs_v7 /tmp/gen_refs_v2.c \
-  -Ipillow-rs-freetype/freetype/include \
-  -Lpillow-rs-freetype/freetype/build \
-  -Wl,-rpath,$(pwd)/pillow-rs-freetype/freetype/build \
+  -Ifreetype/include \
+  -Lfreetype/build \
+  -Wl,-rpath,$(pwd)/freetype/build \
   -lfreetyped -lm -lz
 
 # C trace with per-stage edge dump
@@ -69,9 +69,9 @@ FT2_DEBUG="aflatin:7" /tmp/gen_refs_v7 <font.ttf> <CP_HEX> <size_pt>
 
 # Our trace
 RUST_LOG=autohint::pipeline=trace \
-  cargo run -p pillow-rs-freetype --example debug_glyph -- \
+  cargo run --example debug_glyph -- \
   <font.ttf> <size_pt> <CP_HEX>
 
 # Full test suite
-cargo test -p pillow-rs-freetype --test direct_ft_compare
+cargo test --test direct_ft_compare
 ```

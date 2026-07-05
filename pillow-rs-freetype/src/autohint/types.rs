@@ -139,7 +139,7 @@ pub struct AfLatinMetrics {
     pub units_per_em: i32,
     pub axis: [AfLatinAxisMetrics; 2], // [Horz, Vert]
     /// glyph_index → is non-base (skip blue-zone alignment).
-    /// Mirrors C's globals->glyph_styles[gindex] & AF_NONBASE.
+    /// Mirrors C's globals->glyph_styles\[gindex\] & AF_NONBASE.
     pub non_base_glyphs: Vec<bool>,
     /// TOP_TO_BOTTOM hinting for Indic scripts (beng, deva, guru, goth, mong).
     /// Most scripts use bottom-to-top (false).

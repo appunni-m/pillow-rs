@@ -788,7 +788,7 @@ pub fn metrics_init_blues_impl(
 /// Scale the metrics axes for the current size (base x_scale/y_scale), applying
 /// the x-height scale optimization on the vertical axis, then scale the stem
 /// ✅ VERIFIED: VERT/HORZ scale + width cur values match C
-/// (v_scale=21967, HORZ cur=[61], VERT cur=[52] for DejaVuSans 10pt).
+/// (v_scale=21967, HORZ cur=\[61\], VERT cur=\[52\] for DejaVuSans 10pt).
 /// Port of af_latin_metrics_scale_dim (aflatin.c:1178-1437).
 /// Returns the (x_scale, y_scale) the scaler must use to scale glyph outlines.
 // ✅ VERIFIED: VERT/HORZ scale + width cur match C for DejaVuSans 10pt (aflatin.c:1178-1437).

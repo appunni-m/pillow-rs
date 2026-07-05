@@ -886,7 +886,7 @@ pub fn rasterize(outline: Outline, scratch: &mut GlyphScratch) -> Result<RasterR
 
 After EACH phase, run:
 ```bash
-cargo test -p pillow-rs-freetype -- --test-threads=1
+cargo test -- --test-threads=1
 ```
 
 The 1,708 parity tests must pass identically. Any deviation indicates a bug in
@@ -1036,6 +1036,6 @@ phases and can be done immediately with near-zero risk.
 - FreeType 2.14.1 source: `freetype/src/autofit/aflatin.c`, `freetype/src/smooth/ftgrays.c`
   (vendored read-only reference in `pillow-rs-freetype/freetype/`)
 - Current port: `pillow-rs-freetype/src/autohint/latin.rs`, `pillow-rs-freetype/src/grays.rs`
-- Parity tests: `pillow-rs-freetype/tests/coverage_matrix_tests.rs` (1,708 tests)
+- Parity tests: `tests/coverage_matrix_tests.rs` (1,708 tests)
 - Debugging protocol: `CLAUDE.md` lines 102-287 (C-vs-Rust comparison methodology)
 - Verification annotations: `CLAUDE.md` lines 289-335 (`✅ VERIFIED`, `⚠️ BUG` markers)

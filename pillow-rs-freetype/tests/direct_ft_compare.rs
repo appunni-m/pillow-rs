@@ -4,7 +4,7 @@
 //! Per-script stats: avg_failing_diffs and max_diff for error-rate analysis.
 //!
 //! No pre-computed fixtures — the C binary is the live oracle.
-//! Run: cargo test -p pillow-rs-freetype --test direct_ft_compare -- --test-threads=1
+//! Run: cargo test --test direct_ft_compare -- --test-threads=1
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(clippy::needless_range_loop)]

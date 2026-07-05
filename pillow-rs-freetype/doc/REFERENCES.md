@@ -20,7 +20,7 @@ active families are named by FreeType path and flags:
 ## Running Tests
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
+cargo test --test coverage_matrix_tests -- --nocapture
 ```
 
 ## Regenerating Fixtures
@@ -28,7 +28,6 @@ cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
 Standard flow:
 
 ```bash
-cd pillow-rs-freetype
 bash scripts/build_ft.sh
 python3 scripts/build_ft_fixture.py --family force_autohint --build-ref-bin
 python3 scripts/build_ft_fixture.py --family native_tt_default
@@ -44,10 +43,10 @@ python3 scripts/build_render_mode_fixture.py
 
 ```bash
 # C reference
-gcc -o /tmp/trace pillow-rs-freetype/scripts/trace_one_glyph.c \
+gcc -o /tmp/trace scripts/trace_one_glyph.c \
   -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype
 LD_LIBRARY_PATH=$HOME/.local/lib /tmp/trace <font.ttf> <size_pt> <codepoint>
 
 # Rust
-cargo run --example <name> --manifest-path pillow-rs-freetype/Cargo.toml
+cargo run --example <name>
 ```

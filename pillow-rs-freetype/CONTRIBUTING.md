@@ -1,60 +1,122 @@
 # Contributing
 
-## Development
+`pillow-rs-freetype` is a harness-first pure-Rust FreeType parity project.
+Correctness and reproducibility matter more than clever shortcuts.
+
+## Development Setup
 
 ```bash
-# Build
-cargo build -p pillow-rs-freetype
+cargo build --locked
+cargo test --locked
+cargo fmt -- --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+```
 
-# Run tests
-cargo test -p pillow-rs-freetype
+The Makefile wraps the same commands:
 
-# Full linting
-cargo clippy -p pillow-rs-freetype --all-targets -- -D warnings
-cargo fmt -p pillow-rs-freetype -- --check
+```bash
+make ci
+```
+
+Optional supply-chain checks:
+
+```bash
+cargo install cargo-deny cargo-audit --locked
+make supply-chain
 ```
 
 ## Architecture Rules
 
-- **Core never touches file paths or network.** All I/O lives in `font.rs` at the
-  public API boundary. Internal modules take `&[u8]` slices.
-- **No unsafe code.** `#![forbid(unsafe_code)]` is enforced at the crate root.
-- **All public functions must have doc comments.** Use `#![warn(missing_docs)]`.
-  Doc comments follow this pattern:
-  ```
-  /// One-line summary.
-  ///
-  /// Key rules/constants (table if helpful).
-  ///
-  /// # Debug: <symptom>
-  /// - [ ] Checkpoint 1
-  /// - [ ] Checkpoint 2
-  ```
-- **Commit messages must describe what changed and why.** Never use "wip" or "fix".
-  Include the test pass rate change when fixing parity bugs.
+- Runtime code is pure Rust.
+- No unsafe code.
+- No runtime FreeType FFI, native build hooks, `freetype-sys`, `bindgen`,
+  `pkg-config`, `cc`, `extern "C"`, or `dlopen`.
+- Public APIs take Rust primitives and in-memory data. File and process access
+  belongs in examples, tests, scripts, or caller code.
+- C FreeType is allowed only as an offline oracle for fixtures, diagnostics,
+  and trace comparison.
+- Fixture generation is maintained infrastructure, not one-off scripting.
 
-## Parity Debugging
+## Parity Workflow
 
-When a glyph renders differently from C FreeType:
+When a glyph, metric, bbox, or bitmap differs from C FreeType:
 
-1. **Use a standalone binary**, not the test suite. Load exactly ONE font, ONE glyph, ONE size.
-2. **Dump every pipeline stage**: reload coords → edges → hint_edges phases → align → IUP → final.
-3. **Find the first function where output diverges.** Everything downstream is a consequence.
-4. **Compare against C's fprintf traces.** Add matching `fprintf(stderr, ...)` to the
-   vendored C source, rebuild with `bash scripts/build_ft.sh`, and run side-by-side.
-5. **Fix the root cause, not the symptom.** Never clamp outputs or add per-glyph special cases.
+1. Pick one font, one glyph, one size, one endpoint.
+2. Dump Rust and C at the same pipeline stages.
+3. Find the first divergent value.
+4. Read the exact C function that produced the oracle behavior.
+5. Fix the Rust root cause.
+6. Re-run the narrow lane, then the full matrix.
 
-See `src/autohint/loader.rs` for an example of inline debug documentation.
+Useful commands:
 
-## Adding a New Feature
+```bash
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test no_runtime_ffi --locked -- --nocapture
+```
 
-1. Write a FreeType-path parity test in `tests/`
-2. Generate a JSON fixture using `scripts/build_ft_fixture.py`
-3. Implement the feature in `src/`
-4. Run `cargo test -p pillow-rs-freetype` and verify pass
+Never clamp output, special-case a glyph, delete a fixture row, or weaken a
+threshold to make a lane pass.
 
-## Releasing
+## Fixture Changes
 
-1. Update version in workspace `Cargo.toml`
-2. Update `CHANGELOG.md`
-3. `cargo publish -p pillow-rs-freetype`
+Before changing fixtures or generators, read:
+
+- `PROJECT_GOALS.md`
+- `doc/GENERATOR_SYSTEM.md`
+- `doc/REFERENCES.md`
+
+Fixture updates must be reproducible through documented commands and generated
+from the C oracle. Rust output is never the expected reference.
+
+## Benchmark Changes
+
+Before changing benchmark code or reporting speedups, read:
+
+- `doc/PERFORMANCE_BENCHMARKING.md`
+- `doc/PERFORMANCE_DOCUMENTATION_REFACTOR_PLAN.md`
+
+Required validation:
+
+```bash
+PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
+python3 scripts/bench_freetype.py --self-test
+python3 scripts/bench_freetype.py --compare-c --samples 2 --table
+cargo test --test perf_benchmark_contract --locked
+```
+
+Performance reports must keep raw samples, machine metadata, trust labels,
+timing boundaries, and workload profiles visible.
+
+## Documentation
+
+- Use rustdoc for public APIs.
+- Use short comments only for non-obvious implementation decisions.
+- Put long debugging or process guidance in `doc/`.
+- Update `CHANGELOG.md` for user-visible runtime, harness, fixture, benchmark,
+  or release changes.
+
+## Commit And PR Expectations
+
+- Explain what changed and why.
+- Include before/after parity counts for parity fixes.
+- Include benchmark commands and machine/report metadata for performance claims.
+- Confirm no runtime FFI and no fixture/test weakening.
+
+## Release Checklist
+
+1. Update `Cargo.toml` version.
+2. Update `CHANGELOG.md`.
+3. Run `make ci`.
+4. Run `make supply-chain` when audit tools are available.
+5. Run a publish dry run:
+
+```bash
+cargo publish --dry-run --locked
+```
+
+6. Publish:
+
+```bash
+cargo publish --locked
+```

@@ -160,7 +160,7 @@ pub struct ExecContext {
     pub twilight: GlyphZone,
 
     /// FreeType v40 backward-compatibility state: bit 2 enables the mode,
-    /// bits 0-1 track whether IUP[y]/IUP[x] have executed.
+    /// bits 0-1 track whether IUP\[y\]/IUP\[x\] have executed.
     pub backward_compatibility: u8,
 }
 
