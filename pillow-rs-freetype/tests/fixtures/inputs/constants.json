@@ -2,6 +2,326 @@
   "version": 1,
   "cases": [
     {
+      "case_id": "constant.FT_Err_Ok",
+      "subject": "freetype.FT_Err_Ok",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Ok"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Cannot_Open_Resource",
+      "subject": "freetype.FT_Err_Cannot_Open_Resource",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Cannot_Open_Resource"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Unknown_File_Format",
+      "subject": "freetype.FT_Err_Unknown_File_Format",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Unknown_File_Format"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_File_Format",
+      "subject": "freetype.FT_Err_Invalid_File_Format",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_File_Format"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Argument",
+      "subject": "freetype.FT_Err_Invalid_Argument",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Argument"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Unimplemented_Feature",
+      "subject": "freetype.FT_Err_Unimplemented_Feature",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Unimplemented_Feature"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Table",
+      "subject": "freetype.FT_Err_Invalid_Table",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Table"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Glyph_Index",
+      "subject": "freetype.FT_Err_Invalid_Glyph_Index",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Glyph_Index"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Character_Code",
+      "subject": "freetype.FT_Err_Invalid_Character_Code",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Character_Code"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Glyph_Format",
+      "subject": "freetype.FT_Err_Invalid_Glyph_Format",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Glyph_Format"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Cannot_Render_Glyph",
+      "subject": "freetype.FT_Err_Cannot_Render_Glyph",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Cannot_Render_Glyph"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Outline",
+      "subject": "freetype.FT_Err_Invalid_Outline",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Outline"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_Pixel_Size",
+      "subject": "freetype.FT_Err_Invalid_Pixel_Size",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_Pixel_Size"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_CharMap_Handle",
+      "subject": "freetype.FT_Err_Invalid_CharMap_Handle",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_CharMap_Handle"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Out_Of_Memory",
+      "subject": "freetype.FT_Err_Out_Of_Memory",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Out_Of_Memory"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Raster_Overflow",
+      "subject": "freetype.FT_Err_Raster_Overflow",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Raster_Overflow"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_Err_Invalid_CharMap_Format",
+      "subject": "freetype.FT_Err_Invalid_CharMap_Format",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_Err_Invalid_CharMap_Format"
+        }
+      },
+      "classifiers": [
+        "area:errors",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_DEFAULT",
+      "subject": "freetype.FT_LOAD_DEFAULT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_DEFAULT"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_NO_SCALE",
+      "subject": "freetype.FT_LOAD_NO_SCALE",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_NO_SCALE"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_NO_HINTING",
+      "subject": "freetype.FT_LOAD_NO_HINTING",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_NO_HINTING"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
       "case_id": "constant.FT_LOAD_RENDER",
       "subject": "freetype.FT_LOAD_RENDER",
       "case": "value_matches_header",
@@ -13,7 +333,327 @@
         }
       },
       "classifiers": [
-        "area:constants",
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_NO_BITMAP",
+      "subject": "freetype.FT_LOAD_NO_BITMAP",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_NO_BITMAP"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_VERTICAL_LAYOUT",
+      "subject": "freetype.FT_LOAD_VERTICAL_LAYOUT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_VERTICAL_LAYOUT"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_FORCE_AUTOHINT",
+      "subject": "freetype.FT_LOAD_FORCE_AUTOHINT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_FORCE_AUTOHINT"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_CROP_BITMAP",
+      "subject": "freetype.FT_LOAD_CROP_BITMAP",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_CROP_BITMAP"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_PEDANTIC",
+      "subject": "freetype.FT_LOAD_PEDANTIC",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_PEDANTIC"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_ADVANCE_ONLY",
+      "subject": "freetype.FT_LOAD_ADVANCE_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_ADVANCE_ONLY"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH",
+      "subject": "freetype.FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_NO_RECURSE",
+      "subject": "freetype.FT_LOAD_NO_RECURSE",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_NO_RECURSE"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_IGNORE_TRANSFORM",
+      "subject": "freetype.FT_LOAD_IGNORE_TRANSFORM",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_IGNORE_TRANSFORM"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_MONOCHROME",
+      "subject": "freetype.FT_LOAD_MONOCHROME",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_MONOCHROME"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_LINEAR_DESIGN",
+      "subject": "freetype.FT_LOAD_LINEAR_DESIGN",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_LINEAR_DESIGN"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_SBITS_ONLY",
+      "subject": "freetype.FT_LOAD_SBITS_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_SBITS_ONLY"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_NO_AUTOHINT",
+      "subject": "freetype.FT_LOAD_NO_AUTOHINT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_NO_AUTOHINT"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_COLOR",
+      "subject": "freetype.FT_LOAD_COLOR",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_COLOR"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_COMPUTE_METRICS",
+      "subject": "freetype.FT_LOAD_COMPUTE_METRICS",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_COMPUTE_METRICS"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_BITMAP_METRICS_ONLY",
+      "subject": "freetype.FT_LOAD_BITMAP_METRICS_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_BITMAP_METRICS_ONLY"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_SVG_ONLY",
+      "subject": "freetype.FT_LOAD_SVG_ONLY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_SVG_ONLY"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_NO_SVG",
+      "subject": "freetype.FT_LOAD_NO_SVG",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_NO_SVG"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_NORMAL",
+      "subject": "freetype.FT_RENDER_MODE_NORMAL",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_NORMAL"
+        }
+      },
+      "classifiers": [
+        "area:render-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_LIGHT",
+      "subject": "freetype.FT_RENDER_MODE_LIGHT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_LIGHT"
+        }
+      },
+      "classifiers": [
+        "area:render-modes",
         "kind:constant"
       ]
     },
@@ -29,7 +669,183 @@
         }
       },
       "classifiers": [
-        "area:constants",
+        "area:render-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_LCD",
+      "subject": "freetype.FT_RENDER_MODE_LCD",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_LCD"
+        }
+      },
+      "classifiers": [
+        "area:render-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_LCD_V",
+      "subject": "freetype.FT_RENDER_MODE_LCD_V",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_LCD_V"
+        }
+      },
+      "classifiers": [
+        "area:render-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_SDF",
+      "subject": "freetype.FT_RENDER_MODE_SDF",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_SDF"
+        }
+      },
+      "classifiers": [
+        "area:render-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_MAX",
+      "subject": "freetype.FT_RENDER_MODE_MAX",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_MAX"
+        }
+      },
+      "classifiers": [
+        "area:render-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_TARGET_NORMAL",
+      "subject": "freetype.FT_LOAD_TARGET_NORMAL",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_TARGET_NORMAL"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_TARGET_LIGHT",
+      "subject": "freetype.FT_LOAD_TARGET_LIGHT",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_TARGET_LIGHT"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_TARGET_MONO",
+      "subject": "freetype.FT_LOAD_TARGET_MONO",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_TARGET_MONO"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_TARGET_LCD",
+      "subject": "freetype.FT_LOAD_TARGET_LCD",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_TARGET_LCD"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_LOAD_TARGET_LCD_V",
+      "subject": "freetype.FT_LOAD_TARGET_LCD_V",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_TARGET_LCD_V"
+        }
+      },
+      "classifiers": [
+        "area:load-flags",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_NONE",
+      "subject": "freetype.FT_PIXEL_MODE_NONE",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_NONE"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_MONO",
+      "subject": "freetype.FT_PIXEL_MODE_MONO",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_MONO"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
         "kind:constant"
       ]
     },
@@ -45,7 +861,199 @@
         }
       },
       "classifiers": [
-        "area:constants",
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_GRAY2",
+      "subject": "freetype.FT_PIXEL_MODE_GRAY2",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_GRAY2"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_GRAY4",
+      "subject": "freetype.FT_PIXEL_MODE_GRAY4",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_GRAY4"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_LCD",
+      "subject": "freetype.FT_PIXEL_MODE_LCD",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_LCD"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_LCD_V",
+      "subject": "freetype.FT_PIXEL_MODE_LCD_V",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_LCD_V"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_BGRA",
+      "subject": "freetype.FT_PIXEL_MODE_BGRA",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_BGRA"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_MAX",
+      "subject": "freetype.FT_PIXEL_MODE_MAX",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_MAX"
+        }
+      },
+      "classifiers": [
+        "area:pixel-modes",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_GLYPH_FORMAT_NONE",
+      "subject": "freetype.FT_GLYPH_FORMAT_NONE",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_GLYPH_FORMAT_NONE"
+        }
+      },
+      "classifiers": [
+        "area:glyph-formats",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_GLYPH_FORMAT_COMPOSITE",
+      "subject": "freetype.FT_GLYPH_FORMAT_COMPOSITE",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_GLYPH_FORMAT_COMPOSITE"
+        }
+      },
+      "classifiers": [
+        "area:glyph-formats",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_GLYPH_FORMAT_BITMAP",
+      "subject": "freetype.FT_GLYPH_FORMAT_BITMAP",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_GLYPH_FORMAT_BITMAP"
+        }
+      },
+      "classifiers": [
+        "area:glyph-formats",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_GLYPH_FORMAT_OUTLINE",
+      "subject": "freetype.FT_GLYPH_FORMAT_OUTLINE",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_GLYPH_FORMAT_OUTLINE"
+        }
+      },
+      "classifiers": [
+        "area:glyph-formats",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_GLYPH_FORMAT_PLOTTER",
+      "subject": "freetype.FT_GLYPH_FORMAT_PLOTTER",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_GLYPH_FORMAT_PLOTTER"
+        }
+      },
+      "classifiers": [
+        "area:glyph-formats",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_GLYPH_FORMAT_SVG",
+      "subject": "freetype.FT_GLYPH_FORMAT_SVG",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_GLYPH_FORMAT_SVG"
+        }
+      },
+      "classifiers": [
+        "area:glyph-formats",
         "kind:constant"
       ]
     }

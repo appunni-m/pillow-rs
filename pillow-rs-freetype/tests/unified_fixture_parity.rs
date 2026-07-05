@@ -27,6 +27,7 @@ struct FontVariability {
     folder: String,
     sizes: Vec<u32>,
     char_codes: Vec<u64>,
+    glyph_indices: Vec<u32>,
     load_flags: Vec<i32>,
     render_modes: Vec<i32>,
 }
@@ -200,34 +201,39 @@ fn manifest_font_variability_cases_cover_declared_fixture_folder() {
         for font in &fonts {
             for size in &variability.sizes {
                 let char_codes = coverage_values(&variability.char_codes);
+                let glyph_indices = coverage_values(&variability.glyph_indices);
                 let load_flags = coverage_values(&variability.load_flags);
                 let render_modes = coverage_values(&variability.render_modes);
                 for char_code in &char_codes {
-                    for load_flag in &load_flags {
-                        for render_mode in &render_modes {
-                            let probe = CoverageProbe {
-                                subject,
-                                case_id,
-                                font,
-                                size: *size,
-                                char_code: *char_code,
-                                load_flag: *load_flag,
-                                render_mode: *render_mode,
-                            };
-                            if !cases
-                                .iter()
-                                .any(|input| input_covers_font_variability(input, &probe))
-                            {
-                                failures.push(format!(
-                                    "{}::{} missing font={} size={} char_code={:?} load_flags={:?} render_mode={:?}",
+                    for glyph_index in &glyph_indices {
+                        for load_flag in &load_flags {
+                            for render_mode in &render_modes {
+                                let probe = CoverageProbe {
                                     subject,
                                     case_id,
                                     font,
-                                    size,
-                                    char_code,
-                                    load_flag,
-                                    render_mode
-                                ));
+                                    size: *size,
+                                    char_code: *char_code,
+                                    glyph_index: *glyph_index,
+                                    load_flag: *load_flag,
+                                    render_mode: *render_mode,
+                                };
+                                if !cases
+                                    .iter()
+                                    .any(|input| input_covers_font_variability(input, &probe))
+                                {
+                                    failures.push(format!(
+                                        "{}::{} missing font={} size={} char_code={:?} glyph_index={:?} load_flags={:?} render_mode={:?}",
+                                        subject,
+                                        case_id,
+                                        font,
+                                        size,
+                                        char_code,
+                                        glyph_index,
+                                        load_flag,
+                                        render_mode
+                                    ));
+                                }
                             }
                         }
                     }
@@ -355,6 +361,8 @@ fn parse_manifest(text: &str) -> Manifest {
                 requirement.sizes = parse_u32_array(value);
             } else if let Some(value) = line.strip_prefix("char_codes: ") {
                 requirement.char_codes = parse_u64_array(value);
+            } else if let Some(value) = line.strip_prefix("glyph_indices: ") {
+                requirement.glyph_indices = parse_u32_array(value);
             } else if let Some(value) = line.strip_prefix("load_flags: ") {
                 requirement.load_flags = parse_i32_array(value);
             } else if let Some(value) = line.strip_prefix("render_modes: ") {
@@ -475,6 +483,7 @@ struct CoverageProbe<'a> {
     font: &'a str,
     size: u32,
     char_code: Option<u64>,
+    glyph_index: Option<u32>,
     load_flag: Option<i32>,
     render_mode: Option<i32>,
 }
@@ -487,6 +496,9 @@ fn input_covers_font_variability(input: &InputCase, probe: &CoverageProbe<'_>) -
         && probe
             .char_code
             .is_none_or(|value| input_u64_param(input, "char_code") == Some(value))
+        && probe
+            .glyph_index
+            .is_none_or(|value| input_u32_param(input, "glyph_index") == Some(value))
         && probe
             .load_flag
             .is_none_or(|value| input_i32_param(input, "load_flags") == Some(value))
@@ -516,6 +528,15 @@ fn input_pixel_y(input: &InputCase) -> Option<u32> {
 
 fn input_u64_param(input: &InputCase, key: &str) -> Option<u64> {
     input.inputs.params.get(key)?.as_u64()
+}
+
+fn input_u32_param(input: &InputCase, key: &str) -> Option<u32> {
+    input
+        .inputs
+        .params
+        .get(key)?
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
 }
 
 fn input_i32_param(input: &InputCase, key: &str) -> Option<i32> {
@@ -612,6 +633,28 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         ]),
         "new_memory_face" => {
             let mut args = vec!["--new-memory-face".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
+        "set_pixel_sizes" => {
+            let mut args = vec!["--set-pixel-sizes".to_string()];
+            push_font_source(case, &mut args)?;
+            push_face_size(params, &mut args)?;
+            Ok(args)
+        }
+        "set_char_size" => {
+            let mut args = vec!["--set-char-size".to_string()];
+            push_font_source(case, &mut args)?;
+            args.push(i64_param(params, "face_index")?.to_string());
+            args.push(i64_param(params, "char_width")?.to_string());
+            args.push(i64_param(params, "char_height")?.to_string());
+            args.push(u64_param(params, "horz_resolution")?.to_string());
+            args.push(u64_param(params, "vert_resolution")?.to_string());
+            Ok(args)
+        }
+        "size_metrics" => {
+            let mut args = vec!["--size-metrics".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
             Ok(args)
@@ -713,6 +756,12 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
             "record",
         )?)?)),
         "new_memory_face" => rust_new_memory_face(case),
+        "set_pixel_sizes" => rust_set_pixel_sizes(case),
+        "set_char_size" => rust_set_char_size(case),
+        "size_metrics" => {
+            let face = open_face(case)?;
+            Ok(ok(size_metrics_json(&FT_Size_Metrics(&face))))
+        }
         "get_char_index" => {
             let face = open_face(case)?;
             Ok(ok(json!({
@@ -807,6 +856,59 @@ fn open_face(case: &InputCase) -> Result<FT_Face, String> {
     }
 }
 
+fn rust_set_pixel_sizes(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        &data,
+        i64_param(&case.inputs.params, "face_index")?,
+        20.0,
+    ) {
+        Ok(mut face) => {
+            let size = case
+                .inputs
+                .params
+                .get("pixel_size")
+                .ok_or_else(|| "missing pixel_size".to_string())?;
+            let err = FT_Set_Pixel_Sizes(&mut face, u32_param(size, "x")?, u32_param(size, "y")?);
+            if err == FT_Err_Ok {
+                Ok(ok(json!({"set": true})))
+            } else {
+                Ok(error(err))
+            }
+        }
+        Err(err) => Ok(error(err)),
+    }
+}
+
+fn rust_set_char_size(case: &InputCase) -> Result<RunOutput, String> {
+    let data = font_bytes(case)?;
+    let library = FT_Init_FreeType();
+    match FT_New_Memory_Face(
+        &library,
+        &data,
+        i64_param(&case.inputs.params, "face_index")?,
+        20.0,
+    ) {
+        Ok(mut face) => {
+            let err = FT_Set_Char_Size(
+                &mut face,
+                i64_param(&case.inputs.params, "char_width")?,
+                i64_param(&case.inputs.params, "char_height")?,
+                u32_param(&case.inputs.params, "horz_resolution")?,
+                u32_param(&case.inputs.params, "vert_resolution")?,
+            );
+            if err == FT_Err_Ok {
+                Ok(ok(json!({"set": true})))
+            } else {
+                Ok(error(err))
+            }
+        }
+        Err(err) => Ok(error(err)),
+    }
+}
+
 fn font_bytes(case: &InputCase) -> Result<Vec<u8>, String> {
     let font = case
         .inputs
@@ -848,9 +950,72 @@ fn error(error_code: i32) -> RunOutput {
 
 fn rust_constant(symbol: &str) -> Result<i64, String> {
     match symbol {
+        "FT_Err_Ok" => Ok(i64::from(FT_Err_Ok)),
+        "FT_Err_Cannot_Open_Resource" => Ok(i64::from(FT_Err_Cannot_Open_Resource)),
+        "FT_Err_Unknown_File_Format" => Ok(i64::from(FT_Err_Unknown_File_Format)),
+        "FT_Err_Invalid_File_Format" => Ok(i64::from(FT_Err_Invalid_File_Format)),
+        "FT_Err_Invalid_Argument" => Ok(i64::from(FT_Err_Invalid_Argument)),
+        "FT_Err_Unimplemented_Feature" => Ok(i64::from(FT_Err_Unimplemented_Feature)),
+        "FT_Err_Invalid_Table" => Ok(i64::from(FT_Err_Invalid_Table)),
+        "FT_Err_Invalid_Glyph_Index" => Ok(i64::from(FT_Err_Invalid_Glyph_Index)),
+        "FT_Err_Invalid_Character_Code" => Ok(i64::from(FT_Err_Invalid_Character_Code)),
+        "FT_Err_Invalid_Glyph_Format" => Ok(i64::from(FT_Err_Invalid_Glyph_Format)),
+        "FT_Err_Cannot_Render_Glyph" => Ok(i64::from(FT_Err_Cannot_Render_Glyph)),
+        "FT_Err_Invalid_Outline" => Ok(i64::from(FT_Err_Invalid_Outline)),
+        "FT_Err_Invalid_Pixel_Size" => Ok(i64::from(FT_Err_Invalid_Pixel_Size)),
+        "FT_Err_Invalid_CharMap_Handle" => Ok(i64::from(FT_Err_Invalid_CharMap_Handle)),
+        "FT_Err_Out_Of_Memory" => Ok(i64::from(FT_Err_Out_Of_Memory)),
+        "FT_Err_Raster_Overflow" => Ok(i64::from(FT_Err_Raster_Overflow)),
+        "FT_Err_Invalid_CharMap_Format" => Ok(i64::from(FT_Err_Invalid_CharMap_Format)),
+        "FT_LOAD_DEFAULT" => Ok(i64::from(FT_LOAD_DEFAULT)),
+        "FT_LOAD_NO_SCALE" => Ok(i64::from(FT_LOAD_NO_SCALE)),
+        "FT_LOAD_NO_HINTING" => Ok(i64::from(FT_LOAD_NO_HINTING)),
         "FT_LOAD_RENDER" => Ok(i64::from(FT_LOAD_RENDER)),
+        "FT_LOAD_NO_BITMAP" => Ok(i64::from(FT_LOAD_NO_BITMAP)),
+        "FT_LOAD_VERTICAL_LAYOUT" => Ok(i64::from(FT_LOAD_VERTICAL_LAYOUT)),
+        "FT_LOAD_FORCE_AUTOHINT" => Ok(i64::from(FT_LOAD_FORCE_AUTOHINT)),
+        "FT_LOAD_CROP_BITMAP" => Ok(i64::from(FT_LOAD_CROP_BITMAP)),
+        "FT_LOAD_PEDANTIC" => Ok(i64::from(FT_LOAD_PEDANTIC)),
+        "FT_LOAD_ADVANCE_ONLY" => Ok(i64::from(FT_LOAD_ADVANCE_ONLY)),
+        "FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH" => Ok(i64::from(FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH)),
+        "FT_LOAD_NO_RECURSE" => Ok(i64::from(FT_LOAD_NO_RECURSE)),
+        "FT_LOAD_IGNORE_TRANSFORM" => Ok(i64::from(FT_LOAD_IGNORE_TRANSFORM)),
+        "FT_LOAD_MONOCHROME" => Ok(i64::from(FT_LOAD_MONOCHROME)),
+        "FT_LOAD_LINEAR_DESIGN" => Ok(i64::from(FT_LOAD_LINEAR_DESIGN)),
+        "FT_LOAD_SBITS_ONLY" => Ok(i64::from(FT_LOAD_SBITS_ONLY)),
+        "FT_LOAD_NO_AUTOHINT" => Ok(i64::from(FT_LOAD_NO_AUTOHINT)),
+        "FT_LOAD_COLOR" => Ok(i64::from(FT_LOAD_COLOR)),
+        "FT_LOAD_COMPUTE_METRICS" => Ok(i64::from(FT_LOAD_COMPUTE_METRICS)),
+        "FT_LOAD_BITMAP_METRICS_ONLY" => Ok(i64::from(FT_LOAD_BITMAP_METRICS_ONLY)),
+        "FT_LOAD_SVG_ONLY" => Ok(i64::from(FT_LOAD_SVG_ONLY)),
+        "FT_LOAD_NO_SVG" => Ok(i64::from(FT_LOAD_NO_SVG)),
+        "FT_RENDER_MODE_NORMAL" => Ok(i64::from(FT_RENDER_MODE_NORMAL)),
+        "FT_RENDER_MODE_LIGHT" => Ok(i64::from(FT_RENDER_MODE_LIGHT)),
         "FT_RENDER_MODE_MONO" => Ok(i64::from(FT_RENDER_MODE_MONO)),
+        "FT_RENDER_MODE_LCD" => Ok(i64::from(FT_RENDER_MODE_LCD)),
+        "FT_RENDER_MODE_LCD_V" => Ok(i64::from(FT_RENDER_MODE_LCD_V)),
+        "FT_RENDER_MODE_SDF" => Ok(i64::from(FT_RENDER_MODE_SDF)),
+        "FT_RENDER_MODE_MAX" => Ok(i64::from(FT_RENDER_MODE_MAX)),
+        "FT_LOAD_TARGET_NORMAL" => Ok(i64::from(FT_LOAD_TARGET_NORMAL)),
+        "FT_LOAD_TARGET_LIGHT" => Ok(i64::from(FT_LOAD_TARGET_LIGHT)),
+        "FT_LOAD_TARGET_MONO" => Ok(i64::from(FT_LOAD_TARGET_MONO)),
+        "FT_LOAD_TARGET_LCD" => Ok(i64::from(FT_LOAD_TARGET_LCD)),
+        "FT_LOAD_TARGET_LCD_V" => Ok(i64::from(FT_LOAD_TARGET_LCD_V)),
+        "FT_PIXEL_MODE_NONE" => Ok(i64::from(FT_PIXEL_MODE_NONE)),
+        "FT_PIXEL_MODE_MONO" => Ok(i64::from(FT_PIXEL_MODE_MONO)),
         "FT_PIXEL_MODE_GRAY" => Ok(i64::from(FT_PIXEL_MODE_GRAY)),
+        "FT_PIXEL_MODE_GRAY2" => Ok(i64::from(FT_PIXEL_MODE_GRAY2)),
+        "FT_PIXEL_MODE_GRAY4" => Ok(i64::from(FT_PIXEL_MODE_GRAY4)),
+        "FT_PIXEL_MODE_LCD" => Ok(i64::from(FT_PIXEL_MODE_LCD)),
+        "FT_PIXEL_MODE_LCD_V" => Ok(i64::from(FT_PIXEL_MODE_LCD_V)),
+        "FT_PIXEL_MODE_BGRA" => Ok(i64::from(FT_PIXEL_MODE_BGRA)),
+        "FT_PIXEL_MODE_MAX" => Ok(i64::from(FT_PIXEL_MODE_MAX)),
+        "FT_GLYPH_FORMAT_NONE" => Ok(i64::from(FT_GLYPH_FORMAT_NONE)),
+        "FT_GLYPH_FORMAT_COMPOSITE" => Ok(i64::from(FT_GLYPH_FORMAT_COMPOSITE)),
+        "FT_GLYPH_FORMAT_BITMAP" => Ok(i64::from(FT_GLYPH_FORMAT_BITMAP)),
+        "FT_GLYPH_FORMAT_OUTLINE" => Ok(i64::from(FT_GLYPH_FORMAT_OUTLINE)),
+        "FT_GLYPH_FORMAT_PLOTTER" => Ok(i64::from(FT_GLYPH_FORMAT_PLOTTER)),
+        "FT_GLYPH_FORMAT_SVG" => Ok(i64::from(FT_GLYPH_FORMAT_SVG)),
         other => Err(format!("unsupported rust constant {other}")),
     }
 }
@@ -944,6 +1109,19 @@ fn slot_json(slot: &FT_GlyphSlot) -> Value {
     })
 }
 
+fn size_metrics_json(metrics: &FT_Size_Metrics) -> Value {
+    json!({
+        "x_ppem": metrics.x_ppem,
+        "y_ppem": metrics.y_ppem,
+        "x_scale": metrics.x_scale,
+        "y_scale": metrics.y_scale,
+        "ascender": metrics.ascender,
+        "descender": metrics.descender,
+        "height": metrics.height,
+        "max_advance": metrics.max_advance
+    })
+}
+
 fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Result<(), String> {
     if oracle.status.kind == StatusKind::Ok && case.expect_error {
         return Err(format!(
@@ -963,16 +1141,9 @@ fn compare_case(case: &InputCase, oracle: &RunOutput, actual: &RunOutput) -> Res
             case.case_id, oracle.status, actual.status
         ));
     }
-    if oracle.status.kind == StatusKind::Error {
-        return Ok(());
-    }
-
     validate_schema_output(case, &oracle.output, "oracle")?;
     validate_schema_output(case, &actual.output, "actual")?;
 
-    if case.schema == "face_open" {
-        return Ok(());
-    }
     if oracle.output == actual.output {
         Ok(())
     } else {
@@ -1013,8 +1184,28 @@ fn validate_schema_output(case: &InputCase, output: &Value, label: &str) -> Resu
             }
             Ok(())
         }
-        "face_open" => Ok(()),
-        "error" => Ok(()),
+        "face_open" => require_path(output, "/opened", label, case),
+        "set_status" => require_path(output, "/set", label, case),
+        "size_metrics" => {
+            require_path(output, "/x_ppem", label, case)?;
+            require_path(output, "/y_ppem", label, case)?;
+            require_path(output, "/x_scale", label, case)?;
+            require_path(output, "/y_scale", label, case)?;
+            require_path(output, "/ascender", label, case)?;
+            require_path(output, "/descender", label, case)?;
+            require_path(output, "/height", label, case)?;
+            require_path(output, "/max_advance", label, case)
+        }
+        "error" => {
+            if output.is_null() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{} {label} error output must be null, got {output}",
+                    case.case_id
+                ))
+            }
+        }
         other => Err(format!("{} uses unknown schema {other}", case.case_id)),
     }
 }

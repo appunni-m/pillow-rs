@@ -587,6 +587,12 @@ subjects:
     cases:
       - id: default_load
         description: Loads an outline glyph with default flags.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            glyph_indices: [36]
+            load_flags: [0]
 
   - id: freetype.FT_Long
     kind: type
@@ -757,6 +763,15 @@ subjects:
     symbol: FT_Render_Glyph
     description: Renders a loaded glyph slot into a bitmap.
     cases:
+      - id: supported_render_modes
+        description: Renders a loaded glyph for supported FreeType render modes.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+            load_flags: [0]
+            render_modes: [0, 1]
       - id: invalid_render_mode
         description: Returns the expected FreeType error for an unsupported render mode.
         coverage:
@@ -800,6 +815,10 @@ subjects:
         description: Size, alignment, and field offsets match C FreeType.
       - id: returns_active_size_metrics
         description: Accessor returns active face size metrics.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
 
   - id: freetype.FT_UInt
     kind: type
