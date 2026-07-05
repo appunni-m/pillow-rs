@@ -73,28 +73,28 @@ The first baseline implementation is checked in as a repeatable, script-driven
 framework:
 
 ```text
-pillow-rs-freetype/tests/fixtures/perf_operation_matrix.json
+tests/fixtures/perf_operation_matrix.json
 pillow-rs-freetype/examples/bench_ops.rs
-pillow-rs-freetype/scripts/bench_freetype.py
-pillow-rs-freetype/scripts/bench_ft_ops.c
+scripts/bench_freetype.py
+scripts/bench_ft_ops.c
 ```
 
 Run the Rust-only benchmark:
 
 ```bash
-python3 pillow-rs-freetype/scripts/bench_freetype.py
+python3 scripts/bench_freetype.py
 ```
 
 Run Rust plus the standalone C FreeType timing helper:
 
 ```bash
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c
+python3 scripts/bench_freetype.py --compare-c
 ```
 
 Run repeated Rust/C samples and print the comparative table:
 
 ```bash
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --table
+python3 scripts/bench_freetype.py --compare-c --samples 10 --table
 ```
 
 The runner writes:
@@ -106,7 +106,7 @@ pillow-rs-freetype/target/freetype-bench/latest.json
 The C helper is benchmark/oracle tooling only. It is compiled by
 `scripts/bench_freetype.py`, lives under `scripts/`, and is never linked into
 the `pillow-rs-freetype` runtime crate. The runtime purity gate remains
-`cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture`.
+`cargo test --test no_runtime_ffi --locked -- --nocapture`.
 
 The current seed matrix covers font load, scalar metrics, text length, text
 bbox, rendered masks, force autohint masks, glyph metrics, mono render, LCD
@@ -127,7 +127,7 @@ With `--compare-c`, `--samples`, and `--table`, the output JSON includes:
 ### Benchmark Targets
 
 Add a deliberate benchmark system under `pillow-rs-freetype/benches/` and
-`pillow-rs-freetype/scripts/`.
+`scripts/`.
 
 Operations to benchmark independently:
 
@@ -156,7 +156,7 @@ shape is:
 ```text
 pillow-rs-freetype/examples/
   bench_ops.rs             # Rust operation timing, JSONL output
-pillow-rs-freetype/scripts/
+scripts/
   bench_freetype.py        # orchestrates Rust and C runs, emits JSON
   bench_ft_ops.c           # optional standalone C FreeType timing helper
 ```
@@ -185,7 +185,7 @@ Comparative summary output must include:
 Add a C helper separate from runtime code:
 
 ```text
-pillow-rs-freetype/scripts/bench_ft_ops.c
+scripts/bench_ft_ops.c
 ```
 
 The helper batches operations in one process. Do not spawn one C process per
@@ -246,12 +246,15 @@ After two stable baselines:
 Mandatory command set:
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
-cargo test -p pillow-rs --test imagingft_matrix_tests --locked -- --nocapture
-cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture
-python3 pillow-rs-freetype/scripts/bench_freetype.py
-python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test no_runtime_ffi --locked -- --nocapture
+python3 scripts/bench_freetype.py
+python3 scripts/bench_freetype.py --compare-c
 ```
+
+Downstream parent projects should run their own connector or adapter matrices,
+such as Pillow integration tests, after updating their dependency on this
+crate. Those tests are not standalone crate release gates.
 
 ## Refactor Lanes
 
@@ -267,7 +270,7 @@ Audit commands:
 
 ```bash
 rg -n '\.clone\(|to_vec\(|Vec::new\(|Vec::with_capacity|collect::<Vec|collect\(\)' pillow-rs-freetype/src
-cargo clippy -p pillow-rs-freetype --all-targets --all-features --locked -- -D warnings
+cargo clippy --all-targets --all-features --locked -- -D warnings
 ```
 
 Classification:
@@ -382,7 +385,7 @@ Fixture generators are part of the product:
 Add a benchmark matrix file:
 
 ```text
-pillow-rs-freetype/tests/fixtures/perf_operation_matrix.json
+tests/fixtures/perf_operation_matrix.json
 ```
 
 It should be smaller than parity matrices but cover every operation family and
@@ -397,8 +400,8 @@ Add strict documentation checks in phases:
 Phase 1:
 
 ```bash
-RUSTDOCFLAGS="-D warnings" cargo doc -p pillow-rs-freetype --no-deps
-cargo test -p pillow-rs-freetype --doc
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+cargo test --doc
 ```
 
 Phase 2:
@@ -448,7 +451,7 @@ Before merge:
 - [ ] `imagingft_matrix_tests` unchanged or improved.
 - [ ] `no_runtime_ffi` passes.
 - [ ] `cargo fmt --all -- --check` passes.
-- [ ] `cargo clippy -p pillow-rs-freetype --all-targets --all-features --locked -- -D warnings` passes.
+- [ ] `cargo clippy --all-targets --all-features --locked -- -D warnings` passes.
 - [ ] Benchmarks run for touched operation family.
 - [ ] Performance result recorded when hot code changed.
 - [ ] Public docs updated for changed contracts.

@@ -9,7 +9,7 @@ generation and live-oracle comparison.
 Command:
 
 ```sh
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
+cargo test --test coverage_matrix_tests -- --nocapture
 ```
 
 Before caching fonts in the test harness, the run was interrupted after:

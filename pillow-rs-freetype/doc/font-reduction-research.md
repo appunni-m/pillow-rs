@@ -1,14 +1,14 @@
 # Latin Font Reduction Research: 29 → <10 Without Coverage Loss
 
 **Date:** 2026-06-30
-**Scope:** `pillow-rs-freetype/tests/fixtures/input/fonts_autohint/`
+**Scope:** `tests/fixtures/input/fonts_autohint/`
 **Objective:** Identify a minimal subset (<10) of the 29 Latin fonts that preserves equivalent autohinter code-path coverage in the FT test suite (`coverage_matrix_ft.json`).
 
 ---
 
 ## 1. Font Inventory
 
-All 29 fonts are in `pillow-rs-freetype/tests/fixtures/input/fonts_autohint/`. The FT coverage matrix (`coverage_matrix_ft.json`, v2.0.0) generates 27,695 test rows (955 per font) covering 5 operations × 5 sizes × 95 codepoints uniformly across all fonts.
+All 29 fonts are in `tests/fixtures/input/fonts_autohint/`. The FT coverage matrix (`coverage_matrix_ft.json`, v2.0.0) generates 27,695 test rows (955 per font) covering 5 operations × 5 sizes × 95 codepoints uniformly across all fonts.
 
 | # | Font | Family | Class | Weight | Slant | Width | Glyphs |
 |---|------|--------|-------|--------|-------|-------|--------|
@@ -291,9 +291,9 @@ Future work: run `--5vs8` comparison to validate recovery.
 ### Validation Plan
 
 Before removing any font files:
-1. Run `cargo test -p pillow-rs-freetype` to capture baseline pass/fail counts
+1. Run `cargo test` to capture baseline pass/fail counts
 2. Temporarily remove 24 fonts, keep the 5-font set
-3. Re-run `cargo test -p pillow-rs-freetype`
+3. Re-run `cargo test`
 4. Confirm that:
    - All previously passing tests still pass
    - Previously failing tests fail for the same reasons (SHA mismatches, not new structural errors)

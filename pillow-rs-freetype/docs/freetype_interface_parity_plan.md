@@ -105,7 +105,7 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
+cargo test --test interface_coverage --locked -- --nocapture
 ```
 
 Done criteria:
@@ -128,9 +128,9 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test generator_contract --locked
-cargo test -p pillow-rs-freetype --test harness_contract --locked
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test generator_contract --locked
+cargo test --test harness_contract --locked
+cargo test --test coverage_matrix_tests --locked -- --nocapture
 ```
 
 Done criteria:
@@ -152,8 +152,8 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test core_face_size_charmap --locked
-cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
+cargo test --test core_face_size_charmap --locked
+cargo test --test interface_coverage --locked -- --nocapture
 ```
 
 Done criteria:
@@ -173,7 +173,7 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test coverage_matrix_tests --locked -- --nocapture
 ```
 
 Done criteria:
@@ -194,8 +194,8 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
-cargo test -p pillow-rs-freetype --test harness_contract --locked
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test harness_contract --locked
 ```
 
 Done criteria:
@@ -213,8 +213,8 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test render_mode_matrix --locked
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test render_mode_matrix --locked
+cargo test --test coverage_matrix_tests --locked -- --nocapture
 ```
 
 Done criteria:
@@ -232,7 +232,7 @@ Scope:
 Verification:
 
 ```bash
-cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
+cargo test --test interface_coverage --locked -- --nocapture
 ```
 
 Done criteria:

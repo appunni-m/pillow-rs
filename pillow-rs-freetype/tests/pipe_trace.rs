@@ -2,7 +2,7 @@
 //! Interactive debug only — ignored by default. Enable with --include-ignored.
 //! Run: PIPE_FONT=DejaVuSerif-Bold PIPE_SIZE=10 PIPE_CHAR='$' \
 //!   RUST_LOG=autohint::pipeline=trace \
-//!   cargo test -p pillow-rs-freetype --test pipe_trace -- --nocapture --include-ignored
+//!   cargo test --test pipe_trace -- --nocapture --include-ignored
 
 #![allow(unused_variables)]
 #![allow(clippy::needless_borrow)]

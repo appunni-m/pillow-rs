@@ -3,8 +3,8 @@
 
 Build the helper first, for example:
 
-  cc -I pillow-rs-freetype/freetype/include \
-     pillow-rs-freetype/scripts/gen_ft_refs.c \
+  cc -I freetype/include \
+     scripts/gen_ft_refs.c \
      -L "$HOME/.local/lib" -lfreetype -lm \
      -o /tmp/gen_refs_v4
 
@@ -12,7 +12,7 @@ Then run:
 
   LD_LIBRARY_PATH="$HOME/.local/lib" \
     FT_REF_BIN=/tmp/gen_refs_v4 \
-    python3 pillow-rs-freetype/scripts/build_render_mode_fixture.py
+    python3 scripts/build_render_mode_fixture.py
 """
 
 import hashlib

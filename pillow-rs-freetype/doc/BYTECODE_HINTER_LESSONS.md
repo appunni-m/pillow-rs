@@ -7,13 +7,13 @@
 Two isolated subagent patches touched overlapping interpreter behavior after
 main `9116545a`:
 
-- `e5e9c57f` in `/home/appunni/work/pil-wasm-tt-pixel-coverage` changed
+- `e5e9c57f` in a historical `tt-pixel-coverage` worktree changed
   `MUL` plus `SPVFS`/`SFVFS`. It improved
   `native_tt_default_matrix` from `6757/7640` to `6813/7640`, but local
   orchestrator verification showed `outline_cbox_matrix` dropped from
   `7546/11086` to `7543/11086`. Do not merge that patch as-is. The likely
   split point is to test vector setup independently from `MUL`.
-- `3a1e5479` in `/home/appunni/work/pil-wasm-noto-thai-vertical` changed
+- `3a1e5479` in a historical `noto-thai-vertical` worktree changed
   glyph-program stack clearing, `MUL`, `FLOOR`/`CEILING`, `LOOPCALL`, and
   `JROT`/`JROF`. The subagent reported broad gains:
   `outline_cbox_matrix 7546/11086 -> 10959/11086`,

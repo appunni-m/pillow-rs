@@ -5,10 +5,31 @@ Latin auto-hinter, bytecode hinter, and smooth anti-aliased rasterizer.
 
 **Runtime is 100% Rust: zero FreeType FFI, zero unsafe.**
 
+This crate is designed to stand on its own. It can be vendored into larger
+workspaces, but build, test, parity, benchmark, fixture, and release workflows
+are maintained from this directory.
+
 Project goal: exact FreeType C pixel/byte parity produced by Rust code. C is an
 oracle for fixtures only. Broad parity matrices must not be reduced to smoke
 tests; incomplete threshold baselines are tracked as unfinished parity work.
 See `PROJECT_GOALS.md`.
+
+## Install
+
+```bash
+cargo add pillow-rs-freetype
+```
+
+From source:
+
+```bash
+git clone https://github.com/pillow-rs/pillow-rs-freetype
+cd pillow-rs-freetype
+cargo test --locked
+```
+
+Minimum supported Rust version: 1.87. The checked-in toolchain file tracks the
+stable channel for local development and CI.
 
 ## Quick Start
 
@@ -45,6 +66,33 @@ fn main() -> Result<(), FontError> {
 - **Smooth rasterizer**: FT_INT64 DDA path from `ftgrays.c` — 8-bit alpha output
 - **Table parsing**: `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `name`, `OS/2`
 - **No runtime FreeType C dependency**: Vendored C source and scripts are offline fixture references only
+
+## Current Parity Gates
+
+The default parity runner executes every committed fixture family. Current
+exact gates include:
+
+| Gate | Rows |
+|------|------|
+| `force_autohint_matrix.json` | 22,168 |
+| `native_tt_default_matrix.json` | 7,640 |
+| `no_hinting_matrix.json` | 11,086 |
+| `render_mono_matrix.json` | 11,086 |
+| `render_lcd_matrix.json` | 11,086 |
+| `metrics_only_matrix.json` | 11,086 |
+| `outline_cbox_matrix.json` | 11,086 |
+
+Run:
+
+```bash
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+```
+
+The no-runtime-FFI guard is mandatory:
+
+```bash
+cargo test --test no_runtime_ffi --locked -- --nocapture
+```
 
 ## API
 
@@ -96,9 +144,15 @@ Key modules:
 ## Testing
 
 ```bash
-cargo fmt --all --check
-cargo test -p pillow-rs-freetype --locked
-cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
+cargo fmt -- --check
+cargo test --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+```
+
+Or use the standalone Makefile:
+
+```bash
+make ci
 ```
 
 Harness intent:
@@ -114,6 +168,26 @@ Harness intent:
 Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C
 2.14.3 reference output. See `PROJECT_GOALS.md` and
 `doc/GENERATOR_SYSTEM.md` before changing fixtures, generators, or gates.
+
+## Benchmarking
+
+```bash
+python3 scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
+```
+
+Reports are written to `target/freetype-bench/latest.json` and
+`target/freetype-bench/latest.md`. See `doc/PERFORMANCE_BENCHMARKING.md` for
+trust labels, timing boundaries, machine metadata, and review rules.
+
+## Contributing
+
+Start with `CONTRIBUTING.md` and `PROJECT_GOALS.md`. The short version:
+
+- keep runtime pure Rust
+- keep C FreeType as oracle tooling only
+- run the exact parity lane before claiming correctness
+- do not weaken fixtures, thresholds, or tests
+- document benchmark and fixture changes as project infrastructure
 
 ## License
 

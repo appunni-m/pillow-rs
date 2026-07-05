@@ -1194,12 +1194,13 @@ mod tests {
     }
 
     #[test]
-    fn getlength_reports_run_advance() {
+    fn getlength_reports_run_advance_with_pair_kerning() {
         let font = test_font();
         let single = font.getlength("A");
         let text = font.getlength("AA");
+        let pair_kerning = font.getkerning('A', 'A') as f32 / 64.0;
 
         assert!(text > single);
-        assert_eq!(text, single * 2.0);
+        assert_eq!(text, single * 2.0 + pair_kerning);
     }
 }

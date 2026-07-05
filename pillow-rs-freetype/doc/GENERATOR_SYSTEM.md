@@ -36,7 +36,6 @@ Prefer `scripts/build_ft_fixture.py` for new fixture families. Keep wrappers onl
 From the repository root:
 
 ```bash
-cd pillow-rs-freetype
 bash scripts/build_ft.sh
 python3 scripts/build_ft_fixture.py --family force_autohint --build-ref-bin
 python3 scripts/build_ft_fixture.py --family native_tt_default
@@ -60,7 +59,7 @@ Before committing fixture changes:
 2. Do not edit generated matrix rows or raw byte files by hand.
 3. Confirm the matrix `generator`, `fixture_family`, `load_flags`, and `render_mode` are correct.
 4. Run the exact gate or contract that owns the fixture family.
-5. Run `cargo test -p pillow-rs-freetype --test harness_contract --locked`.
+5. Run `cargo test --test harness_contract --locked`.
 6. Document any threshold, incomplete, small-baseline, or unexecuted state as debt.
 
 ## Adding A New Fixture Family

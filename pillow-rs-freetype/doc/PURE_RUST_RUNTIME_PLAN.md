@@ -40,7 +40,7 @@ Allowed C use:
 Current gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked
+cargo test --test no_runtime_ffi --locked
 ```
 
 Intent:
@@ -53,7 +53,7 @@ Intent:
 Current gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test harness_contract --locked
+cargo test --test harness_contract --locked
 ```
 
 Intent:
@@ -74,7 +74,7 @@ Next promotions:
 Current gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test generator_contract --locked
+cargo test --test generator_contract --locked
 ```
 
 Intent:
@@ -96,7 +96,7 @@ Plan:
 Current exact runner:
 
 ```bash
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked
+cargo test --test coverage_matrix_tests --locked
 ```
 
 Current exact matrix:
@@ -130,7 +130,7 @@ Promotion rule: once a matrix is executable, it must fail on any row mismatch. T
 Current gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test render_mode_matrix --locked
+cargo test --test render_mode_matrix --locked
 ```
 
 Intent:
@@ -149,7 +149,7 @@ Plan:
 Current gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test fixed_parity --locked
+cargo test --test fixed_parity --locked
 ```
 
 Intent:
@@ -168,7 +168,7 @@ Plan:
 Current gate:
 
 ```bash
-cargo test -p pillow-rs-freetype --test interface_coverage --locked
+cargo test --test interface_coverage --locked
 ```
 
 Intent:
@@ -199,20 +199,20 @@ Run before claiming progress:
 
 ```bash
 cargo fmt --all --check
-cargo test -p pillow-rs-freetype --locked
-cargo clippy -p pillow-rs-freetype --all-targets --locked -- -D warnings
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
 ```
 
 Run before claiming project-level parity:
 
 ```bash
-cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked
-cargo test -p pillow-rs-freetype --test harness_contract --locked
-cargo test -p pillow-rs-freetype --test generator_contract --locked
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
-cargo test -p pillow-rs-freetype --test render_mode_matrix --locked
-cargo test -p pillow-rs-freetype --test fixed_parity --locked
-cargo test -p pillow-rs-freetype --test interface_coverage --locked -- --nocapture
+cargo test --test no_runtime_ffi --locked
+cargo test --test harness_contract --locked
+cargo test --test generator_contract --locked
+cargo test --test coverage_matrix_tests --locked -- --nocapture
+cargo test --test render_mode_matrix --locked
+cargo test --test fixed_parity --locked
+cargo test --test interface_coverage --locked -- --nocapture
 ```
 
 Passing tests are not enough if the plan still lists threshold, incomplete, small-baseline, or unexecuted debt. Those debts must be promoted into exact gates.

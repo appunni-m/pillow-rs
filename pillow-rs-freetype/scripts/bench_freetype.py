@@ -26,7 +26,7 @@ DEFAULT_OUT = ROOT / "target" / "freetype-bench" / "latest.json"
 DEFAULT_REPORT = ROOT / "target" / "freetype-bench" / "latest.md"
 HELPER_SRC = ROOT / "scripts" / "bench_ft_ops.c"
 HELPER_BIN = ROOT / "target" / "freetype-bench" / "bench_ft_ops"
-WORKSPACE_ROOT = ROOT.parent
+CARGO_MANIFEST = ROOT / "Cargo.toml"
 
 
 def run(cmd: list[str], *, cwd: pathlib.Path = ROOT, env: dict[str, str] | None = None) -> str:
@@ -49,13 +49,21 @@ def run_optional(cmd: list[str], *, cwd: pathlib.Path = ROOT) -> str | None:
         return None
 
 
+def repo_root() -> pathlib.Path:
+    root = run_optional(["git", "rev-parse", "--show-toplevel"], cwd=ROOT)
+    return pathlib.Path(root) if root else ROOT
+
+
+REPO_ROOT = repo_root()
+
+
 def run_rust(matrix: pathlib.Path) -> list[dict[str, Any]]:
     stdout = run(
         [
             "cargo",
             "run",
-            "-p",
-            "pillow-rs-freetype",
+            "--manifest-path",
+            str(CARGO_MANIFEST),
             "--example",
             "bench_ops",
             "--release",
@@ -63,7 +71,7 @@ def run_rust(matrix: pathlib.Path) -> list[dict[str, Any]]:
             "--",
             str(matrix),
         ],
-        cwd=WORKSPACE_ROOT,
+        cwd=ROOT,
     )
     return [json.loads(line) for line in stdout.splitlines() if line.strip()]
 
@@ -521,17 +529,18 @@ def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dic
     return {
         "schema_version": 2,
         "created_utc": dt.datetime.now(dt.UTC).isoformat(),
-        "git_sha": run_optional(["git", "rev-parse", "HEAD"], cwd=WORKSPACE_ROOT),
-        "git_dirty": bool(run_optional(["git", "status", "--short"], cwd=WORKSPACE_ROOT)),
-        "workspace_root": str(WORKSPACE_ROOT),
+        "git_sha": run_optional(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT),
+        "git_dirty": bool(run_optional(["git", "status", "--short"], cwd=REPO_ROOT)),
+        "repository_root": str(REPO_ROOT),
+        "crate_root": str(ROOT),
         "matrix": str(args.matrix),
         "matrix_version": matrix_data.get("version"),
         "workload_profile": args.profile,
         "sample_count": args.samples,
         "cached_row_warmup_iterations": 1,
         "compare_c": args.compare_c,
-        "rustc_version": run_optional(["rustc", "--version"], cwd=WORKSPACE_ROOT),
-        "cargo_version": run_optional(["cargo", "--version"], cwd=WORKSPACE_ROOT),
+        "rustc_version": run_optional(["rustc", "--version"], cwd=ROOT),
+        "cargo_version": run_optional(["cargo", "--version"], cwd=ROOT),
         "python_version": sys.version.split()[0],
         "platform": platform.platform(),
         "machine": platform.machine(),
@@ -540,7 +549,7 @@ def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dic
         "cpu_frequency": read_cpu_frequencies(),
         "memory": read_memory_info(),
         "c_compiler": cc,
-        "c_compiler_version": run_optional([cc, "--version"], cwd=WORKSPACE_ROOT).splitlines()[0] if cc else None,
+        "c_compiler_version": run_optional([cc, "--version"], cwd=ROOT).splitlines()[0] if cc else None,
         "ft_include": str(args.ft_include),
         "ft_lib": str(args.ft_lib),
         "timing_notes": [
@@ -758,6 +767,8 @@ def metadata_table(metadata: dict[str, Any]) -> str:
         ("Created UTC", metadata.get("created_utc")),
         ("Git SHA", metadata.get("git_sha")),
         ("Git dirty", metadata.get("git_dirty")),
+        ("Repository root", metadata.get("repository_root")),
+        ("Crate root", metadata.get("crate_root")),
         ("Workload profile", metadata.get("workload_profile")),
         ("Samples", metadata.get("sample_count")),
         ("Cached row warmup iterations", metadata.get("cached_row_warmup_iterations")),
@@ -864,7 +875,7 @@ def format_report(metadata: dict[str, Any], summary: dict[str, Any] | None) -> s
             "## Reproduction",
             "",
             "```bash",
-            "python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --profile default --table",
+            "python3 scripts/bench_freetype.py --compare-c --samples 10 --profile default --table",
             "```",
             "",
         ]

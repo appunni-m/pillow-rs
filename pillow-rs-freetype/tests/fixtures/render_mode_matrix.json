@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generator": "pillow-rs-freetype render_mode_matrix.rs; FreeType render mode metadata parity fixture",
+  "generator": "FreeType render mode metadata parity fixture via scripts/build_render_mode_fixture.py",
   "rows": [
     {
       "id": "DejaVuSans_20_65_render_normal",
@@ -29,7 +29,7 @@
       "pitch": 2,
       "left": 0,
       "top": 14,
-      "ref_sha256": "af83700f148aba7f4f5ae96253e190cf3c99a93fc2a93f2155ec897dd65d1cde",
+      "ref_sha256": "3cc91bee8bd2d5b4fe3c40d424761a0fadf286aa1bc5fab1375d0273147bd1d5",
       "ref_raw": "outputs/render_modes/DejaVuSans_20_65_render_mono.bin"
     },
     {
@@ -39,7 +39,7 @@
       "codepoint": 65,
       "mode": "lcd",
       "pixel_mode": "lcd",
-      "width": 48,
+      "width": 45,
       "rows": 14,
       "pitch": 48,
       "left": -1,
@@ -89,7 +89,7 @@
       "pitch": 2,
       "left": 1,
       "top": 11,
-      "ref_sha256": "be2c0b21886067c4a8bf18a62d9e438d0bf3525598d2931e8693c8c11b4a387e",
+      "ref_sha256": "6b1a998d88d05bd1c13dbf319b49fd5eb561727d53767d160be0ebd498c7fd6b",
       "ref_raw": "outputs/render_modes/DejaVuSans_20_103_render_mono.bin"
     },
     {
@@ -104,7 +104,7 @@
       "pitch": 36,
       "left": 0,
       "top": 11,
-      "ref_sha256": "5b5e0cddd800908be51022aa4585438bb72b3c7275b23d8b0fb73af9c842432a",
+      "ref_sha256": "cd83a88e2cafbde12bffe2bcbfed3b91b3f7a0298adc9c6b93ad35b92e6ab0ea",
       "ref_raw": "outputs/render_modes/DejaVuSans_20_103_render_lcd.bin"
     },
     {
@@ -144,12 +144,12 @@
       "codepoint": 81,
       "mode": "mono",
       "pixel_mode": "mono",
-      "width": 12,
+      "width": 11,
       "rows": 15,
       "pitch": 2,
-      "left": 0,
+      "left": 1,
       "top": 12,
-      "ref_sha256": "2e62523b9a0c2115e0c60692ceff7e401f6781226fe46b44afaef4361624641b",
+      "ref_sha256": "c422347c77575a77330082ea55ef0b121f6fda31e735e2320e804387aabbda0d",
       "ref_raw": "outputs/render_modes/LiberationSans-Regular_16_81_render_mono.bin"
     },
     {
@@ -159,12 +159,12 @@
       "codepoint": 81,
       "mode": "lcd",
       "pixel_mode": "lcd",
-      "width": 42,
+      "width": 39,
       "rows": 15,
-      "pitch": 44,
-      "left": -1,
+      "pitch": 40,
+      "left": 0,
       "top": 12,
-      "ref_sha256": "03f0df839b3eee9162838d8438990518e6e7c6fef735271553c4d155eca2a42d",
+      "ref_sha256": "fd844475369a8111eb65ac929f3d7052a102cf190943a79b9021a8ab4889604b",
       "ref_raw": "outputs/render_modes/LiberationSans-Regular_16_81_render_lcd.bin"
     },
     {
@@ -209,7 +209,7 @@
       "pitch": 2,
       "left": 1,
       "top": 17,
-      "ref_sha256": "e01d981cd3ffb890fb7f942f69f4c5e73049706de1db4f4fa4b3de682aa6bef8",
+      "ref_sha256": "5e664d8f467ea2c8c76d0a39a660f24fba5316448c05454881161b8677bc936f",
       "ref_raw": "outputs/render_modes/NotoSans-Bold_24_56_render_mono.bin"
     },
     {
@@ -224,7 +224,7 @@
       "pitch": 44,
       "left": 0,
       "top": 17,
-      "ref_sha256": "6e5d1159729e107c2b8e84135399a1d16fe5947541e004601af56dfdf786346f",
+      "ref_sha256": "ea5fb30e456c178147785a820276b018dd2ed7cfb1862fb78988babc135289ff",
       "ref_raw": "outputs/render_modes/NotoSans-Bold_24_56_render_lcd.bin"
     },
     {
