@@ -13,6 +13,7 @@ MANIFEST     := manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
+FREETYPE_SRC := pillow-rs-freetype
 FIXTURES_DIR := tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
@@ -39,13 +40,22 @@ help: ## Show this help
 	@printf "  $(CYAN)make build-wasm-release$(NC) Build WASM package (release)\n"
 	@printf "  $(CYAN)make build-all$(NC)      Build Python + WASM\n"
 	@printf "\n$(BOLD)Test$(NC)\n"
-	@printf "  $(CYAN)make test$(NC)           Run all 1,555 PIL parity tests\n"
+	@printf "  $(CYAN)make test$(NC)           Run all PIL parity tests\n"
 	@printf "  $(CYAN)make test-suite0$(NC)    Run suite0 only (core functions, fast)\n"
 	@printf "  $(CYAN)make test-suite1$(NC)    Run suite1 only\n"
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
+	@printf "\n$(BOLD)FreeType$(NC)\n"
+	@printf "  $(CYAN)make freetype-help$(NC)  Show crate-local FreeType targets\n"
+	@printf "  $(CYAN)make freetype-ci$(NC)    Run FreeType docs, lint, tests, parity, FFI, bench contracts\n"
+	@printf "  $(CYAN)make freetype-test$(NC)  Run all pillow-rs-freetype tests\n"
+	@printf "  $(CYAN)make freetype-parity$(NC) Run the FreeType coverage matrix harness\n"
+	@printf "  $(CYAN)make freetype-ffi$(NC)   Run the no-runtime-FFI guard\n"
+	@printf "  $(CYAN)make freetype-doc$(NC)   Build strict FreeType rustdoc\n"
+	@printf "  $(CYAN)make freetype-bench$(NC) Run Rust vs C FreeType benchmark report\n"
+	@printf "  $(CYAN)make freetype-fixtures$(NC) Regenerate FreeType fixture families\n"
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
@@ -66,6 +76,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make bench-priority$(NC) Priority tier only (12 ops)\n"
 	@printf "\n$(BOLD)CI$(NC)\n"
 	@printf "  $(CYAN)make ci$(NC)             Full CI pipeline (fmt → clippy → test → coverage)\n"
+	@printf "  $(CYAN)make verify$(NC)         Full workspace CI plus FreeType CI\n"
 	@printf "\n$(BOLD)Clean$(NC)\n"
 	@printf "  $(CYAN)make clean$(NC)          Remove build artifacts and caches\n"
 	@printf "  $(CYAN)make clean-all$(NC)      clean + cargo clean\n"
@@ -134,6 +145,64 @@ test-wasm: ## Run WASM/JS tests
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
+# ── FreeType ─────────────────────────────────────────────────────────────────
+.PHONY: freetype-help freetype-build freetype-doc freetype-doc-test
+.PHONY: freetype-test freetype-parity freetype-ffi freetype-lint
+.PHONY: freetype-fmt freetype-fmt-fix freetype-clippy
+.PHONY: freetype-bench freetype-bench-quick freetype-bench-self-test
+.PHONY: freetype-fixtures freetype-ci freetype-clean
+
+freetype-help: ## Show pillow-rs-freetype targets
+	$(MAKE) -C $(FREETYPE_SRC) help
+
+freetype-build: ## Build pillow-rs-freetype
+	$(MAKE) -C $(FREETYPE_SRC) build
+
+freetype-doc: ## Build strict pillow-rs-freetype rustdoc
+	$(MAKE) -C $(FREETYPE_SRC) doc
+
+freetype-doc-test: ## Run pillow-rs-freetype doctests
+	$(MAKE) -C $(FREETYPE_SRC) doc-test
+
+freetype-test: ## Run all pillow-rs-freetype tests
+	$(MAKE) -C $(FREETYPE_SRC) test
+
+freetype-parity: ## Run FreeType parity matrix tests
+	$(MAKE) -C $(FREETYPE_SRC) test-parity
+
+freetype-ffi: ## Run no-runtime-FFI guard
+	$(MAKE) -C $(FREETYPE_SRC) test-ffi
+
+freetype-fmt: ## Check pillow-rs-freetype formatting
+	$(MAKE) -C $(FREETYPE_SRC) fmt
+
+freetype-fmt-fix: ## Apply pillow-rs-freetype formatting
+	$(MAKE) -C $(FREETYPE_SRC) fmt-fix
+
+freetype-clippy: ## Run strict pillow-rs-freetype clippy
+	$(MAKE) -C $(FREETYPE_SRC) clippy
+
+freetype-lint: ## Run pillow-rs-freetype fmt + clippy
+	$(MAKE) -C $(FREETYPE_SRC) lint
+
+freetype-bench: ## Run Rust vs C FreeType benchmark report
+	$(MAKE) -C $(FREETYPE_SRC) bench
+
+freetype-bench-quick: ## Run short FreeType benchmark smoke comparison
+	$(MAKE) -C $(FREETYPE_SRC) bench-quick
+
+freetype-bench-self-test: ## Run FreeType benchmark tooling self-test
+	$(MAKE) -C $(FREETYPE_SRC) bench-self-test
+
+freetype-fixtures: ## Regenerate all FreeType fixture families
+	$(MAKE) -C $(FREETYPE_SRC) fixtures
+
+freetype-ci: ## Run required FreeType local CI sequence
+	$(MAKE) -C $(FREETYPE_SRC) ci
+
+freetype-clean: ## Clean pillow-rs-freetype artifacts
+	$(MAKE) -C $(FREETYPE_SRC) clean
+
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
 
@@ -197,16 +266,13 @@ bench-priority: ## Priority tier benchmark (12 ops)
 	bash scripts/bench/bench_all.sh --group priority
 
 # ── CI ────────────────────────────────────────────────────────────────────────
-.PHONY: ci
+.PHONY: ci verify
 
-ci: ## Full CI pipeline (exit 1 on any failure)
-	@echo "=== fmt ===" && $(CARGO) fmt --check
-	@echo "=== clippy ===" && $(CARGO) clippy --all-targets --all-features -- -A deprecated
-	@echo "=== core tests ===" && $(CARGO) test -p pillow-rs
-	@echo "=== fixtures ===" && $(MAKE) fixtures-suite0
-	@echo "=== python tests ===" && $(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) --json-report --json-report-file=$(REPORT)
-	@echo "=== coverage ===" && $(PYTHON) scripts/coverage/validate_coverage.py $(MANIFEST)
+ci: fmt clippy test-core fixtures-suite0 test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
+
+verify: ci freetype-ci ## Full workspace CI plus FreeType CI
+	@echo "=== all verification done ==="
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
 .PHONY: clean clean-all
