@@ -1,10 +1,10 @@
-//! Direct pixel comparison against vendored FreeType 2.14.3 C binary.
+//! Direct pixel comparison against pinned FreeType 2.14.3 C binary.
 //!
 //! Per-pixel diff: diff_count, max_diff, first divergent byte, size delta.
 //! Per-script stats: avg_failing_diffs and max_diff for error-rate analysis.
 //!
 //! No pre-computed fixtures — the C binary is the live oracle.
-//! Run: cargo test --test direct_ft_compare -- --test-threads=1
+//! Run: `make test-direct-live`
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(clippy::needless_range_loop)]
@@ -13,7 +13,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(unused_crate_dependencies)]
 
-use freetype::Font;
+use fontdone::Font;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;

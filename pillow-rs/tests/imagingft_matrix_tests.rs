@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
+use std::sync::OnceLock;
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -103,9 +105,58 @@ fn fixture_dir() -> PathBuf {
 
 fn read_matrix() -> Matrix {
     let path = fixture_dir().join("imagingft_matrix.json");
+    ensure_imagingft_matrix(&path);
     let data = fs::read_to_string(&path)
         .unwrap_or_else(|err| panic!("failed to read fixture matrix {path:?}: {err}"));
     serde_json::from_str(&data).expect("imagingft fixture matrix is valid JSON")
+}
+
+fn ensure_imagingft_matrix(path: &std::path::Path) {
+    static MATRIX_READY: OnceLock<()> = OnceLock::new();
+    MATRIX_READY.get_or_init(|| {
+        if matrix_needs_generation(path) {
+            generate_imagingft_matrix(path);
+        }
+    });
+}
+
+fn matrix_needs_generation(path: &std::path::Path) -> bool {
+    let Ok(data) = fs::read_to_string(path) else {
+        return true;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&data) else {
+        return true;
+    };
+    value
+        .get("fixture_family")
+        .and_then(serde_json::Value::as_str)
+        != Some("pillow-rs-imagingft")
+}
+
+fn generate_imagingft_matrix(path: &std::path::Path) {
+    let manifest = manifest_dir();
+    let script = manifest.join("scripts").join("build_imagingft_fixtures.py");
+    let repo_root = manifest
+        .parent()
+        .expect("pillow-rs crate has a repository parent");
+    let output = Command::new("python3")
+        .arg(&script)
+        .current_dir(repo_root)
+        .output()
+        .unwrap_or_else(|err| {
+            panic!("failed to run imagingft fixture generator {script:?}: {err}")
+        });
+    assert!(
+        output.status.success(),
+        "imagingft fixture generator failed with status {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        path.is_file(),
+        "imagingft fixture generator completed but did not create {path:?}"
+    );
 }
 
 fn load_font(row: &Row) -> Font {
@@ -217,7 +268,6 @@ fn compare_scalar_result(font: &Font, row: &Row) -> Result<(), PixelFailure> {
 }
 
 fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
-    let expected_raw = read_expected_raw(row);
     let (actual_size, actual_offset, actual_raw) = match row.operation.as_str() {
         "getmask" => {
             let (width, height, pixels) = imagingft::getmask(font, &row.text);
@@ -273,12 +323,30 @@ fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
             ),
         });
     }
+
+    let actual_sha256 = sha256_hex(&actual_raw);
+    if row.expected_raw.is_empty() {
+        if actual_sha256 != row.expected_sha256 {
+            return Err(PixelFailure {
+                id: row.id.clone(),
+                reason: format!(
+                    "pixels actual_sha256={} expected_sha256={} actual_len={}",
+                    actual_sha256,
+                    row.expected_sha256,
+                    actual_raw.len()
+                ),
+            });
+        }
+        return Ok(());
+    }
+
+    let expected_raw = read_expected_raw(row);
     if actual_raw != expected_raw {
         return Err(PixelFailure {
             id: row.id.clone(),
             reason: format!(
                 "pixels actual_sha256={} expected_sha256={} actual_len={} expected_len={}",
-                sha256_hex(&actual_raw),
+                actual_sha256,
                 row.expected_sha256,
                 actual_raw.len(),
                 expected_raw.len()

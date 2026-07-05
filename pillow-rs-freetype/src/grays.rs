@@ -4,7 +4,7 @@
 //! `gray_render_conic` DDA, `gray_render_cubic`, `gray_convert_glyph` band
 //! bisection, `gray_sweep`).
 //!
-//! The vendored FreeType oracle defines `FT_INT64`, so conic flattening uses
+//! The pinned FreeType oracle defines `FT_INT64`, so conic flattening uses
 //! the 64-bit forward-difference path and line rasterization uses the matching
 //! cell-to-cell `FT_UDIV` path.
 //!

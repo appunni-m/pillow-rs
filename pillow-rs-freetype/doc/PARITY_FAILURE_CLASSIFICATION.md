@@ -6,27 +6,24 @@ lower thresholds, rewrite fixture data, or bless Rust output as expected output.
 
 The classifier is `scripts/classify_failure_ids.py`.  It uses only Python's
 standard library and reads failure text files that the Rust harness already
-emits at `/tmp/pillow_failure_ids.txt`.
+emits at `/tmp/freetype_failure_ids.txt`.
 
 ## Capture Failure Files
 
-Run each lane in isolation and copy `/tmp/pillow_failure_ids.txt` immediately
+Run each lane in isolation and copy `/tmp/freetype_failure_ids.txt` immediately
 after the test completes.  The next lane overwrites that file.
 
 From the repository root:
 
 ```bash
-cargo test --test coverage_matrix_tests --locked \
-  test_native_tt_default_threshold_baseline_not_parity_gate -- --nocapture
-cp /tmp/pillow_failure_ids.txt /tmp/native_tt_default_failure_ids.txt
+make test-parity PARITY_ARGS='test_native_tt_default_matrix_exact_parity -- --nocapture'
+cp /tmp/freetype_failure_ids.txt /tmp/native_tt_default_failure_ids.txt
 
-cargo test --test coverage_matrix_tests --locked \
-  test_metrics_only_matrix_baseline_is_executed -- --nocapture
-cp /tmp/pillow_failure_ids.txt /tmp/metrics_only_failure_ids.txt
+make test-parity PARITY_ARGS='test_metrics_only_matrix_exact_parity -- --nocapture'
+cp /tmp/freetype_failure_ids.txt /tmp/metrics_only_failure_ids.txt
 
-cargo test --test coverage_matrix_tests --locked \
-  test_outline_cbox_matrix_baseline_is_executed -- --nocapture
-cp /tmp/pillow_failure_ids.txt /tmp/outline_cbox_failure_ids.txt
+make test-parity PARITY_ARGS='test_outline_cbox_matrix_exact_parity -- --nocapture'
+cp /tmp/freetype_failure_ids.txt /tmp/outline_cbox_failure_ids.txt
 ```
 
 For experiment branches, keep the same lane names and choose explicit file
@@ -63,7 +60,7 @@ The report includes:
 
 ## Contract
 
-- Keep the generated report out of committed fixtures unless it is deliberately
+- Keep the generated report out of tracked fixtures unless it is deliberately
   added as documentation.
 - Do not edit `tests/fixtures/*.json`, raw byte outputs, matrix thresholds, or
   `coverage_matrix_tests.rs` to make the report look better.

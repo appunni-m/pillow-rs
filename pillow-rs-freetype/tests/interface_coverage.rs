@@ -80,7 +80,7 @@ fn freetype_interface_coverage_report() {
 
     let map_path = manifest_dir
         .join("tests")
-        .join("fixtures")
+        .join("data")
         .join("interface_map.json");
     let interface_map: InterfaceMap =
         serde_json::from_str(&fs::read_to_string(&map_path).expect("read interface_map.json"))
@@ -186,12 +186,8 @@ fn freetype_interface_coverage_report() {
             if parity.family == "native_tt_default" {
                 assert_eq!(
                     (parity.passing, parity.total),
-                    (3176, 7640),
-                    "{path} misreports the current native TrueType threshold baseline"
-                );
-                assert!(
-                    parity.passing < parity.total,
-                    "{path} cannot report native TrueType as exact until the bytecode path reaches 100%"
+                    (7640, 7640),
+                    "{path} misreports the current native TrueType exact gate"
                 );
             }
         }

@@ -24,7 +24,7 @@ Font::truetype(data, size, LoadMode::Default)
             └─ Compute bbox from scaled coords
 ```
 
-The bytecode hinter lives entirely in `pillow-rs-freetype/src/tt/hinter/`.
+The bytecode hinter lives entirely in `src/tt/hinter/`.
 It is self-contained, owns its own VM state, and is called exactly once
 per glyph from `scaler.rs`.
 
@@ -434,7 +434,7 @@ and would take longer to refactor than rewrite.
 ### Phase 1: Data Layer (400 lines)
 
 ```
-pillow-rs-freetype/src/tt/hinter/
+src/tt/hinter/
 ├── mod.rs           (30 lines)  — module structure, public API
 ├── tables.rs        (150 lines) — parse 'fpgm', 'prep', 'cvt ' tables
 ├── zone.rs          (120 lines) — GlyphZone struct and operations
@@ -449,7 +449,7 @@ pillow-rs-freetype/src/tt/hinter/
 ### Phase 2: VM Core (800 lines)
 
 ```
-pillow-rs-freetype/src/tt/hinter/
+src/tt/hinter/
 ├── exec.rs          (400 lines) — ExecContext, stack, CVT, storage
 ├── op_math.rs       (100 lines) — ADD, SUB, MUL, DIV, ABS, NEG, etc.
 ├── op_stack.rs      (100 lines) — DUP, POP, SWAP, CLEAR, CINDEX, etc.
@@ -465,7 +465,7 @@ pillow-rs-freetype/src/tt/hinter/
 ### Phase 3: Point Operations (600 lines)
 
 ```
-pillow-rs-freetype/src/tt/hinter/
+src/tt/hinter/
 ├── op_move.rs       (300 lines) — MDRP, MIRP, MDAP, MIAP, ALIGNRP
 ├── op_zone.rs       (100 lines) — GC, SCFS, MD, SHPIX, SHC, SHZ
 ├── op_vectors.rs    (100 lines) — SVTCA, SPVTCA, SFVTCA, SPVTL, SFVTL
@@ -511,26 +511,26 @@ Level 3: Regression guard
 
 ```
 New files:
-  pillow-rs-freetype/src/tt/hinter/mod.rs          (~50 lines)
-  pillow-rs-freetype/src/tt/hinter/tables.rs       (~150 lines)
-  pillow-rs-freetype/src/tt/hinter/zone.rs         (~120 lines)
-  pillow-rs-freetype/src/tt/hinter/gs.rs           (~100 lines)
-  pillow-rs-freetype/src/tt/hinter/exec.rs         (~500 lines)
-  pillow-rs-freetype/src/tt/hinter/op_math.rs      (~100 lines)
-  pillow-rs-freetype/src/tt/hinter/op_stack.rs     (~100 lines)
-  pillow-rs-freetype/src/tt/hinter/op_control.rs   (~150 lines)
-  pillow-rs-freetype/src/tt/hinter/op_push.rs      (~60 lines)
-  pillow-rs-freetype/src/tt/hinter/op_round.rs     (~100 lines)
-  pillow-rs-freetype/src/tt/hinter/op_move.rs      (~400 lines)
-  pillow-rs-freetype/src/tt/hinter/op_zone.rs      (~100 lines)
-  pillow-rs-freetype/src/tt/hinter/op_vectors.rs   (~100 lines)
-  pillow-rs-freetype/src/tt/hinter/iup.rs          (~250 lines) [copy+adapt]
+  src/tt/hinter/mod.rs          (~50 lines)
+  src/tt/hinter/tables.rs       (~150 lines)
+  src/tt/hinter/zone.rs         (~120 lines)
+  src/tt/hinter/gs.rs           (~100 lines)
+  src/tt/hinter/exec.rs         (~500 lines)
+  src/tt/hinter/op_math.rs      (~100 lines)
+  src/tt/hinter/op_stack.rs     (~100 lines)
+  src/tt/hinter/op_control.rs   (~150 lines)
+  src/tt/hinter/op_push.rs      (~60 lines)
+  src/tt/hinter/op_round.rs     (~100 lines)
+  src/tt/hinter/op_move.rs      (~400 lines)
+  src/tt/hinter/op_zone.rs      (~100 lines)
+  src/tt/hinter/op_vectors.rs   (~100 lines)
+  src/tt/hinter/iup.rs          (~250 lines) [copy+adapt]
 
 Modified files:
-  pillow-rs-freetype/src/tables.rs                 (+4 fields)
-  pillow-rs-freetype/src/font.rs                   (+parse new tables)
-  pillow-rs-freetype/src/scaler.rs                 (+15 lines dispatch)
-  pillow-rs-freetype/src/tt/mod.rs                 (+1 line)
+  src/tables.rs                 (+4 fields)
+  src/font.rs                   (+parse new tables)
+  src/scaler.rs                 (+15 lines dispatch)
+  src/tt/mod.rs                 (+1 line)
 
 Total new code: ~2,300 lines
 Total modified: ~30 lines

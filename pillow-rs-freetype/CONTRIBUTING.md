@@ -1,6 +1,6 @@
 # Contributing
 
-`freetype` is a harness-first pure-Rust FreeType parity project.
+`fontdone` is a harness-first pure-Rust FreeType parity project.
 Correctness and reproducibility matter more than clever shortcuts.
 
 ## Development Setup
@@ -10,6 +10,7 @@ The crate's MSRV is Rust 1.87. The checked-in `rust-toolchain.toml` pins Rust
 MSRV test lane.
 
 ```bash
+make setup
 make build
 make test
 make fmt
@@ -25,7 +26,7 @@ make ci
 Optional supply-chain checks:
 
 ```bash
-make setup
+make setup-tools
 make supply-chain
 ```
 
@@ -71,14 +72,15 @@ Before changing fixtures or generators, read:
 - `doc/REFERENCES.md`
 
 Fixture updates must be reproducible through documented commands and generated
-from the C oracle. Rust output is never the expected reference.
+from the C oracle. Rust output is never the expected reference. Generated
+matrices and raw bytes are ignored; commit generator changes, tracked fonts, and
+maintained contract data only.
 
 ## Benchmark Changes
 
 Before changing benchmark code or reporting speedups, read:
 
 - `doc/PERFORMANCE_BENCHMARKING.md`
-- `doc/PERFORMANCE_DOCUMENTATION_REFACTOR_PLAN.md`
 
 Required validation:
 
@@ -96,8 +98,6 @@ timing boundaries, and workload profiles visible.
 - Use rustdoc for public APIs.
 - Use short comments only for non-obvious implementation decisions.
 - Put long debugging or process guidance in `doc/`.
-- Keep `../docs/REPO_MAP.md` current when important source, harness,
-  generator, or project-goal files move.
 - Update `CHANGELOG.md` for user-visible runtime, harness, fixture, benchmark,
   or release changes.
 

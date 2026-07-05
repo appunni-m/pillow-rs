@@ -9,7 +9,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(unused_crate_dependencies)]
 
-use freetype::fixed::*;
+use fontdone::fixed::*;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;

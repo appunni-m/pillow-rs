@@ -46,7 +46,7 @@ Workspace crates:
 - `pillow-rs-py/`: PyO3 wrapper. Keep it thin.
 - `pillow-rs-js/`: wasm-bindgen wrapper. Keep it thin.
 - `pillow-rs-freetype/`: pure Rust FreeType-compatible implementation and
-  parity harness.
+  parity harness. Cargo package/crate name: `fontdone`.
 
 Core crates never touch Python objects, JS objects, file paths, or network.
 Core takes Rust primitives and returns Rust primitives. I/O and conversion live
@@ -213,20 +213,20 @@ make ci
 make verify
 ```
 
-FreeType targets:
+fontdone / FreeType parity targets:
 
 ```bash
-make freetype-help
-make freetype-ci
-make freetype-test
-make freetype-parity
-make freetype-ffi
-make freetype-doc
-make freetype-doc-test
-make freetype-lint
-make freetype-bench
-make freetype-bench-quick
-make freetype-fixtures
+make fontdone-help
+make fontdone-ci
+make fontdone-test
+make fontdone-parity
+make fontdone-ffi
+make fontdone-doc
+make fontdone-doc-test
+make fontdone-lint
+make fontdone-bench
+make fontdone-bench-quick
+make fontdone-fixtures
 ```
 
 For narrow FreeType lanes, prefer the crate-local Makefile targets:

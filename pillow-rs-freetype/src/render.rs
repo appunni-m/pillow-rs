@@ -1,6 +1,6 @@
 //! FreeType-style glyph render modes and bitmap helpers.
 //!
-//! Normal and LCD modes use the smooth rasterizer.  The vendored FreeType
+//! Normal and LCD modes use the smooth rasterizer. The pinned FreeType
 //! configuration keeps `FT_CONFIG_OPTION_SUBPIXEL_RENDERING` disabled, so LCD
 //! and LCD_V follow the Harmony renderer geometry from `ftsmooth.c`.
 
@@ -106,9 +106,7 @@ impl Font {
                 metrics_cache.as_deref(),
                 self.is_italic,
             )?,
-            RenderMode::Normal => {
-                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)?
-            }
+            RenderMode::Normal => self.scale_glyph_for_load_mode(glyph)?,
         };
 
         if scaled.outline.n_contours == 0 && mode == RenderMode::Lcd {
@@ -2033,17 +2031,21 @@ fn render_lcd(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, F
 }
 
 fn render_lcd_v(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, FontError> {
-    let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min);
-    let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min + 2);
+    let box_ = lcd_pixel_box(&outline, RenderMode::LcdV);
+    let width = usize_from_i32(box_.x_max - box_.x_min);
+    let height = usize_from_i32(box_.y_max - box_.y_min);
     let rows = height * 3;
     let pitch = width;
     let mut buffer = vec![0u8; pitch * rows];
     let mut scratch = grays::RasterScratch::new();
     for (channel, sub_x) in LCD_SUBPIXELS.iter().enumerate() {
+        // FreeType's Harmony LCD_V path translates into the preset bitmap box,
+        // then applies rotated LCD geometry: (-sub.y, sub.x).  The default
+        // geometry has sub.y = 0 and sub.x = [-21, 0, 21].
         grays::rasterize_shifted_in_box_to_with_scratch(
             &outline,
-            0,
-            64 + *sub_x,
+            -box_.x_min * FT_PIXEL_ONE,
+            -box_.y_min * FT_PIXEL_ONE + *sub_x,
             width,
             height,
             &mut buffer,
@@ -2062,8 +2064,8 @@ fn render_lcd_v(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap,
         rows: u32_from_usize(rows),
         pitch: i32_from_usize(pitch),
         pixel_mode: PixelMode::LcdV,
-        left,
-        top: top + 1,
+        left: left + box_.x_min,
+        top: top - outline.cbox_y_max + box_.y_max,
         buffer,
     })
 }

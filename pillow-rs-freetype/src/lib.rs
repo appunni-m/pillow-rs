@@ -2,7 +2,7 @@
 //!
 //! ```rust,no_run
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use freetype::Font;
+//! use fontdone::Font;
 //! let data = std::fs::read("font.ttf")?;
 //! let font = Font::truetype(&data, 12.0)?;
 //! let mask = font.getmask("A")?;

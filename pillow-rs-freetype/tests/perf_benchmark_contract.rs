@@ -8,7 +8,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-const MATRIX: &str = include_str!("fixtures/perf_operation_matrix.json");
+const MATRIX: &str = include_str!("data/perf_operation_matrix.json");
 
 fn matrix() -> Value {
     serde_json::from_str(MATRIX).expect("perf operation matrix must be valid JSON")

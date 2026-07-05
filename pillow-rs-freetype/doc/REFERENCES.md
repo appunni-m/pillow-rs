@@ -6,7 +6,7 @@ flow, and fixture update checklist.
 
 ## FreeType Fixture Matrices
 
-Reference fixtures in this crate are generated from vendored FreeType C.  The
+Reference fixtures in this crate are generated from pinned FreeType C.  The
 active families are named by FreeType path and flags:
 
 - `native_tt_default_matrix.json`: `FT_LOAD_RENDER`
@@ -20,7 +20,7 @@ active families are named by FreeType path and flags:
 ## Running Tests
 
 ```bash
-cargo test --test coverage_matrix_tests -- --nocapture
+make test-parity
 ```
 
 ## Regenerating Fixtures
@@ -28,25 +28,18 @@ cargo test --test coverage_matrix_tests -- --nocapture
 Standard flow:
 
 ```bash
-bash scripts/build_ft.sh
-python3 scripts/build_ft_fixture.py --family force_autohint --build-ref-bin
-python3 scripts/build_ft_fixture.py --family native_tt_default
-python3 scripts/build_ft_fixture.py --family no_hinting --small
-python3 scripts/build_ft_fixture.py --family metrics_only --small
-python3 scripts/build_ft_fixture.py --family outline_cbox --small
-python3 scripts/build_ft_fixture.py --family render_mono --small
-python3 scripts/build_ft_fixture.py --family render_lcd --small
-python3 scripts/build_render_mode_fixture.py
+make fixtures
 ```
+
+`make oracle-fetch` downloads and verifies FreeType 2.14.3 into ignored
+`freetype/`. Generated matrices under `tests/fixtures/*.json` and raw bytes
+under `tests/fixtures/outputs/` are ignored local artifacts. Keep tracked
+fixture inputs limited to fonts under `tests/fixtures/input/`.
 
 ## Tracing a Failing Glyph
 
 ```bash
-# C reference
-gcc -o /tmp/trace scripts/trace_one_glyph.c \
-  -I$HOME/.local/include/freetype2 -L$HOME/.local/lib -lfreetype
-LD_LIBRARY_PATH=$HOME/.local/lib /tmp/trace <font.ttf> <size_pt> <codepoint>
-
-# Rust
-cargo run --example <name>
+make fixture-ref-bin
+LD_LIBRARY_PATH=freetype/build /tmp/gen_refs_v4 --json \
+  tests/fixtures/input/fonts_autohint/DejaVuSans.ttf 0041 20 force_autohint
 ```

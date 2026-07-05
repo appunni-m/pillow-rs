@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -73,7 +73,7 @@ def add_raw(rows: list[dict], row_id: str, operation: str, text: str, mode: str,
     rows.append(row)
 
 
-def add_referenced_raw(
+def add_hash_only_raw(
     rows: list[dict],
     row_id: str,
     operation: str,
@@ -81,8 +81,7 @@ def add_referenced_raw(
     size_pt: int,
     text: str,
     size,
-    raw_path: Path,
-    expected_sha256: str,
+    data: bytes,
     offset=None,
 ):
     row = {
@@ -94,15 +93,33 @@ def add_referenced_raw(
         "mode": "L",
         "status": "pixel_matrix",
         "expected_size": list(size),
-        "expected_sha256": expected_sha256,
-        "expected_raw": os.path.relpath(raw_path, FIXTURE_DIR),
+        "expected_sha256": sha256(data),
     }
     if offset is not None:
         row["expected_offset"] = list(offset)
     rows.append(row)
 
 
+def ensure_native_tt_matrix() -> None:
+    if NATIVE_TT_MATRIX.exists():
+        return
+    result = subprocess.run(
+        ["make", "-C", str(ROOT / "pillow-rs-freetype"), "fixture-native-tt-default"],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            "failed to generate native TrueType matrix for imagingft fixtures\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def add_large_pixel_matrix(rows: list[dict]) -> None:
+    ensure_native_tt_matrix()
     native = json.loads(NATIVE_TT_MATRIX.read_text(encoding="utf-8"))
     selected = [
         row
@@ -113,20 +130,19 @@ def add_large_pixel_matrix(rows: list[dict]) -> None:
     for row in selected:
         font_path = FREETYPE_FIXTURE_DIR / "input" / "fonts_autohint" / f"{row['font']}.ttf"
         font_ref = f"../pillow-rs-freetype/tests/fixtures/input/fonts_autohint/{row['font']}.ttf"
-        raw_path = FREETYPE_FIXTURE_DIR / row["ref_raw"]
-        raw = raw_path.read_bytes()
         font = ImageFont.truetype(str(font_path), int(row["size_pt"]))
         mask = font.getmask(row["char"], mode="L")
         mask_bytes = bytes(mask)
-        mask_sha256 = sha256(mask_bytes)
-        if mask.size != tuple(row["ref_size"]) or mask_sha256 != row["ref_sha256"] or raw != mask_bytes:
-            raise SystemExit(f"{row['id']} does not match Pillow 12.2.0 getmask output")
 
         mask2, offset = font.getmask2(row["char"], mode="L")
         if mask2.size != mask.size or bytes(mask2) != mask_bytes:
             raise SystemExit(f"{row['id']} getmask2 pixels differ from getmask")
 
-        add_referenced_raw(
+        # The native FreeType matrix supplies deterministic font/glyph/size
+        # coverage. PIL `_imagingft` adds run-origin padding for some glyphs,
+        # so this parent matrix stores PIL's own byte hash instead of reusing
+        # raw FreeType slot bitmaps.
+        add_hash_only_raw(
             rows,
             f"{row['id']}_pil122_getmask",
             "getmask",
@@ -134,10 +150,9 @@ def add_large_pixel_matrix(rows: list[dict]) -> None:
             int(row["size_pt"]),
             row["char"],
             mask.size,
-            raw_path,
-            mask_sha256,
+            mask_bytes,
         )
-        add_referenced_raw(
+        add_hash_only_raw(
             rows,
             f"{row['id']}_pil122_getmask2",
             "getmask2",
@@ -145,8 +160,7 @@ def add_large_pixel_matrix(rows: list[dict]) -> None:
             int(row["size_pt"]),
             row["char"],
             mask.size,
-            raw_path,
-            mask_sha256,
+            mask_bytes,
             offset,
         )
 
@@ -211,7 +225,9 @@ def main() -> None:
         "rows": rows,
     }
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
-    MATRIX_PATH.write_text(json.dumps(matrix, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp_path = MATRIX_PATH.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(matrix, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp_path.replace(MATRIX_PATH)
 
 
 if __name__ == "__main__":

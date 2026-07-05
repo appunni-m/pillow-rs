@@ -5,7 +5,7 @@ Appends to globals_data.rs.
 
 Usage: python3 scripts/generate_script_meta.py \
     <afscript.h> <afblue.dat> \
-    >> pillow-rs-freetype/src/autohint/globals_data.rs
+    >> src/autohint/globals_data.rs
 """
 
 import re, sys

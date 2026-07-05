@@ -19,9 +19,10 @@ typedef struct FixtureFamily_ {
     int cbox_after_load;
 } FixtureFamily;
 
-/* The vendored FreeType tree can be patched to call this debug hook from
- * ftgrays.c.  Fixture generation does not need cell dumps, but the executable
- * must satisfy the shared library symbol when that patch is present.
+/* The fetched FreeType oracle tree is sometimes patched locally to call this
+ * debug hook from ftgrays.c. Fixture generation does not need cell dumps, but
+ * the helper must satisfy the shared-library symbol when that trace patch is
+ * present.
  */
 void gray_dump_cells(void* raster) {
     (void)raster;
@@ -434,7 +435,91 @@ static int emit_batch(const char* font_path, FixtureFamily family) {
     return 0;
 }
 
+static double measure_hello_length(FT_Face face) {
+    const char* text = "Hello";
+    FT_Pos advance = 0;
+    for (const char* p = text; *p; p++) {
+        FT_UInt idx = FT_Get_Char_Index(face, (FT_ULong)(unsigned char)*p);
+        if (!idx) {
+            continue;
+        }
+        if (FT_Load_Glyph(face, idx, FT_LOAD_DEFAULT) == 0) {
+            advance += face->glyph->advance.x;
+        }
+    }
+    return (double)advance / 64.0;
+}
+
+static int emit_face_json(const char* font_path, int size) {
+    FT_Library library;
+    FT_Face face;
+    unsigned char* buf = NULL;
+    long sz = 0;
+    int ft_major = 0;
+    int ft_minor = 0;
+    int ft_patch = 0;
+
+    FT_Error err = FT_Init_FreeType(&library);
+    if (err) {
+        fprintf(stderr, "FT_Init_FreeType: %d\n", err);
+        return 1;
+    }
+    FT_Library_Version(library, &ft_major, &ft_minor, &ft_patch);
+
+    if (load_font_file(font_path, &buf, &sz) != 0) {
+        FT_Done_FreeType(library);
+        return 1;
+    }
+
+    err = FT_New_Memory_Face(library, buf, sz, 0, &face);
+    if (err) {
+        fprintf(stderr, "FT_New_Memory_Face: %d\n", err);
+        free(buf);
+        FT_Done_FreeType(library);
+        return 1;
+    }
+
+    err = FT_Set_Char_Size(face, size << 6, 0, 72, 0);
+    if (err) {
+        fprintf(stderr, "FT_Set_Char_Size: %d\n", err);
+        FT_Done_Face(face);
+        free(buf);
+        FT_Done_FreeType(library);
+        return 1;
+    }
+
+    printf("{");
+    printf("\"generator\":\"scripts/gen_ft_refs.c\",");
+    printf("\"freetype_version\":\"%d.%d.%d\",", ft_major, ft_minor, ft_patch);
+    printf("\"font\":");
+    print_json_string(basename_const(font_path));
+    printf(",");
+    printf("\"font_path\":");
+    print_json_string(font_path);
+    printf(",");
+    printf("\"size_pt\":%d,", size);
+    printf("\"metrics\":[%ld,%ld],",
+           face->size->metrics.ascender >> 6,
+           -(face->size->metrics.descender >> 6));
+    printf("\"name\":[");
+    print_json_string(face->family_name ? face->family_name : "");
+    printf(",");
+    print_json_string(face->style_name ? face->style_name : "");
+    printf("],");
+    printf("\"length_hello\":%.6f", measure_hello_length(face));
+    printf("}\n");
+
+    FT_Done_Face(face);
+    free(buf);
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc == 4 && streq(argv[1], "--face-json")) {
+        return emit_face_json(argv[2], atoi(argv[3]));
+    }
+
     int json_mode = 0;
     int arg = 1;
     if (argc > 1 && streq(argv[1], "--json")) {

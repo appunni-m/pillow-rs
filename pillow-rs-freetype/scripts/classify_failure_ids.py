@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Summarize coverage_matrix_tests failure ID files.
 
-This is a developer triage tool. It consumes the `/tmp/pillow_failure_ids.txt`
+This is a developer triage tool. It consumes the `/tmp/freetype_failure_ids.txt`
 files emitted by `tests/coverage_matrix_tests.rs` and writes a Markdown report.
 It never reads or rewrites fixtures, thresholds, baselines, or Rust output.
 """

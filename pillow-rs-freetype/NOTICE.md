@@ -7,9 +7,9 @@ The project is distributed under the FreeType License (`FTL`). The unmodified
 license text is retained in `FTL.TXT` and duplicated in `LICENSE` for package
 tooling that expects a root license file.
 
-The vendored C FreeType source under `freetype/` is retained as a version-pinned
+The C FreeType source is fetched into ignored `freetype/` as a version-pinned
 oracle for fixture generation, diagnosis, and line-by-line behavior comparison.
-It is not linked into runtime Rust code.
+It is not committed to this repository and is not linked into runtime Rust code.
 
 The Rust implementation under `src/`, tests under `tests/`, and maintained
 tooling under `scripts/` are additions and migrations written for this crate.

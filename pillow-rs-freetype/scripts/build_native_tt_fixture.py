@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the native_tt_default fixture from vendored FreeType.
+"""Generate the native_tt_default fixture from pinned FreeType.
 
 This wrapper exists for the plan's historical command name.  New fixture
 families should call `scripts/build_ft_fixture.py` directly.

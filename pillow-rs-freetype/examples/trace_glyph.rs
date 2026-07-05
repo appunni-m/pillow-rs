@@ -28,12 +28,12 @@ fn main() {
     };
 
     let data = fs::read(font_path).expect("read font");
-    let font = freetype::Font::truetype(&data, size_pt).expect("load font");
+    let font = fontdone::Font::truetype(&data, size_pt).expect("load font");
 
     if env::var_os("FT_RS_DUMP_METRICS").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
         let metrics_scaled =
-            freetype::scaler::scale_glyph_for_metrics(&font.data, glyph, font.is_italic)
+            fontdone::scaler::scale_glyph_for_metrics(&font.data, glyph, font.is_italic)
                 .expect("scale glyph for metrics");
         eprintln!(
             "[R METRICS SCALED] glyph={} cbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {}) outline_bbox=({}, {}, {}, {}) bitmap=({}, {}, {}, {}) advance={} slot_advance={} lsb={}",
@@ -58,7 +58,7 @@ fn main() {
             metrics_scaled.slot_advance_width,
             metrics_scaled.lsb
         );
-        let outline_scaled = freetype::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
+        let outline_scaled = fontdone::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
             .expect("scale glyph for outline");
         eprintln!(
             "[R OUTLINE SCALED] glyph={} cbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {}) outline_bbox=({}, {}, {}, {}) bitmap=({}, {}, {}, {}) advance={} slot_advance={} lsb={}",
@@ -101,7 +101,7 @@ fn main() {
 
     if env::var_os("FT_RS_DUMP_OUTLINE").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
-        let scaled = freetype::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
+        let scaled = fontdone::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
             .expect("scale glyph");
         eprintln!(
             "[R OUTLINE] glyph={} contours={} points={} cbox=({}, {}, {}, {})",
