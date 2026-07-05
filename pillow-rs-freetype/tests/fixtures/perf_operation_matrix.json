@@ -1,0 +1,96 @@
+{
+  "fixture_family": "pillow-rs-freetype-performance",
+  "generator": "manual seed matrix; expand through scripts/bench_freetype.py",
+  "oracle": "Rust runtime timings with optional batched FreeType C comparison",
+  "version": 1,
+  "rows": [
+    {
+      "id": "dejavusans_load_20",
+      "operation": "load_font",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "iterations": 50
+    },
+    {
+      "id": "dejavusans_getname_20",
+      "operation": "getname",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getmetrics_20",
+      "operation": "getmetrics",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getlength_av_20",
+      "operation": "getlength",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "AV",
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getbbox_hello_20",
+      "operation": "getbbox",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "Hello",
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getmask_a_20",
+      "operation": "getmask",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "iterations": 2000
+    },
+    {
+      "id": "dejavusans_getmask_force_autohint_a_20",
+      "operation": "getmask",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "load_mode": "force_autohint",
+      "iterations": 2000
+    },
+    {
+      "id": "dejavusans_glyph_metrics_a_20",
+      "operation": "glyph_metrics",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_render_mono_a_20",
+      "operation": "render_mode",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "render_mode": "mono",
+      "iterations": 2000
+    },
+    {
+      "id": "dejavusans_render_lcd_a_20",
+      "operation": "render_mode",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "render_mode": "lcd",
+      "iterations": 1000
+    },
+    {
+      "id": "droidsansfallback_getmask_hani_20",
+      "operation": "getmask",
+      "font": "tests/fixtures/input/fonts_autohint/DroidSansFallbackFull.ttf",
+      "size": 20,
+      "text": "\u4e2d",
+      "iterations": 1000
+    }
+  ]
+}

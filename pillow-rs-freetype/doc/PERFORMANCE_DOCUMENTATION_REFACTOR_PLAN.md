@@ -62,6 +62,46 @@ Missing pieces:
 
 ## Performance Framework
 
+### Implemented Baseline Tooling
+
+The first baseline implementation is checked in as a repeatable, script-driven
+framework:
+
+```text
+pillow-rs-freetype/tests/fixtures/perf_operation_matrix.json
+pillow-rs-freetype/examples/bench_ops.rs
+pillow-rs-freetype/scripts/bench_freetype.py
+pillow-rs-freetype/scripts/bench_ft_ops.c
+```
+
+Run the Rust-only benchmark:
+
+```bash
+python3 pillow-rs-freetype/scripts/bench_freetype.py
+```
+
+Run Rust plus the standalone C FreeType timing helper:
+
+```bash
+python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c
+```
+
+The runner writes:
+
+```text
+pillow-rs-freetype/target/freetype-bench/latest.json
+```
+
+The C helper is benchmark/oracle tooling only. It is compiled by
+`scripts/bench_freetype.py`, lives under `scripts/`, and is never linked into
+the `pillow-rs-freetype` runtime crate. The runtime purity gate remains
+`cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture`.
+
+The current seed matrix covers font load, scalar metrics, text length, text
+bbox, rendered masks, force autohint masks, glyph metrics, mono render, LCD
+render, and a non-Latin fallback-font mask. Expand this matrix through reviewed
+fixture-generator changes, not ad hoc local scripts.
+
 ### Benchmark Targets
 
 Add a deliberate benchmark system under `pillow-rs-freetype/benches/` and
@@ -87,15 +127,16 @@ Inputs must include:
 
 ### Rust Benchmarks
 
-Use `criterion` or Cargo's stable benchmark-compatible harness with explicit
-release-mode commands. Preferred initial shape:
+Use the checked-in stable runner first. Add `criterion` later only if the extra
+statistics justify the dependency and runtime cost. The initial checked-in
+shape is:
 
 ```text
-pillow-rs-freetype/benches/
-  operation_bench.rs       # Rust-only operation timing
-  c_oracle_bench.rs        # optional live C timing, ignored unless helper exists
+pillow-rs-freetype/examples/
+  bench_ops.rs             # Rust operation timing, JSONL output
 pillow-rs-freetype/scripts/
   bench_freetype.py        # orchestrates Rust and C runs, emits JSON
+  bench_ft_ops.c           # optional standalone C FreeType timing helper
 ```
 
 Rust benchmark output must include:
@@ -106,7 +147,7 @@ Rust benchmark output must include:
 - codepoint or text
 - load mode/render mode
 - iterations
-- median, mean, p95
+- nanoseconds total and per iteration
 - output checksum to prevent dead-code elimination
 
 ### C FreeType Benchmark Oracle
@@ -117,7 +158,7 @@ Add a C helper separate from runtime code:
 pillow-rs-freetype/scripts/bench_ft_ops.c
 ```
 
-The helper should batch operations in one process. Do not spawn one C process per
+The helper batches operations in one process. Do not spawn one C process per
 glyph in performance comparisons.
 
 Required properties:
@@ -125,7 +166,8 @@ Required properties:
 - linked only by scripts/build helpers, never by `pillow-rs-freetype` runtime
 - same FreeType version as fixture oracle
 - same input matrix as Rust benchmark
-- same output checksum format as Rust benchmark
+- deterministic output fingerprint, with SHA-256 parity promoted when the C
+  helper packs each operation's public output exactly like the Rust helper
 - reports timing in machine-readable JSON lines
 
 ### Performance Comparison Contract
@@ -152,8 +194,11 @@ Each row:
 }
 ```
 
-The benchmark must fail if output hashes differ. Performance comparisons are
-meaningless unless parity is preserved.
+The benchmark must fail if comparable output hashes differ. Until the C helper
+emits exact SHA-256 rows for every operation, exact correctness remains enforced
+by the fixture harnesses and this framework is used for timing comparison.
+Performance conclusions are meaningful only after the corresponding parity lane
+is already green.
 
 ### Performance Gates
 
@@ -174,7 +219,7 @@ Mandatory command set:
 cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
 cargo test -p pillow-rs --test imagingft_matrix_tests --locked -- --nocapture
 cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture
-cargo bench -p pillow-rs-freetype --bench operation_bench --locked
+python3 pillow-rs-freetype/scripts/bench_freetype.py
 python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c
 ```
 
