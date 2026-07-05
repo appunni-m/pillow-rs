@@ -28,7 +28,8 @@ The JSON contains:
 - `rows`: every raw sample row. These are the source of truth.
 - `summary.rows`: per-operation aggregate statistics derived from raw rows.
 - `summary.overall`: aggregate operation count, Rust total time, C total time,
-  total speedup, and weighted workload speedup.
+  total speedup, weighted workload speedup, and overall mean/median/p90/p99
+  distributions for Rust time, C time, and speedup.
 - `summary_markdown`: the printable comparison table.
 
 The Markdown report contains:
@@ -36,6 +37,8 @@ The Markdown report contains:
 - benchmark configuration and reproduction command
 - the same result table in review-friendly form
 - aggregate Rust/C total time and speedup summary
+- overall mean, median, p90, and p99 distributions for Rust time, C time, and
+  speedup
 - git/toolchain metadata
 - CPU model, CPU governor, and detected CPU frequency range
 - memory capacity and available memory
@@ -108,6 +111,8 @@ Aggregate rows report:
 - C total nanoseconds.
 - Total speedup versus C.
 - Weighted workload speedup versus C.
+- Overall mean, median, p90, and p99 Rust time, C time, and speedup
+  distributions.
 
 The raw rows stay in JSON so reviewers can recompute all summaries.
 
