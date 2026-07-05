@@ -885,7 +885,10 @@ impl ExecContext {
                             "bytecode: division by zero".into(),
                         ));
                     }
-                    self.push(crate::fixed::ft_mul_div(a, 64, b));
+                    // C: ttinterp.c Ins_DIV uses FT_MulDiv_No_Round.
+                    // Noto bytecode function 56 depends on truncation here
+                    // before FLOOR/SHPIX computes stem-dependent deltas.
+                    self.push(crate::fixed::ft_mul_div_no_round(a, 64, b));
                 } // DIV
                 0x63 => {
                     let b = self.pop()?;

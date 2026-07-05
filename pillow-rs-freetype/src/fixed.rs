@@ -44,6 +44,27 @@ pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     }
 }
 
+/// FT_MulDiv_No_Round — matches C's sign-stripped truncating division.
+///
+/// C reference: `src/base/ftcalc.c:187-207`. TrueType `DIV[]` uses this
+/// no-round variant, unlike `MUL[]`, which uses rounded `FT_MulDiv`.
+#[inline]
+pub fn ft_mul_div_no_round(a: i32, b: i32, c: i32) -> i32 {
+    if c == 0 {
+        return 0x7FFFFFFF;
+    }
+    let ua: u64 = (a as i64).unsigned_abs();
+    let ub: u64 = (b as i64).unsigned_abs();
+    let uc: u64 = (c as i64).unsigned_abs();
+    let d32 = i32_from_u64(ua.wrapping_mul(ub) / uc);
+    let negate = ((a < 0) ^ (b < 0)) ^ (c < 0);
+    if negate {
+        0i32.wrapping_sub(d32)
+    } else {
+        d32
+    }
+}
+
 /// FT_MulFix — ✅ VERIFIED: matches C FT_MulFix_64 (ftcalc.h:91-102).
 ///
 /// `(ab + 0x8000 + (ab >> 63)) >> 16` with symmetric rounding.
