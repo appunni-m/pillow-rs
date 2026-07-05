@@ -14,7 +14,7 @@ use crate::scaler::{
 };
 use crate::tables::FontData;
 use crate::tt::{self, tag};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// FreeType glyph load behavior used by high-level render helpers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -40,6 +40,7 @@ pub struct Font {
     pub is_italic: bool,
     size_metrics: SizeMetrics,
     selected_charmap: usize,
+    bytecode_context: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
 }
 
 /// FreeType-like size metrics for the active size object.
@@ -303,6 +304,7 @@ impl Font {
             is_italic,
             size_metrics,
             selected_charmap,
+            bytecode_context: Arc::new(OnceLock::new()),
         })
     }
 
@@ -618,7 +620,13 @@ impl Font {
     pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
         let glyph = self.char_index(codepoint);
         let scaled = if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let scaled = scaler::scale_glyph_for_metrics(&self.data, glyph, self.is_italic)?;
+            let bytecode_context = self.native_bytecode_context()?;
+            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context(
+                &self.data,
+                glyph,
+                self.is_italic,
+                bytecode_context,
+            )?;
             if is_pathological_metrics_cbox(&scaled) || is_pathological_metrics_advance(&scaled) {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
                 scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
@@ -703,8 +711,7 @@ impl Font {
                 let x_max = pixel_round(scaled.advance_width).max(scaled.bbox_x_max);
                 let y_min = 0.min(scaled.bbox_y_min);
                 let y_max = 0.max(scaled.bbox_y_max);
-                let scale = ScaleMetrics::new(self.data.size_pt, self.data.head.units_per_em);
-                let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, scale.y_scale);
+                let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, self.size_metrics.y_scale);
                 let asc_px = pixel_ceil(asc_26);
                 (x_min, asc_px - y_max, x_max, asc_px - y_min)
             }
@@ -726,9 +733,14 @@ impl Font {
     }
 
     fn getmask_default_rendered_slot(&self, text: &str) -> Result<GlyphMask, FontError> {
-        let glyph_text = text.chars().next().unwrap_or('\0').to_string();
-        let glyphs = self.layout_glyphs(&glyph_text)?;
-        let (x_min, x_max, y_min, y_max) = layout_bounds_from_glyphs(&glyphs);
+        let ch = text.chars().next().unwrap_or('\0');
+        let glyph = self.char_index(ch as u32);
+        let scaled = self.scale_glyph_for_load_mode(glyph)?;
+        let x_min = 0.min(scaled.bbox_x_min);
+        let x_max = pixel_round(scaled.advance_width).max(scaled.bbox_x_max);
+        let y_min = 0.min(scaled.bbox_y_min);
+        let y_max = 0.max(scaled.bbox_y_max);
+        let advance_width = pixel_round(scaled.advance_width);
         let width = u32_from_i32(x_max - x_min);
         let height = u32_from_i32(y_max - y_min);
         let width_usize = width as usize;
@@ -736,31 +748,37 @@ impl Font {
         let len = width_usize.checked_mul(height_usize).ok_or_else(|| {
             FontError::InvalidOutline("rendered glyph slot dimensions overflow".into())
         })?;
-        let mut pixels = vec![0u8; len];
 
-        if width_usize != 0 && height_usize != 0 {
-            for glyph in &glyphs {
-                if let Some(raster) = &glyph.raster {
-                    let dst_x =
-                        usize_from_i32(pixel_round(glyph.x_position) + glyph.bbox_x_min - x_min);
-                    let dst_y = usize_from_i32(y_max - glyph.bbox_y_max);
-                    for y in 0..raster.height {
-                        let src = y * raster.width;
-                        let dst = (dst_y + y) * width_usize + dst_x;
-                        if dst + raster.width <= pixels.len()
-                            && dst_x + raster.width <= width_usize
-                            && src + raster.width <= raster.pixels.len()
-                        {
-                            for x in 0..raster.width {
-                                let value = raster.pixels[src + x];
-                                let target = &mut pixels[dst + x];
-                                *target = (*target).max(value);
-                            }
-                        }
+        let pixels = if scaled.outline.n_contours == 0 || len == 0 {
+            Vec::new()
+        } else {
+            let raster = grays::rasterize(scaled.outline)?;
+            if scaled.bbox_x_min == x_min
+                && scaled.bbox_x_max == x_max
+                && scaled.bbox_y_min == y_min
+                && scaled.bbox_y_max == y_max
+                && raster.width == width_usize
+                && raster.height == height_usize
+            {
+                raster.pixels
+            } else {
+                let mut pixels = vec![0u8; len];
+                let dst_x = usize_from_i32(scaled.bbox_x_min - x_min);
+                let dst_y = usize_from_i32(y_max - scaled.bbox_y_max);
+                for y in 0..raster.height {
+                    let src = y * raster.width;
+                    let dst = (dst_y + y) * width_usize + dst_x;
+                    if dst + raster.width <= pixels.len()
+                        && dst_x + raster.width <= width_usize
+                        && src + raster.width <= raster.pixels.len()
+                    {
+                        pixels[dst..dst + raster.width]
+                            .copy_from_slice(&raster.pixels[src..src + raster.width]);
                     }
                 }
+                pixels
             }
-        }
+        };
 
         Ok(GlyphMask {
             width,
@@ -768,7 +786,7 @@ impl Font {
             pixels,
             xmin: x_min,
             ymin: y_min,
-            advance_width: pixel_round(self.layout_advance(&glyph_text)),
+            advance_width,
         })
     }
 
@@ -802,13 +820,42 @@ impl Font {
     fn scale_glyph_for_load_mode(&self, glyph: u16) -> Result<scaler::ScaledGlyph, FontError> {
         match self.load_mode {
             LoadMode::Default => {
-                scaler::scale_glyph_native_default(&self.data, glyph, None, self.is_italic)
+                let bytecode_context = self.native_bytecode_context()?;
+                scaler::scale_glyph_native_default_with_bytecode_context(
+                    &self.data,
+                    glyph,
+                    None,
+                    self.is_italic,
+                    bytecode_context,
+                )
             }
             LoadMode::ForceAutoHint => {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
                 scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)
             }
         }
+    }
+
+    fn native_bytecode_context(&self) -> Result<Option<&tt::hinter::exec::ExecContext>, FontError> {
+        let (Some(fpgm), Some(cvt)) = (&self.data.fpgm, &self.data.cvt) else {
+            return Ok(None);
+        };
+        if self.bytecode_context.get().is_none() {
+            let scale = tt::hinter::HintScale {
+                x_scale: self.size_metrics.x_scale,
+                y_scale: self.size_metrics.y_scale,
+                ppem: i32::from(self.size_metrics.x_ppem),
+                storage_size: self.data.maxp.max_storage as usize,
+                twilight_points: self.data.maxp.max_twilight_points as usize,
+                is_composite: false,
+                reset_vectors_at_glyph_entry: false,
+                metrics_legacy_phantoms: false,
+            };
+            let prep = self.data.prep.as_deref().unwrap_or(&[]);
+            let prepared = tt::hinter::prepare_context(cvt, fpgm, prep, &scale)?;
+            let _ = self.bytecode_context.set(prepared);
+        }
+        Ok(self.bytecode_context.get())
     }
 
     fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {
