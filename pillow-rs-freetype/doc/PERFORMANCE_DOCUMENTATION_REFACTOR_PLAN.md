@@ -62,6 +62,11 @@ Missing pieces:
 
 ## Performance Framework
 
+Contributor-facing benchmark rules live in
+[`PERFORMANCE_BENCHMARKING.md`](PERFORMANCE_BENCHMARKING.md). That document is
+the contract for publishable Rust-vs-C numbers: raw samples, metadata, trust
+labels, workload profiles, and validation commands.
+
 ### Implemented Baseline Tooling
 
 The first baseline implementation is checked in as a repeatable, script-driven

@@ -91,6 +91,11 @@ The first performance framework slice is implemented through
 `scripts/bench_ft_ops.c`; it is diagnostic/oracle tooling only and must never be
 linked into runtime code.
 
+Publishable performance reports must follow
+[`doc/PERFORMANCE_BENCHMARKING.md`](doc/PERFORMANCE_BENCHMARKING.md): keep raw
+samples, metadata, trust labels, timing boundaries, workload profiles, and
+validation commands visible.
+
 ## Promotion Rules
 
 A fixture family can move to "exact gate" only when:

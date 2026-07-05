@@ -9,9 +9,11 @@ standalone helper; it is never linked into the Rust runtime crate.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import pathlib
+import platform
 import shutil
 import subprocess
 import sys
@@ -23,6 +25,7 @@ DEFAULT_MATRIX = ROOT / "tests" / "fixtures" / "perf_operation_matrix.json"
 DEFAULT_OUT = ROOT / "target" / "freetype-bench" / "latest.json"
 HELPER_SRC = ROOT / "scripts" / "bench_ft_ops.c"
 HELPER_BIN = ROOT / "target" / "freetype-bench" / "bench_ft_ops"
+WORKSPACE_ROOT = ROOT.parent
 
 
 def run(cmd: list[str], *, cwd: pathlib.Path = ROOT, env: dict[str, str] | None = None) -> str:
@@ -36,6 +39,13 @@ def run(cmd: list[str], *, cwd: pathlib.Path = ROOT, env: dict[str, str] | None 
         stderr=subprocess.PIPE,
     )
     return proc.stdout
+
+
+def run_optional(cmd: list[str], *, cwd: pathlib.Path = ROOT) -> str | None:
+    try:
+        return run(cmd, cwd=cwd).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 
 def run_rust(matrix: pathlib.Path) -> list[dict[str, Any]]:
@@ -52,7 +62,7 @@ def run_rust(matrix: pathlib.Path) -> list[dict[str, Any]]:
             "--",
             str(matrix),
         ],
-        cwd=ROOT.parent,
+        cwd=WORKSPACE_ROOT,
     )
     return [json.loads(line) for line in stdout.splitlines() if line.strip()]
 
@@ -92,9 +102,26 @@ def run_c(
     return [json.loads(line) for line in stdout.splitlines() if line.strip()]
 
 
-def load_weights(matrix: pathlib.Path) -> dict[str, float]:
-    data = json.loads(matrix.read_text())
-    return {row["id"]: float(row.get("weight", 1.0)) for row in data.get("rows", [])}
+def load_matrix(matrix: pathlib.Path) -> dict[str, Any]:
+    return json.loads(matrix.read_text())
+
+
+def load_weights(matrix_data: dict[str, Any], profile: str) -> dict[str, float]:
+    profiles = matrix_data.get("workload_profiles", {})
+    if profile in profiles:
+        weights = profiles[profile].get("weights", {})
+        return {row_id: float(weight) for row_id, weight in weights.items()}
+    if profile != "row_weight":
+        available = ", ".join(sorted([*profiles.keys(), "row_weight"]))
+        raise ValueError(f"unknown workload profile {profile!r}; available: {available}")
+    return {
+        row["id"]: float(row.get("weight", 1.0))
+        for row in matrix_data.get("rows", [])
+    }
+
+
+def matrix_rows_by_id(matrix_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {row["id"]: row for row in matrix_data.get("rows", [])}
 
 
 def merge_rows(
@@ -137,9 +164,32 @@ def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def median(values: list[float]) -> float:
+    return percentile(values, 50)
+
+
+def trimmed_mean(values: list[float], trim_fraction: float = 0.1) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    trim = int(len(ordered) * trim_fraction)
+    if trim == 0 or trim * 2 >= len(ordered):
+        return mean(ordered)
+    return mean(ordered[trim:-trim])
+
+
+def stddev(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    avg = mean(values)
+    variance = sum((value - avg) ** 2 for value in values) / (len(values) - 1)
+    return variance ** 0.5
+
+
 def summarize_rows(
     sample_rows: list[list[dict[str, Any]]],
     weights: dict[str, float],
+    matrix_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     by_id: dict[str, list[dict[str, Any]]] = {}
     order: list[str] = []
@@ -162,6 +212,7 @@ def summarize_rows(
     for row_id in order:
         samples = by_id[row_id]
         first = samples[0]
+        matrix_row = (matrix_by_id or {}).get(row_id, {})
         rust_per_iter = [float(row["rust_ns_per_iter"]) for row in samples]
         c_per_iter = [
             float(row["c_ns_per_iter"])
@@ -173,6 +224,8 @@ def summarize_rows(
             for row in samples
             if row.get("c_ns_per_iter") and row.get("rust_ns_per_iter")
         ]
+        c_output_has_sha = any(row.get("c_output_sha256") for row in samples)
+        output_match_checked = any(row.get("output_match") is not None for row in samples)
         rust_total = sum(float(row["rust_ns_total"]) for row in samples)
         c_total = sum(float(row.get("c_ns_total", 0)) for row in samples)
         iterations = int(first["iterations"])
@@ -191,17 +244,36 @@ def summarize_rows(
             {
                 "id": row_id,
                 "operation": first["operation"],
+                "comparison_trust": matrix_row.get("comparison_trust", "unspecified"),
+                "timing_boundary": matrix_row.get("timing_boundary", ""),
+                "output_match_checked": output_match_checked,
+                "c_output_has_sha256": c_output_has_sha,
                 "iterations_per_sample": iterations,
                 "sample_count": len(samples),
                 "operation_count": total_iterations,
                 "weight": weight,
+                "rust_ns_per_iter_min": min(rust_per_iter),
+                "rust_ns_per_iter_max": max(rust_per_iter),
                 "rust_ns_per_iter_mean": mean(rust_per_iter),
+                "rust_ns_per_iter_median": median(rust_per_iter),
+                "rust_ns_per_iter_trimmed_mean": trimmed_mean(rust_per_iter),
+                "rust_ns_per_iter_stddev": stddev(rust_per_iter),
                 "rust_ns_per_iter_p90": percentile(rust_per_iter, 90),
                 "rust_ns_per_iter_p99": percentile(rust_per_iter, 99),
+                "c_ns_per_iter_min": min(c_per_iter) if c_per_iter else 0.0,
+                "c_ns_per_iter_max": max(c_per_iter) if c_per_iter else 0.0,
                 "c_ns_per_iter_mean": mean(c_per_iter),
+                "c_ns_per_iter_median": median(c_per_iter),
+                "c_ns_per_iter_trimmed_mean": trimmed_mean(c_per_iter),
+                "c_ns_per_iter_stddev": stddev(c_per_iter),
                 "c_ns_per_iter_p90": percentile(c_per_iter, 90),
                 "c_ns_per_iter_p99": percentile(c_per_iter, 99),
+                "speedup_vs_c_min": min(speedups) if speedups else 0.0,
+                "speedup_vs_c_max": max(speedups) if speedups else 0.0,
                 "speedup_vs_c_mean": mean(speedups),
+                "speedup_vs_c_median": median(speedups),
+                "speedup_vs_c_trimmed_mean": trimmed_mean(speedups),
+                "speedup_vs_c_stddev": stddev(speedups),
                 "speedup_vs_c_p90": percentile(speedups, 90),
                 "speedup_vs_c_p99": percentile(speedups, 99),
                 "rust_ns_total": int(rust_total),
@@ -226,21 +298,82 @@ def summarize_rows(
     }
 
 
+def read_cpu_model() -> str | None:
+    cpuinfo = pathlib.Path("/proc/cpuinfo")
+    if not cpuinfo.exists():
+        return platform.processor() or None
+    for line in cpuinfo.read_text(errors="ignore").splitlines():
+        if line.startswith("model name"):
+            return line.split(":", 1)[1].strip()
+    return platform.processor() or None
+
+
+def read_cpu_governor() -> str | None:
+    governors = sorted(pathlib.Path("/sys/devices/system/cpu").glob("cpu*/cpufreq/scaling_governor"))
+    values = []
+    for governor in governors[:8]:
+        try:
+            values.append(governor.read_text().strip())
+        except OSError:
+            continue
+    return ",".join(sorted(set(values))) if values else None
+
+
+def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dict[str, Any]:
+    cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+    return {
+        "schema_version": 2,
+        "created_utc": dt.datetime.now(dt.UTC).isoformat(),
+        "git_sha": run_optional(["git", "rev-parse", "HEAD"], cwd=WORKSPACE_ROOT),
+        "git_dirty": bool(run_optional(["git", "status", "--short"], cwd=WORKSPACE_ROOT)),
+        "workspace_root": str(WORKSPACE_ROOT),
+        "matrix": str(args.matrix),
+        "matrix_version": matrix_data.get("version"),
+        "workload_profile": args.profile,
+        "sample_count": args.samples,
+        "compare_c": args.compare_c,
+        "rustc_version": run_optional(["rustc", "--version"], cwd=WORKSPACE_ROOT),
+        "cargo_version": run_optional(["cargo", "--version"], cwd=WORKSPACE_ROOT),
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "cpu_model": read_cpu_model(),
+        "cpu_governor": read_cpu_governor(),
+        "c_compiler": cc,
+        "c_compiler_version": run_optional([cc, "--version"], cwd=WORKSPACE_ROOT).splitlines()[0] if cc else None,
+        "ft_include": str(args.ft_include),
+        "ft_lib": str(args.ft_lib),
+        "timing_notes": [
+            "Rust benchmark is cargo run --release --locked for the bench_ops example.",
+            "C helper is standalone tooling compiled by this script and never linked into runtime code.",
+            "Rows marked timing_only have C timing/fingerprint but not exact comparable C SHA-256 output parity.",
+            "Exact correctness remains enforced by fixture parity tests.",
+        ],
+    }
+
+
 def format_table(summary: dict[str, Any]) -> str:
     headers = [
         "id",
         "op",
         "count",
         "weight",
+        "trust",
         "rust total ms",
         "c total ms",
+        "rust median ns",
         "rust mean ns",
+        "rust stddev",
         "rust p90 ns",
         "rust p99 ns",
+        "c median ns",
         "c mean ns",
+        "c stddev",
         "c p90 ns",
         "c p99 ns",
+        "median speedup vs C",
         "mean speedup vs C",
+        "stddev speedup",
         "p90 speedup",
         "p99 speedup",
     ]
@@ -257,15 +390,22 @@ def format_table(summary: dict[str, Any]) -> str:
                     row["operation"],
                     str(row["operation_count"]),
                     f"{row['weight']:.2f}",
+                    row["comparison_trust"],
                     f"{row['rust_ns_total'] / 1_000_000.0:.3f}",
                     f"{row['c_ns_total'] / 1_000_000.0:.3f}",
+                    f"{row['rust_ns_per_iter_median']:.1f}",
                     f"{row['rust_ns_per_iter_mean']:.1f}",
+                    f"{row['rust_ns_per_iter_stddev']:.1f}",
                     f"{row['rust_ns_per_iter_p90']:.1f}",
                     f"{row['rust_ns_per_iter_p99']:.1f}",
+                    f"{row['c_ns_per_iter_median']:.1f}",
                     f"{row['c_ns_per_iter_mean']:.1f}",
+                    f"{row['c_ns_per_iter_stddev']:.1f}",
                     f"{row['c_ns_per_iter_p90']:.1f}",
                     f"{row['c_ns_per_iter_p99']:.1f}",
+                    f"{row['speedup_vs_c_median']:.3f}x",
                     f"{row['speedup_vs_c_mean']:.3f}x",
+                    f"{row['speedup_vs_c_stddev']:.3f}x",
                     f"{row['speedup_vs_c_p90']:.3f}x",
                     f"{row['speedup_vs_c_p99']:.3f}x",
                 ]
@@ -292,14 +432,77 @@ def format_table(summary: dict[str, Any]) -> str:
 def write_output(
     path: pathlib.Path,
     rows: list[dict[str, Any]],
+    metadata: dict[str, Any],
     summary: dict[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload: dict[str, Any] = {"rows": rows}
+    payload: dict[str, Any] = {"metadata": metadata, "rows": rows}
     if summary is not None:
         payload["summary"] = summary
         payload["summary_markdown"] = format_table(summary)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def run_self_test() -> int:
+    samples = [
+        [
+            {
+                "id": "a",
+                "operation": "op",
+                "iterations": 10,
+                "rust_ns_total": 100,
+                "rust_ns_per_iter": 10,
+                "c_ns_total": 200,
+                "c_ns_per_iter": 20,
+            },
+            {
+                "id": "b",
+                "operation": "op",
+                "iterations": 5,
+                "rust_ns_total": 100,
+                "rust_ns_per_iter": 20,
+                "c_ns_total": 50,
+                "c_ns_per_iter": 10,
+            },
+        ],
+        [
+            {
+                "id": "a",
+                "operation": "op",
+                "iterations": 10,
+                "rust_ns_total": 200,
+                "rust_ns_per_iter": 20,
+                "c_ns_total": 400,
+                "c_ns_per_iter": 40,
+            },
+            {
+                "id": "b",
+                "operation": "op",
+                "iterations": 5,
+                "rust_ns_total": 200,
+                "rust_ns_per_iter": 40,
+                "c_ns_total": 100,
+                "c_ns_per_iter": 20,
+            },
+        ],
+    ]
+    summary = summarize_rows(
+        samples,
+        {"a": 2.0, "b": 1.0},
+        {
+            "a": {"comparison_trust": "exact_sha256", "timing_boundary": "test"},
+            "b": {"comparison_trust": "timing_only", "timing_boundary": "test"},
+        },
+    )
+    assert summary["overall"]["operation_count"] == 30
+    assert summary["overall"]["rust_ns_total"] == 600
+    assert summary["overall"]["c_ns_total"] == 750
+    assert round(summary["overall"]["speedup_vs_c_total"], 6) == 1.25
+    assert round(summary["overall"]["weighted_speedup_vs_c"], 6) == 1.25
+    assert summary["rows"][0]["speedup_vs_c_mean"] == 2.0
+    assert summary["rows"][1]["speedup_vs_c_mean"] == 0.5
+    print("bench_freetype.py self-test passed")
+    return 0
 
 
 def main() -> int:
@@ -307,13 +510,22 @@ def main() -> int:
     parser.add_argument("--matrix", type=pathlib.Path, default=DEFAULT_MATRIX)
     parser.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT)
     parser.add_argument("--compare-c", action="store_true")
+    parser.add_argument("--profile", default="default")
     parser.add_argument("--samples", type=int, default=1)
+    parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--table", action="store_true", help="print comparative summary table")
     parser.add_argument("--ft-include", type=pathlib.Path, default=pathlib.Path.home() / ".local/include/freetype2")
     parser.add_argument("--ft-lib", type=pathlib.Path, default=ROOT / "freetype/build")
     args = parser.parse_args()
+    if args.self_test:
+        return run_self_test()
     if args.samples < 1:
         parser.error("--samples must be >= 1")
+    matrix_data = load_matrix(args.matrix)
+    try:
+        weights = load_weights(matrix_data, args.profile)
+    except ValueError as err:
+        parser.error(str(err))
 
     helper = None
     if args.compare_c:
@@ -339,8 +551,9 @@ def main() -> int:
             print(f"  {row['id']}", file=sys.stderr)
         return 1
 
-    summary = summarize_rows(sample_rows, load_weights(args.matrix)) if args.compare_c else None
-    write_output(args.out, rows, summary)
+    metadata = build_metadata(args, matrix_data)
+    summary = summarize_rows(sample_rows, weights, matrix_rows_by_id(matrix_data)) if args.compare_c else None
+    write_output(args.out, rows, metadata, summary)
     if args.table and summary is not None:
         print(format_table(summary))
     print(f"wrote {args.out}")
