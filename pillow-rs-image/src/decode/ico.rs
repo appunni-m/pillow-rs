@@ -11,7 +11,6 @@
 //!
 //! Reference: https://en.wikipedia.org/wiki/ICO_(file_format)
 
-use crate::decode::png;
 use crate::types::{ColorType, DecodedImage};
 
 /// ICO header size: 6 bytes
@@ -112,7 +111,14 @@ fn decode_entry(data: &[u8], index: usize, _count: usize) -> Option<DecodedImage
     // Check if the entry data is PNG (magic: 0x89 0x50 0x4E 0x47)
     if entry_data.len() >= 8 && entry_data[0..4] == [0x89, 0x50, 0x4E, 0x47] {
         // Decode as PNG
-        png::decode(entry_data)
+        #[cfg(feature = "png")]
+        {
+            crate::decode::png::decode(entry_data)
+        }
+        #[cfg(not(feature = "png"))]
+        {
+            None
+        }
     } else {
         // BMP/DIB data inside ICO
         // ICO BMP data starts with a BITMAPINFOHEADER (40 bytes) at offset 0,

@@ -15,6 +15,9 @@
 // PIL API compatibility — many functions have 8+ parameters matching PIL signatures
 #![allow(clippy::too_many_arguments)]
 
+#[cfg(feature = "parallel")]
+use rayon as _;
+
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE THESE MODULES:
 //   Each module below is a foundational piece of the systemic fix architecture
@@ -23,7 +26,7 @@
 //
 //   - checked_dims:  Only way to allocate image buffers (no overflow, no DoS)
 //   - pixel_format:  Named enum replacing bare 0/1/2/3 mode codes
-//   - par:           Approved parallelization macros (no raw rayon)
+//   - par:           Approved parallelization macros (no raw rayon; native default)
 //   - image_utils:   Canonical buffer conversion (no duplicate copies)
 //   - compute::op_def: Declarative op registration (no parallel match arms)
 // ============================================================================
@@ -41,6 +44,7 @@ pub mod image;
 pub mod image_utils;
 pub mod infallible;
 pub mod ops;
+#[cfg(feature = "parallel")]
 pub mod par;
 pub mod pipeline;
 pub mod pixel_format;

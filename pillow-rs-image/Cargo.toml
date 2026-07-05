@@ -5,14 +5,19 @@ edition = "2021"
 description = "Zero-dependency pixel-perfect image decoders (JPEG, PNG, GIF, BMP, WebP, TIFF)"
 
 [dependencies]
-png = "0.18"
-gif = "0.14"
-tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate"] }
+png = { version = "0.18", optional = true }
+gif = { version = "0.14", optional = true }
+tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate"], optional = true }
 bytemuck = { version = "1", features = ["derive"] }
-image-webp = "0.2"
+image-webp = { version = "0.2", optional = true }
 
 [features]
+default = ["png", "gif", "tiff", "webp"]
 avif = []
+png = ["dep:png"]
+gif = ["dep:gif"]
+tiff = ["dep:tiff"]
+webp = ["dep:image-webp"]
 
 [dev-dependencies]
 md5 = "0.8.0"

@@ -9,11 +9,17 @@ description = "Pure Rust image processing — Pillow reimplementation"
 name = "pillow_rs"
 
 [features]
-default = ["gpu"]
-gpu = ["wgpu", "pollster"]
+default = ["gpu", "image-codecs-all", "parallel"]
+gpu = ["wgpu", "pollster", "bytemuck"]
+parallel = ["rayon"]
+image-codecs-all = ["image-gif", "image-png", "image-tiff", "image-webp"]
+image-gif = ["pillow-rs-image/gif"]
+image-png = ["pillow-rs-image/png"]
+image-tiff = ["pillow-rs-image/tiff"]
+image-webp = ["pillow-rs-image/webp"]
 
 [dependencies]
-pillow-rs-image = { path = "../pillow-rs-image" }
+pillow-rs-image = { path = "../pillow-rs-image", default-features = false }
 pillow-rs-freetype = { path = "../pillow-rs-freetype" }
 log = "0.4"
 png = "0.18"
@@ -21,13 +27,13 @@ thiserror = "2"
 csscolorparser = "0.8"
 wgpu = { version = "24", optional = true }
 pollster = { version = "0.3", optional = true }
-bytemuck = { version = "1", features = ["derive"] }
+bytemuck = { version = "1", features = ["derive"], optional = true }
 
 # AS PER DESIGN — DO NOT REMOVE:
 # rayon provides safe parallelism for pixel loops via the par_rows!/par_pixels!
 # macros (see pillow-rs/src/par.rs). Every trivially-parallel operation should
 # use these macros. CI checks for serial loops that should be parallelized.
-rayon = "1"
+rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
