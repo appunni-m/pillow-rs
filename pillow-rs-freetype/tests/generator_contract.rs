@@ -7,8 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
+use freetype as _;
 use log as _;
-use pillow_rs_freetype as _;
 use serde as _;
 use serde_json as _;
 use sha2 as _;
@@ -48,7 +48,7 @@ fn read_project_file(path: &str) -> String {
 fn maintained_generators_are_documented() {
     let doc = read_project_file("doc/GENERATOR_SYSTEM.md");
     assert!(
-        doc.contains("Fixture generation is part of the `pillow-rs-freetype` harness"),
+        doc.contains("Fixture generation is part of the `freetype` harness"),
         "generator system doc must state that generation is part of the harness"
     );
     assert!(

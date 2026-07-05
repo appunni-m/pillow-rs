@@ -1,4 +1,4 @@
-# Supply-chain policy for the standalone pillow-rs-freetype crate.
+# Supply-chain policy for the standalone freetype crate.
 
 [advisories]
 vulnerability = "deny"

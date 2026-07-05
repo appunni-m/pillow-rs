@@ -9,8 +9,8 @@
 #![allow(clippy::unwrap_used)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::autohint::latin;
-use pillow_rs_freetype::{Font, RenderMode, scaler, tt};
+use freetype::autohint::latin;
+use freetype::{Font, RenderMode, scaler, tt};
 
 fn sha256(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
@@ -81,7 +81,7 @@ fn trace_one_glyph() {
     };
 
     let is_italic = (fd.head.mac_style & 2) != 0;
-    let mut outline = pillow_rs_freetype::outline::Outline::default();
+    let mut outline = freetype::outline::Outline::default();
     latin::apply_hints(
         &mut outline,
         &shifted_raw,

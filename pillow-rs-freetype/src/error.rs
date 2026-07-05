@@ -1,4 +1,4 @@
-//! Error types for pillow-rs-freetype.
+//! Error types for `freetype`.
 //!
 //! Mirrors FreeType's `FT_Error` categories that are reachable from the
 //! rendering path we port.

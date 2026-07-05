@@ -8,7 +8,7 @@ Reference provenance: fixtures are **FreeType `FT_LOAD_RENDER`**
 on bytecode-stripped `fonts_autohint/` → **AUTOHINTED**. The autohinter must run.
 
 Citation key:
-- `aflatin.c:N` — `pillow-rs-freetype/freetype/src/autofit/aflatin.c`
+- `aflatin.c:N` — `freetype/src/autofit/aflatin.c` in the vendored C oracle
 - `afhints.c:N` — `.../afhints.c`
 - `aflatin.h:N`, `afblue.c:N`, `afblue.h:N`, `afblue.dat`
 

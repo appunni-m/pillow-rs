@@ -1,6 +1,6 @@
 # Standalone Project Plan
 
-`pillow-rs-freetype` is becoming an independent open-source crate, not a
+`freetype` is becoming an independent open-source crate, not a
 directory that relies on a parent repository for discipline. The parent project
 provided useful defaults; this crate now needs to own those defaults directly.
 
@@ -36,7 +36,7 @@ own correctness, performance contract, or release readiness.
 ## Extraction Checklist
 
 1. Keep `Cargo.toml` free of workspace-inherited package fields and lints.
-2. Commit a crate-local `Cargo.lock` so `cargo test --locked` works in a fresh
+2. Commit a crate-local `Cargo.lock` so `make test` works in a fresh
    standalone clone.
 3. Keep `.github/workflows/ci.yml` runnable from this directory as the
    repository root.
@@ -54,21 +54,20 @@ own correctness, performance contract, or release readiness.
 The crate is not release-ready unless these pass from the standalone root:
 
 ```bash
-cargo fmt -- --check
-cargo clippy --all-targets --all-features --locked -- -D warnings
-cargo test --test coverage_matrix_tests --locked -- --nocapture
-cargo test --test no_runtime_ffi --locked -- --nocapture
-cargo test --locked
-PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
-python3 scripts/bench_freetype.py --self-test
-cargo test --test perf_benchmark_contract --locked
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked
+make fmt
+make clippy
+make test-parity
+make test-ffi
+make test
+make bench-self-test
+make test-perf
+make doc
 ```
 
 Performance claims additionally require:
 
 ```bash
-python3 scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
+make bench
 ```
 
 ## Maintenance Rule

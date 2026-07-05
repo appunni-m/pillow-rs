@@ -45,14 +45,17 @@ and refreshed with `make repo-map-update`.
 - `pillow-rs-py/`: PyO3 binding crate. `src/lib.rs` exposes Rust to Python;
   `python/pillow_rs/` must stay a thin Python surface.
 - `pillow-rs-js/`: wasm-bindgen binding crate plus browser/node test runners.
-- `pillow-rs-freetype/`: pure Rust FreeType-compatible implementation and
-  parity harness. `PROJECT_GOALS.md`, `Makefile`, `src/`, `tests/`,
-  `scripts/`, and selected `doc/` files are the maintained surface.
+- `pillow-rs-freetype/`: monorepo path for the standalone `freetype` package:
+  pure Rust FreeType-compatible implementation and parity harness.
+  `PROJECT_GOALS.md`, `Makefile`, `src/`, `tests/`, `scripts/`, license files,
+  and selected `doc/` files are the maintained surface.
 
 ## FreeType Map
 
 - `pillow-rs-freetype/PROJECT_GOALS.md`: project-level parity goal and
   non-negotiable constraints.
+- `pillow-rs-freetype/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
+  text and migration attribution for the standalone package.
 - `pillow-rs-freetype/src/font.rs`: public face/font API and high-level
   FreeType-compatible behavior.
 - `pillow-rs-freetype/src/scaler.rs`: size scaling and glyph load pipeline.
@@ -143,6 +146,8 @@ generated reports, build outputs, and package installs.
 |-- Makefile
 |-- README.md
 |-- deny.toml
+|-- docs/
+|   `-- REPO_MAP.md
 |-- manifest.yaml
 |-- pillow-rs/
 |   |-- Cargo.toml
@@ -311,6 +316,7 @@ generated reports, build outputs, and package installs.
 |   |-- CONTRIBUTING.md
 |   |-- Cargo.lock
 |   |-- Cargo.toml
+|   |-- LICENSE
 |   |-- Makefile
 |   |-- PROJECT_GOALS.md
 |   |-- README.md
@@ -525,6 +531,7 @@ generated reports, build outputs, and package installs.
 |   |   `-- compare_benchmarks.py
 |   |-- build_and_test.sh
 |   |-- check_bindings.py
+|   |-- check_repo_map.py
 |   |-- ci_coverage.sh
 |   |-- compare_font_coverage.sh
 |   |-- coverage/

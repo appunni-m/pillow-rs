@@ -1,4 +1,4 @@
-# pillow-rs-freetype Agent Instructions
+# freetype Agent Instructions
 
 This repository is the standalone pure-Rust FreeType parity project.
 

@@ -7,7 +7,7 @@
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::{Font, PixelMode, RenderMode};
+use freetype::{Font, PixelMode, RenderMode};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;

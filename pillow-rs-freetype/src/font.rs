@@ -154,7 +154,7 @@ impl Font {
     /// # Examples
     ///
     /// ```no_run
-    /// use pillow_rs_freetype::Font;
+    /// use freetype::Font;
     /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
     /// let font = Font::truetype(&font_data, 10.0).unwrap();
     /// assert_eq!(font.getname(), ("DejaVu Sans", "Book"));
@@ -677,7 +677,7 @@ impl Font {
     /// # Examples
     ///
     /// ```no_run
-    /// use pillow_rs_freetype::Font;
+    /// use freetype::Font;
     /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
     /// let font = Font::truetype(&font_data, 10.0).unwrap();
     /// let mask = font.getmask("A").unwrap();

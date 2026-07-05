@@ -28,7 +28,7 @@
 //!
 //! Enable per-stage trace dumps for C→Rust parity debugging:
 //! ```text
-//! RUST_LOG=pillow_rs_freetype::autohint::pipeline=trace
+//! RUST_LOG=freetype::autohint::pipeline=trace
 //! ```
 //! Each pipeline stage emits structured trace lines at `trace!` level:
 //!   `[PIPE] reload N pt: fx=X fy=Y in=DIR out=DIR u=N v=N`

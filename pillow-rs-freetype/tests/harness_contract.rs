@@ -12,8 +12,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
+use freetype as _;
 use log as _;
-use pillow_rs_freetype as _;
 use sha2 as _;
 use thiserror as _;
 

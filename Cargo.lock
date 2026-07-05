@@ -486,6 +486,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
+name = "freetype"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1020,8 +1032,8 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "csscolorparser",
+ "freetype",
  "log",
- "pillow-rs-freetype",
  "pillow-rs-image",
  "png",
  "pollster",
@@ -1031,18 +1043,6 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "wgpu",
-]
-
-[[package]]
-name = "pillow-rs-freetype"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "log",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.18",
 ]
 
 [[package]]

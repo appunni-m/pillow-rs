@@ -1,7 +1,7 @@
 //! Pillow-compatible font loading and text rendering.
 //!
 //! This module exposes the font surface used by drawing and binding crates.
-//! TrueType/OpenType rendering is delegated to `pillow-rs-freetype`, a pure Rust
+//! TrueType/OpenType rendering is delegated to `freetype`, a pure Rust
 //! FreeType-compatible implementation. The default bitmap font uses pre-rendered
 //! Pillow glyph data for exact `ImageFont.load_default()` behavior.
 //!
@@ -18,15 +18,15 @@ pub mod imagingft;
 
 /// Loaded font source for Pillow-style text measurement and masks.
 pub enum Font {
-    /// TrueType/OpenType font rendered via pillow-rs-freetype (pure-Rust FreeType-compatible).
+    /// TrueType/OpenType font rendered via `freetype` (pure-Rust FreeType-compatible).
     TrueType(TrueTypeFont),
     /// Pre-rendered bitmap font matching PIL's default font exactly.
     Bitmap(BitmapFont),
 }
 
-/// TrueType/OpenType font loaded through `pillow-rs-freetype`.
+/// TrueType/OpenType font loaded through `freetype`.
 pub struct TrueTypeFont {
-    inner: Rc<pillow_rs_freetype::Font>,
+    inner: Rc<freetype::Font>,
     size: f32,
 }
 
@@ -40,7 +40,7 @@ impl Font {
     ///
     /// Returns [`PilError::ValueError`] when the font bytes cannot be parsed.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
-        let inner = pillow_rs_freetype::Font::truetype(&data, size)
+        let inner = freetype::Font::truetype(&data, size)
             .map_err(|e| PilError::ValueError(format!("Failed to load font: {}", e)))?;
         Ok(Font::TrueType(TrueTypeFont {
             inner: Rc::new(inner),
