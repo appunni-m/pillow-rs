@@ -3,9 +3,15 @@ use crate::image::Image;
 use crate::pipeline::{PipelineOp, TransposeMethod};
 
 impl Image {
-    /// Transpose the image (flip, rotate, or both).
-    /// method: one of FLIP_LEFT_RIGHT, FLIP_TOP_BOTTOM, ROTATE_90,
-    /// ROTATE_180, ROTATE_270, TRANSPOSE, TRANSVERSE.
+    /// Applies a Pillow transpose method.
+    ///
+    /// Accepted methods are `"FLIP_LEFT_RIGHT"`, `"FLIP_TOP_BOTTOM"`,
+    /// `"ROTATE_90"`, `"ROTATE_180"`, `"ROTATE_270"`, `"TRANSPOSE"`, and
+    /// `"TRANSVERSE"`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when `method` is unknown.
     pub fn transpose(&self, method: &str) -> Result<Image, PilError> {
         let method = parse_transpose(method)?;
         Ok(Image::push_op(self, PipelineOp::Transpose { method }))

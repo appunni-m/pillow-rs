@@ -7,4 +7,5 @@
 //   See handler.rs for the FormatHandler trait and FormatRegistry.
 // ============================================================================
 
+/// Format handler traits and format registry helpers.
 pub mod handler;

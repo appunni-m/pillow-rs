@@ -1,29 +1,22 @@
-//! Compute backend dispatch — multi-backend image pipeline execution.
+//! Compute backend routing for deferred image pipelines.
 //!
-//! ## Architecture
-//! - `Backend` enum: Cpu, Gpu, Simd
-//! - `BackendImpl` trait: one impl per backend — `supports()`, `execute_batch()`, bridge methods
-//! - `registry.rs`: maps every PipelineOp → which backends implement it
-//! - `op_def.rs`: declarative op registration via `define_op!` macro
-//! - `backend_op.rs`: BackendOp trait for per-backend capability detection
-//! - Router: picks best backend for pipeline, bridges data as needed
+//! This module decides where a materialized [`crate::pipeline::PipelineOp`]
+//! batch executes. The public surface is intentionally small: callers can
+//! inspect compiled backends, enable or disable automatic routing choices, lock
+//! an image pipeline to one backend, and execute a selected backend.
 //!
-//! ## Adding a new PipelineOp
-//! 1. Add variant to `PipelineOp` enum
-//! 2. Add CPU impl in `pool_cpu/ops/<category>.rs`
-//! 3. Add GPU shader in `pool_gpu/shaders/<name>.wgsl` (optional)
-//! 4. Register using `define_op!` macro (see op_def.rs)
-//!    Done. No other files touched.
+//! # Routing Contract
 //!
-//! ## AS PER DESIGN — DO NOT REMOVE these modules:
-//! - `backend_op`: trait system replacing leaky OpEntry pattern
-//! - `op_def`: macro-driven op registration eliminating parallel match statements
+//! A pipeline executes on one backend for the whole batch. CPU is always present
+//! and acts as the fallback. GPU and SIMD are selected only when they are active
+//! and every operation in the batch reports support.
 //!
-//! ## Principles
-//! - CPU is universal fallback — registered for every op
-//! - Pipeline picks ONE backend — no per-op switching within a pipeline
-//! - Bridge unrestricted — can transfer between any two backends
-//! - SIMD-ready — add `pool_simd/` and register ops
+//! # Adding Operations
+//!
+//! New operations must define the pipeline variant, CPU implementation, registry
+//! key, and optional GPU/SIMD support together. The registry module is the source
+//! of truth used by [`crate::compute::route`] and
+//! [`crate::compute::execute_batch`].
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -33,14 +26,25 @@ use std::sync::Mutex;
 
 // ── Backend ─────────────────────────────────────────────────────────────────
 
+/// Compute backend used to execute a materialized image pipeline.
+///
+/// Backends are ordered by preference, with CPU as the universal fallback.
+/// Callers can enable or disable backends globally, or request one explicitly
+/// when routing a batch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Backend {
+    /// Scalar CPU implementation. This backend is always available.
     Cpu = 0,
+    /// WebGPU/wgpu implementation when the `gpu` feature is enabled.
     Gpu = 1,
+    /// SIMD implementation for operations with vectorized adapters.
     Simd = 2,
 }
 
 impl Backend {
+    /// Parses a backend name used by CLI, environment, or binding-layer options.
+    ///
+    /// Accepted values are `"cpu"`, `"gpu"`, and `"simd"`, case-insensitive.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "cpu" => Some(Self::Cpu),
@@ -53,11 +57,19 @@ impl Backend {
 
 // ── BackendImpl trait ──────────────────────────────────────────────────────
 
-/// Every backend implements this trait. CPU is the universal fallback.
+/// Implementation contract for a compute backend.
+///
+/// Backends advertise operation support before execution so the router can keep
+/// a pipeline on one backend. Implementations should return errors instead of
+/// panicking when runtime resources are unavailable.
 pub trait BackendImpl: Send + Sync {
+    /// Returns the backend identity used for routing and enable/disable state.
     fn name(&self) -> Backend;
+    /// Returns backend preference. Larger values are selected first.
     fn priority(&self) -> u8; // higher = preferred
+    /// Returns whether this backend can execute one pipeline operation.
     fn supports(&self, op: &PipelineOp) -> bool;
+    /// Executes a sequence of operations against one image buffer.
     fn execute_batch(
         &self,
         ops: &[PipelineOp],
@@ -71,7 +83,9 @@ pub trait BackendImpl: Send + Sync {
 // AS PER DESIGN — DO NOT REMOVE:
 // backend_op: BackendOp trait for per-backend capability detection
 // op_def:     define_op! macro — single-definition op registration
+/// Per-backend capability trait used by operation descriptors.
 pub mod backend_op;
+/// Macro-backed operation registration helpers.
 pub mod op_def;
 
 mod pool_cpu;
@@ -97,16 +111,24 @@ fn active() -> &'static Mutex<HashSet<Backend>> {
     })
 }
 
+/// Enables a backend for future automatic routing.
+///
+/// Returns `true` when the backend was newly inserted into the active set.
 pub fn enable_backend(b: Backend) -> bool {
     active().lock().expect("internal invariant").insert(b)
 }
+/// Disables a backend for future automatic routing.
+///
+/// Returns `true` when the backend was previously active.
 pub fn disable_backend(b: Backend) -> bool {
     active().lock().expect("internal invariant").remove(&b)
 }
+/// Returns whether a backend is currently eligible for automatic routing.
 pub fn backend_enabled(b: Backend) -> bool {
     active().lock().expect("internal invariant").contains(&b)
 }
 
+/// Returns active backends ordered by routing preference.
 pub fn active_backends() -> Vec<Backend> {
     let a = active().lock().expect("internal invariant");
     let mut v: Vec<Backend> = a.iter().copied().collect();
@@ -132,13 +154,19 @@ fn pools() -> &'static [Box<dyn BackendImpl>] {
     })
 }
 
+/// Returns every backend compiled into this crate.
 pub fn available_backends() -> Vec<Backend> {
     pools().iter().map(|p| p.name()).collect()
 }
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-/// Pick best active backend that supports ALL ops. Falls back to CPU.
+/// Picks the best active backend that supports every operation in `ops`.
+///
+/// Passing `explicit` bypasses automatic routing and returns that backend even
+/// if it is inactive or cannot support the batch; execution will report the
+/// actual backend error later. Without an explicit backend, routing prefers
+/// active backends by priority and falls back to [`Backend::Cpu`].
 pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Backend {
     if let Some(b) = explicit {
         return b;
@@ -152,7 +180,15 @@ pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Backend {
     Backend::Cpu // universal fallback
 }
 
-/// Execute a batch on a specific backend.
+/// Executes `ops` on a specific backend.
+///
+/// `mode` carries Pillow mode tags such as `"P"` or `"F"` when the
+/// [`DynamicImage`] color type is not enough to describe semantics.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `backend` is not compiled into this
+/// crate, or the backend returns an operation-specific error.
 pub fn execute_batch(
     backend: Backend,
     ops: &[PipelineOp],

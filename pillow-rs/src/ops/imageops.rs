@@ -1,13 +1,19 @@
-//! ImageOps — high-level image operations (module-level functions).
-//! Mirroring PIL.ImageOps: autocontrast, equalize, invert, flip, mirror,
-//! posterize, solarize, expand, scale, contain, cover, fit, pad, grayscale.
+//! Pillow `ImageOps`-style module functions.
+//!
+//! Functions take [`crate::Image`] handles and return lazy result images where the
+//! operation can be represented in the compute pipeline.
 
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::resize::parse_resample;
 use crate::pipeline::PipelineOp;
 
-/// Normalize image contrast. Clips the darkest and lightest `cutoff` percent.
+/// Normalizes image contrast by clipping darkest and lightest values.
+///
+/// # Errors
+///
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another [`PilError`] when mode detection fails.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "LA" || mode == "RGBA" {
@@ -16,7 +22,12 @@ pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Autocontrast { cutoff }))
 }
 
-/// Equalize the image histogram.
+/// Equalizes the image histogram.
+///
+/// # Errors
+///
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another [`PilError`] when mode detection fails.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "LA" || mode == "RGBA" {
@@ -25,7 +36,12 @@ pub fn equalize(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Equalize))
 }
 
-/// Invert all pixel values (negative).
+/// Inverts all pixel values.
+///
+/// # Errors
+///
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another [`PilError`] when mode detection fails.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "LA" || mode == "RGBA" {
@@ -34,7 +50,14 @@ pub fn invert(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Invert))
 }
 
-/// ImageOps.invert: raises NotImplementedError for P-mode (unlike ImageChops.invert).
+/// Inverts through the `ImageOps.invert` compatibility path.
+///
+/// Unlike `ImageChops.invert`, Pillow raises for `P` mode here.
+///
+/// # Errors
+///
+/// Returns [`PilError::NotImplementedError`] for `P` mode, or errors from
+/// [`invert`].
 pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "P" {
@@ -45,17 +68,34 @@ pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
     invert(image)
 }
 
-/// Flip image vertically.
+/// Flips an image vertically.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn flip(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Flip))
 }
 
-/// Mirror image horizontally (same as FLIP_LEFT_RIGHT).
+/// Mirrors an image horizontally.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn mirror(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Mirror))
 }
 
-/// Reduce number of bits per color channel.
+/// Reduces the number of stored high bits per color channel.
+///
+/// `bits` is clamped to `1..=8`.
+///
+/// # Errors
+///
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another [`PilError`] when mode detection fails.
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "LA" || mode == "RGBA" {
@@ -69,7 +109,12 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     ))
 }
 
-/// Invert all pixel values above threshold.
+/// Inverts pixel values at or above `threshold`.
+///
+/// # Errors
+///
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another [`PilError`] when mode detection fails.
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode == "LA" || mode == "RGBA" {
@@ -78,12 +123,22 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Solarize { threshold }))
 }
 
-/// Convert to grayscale using PIL-compatible BT.601 formula.
+/// Converts an image to grayscale using Pillow-compatible BT.601 luma.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn grayscale(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Grayscale))
 }
 
-/// Colorize grayscale image using black/white color mapping.
+/// Colorizes an `L` image by mapping black and white endpoints.
+///
+/// # Errors
+///
+/// Returns [`PilError::AssertionError`] when the source mode is not `"L"`, or
+/// another [`PilError`] when mode detection fails.
 pub fn colorize(
     image: &Image,
     black: (u8, u8, u8),
@@ -97,24 +152,43 @@ pub fn colorize(
     Ok(Image::push_op(image, PipelineOp::Colorize { black, white }))
 }
 
-/// Add a border around the image.
+/// Adds a border around an image.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Expand { border, fill }))
 }
 
-/// Resize image to fit within (w, h) while preserving aspect ratio.
+/// Resizes an image to fit within `(w, h)` while preserving aspect ratio.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
-/// Resize image to completely cover (w, h), cropping overflow.
+/// Resizes an image to cover `(w, h)`, cropping overflow.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
-/// Resize and crop to fit within (w, h) with centering.
+/// Resizes and crops an image to exactly fit `(w, h)`.
+///
+/// `bleed` and `centering` follow Pillow `ImageOps.fit` semantics.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn fit(
     image: &Image,
     w: u32,
@@ -136,7 +210,11 @@ pub fn fit(
     ))
 }
 
-/// Resize and pad to exactly (w, h) with optional color fill.
+/// Resizes and pads an image to exactly `(w, h)`.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn pad(
     image: &Image,
     w: u32,
@@ -158,13 +236,22 @@ pub fn pad(
     ))
 }
 
-/// Scale image by a factor.
+/// Scales image dimensions by `factor`.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn scale(image: &Image, factor: f64, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
     Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
 }
 
-/// Crop border pixels from the image.
+/// Crops the same border width from every image edge.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports invalid
+/// crop geometry or later materialization failures.
 pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
 }

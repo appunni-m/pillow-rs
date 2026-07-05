@@ -1,6 +1,9 @@
-//! ImageDraw — drawing primitives on images.
-//! Implements line, rectangle, ellipse, polygon, point, text.
-//! Uses Bresenham-style algorithms for pixel-perfect rendering.
+//! Pillow-compatible `ImageDraw` primitives.
+//!
+//! [`Draw`] records drawing operations against an [`Image`] and keeps enough
+//! mode metadata to convert the drawn result back to the original Pillow mode.
+//! Coordinates are integer pixel coordinates. Colors are normalized RGBA byte
+//! tuples before mode-specific drawing rules are applied.
 
 use pillow_rs_image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 
@@ -8,8 +11,11 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
-/// Drawing context wrapping an Image.
-/// PIL: `draw = ImageDraw.Draw(image)` then `draw.line(...)`, `draw.rectangle(...)`, etc.
+/// Drawing context for Pillow-style image mutation.
+///
+/// This is the Rust equivalent of `ImageDraw.Draw(image)`. Methods queue or
+/// apply drawing operations and [`Draw::image_clone`] returns the updated image
+/// with the original mode restored where possible.
 #[derive(Debug)]
 pub struct Draw {
     image: Image,
@@ -18,7 +24,7 @@ pub struct Draw {
 }
 
 impl Draw {
-    /// Create a new drawing context.
+    /// Creates a drawing context for `image`.
     ///
     /// `explicit_mode` is an optional PIL mode override for cases where the
     /// image's raw DynamicImage mode differs from the logical PIL mode
@@ -43,7 +49,7 @@ impl Draw {
             .unwrap_or_else(|| "RGBA".to_string())
     }
 
-    /// Return the original PIL mode of the drawing target.
+    /// Returns the original Pillow mode of the drawing target.
     pub fn mode(&self) -> Option<&str> {
         self.orig_mode.as_deref()
     }
@@ -59,7 +65,14 @@ impl Draw {
         self.image = Image::Loaded(DynamicImage::ImageRgba8(canvas), explicit);
     }
 
-    /// Draw a line from (x0,y0) to (x1,y1). Bresenham's algorithm.
+    /// Draws a line from `(x0, y0)` to `(x1, y1)`.
+    ///
+    /// `fill` is an RGBA byte tuple and `width` is the stroke width in pixels.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn line(
         &mut self,
         x0: i32,
@@ -83,7 +96,15 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a rectangle. Filled if fill is provided, outline otherwise.
+    /// Draws a rectangle bounded by `(x0, y0, x1, y1)`.
+    ///
+    /// `fill` paints the interior when present. `outline` paints the border
+    /// when present. `width` controls outline thickness in pixels.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn rectangle(
         &mut self,
         x0: i32,
@@ -109,9 +130,15 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw an ellipse within the bounding box.
-    /// Uses PIL's exact Bresenham quarter-ellipse algorithm with step-2 coordinate system.
-    /// Matches PIL pixel-for-pixel by using the same `a=x1-x0, b=y1-y0` scaling.
+    /// Draws an ellipse inside `(x0, y0, x1, y1)`.
+    ///
+    /// Fill, outline, and width follow Pillow `ImageDraw.ellipse` semantics.
+    /// The backend uses Pillow's Bresenham-style quarter-ellipse algorithm.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn ellipse(
         &mut self,
         x0: i32,
@@ -137,7 +164,15 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a polygon. Filled if fill provided.
+    /// Draws a polygon from integer vertices.
+    ///
+    /// Fewer than three points is a no-op. `fill` paints the interior and
+    /// `outline` paints the boundary when present.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn polygon(
         &mut self,
         points: &[(i32, i32)],
@@ -160,7 +195,12 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a single point.
+    /// Draws one or more individual points.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn point(&mut self, points: &[(i32, i32)], fill: (u8, u8, u8, u8)) -> Result<(), PilError> {
         self.image = Image::push_op(
             &self.image,
@@ -172,14 +212,18 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a bitmap image at position (x, y) with fill color.
+    /// Draws a bitmap mask at `(x, y)` using `fill`.
     ///
     /// The bitmap acts as a transparency mask. Valid bitmap modes:
     /// - "1": binary mask (non-zero → fill)
     /// - "L": alpha mask (0-255 opacity)
     /// - "RGBA"/"RGBa": alpha channel at byte offset +3
     ///
-    /// Matching PIL's `ImagingFill2` behavior exactly.
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when the bitmap mode is not a valid mask
+    /// mode. Returns other [`PilError`] values when mode, size, or data lookup
+    /// fails.
     pub fn bitmap(
         &mut self,
         x: i32,
@@ -576,7 +620,11 @@ impl Draw {
         }
     }
 
-    /// Return a clone of the current image state, converted back to original mode.
+    /// Returns the current drawn image with original mode semantics restored.
+    ///
+    /// Standard modes are converted from the internal RGBA drawing canvas back
+    /// to their original layout. `P` mode attempts palette-index restoration
+    /// using the carried palette.
     pub fn image_clone(&self) -> Image {
         let img = self.image.clone();
         if let Some(ref orig) = self.orig_mode {
@@ -673,9 +721,14 @@ impl Draw {
         img
     }
 
-    /// Draw an arc (partial ellipse outline).
-    /// Uses the same Bresenham quarter-ellipse generator as the ellipse fill,
-    /// then performs edge detection to find boundary pixels and filters by angle.
+    /// Draws an arc along an ellipse boundary.
+    ///
+    /// Angles are in degrees, following Pillow's coordinate convention.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn arc(
         &mut self,
         x0: i32,
@@ -703,7 +756,12 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a chord (arc + filled to center).
+    /// Draws a chord inside an ellipse bounding box.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn chord(
         &mut self,
         x0: i32,
@@ -733,7 +791,12 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a pieslice. Uses the Bresenham ellipse fill with angle clipping.
+    /// Draws a pieslice inside an ellipse bounding box.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn pieslice(
         &mut self,
         x0: i32,
@@ -763,7 +826,14 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a circle.
+    /// Draws a circle centered at `(cx, cy)`.
+    ///
+    /// `radius` is rounded to an integer pixel radius for pipeline execution.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn circle(
         &mut self,
         cx: i32,
@@ -787,8 +857,15 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw a rounded rectangle. Composes corner pieslices/arcs and rectangles
-    /// matching PIL's Python algorithm in ImageDraw.py.
+    /// Draws a rounded rectangle.
+    ///
+    /// `radius` is rounded to pixels. Non-positive radii or degenerate boxes
+    /// fall back to a normal rectangle.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn rounded_rectangle(
         &mut self,
         x0: i32,
@@ -835,7 +912,7 @@ impl Draw {
         Ok(())
     }
 
-    /// Draw text at position (x, y) using a font.
+    /// Draws text at `(x, y)` using a loaded font.
     ///
     /// For RGB and RGBA modes, uses the standard RGBA compositing pipeline.
     /// For other modes (1, L, LA, CMYK, P, I, F), renders directly in the
@@ -843,6 +920,11 @@ impl Draw {
     /// - Integer fill values go to the first channel only; other channels get 0.
     /// - Binary modes (1, P, I, F) use PIL's fontmode="1": binary glyphs (coverage >= 128 → 255).
     /// - Anti-aliased modes (L, LA, CMYK) use PIL's BLEND (truncation) per channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when mode detection, font rendering, or destination
+    /// materialization fails.
     pub fn text(
         &mut self,
         x: i32,

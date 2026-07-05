@@ -1,3 +1,13 @@
+//! Checked image dimensions and allocation helpers.
+//!
+//! This module is the allocation gate for `pillow-rs`. Callers provide image
+//! width, height, and channel count; [`CheckedDims::new`] validates that the
+//! shape is non-zero, below the global pixel limit, and safe to multiply before
+//! any buffer is allocated.
+//!
+//! Use [`CheckedDims`] when constructing a new image buffer or calculating a
+//! row stride. Do not recompute `width * height * channels` in call sites.
+
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE:
 //   CheckedDims is the ONLY approved way to create image buffers in this project.
@@ -18,8 +28,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::PilError;
 
-/// Default max pixels: ~1 GB for RGBA (matching PIL's default).
-/// 268,435,456 pixels × 4 bytes = 1,073,741,824 bytes.
+/// Default maximum pixel count accepted by [`CheckedDims::new`].
+///
+/// The value allows roughly one GiB of RGBA data:
+/// `268_435_456 pixels * 4 bytes = 1_073_741_824 bytes`.
 const DEFAULT_MAX_PIXELS: u64 = 268_435_456;
 
 /// Global maximum pixel count. Users can override via `set_max_pixels()`.
@@ -27,21 +39,29 @@ const DEFAULT_MAX_PIXELS: u64 = 268_435_456;
 /// PIL equivalent: `Image.MAX_IMAGE_PIXELS`
 static MAX_PIXELS: AtomicU64 = AtomicU64::new(DEFAULT_MAX_PIXELS);
 
-/// Validated image dimensions.
+/// Validated image dimensions for allocation and stride calculations.
 ///
-/// AS PER DESIGN — DO NOT REMOVE OR BYPASS:
-/// The ONLY valid constructor is `CheckedDims::new()`, which checks:
-/// 1. No single dimension is zero
-/// 2. Width × height does not overflow u64
-/// 3. Width × height does not exceed `MAX_PIXELS`
-/// 4. Total bytes (pixels × channels) does not overflow u64
+/// `CheckedDims` stores a width, height, and channel count after validating
+/// that they can safely describe a pixel buffer. The precomputed totals should
+/// be used by allocation code instead of repeating arithmetic at call sites.
 ///
-/// All buffer allocation must go through `self.alloc_buffer()` or read from
-/// `self.total_bytes()` — never compute sizes manually from raw (w, h).
+/// # Inputs
+///
+/// Use [`CheckedDims::new`] with dimensions in pixels and a channel count in
+/// bytes per pixel for byte-addressed image modes.
+///
+/// # Invariants
+///
+/// - `width`, `height`, and `channels` are non-zero.
+/// - `width * height` fits in `u64` and is below [`CheckedDims::max_pixels`].
+/// - `width * height * channels` fits in `u64`.
 #[derive(Debug, Clone, Copy)]
 pub struct CheckedDims {
+    /// Image width in pixels.
     pub width: u32,
+    /// Image height in pixels.
     pub height: u32,
+    /// Number of stored bytes per pixel.
     pub channels: u8,
 
     /// Pre-computed: width * height (guaranteed no overflow, non-zero)
@@ -52,16 +72,25 @@ pub struct CheckedDims {
 }
 
 impl CheckedDims {
-    /// AS PER DESIGN — DO NOT REMOVE:
-    /// The ONE and ONLY constructor for image dimensions. Every allocation path
-    /// in the entire codebase MUST go through here. There is no `new_unchecked`
-    /// alternative — if you think you need one, you're doing it wrong.
+    /// Validates dimensions for a future image allocation.
+    ///
+    /// # Inputs
+    ///
+    /// - `width`: image width in pixels.
+    /// - `height`: image height in pixels.
+    /// - `channels`: stored bytes per pixel, for example `1` for `L` and `4`
+    ///   for `RGBA`.
+    ///
+    /// # Returns
+    ///
+    /// A [`CheckedDims`] value with precomputed pixel count, byte count, and row
+    /// stride information.
     ///
     /// # Errors
-    /// - `DimensionError` if w=0 or h=0
-    /// - `DimensionError` if w×h overflows u64
-    /// - `DimensionError` if w×h exceeds `MAX_PIXELS`
-    /// - `DimensionError` if w×h×channels overflows u64
+    ///
+    /// Returns [`PilError::DimensionError`] if a dimension is zero, if the
+    /// pixel count overflows, if the pixel count exceeds
+    /// [`CheckedDims::max_pixels`], or if the byte count overflows.
     pub fn new(width: u32, height: u32, channels: u8) -> Result<Self, PilError> {
         // AS PER DESIGN: Zero-dimension check (separate from overflow for
         // clearer error messages)
@@ -116,19 +145,24 @@ impl CheckedDims {
 
     // ── Accessors (AS PER DESIGN: prefer these over manual arithmetic) ──
 
-    /// Total pixel count (width × height). Guaranteed non-zero.
+    /// Returns the validated pixel count.
+    ///
+    /// The value is `width * height` and is guaranteed to be non-zero.
     #[inline]
     pub fn total_pixels(&self) -> usize {
         self.total_pixels
     }
 
-    /// Total buffer size in bytes (width × height × channels). Guaranteed non-zero.
+    /// Returns the validated byte count for a tightly packed image buffer.
+    ///
+    /// The value is `width * height * channels` and is guaranteed to be
+    /// non-zero.
     #[inline]
     pub fn total_bytes(&self) -> usize {
         self.total_bytes
     }
 
-    /// Row stride in bytes (width × channels).
+    /// Returns the tightly packed row stride in bytes.
     #[inline]
     pub fn row_stride(&self) -> usize {
         self.width as usize * self.channels as usize
@@ -136,14 +170,15 @@ impl CheckedDims {
 
     // ── Allocation helpers (AS PER DESIGN: use these, never vec![0u8; w*h*ch]) ──
 
-    /// Allocate a zero-filled pixel buffer of the correct size.
-    /// AS PER DESIGN: Use this instead of `vec![0u8; total_bytes]`.
+    /// Allocates a zero-filled pixel buffer with [`CheckedDims::total_bytes`].
+    ///
+    /// Use this helper instead of manually calculating a vector length.
     #[inline]
     pub fn alloc_buffer(&self) -> Vec<u8> {
         vec![0u8; self.total_bytes]
     }
 
-    /// Allocate a buffer and fill it with the given value.
+    /// Allocates a pixel buffer and fills every byte with `value`.
     #[inline]
     pub fn alloc_buffer_fill(&self, value: u8) -> Vec<u8> {
         vec![value; self.total_bytes]
@@ -151,15 +186,19 @@ impl CheckedDims {
 
     // ── Global limit control (matching PIL's Image.MAX_IMAGE_PIXELS) ──
 
-    /// Get the current global max pixel limit.
+    /// Returns the current global maximum pixel limit.
+    ///
+    /// [`CheckedDims::new`] rejects images whose pixel count exceeds this
+    /// value.
     pub fn max_pixels() -> u64 {
         MAX_PIXELS.load(Ordering::Relaxed)
     }
 
-    /// Override the global max pixel limit.
-    /// Pass `None` to remove the limit (use with caution).
-    /// AS PER DESIGN: This is the ONLY way to change the limit — no env var
-    /// or magic constant elsewhere.
+    /// Overrides the global maximum pixel limit.
+    ///
+    /// Pass `Some(limit)` to set a pixel-count cap. Pass `None` to remove the
+    /// cap by setting it to `u64::MAX`; this should only be used by callers that
+    /// already control their input image sizes.
     pub fn set_max_pixels(limit: Option<u64>) {
         MAX_PIXELS.store(limit.unwrap_or(u64::MAX), Ordering::Relaxed);
     }

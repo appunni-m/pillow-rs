@@ -1,12 +1,22 @@
-//! Image analysis operations — getbbox, histogram, getextrema.
-//! These are IMMEDIATE operations that materialize the pipeline first.
+//! Pillow-compatible image analysis operations.
+//!
+//! These methods materialize lazy pipelines before scanning pixels. Results are
+//! returned as Rust primitives instead of Python tuples or lists.
 
 use crate::error::PilError;
 use crate::image::Image;
 
 impl Image {
-    /// Return the bounding box of non-zero regions.
-    /// PIL: `getbbox(*, alpha_only=True) -> (left, top, right, bottom) | None`
+    /// Returns the bounding box of non-zero image content.
+    ///
+    /// The result is `(left, top, right, bottom)` with `right` and `bottom`
+    /// exclusive, matching Pillow `getbbox`. `None` means every inspected pixel
+    /// is zero. When `alpha_only` is true and the image has alpha, only alpha is
+    /// inspected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn getbbox(&self, alpha_only: bool) -> Result<Option<(u32, u32, u32, u32)>, PilError> {
         let img = self.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
@@ -49,8 +59,13 @@ impl Image {
         }
     }
 
-    /// Return min/max pixel values per band.
-    /// PIL: `getextrema() -> tuple[float, float] | tuple[tuple[int,int],...]`
+    /// Returns minimum and maximum byte values per band.
+    ///
+    /// Bands are returned in decoded image order. Each pair is `(min, max)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn getextrema(&self) -> Result<Vec<(u8, u8)>, PilError> {
         let img = self.materialize()?;
 
@@ -93,9 +108,14 @@ impl Image {
         Ok(extrema)
     }
 
-    /// Compute image histogram per band.
-    /// PIL: `histogram(mask=None, extrema=None) -> list[int]`
-    /// Returns 256 values per band, concatenated.
+    /// Computes a per-band 256-bin histogram.
+    ///
+    /// The returned vector is concatenated by band: all 256 bins for band 0,
+    /// then all 256 bins for band 1, and so on.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn histogram(&self) -> Result<Vec<u32>, PilError> {
         let img = self.materialize()?;
         let n_bands = match img.color() {

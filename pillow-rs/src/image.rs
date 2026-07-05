@@ -1,3 +1,32 @@
+//! Core Pillow-style image object.
+//!
+//! [`Image`] stores loaded buffers, lazy path/byte inputs, paletted data, and
+//! deferred pipelines. Public methods expose Rust equivalents of common
+//! `PIL.Image.Image` behavior while keeping I/O and host-language object
+//! conversion outside this crate.
+//!
+//! # Representation
+//!
+//! `Image` is both a public handle and the crate's lazy representation. Methods
+//! such as [`Image::new`], [`Image::open`], and [`Image::open_bytes`] are the
+//! stable construction surface. Enum variants are public because binding crates
+//! and integration tests need to inspect or carry lazy state, but downstream
+//! users should prefer methods over direct variant construction.
+//!
+//! # Mode And Layout
+//!
+//! Mode strings follow Pillow names. Raw byte APIs use the current image mode:
+//! `L` is one byte per pixel, `RGB` is tightly packed triplets, `RGBA` is
+//! tightly packed quadruplets, and `P` returns palette indices. Non-standard
+//! modes such as `CMYK`, `HSV`, `YCbCr`, `I`, and `F` may be carried through
+//! internal `pillow-rs-image` buffers with an explicit mode tag.
+//!
+//! # Lazy Execution
+//!
+//! Operations that can be represented as [`crate::pipeline::PipelineOp`] values
+//! may be deferred. Calling [`Image::materialize`], [`Image::save`], or
+//! [`Image::tobytes`] forces decoding and pipeline execution.
+
 use pillow_rs_image::{DynamicImage, GenericImageView, ImageFormat};
 use std::io::{BufReader, Read, Seek};
 use std::path::PathBuf;
@@ -39,10 +68,17 @@ pub fn default_palette() -> Vec<u8> {
 /// `palette` holds 768 bytes: 256 RGB triples mapping each index to a color.
 #[derive(Debug, Clone)]
 pub struct PalettedData {
+    /// One palette index byte per pixel.
     pub indices: pillow_rs_image::GrayImage,
+    /// Palette data as 256 RGB triples.
     pub palette: Vec<u8>,
 }
 
+/// Core image value used by Pillow-style operations.
+///
+/// Values may hold decoded pixels, lazy input references, or a deferred
+/// operation pipeline. Call [`Image::materialize`] when a concrete
+/// [`DynamicImage`] is required.
 #[derive(Debug, Clone)]
 pub enum Image {
     /// Fully decoded, ready to process or save. Optional explicit PIL mode.
@@ -51,14 +87,20 @@ pub enum Image {
     Paletted(PalettedData),
     /// Path not yet decoded — lazy.
     Path {
+        /// Source file path.
         path: PathBuf,
+        /// Optional decoded or caller-provided image format.
         format: Option<ImageFormat>,
+        /// Whether format probing identified indexed palette storage.
         is_paletted: bool,
     },
     /// Byte buffer not yet decoded — lazy.
     Bytes {
+        /// Shared encoded image bytes.
         data: Arc<Vec<u8>>,
+        /// Optional detected image format.
         format: Option<ImageFormat>,
+        /// Whether format probing identified indexed palette storage.
         is_paletted: bool,
     },
     /// Lazy pipeline — operations recorded, not executed.
@@ -66,9 +108,13 @@ pub enum Image {
     /// ops: the operations to apply, in order.
     /// explicit_mode: PIL mode override (e.g. "1", "P") preserved from source.
     Pipeline {
+        /// Input image feeding the operation pipeline.
         source: Arc<Image>,
+        /// Operations to execute in order.
         ops: Vec<PipelineOp>,
+        /// Output format inherited from the source when known.
         format: Option<ImageFormat>,
+        /// Explicit Pillow mode preserved across lazy operations.
         explicit_mode: Option<String>,
         /// Locked backend for this pipeline. None = use global active set.
         backend: Option<crate::compute::Backend>,
@@ -80,24 +126,40 @@ pub enum Image {
 /// PIL-compatible statistics result. Scalars for single-band, Vecs for multi-band.
 #[derive(Debug, Clone)]
 pub struct StatResult {
+    /// Number of pixels contributing to each band.
     pub count: StatValue,
+    /// Sum of channel values.
     pub sum: StatValue,
+    /// Sum of squared channel values.
     pub sum2: StatValue,
+    /// Mean channel value.
     pub mean: StatValue,
+    /// Median channel value.
     pub median: StatValue,
+    /// Root-mean-square channel value.
     pub rms: StatValue,
+    /// Variance per channel.
     pub var: StatValue,
+    /// Standard deviation per channel.
     pub stddev: StatValue,
+    /// Minimum and maximum value per channel.
     pub extrema: StatValue,
 }
 
+/// Scalar or per-band statistic value.
 #[derive(Debug, Clone)]
 pub enum StatValue {
+    /// Single integer statistic.
     Int(i64),
+    /// Single floating-point statistic.
     Float(f64),
+    /// Per-band integer statistics.
     IntList(Vec<i64>),
+    /// Per-band floating-point statistics.
     FloatList(Vec<f64>),
+    /// Single-band extrema pair.
     ExtremaSingle((i64, i64)),
+    /// Per-band extrema pairs.
     ExtremaList(Vec<(i64, i64)>),
 }
 
@@ -146,6 +208,12 @@ impl Image {
     // ── Constructors ──
 
     #[allow(clippy::too_many_arguments)]
+    /// Creates a new image with the requested Pillow mode, dimensions, and fill color.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when dimensions are invalid or the mode is not
+    /// supported by core image construction.
     pub fn new(
         width: u32,
         height: u32,
@@ -223,7 +291,21 @@ impl Image {
         Ok(Image::Loaded(img, explicit))
     }
 
-    /// Create image from raw bytes: `Image.frombytes(mode, size, data)`.
+    /// Creates an image from tightly packed raw bytes.
+    ///
+    /// `mode` uses Pillow mode names. Modes `L`, `LA`, `RGB`, `RGBA`, `CMYK`,
+    /// `HSV`, `YCbCr`, `I`, `F`, and `P` expect one full pixel after another.
+    /// Mode `"1"` expects Pillow's packed bitmap layout: eight pixels per byte,
+    /// most-significant bit first, with each row padded to a byte boundary.
+    ///
+    /// Extra bytes are ignored, matching Pillow's permissive `frombytes`
+    /// behavior. Too few bytes is an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when dimensions are zero, allocation checks fail,
+    /// the mode is unsupported, or `data` is shorter than the required mode
+    /// layout.
     pub fn frombytes(mode: &str, size: (u32, u32), data: &[u8]) -> Result<Self, PilError> {
         let (w, h) = size;
         if w == 0 || h == 0 {
@@ -319,6 +401,15 @@ impl Image {
         Ok(Image::Loaded(img, explicit_mode))
     }
 
+    /// Creates a lazy image from a filesystem path.
+    ///
+    /// The image is decoded when pixel data is first needed. PNG palette data
+    /// may be inspected eagerly so P-mode behavior can be preserved.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when the provided format string is unknown or
+    /// palette probing requires I/O that fails.
     pub fn open(path: &str, format: Option<&str>) -> Result<Self, PilError> {
         let fmt = format
             .and_then(|f| parse_format_str(f).ok())
@@ -339,6 +430,14 @@ impl Image {
         })
     }
 
+    /// Creates a lazy image from encoded image bytes.
+    ///
+    /// Format is detected from magic bytes. PNG palette data may be inspected
+    /// eagerly so P-mode behavior can be preserved.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] if eager palette probing finds invalid data.
     pub fn open_bytes(data: Vec<u8>) -> Result<Self, PilError> {
         let format = detect_format_from_magic(&data);
         // If this is a PNG file, check if it uses a palette (Indexed color type)
@@ -420,6 +519,12 @@ impl Image {
         }
     }
 
+    /// Decodes or executes this image into a concrete pixel buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when lazy decoding, pipeline execution, or format
+    /// conversion fails.
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
         match self {
             Image::Loaded(img, _) => Ok(img.clone()),
@@ -493,8 +598,15 @@ impl Image {
         }
     }
 
-    /// Materialize a Paletted image to its palette indices (Luma8).
-    /// For non-Paletted images, falls through to normal materialize.
+    /// Materializes a `P` image as palette index bytes.
+    ///
+    /// Paletted images return a one-byte-per-pixel `Luma8` buffer containing
+    /// palette indices rather than RGB colors. Non-paletted images delegate to
+    /// [`Image::materialize`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when lazy decoding or pipeline execution fails.
     pub fn materialize_indices(&self) -> Result<DynamicImage, PilError> {
         match self {
             Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
@@ -524,9 +636,12 @@ impl Image {
 
     // ── Pipeline ops ──
 
-    /// Append an op to the pipeline chain.
-    /// If the current Image is already a Pipeline, appends to its ops vec.
-    /// Otherwise wraps in a new Pipeline.
+    /// Returns a lazy image with `op` appended to its pipeline.
+    ///
+    /// Existing pipelines are extended in order. Non-pipeline images become the
+    /// source of a new pipeline. Mode metadata and palettes are carried forward
+    /// when the operation can preserve them; operations that fundamentally
+    /// change mode clear or replace the explicit mode tag.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         // Ops that change the image mode fundamentally should clear explicit_mode
         let explicit_mode = match &op {
@@ -591,6 +706,11 @@ impl Image {
 
     // ── Immediate ops (force materialize) ──
 
+    /// Returns one pixel as an RGBA tuple.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::IndexError`] when coordinates are outside the image.
     pub fn getpixel(&self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
         let (w, h) = self.size()?;
         if x >= w || y >= h {
@@ -606,7 +726,16 @@ impl Image {
         ))
     }
 
-    /// Set a single pixel. Mutates self in-place.
+    /// Queues an in-place single-pixel write.
+    ///
+    /// The color is normalized as `(r, g, b, a)` before entering the pipeline.
+    /// Materialization performs the mode-specific storage conversion.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::IndexError`] when coordinates are outside the image,
+    /// or another [`PilError`] when image size lookup requires decoding and that
+    /// fails.
     pub fn putpixel(&mut self, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) -> Result<(), PilError> {
         let (w, h) = self.size()?;
         if x >= w || y >= h {
@@ -624,7 +753,15 @@ impl Image {
         Ok(())
     }
 
-    /// Mode-aware putpixel for single-int values. Expands int to RGBA per PIL mode rules.
+    /// Queues a Pillow-style single-integer pixel write.
+    ///
+    /// Binding crates use this path when host input is a scalar instead of a
+    /// color tuple. `mode` decides how the scalar expands into the internal
+    /// RGBA tuple before the same [`Image::putpixel`] pipeline path is used.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Image::putpixel`].
     pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
         let (r, g, b, a) = match mode {
             "L" | "1" | "P" => (v, v, v, 255),
@@ -636,15 +773,29 @@ impl Image {
         self.putpixel(x, y, r, g, b, a)
     }
 
-    /// PIL-compatible statistics result. Single-band: scalars. Multi-band: vectors.
+    /// Returns Pillow-compatible image statistics in structured form.
+    ///
+    /// Single-band results use scalar [`StatValue`] variants. Multi-band
+    /// results use list variants in band order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn stat_formatted(&self) -> Result<StatResult, PilError> {
         let bands = self.stat()?;
         Ok(StatResult::from_bands(&bands))
     }
 
-    /// Compute per-band statistics: count, sum, sum2, mean, rms, var, stddev, extrema.
-    /// Returns vectors indexed by band: [band0_stats, band1_stats, ...].
-    /// Each band is: [count, sum, sum2, mean, median, rms, var, stddev, min, max]
+    /// Computes per-band statistics.
+    ///
+    /// The return value is indexed by band. Each band contains:
+    /// `[count, sum, sum2, mean, median, rms, var, stddev, min, max]`.
+    /// Integer (`"I"`) and floating (`"F"`) modes follow Pillow's histogram
+    /// fallback behavior instead of reporting raw numeric-domain statistics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {
         let explicit_mode = self.explicit_mode();
         let is_f = explicit_mode == Some("F");
@@ -816,6 +967,12 @@ impl Image {
         Ok(results)
     }
 
+    /// Returns Pillow band names for the current image mode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when lazy image data must be decoded and decoding
+    /// fails.
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
         if matches!(self, Image::Paletted(_)) {
             return Ok(vec!["P".to_string()]);
@@ -854,6 +1011,12 @@ impl Image {
         Ok(bands)
     }
 
+    /// Encodes and writes the image to a filesystem path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when format detection, encoding, materialization, or
+    /// filesystem writing fails.
     pub fn save(&self, path: &str, format: Option<&str>) -> Result<(), PilError> {
         // Paletted images: convert via the palette to RGB for visual correctness
         let img = self.paletted_to_rgb().unwrap_or(self.materialize()?);
@@ -869,11 +1032,26 @@ impl Image {
         Ok(())
     }
 
+    /// Returns raw image bytes in the image's current Pillow mode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization or mode-specific byte packing
+    /// fails.
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
         self.tobytes_formatted(self.explicit_mode().unwrap_or(""))
     }
 
-    /// Like tobytes() but takes an explicit mode override (for Python-side modes like F/I).
+    /// Returns raw image bytes using an explicit Pillow mode override.
+    ///
+    /// This is the binding-facing form of [`Image::tobytes`]. Modes `"F"` and
+    /// `"I"` return the internal little-endian 4-byte scalar representation.
+    /// Mode `"1"` packs pixels eight per byte, most-significant bit first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization or mode-specific byte packing
+    /// fails.
     pub fn tobytes_formatted(&self, mode: &str) -> Result<Vec<u8>, PilError> {
         // Fast path for Paletted: return raw index bytes
         if let Image::Paletted(data) = self {
@@ -909,7 +1087,10 @@ impl Image {
         Ok(img.as_bytes().to_vec())
     }
 
-    /// Lock this image to a specific backend for its entire pipeline.
+    /// Locks this image pipeline to one compute backend.
+    ///
+    /// The backend choice is applied when the image is materialized. Non-pipeline
+    /// images are returned unchanged because there is no deferred work to route.
     pub fn use_backend(mut self, b: crate::compute::Backend) -> Image {
         if let Image::Pipeline { backend, .. } = &mut self {
             *backend = Some(b);
@@ -917,7 +1098,7 @@ impl Image {
         self
     }
 
-    /// Get the backend locked for this image, if any.
+    /// Returns the backend explicitly locked on this pipeline, if any.
     pub fn backend(&self) -> Option<crate::compute::Backend> {
         match self {
             Image::Pipeline { backend, .. } => *backend,
@@ -925,7 +1106,11 @@ impl Image {
         }
     }
 
-    /// Return the explicit mode override if set (e.g. "1", "P")
+    /// Returns the explicit Pillow mode tag carried by this image.
+    ///
+    /// Some Pillow modes cannot be represented by `pillow-rs-image` color types
+    /// alone. This method exposes the side-channel mode tag for modes such as
+    /// `"1"`, `"P"`, `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
     pub fn explicit_mode(&self) -> Option<&str> {
         match self {
             Image::Loaded(_, Some(m)) => Some(m.as_str()),
@@ -938,8 +1123,10 @@ impl Image {
         }
     }
 
-    /// Return the palette data (RGB triples) for P-mode images.
-    /// PIL stores the palette as 768 bytes (256 × R,G,B), accessible via getpalette().
+    /// Returns palette data for `P` images as RGB triples.
+    ///
+    /// The full palette is 768 bytes: 256 entries of `R, G, B`. Pipeline images
+    /// can carry a copied palette so palette-safe operations preserve `P` mode.
     pub fn palette(&self) -> Option<Vec<u8>> {
         match self {
             Image::Paletted(data) => Some(data.palette.clone()),
@@ -948,10 +1135,10 @@ impl Image {
         }
     }
 
-    /// Return palette trimmed of trailing zero RGB triples, matching PIL's getpalette().
-    /// PIL: returns the palette as a flat list of RGB values, trimmed to the last
-    /// non-zero triple. WEB palette has 226 colors (678 bytes). Full custom palette
-    /// has 256 colors (768 bytes).
+    /// Returns palette data trimmed like Pillow's `getpalette`.
+    ///
+    /// Trailing all-zero RGB triples are removed. A full palette may still return
+    /// 768 bytes when later entries are non-zero.
     pub fn getpalette_trimmed(&self) -> Option<Vec<u8>> {
         let raw = self.palette()?;
         let mut last = raw.len();
@@ -961,13 +1148,16 @@ impl Image {
         Some(raw[..last].to_vec())
     }
 
-    /// Apply transparency mask to image.
-    /// PIL: For P-mode images with palette transparency, converts the palette
-    /// from RGB to RGBA format, setting alpha=0 for transparent entries.
-    /// For non-P-mode images, this is a no-op.
-    /// Our implementation: For Paletted images, expands palette indices to
-    /// full RGBA pixels with alpha=255 (since we don't store separate
-    /// transparency info). For other modes, no-op.
+    /// Applies stored transparency information when available.
+    ///
+    /// Current core storage does not keep a separate palette transparency table.
+    /// For [`Image::Paletted`] values this expands indices to RGBA pixels with
+    /// opaque alpha; other image variants are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; the result type is preserved for Pillow API
+    /// compatibility and future metadata-backed transparency handling.
     pub fn apply_transparency(&mut self) -> Result<(), PilError> {
         // Extract Paletted data via clone to avoid borrow issues with self-mutation
         let pal_data = match self {
@@ -990,29 +1180,37 @@ impl Image {
         Ok(())
     }
 
-    /// Return list of child images (multi-frame formats like GIF, TIFF).
-    /// PIL: Returns frames from multi-frame images. We don't support multi-frame yet.
+    /// Returns child images for multi-frame formats.
+    ///
+    /// Multi-frame decoding is not implemented in core yet, so this currently
+    /// returns an empty vector for all inputs.
     pub fn get_child_images(&self) -> Vec<Image> {
         vec![]
     }
 
-    /// Return EXIF data as raw bytes.
-    /// PIL: Returns Image.Exif object or the raw EXIF bytes from the image file.
-    /// We return minimal empty EXIF header bytes matching PIL's empty EXIF format.
+    /// Returns EXIF metadata bytes.
+    ///
+    /// Core does not currently parse EXIF metadata from encoded containers, so
+    /// this returns an empty byte vector.
     pub fn getexif(&self) -> Vec<u8> {
         // Return empty vec — no EXIF data extracted. PIL returns empty Exif dict {}.
         // Full EXIF extraction would need TIFF/EXIF parsing from JPEG/HEIF headers.
         Vec::new()
     }
 
-    /// Return XMP metadata. PIL parses XMP XML from image headers.
-    /// We don't parse XMP yet — returns empty dict.
+    /// Returns XMP metadata fields.
+    ///
+    /// Core does not currently parse XMP packets from encoded containers, so
+    /// this returns an empty map.
     pub fn getxmp(&self) -> std::collections::HashMap<String, String> {
         std::collections::HashMap::new()
     }
 
-    /// Return internal C capsule. PIL returns a PyCapsule wrapping the C Imaging object.
-    /// Rust has no C pointer to wrap — returns None. Python binding formats the string.
+    /// Returns Pillow's internal-image handle equivalent.
+    ///
+    /// Pure Rust core has no C `Imaging` pointer or capsule to expose, so this
+    /// returns `None`. Binding crates may format that as a Pillow-compatible
+    /// placeholder.
     pub fn getim(&self) -> Option<u64> {
         None
     }
@@ -1026,7 +1224,14 @@ impl Image {
         }
     }
 
-    /// Encode image to PNG bytes.
+    /// Encodes the image as PNG bytes.
+    ///
+    /// Paletted images are rendered through their palette before encoding so
+    /// saved output contains visible RGB colors rather than raw index bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization or PNG encoding fails.
     pub fn to_png_bytes(&self) -> Result<Vec<u8>, PilError> {
         match self.paletted_to_rgb() {
             Some(img) => {
@@ -1045,9 +1250,15 @@ impl Image {
         }
     }
 
-    /// Materialize for operations: converts Paletted to RGB so ops work on actual
-    /// pixel colors. Non-Paletted images are materialized normally.
-    /// This is for ops (paste, composite, filter, etc.) — NOT for save/tobytes.
+    /// Materializes the image for color-space image operations.
+    ///
+    /// `P` images are converted through their palette to RGB so operations such
+    /// as paste, composite, and filters operate on visible colors. Use
+    /// [`Image::materialize_indices`] when an operation needs palette indices.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when lazy decoding or pipeline execution fails.
     pub fn materialize_for_ops(&self) -> Result<DynamicImage, PilError> {
         // Fast path: Paletted images have direct palette→RGB conversion
         if let Some(rgb) = self.paletted_to_rgb() {
@@ -1094,6 +1305,12 @@ impl Image {
         }
     }
 
+    /// Returns image dimensions as `(width, height)` in pixels.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when a lazy image must be decoded and decoding
+    /// fails.
     pub fn size(&self) -> Result<(u32, u32), PilError> {
         if let Image::Paletted(data) = self {
             return Ok(data.indices.dimensions());
@@ -1102,6 +1319,12 @@ impl Image {
         Ok((img.width(), img.height()))
     }
 
+    /// Returns the Pillow mode string for this image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when lazy data must be materialized to determine
+    /// the mode and that materialization fails.
     pub fn mode(&self) -> Result<String, PilError> {
         if matches!(self, Image::Paletted(_)) {
             return Ok("P".to_string());
@@ -1141,6 +1364,7 @@ impl Image {
         Ok(color_type_to_mode(img.color()).to_string())
     }
 
+    /// Returns the known image format name, if the image came from encoded input.
     pub fn format_name(&self) -> Option<String> {
         match self {
             Image::Loaded(_, _) | Image::Paletted(_) => None,
@@ -1150,17 +1374,30 @@ impl Image {
         }
     }
 
-    /// Load pixel data (no-op in Rust — data is always loaded). Returns Ok.
+    /// Forces lazy decoding and pipeline execution.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn load(&self) -> Result<(), PilError> {
         self.materialize()?;
         Ok(())
     }
 
+    /// Returns a deep clone of the image handle and its current lazy state.
     pub fn copy(&self) -> Self {
         self.clone()
     }
 
-    /// Get pixel data as sequence. Returns per-channel values in display order.
+    /// Returns pixel data as a flat sequence of channel bytes.
+    ///
+    /// When `band` is `Some`, returns only that channel. Negative bands are not
+    /// interpreted here; callers should pass a non-negative band index. Without
+    /// `band`, bytes are returned in the current decoded image channel order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn getdata(&self, band: Option<i32>) -> Result<Vec<u8>, PilError> {
         let img = self.materialize()?;
         let band = band.unwrap_or(-1);
@@ -1196,8 +1433,15 @@ impl Image {
         }
     }
 
-    /// Set pixel data from a flat byte sequence (matching image mode dimensions).
-    /// Pipelined — data is stored and applied lazily at materialize time.
+    /// Queues replacement pixel data from a flat byte sequence.
+    ///
+    /// `data` must match the active image mode and dimensions expected by the
+    /// pipeline operation. Validation happens when the pipeline is materialized.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; materialization reports invalid byte length
+    /// or mode mismatches.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
         let new_self = Image::push_op(
             self,
@@ -1209,7 +1453,14 @@ impl Image {
         Ok(())
     }
 
-    /// Extract a single channel as an L-mode image.
+    /// Extracts one channel as an `L` image.
+    ///
+    /// Negative indices count from the end, matching Pillow band indexing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when `channel` is out of range, or
+    /// another [`PilError`] when materialization fails.
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
         // Validate channel index (requires materialized image for band count)
         let img = self.materialize()?;
@@ -1233,16 +1484,29 @@ impl Image {
         ))
     }
 
-    /// Set/replace alpha channel. Preserves mode: L→LA, RGB→RGBA, LA→LA, RGBA→RGBA.
-    /// Set alpha channel: L→LA, RGB→RGBA, LA→replace alpha. Pipelined.
+    /// Queues replacement of the alpha channel.
+    ///
+    /// Materialization preserves Pillow-style mode intent: `L` becomes `LA`,
+    /// `RGB` becomes `RGBA`, and existing `LA`/`RGBA` alpha bytes are replaced.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(())`; materialization reports later pipeline
+    /// failures.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha });
         *self = new_self;
         Ok(())
     }
 
-    /// Get unique colors and their counts.
-    /// Returns (count, color) pairs. Color is Vec<u8> matching the image mode.
+    /// Returns unique colors and their counts.
+    ///
+    /// The result is `None` when the image contains more than `maxcolors`
+    /// distinct colors. Each color is returned as bytes matching the image mode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when mode detection or materialization fails.
     #[allow(clippy::type_complexity)]
     pub fn getcolors(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
         let mode = self.mode()?;
@@ -1334,7 +1598,11 @@ impl Image {
         Ok(Some(result))
     }
 
-    /// Get entropy of the image. Uses per-band histogram matching PIL.
+    /// Returns Shannon entropy using Pillow-compatible per-band histograms.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn entropy(&self) -> Result<f64, PilError> {
         let img = self.materialize()?;
         let n_bands = match img.color() {
@@ -1381,8 +1649,15 @@ impl Image {
         Ok(entropy)
     }
 
-    /// Get horizontal and vertical projections.
-    /// PIL returns 1 if the column/row contains any non-zero pixel, 0 otherwise.
+    /// Returns horizontal and vertical non-zero pixel projections.
+    ///
+    /// The first vector has one entry per column and the second has one entry
+    /// per row. Entries are `1` when any converted-luma pixel on that axis is
+    /// non-zero, otherwise `0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn getprojection(&self) -> Result<(Vec<u32>, Vec<u32>), PilError> {
         let img = self.materialize()?;
         let (w, h) = (img.width() as usize, img.height() as usize);
@@ -1398,7 +1673,14 @@ impl Image {
         Ok((h_proj, v_proj))
     }
 
-    /// Convert to X11 bitmap format (returns raw bitmap data).
+    /// Converts the image to X11 bitmap (`XBM`) source bytes.
+    ///
+    /// Mode `"1"` treats any non-zero pixel as white. Other modes are converted
+    /// through luma and thresholded at `128`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when mode detection or materialization fails.
     pub fn tobitmap(&self) -> Result<Vec<u8>, PilError> {
         let mode = self.mode()?;
         let is_mode1 = mode == "1";
@@ -1446,20 +1728,32 @@ impl Image {
         Ok(xbm.into_bytes())
     }
 
-    /// Seek to frame in multi-frame image. Stub for now (no multi-frame support).
+    /// Seeks to a frame in a multi-frame image.
+    ///
+    /// Multi-frame decoding is not implemented in core yet, so this accepts the
+    /// request and leaves the image unchanged.
     pub fn seek(&self, _frame: u32) -> Result<(), PilError> {
         Ok(())
     }
 
-    /// Return current frame number.
+    /// Returns the current frame number.
+    ///
+    /// Multi-frame decoding is not implemented in core yet, so this always
+    /// returns `0`.
     pub fn tell(&self) -> u32 {
         0
     }
 
-    /// Remap palette using a destination map.
-    /// For P-mode images, operates on palette indices directly.
-    /// For other modes, operates on RGB color values.
-    /// PIL creates an inverse mapping: old_value_not_in_dest_map -> 0.
+    /// Remaps palette indices through `dest_map`.
+    ///
+    /// `P` images operate on palette indices directly. Other modes operate on
+    /// RGB color values and return a `P`-tagged pipeline result. Values absent
+    /// from `dest_map` map to `0`, matching Pillow's inverse-map behavior.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; invalid map behavior is handled during
+    /// pipeline execution.
     pub fn remap_palette(&self, dest_map: &[u8]) -> Result<Image, PilError> {
         // Defer remap via pipeline — PipelineOp::RemapPalette handles P/L/RGB modes
         // PIL: remap_palette always returns a P-mode image (palette indices).
@@ -1535,9 +1829,7 @@ fn decode_paletted_png_reader<R: Read + Seek>(r: &mut R) -> Result<PalettedData,
     })
 }
 
-/// Check if PNG data contains a PLTE (palette) chunk.
-#[allow(dead_code)]
-/// Detect image format from magic bytes.
+/// Detects image format from magic bytes.
 fn detect_format_from_magic(data: &[u8]) -> Option<ImageFormat> {
     if data.len() >= 3 && &data[..3] == b"GIF" {
         Some(ImageFormat::Gif)
@@ -1604,8 +1896,7 @@ fn is_grayscale_rgb(img: &DynamicImage) -> bool {
     rgb.pixels().all(|p| p[0] == p[1] && p[1] == p[2])
 }
 
-/// Helper: preserve the color mode of the input image after operations
-/// that may convert to RGBA (e.g., the `image` crate's resize always returns RGBA).
+/// Preserves the input image color type after operations that may widen to RGBA.
 ///
 /// For L/LA modes, extracts the R channel directly (GPU stores luma in R, and
 /// G/B may be stale after mode-aware processing). Uses `to_luma8()`/`to_luma_alpha8()`
@@ -1643,7 +1934,12 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
         _ => result,
     }
 }
-/// Convert raw flat bytes back to a DynamicImage based on channel count.
+/// Converts raw flat bytes into a [`DynamicImage`] with `channels` bytes per pixel.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `channels` is not one of `1`, `2`,
+/// `3`, or `4`, or when the byte length does not match `w * h * channels`.
 pub fn raw_bytes_to_image(
     w: u32,
     h: u32,
@@ -1674,8 +1970,10 @@ pub fn raw_bytes_to_image(
     }
 }
 
-/// Compute basic statistics from a list of values (PIL's ImageStat fallback
-/// for non-Image inputs like plain lists). Returns (count, sum, mean, min, max).
+/// Computes basic statistics for non-image numeric input.
+///
+/// This is the Pillow `ImageStat` fallback for plain lists. The returned tuple
+/// is `(count, sum, mean, min, max)`.
 pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
     let count = data.len() as f64;
     let sum: f64 = data.iter().sum();
@@ -1693,15 +1991,16 @@ pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
     (count, sum, mean, min_val, max_val)
 }
 
-/// Convert ResampleFilter to image crate's FilterType.
-/// Resize an I-mode image (32-bit signed integers stored as RGBA8 bytes LE).
-/// Uses PIL-compatible direct 2D interpolation with f64 precision and i32 rounding.
-#[allow(dead_code)]
-/// Execute a single PipelineOp against a DynamicImage.
-/// Each op borrows the input, allocates and returns the output.
-/// `explicit_mode` carries the PIL mode override (e.g. "F", "P") that the
-/// underlying DynamicImage cannot express natively.
-/// `palette` carries the palette data for P-mode images (768 bytes of RGB triples).
+/// Executes one [`PipelineOp`] against a materialized image.
+///
+/// `explicit_mode` carries Pillow mode tags, such as `"F"` or `"P"`, that the
+/// underlying [`DynamicImage`] cannot express directly. The optional palette is
+/// accepted for API symmetry with older call sites; CPU registry execution
+/// currently receives palette state through the operation or image pipeline.
+///
+/// # Errors
+///
+/// Returns [`PilError`] from the CPU registry implementation.
 pub fn execute_op(
     img: &DynamicImage,
     op: &PipelineOp,

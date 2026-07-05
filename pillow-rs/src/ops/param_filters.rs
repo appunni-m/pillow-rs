@@ -1,5 +1,7 @@
-//! Parameterized image filters — GaussianBlur, BoxBlur, UnsharpMask,
-//! MaxFilter, MinFilter, MedianFilter, ModeFilter, RankFilter.
+//! Parameterized Pillow image filters.
+//!
+//! Most methods return lazy pipeline operations. Filters that need multiple
+//! passes or mode-specific CPU behavior may materialize immediately.
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
@@ -23,7 +25,14 @@ fn find_mode_with_count(hist: &[u32; 256]) -> (u8, u32) {
 }
 
 impl Image {
-    /// Gaussian blur with given radius. Larger radius = more blur.
+    /// Applies Gaussian blur with the given radius.
+    ///
+    /// Larger radius produces more blur.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn gaussian_blur(&self, radius: f32) -> Result<Image, PilError> {
         Ok(Image::push_op(
             self,
@@ -31,7 +40,12 @@ impl Image {
         ))
     }
 
-    /// Box blur (uniform kernel) with given radius.
+    /// Applies box blur with a uniform kernel radius.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn box_blur(&self, radius: f32) -> Result<Image, PilError> {
         Ok(Image::push_op(
             self,
@@ -53,12 +67,18 @@ impl Image {
         }
     }
 
-    /// Unsharp mask: sharpen by subtracting a blurred version.
+    /// Applies Pillow-style unsharp masking.
+    ///
     /// `radius` controls blur amount, `percent` controls strength (150 = 150%),
     /// `threshold` is minimum difference to apply.
     /// Uses PIL-style GaussianBlur for the blurred version.
     /// Handles any number of channels (L=1, LA=2, RGB=3, RGBA=4).
     /// Uses PIL's exact integer arithmetic: `clip8(original + diff * percent / 100)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization, blur execution, allocation
+    /// checks, or raw image reconstruction fails.
     pub fn unsharp_mask(
         &self,
         radius: f32,
@@ -98,25 +118,50 @@ impl Image {
         Ok(Image::Loaded(result, None))
     }
 
-    /// Max filter: each pixel becomes the maximum in its neighborhood.
+    /// Applies a maximum filter over an odd neighborhood.
+    ///
+    /// `size` is rounded up to an odd value of at least `3`.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn max_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::MaxFilter { size }))
     }
 
-    /// Min filter: each pixel becomes the minimum in its neighborhood.
+    /// Applies a minimum filter over an odd neighborhood.
+    ///
+    /// `size` is rounded up to an odd value of at least `3`.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn min_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::MinFilter { size }))
     }
 
-    /// Median filter: each pixel becomes the median in its neighborhood.
+    /// Applies a median filter over an odd neighborhood.
+    ///
+    /// `size` is rounded up to an odd value of at least `3`.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn median_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::MedianFilter { size }))
     }
 
-    /// Mode filter: each pixel becomes the most common value in its neighborhood.
+    /// Applies a mode filter over an odd neighborhood.
+    ///
+    /// Each pixel becomes the most common value in its neighborhood when that
+    /// value occurs more than twice; otherwise the original pixel is preserved.
+    ///
     /// PIL C behavior:
     ///   - Single-band only at C level; multi-band processed per-channel
     ///   - Strict `>` tie-breaking (lower value wins)
@@ -124,6 +169,11 @@ impl Image {
     ///   - Pixels outside image boundary are SKIPPED (not clamped/replicated)
     ///   - Supports any channel count (1=L, 2=LA, 3=RGB, 4=RGBA)
     ///   - For P-mode (palette): operates on palette indices, preserves palette
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization, allocation checks, or raw image
+    /// reconstruction fails.
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
 
@@ -193,13 +243,29 @@ impl Image {
         Ok(Image::Loaded(result, None))
     }
 
-    /// Rank filter: each pixel becomes the k-th smallest value in its neighborhood.
+    /// Applies a rank filter over an odd neighborhood.
+    ///
+    /// Each pixel becomes the `rank`-th value after sorting the neighborhood.
+    /// `size` is rounded up to an odd value of at least `3`.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::RankFilter { size, rank }))
     }
 
-    /// 3D Color Lookup Table with trilinear interpolation.
+    /// Applies a 3D color lookup table with trilinear interpolation.
+    ///
+    /// `size` is the LUT grid size, `table` contains the LUT values, and
+    /// `channels` is the number of output channels.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; LUT validation is handled during pipeline
+    /// execution.
     pub fn color3dlut(
         &self,
         size: (u32, u32, u32),

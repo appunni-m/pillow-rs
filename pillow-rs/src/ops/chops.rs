@@ -1,5 +1,7 @@
-//! ImageChops — channel operations (arithmetic, logical, blending).
-//! All functions take images and return a new combined image via PipelineOp.
+//! Pillow `ImageChops`-style channel operations.
+//!
+//! Functions return lazy pipeline images that combine one or two inputs. Shape
+//! and mode compatibility are checked when the pipeline materializes.
 
 use std::sync::Arc;
 
@@ -7,7 +9,12 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
-/// Add two images. Result = image1 + image2, scaled and offset.
+/// Adds two images with scale and offset.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -19,7 +26,12 @@ pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Im
     ))
 }
 
-/// Subtract image2 from image1.
+/// Subtracts `image2` from `image1` with scale and offset.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn subtract(
     image1: &Image,
     image2: &Image,
@@ -36,7 +48,12 @@ pub fn subtract(
     ))
 }
 
-/// Multiply two images.
+/// Multiplies two images channel-by-channel.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -46,7 +63,12 @@ pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Screen blend mode (PIL uses integer division).
+/// Applies screen blend mode.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -56,7 +78,12 @@ pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Return the darker pixel at each position.
+/// Keeps the darker pixel at each position.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -66,7 +93,12 @@ pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Return the lighter pixel at each position.
+/// Keeps the lighter pixel at each position.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -76,7 +108,12 @@ pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Absolute difference between two images.
+/// Computes absolute channel difference between two images.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -86,7 +123,12 @@ pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Overlay blend mode.
+/// Applies overlay blend mode.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -96,7 +138,12 @@ pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Soft light blend mode.
+/// Applies soft-light blend mode.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -106,7 +153,12 @@ pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Hard light blend mode.
+/// Applies hard-light blend mode.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -116,7 +168,12 @@ pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Bitwise AND.
+/// Applies bitwise AND.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -126,7 +183,12 @@ pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Bitwise OR.
+/// Applies bitwise OR.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -136,7 +198,12 @@ pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Bitwise XOR.
+/// Applies bitwise XOR.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn logical_xor(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -151,12 +218,21 @@ pub fn duplicate(image: &Image) -> Image {
     image.copy()
 }
 
-/// Invert an image (same as ImageOps.invert).
+/// Inverts an image through the ImageChops compatibility surface.
+///
+/// # Errors
+///
+/// Returns errors from [`crate::ops::imageops::invert`].
 pub fn invert(image: &Image) -> Result<Image, PilError> {
     crate::ops::imageops::invert(image)
 }
 
-/// Offset image contents.
+/// Offsets image contents by wrapping pixels around both axes.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn offset(image: &Image, xoffset: i32, yoffset: i32) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
@@ -167,7 +243,12 @@ pub fn offset(image: &Image, xoffset: i32, yoffset: i32) -> Result<Image, PilErr
     ))
 }
 
-/// Modulo addition (wrap-around).
+/// Adds two images modulo 256.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -177,7 +258,12 @@ pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Modulo subtraction.
+/// Subtracts two images modulo 256.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; size or mode mismatches are reported during
+/// materialization.
 pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image1,
@@ -187,7 +273,12 @@ pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError
     ))
 }
 
-/// Fill with constant value (single-channel fill).
+/// Fills active channels with a constant byte value.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn constant(image: &Image, value: u8) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Constant { value }))
 }

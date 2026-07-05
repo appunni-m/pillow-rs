@@ -3,10 +3,16 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 impl Image {
-    /// Rotate the image by the given angle (in degrees).
-    /// expand: if true, expands output to fit rotated image.
-    /// fillcolor: optional RGBA fill color for exposed areas.
-    /// Angle is normalized to [0, 360) matching PIL behavior.
+    /// Rotates the image by `angle` degrees.
+    ///
+    /// When `expand` is true, the output canvas expands to contain the rotated
+    /// image. `fillcolor` is used for newly exposed pixels. The angle is
+    /// normalized into Pillow's `0..360` degree range.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+    /// materialization failures.
     pub fn rotate(
         &self,
         angle: f64,

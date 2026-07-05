@@ -6,14 +6,19 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
-/// Source for paste: another image or a solid RGBA color.
+/// Source pixels for [`Image::paste`].
 pub enum PasteSource {
+    /// Paste pixels from another image.
     Image(Image),
+    /// Paste a solid RGBA color.
     Color((u8, u8, u8, u8)),
 }
 
 impl PasteSource {
-    /// Build from extracted Rust values. Image takes priority over raw color values.
+    /// Builds a paste source from binding-normalized values.
+    ///
+    /// When `image` is present it takes priority. Otherwise the RGBA tuple is
+    /// used as a solid color source.
     pub fn from_parts(image: Option<Image>, r: u8, g: u8, b: u8, a: u8) -> Self {
         if let Some(img) = image {
             PasteSource::Image(img)
@@ -24,7 +29,18 @@ impl PasteSource {
 }
 
 impl Image {
-    /// Paste source image or color onto self (mutates in-place, matching Pillow).
+    /// Queues a Pillow-style paste into this image.
+    ///
+    /// Image sources default to pasting at `(0, 0)` when `box_coords` is absent.
+    /// Color sources require a four-coordinate box so the fill region has a
+    /// defined width and height. `mask`, when present, is carried into the
+    /// pipeline for masked paste semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when a color paste has no valid box.
+    /// Returns other [`PilError`] values when source size lookup or color-image
+    /// construction fails.
     pub fn paste(
         &mut self,
         source: PasteSource,
@@ -73,8 +89,15 @@ impl Image {
         Ok(())
     }
 
-    /// Alpha composite source image onto self (mutates in-place).
-    /// dest: offset into self, src: offset into source.
+    /// Queues alpha compositing of `source` over this image.
+    ///
+    /// `dest` is the offset in the destination image and `src` is the offset in
+    /// the source image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when source and destination dimensions
+    /// differ, or another [`PilError`] when size lookup fails.
     pub fn alpha_composite(
         &mut self,
         source: &Image,

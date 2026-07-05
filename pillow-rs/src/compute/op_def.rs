@@ -42,18 +42,21 @@
 
 use pillow_rs_image::DynamicImage;
 
-/// AS PER DESIGN — DO NOT REMOVE:
-/// OpEntry stores the per-backend function pointers for an operation.
-/// Each field is an Option because not all backends support every op.
+/// Registered backend functions for one operation key.
+///
+/// # Internal Contract
+///
+/// `OpEntry` is populated by the `define_op!` macro. Fields are optional because an
+/// operation may not have GPU or SIMD support even when CPU support exists.
 #[derive(Clone)]
 pub struct OpEntry {
-    /// CPU implementation (always present — CPU is the universal fallback)
+    /// CPU implementation for the operation.
     pub cpu_fn: Option<
         fn(&DynamicImage, &str, &[u32], &[f64]) -> Result<DynamicImage, crate::error::PilError>,
     >,
-    /// GPU shader name (e.g., "crop.wgsl")
+    /// GPU shader file name, for example `"crop.wgsl"`.
     pub gpu_shader: Option<&'static str>,
-    /// SIMD adapter function
+    /// SIMD adapter function.
     pub simd_fn: Option<
         fn(&DynamicImage, &str, &[u32], &[f64]) -> Result<DynamicImage, crate::error::PilError>,
     >,
@@ -68,8 +71,7 @@ pub struct OpEntry {
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-/// Global operation registry.
-/// AS PER DESIGN: OnceLock<Mutex<...>> for thread-safe lazy initialization.
+/// Global operation registry used by macro-backed operation definitions.
 static OP_REGISTRY: std::sync::OnceLock<Mutex<HashMap<&'static str, OpEntry>>> =
     std::sync::OnceLock::new();
 
@@ -77,9 +79,13 @@ fn registry() -> &'static Mutex<HashMap<&'static str, OpEntry>> {
     OP_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// AS PER DESIGN — DO NOT REMOVE:
-/// Register an operation entry. Called by the define_op! macro for each op.
-/// Panics on duplicate keys (indicates a bug — two ops with the same key).
+/// Registers an operation entry.
+///
+/// This is called by the `define_op!` macro for each operation key.
+///
+/// # Panics
+///
+/// Panics when an operation key is registered more than once.
 pub fn register_op(key: &'static str, entry: OpEntry) {
     let mut map = registry().lock().unwrap_or_else(|poisoned| {
         // AS PER DESIGN: Recover from poisoned mutex (e.g., panic in test).
@@ -96,7 +102,7 @@ pub fn register_op(key: &'static str, entry: OpEntry) {
     map.insert(key, entry);
 }
 
-/// Look up an operation entry by key.
+/// Looks up an operation entry by registry key.
 pub fn get_op(key: &str) -> Option<OpEntry> {
     registry()
         .lock()
@@ -108,7 +114,7 @@ pub fn get_op(key: &str) -> Option<OpEntry> {
         .cloned()
 }
 
-/// List all registered operation keys. Useful for validation/debugging.
+/// Returns all registered operation keys.
 pub fn registered_keys() -> Vec<&'static str> {
     registry()
         .lock()
@@ -121,7 +127,7 @@ pub fn registered_keys() -> Vec<&'static str> {
         .collect()
 }
 
-/// Check if an operation key is registered.
+/// Returns whether an operation key is registered.
 pub fn is_registered(key: &str) -> bool {
     registry()
         .lock()
@@ -141,6 +147,10 @@ pub fn is_registered(key: &str) -> bool {
 //     2. Provide a dispatch function that extracts fields and calls the impl
 // ============================================================================
 
+/// Defines and registers a compute operation descriptor.
+///
+/// The macro is used by backend registration code to keep the operation key,
+/// field extraction, and CPU implementation together.
 #[macro_export]
 macro_rules! define_op {
     // ── CPU-only op ──

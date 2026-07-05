@@ -1,5 +1,7 @@
-//! Image module-level functions — merge, blend, composite, eval, and effects.
-//! These correspond to PIL.Image.merge(), PIL.Image.blend(), PIL.Image.composite().
+//! Pillow `Image` module-level functions.
+//!
+//! These functions mirror surfaces such as `Image.merge`, `Image.blend`,
+//! `Image.composite`, `Image.eval`, and synthetic image effects.
 
 use std::sync::Arc;
 
@@ -9,8 +11,15 @@ use crate::image::Image;
 use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
 
-/// Merge single-band images into a multi-band image.
-/// PIL: `Image.merge(mode, bands)` where mode determines the band count.
+/// Merges single-band images into a multi-band image.
+///
+/// `mode` determines the required band count: `L=1`, `LA=2`, `RGB=3`, and
+/// `RGBA=4`.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `mode` is unsupported or `bands` has
+/// the wrong length.
 pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     let n_expected = match mode {
         "RGB" => 3,
@@ -44,8 +53,15 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     ))
 }
 
-/// Linear interpolation between two images.
-/// PIL: `Image.blend(im1, im2, alpha)` -> (1-alpha)*im1 + alpha*im2
+/// Blends two same-sized images by linear interpolation.
+///
+/// `alpha` is clamped to `0.0..=1.0`; output is `(1 - alpha) * image1 +
+/// alpha * image2`.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when image dimensions differ, or another
+/// [`PilError`] when size lookup fails.
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let alpha = alpha.clamp(0.0, 1.0);
     let (w1, h1) = image1.size()?;
@@ -62,9 +78,15 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
     ))
 }
 
-/// Composite image1 over image2 using mask.
-/// PIL: `Image.composite(image1, image2, mask)`
-/// `mode` is an optional mode override (e.g. "P" when composite is called on P-mode images).
+/// Composites `image1` over `image2` using `mask`.
+///
+/// `mode` is an optional Pillow mode override, for example `"P"` when
+/// composite is called on palette images through a binding.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `image1` and `mask` dimensions differ,
+/// or another [`PilError`] when size lookup fails.
 pub fn composite(
     image1: &Image,
     image2: &Image,
@@ -101,8 +123,15 @@ pub fn composite(
     Ok(result)
 }
 
-/// Apply a lookup table to each pixel.
-/// PIL: `Image.eval(image, lut)`
+/// Applies a lookup table to each pixel.
+///
+/// `lut` is copied into the lazy operation and interpreted by the point/eval
+/// backend according to the image mode.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; LUT length validation is handled by pipeline
+/// execution.
 pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
@@ -110,8 +139,15 @@ pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     ))
 }
 
-/// Like eval() but replicates a 256-entry LUT across n_bands channels.
-/// PIL: `self.point(lut)` where lut is a function → 256*bands entries.
+/// Applies a lookup table, expanding a single-band table across bands.
+///
+/// A 256-entry `lut` is replicated `n_bands` times. A table already sized to
+/// `256 * n_bands` is used as-is.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `n_bands` is outside `1..=4` or `lut`
+/// has neither 256 nor `256 * n_bands` entries.
 pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Image, PilError> {
     if n_bands == 0 || n_bands > 4 {
         return Err(PilError::ValueError("invalid band count".into()));
@@ -135,22 +171,35 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
     eval(image, &replicated)
 }
 
-/// Generate an image with Gaussian noise.
-/// PIL: `Image.effect_noise(size, sigma)`
-/// Uses the source image only for dimensions.
+/// Generates Gaussian noise using the source image dimensions.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn effect_noise(image: &Image, sigma: f64) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::EffectNoise { sigma }))
 }
 
-/// Spread pixels outward (visual effect).
-/// Uses the source image and applies distance-based spread.
+/// Spreads pixels outward by up to `distance` pixels.
+///
+/// # Errors
+///
+/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
+/// materialization failures.
 pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::EffectSpread { distance }))
 }
 
-/// Generate a 256×256 linear gradient from black (top) to white (bottom).
-/// PIL: `Image.linear_gradient(mode)` — only single-channel modes like "L".
-/// Matches PIL's ImagingFillLinearGradient in src/libImaging/Fill.c exactly.
+/// Generates a 256 by 256 linear gradient.
+///
+/// Single-channel modes increase from black at the top to white at the bottom.
+/// Supported modes are `"1"`, `"L"`, `"P"`, `"I"`, and `"F"`.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
+/// [`PilError`] when raw image construction fails.
 pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
     if mode.len() != 1 {
         return Err(PilError::ValueError(format!(
@@ -204,9 +253,15 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
     Image::frombytes(mode, (256, 256), &data)
 }
 
-/// Generate a 256×256 radial gradient from white (center) to black (edges).
-/// PIL: `Image.radial_gradient(mode)` — only single-channel modes like "L".
-/// Matches PIL's ImagingFillRadialGradient in src/libImaging/Fill.c exactly.
+/// Generates a 256 by 256 radial gradient.
+///
+/// Supported modes are `"1"`, `"L"`, `"P"`, `"I"`, and `"F"`. Pixel values
+/// follow Pillow's radial distance formula.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
+/// [`PilError`] when raw image construction fails.
 pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
     if mode.len() != 1 {
         return Err(PilError::ValueError(format!(
@@ -258,10 +313,16 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
     Image::frombytes(mode, (256, 256), &data)
 }
 
-/// Generate a Mandelbrot set image.
-/// PIL: `Image.effect_mandelbrot(size, extent, quality)`.
-/// Matches PIL's ImagingEffectMandelbrot in src/libImaging/Effects.c exactly,
-/// including the UINT8 overflow behavior when k > quality and pixel escapes.
+/// Generates a Mandelbrot effect image.
+///
+/// `size` is output dimensions, `extent` is `(x0, y0, x1, y1)` in the complex
+/// plane, and `quality` controls iteration count.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] for zero size, negative extent dimensions,
+/// or `quality < 2`. Returns [`PilError::DimensionError`] when allocation
+/// checks fail.
 pub fn effect_mandelbrot(
     size: (u32, u32),
     extent: (f64, f64, f64, f64),
