@@ -175,7 +175,8 @@ fn layout_bbox(ttf: &super::TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
     // negative-left runs keep their ink bbox, matching the generated oracle.
     let has_multiple_glyphs = text.chars().nth(1).is_some();
     let right = if has_multiple_glyphs && left >= 0 {
-        right.max(ttf.inner.getlength(text).ceil() as i32)
+        let advance_26dot6 = (ttf.inner.getlength(text) * 64.0).round() as i32;
+        right.max(pillow_rs_freetype::scaler::pixel_round(advance_26dot6))
     } else {
         right
     };
@@ -233,7 +234,11 @@ fn layout_mask(ttf: &super::TrueTypeFont, text: &str) -> Option<TextMask> {
 fn positioned_glyphs(ttf: &super::TrueTypeFont, text: &str) -> Vec<PositionedGlyph> {
     let mut glyphs = Vec::new();
     let mut cursor_26dot6 = 0i32;
+    let mut previous = None;
     for ch in text.chars() {
+        if let Some(previous) = previous {
+            cursor_26dot6 += ttf.inner.getkerning(previous, ch);
+        }
         let bbox = ttf.inner.getbbox(&ch.to_string());
         glyphs.push(PositionedGlyph {
             bbox_x: pillow_rs_freetype::scaler::pixel_floor(cursor_26dot6),
@@ -243,6 +248,7 @@ fn positioned_glyphs(ttf: &super::TrueTypeFont, text: &str) -> Vec<PositionedGly
         cursor_26dot6 +=
             i32::try_from((ttf.inner.getlength(&ch.to_string()) * 64.0).round() as i64)
                 .unwrap_or(0);
+        previous = Some(ch);
     }
     glyphs
 }

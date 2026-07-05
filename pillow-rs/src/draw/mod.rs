@@ -948,10 +948,13 @@ impl Draw {
         if w == 0 || h == 0 {
             return Ok(());
         }
+        let bbox = crate::font::imagingft::getbbox(font, text);
+        let draw_x = x.saturating_add(bbox.0);
+        let draw_y = y.saturating_add(bbox.1);
 
         match mode.as_str() {
-            "RGB" | "RGBA" => self.text_compose_rgba(x, y, w, h, &pixels),
-            _ => self.text_compose_direct(x, y, w, h, &pixels, &mode, fill),
+            "RGB" | "RGBA" => self.text_compose_rgba(draw_x, draw_y, w, h, &pixels),
+            _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
         }
     }
 
@@ -986,29 +989,33 @@ impl Draw {
                     let dx = (x as u32 + px).min(img_w - 1);
                     let dy = (y as u32 + py).min(img_h - 1);
                     if sa == 255 {
-                        let out_a = if blend_alpha { 255u8 } else { 255u8 };
                         canvas.put_pixel(
                             dx,
                             dy,
-                            Rgba([pixels[off], pixels[off + 1], pixels[off + 2], out_a]),
+                            Rgba([pixels[off], pixels[off + 1], pixels[off + 2], 255u8]),
                         );
                     } else {
                         let dp = canvas.get_pixel(dx, dy);
                         let inv = 255u16 - sa as u16;
-                        canvas.put_pixel(
-                            dx,
-                            dy,
+                        let pixel = if blend_alpha {
+                            // PIL keeps straight RGB for RGBA text masks and
+                            // stores coverage in alpha; RGB is not
+                            // premultiplied by glyph coverage.
+                            Rgba([
+                                pixels[off],
+                                pixels[off + 1],
+                                pixels[off + 2],
+                                blend_u8(255u8, dp[3], sa, inv),
+                            ])
+                        } else {
                             Rgba([
                                 blend_u8(pixels[off], dp[0], sa, inv),
                                 blend_u8(pixels[off + 1], dp[1], sa, inv),
                                 blend_u8(pixels[off + 2], dp[2], sa, inv),
-                                if blend_alpha {
-                                    blend_u8(255u8, dp[3], sa, inv)
-                                } else {
-                                    255u8
-                                },
-                            ]),
-                        );
+                                255u8,
+                            ])
+                        };
+                        canvas.put_pixel(dx, dy, pixel);
                     }
                 }
             }

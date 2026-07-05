@@ -8,6 +8,7 @@ use crate::tt::hdmx::HdmxTable;
 use crate::tt::head::HeadTable;
 use crate::tt::hhea::HheaTable;
 use crate::tt::hmtx::HmtxTable;
+use crate::tt::kern::KernTable;
 use crate::tt::maxp::MaxpTable;
 use crate::tt::name::NameTable;
 use crate::tt::os2::Os2Table;
@@ -32,6 +33,7 @@ pub struct FontData {
     pub vhea: Option<VheaTable>,
     pub vmtx: Option<VmtxTable>,
     pub hdmx: Option<HdmxTable>,
+    pub kern: Option<KernTable>,
     pub loca_data: Vec<u8>,
     pub glyf_data: Vec<u8>,
     pub size_pt: f32,

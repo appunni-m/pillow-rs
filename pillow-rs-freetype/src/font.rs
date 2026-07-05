@@ -233,6 +233,9 @@ impl Font {
         let hdmx = dir
             .find(data, tag(b"hdmx"))
             .and_then(|d| tt::hdmx::parse_hdmx(d, maxp.num_glyphs).ok());
+        let kern = dir
+            .find(data, tag(b"kern"))
+            .and_then(|d| tt::kern::parse_kern(d).ok());
 
         let loca_data = dir
             .find(data, tag(b"loca"))
@@ -270,6 +273,7 @@ impl Font {
             vhea,
             vmtx,
             hdmx,
+            kern,
             loca_data,
             glyf_data,
             size_pt,
@@ -598,6 +602,13 @@ impl Font {
         self.layout_advance(text) as f32 / 64.0
     }
 
+    /// Return scaled legacy `kern` table adjustment for a Unicode pair in 26.6 pixels.
+    pub fn getkerning(&self, left: char, right: char) -> i32 {
+        let left = self.char_index(left as u32);
+        let right = self.char_index(right as u32);
+        self.glyph_kerning(left, right)
+    }
+
     /// Return `FT_GlyphSlotRec::metrics` for a Unicode codepoint loaded with
     /// FreeType's default TrueType load path.
     ///
@@ -797,8 +808,12 @@ impl Font {
     fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {
         let mut glyphs = Vec::new();
         let mut x_position = 0;
+        let mut previous = None;
         for ch in text.chars() {
             let glyph_index = self.char_index(ch as u32);
+            if let Some(previous) = previous {
+                x_position += self.glyph_kerning(previous, glyph_index);
+            }
             let scaled = self.scale_glyph_for_load_mode(glyph_index)?;
             let raster = if scaled.outline.n_contours == 0 {
                 None
@@ -815,6 +830,7 @@ impl Font {
                 raster,
             });
             x_position += scaled.advance_width;
+            previous = Some(glyph_index);
         }
         Ok(glyphs)
     }
@@ -822,10 +838,20 @@ impl Font {
     fn layout_advance(&self, text: &str) -> i32 {
         let data = &self.data;
         let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
+        let mut previous = None;
         text.chars().fold(0, |total, ch| {
             let glyph = self.char_index(ch as u32);
             let m = data.hmtx.get(glyph);
-            total + ft_mul_fix(m.advance_width as i32, scale.x_scale)
+            let kerning = previous.map_or(0, |left| self.glyph_kerning(left, glyph));
+            previous = Some(glyph);
+            total + kerning + ft_mul_fix(m.advance_width as i32, scale.x_scale)
+        })
+    }
+
+    fn glyph_kerning(&self, left: u16, right: u16) -> i32 {
+        self.data.kern.as_ref().map_or(0, |kern| {
+            let value = i32::from(kern.get(left, right));
+            ft_mul_fix(value, self.size_metrics.x_scale)
         })
     }
 
