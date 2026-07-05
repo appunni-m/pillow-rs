@@ -18,6 +18,7 @@ The output is written to:
 
 ```text
 pillow-rs-freetype/target/freetype-bench/latest.json
+pillow-rs-freetype/target/freetype-bench/latest.md
 ```
 
 The JSON contains:
@@ -29,6 +30,18 @@ The JSON contains:
 - `summary.overall`: aggregate operation count, Rust total time, C total time,
   total speedup, and weighted workload speedup.
 - `summary_markdown`: the printable comparison table.
+
+The Markdown report contains:
+
+- benchmark configuration and reproduction command
+- the same result table in review-friendly form
+- aggregate Rust/C total time and speedup summary
+- git/toolchain metadata
+- CPU model, CPU governor, and detected CPU frequency range
+- memory capacity and available memory
+- memory speed/clock when the host exposes it; otherwise an explicit
+  `not available` value with the source used
+- C compiler and FreeType include/library paths
 
 ## Trust Labels
 
@@ -119,6 +132,7 @@ Before accepting benchmark tooling changes:
 ```bash
 python3 -m py_compile pillow-rs-freetype/scripts/bench_freetype.py
 python3 pillow-rs-freetype/scripts/bench_freetype.py --self-test
+python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 2 --table
 cargo test -p pillow-rs-freetype --test perf_benchmark_contract --locked
 cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture
 ```
