@@ -156,8 +156,8 @@ Subagents are isolated workers for classified failure buckets only.
 
 - They must use separate worktrees and branches.
 - They must never edit `/home/appunni/work/pil-wasm` directly.
-- They must receive the exact worktree path, branch, baseline counts, lane
-  test command, and constraints.
+- They must receive the exact worktree path, branch, baseline counts, Makefile
+  lane target, and constraints.
 - They must not push main.
 - They must commit only verified improvements and report changed files,
   before/after counts, verification commands, and remaining bucket.
@@ -174,21 +174,68 @@ Detailed subagent protocol lives in `.claude/skills/freetype-parity`.
 
 ## Build And Test
 
-Common commands:
+All normal workflows must go through `make`.
+
+- Run `make help` first when you do not know the target name.
+- Do not paste raw `cargo`, `python`, `pytest`, `wasm-pack`, or shell script
+  commands for routine build, test, lint, fixture, benchmark, or CI work.
+- If a repeated workflow has no target, add or extend a Makefile target in the
+  same change and document it here. A manual command that is not documented is
+  not a maintained workflow.
+- One-off diagnostic commands are allowed only for investigation. If they become
+  useful twice, promote them to a Makefile target.
+
+Common root targets:
 
 ```bash
-cargo test -p pillow-rs
-cargo test -p pillow-rs-freetype --test coverage_matrix_tests -- --nocapture
-cargo test -p pillow-rs-freetype --test no_runtime_ffi -- --nocapture
-cargo fmt --all -- --check
-cargo clippy -p pillow-rs-freetype --all-targets --all-features -- -D warnings
-bash scripts/build_and_test.sh all
-bash scripts/lint.sh
+make help
+make setup
+make build
+make build-dev
+make build-wasm-release
+make test-core
+make test
+make test-wasm
+make test-all
+make fixtures
+make fmt
+make fmt-fix
+make clippy
+make lint
+make ci
+make verify
 ```
 
-Run the narrow failing test first, then the broader harness. If a full workspace
-clippy failure is unrelated, report it clearly and keep the touched package
-clean.
+FreeType targets:
+
+```bash
+make freetype-help
+make freetype-ci
+make freetype-test
+make freetype-parity
+make freetype-ffi
+make freetype-doc
+make freetype-doc-test
+make freetype-lint
+make freetype-bench
+make freetype-bench-quick
+make freetype-fixtures
+```
+
+For narrow FreeType lanes, prefer the crate-local Makefile targets:
+
+```bash
+make -C pillow-rs-freetype test-harness
+make -C pillow-rs-freetype test-generator
+make -C pillow-rs-freetype test-render-mode
+make -C pillow-rs-freetype test-fixed
+make -C pillow-rs-freetype test-interface
+make -C pillow-rs-freetype test-perf
+```
+
+Run the narrow failing Makefile target first, then the broader harness target.
+If a full workspace clippy failure is unrelated, report it clearly and keep the
+touched package clean.
 
 ## Manifest And Coverage
 
