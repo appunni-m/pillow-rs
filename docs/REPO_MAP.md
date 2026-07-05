@@ -358,7 +358,12 @@ generated reports, build outputs, and package installs.
 |   |   |   `-- types.rs
 |   |   |-- casts.rs
 |   |   |-- error.rs
-|   |   |-- ffi.rs
+|   |   |-- ffi/
+|   |   |   |-- constants.rs
+|   |   |   |-- convert.rs
+|   |   |   |-- handles.rs
+|   |   |   |-- mod.rs
+|   |   |   `-- types.rs
 |   |   |-- fixed.rs
 |   |   |-- font.rs
 |   |   |-- grays.rs
