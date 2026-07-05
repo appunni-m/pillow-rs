@@ -1,0 +1,209 @@
+# Multiple Master, OpenType Variations, and Variation Selectors
+
+Scope: FreeType 2.14.3 public C API compatibility for `ftmm.h` Multiple
+Master/OpenType variation entry points and `freetype.h` Unicode variation
+selector queries.
+
+This is a planning slice for the future C ABI replacement layer.  The current
+`fontdone` Rust facade does not expose these endpoints, and the core parser
+does not yet parse variation tables or cmap format 14.  Servo `rust-freetype`
+is a binding reference only; parity must be proven against the pinned C
+FreeType oracle.
+
+## C Symbols
+
+| Symbol | Header | C signature | Current mapping |
+|---|---|---|---|
+| `FT_Get_Multi_Master` | `freetype/ftmm.h` | `FT_Error FT_Get_Multi_Master(FT_Face face, FT_Multi_Master *amaster)` | Planned; no Rust API, no core Adobe MM parser. |
+| `FT_Get_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_Var(FT_Face face, FT_MM_Var **amaster)` | Planned; no Rust API, no `fvar`/Adobe MM descriptor parser. |
+| `FT_Done_MM_Var` | `freetype/ftmm.h` | `FT_Error FT_Done_MM_Var(FT_Library library, FT_MM_Var *amaster)` | Planned for C ABI layer; depends on ABI-owned allocation from `FT_Get_MM_Var`. |
+| `FT_Set_MM_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Long *coords)` | Planned; Adobe MM only. |
+| `FT_Set_Var_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no active variation state or glyph/metric delta application. |
+| `FT_Get_Var_Design_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Design_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no active variation state. |
+| `FT_Set_MM_Blend_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no normalized blend coordinate model. |
+| `FT_Get_MM_Blend_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; no normalized blend coordinate model. |
+| `FT_Set_Var_Blend_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Set_Var_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; C documents this as another name for `FT_Set_MM_Blend_Coordinates`. |
+| `FT_Get_Var_Blend_Coordinates` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Blend_Coordinates(FT_Face face, FT_UInt num_coords, FT_Fixed *coords)` | Planned; C documents this as another name for `FT_Get_MM_Blend_Coordinates`. |
+| `FT_Set_Named_Instance` | `freetype/ftmm.h` | `FT_Error FT_Set_Named_Instance(FT_Face face, FT_UInt instance_index)` | Planned; no named instance state; current `Face::from_memory` takes a plain `usize` face index and ignores bits 16-30 semantics. |
+| `FT_Get_Default_Named_Instance` | `freetype/ftmm.h` | `FT_Error FT_Get_Default_Named_Instance(FT_Face face, FT_UInt *instance_index)` | Planned; no named instance records or synthesized default instance. |
+| `FT_Get_Var_Axis_Flags` | `freetype/ftmm.h` | `FT_Error FT_Get_Var_Axis_Flags(FT_MM_Var *master, FT_UInt axis_index, FT_UInt *flags)` | Planned; no `FT_MM_Var` ABI record or axis flags storage. |
+| `FT_Set_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Set_MM_WeightVector(FT_Face face, FT_UInt len, FT_Fixed *weightvector)` | Planned; Adobe MM only; TrueType driver service is `NULL` in C FreeType. |
+| `FT_Get_MM_WeightVector` | `freetype/ftmm.h` | `FT_Error FT_Get_MM_WeightVector(FT_Face face, FT_UInt *len, FT_Fixed *weightvector)` | Planned; Adobe MM only; requires exact C length/error behavior. |
+| `FT_Face_GetCharVariantIndex` | `freetype/freetype.h` | `FT_UInt FT_Face_GetCharVariantIndex(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Planned; no cmap format 14 parser/query path. |
+| `FT_Face_GetCharVariantIsDefault` | `freetype/freetype.h` | `FT_Int FT_Face_GetCharVariantIsDefault(FT_Face face, FT_ULong charcode, FT_ULong variantSelector)` | Planned; no cmap format 14 parser/query path. |
+| `FT_Face_GetVariantSelectors` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantSelectors(FT_Face face)` | Planned; no face-owned zero-terminated result buffer. |
+| `FT_Face_GetVariantsOfChar` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetVariantsOfChar(FT_Face face, FT_ULong charcode)` | Planned; no face-owned zero-terminated result buffer. |
+| `FT_Face_GetCharsOfVariant` | `freetype/freetype.h` | `FT_UInt32 *FT_Face_GetCharsOfVariant(FT_Face face, FT_ULong variantSelector)` | Planned; no face-owned zero-terminated result buffer. |
+
+The audit inventory currently lists all symbols above as `planned` with
+`rust: null` in `tests/data/interface_map.json`.
+
+## ABI Records
+
+The future C ABI layer must expose these records with `#[repr(C)]`, exact C
+field order, C integer widths, pointer fields, and ownership rules.
+
+```c
+typedef struct FT_MM_Axis_ {
+  FT_String *name;
+  FT_Long minimum;
+  FT_Long maximum;
+} FT_MM_Axis;
+
+typedef struct FT_Multi_Master_ {
+  FT_UInt num_axis;
+  FT_UInt num_designs;
+  FT_MM_Axis axis[T1_MAX_MM_AXIS];
+} FT_Multi_Master;
+
+typedef struct FT_Var_Axis_ {
+  FT_String *name;
+  FT_Fixed minimum;
+  FT_Fixed def;
+  FT_Fixed maximum;
+  FT_ULong tag;
+  FT_UInt strid;
+} FT_Var_Axis;
+
+typedef struct FT_Var_Named_Style_ {
+  FT_Fixed *coords;
+  FT_UInt strid;
+  FT_UInt psid;
+} FT_Var_Named_Style;
+
+typedef struct FT_MM_Var_ {
+  FT_UInt num_axis;
+  FT_UInt num_designs;
+  FT_UInt num_namedstyles;
+  FT_Var_Axis *axis;
+  FT_Var_Named_Style *namedstyle;
+} FT_MM_Var;
+```
+
+Record details that tests must pin:
+
+- `FT_Multi_Master::axis` is an inline array of `T1_MAX_MM_AXIS` Adobe MM axis
+  records; FreeType caps Adobe MM axes at 4 and designs at 16.
+- `FT_Var_Axis::{minimum,def,maximum}` are 16.16 `FT_Fixed` values for
+  TrueType GX/OpenType Variations and whole-number design values for Adobe MM.
+- `FT_Var_Axis::tag` must preserve four-byte OpenType axis tags such as
+  `wght`, `wdth`, `opsz`, and custom tags; `strid` is the name table ID.
+- `FT_Var_Named_Style::coords` points to one 16.16 design coordinate per axis;
+  `psid == 0xFFFF` means the PostScript name entry is missing.
+- `FT_MM_Var::{axis,namedstyle}` are internally allocated by
+  `FT_Get_MM_Var`; C callers release the full allocation with
+  `FT_Done_MM_Var(library, amaster)`.
+- `FT_VAR_AXIS_FLAG_HIDDEN` has numeric value `1` and is returned through
+  `FT_Get_Var_Axis_Flags`.
+
+## Required Core Work
+
+The implementation needs a pure-Rust variation subsystem before the C ABI
+symbols can become more than stubs:
+
+- Parse `fvar` axes, named instances, axis flags, name IDs, PostScript name
+  IDs, and default coordinates.
+- Parse `avar` segment maps and convert design coordinates to normalized blend
+  coordinates with FreeType-compatible clamping, defaults, and missing-axis
+  behavior.
+- Apply `gvar` glyph deltas to simple and composite glyph outlines before
+  hinting and metrics finalization.
+- Apply `cvar`, `HVAR`, `VVAR`, and `MVAR` deltas where FreeType changes CVT,
+  advances, vertical metrics, and face/size metrics.
+- Track active variation state on the face: selected named instance, design
+  coordinates, normalized blend coordinates, and `FT_FACE_FLAG_VARIATION`
+  semantics.
+- Preserve FreeType `face_index` named-instance encoding: bits 16-30 hold the
+  selected instance index, bit 31 stays clear, and direct coordinate changes do
+  not update the named instance bits.
+- Parse cmap format 14 and expose the five UVS queries with Unicode-charmap
+  checks, default/non-default distinction, sorted zero-terminated result lists,
+  and face-owned scratch-buffer lifetime.
+- Add the C ABI allocation boundary for `FT_Get_MM_Var` and
+  `FT_Done_MM_Var`; safe Rust wrappers may own `Vec`/`String` data, but ABI
+  callers must see stable C pointers until `FT_Done_MM_Var`.
+
+## Fixture Coverage
+
+Add maintained fixtures through `pillow-rs-freetype/scripts/`; do not hand-edit
+fixture JSON or oracle outputs.  C FreeType remains the oracle.
+
+Minimum font coverage:
+
+- A single-axis variable TrueType font with `wght`, at least one named instance,
+  and glyph outlines affected by `gvar`.
+- A multi-axis variable TrueType font covering at least `wght`, `wdth`, and
+  `opsz`, with non-default `avar` mappings and several named instances.
+- A variable font with hidden axis flags so `FT_Get_Var_Axis_Flags` proves both
+  zero and `FT_VAR_AXIS_FLAG_HIDDEN`.
+- A font with metric variation tables: at least one of `HVAR`, `VVAR`, and
+  `MVAR`; prefer coverage for all three before marking metrics parity complete.
+- A font with `cvar` so CVT variation is covered before native TrueType
+  bytecode execution.
+- A cmap format 14 font with both default and non-default UVS mappings,
+  including at least one ideographic variation selector and one standardized
+  variation selector where available.
+- If Adobe MM support is in scope for the replacement layer, a deterministic
+  Type 1 Multiple Master fixture that exercises `FT_Get_Multi_Master`,
+  `FT_Set_MM_Design_Coordinates`, and `FT_Set/Get_MM_WeightVector`.
+
+Fixture rows should include the font path, face index including named-instance
+bits when relevant, axis tags, min/default/max, axis flags, named-style name
+IDs, `psid`, design coordinates, normalized blend coordinates, glyph ID,
+metrics, outline cbox/bbox, and rendered bitmap metadata/bytes for at least one
+representative size.
+
+## Dynamic Tests
+
+Add narrow dynamic tests before broad matrix promotion:
+
+- `FT_Get_MM_Var`/`FT_Done_MM_Var`: compare axis count, named-style count,
+  tags, min/default/max, `strid`, `psid`, named-style coordinates, pointer
+  nullability, and successful free behavior against C FreeType.
+- Design coordinates: set fewer, exact, and extra coordinates; verify missing
+  axes use defaults, extra values are ignored, `num_coords == 0 && coords ==
+  NULL` resets state, and `FT_Get_Var_Design_Coordinates` zero-fills excess
+  output coordinates.
+- Blend coordinates: set/get normalized coordinates and verify alias behavior
+  for `FT_Set_Var_Blend_Coordinates` and `FT_Get_Var_Blend_Coordinates`;
+  excess get coordinates must be `0` for GX/OpenType and `0.5` for Adobe MM.
+- Named instances: select index 0, the default named instance, and a
+  non-default named instance; verify `face_index` bits, reset of prior
+  coordinate variation, `FT_FACE_FLAG_VARIATION`, PostScript name behavior, and
+  output metrics/glyph deltas.
+- Axis flags: query every axis and one out-of-range index; compare
+  `FT_VAR_AXIS_FLAG_HIDDEN` and error code behavior.
+- Weight vector: for Adobe MM fixtures, verify shorter/exact/longer lengths,
+  reset with length 0, non-enforcement of total weight sum, and
+  `FT_Get_MM_WeightVector` required-length error behavior.
+- Glyph output: for selected coordinates and named instances, compare glyph
+  metrics, cbox/bbox, and render bytes so the API state is tied to actual
+  interpolation output.
+- UVS scalar queries: compare undefined char, undefined selector, default UVS,
+  non-default UVS, selector larger than 32 bits, and non-Unicode current
+  charmap behavior.
+- UVS list queries: compare full zero-terminated arrays from
+  `FT_Face_GetVariantSelectors`, `FT_Face_GetVariantsOfChar`, and
+  `FT_Face_GetCharsOfVariant`, including empty/invalid `NULL` cases and
+  overwrite-on-next-FreeType-call lifetime behavior for the C ABI layer.
+
+## C Reference Areas
+
+Use these FreeType source areas when implementing and debugging first
+divergences:
+
+- Public dispatch and service behavior: `src/base/ftmm.c`.
+- TrueType/OpenType variation parsing, coordinate state, named instances, and
+  glyph/metric deltas: `src/truetype/ttgxvar.c`.
+- TrueType variation service table: `src/truetype/ttdriver.c`.
+- Adobe Type 1 MM descriptors and weight vectors: `src/type1/t1load.c`.
+- Variation selector public functions: `src/base/ftobjs.c`.
+- cmap format 14 parser and query algorithms: `src/sfnt/ttcmap.c`.
+
+## Current Risk
+
+This slice is entirely unimplemented in `fontdone` today.  Returning successful
+ABI stubs before table parsing, state mutation, allocation ownership, and
+oracle-backed dynamic tests exist would create false compatibility.  Until
+variable-font fixtures are added, even adjacent glyph/metrics parity lanes only
+prove static TrueType behavior.
