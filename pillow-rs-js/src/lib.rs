@@ -31,9 +31,11 @@ pub struct Image {
 impl Image {
     #[wasm_bindgen(constructor)]
     pub fn new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> {
+        #[cfg(feature = "debug-hooks")]
         console_error_panic_hook::set_once();
         // Initialize console_log with a conservative default (Warn).
         // Users can change the level at runtime via setLogLevel().
+        #[cfg(feature = "debug-hooks")]
         console_log::init_with_level(log::Level::Warn).ok();
         RsImage::new(w, h, mode, (r, g, b, a))
             .map(|i| Image { inner: i })
@@ -1307,16 +1309,22 @@ pub fn backend_enabled(name: &str) -> bool {
 /// Levels (ascending): 0=off, 1=error, 2=warn, 3=info, 4=debug, 5=trace.
 #[wasm_bindgen(js_name = "setLogLevel")]
 pub fn set_log_level(level: u8) {
-    let lvl = match level {
-        0 => log::LevelFilter::Off,
-        1 => log::LevelFilter::Error,
-        2 => log::LevelFilter::Warn,
-        3 => log::LevelFilter::Info,
-        4 => log::LevelFilter::Debug,
-        5 => log::LevelFilter::Trace,
-        _ => log::LevelFilter::Warn,
-    };
-    log::set_max_level(lvl);
+    #[cfg(feature = "debug-hooks")]
+    {
+        let lvl = match level {
+            0 => log::LevelFilter::Off,
+            1 => log::LevelFilter::Error,
+            2 => log::LevelFilter::Warn,
+            3 => log::LevelFilter::Info,
+            4 => log::LevelFilter::Debug,
+            5 => log::LevelFilter::Trace,
+            _ => log::LevelFilter::Warn,
+        };
+        log::set_max_level(lvl);
+    }
+
+    #[cfg(not(feature = "debug-hooks"))]
+    let _ = level;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

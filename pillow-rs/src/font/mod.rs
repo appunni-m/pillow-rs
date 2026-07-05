@@ -61,6 +61,15 @@ impl Font {
         let h = (bbox.3 - bbox.1).max(0) as u32;
         (w, h)
     }
+
+    /// Render text as an L-mode alpha mask.
+    ///
+    /// This is the public font-object surface, matching Pillow's
+    /// `ImageFont.getmask`/`FreeTypeFont.getmask`. The `_imagingft`-style
+    /// adapter remains an implementation detail behind this method.
+    pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
+        imagingft::getmask(self, text)
+    }
 }
 
 impl std::fmt::Debug for Font {
