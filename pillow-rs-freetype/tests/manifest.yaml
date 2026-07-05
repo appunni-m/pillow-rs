@@ -1,0 +1,834 @@
+version: 1
+
+subjects:
+  - id: fontdone.ffi.FT_LOAD_TARGET_MODE
+    kind: helper
+    symbol: FT_LOAD_TARGET_MODE
+    description: Helper that extracts the FreeType render target mode from load flags.
+    cases:
+      - id: target_mode_value
+        description: Extracts the target mode bits from a load flag value.
+
+  - id: fontdone.ffi.glyph_format_from_core
+    kind: helper
+    symbol: glyph_format_from_core
+    description: Helper that maps core glyph formats to FreeType glyph format constants.
+    cases:
+      - id: maps_outline
+        description: Maps the core outline format to the public FreeType outline constant.
+
+  - id: fontdone.ffi.load_flags_to_core
+    kind: helper
+    symbol: load_flags_to_core
+    description: Helper that maps FreeType load flags to core load flags.
+    cases:
+      - id: maps_supported_flags
+        description: Maps supported load flags and rejects unsupported flags.
+
+  - id: fontdone.ffi.pixel_mode_from_core
+    kind: helper
+    symbol: pixel_mode_from_core
+    description: Helper that maps core pixel modes to FreeType pixel mode constants.
+    cases:
+      - id: maps_gray
+        description: Maps grayscale bitmap output to FT_PIXEL_MODE_GRAY.
+
+  - id: fontdone.ffi.render_mode_to_core
+    kind: helper
+    symbol: render_mode_to_core
+    description: Helper that maps FreeType render modes to core render modes.
+    cases:
+      - id: maps_supported_modes
+        description: Maps supported render modes and rejects unsupported modes.
+
+  - id: freetype.FT_BBox
+    kind: record
+    symbol: FT_BBox
+    description: Public bounding-box record.
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and field offsets match C FreeType.
+
+  - id: freetype.FT_Bitmap
+    kind: record
+    symbol: FT_Bitmap
+    description: Public bitmap record exposed by the Rust FFI facade.
+    cases:
+      - id: public_fields_match_render_output
+        description: Public bitmap fields and byte buffer match C FreeType output for migrated cases.
+
+  - id: freetype.FT_Error
+    kind: type
+    symbol: FT_Error
+    description: Public FreeType error code type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Err_Cannot_Open_Resource
+    kind: constant
+    symbol: FT_Err_Cannot_Open_Resource
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Cannot_Render_Glyph
+    kind: constant
+    symbol: FT_Err_Cannot_Render_Glyph
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Argument
+    kind: constant
+    symbol: FT_Err_Invalid_Argument
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_CharMap_Format
+    kind: constant
+    symbol: FT_Err_Invalid_CharMap_Format
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_CharMap_Handle
+    kind: constant
+    symbol: FT_Err_Invalid_CharMap_Handle
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Character_Code
+    kind: constant
+    symbol: FT_Err_Invalid_Character_Code
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_File_Format
+    kind: constant
+    symbol: FT_Err_Invalid_File_Format
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Glyph_Format
+    kind: constant
+    symbol: FT_Err_Invalid_Glyph_Format
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Glyph_Index
+    kind: constant
+    symbol: FT_Err_Invalid_Glyph_Index
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Outline
+    kind: constant
+    symbol: FT_Err_Invalid_Outline
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Pixel_Size
+    kind: constant
+    symbol: FT_Err_Invalid_Pixel_Size
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Invalid_Table
+    kind: constant
+    symbol: FT_Err_Invalid_Table
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Ok
+    kind: constant
+    symbol: FT_Err_Ok
+    description: FreeType success error code constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Out_Of_Memory
+    kind: constant
+    symbol: FT_Err_Out_Of_Memory
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Raster_Overflow
+    kind: constant
+    symbol: FT_Err_Raster_Overflow
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Unimplemented_Feature
+    kind: constant
+    symbol: FT_Err_Unimplemented_Feature
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Err_Unknown_File_Format
+    kind: constant
+    symbol: FT_Err_Unknown_File_Format
+    description: FreeType error constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_F26Dot6
+    kind: type
+    symbol: FT_F26Dot6
+    description: Public 26.6 fixed-point type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Face
+    kind: handle
+    symbol: FT_Face
+    description: Public face handle wrapper.
+    cases:
+      - id: valid_font_bytes
+        description: Face handle can be created from tracked font bytes.
+
+  - id: freetype.FT_Fixed
+    kind: type
+    symbol: FT_Fixed
+    description: Public fixed-point type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_GLYPH_FORMAT_BITMAP
+    kind: constant
+    symbol: FT_GLYPH_FORMAT_BITMAP
+    description: FreeType glyph format constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_GLYPH_FORMAT_COMPOSITE
+    kind: constant
+    symbol: FT_GLYPH_FORMAT_COMPOSITE
+    description: FreeType glyph format constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_GLYPH_FORMAT_NONE
+    kind: constant
+    symbol: FT_GLYPH_FORMAT_NONE
+    description: FreeType glyph format constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_GLYPH_FORMAT_OUTLINE
+    kind: constant
+    symbol: FT_GLYPH_FORMAT_OUTLINE
+    description: FreeType glyph format constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_GLYPH_FORMAT_PLOTTER
+    kind: constant
+    symbol: FT_GLYPH_FORMAT_PLOTTER
+    description: FreeType glyph format constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_GLYPH_FORMAT_SVG
+    kind: constant
+    symbol: FT_GLYPH_FORMAT_SVG
+    description: FreeType glyph format constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Get_Char_Index
+    kind: function
+    symbol: FT_Get_Char_Index
+    description: Maps a character code to a glyph index.
+    cases:
+      - id: latin_capital_a
+        description: Resolves U+0041 to the C FreeType glyph index.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+
+  - id: freetype.FT_GlyphSlot
+    kind: record
+    symbol: FT_GlyphSlot
+    description: Public glyph slot snapshot record.
+    cases:
+      - id: populated_from_load
+        description: Loaded glyph slot fields match C FreeType for migrated load cases.
+
+  - id: freetype.FT_Glyph_Format
+    kind: type
+    symbol: FT_Glyph_Format
+    description: Public glyph format type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Glyph_Metrics
+    kind: record
+    symbol: FT_Glyph_Metrics
+    description: Public glyph metrics record.
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and field offsets match C FreeType.
+
+  - id: freetype.FT_Init_FreeType
+    kind: function
+    symbol: FT_Init_FreeType
+    description: Initializes a FreeType-compatible library handle.
+    cases:
+      - id: creates_library_handle
+        description: Produces a usable library handle.
+
+  - id: freetype.FT_Int
+    kind: type
+    symbol: FT_Int
+    description: Public signed integer type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Int32
+    kind: type
+    symbol: FT_Int32
+    description: Public signed 32-bit integer type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_LOAD_ADVANCE_ONLY
+    kind: constant
+    symbol: FT_LOAD_ADVANCE_ONLY
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_BITMAP_METRICS_ONLY
+    kind: constant
+    symbol: FT_LOAD_BITMAP_METRICS_ONLY
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_COLOR
+    kind: constant
+    symbol: FT_LOAD_COLOR
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_COMPUTE_METRICS
+    kind: constant
+    symbol: FT_LOAD_COMPUTE_METRICS
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_CROP_BITMAP
+    kind: constant
+    symbol: FT_LOAD_CROP_BITMAP
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_DEFAULT
+    kind: constant
+    symbol: FT_LOAD_DEFAULT
+    description: FreeType default load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_FORCE_AUTOHINT
+    kind: constant
+    symbol: FT_LOAD_FORCE_AUTOHINT
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH
+    kind: constant
+    symbol: FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_IGNORE_TRANSFORM
+    kind: constant
+    symbol: FT_LOAD_IGNORE_TRANSFORM
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_LINEAR_DESIGN
+    kind: constant
+    symbol: FT_LOAD_LINEAR_DESIGN
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_MONOCHROME
+    kind: constant
+    symbol: FT_LOAD_MONOCHROME
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_NO_AUTOHINT
+    kind: constant
+    symbol: FT_LOAD_NO_AUTOHINT
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_NO_BITMAP
+    kind: constant
+    symbol: FT_LOAD_NO_BITMAP
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_NO_HINTING
+    kind: constant
+    symbol: FT_LOAD_NO_HINTING
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_NO_RECURSE
+    kind: constant
+    symbol: FT_LOAD_NO_RECURSE
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_NO_SCALE
+    kind: constant
+    symbol: FT_LOAD_NO_SCALE
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_NO_SVG
+    kind: constant
+    symbol: FT_LOAD_NO_SVG
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_PEDANTIC
+    kind: constant
+    symbol: FT_LOAD_PEDANTIC
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_RENDER
+    kind: constant
+    symbol: FT_LOAD_RENDER
+    description: Load flag requesting glyph rendering during load.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_SBITS_ONLY
+    kind: constant
+    symbol: FT_LOAD_SBITS_ONLY
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_SVG_ONLY
+    kind: constant
+    symbol: FT_LOAD_SVG_ONLY
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_TARGET_LCD
+    kind: constant
+    symbol: FT_LOAD_TARGET_LCD
+    description: FreeType LCD load target constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_TARGET_LCD_V
+    kind: constant
+    symbol: FT_LOAD_TARGET_LCD_V
+    description: FreeType vertical LCD load target constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_TARGET_LIGHT
+    kind: constant
+    symbol: FT_LOAD_TARGET_LIGHT
+    description: FreeType light load target constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_TARGET_MONO
+    kind: constant
+    symbol: FT_LOAD_TARGET_MONO
+    description: FreeType mono load target constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_TARGET_NORMAL
+    kind: constant
+    symbol: FT_LOAD_TARGET_NORMAL
+    description: FreeType normal load target constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_LOAD_VERTICAL_LAYOUT
+    kind: constant
+    symbol: FT_LOAD_VERTICAL_LAYOUT
+    description: FreeType load flag constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Library
+    kind: handle
+    symbol: FT_Library
+    description: Public library handle wrapper.
+    cases:
+      - id: creates_library_handle
+        description: Library handle can be initialized.
+
+  - id: freetype.FT_Load_Char
+    kind: function
+    symbol: FT_Load_Char
+    description: Loads a glyph selected by character code.
+    cases:
+      - id: default_load
+        description: Loads an outline glyph with default flags.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+            load_flags: [0]
+      - id: render_during_load
+        description: Loads and renders a glyph when FT_LOAD_RENDER is set.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+            load_flags: [4]
+
+  - id: freetype.FT_Load_Glyph
+    kind: function
+    symbol: FT_Load_Glyph
+    description: Loads a glyph selected by glyph index.
+    cases:
+      - id: default_load
+        description: Loads an outline glyph with default flags.
+
+  - id: freetype.FT_Long
+    kind: type
+    symbol: FT_Long
+    description: Public long integer type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_New_Memory_Face
+    kind: function
+    symbol: FT_New_Memory_Face
+    description: Creates a face from caller-provided font bytes.
+    cases:
+      - id: valid_font_bytes
+        description: Accepts a tracked TrueType fixture from memory.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+
+  - id: freetype.FT_PIXEL_MODE_BGRA
+    kind: constant
+    symbol: FT_PIXEL_MODE_BGRA
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_GRAY
+    kind: constant
+    symbol: FT_PIXEL_MODE_GRAY
+    description: Pixel mode value for 8-bit grayscale bitmap output.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_GRAY2
+    kind: constant
+    symbol: FT_PIXEL_MODE_GRAY2
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_GRAY4
+    kind: constant
+    symbol: FT_PIXEL_MODE_GRAY4
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_LCD
+    kind: constant
+    symbol: FT_PIXEL_MODE_LCD
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_LCD_V
+    kind: constant
+    symbol: FT_PIXEL_MODE_LCD_V
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_MAX
+    kind: constant
+    symbol: FT_PIXEL_MODE_MAX
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_MONO
+    kind: constant
+    symbol: FT_PIXEL_MODE_MONO
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_PIXEL_MODE_NONE
+    kind: constant
+    symbol: FT_PIXEL_MODE_NONE
+    description: FreeType pixel mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Pixel_Mode
+    kind: type
+    symbol: FT_Pixel_Mode
+    description: Public pixel mode type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Pos
+    kind: type
+    symbol: FT_Pos
+    description: Public coordinate position type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_RENDER_MODE_LCD
+    kind: constant
+    symbol: FT_RENDER_MODE_LCD
+    description: FreeType render mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_RENDER_MODE_LCD_V
+    kind: constant
+    symbol: FT_RENDER_MODE_LCD_V
+    description: FreeType render mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_RENDER_MODE_LIGHT
+    kind: constant
+    symbol: FT_RENDER_MODE_LIGHT
+    description: FreeType render mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_RENDER_MODE_MAX
+    kind: constant
+    symbol: FT_RENDER_MODE_MAX
+    description: FreeType render mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_RENDER_MODE_MONO
+    kind: constant
+    symbol: FT_RENDER_MODE_MONO
+    description: Render mode selecting packed monochrome bitmap output.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_RENDER_MODE_NORMAL
+    kind: constant
+    symbol: FT_RENDER_MODE_NORMAL
+    description: FreeType render mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_RENDER_MODE_SDF
+    kind: constant
+    symbol: FT_RENDER_MODE_SDF
+    description: FreeType render mode constant.
+    cases:
+      - id: value_matches_header
+        description: Numeric value matches the pinned FreeType header.
+
+  - id: freetype.FT_Render_Glyph
+    kind: function
+    symbol: FT_Render_Glyph
+    description: Renders a loaded glyph slot into a bitmap.
+    cases:
+      - id: invalid_render_mode
+        description: Returns the expected FreeType error for an unsupported render mode.
+        coverage:
+          font_variability:
+            folder: input/fonts
+            sizes: [20]
+            char_codes: [65]
+            load_flags: [0]
+            render_modes: [99]
+
+  - id: freetype.FT_Render_Mode
+    kind: type
+    symbol: FT_Render_Mode
+    description: Public render mode type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Set_Char_Size
+    kind: function
+    symbol: FT_Set_Char_Size
+    description: Sets the active character size on a face.
+    cases:
+      - id: set_size
+        description: Updates active size fields without error.
+
+  - id: freetype.FT_Set_Pixel_Sizes
+    kind: function
+    symbol: FT_Set_Pixel_Sizes
+    description: Sets the active pixel size on a face.
+    cases:
+      - id: set_pixel_size
+        description: Updates active pixel dimensions without error.
+
+  - id: freetype.FT_Size_Metrics
+    kind: record
+    symbol: FT_Size_Metrics
+    description: Public size metrics record and accessor.
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and field offsets match C FreeType.
+      - id: returns_active_size_metrics
+        description: Accessor returns active face size metrics.
+
+  - id: freetype.FT_UInt
+    kind: type
+    symbol: FT_UInt
+    description: Public unsigned integer type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_ULong
+    kind: type
+    symbol: FT_ULong
+    description: Public unsigned long integer type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_UShort
+    kind: type
+    symbol: FT_UShort
+    description: Public unsigned short integer type alias.
+    cases:
+      - id: alias_defined
+        description: Type alias is present in the FFI surface.
+
+  - id: freetype.FT_Vector
+    kind: record
+    symbol: FT_Vector
+    description: Public two-coordinate vector record.
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and field offsets match C FreeType.

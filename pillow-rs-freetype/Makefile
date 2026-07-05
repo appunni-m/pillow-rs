@@ -36,6 +36,9 @@ help:
 	@printf "  make test-fixed       Run fixed arithmetic parity tests\n"
 	@printf "  make test-interface   Run public interface coverage report\n"
 	@printf "  make test-ffi-compat  Run FreeType-shaped ffi facade tests\n"
+	@printf "  make test-unified-fixtures Run manifest-linked input fixtures against runtime C oracle\n"
+	@printf "  make test-unified-coverage Run manifest coverage validation for unified fixtures\n"
+	@printf "  make test-api-abi     Run unified API/ABI fixture and coverage gates\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make test-perf        Run benchmark contract tests\n"
 	@printf "  make test-direct-live Run ignored live C-oracle pixel comparison\n"
@@ -52,6 +55,7 @@ help:
 	@printf "  make fixture-force-autohint | fixture-native-tt-default | fixture-no-hinting\n"
 	@printf "  make fixture-metrics-only | fixture-outline-cbox | fixture-render-mono | fixture-render-lcd\n"
 	@printf "  make fixture-render-mode\n"
+	@printf "  make unified-oracle   Build the runtime C FreeType oracle helper\n"
 	@printf "\nBenchmark:\n"
 	@printf "  make bench            Run Rust vs C FreeType benchmark report\n"
 	@printf "  make bench-quick      Run short benchmark smoke comparison\n"
@@ -123,9 +127,25 @@ test-fixed:
 test-interface: oracle-fetch test-ffi-compat
 	$(CARGO) test --test interface_coverage --locked -- --nocapture
 
+.PHONY: unified-oracle
+unified-oracle: oracle-fetch
+	bash scripts/build_ft.sh
+	$(PYTHON) scripts/build_unified_oracle.py
+
+.PHONY: test-unified-fixtures
+test-unified-fixtures: unified-oracle
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_cases_match_runtime_c_oracle -- --nocapture
+
+.PHONY: test-unified-coverage
+test-unified-coverage: unified-oracle
+	$(CARGO) test --test unified_fixture_parity --locked manifest_ -- --nocapture
+
 .PHONY: test-ffi-compat
 test-ffi-compat:
 	$(CARGO) test --test ffi_compat --locked -- --nocapture
+
+.PHONY: test-api-abi
+test-api-abi: test-unified-fixtures test-unified-coverage test-ffi
 
 .PHONY: api-abi-audit
 api-abi-audit: oracle-fetch
