@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use pillow_rs_freetype::{BitmapBackend, Font};
+use pillow_rs_freetype::Font;
 
 fn fixture_font(name: &str) -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -22,7 +22,7 @@ fn fixture_font(name: &str) -> Vec<u8> {
 fn face_open_exposes_count_and_index_semantics() {
     let data = fixture_font("DejaVuSans.ttf");
 
-    let font = Font::truetype_face(&data, 0, 12.0, BitmapBackend::FreeType).unwrap();
+    let font = Font::truetype_face(&data, 0, 12.0).unwrap();
 
     assert_eq!(
         (
@@ -38,7 +38,7 @@ fn face_open_exposes_count_and_index_semantics() {
 fn face_open_rejects_out_of_range_index() {
     let data = fixture_font("DejaVuSans.ttf");
 
-    let err = match Font::truetype_face(&data, 1, 12.0, BitmapBackend::FreeType) {
+    let err = match Font::truetype_face(&data, 1, 12.0) {
         Ok(_) => panic!("out-of-range face index succeeded"),
         Err(err) => err,
     };
@@ -49,7 +49,7 @@ fn face_open_rejects_out_of_range_index() {
 #[test]
 fn face_metadata_exposes_names_flags_metrics_and_format() {
     let data = fixture_font("DejaVuSans.ttf");
-    let font = Font::truetype(&data, 12.0, BitmapBackend::FreeType).unwrap();
+    let font = Font::truetype(&data, 12.0).unwrap();
 
     let info = font.face_info();
 
@@ -80,7 +80,7 @@ fn face_metadata_exposes_names_flags_metrics_and_format() {
 #[test]
 fn size_select_distinguishes_char_size_pixel_size_dpi_ppem_and_scale() {
     let data = fixture_font("DejaVuSans.ttf");
-    let mut font = Font::truetype(&data, 12.0, BitmapBackend::FreeType).unwrap();
+    let mut font = Font::truetype(&data, 12.0).unwrap();
 
     font.set_char_size(0, 10 * 64, 0, 144);
     let char_size = font.size_metrics();
@@ -104,7 +104,7 @@ fn size_select_distinguishes_char_size_pixel_size_dpi_ppem_and_scale() {
 #[test]
 fn charmap_select_set_get_and_iteration_match_expected_unicode_mapping() {
     let data = fixture_font("DejaVuSans.ttf");
-    let mut font = Font::truetype(&data, 12.0, BitmapBackend::FreeType).unwrap();
+    let mut font = Font::truetype(&data, 12.0).unwrap();
     let charmaps = font.charmaps();
     let unicode_index = charmaps
         .iter()
@@ -138,7 +138,7 @@ fn charmap_select_set_get_and_iteration_match_expected_unicode_mapping() {
 #[test]
 fn charmap_select_by_platform_encoding_updates_current_charmap() {
     let data = fixture_font("DejaVuSans.ttf");
-    let mut font = Font::truetype(&data, 12.0, BitmapBackend::FreeType).unwrap();
+    let mut font = Font::truetype(&data, 12.0).unwrap();
 
     font.select_charmap(3, 1).unwrap();
 
@@ -149,7 +149,7 @@ fn charmap_select_by_platform_encoding_updates_current_charmap() {
 #[test]
 fn sfnt_table_access_matches_raw_table_bytes() {
     let data = fixture_font("DejaVuSans.ttf");
-    let font = Font::truetype(&data, 12.0, BitmapBackend::FreeType).unwrap();
+    let font = Font::truetype(&data, 12.0).unwrap();
     let cmap_info = font
         .sfnt_tables()
         .into_iter()

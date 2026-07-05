@@ -18,7 +18,7 @@ Current exact-branch baseline:
 
 - Live FreeType fixture comparison: `11084/11084 passed`.
 - `cargo clippy -p pillow-rs-freetype --all-targets`: passes.
-- Static PIL matrix currently fails at `2149/7640 passed`; treat that as a
+- Static FreeType matrix currently fails at `2149/7640 passed`; treat that as a
   separate stale/static-fixture issue unless the task is specifically about
   `coverage_matrix.json`.
 
@@ -34,7 +34,7 @@ Current exact-branch baseline:
 ## Next Phases
 
 1. Keep all-target linting green while reducing local test/example allowances.
-2. Audit `coverage_matrix.json` versus live FreeType/PIL generation and decide
+2. Audit `coverage_matrix.json` versus live FreeType generation and decide
    whether to regenerate or retire the stale matrix.
 3. Continue production refactors module by module: `tt/hinter`, `autohint`,
    raster/scaler, then public font surface.

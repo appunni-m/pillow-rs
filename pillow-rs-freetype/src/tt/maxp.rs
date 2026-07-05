@@ -13,6 +13,8 @@ pub struct MaxpTable {
     pub max_points: u16,
     /// Maximum contours in a simple glyph.
     pub max_contours: u16,
+    /// Number of twilight-zone points available to TrueType bytecode.
+    pub max_twilight_points: u16,
     /// Number of storage area locations available to TrueType bytecode.
     pub max_storage: u16,
     /// Maximum component depth for composite glyphs.
@@ -44,6 +46,11 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
     } else {
         0
     };
+    let max_twilight_points = if data.len() >= 18 {
+        u16::from_be_bytes([data[16], data[17]])
+    } else {
+        0
+    };
     let max_storage = if data.len() >= 20 {
         u16::from_be_bytes([data[18], data[19]])
     } else {
@@ -58,6 +65,7 @@ pub fn parse_maxp(data: &[u8]) -> Result<MaxpTable, FontError> {
         num_glyphs,
         max_points,
         max_contours,
+        max_twilight_points,
         max_storage,
         max_component_depth,
     })

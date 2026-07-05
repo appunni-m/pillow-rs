@@ -6,8 +6,7 @@
 //! This module is called from `scaler.rs:scale_glyph()` when `latin_metrics`
 //! is `None` and the font has bytecode tables (fpgm, prep, cvt).
 //! It operates on 26.6 fixed-point coordinates and mutates them in-place
-//! to match Python Pillow's pixel output (which uses FreeType's native
-//! bytecode interpreter via `FT_LOAD_DEFAULT`).
+//! to match FreeType's native bytecode interpreter via `FT_LOAD_DEFAULT`.
 //!
 //! ## Architecture
 //!
@@ -46,6 +45,7 @@ pub struct HintScale {
     pub y_scale: i32,
     pub ppem: i32,
     pub storage_size: usize,
+    pub twilight_points: usize,
     pub is_composite: bool,
     pub reset_vectors_at_glyph_entry: bool,
     pub metrics_legacy_phantoms: bool,
@@ -60,9 +60,8 @@ pub struct HintOutcome {
 
 /// Entry point: run bytecode hinting on scaled 26.6 coordinates.
 ///
-/// This is called once per glyph when:
-/// - The backend is `BitmapBackend::PIL` (no autohinting available)
-/// - The font has `fpgm`, `prep`, and `cvt` tables
+/// This is called once per glyph when the font has `fpgm`, `prep`, and `cvt`
+/// tables and the default native TrueType path is selected.
 ///
 /// The `scaled` array is modified in-place with the hinted coordinates.
 /// After calling this function, the caller should compute bbox from
@@ -111,14 +110,15 @@ pub fn hint_glyph(
     //   pp3: top side bearing    (y = 0 in horizontal mode)
     //   pp4: bottom side bearing (y = 0 in horizontal mode)
     //
-    // For PIL emulation, we set horizontal phantom points (pp1, pp2)
-    // to zero and rely on the bytecode program to adjust them.
+    // FreeType seeds horizontal phantom points (pp1, pp2), then lets the
+    // bytecode program adjust them.
     // Vertical phantoms (pp3, pp4) are unused in Latin fonts.
 
     let n_points = scaled.len();
     let n_phantoms = 4;
     let total = n_points + n_phantoms;
     let n_pts: u16 = u16::try_from(total).unwrap_or(u16::MAX);
+    let seed_pp2_x = crate::fixed::ft_mul_fix(raw_pp1_x + raw_advance_width, scale.x_scale);
 
     let mut zone = GlyphZone {
         cur_x: Vec::with_capacity(total),
@@ -147,12 +147,15 @@ pub fn hint_glyph(
 
     if scale.metrics_legacy_phantoms {
         // Metrics parity branch contract: seed horizontal phantoms at zero and
-        // leave vertical phantoms unused.
+        // leave vertical phantoms unused.  C computes pp2 in font units first
+        // (`pp1_fu + advance_fu`) and then scales that combined value
+        // (ttgload.c:1339-1342, 958-962); scaling advance alone can differ by
+        // one 26.6 unit at FT_PIX_ROUND thresholds.
         zone.cur_x.push(0);
         zone.cur_y.push(0);
         zone.orus_x.push(0);
         zone.orus_y.push(0);
-        zone.cur_x.push(advance_width);
+        zone.cur_x.push(seed_pp2_x - pp1_x);
         zone.cur_y.push(0);
         zone.orus_x.push(raw_advance_width);
         zone.orus_y.push(0);
@@ -173,7 +176,7 @@ pub fn hint_glyph(
         zone.orus_x.push(raw_pp1_x);
         zone.orus_y.push(0);
         // pp2: advance width in the shifted glyph coordinate system.
-        zone.cur_x.push(pp1_x + advance_width);
+        zone.cur_x.push(seed_pp2_x);
         zone.cur_y.push(0);
         zone.orus_x.push(raw_pp1_x + raw_advance_width);
         zone.orus_y.push(0);
@@ -214,6 +217,7 @@ pub fn hint_glyph(
         cvt,
         fpgm,
         scale.storage_size,
+        scale.twilight_points,
     );
     ctx.is_composite = scale.is_composite;
 
@@ -240,23 +244,30 @@ pub fn hint_glyph(
     }
 
     // ── Write hinted coordinates back ──────────────────────────────────
+    let use_current_phantoms =
+        ctx.backward_compatibility == 0 || (scale.is_composite && glyph_ins.is_empty());
     for (i, pt) in scaled.iter_mut().enumerate().take(n_points) {
         pt.x = if scale.metrics_legacy_phantoms {
-            zone.cur_x[i]
+            // C `TT_Load_Glyph` translates simple outlines by `-loader.pp1.x`
+            // before `compute_glyph_metrics` calls `FT_Outline_Get_CBox`
+            // (ttgload.c:2578-2583, 1963-1964). Composite glyph metrics use
+            // the loader's cached bbox instead (ttgload.c:1965-1966), so the
+            // legacy metrics branch must not apply the simple-glyph origin
+            // shift to composite coordinates.
+            let origin_shift = if scale.is_composite { 0 } else { pp1_x };
+            zone.cur_x[i] - origin_shift
         } else {
-            let pp1 = if ctx.backward_compatibility != 0 {
-                pp1_x
-            } else {
+            let pp1 = if use_current_phantoms {
                 zone.cur_x[n_points]
+            } else {
+                pp1_x
             };
             zone.cur_x[i] - pp1
         };
         pt.y = zone.cur_y[i];
     }
 
-    let (pp1, pp2) = if ctx.backward_compatibility != 0 {
-        (pp1_x, pp1_x + advance_width)
-    } else {
+    let (pp1, pp2) = if use_current_phantoms {
         (
             zone.cur_x.get(n_points).copied().unwrap_or(0),
             zone.cur_x
@@ -264,6 +275,8 @@ pub fn hint_glyph(
                 .copied()
                 .unwrap_or(advance_width),
         )
+    } else {
+        (pp1_x, seed_pp2_x)
     };
 
     Ok(HintOutcome {

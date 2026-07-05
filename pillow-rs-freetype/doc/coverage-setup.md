@@ -59,7 +59,7 @@ The test lives in `pillow-rs-freetype/tests/coverage_matrix_tests.rs`:
 ```rust
 #[test]
 fn test_font_coverage_matrix_freetype() {
-    run_matrix(BitmapBackend::FreeType, "coverage_matrix_ft.json");
+    run_matrix(LoadMode::ForceAutoHint, "coverage_matrix_ft.json");
 }
 ```
 

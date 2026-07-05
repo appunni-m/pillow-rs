@@ -7,7 +7,7 @@
 - TrueType table parsers: cmap, glyf, head, hhea, hmtx, maxp, name, OS/2, loca
 - Latin script auto-hinter: reload, segment detection, edge grouping, 4-phase hinting, IUP
 - Smooth anti-aliased rasterizer (FT_INT64 DDA path from ftgrays.c)
-- `BitmapBackend::FreeType` and `BitmapBackend::PIL` backends
+- FreeType-style glyph loading, metrics, bbox/cbox, and bitmap output implemented in Rust
 - Harness-first parity tracking: exact gates, threshold baselines, incomplete executed baselines, and unexecuted fixture debt are reported separately.
 - Runtime FFI guard: `tests/no_runtime_ffi.rs` prevents reintroducing FreeType C linking in crate runtime files.
 - Fixture generator contract: `doc/GENERATOR_SYSTEM.md` and `tests/generator_contract.rs` make C-oracle fixture reproduction part of the maintained harness.
@@ -15,7 +15,7 @@
 - Supplemental FreeType fixture generation now defaults to broad inventory coverage; the five supplemental matrices each contain 11,086 C-oracle rows.
 
 ### Fixed
-- Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); `BitmapBackend::PIL` now routes through the Rust scaler, TrueType hinting, and rasterizer path.
+- Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); runtime behavior now routes through the Rust scaler, TrueType hinting, and rasterizer path.
 - `1ecd364`: WEAK_INTERPOLATION classification — 18→9 failures. The "both-None" case
   XOR check and `corner_is_flat` must run sequentially (not OR'd) because
   `corner_is_flat` updates direction-chain deltas that downstream classifications

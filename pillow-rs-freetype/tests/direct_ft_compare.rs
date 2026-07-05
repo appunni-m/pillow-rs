@@ -13,7 +13,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::{BitmapBackend, Font};
+use pillow_rs_freetype::Font;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -135,7 +135,7 @@ fn test_direct_ft_comparison() {
         let key = font_key(&data);
 
         for &size in &sizes {
-            let font = match Font::truetype(&data, size as f32, BitmapBackend::FreeType) {
+            let font = match Font::truetype(&data, size as f32) {
                 Ok(f) => f,
                 Err(_) => continue,
             };

@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use env_logger as _;
 use log as _;
-use pillow_rs_freetype::{grays, scaler, BitmapBackend, Font, RenderMode};
+use pillow_rs_freetype::{grays, scaler, Font, LoadMode, RenderMode};
 use thiserror as _;
 
 #[derive(Debug, Deserialize)]
@@ -320,7 +320,7 @@ fn test_native_tt_default_threshold_baseline_not_parity_gate() {
     // while we promote it to exact pixel/byte parity.
     run_unified(
         "native_tt_default_matrix.json",
-        BitmapBackend::PIL,
+        LoadMode::Default,
         Some((3176, 7640)),
     );
 }
@@ -328,14 +328,14 @@ fn test_native_tt_default_threshold_baseline_not_parity_gate() {
 #[test]
 fn test_coverage_matrix_force_autohint() {
     // Static FT parity: checks raw pixel refs generated from vendored FreeType.
-    run_unified("force_autohint_matrix.json", BitmapBackend::FreeType, None);
+    run_unified("force_autohint_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
 fn test_render_mono_matrix_baseline_is_executed() {
     run_unified(
         "render_mono_matrix.json",
-        BitmapBackend::FreeType,
+        LoadMode::ForceAutoHint,
         Some((915, 11_086)),
     );
 }
@@ -344,7 +344,7 @@ fn test_render_mono_matrix_baseline_is_executed() {
 fn test_render_lcd_matrix_baseline_is_executed() {
     run_unified(
         "render_lcd_matrix.json",
-        BitmapBackend::FreeType,
+        LoadMode::ForceAutoHint,
         Some((215, 11_086)),
     );
 }
@@ -353,7 +353,7 @@ fn test_render_lcd_matrix_baseline_is_executed() {
 fn test_no_hinting_matrix_baseline_is_executed() {
     run_unified(
         "no_hinting_matrix.json",
-        BitmapBackend::FreeType,
+        LoadMode::Default,
         Some((10_029, 11_086)),
     );
 }
@@ -362,7 +362,7 @@ fn test_no_hinting_matrix_baseline_is_executed() {
 fn test_metrics_only_matrix_baseline_is_executed() {
     run_unified(
         "metrics_only_matrix.json",
-        BitmapBackend::PIL,
+        LoadMode::Default,
         Some((13, 11_086)),
     );
 }
@@ -371,7 +371,7 @@ fn test_metrics_only_matrix_baseline_is_executed() {
 fn test_outline_cbox_matrix_baseline_is_executed() {
     run_unified(
         "outline_cbox_matrix.json",
-        BitmapBackend::PIL,
+        LoadMode::Default,
         Some((7, 11_086)),
     );
 }
@@ -401,7 +401,7 @@ fn test_fixture_matrix_provenance() {
 
 // ── Single runner ─────────────────────────────────────────────────────────
 
-fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Option<(u32, u32)>) {
+fn run_unified(matrix_file: &str, load_mode: LoadMode, expected_partial: Option<(u32, u32)>) {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let matrix_path = manifest_dir
         .join("tests")
@@ -453,7 +453,7 @@ fn run_unified(matrix_file: &str, backend: BitmapBackend, expected_partial: Opti
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
                 let font_data = load_font_bytes(manifest_dir, &row.font);
-                match Font::truetype(&font_data, row.size_pt, backend) {
+                match Font::truetype_with_load_mode(&font_data, row.size_pt, load_mode) {
                     Ok(font) => entry.insert(font),
                     Err(e) => {
                         failed += 1;

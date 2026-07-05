@@ -180,6 +180,7 @@ impl ExecContext {
         cvt: &[i32],
         fpgm: &[u8],
         storage_size: usize,
+        twilight_points: usize,
     ) -> Self {
         ExecContext {
             gs: GraphicsState::default(),
@@ -205,7 +206,10 @@ impl ExecContext {
             pedantic_hinting: false,
             glyph_program: Vec::new(),
             cvt_program: Vec::new(),
-            twilight: Self::new_twilight_zone(16),
+            // C `TT_Load_Context` allocates the twilight zone from
+            // maxp.maxTwilightPoints.  Some bytecode programs address points
+            // well past 16 while building interpolation control points.
+            twilight: Self::new_twilight_zone(twilight_points),
             backward_compatibility: 0,
         }
     }
