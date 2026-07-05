@@ -221,6 +221,7 @@ make fontdone-ci
 make fontdone-test
 make fontdone-parity
 make fontdone-ffi
+make fontdone-ffi-compat
 make fontdone-doc
 make fontdone-doc-test
 make fontdone-lint
@@ -237,6 +238,7 @@ make -C pillow-rs-freetype test-generator
 make -C pillow-rs-freetype test-render-mode
 make -C pillow-rs-freetype test-fixed
 make -C pillow-rs-freetype test-interface
+make -C pillow-rs-freetype test-ffi-compat
 make -C pillow-rs-freetype test-perf
 ```
 
