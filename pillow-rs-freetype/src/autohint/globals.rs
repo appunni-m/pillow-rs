@@ -39,6 +39,7 @@ use crate::tables::FontData;
 use crate::tt::cmap::CmapTable;
 
 use std::cell::RefCell;
+use std::rc::Rc;
 
 // ── FaceGlobals ───────────────────────────────────────────────────────────
 
@@ -52,9 +53,14 @@ pub struct FaceGlobals {
     /// Lazily computed coverage data. Default/native TrueType loads do not
     /// need autohint style coverage, so this mirrors FreeType's pay-for-use
     /// behavior more closely than eager construction.
-    coverage: std::rc::Rc<RefCell<Option<FaceCoverage>>>,
-    /// Per-style cached metrics. Index into STYLE_TABLE → Option<AfLatinMetrics>.
-    pub metrics_cache: std::rc::Rc<RefCell<Vec<Option<AfLatinMetrics>>>>,
+    coverage: Rc<RefCell<Option<FaceCoverage>>>,
+    /// Per-style cached metrics. Index into STYLE_TABLE → shared metrics.
+    ///
+    /// C stores initialized `AF_LatinMetrics` on the face globals and passes
+    /// pointers to glyph loads.  Store metrics behind `Rc` for the same cheap
+    /// reuse: every render can borrow the cached object instead of cloning the
+    /// full per-glyph `non_base_glyphs` table.
+    pub metrics_cache: Rc<RefCell<Vec<Option<Rc<AfLatinMetrics>>>>>,
     /// Font data for lazy metric computation.
     pub font_data: std::sync::Arc<FontData>,
     /// Whether the font is italic.
@@ -75,8 +81,8 @@ impl FaceGlobals {
         let num_styles = STYLE_TABLE.len();
         FaceGlobals {
             glyph_count: ng as u16,
-            coverage: std::rc::Rc::new(RefCell::new(None)),
-            metrics_cache: std::rc::Rc::new(RefCell::new(vec![None; num_styles])),
+            coverage: Rc::new(RefCell::new(None)),
+            metrics_cache: Rc::new(RefCell::new(vec![None; num_styles])),
             font_data,
             is_italic,
         }
@@ -91,7 +97,7 @@ impl FaceGlobals {
     }
 
     /// Get the metrics for a given glyph index, lazily computing if needed.
-    pub fn get_metrics(&self, glyph_index: u16) -> Option<AfLatinMetrics> {
+    pub fn get_metrics(&self, glyph_index: u16) -> Option<Rc<AfLatinMetrics>> {
         self.ensure_coverage();
         let coverage = self.coverage.borrow();
         let coverage = coverage.as_ref()?;
@@ -197,7 +203,7 @@ impl FaceGlobals {
             let (_, ya) = super::latin::metrics_scale_dim(&mut m, bs.x_scale, bs.y_scale, 0, 0);
             m.axis[1].org_scale = ya;
 
-            cache[si] = Some(m);
+            cache[si] = Some(Rc::new(m));
         }
 
         cache[si].clone()

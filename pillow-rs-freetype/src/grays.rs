@@ -120,14 +120,14 @@ struct Cell {
 /// The rasterizer worker — mirrors `gray_TWorker` (ftgrays.c:486).
 /// Instead of a complex linked-list cell pool, we use a simple per-scanline
 /// `Vec<Cell>` approach that is functionally equivalent.
-struct Worker {
+struct Worker<'a> {
     min_ex: i32,
     max_ex: i32,
     min_ey: i32,
     max_ey: i32,
 
     /// One Vec of cells per scanline in the band.
-    scanlines: Vec<Vec<Cell>>,
+    scanlines: &'a mut Vec<Vec<Cell>>,
     /// Current cell index within the current scanline. `None` = dumpster.
     current_scanline: usize,
     /// Which scanline the current cell belongs to.
@@ -139,16 +139,37 @@ struct Worker {
     x: i64,
     y: i64,
 
-    target: Vec<u8>,
+    target: &'a mut [u8],
     width: usize,
     height: usize,
     flags: u32,
+    offset_x: i64,
+    offset_y: i64,
+    target_pitch: usize,
+    target_x_step: usize,
+    target_offset: usize,
 }
 
 pub struct RasterResult {
     pub width: usize,
     pub height: usize,
     pub pixels: Vec<u8>,
+}
+
+/// Reusable allocation storage for repeated gray rasterizer passes.
+///
+/// LCD rendering performs three shifted passes over the same outline.  Keeping
+/// scanline cell vectors here lets later passes reuse the first pass's
+/// allocations, closer to FreeType's reusable raster worker.
+#[derive(Default)]
+pub struct RasterScratch {
+    scanlines: Vec<Vec<Cell>>,
+}
+
+impl RasterScratch {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 /// ✅ VERIFIED: via 1708 FT tests. Port of ftgrays.c gray_convert_glyph.
@@ -162,7 +183,26 @@ pub struct RasterResult {
 /// - [ ] `render_conic` subdivision endpoints match C?
 /// - [ ] Cell cover/area values after `decompose` match C?
 pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
-    rasterize_clipped(outline, None)
+    if outline.points.is_empty() || outline.n_contours == 0 {
+        return Ok(RasterResult {
+            width: 0,
+            height: 0,
+            pixels: Vec::new(),
+        });
+    }
+    let width = usize_from_i32(outline.cbox_x_max - outline.cbox_x_min);
+    let height = usize_from_i32(outline.cbox_y_max - outline.cbox_y_min);
+    rasterize_with_clip_box(
+        &outline,
+        width,
+        height,
+        outline.cbox_x_min,
+        outline.cbox_x_max,
+        outline.cbox_y_min,
+        outline.cbox_y_max,
+        0,
+        0,
+    )
 }
 
 /// Render an outline into an explicit pixel box.
@@ -179,12 +219,32 @@ pub fn rasterize_in_box(
     outline.cbox_y_min = 0;
     outline.cbox_x_max = i32_from_usize(width);
     outline.cbox_y_max = i32_from_usize(height);
-    rasterize_clipped(outline, Some((width, height)))
+    rasterize_with_clip_box(
+        &outline,
+        width,
+        height,
+        0,
+        i32_from_usize(width),
+        0,
+        i32_from_usize(height),
+        0,
+        0,
+    )
 }
 
-fn rasterize_clipped(
-    outline: Outline,
-    forced_size: Option<(usize, usize)>,
+/// Render an outline into an explicit pixel box after applying a 26.6
+/// translation during decomposition.
+///
+/// LCD render modes use this to apply FreeType Harmony subpixel shifts without
+/// cloning and mutating the outline for each channel.  The arithmetic matches
+/// translating every point before rasterization: the 26.6 offset is added
+/// before the gray rasterizer upscales to 8-bit subpixel coordinates.
+pub fn rasterize_shifted_in_box(
+    outline: &Outline,
+    dx: i32,
+    dy: i32,
+    width: usize,
+    height: usize,
 ) -> Result<RasterResult, FontError> {
     if outline.points.is_empty() || outline.n_contours == 0 {
         return Ok(RasterResult {
@@ -193,12 +253,31 @@ fn rasterize_clipped(
             pixels: Vec::new(),
         });
     }
-    let (width, height) = forced_size.unwrap_or_else(|| {
-        (
-            usize_from_i32(outline.cbox_x_max - outline.cbox_x_min),
-            usize_from_i32(outline.cbox_y_max - outline.cbox_y_min),
-        )
-    });
+    rasterize_with_clip_box(
+        outline,
+        width,
+        height,
+        0,
+        i32_from_usize(width),
+        0,
+        i32_from_usize(height),
+        dx,
+        dy,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rasterize_with_clip_box(
+    outline: &Outline,
+    width: usize,
+    height: usize,
+    cbox_x_min: i32,
+    cbox_x_max: i32,
+    cbox_y_min: i32,
+    cbox_y_max: i32,
+    dx: i32,
+    dy: i32,
+) -> Result<RasterResult, FontError> {
     if width == 0 || height == 0 {
         return Ok(RasterResult {
             width: 0,
@@ -206,52 +285,153 @@ fn rasterize_clipped(
             pixels: Vec::new(),
         });
     }
-    let mut worker = Worker::new(width, height, outline.flags);
-    worker.convert_glyph(
-        &outline.points,
-        &outline.contours,
-        outline.n_contours,
-        outline.cbox_x_min,
-        outline.cbox_x_max,
-        outline.cbox_y_min,
-        outline.cbox_y_max,
+    let mut target = vec![0u8; width * height];
+    rasterize_shifted_in_box_to(
+        outline,
+        dx,
+        dy,
+        width,
+        height,
+        &mut target,
+        width,
+        1,
+        0,
+        cbox_x_min,
+        cbox_x_max,
+        cbox_y_min,
+        cbox_y_max,
     )?;
     Ok(RasterResult {
         width,
         height,
-        pixels: worker.target,
+        pixels: target,
     })
 }
 
-impl Worker {
-    fn new(width: usize, height: usize, flags: u32) -> Self {
+#[allow(clippy::too_many_arguments)]
+pub fn rasterize_shifted_in_box_to(
+    outline: &Outline,
+    dx: i32,
+    dy: i32,
+    width: usize,
+    height: usize,
+    target: &mut [u8],
+    target_pitch: usize,
+    target_x_step: usize,
+    target_offset: usize,
+    cbox_x_min: i32,
+    cbox_x_max: i32,
+    cbox_y_min: i32,
+    cbox_y_max: i32,
+) -> Result<(), FontError> {
+    let mut scratch = RasterScratch::new();
+    rasterize_shifted_in_box_to_with_scratch(
+        outline,
+        dx,
+        dy,
+        width,
+        height,
+        target,
+        target_pitch,
+        target_x_step,
+        target_offset,
+        cbox_x_min,
+        cbox_x_max,
+        cbox_y_min,
+        cbox_y_max,
+        &mut scratch,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn rasterize_shifted_in_box_to_with_scratch(
+    outline: &Outline,
+    dx: i32,
+    dy: i32,
+    width: usize,
+    height: usize,
+    target: &mut [u8],
+    target_pitch: usize,
+    target_x_step: usize,
+    target_offset: usize,
+    cbox_x_min: i32,
+    cbox_x_max: i32,
+    cbox_y_min: i32,
+    cbox_y_max: i32,
+    scratch: &mut RasterScratch,
+) -> Result<(), FontError> {
+    if outline.points.is_empty() || outline.n_contours == 0 || width == 0 || height == 0 {
+        return Ok(());
+    }
+    let mut worker = Worker::new(
+        target,
+        &mut scratch.scanlines,
+        width,
+        height,
+        outline.flags,
+        i64::from(dx),
+        i64::from(dy),
+        target_pitch,
+        target_x_step,
+        target_offset,
+    );
+    worker.convert_glyph(
+        &outline.points,
+        &outline.contours,
+        outline.n_contours,
+        cbox_x_min,
+        cbox_x_max,
+        cbox_y_min,
+        cbox_y_max,
+    )
+}
+
+impl<'a> Worker<'a> {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        target: &'a mut [u8],
+        scanlines: &'a mut Vec<Vec<Cell>>,
+        width: usize,
+        height: usize,
+        flags: u32,
+        offset_x: i64,
+        offset_y: i64,
+        target_pitch: usize,
+        target_x_step: usize,
+        target_offset: usize,
+    ) -> Self {
         Worker {
             min_ex: 0,
             max_ex: 0,
             min_ey: 0,
             max_ey: 0,
-            scanlines: Vec::new(),
+            scanlines,
             current_scanline: usize::MAX,
             current_ey: 0,
             current_idx: usize::MAX,
             x: 0,
             y: 0,
-            target: vec![0u8; width * height],
+            target,
             width,
             height,
             flags,
+            offset_x,
+            offset_y,
+            target_pitch,
+            target_x_step,
+            target_offset,
         }
     }
 
     /// `FT_INTEGRATE(ras, a, b)`: accumulate cover/area into current cell.
     #[inline]
     fn integrate(&mut self, a: i32, b: i32) {
-        if let Some(scanline) = self.scanlines.get_mut(self.current_scanline) {
-            if let Some(cell) = scanline.get_mut(self.current_idx) {
-                cell.cover = add_int(cell.cover, a);
-                cell.area = add_int(cell.area, a.wrapping_mul(b));
-            }
+        if self.current_scanline == usize::MAX {
+            return;
         }
+        let cell = &mut self.scanlines[self.current_scanline][self.current_idx];
+        cell.cover = add_int(cell.cover, a);
+        cell.area = add_int(cell.area, a.wrapping_mul(b));
     }
 
     /// `gray_set_cell(ras, ex, ey)`: move to cell at (ex, ey), creating it if needed.
@@ -267,8 +447,28 @@ impl Worker {
         self.current_ey = ey;
         self.current_scanline = ey_u;
 
-        // Binary search for cell at `ex`, or insertion point.
         let scanline = &mut self.scanlines[ey_u];
+        if self.current_idx < scanline.len() && scanline[self.current_idx].x == ex {
+            return;
+        }
+        if let Some(last) = scanline.last_mut() {
+            if last.x == ex {
+                self.current_idx = scanline.len() - 1;
+                return;
+            }
+            if last.x < ex {
+                self.current_idx = scanline.len();
+                scanline.push(Cell {
+                    x: ex,
+                    cover: 0,
+                    area: 0,
+                });
+                return;
+            }
+        }
+
+        // Binary search for out-of-order cells; the common path above keeps
+        // monotonically emitted scanlines close to C's append-only cell pool.
         match scanline.binary_search_by_key(&ex, |c| c.x) {
             Ok(idx) => {
                 self.current_idx = idx;
@@ -477,10 +677,10 @@ impl Worker {
     fn render_conic(&mut self, control_x: i64, control_y: i64, to_x: i64, to_y: i64) {
         let p0x = self.x;
         let p0y = self.y;
-        let p1x = UPSCALE * control_x;
-        let p1y = UPSCALE * control_y;
-        let p2x = UPSCALE * to_x;
-        let p2y = UPSCALE * to_y;
+        let p1x = UPSCALE * (control_x + self.offset_x);
+        let p1y = UPSCALE * (control_y + self.offset_y);
+        let p2x = UPSCALE * (to_x + self.offset_x);
+        let p2y = UPSCALE * (to_y + self.offset_y);
 
         if (trunc(p0y) >= self.max_ey && trunc(p1y) >= self.max_ey && trunc(p2y) >= self.max_ey)
             || (trunc(p0y) < self.min_ey && trunc(p1y) < self.min_ey && trunc(p2y) < self.min_ey)
@@ -541,12 +741,12 @@ impl Worker {
         let mut stack: Vec<[i64; 8]> = Vec::with_capacity(64);
         // arc layout (FT): [to, c2, c1, p0]
         stack.push([
-            UPSCALE * to_x,
-            UPSCALE * to_y,
-            UPSCALE * c2x,
-            UPSCALE * c2y,
-            UPSCALE * c1x,
-            UPSCALE * c1y,
+            UPSCALE * (to_x + self.offset_x),
+            UPSCALE * (to_y + self.offset_y),
+            UPSCALE * (c2x + self.offset_x),
+            UPSCALE * (c2y + self.offset_y),
+            UPSCALE * (c1x + self.offset_x),
+            UPSCALE * (c1y + self.offset_y),
             self.x,
             self.y,
         ]);
@@ -601,15 +801,18 @@ impl Worker {
 
     // ── outline emission (ftgrays.c:1339) ─────────────────────────────────
     fn move_to(&mut self, to_x: i64, to_y: i64) {
-        let x = UPSCALE * to_x;
-        let y = UPSCALE * to_y;
+        let x = UPSCALE * (to_x + self.offset_x);
+        let y = UPSCALE * (to_y + self.offset_y);
         self.set_cell(trunc(x), trunc(y));
         self.x = x;
         self.y = y;
     }
 
     fn line_to(&mut self, to_x: i64, to_y: i64) {
-        self.render_line(UPSCALE * to_x, UPSCALE * to_y);
+        self.render_line(
+            UPSCALE * (to_x + self.offset_x),
+            UPSCALE * (to_y + self.offset_y),
+        );
     }
 
     // ── FT_Outline_Decompose (ftgrays.c:1442) ─────────────────────────────
@@ -801,6 +1004,7 @@ impl Worker {
             // FT sweep: `line = origin - pitch * y`, bottom-up convention.
             // With pitch positive: row = height-1-y for top-down buffer.
             let dst_row = usize_from_i32(i32_from_usize(self.height) - 1 - y);
+            let row_base = dst_row * self.target_pitch + self.target_offset;
             let mut x = self.min_ex;
             let mut cover: i32 = 0;
 
@@ -813,10 +1017,11 @@ impl Worker {
                             y, x, cell.x, cover, coverage);
                     }
                     write_span(
-                        &mut self.target,
-                        dst_row * self.width + usize_from_i32(x),
+                        self.target,
+                        row_base + usize_from_i32(x) * self.target_x_step,
                         coverage,
                         cell.x - x,
+                        self.target_x_step,
                     );
                 }
 
@@ -830,7 +1035,7 @@ impl Worker {
                         log::trace!(target: "autohint::rasterizer", "[SWEEP_PIX] y={} x={} area={} cov_raw={} cov_out={}",
                             y, cell.x, area, area, coverage);
                     }
-                    let off = dst_row * self.width + usize_from_i32(cell.x);
+                    let off = row_base + usize_from_i32(cell.x) * self.target_x_step;
                     if let Some(slot) = self.target.get_mut(off) {
                         *slot = u8_from_i32(coverage);
                     }
@@ -847,10 +1052,11 @@ impl Worker {
                         y, x, self.max_ex, cover, coverage);
                 }
                 write_span(
-                    &mut self.target,
-                    dst_row * self.width + usize_from_i32(x),
+                    self.target,
+                    row_base + usize_from_i32(x) * self.target_x_step,
                     coverage,
                     self.max_ex - x,
+                    self.target_x_step,
                 );
             }
         }
@@ -874,9 +1080,11 @@ impl Worker {
         self.max_ey = cbox_y_max;
 
         let band_height = usize_from_i32(self.max_ey - self.min_ey);
-        self.scanlines.clear();
-        for _ in 0..band_height {
-            self.scanlines.push(Vec::new());
+        if self.scanlines.len() < band_height {
+            self.scanlines.resize_with(band_height, Vec::new);
+        }
+        for scanline in &mut self.scanlines[..band_height] {
+            scanline.clear();
         }
 
         // Dumpster: sentinel values that mark "outside clipping".
@@ -892,15 +1100,26 @@ impl Worker {
 // ✅ TRIVIAL: memcpy to target buffer.
 /// Fill `count` bytes with coverage value `s`, clamped to 0..255.
 /// Used by sweep for non-zero-winding span filling.
-fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32) {
+fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32, step: usize) {
     if count <= 0 {
         return;
     }
     let s = u8_from_i32(s);
-    for i in 0..usize_from_i32(count) {
-        if let Some(slot) = buf.get_mut(off + i) {
+    if step == 1 {
+        let start = off.min(buf.len());
+        let end = start.saturating_add(usize_from_i32(count)).min(buf.len());
+        if start < end {
+            buf[start..end].fill(s);
+        }
+        return;
+    }
+
+    let mut cursor = off;
+    for _ in 0..usize_from_i32(count) {
+        if let Some(slot) = buf.get_mut(cursor) {
             *slot = s;
         }
+        cursor = cursor.saturating_add(step);
     }
 }
 

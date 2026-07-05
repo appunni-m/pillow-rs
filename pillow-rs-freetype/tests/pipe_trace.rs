@@ -73,7 +73,7 @@ fn trace_one_glyph() {
     };
 
     let metrics = font.face_globals.get_metrics(gid);
-    let mut m_clone = metrics.clone();
+    let mut m_clone = metrics.as_deref().cloned();
     let (x_adj, y_adj_new) = if let Some(ref mut m) = m_clone {
         latin::metrics_scale_dim(m, base_scale.x_scale, base_scale.y_scale, 0, 0)
     } else {
@@ -90,7 +90,7 @@ fn trace_one_glyph() {
         0,
         0,
         gid as u16,
-        metrics.as_ref(),
+        metrics.as_deref(),
         is_italic,
         false,
         true,

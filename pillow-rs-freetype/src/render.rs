@@ -88,20 +88,26 @@ impl Font {
         let glyph = self.data.cmap.char_index(ch as u32).unwrap_or(0);
         let metrics_cache = self.face_globals.get_metrics(glyph);
         let scaled = match mode {
-            RenderMode::Lcd => {
-                scaler::scale_glyph_lcd(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
-            }
+            RenderMode::Lcd => scaler::scale_glyph_lcd(
+                &self.data,
+                glyph,
+                metrics_cache.as_deref(),
+                self.is_italic,
+            )?,
             RenderMode::LcdV => scaler::scale_glyph_lcd_v(
                 &self.data,
                 glyph,
-                metrics_cache.as_ref(),
+                metrics_cache.as_deref(),
                 self.is_italic,
             )?,
-            RenderMode::Mono => {
-                scaler::scale_glyph_mono(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
-            }
+            RenderMode::Mono => scaler::scale_glyph_mono(
+                &self.data,
+                glyph,
+                metrics_cache.as_deref(),
+                self.is_italic,
+            )?,
             RenderMode::Normal => {
-                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)?
+                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)?
             }
         };
 
@@ -506,12 +512,18 @@ impl<'a> MonoProfileBuilder<'a> {
             self.new_profile(state, contour);
         }
 
+        let last_x = self.last_x;
+        let last_y = self.last_y;
+        let min_y = self.min_y;
+        let max_y = self.max_y;
         if state == MonoState::Ascending {
-            let xs = line_up(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
-            self.push_profile_xs(xs);
+            self.push_profile_xs_from(|xs| {
+                line_up_into(xs, last_x, last_y, x, y, min_y, max_y);
+            });
         } else {
-            let xs = line_down(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
-            self.push_profile_xs(xs);
+            self.push_profile_xs_from(|xs| {
+                line_down_into(xs, last_x, last_y, x, y, min_y, max_y);
+            });
         }
 
         self.last_x = x;
@@ -606,6 +618,12 @@ impl<'a> MonoProfileBuilder<'a> {
     fn push_profile_xs(&mut self, xs: Vec<i32>) {
         if let Some(index) = self.current {
             self.profiles[index].xs.extend(xs);
+        }
+    }
+
+    fn push_profile_xs_from(&mut self, append: impl FnOnce(&mut Vec<i32>)) {
+        if let Some(index) = self.current {
+            append(&mut self.profiles[index].xs);
         }
     }
 }
@@ -706,12 +724,18 @@ impl MonoOutlineProfileBuilder {
         };
         self.ensure_profile_state(state, contour);
 
+        let last_x = self.last_x;
+        let last_y = self.last_y;
+        let min_y = self.min_y;
+        let max_y = self.max_y;
         if state == MonoState::Ascending {
-            let xs = line_up(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
-            self.push_profile_xs(xs);
+            self.push_profile_xs_from(|xs| {
+                line_up_into(xs, last_x, last_y, x, y, min_y, max_y);
+            });
         } else {
-            let xs = line_down(self.last_x, self.last_y, x, y, self.min_y, self.max_y);
-            self.push_profile_xs(xs);
+            self.push_profile_xs_from(|xs| {
+                line_down_into(xs, last_x, last_y, x, y, min_y, max_y);
+            });
         }
 
         self.last_x = x;
@@ -750,12 +774,17 @@ impl MonoOutlineProfileBuilder {
                     MonoState::Descending
                 };
                 self.ensure_profile_state(state, contour);
-                let xs = if state == MonoState::Ascending {
-                    bezier_up_2(arc, self.min_y, self.max_y)
+                let min_y = self.min_y;
+                let max_y = self.max_y;
+                if state == MonoState::Ascending {
+                    self.push_profile_xs_from(|xs| {
+                        bezier_up_2_into(xs, arc, min_y, max_y);
+                    });
                 } else {
-                    bezier_down_2(arc, self.min_y, self.max_y)
-                };
-                self.push_profile_xs(xs);
+                    self.push_profile_xs_from(|xs| {
+                        bezier_down_2_into(xs, arc, min_y, max_y);
+                    });
+                }
             }
 
             self.last_x = x3;
@@ -860,6 +889,12 @@ impl MonoOutlineProfileBuilder {
     fn push_profile_xs(&mut self, xs: Vec<i32>) {
         if let Some(index) = self.current {
             self.profiles[index].xs.extend(xs);
+        }
+    }
+
+    fn push_profile_xs_from(&mut self, append: impl FnOnce(&mut Vec<i32>)) {
+        if let Some(index) = self.current {
+            append(&mut self.profiles[index].xs);
         }
     }
 
@@ -1233,8 +1268,14 @@ fn mono_pixel_offset(
 }
 
 fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
+    let mut out = Vec::new();
+    line_up_into(&mut out, x1, y1, x2, y2, min_y, max_y);
+    out
+}
+
+fn line_up_into(out: &mut Vec<i32>, x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) {
     if y2 < min_y || y1 > max_y {
-        return Vec::new();
+        return;
     }
     let e2 = if y2 > max_y {
         max_y
@@ -1250,16 +1291,17 @@ fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i3
         e += 64;
     }
     if e2 < e {
-        return Vec::new();
+        return;
     }
 
     let mut size = ((e2 - e) >> 6) + 1;
     let dx = x2 - x1;
     let dy = y2 - y1;
-    let mut out = Vec::with_capacity(usize_from_i32(size));
+    out.reserve(usize_from_i32(size));
     if dx == 0 {
-        out.resize(usize_from_i32(size), x1);
-        return out;
+        let len = out.len();
+        out.resize(len + usize_from_i32(size), x1);
+        return;
     }
 
     let ix = mul_div_trunc(e - y1, dx, dy);
@@ -1287,18 +1329,29 @@ fn line_up(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i3
             size -= 1;
         }
     }
-    out
 }
 
 fn line_down(x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) -> Vec<i32> {
-    line_up(x1, -y1, x2, -y2, -max_y, -min_y)
+    let mut out = Vec::new();
+    line_down_into(&mut out, x1, y1, x2, y2, min_y, max_y);
+    out
 }
 
-fn bezier_up_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
+fn line_down_into(out: &mut Vec<i32>, x1: i32, y1: i32, x2: i32, y2: i32, min_y: i32, max_y: i32) {
+    line_up_into(out, x1, -y1, x2, -y2, -max_y, -min_y);
+}
+
+fn bezier_up_2(arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
+    let mut out = Vec::new();
+    bezier_up_2_into(&mut out, arc, min_y, max_y);
+    out
+}
+
+fn bezier_up_2_into(out: &mut Vec<i32>, mut arc: [Point; 3], min_y: i32, max_y: i32) {
     let y1 = arc[2].y;
     let y2 = arc[0].y;
     if y2 < min_y || y1 > max_y {
-        return Vec::new();
+        return;
     }
 
     let e2 = if y2 > max_y {
@@ -1315,10 +1368,10 @@ fn bezier_up_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
         e += 64;
     }
     if e2 < e {
-        return Vec::new();
+        return;
     }
 
-    let mut out = Vec::with_capacity(usize_from_i32(((e2 - e) >> 6) + 1));
+    out.reserve(usize_from_i32(((e2 - e) >> 6) + 1));
     let mut stack = Vec::new();
     while e <= e2 {
         let end_y = arc[0].y;
@@ -1344,14 +1397,22 @@ fn bezier_up_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
         };
         arc = next;
     }
-    out
 }
 
 fn bezier_down_2(mut arc: [Point; 3], min_y: i32, max_y: i32) -> Vec<i32> {
     arc[0].y = -arc[0].y;
     arc[1].y = -arc[1].y;
     arc[2].y = -arc[2].y;
-    bezier_up_2(arc, -max_y, -min_y)
+    let mut out = Vec::new();
+    bezier_up_2_into(&mut out, arc, -max_y, -min_y);
+    out
+}
+
+fn bezier_down_2_into(out: &mut Vec<i32>, mut arc: [Point; 3], min_y: i32, max_y: i32) {
+    arc[0].y = -arc[0].y;
+    arc[1].y = -arc[1].y;
+    arc[2].y = -arc[2].y;
+    bezier_up_2_into(out, arc, -max_y, -min_y);
 }
 
 fn split_conic_arc(arc: [Point; 3]) -> ([Point; 3], [Point; 3]) {
@@ -1549,9 +1610,27 @@ fn fill_mono_span(row: &mut [u8], width: usize, mut x1: i32, mut x2: i32) {
         return;
     }
 
-    for x in usize_from_i32(x1)..=usize_from_i32(x2) {
-        row[x / 8] |= 0x80 >> (x & 7);
+    let start = usize_from_i32(x1);
+    let end = usize_from_i32(x2);
+    let start_byte = start / 8;
+    let end_byte = end / 8;
+    let start_bit = start & 7;
+    let end_bit = end & 7;
+
+    if start_byte == end_byte {
+        row[start_byte] |= mono_span_mask(start_bit, end_bit);
+        return;
     }
+
+    row[start_byte] |= 0xFFu8 >> start_bit;
+    if start_byte + 1 < end_byte {
+        row[start_byte + 1..end_byte].fill(0xFF);
+    }
+    row[end_byte] |= 0xFFu8 << (7 - end_bit);
+}
+
+fn mono_span_mask(start_bit: usize, end_bit: usize) -> u8 {
+    (0xFFu8 >> start_bit) & (0xFFu8 << (7 - end_bit))
 }
 
 fn set_mono_dropout(
@@ -1923,21 +2002,24 @@ fn render_lcd(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, F
     let row_width = width * 3;
     let pitch = pad_ceil(row_width, 4);
     let mut buffer = vec![0u8; pitch * height];
+    let mut scratch = grays::RasterScratch::new();
     for (channel, sub_x) in LCD_SUBPIXELS.iter().enumerate() {
-        let mut shifted = outline.clone();
-        translate_outline(
-            &mut shifted,
+        grays::rasterize_shifted_in_box_to_with_scratch(
+            &outline,
             -box_.x_min * FT_PIXEL_ONE - *sub_x,
             -box_.y_min * FT_PIXEL_ONE,
-        );
-        let raster = grays::rasterize_in_box(shifted, width, height)?;
-        for y in 0..height {
-            let src = y * width;
-            let dst = y * pitch + channel;
-            for x in 0..width {
-                buffer[dst + x * 3] = raster.pixels[src + x];
-            }
-        }
+            width,
+            height,
+            &mut buffer,
+            pitch,
+            3,
+            channel,
+            0,
+            i32_from_usize(width),
+            0,
+            i32_from_usize(height),
+            &mut scratch,
+        )?;
     }
     Ok(RenderedBitmap {
         width: u32_from_usize(row_width),
@@ -1956,15 +2038,24 @@ fn render_lcd_v(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap,
     let rows = height * 3;
     let pitch = width;
     let mut buffer = vec![0u8; pitch * rows];
+    let mut scratch = grays::RasterScratch::new();
     for (channel, sub_x) in LCD_SUBPIXELS.iter().enumerate() {
-        let mut shifted = outline.clone();
-        translate_outline(&mut shifted, 0, 64 + *sub_x);
-        let raster = grays::rasterize_in_box(shifted, width, height)?;
-        for y in 0..height {
-            let src = y * width;
-            let dst = (y * 3 + channel) * pitch;
-            buffer[dst..dst + width].copy_from_slice(&raster.pixels[src..src + width]);
-        }
+        grays::rasterize_shifted_in_box_to_with_scratch(
+            &outline,
+            0,
+            64 + *sub_x,
+            width,
+            height,
+            &mut buffer,
+            pitch * 3,
+            1,
+            channel * pitch,
+            0,
+            i32_from_usize(width),
+            0,
+            i32_from_usize(height),
+            &mut scratch,
+        )?;
     }
     Ok(RenderedBitmap {
         width: u32_from_usize(width),

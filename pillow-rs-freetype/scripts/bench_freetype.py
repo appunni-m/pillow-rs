@@ -528,6 +528,7 @@ def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dic
         "matrix_version": matrix_data.get("version"),
         "workload_profile": args.profile,
         "sample_count": args.samples,
+        "cached_row_warmup_iterations": 1,
         "compare_c": args.compare_c,
         "rustc_version": run_optional(["rustc", "--version"], cwd=WORKSPACE_ROOT),
         "cargo_version": run_optional(["cargo", "--version"], cwd=WORKSPACE_ROOT),
@@ -545,6 +546,7 @@ def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dic
         "timing_notes": [
             "Rust benchmark is cargo run --release --locked for the bench_ops example.",
             "C helper is standalone tooling compiled by this script and never linked into runtime code.",
+            "Cached-font rows run one untimed warmup operation in both Rust and C before timing.",
             "Rows marked timing_only have C timing/fingerprint but not exact comparable C SHA-256 output parity.",
             "Exact correctness remains enforced by fixture parity tests.",
         ],
@@ -758,6 +760,7 @@ def metadata_table(metadata: dict[str, Any]) -> str:
         ("Git dirty", metadata.get("git_dirty")),
         ("Workload profile", metadata.get("workload_profile")),
         ("Samples", metadata.get("sample_count")),
+        ("Cached row warmup iterations", metadata.get("cached_row_warmup_iterations")),
         ("Matrix", metadata.get("matrix")),
         ("Matrix version", metadata.get("matrix_version")),
         ("Platform", metadata.get("platform")),
@@ -791,6 +794,7 @@ def benchmark_configuration_table(metadata: dict[str, Any]) -> str:
     rows = [
         ("Workload profile", metadata.get("workload_profile")),
         ("Samples", metadata.get("sample_count")),
+        ("Cached row warmup iterations", metadata.get("cached_row_warmup_iterations")),
         ("Compare C", metadata.get("compare_c")),
         ("Matrix", metadata.get("matrix")),
         ("Matrix version", metadata.get("matrix_version")),

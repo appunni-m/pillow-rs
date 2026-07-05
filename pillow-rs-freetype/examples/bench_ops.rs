@@ -144,9 +144,13 @@ impl BenchOutput {
 
 fn run_row(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> BenchOutput {
     let mut last = Vec::new();
+    if row.operation != "load_font" {
+        run_once_into(row, font_bytes, font, &mut last);
+        black_box(&last);
+    }
     let start = Instant::now();
     for _ in 0..row.iterations {
-        last = run_once(row, font_bytes, font);
+        run_once_into(row, font_bytes, font, &mut last);
         black_box(&last);
     }
     BenchOutput {
@@ -157,7 +161,8 @@ fn run_row(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> BenchOutput {
     }
 }
 
-fn run_once(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> Vec<u8> {
+fn run_once_into(row: &Row, font_bytes: &[u8], font: Option<&Font>, out: &mut Vec<u8>) {
+    out.clear();
     match row.operation.as_str() {
         "load_font" => {
             let font = Font::truetype_with_load_mode(
@@ -167,31 +172,43 @@ fn run_once(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> Vec<u8> {
             )
             .unwrap_or_else(|err| panic!("load_font failed for {}: {err}", row.id));
             let info = font.face_info();
-            info.num_glyphs.to_le_bytes().to_vec()
+            out.extend_from_slice(&info.num_glyphs.to_le_bytes());
         }
         "getname" => {
             let (family, style) = font.expect("font is cached").getname();
-            [family.as_bytes(), style.as_bytes()].concat()
+            out.extend_from_slice(family.as_bytes());
+            out.extend_from_slice(style.as_bytes());
         }
         "getmetrics" => {
             let (ascent, descent) = font.expect("font is cached").getmetrics();
-            [ascent.to_le_bytes(), descent.to_le_bytes()].concat()
+            out.extend_from_slice(&ascent.to_le_bytes());
+            out.extend_from_slice(&descent.to_le_bytes());
         }
-        "getlength" => font
-            .expect("font is cached")
-            .getlength(&row.text)
-            .to_le_bytes()
-            .to_vec(),
+        "getlength" => {
+            out.extend_from_slice(
+                &font
+                    .expect("font is cached")
+                    .getlength(&row.text)
+                    .to_le_bytes(),
+            );
+        }
         "getbbox" => {
             let bbox = font.expect("font is cached").getbbox(&row.text);
-            pack_i32s([bbox.0, bbox.1, bbox.2, bbox.3])
+            pack_i32s_into(out, [bbox.0, bbox.1, bbox.2, bbox.3]);
         }
         "getmask" => {
             let mask = font
                 .expect("font is cached")
                 .getmask(&row.text)
                 .unwrap_or_else(|err| panic!("getmask failed for {}: {err}", row.id));
-            pack_mask(mask.width, mask.height, mask.xmin, mask.ymin, &mask.pixels)
+            pack_mask_into(
+                out,
+                mask.width,
+                mask.height,
+                mask.xmin,
+                mask.ymin,
+                &mask.pixels,
+            );
         }
         "glyph_metrics" => {
             let ch = first_char(&row.text);
@@ -199,29 +216,33 @@ fn run_once(row: &Row, font_bytes: &[u8], font: Option<&Font>) -> Vec<u8> {
                 .expect("font is cached")
                 .glyph_metrics(ch as u32)
                 .unwrap_or_else(|err| panic!("glyph_metrics failed for {}: {err}", row.id));
-            pack_i32s([
-                metrics.width,
-                metrics.height,
-                metrics.hori_bearing_x,
-                metrics.hori_bearing_y,
-                metrics.hori_advance,
-                metrics.vert_bearing_x,
-                metrics.vert_bearing_y,
-                metrics.vert_advance,
-            ])
+            pack_i32s_into(
+                out,
+                [
+                    metrics.width,
+                    metrics.height,
+                    metrics.hori_bearing_x,
+                    metrics.hori_bearing_y,
+                    metrics.hori_advance,
+                    metrics.vert_bearing_x,
+                    metrics.vert_bearing_y,
+                    metrics.vert_advance,
+                ],
+            );
         }
         "render_mode" => {
             let bitmap = font
                 .expect("font is cached")
                 .render_mode(&row.text, parse_render_mode(&row.render_mode))
                 .unwrap_or_else(|err| panic!("render_mode failed for {}: {err}", row.id));
-            pack_mask(
+            pack_mask_into(
+                out,
                 bitmap.width,
                 bitmap.rows,
                 bitmap.left,
                 bitmap.top,
                 &bitmap.buffer,
-            )
+            );
         }
         other => panic!("unsupported benchmark operation {other}"),
     }
@@ -231,22 +252,20 @@ fn first_char(text: &str) -> char {
     text.chars().next().unwrap_or('\0')
 }
 
-fn pack_i32s<const N: usize>(values: [i32; N]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(N.checked_mul(4).unwrap_or(0));
+fn pack_i32s_into<const N: usize>(out: &mut Vec<u8>, values: [i32; N]) {
+    out.reserve(N.checked_mul(4).unwrap_or(0));
     for value in values {
         out.extend_from_slice(&value.to_le_bytes());
     }
-    out
 }
 
-fn pack_mask(width: u32, height: u32, left: i32, top: i32, pixels: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(16usize.checked_add(pixels.len()).unwrap_or(0));
+fn pack_mask_into(out: &mut Vec<u8>, width: u32, height: u32, left: i32, top: i32, pixels: &[u8]) {
+    out.reserve(16usize.checked_add(pixels.len()).unwrap_or(0));
     out.extend_from_slice(&width.to_le_bytes());
     out.extend_from_slice(&height.to_le_bytes());
     out.extend_from_slice(&left.to_le_bytes());
     out.extend_from_slice(&top.to_le_bytes());
     out.extend_from_slice(pixels);
-    out
 }
 
 fn sha256_hex(data: &[u8]) -> String {
