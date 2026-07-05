@@ -79,8 +79,7 @@ class FreeTypeFont:
         return self._rust_font.getbbox(text)
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
-        w, _h = self._rust_font.getbbox(text)
-        return w
+        return self._rust_font.getlength(str(text))
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
@@ -122,8 +121,7 @@ class FreeTypeFont:
 
     def getmetrics(self):
         """Get font metrics: (ascent, descent) in pixels."""
-        sz = self._rust_font.get_size()
-        return (sz, sz)
+        return self._rust_font.getmetrics()
 
     def getname(self):
         """Return font family name and style name.
