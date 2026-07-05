@@ -60,7 +60,7 @@ fn encode_l8(w: u32, h: u32, pixels: &[u8]) -> Option<Vec<u8>> {
     data.extend_from_slice(&(file_size as u32).to_le_bytes()); // bfSize
     data.extend_from_slice(&[0u8; 4]); // bfReserved1 + bfReserved2
     data.extend_from_slice(&pixel_data_offset.to_le_bytes()); // bfOffBits
-                                                              // --- BITMAPINFOHEADER (40 bytes) ---
+    // --- BITMAPINFOHEADER (40 bytes) ---
     data.extend_from_slice(&40u32.to_le_bytes()); // biSize
     data.extend_from_slice(&(w as i32).to_le_bytes()); // biWidth
     data.extend_from_slice(&(h as i32).to_le_bytes()); // biHeight (bottom-up)
@@ -72,7 +72,7 @@ fn encode_l8(w: u32, h: u32, pixels: &[u8]) -> Option<Vec<u8>> {
     data.extend_from_slice(&0i32.to_le_bytes()); // biYPelsPerMeter
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed (0 = max for bpp)
     data.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
-                                                 // --- Palette (256 entries, 4 bytes each: B, G, R, reserved) ---
+    // --- Palette (256 entries, 4 bytes each: B, G, R, reserved) ---
     for i in 0u16..256 {
         let val = i as u8;
         data.push(val); // B

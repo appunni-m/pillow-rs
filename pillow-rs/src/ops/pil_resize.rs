@@ -16,21 +16,13 @@ use pillow_rs_image::DynamicImage;
 
 /// Box / Nearest-neighbor kernel.
 fn kernel_box(x: f64) -> f64 {
-    if x.abs() < 0.5 {
-        1.0
-    } else {
-        0.0
-    }
+    if x.abs() < 0.5 { 1.0 } else { 0.0 }
 }
 
 /// Triangle (bilinear) kernel.
 fn kernel_triangle(x: f64) -> f64 {
     let a = x.abs();
-    if a < 1.0 {
-        1.0 - a
-    } else {
-        0.0
-    }
+    if a < 1.0 { 1.0 - a } else { 0.0 }
 }
 
 /// Catmull-Rom (bicubic) kernel.
@@ -89,20 +81,20 @@ fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f64) {
 /// Get pixel as 4 f64 values (r, g, b, a). Grayscale replicates to RGB.
 fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
     match img {
-        DynamicImage::ImageLuma8(ref g) => {
+        DynamicImage::ImageLuma8(g) => {
             let v = g.get_pixel(x, y)[0] as f64;
             [v, v, v, 255.0]
         }
-        DynamicImage::ImageLumaA8(ref ga) => {
+        DynamicImage::ImageLumaA8(ga) => {
             let p = ga.get_pixel(x, y);
             let v = p[0] as f64;
             [v, v, v, p[1] as f64]
         }
-        DynamicImage::ImageRgb8(ref rgb) => {
+        DynamicImage::ImageRgb8(rgb) => {
             let p = rgb.get_pixel(x, y);
             [p[0] as f64, p[1] as f64, p[2] as f64, 255.0]
         }
-        DynamicImage::ImageRgba8(ref rgba) => {
+        DynamicImage::ImageRgba8(rgba) => {
             let p = rgba.get_pixel(x, y);
             [p[0] as f64, p[1] as f64, p[2] as f64, p[3] as f64]
         }
@@ -422,7 +414,7 @@ fn _precompute_coeffs_impl(
 
 fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
-        DynamicImage::ImageRgba8(ref rgba) => {
+        DynamicImage::ImageRgba8(rgba) => {
             let mut out = rgba.clone();
             for p in out.pixels_mut() {
                 let a = p[3] as f64 / 255.0;
@@ -432,7 +424,7 @@ fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
             }
             DynamicImage::ImageRgba8(out)
         }
-        DynamicImage::ImageLumaA8(ref la) => {
+        DynamicImage::ImageLumaA8(la) => {
             let mut out = la.clone();
             for p in out.pixels_mut() {
                 let a = p[1] as f64 / 255.0;
@@ -446,7 +438,7 @@ fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
 
 fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
-        DynamicImage::ImageRgba8(ref rgba) => {
+        DynamicImage::ImageRgba8(rgba) => {
             let mut out = rgba.clone();
             for p in out.pixels_mut() {
                 let a = p[3] as f64;
@@ -459,7 +451,7 @@ fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
             }
             DynamicImage::ImageRgba8(out)
         }
-        DynamicImage::ImageLumaA8(ref la) => {
+        DynamicImage::ImageLumaA8(la) => {
             let mut out = la.clone();
             for p in out.pixels_mut() {
                 let a = p[1] as f64;

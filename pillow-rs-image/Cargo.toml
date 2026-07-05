@@ -1,7 +1,7 @@
 [package]
 name = "pillow-rs-image"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Zero-dependency pixel-perfect image decoders (JPEG, PNG, GIF, BMP, WebP, TIFF)"
 
 [dependencies]

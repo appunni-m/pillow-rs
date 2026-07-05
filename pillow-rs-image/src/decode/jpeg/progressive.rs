@@ -13,7 +13,7 @@
 
 use super::bit_reader::BitReader;
 use super::decode::extract_entropy_segments;
-use super::idct::{extend, jpeg_idct_islow, YccColorConverter, JPEG_NATURAL_ORDER};
+use super::idct::{JPEG_NATURAL_ORDER, YccColorConverter, extend, jpeg_idct_islow};
 use super::parser::JpegInfo;
 use super::upsample::{crop_component, fancy_upsample};
 use crate::types::{ColorType, DecodedImage};

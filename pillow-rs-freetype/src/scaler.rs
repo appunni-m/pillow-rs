@@ -10,7 +10,7 @@ use crate::error::FontError;
 use crate::fixed::{ft_mul_div, ft_mul_fix};
 use crate::outline::{Outline, OutlinePoint};
 use crate::tables::FontData;
-use crate::tt::glyf::{load_glyph, load_glyph_with_scaled_component_offsets, GlyphOutline};
+use crate::tt::glyf::{GlyphOutline, load_glyph, load_glyph_with_scaled_component_offsets};
 
 /// Fixed-point scale factors derived from point size and units-per-em.
 ///
@@ -510,11 +510,7 @@ fn scale_glyph_impl(
     let y_adj = hint_metrics
         .and_then(|m| {
             let s = m.axis[1].scale;
-            if s != 0 {
-                Some(s)
-            } else {
-                None
-            }
+            if s != 0 { Some(s) } else { None }
         })
         .unwrap_or(scale.y_scale);
     // pp1.x origin shift (ttgload.c:2582). Without this, italic fonts
@@ -639,7 +635,7 @@ fn scale_glyph_impl(
             }
         }
     } else if allow_bytecode {
-        if let (Some(ref fpgm), Some(ref cvt)) = (&data.fpgm, &data.cvt) {
+        if let (Some(fpgm), Some(cvt)) = (&data.fpgm, &data.cvt) {
             // Bytecode VM: run on glyphs with per-glyph instructions.
             // Falls through to unhinted on error (graceful degradation).
             let raw_pts: Vec<OutlinePoint> = outline_raw
@@ -1170,11 +1166,7 @@ fn autohint_glyph(
     let y_adj = metrics
         .and_then(|m| {
             let s = m.axis[1].scale;
-            if s != 0 {
-                Some(s)
-            } else {
-                None
-            }
+            if s != 0 { Some(s) } else { None }
         })
         .unwrap_or(scale.y_scale);
     let output = crate::autohint::apply_hints(

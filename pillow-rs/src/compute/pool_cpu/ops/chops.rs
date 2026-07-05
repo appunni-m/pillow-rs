@@ -2,7 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::{preserve_mode, Image};
+use crate::image::{Image, preserve_mode};
 use pillow_rs_image::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use std::sync::Arc;
 
@@ -96,7 +96,7 @@ fn channel_op_binary(
             return Err(PilError::ValueError(format!(
                 "channel_op_binary: unsupported channel count {}",
                 ch
-            )))
+            )));
         }
     };
 
@@ -158,7 +158,7 @@ fn channel_op_binary_lut(
                 return Err(PilError::ValueError(format!(
                     "channel_op_binary_lut: unsupported channel count {}",
                     ch
-                )))
+                )));
             }
         };
 

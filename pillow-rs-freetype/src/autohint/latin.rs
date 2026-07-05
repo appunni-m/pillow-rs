@@ -60,18 +60,17 @@ use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use log::trace;
 
 use super::types::{
-    AFEdge, AFPoint, AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, Dimension, Direction,
-    GlyphHints, AF_EDGE_DONE, AF_EDGE_NEUTRAL, AF_EDGE_NORMAL, AF_EDGE_NO_BLUE, AF_EDGE_ROUND,
-    AF_EDGE_SERIF, AF_FLAG_CONTROL, AF_FLAG_IGNORE, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y,
-    AF_FLAG_WEAK_INTERPOLATION, AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_MONO,
-    AF_LATIN_HINTS_STEM_ADJUST, AF_LATIN_HINTS_VERT_SNAP, AF_LATIN_MAX_WIDTHS,
-    AF_SCALER_FLAG_NO_HORIZONTAL,
-};
-use super::types::{
     AF_BLUE_PROP_LATIN_CAPITAL_BOTTOM, AF_BLUE_PROP_LATIN_NEUTRAL, AF_BLUE_PROP_LATIN_SMALL_BOTTOM,
     AF_BLUE_PROP_LATIN_SUB_TOP, AF_BLUE_PROP_LATIN_TOP, AF_BLUE_PROP_LATIN_X_HEIGHT,
     AF_LATIN_BLUE_ACTIVE, AF_LATIN_BLUE_ADJUSTMENT, AF_LATIN_BLUE_BOTTOM,
     AF_LATIN_BLUE_BOTTOM_SMALL, AF_LATIN_BLUE_NEUTRAL, AF_LATIN_BLUE_SUB_TOP, AF_LATIN_BLUE_TOP,
+};
+use super::types::{
+    AF_EDGE_DONE, AF_EDGE_NEUTRAL, AF_EDGE_NO_BLUE, AF_EDGE_NORMAL, AF_EDGE_ROUND, AF_EDGE_SERIF,
+    AF_FLAG_CONTROL, AF_FLAG_IGNORE, AF_FLAG_TOUCH_X, AF_FLAG_TOUCH_Y, AF_FLAG_WEAK_INTERPOLATION,
+    AF_LATIN_HINTS_HORZ_SNAP, AF_LATIN_HINTS_MONO, AF_LATIN_HINTS_STEM_ADJUST,
+    AF_LATIN_HINTS_VERT_SNAP, AF_LATIN_MAX_WIDTHS, AF_SCALER_FLAG_NO_HORIZONTAL, AFEdge, AFPoint,
+    AFSegment, AfLatinBlue, AfLatinMetrics, AfWidth, Dimension, Direction, GlyphHints,
 };
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1505,18 +1504,14 @@ pub fn compute_segments(hints: &mut GlyphHints, dim: Dimension) {
     // direction matching.
     let major_dir = {
         let cw = hints.cw_orientation; // true = clockwise (sum<0). C matches this to FT_Outline_Get_Orientation
-                                       // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
-                                       // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
-                                       // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
-                                       // CW→TrueType→no flip: HORZ=UP, VERT=LEFT
-                                       // CCW→PostScript→flip: HORZ=DOWN, VERT=RIGHT
-                                       // Our cw_orientation=true means CW (=TrueType), so NO flip.
+        // C: default HORZ=UP VERT=LEFT. If PostScript (area>0→cw=false in our terms? or area<0→cw=true?): flip to HORZ=DOWN VERT=RIGHT
+        // FT_Outline_Get_Orientation: area>0→POSTSCRIPT→flip. area<0→TRUETYPE→no_flip.
+        // Our cw_orientation: area<0→true. So cw=true means area<0 means TRUETYPE means NO flip.
+        // CW→TrueType→no flip: HORZ=UP, VERT=LEFT
+        // CCW→PostScript→flip: HORZ=DOWN, VERT=RIGHT
+        // Our cw_orientation=true means CW (=TrueType), so NO flip.
         let d = if is_horz {
-            if cw {
-                Direction::Up
-            } else {
-                Direction::Down
-            }
+            if cw { Direction::Up } else { Direction::Down }
         } else if cw {
             Direction::Left
         } else {

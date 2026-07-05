@@ -365,11 +365,7 @@ impl GraphicsState {
             }
         }
         fn floor_grid(v: i32) -> i32 {
-            if v >= 0 {
-                v & !63
-            } else {
-                -((-v) & !63)
-            }
+            if v >= 0 { v & !63 } else { -((-v) & !63) }
         }
         fn ceil_grid(v: i32) -> i32 {
             if v <= 0 {

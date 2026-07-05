@@ -17,11 +17,11 @@
 use super::{
     bool_enc::BoolEncoder,
     dct::{fdct_4x4, wht_4x4},
-    predict::{choose_luma_mode, predict_chroma_8x8, predict_luma_16x16, MbPredictionMode},
+    predict::{MbPredictionMode, choose_luma_mode, predict_chroma_8x8, predict_luma_16x16},
     quant::{quality_to_quant_index, rgb_to_yuv},
     tokenize::{
-        classify_coefficient, COEFF_BANDS, COEFF_PROBS, DCT_1, DCT_2, DCT_4, DCT_CAT1, DCT_CAT2,
-        DCT_CAT4, DCT_CAT6, ZIGZAG,
+        COEFF_BANDS, COEFF_PROBS, DCT_1, DCT_2, DCT_4, DCT_CAT1, DCT_CAT2, DCT_CAT4, DCT_CAT6,
+        ZIGZAG, classify_coefficient,
     },
 };
 
@@ -82,7 +82,7 @@ fn encode_frame_header(enc: &mut BoolEncoder, _width: u32, _height: u32, qi: u8)
 
     // ── Quantization indices (Section 9.6) ──
     enc.encode_literal(qi as u32, 7); // yac_abs (7 bits, 0-127)
-                                      // All deltas = 0: encode single false bit each
+    // All deltas = 0: encode single false bit each
     enc.encode_bool(128, false); // ydc_delta
     enc.encode_bool(128, false); // y2dc_delta
     enc.encode_bool(128, false); // y2ac_delta
@@ -321,31 +321,31 @@ fn encode_non_small_token(enc: &mut BoolEncoder, token: i8, probs: &[u8; 11]) {
     // At tree[3]: 2-4 vs 5+
     if token <= DCT_4 && token >= DCT_2 {
         enc.encode_bool(probs[3], false); // left → tree[4]
-                                          // tree[4]: DCT_2 vs 3-4
+        // tree[4]: DCT_2 vs 3-4
         if token == DCT_2 {
             enc.encode_bool(probs[4], false); // left leaf: DCT_2
         } else {
             enc.encode_bool(probs[4], true); // right → tree[5]
-                                             // tree[5]: DCT_3 vs DCT_4
+            // tree[5]: DCT_3 vs DCT_4
             enc.encode_bool(probs[5], token == DCT_4); // left=DCT_3, right=DCT_4
         }
     } else {
         enc.encode_bool(probs[3], true); // right → tree[6]
-                                         // tree[6]: CAT1-2 vs CAT3-6
+        // tree[6]: CAT1-2 vs CAT3-6
         if token <= DCT_CAT2 {
             enc.encode_bool(probs[6], false); // left → tree[7]
-                                              // tree[7]: CAT1 vs CAT2
+            // tree[7]: CAT1 vs CAT2
             enc.encode_bool(probs[7], token == DCT_CAT2);
         } else {
             enc.encode_bool(probs[6], true); // right → tree[8]
-                                             // tree[8]: CAT3-4 vs CAT5-6
+            // tree[8]: CAT3-4 vs CAT5-6
             if token <= DCT_CAT4 {
                 enc.encode_bool(probs[8], false); // left → tree[9]
-                                                  // tree[9]: CAT3 vs CAT4
+                // tree[9]: CAT3 vs CAT4
                 enc.encode_bool(probs[9], token == DCT_CAT4);
             } else {
                 enc.encode_bool(probs[8], true); // right → tree[10]
-                                                 // tree[10]: CAT5 vs CAT6
+                // tree[10]: CAT5 vs CAT6
                 enc.encode_bool(probs[10], token == DCT_CAT6);
             }
         }
@@ -1045,7 +1045,7 @@ mod tests {
                 enc.encode_bool(128, false);
             } // deltas
             enc.encode_bool(128, true); // refresh
-                                        // ALL coeff updates at prob=255
+            // ALL coeff updates at prob=255
             for _ in 0..1056 {
                 enc.encode_bool(255, false);
             }

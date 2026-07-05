@@ -2,8 +2,8 @@ use crate::types::{ColorType, DecodedImage};
 
 use super::bit_reader::BitReader;
 use super::huffman::HuffTable;
-use super::idct::{self, extend, jpeg_idct_islow, YccColorConverter};
-use super::parser::{parse_jpeg, JpegInfo};
+use super::idct::{self, YccColorConverter, extend, jpeg_idct_islow};
+use super::parser::{JpegInfo, parse_jpeg};
 use super::progressive::progressive_reconstruct;
 use super::upsample::{crop_component, fancy_upsample};
 

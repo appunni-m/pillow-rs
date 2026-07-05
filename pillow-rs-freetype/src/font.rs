@@ -10,7 +10,7 @@ use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::grays::{self, RasterResult};
 use crate::scaler::{
-    self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_ceil, pixel_round, ScaleMetrics,
+    self, ScaleMetrics, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_ceil, pixel_round,
 };
 use crate::tables::FontData;
 use crate::tt::{self, tag};
@@ -1096,11 +1096,7 @@ impl SizeMetrics {
 }
 
 fn normalize_dpi(dpi: u32) -> u32 {
-    if dpi == 0 {
-        72
-    } else {
-        dpi
-    }
+    if dpi == 0 { 72 } else { dpi }
 }
 
 fn ppem_from_char_size(char_size_26dot6: i32, dpi: u32) -> u16 {

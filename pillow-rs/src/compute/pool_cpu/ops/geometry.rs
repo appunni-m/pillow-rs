@@ -17,21 +17,13 @@ use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 /// Box / Nearest-neighbor kernel.
 fn f_kernel_box(x: f64) -> f64 {
-    if x.abs() < 0.5 {
-        1.0
-    } else {
-        0.0
-    }
+    if x.abs() < 0.5 { 1.0 } else { 0.0 }
 }
 
 /// Triangle (bilinear) kernel.
 fn f_kernel_triangle(x: f64) -> f64 {
     let a = x.abs();
-    if a < 1.0 {
-        1.0 - a
-    } else {
-        0.0
-    }
+    if a < 1.0 { 1.0 - a } else { 0.0 }
 }
 
 /// Catmull-Rom (bicubic) kernel.
@@ -406,7 +398,7 @@ fn rotate_arbitrary_generic(
                 2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dw, dh)),
                 3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dw, dh)),
                 _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dw, dh)),
-            }
+            };
         }
     };
 
@@ -517,7 +509,7 @@ fn transform_affine_generic(
                 2 => DynamicImage::ImageLumaA8(pillow_rs_image::GrayAlphaImage::new(dst_w, dst_h)),
                 3 => DynamicImage::ImageRgb8(pillow_rs_image::RgbImage::new(dst_w, dst_h)),
                 _ => DynamicImage::ImageRgba8(pillow_rs_image::RgbaImage::new(dst_w, dst_h)),
-            }
+            };
         }
     };
 

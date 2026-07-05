@@ -1,6 +1,6 @@
 //! `FromColor` trait + cross-type conversions.
 
-use super::from_primitive::{rgb_to_luma, FromPrimitive};
+use super::from_primitive::{FromPrimitive, rgb_to_luma};
 use super::types::{Luma, LumaA, Rgb, Rgba};
 use crate::types::traits::{Enlargeable, Pixel, Primitive};
 

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use pillow_rs::font::{imagingft, Font};
+use pillow_rs::font::{Font, imagingft};
 use pillow_rs::{Draw, Image};
 
 #[derive(Debug, Deserialize)]
@@ -251,7 +251,7 @@ fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
             return Err(PixelFailure {
                 id: row.id.clone(),
                 reason: format!("unsupported pixel operation {other}"),
-            })
+            });
         }
     };
 

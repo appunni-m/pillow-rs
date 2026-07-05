@@ -11,7 +11,7 @@
 //! Encode: decode reference → encode with params → decode → compare pixel bytes.
 
 use serde::Deserialize;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -436,39 +436,38 @@ fn test_encode_matrix() {
 
             // Determine source: use row's source_asset if present, otherwise fall back
             // to the first active decode row for this format.
-            let asset_path = if let (Some(ref src_fmt), Some(ref src_asset)) =
-                (&row.source_format, &row.source_asset)
-            {
-                let path = assets_dir.join(src_fmt).join(src_asset);
-                if path.exists() {
-                    path
+            let asset_path =
+                if let (Some(src_fmt), Some(src_asset)) = (&row.source_format, &row.source_asset) {
+                    let path = assets_dir.join(src_fmt).join(src_asset);
+                    if path.exists() {
+                        path
+                    } else {
+                        eprintln!("  FAIL [{}]: source asset not found: {:?}", row.id, path);
+                        failed += 1;
+                        continue;
+                    }
                 } else {
-                    eprintln!("  FAIL [{}]: source asset not found: {:?}", row.id, path);
-                    failed += 1;
-                    continue;
-                }
-            } else {
-                // Fallback: find a decode row in this format
-                let source_row = fmt_data
-                    .decode
-                    .iter()
-                    .find(|r| r.status == "active" && r.asset.is_some());
-                match source_row {
-                    Some(src) => {
-                        let path = assets_dir.join(fmt_name).join(src.asset.as_ref().unwrap());
-                        if path.exists() {
-                            path
-                        } else {
+                    // Fallback: find a decode row in this format
+                    let source_row = fmt_data
+                        .decode
+                        .iter()
+                        .find(|r| r.status == "active" && r.asset.is_some());
+                    match source_row {
+                        Some(src) => {
+                            let path = assets_dir.join(fmt_name).join(src.asset.as_ref().unwrap());
+                            if path.exists() {
+                                path
+                            } else {
+                                skipped += 1;
+                                continue;
+                            }
+                        }
+                        None => {
                             skipped += 1;
                             continue;
                         }
                     }
-                    None => {
-                        skipped += 1;
-                        continue;
-                    }
-                }
-            };
+                };
 
             if let Entry::Vacant(entry) = asset_cache.entry(asset_path.clone()) {
                 entry.insert(fs::read(&asset_path).unwrap());

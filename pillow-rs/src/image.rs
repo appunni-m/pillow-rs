@@ -322,7 +322,7 @@ impl Image {
                 return Err(PilError::ValueError(format!(
                     "frombytes: unsupported mode {}",
                     mode
-                )))
+                )));
             }
         };
         if data.len() < expected {
@@ -620,7 +620,7 @@ impl Image {
                 || explicit_mode.as_deref() == Some("P") =>
             {
                 let mut img = source.materialize()?; // Paletted → Luma8 (indices)
-                                                     // Check if all ops are palette-safe
+                // Check if all ops are palette-safe
                 if ops.iter().all(Self::is_palette_safe_op) {
                     let b = backend.unwrap_or_else(|| crate::compute::route(ops, None));
                     img = crate::compute::execute_batch(b, ops, &img, Some("P"))?;
@@ -1765,8 +1765,7 @@ impl Image {
         );
         // Always tag the result as P-mode, regardless of source mode.
         if let Image::Pipeline {
-            explicit_mode: ref mut em,
-            ..
+            explicit_mode: em, ..
         } = &mut result
         {
             *em = Some("P".to_string());

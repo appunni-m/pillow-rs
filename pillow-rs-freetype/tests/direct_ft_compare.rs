@@ -189,8 +189,21 @@ fn test_direct_ft_comparison() {
                         }
                         st.total_mag += dc as f64;
                         st.count += 1;
-                        eprintln!("  FAIL [{}_{}_{}_{}] our={}x{} ft={}x{} diffs={} max={} first={:?} size_delta={}",
-                            font_name, size, cp, script, mask.width, mask.height, ft_w, ft_h, dc, maxd, first, sd);
+                        eprintln!(
+                            "  FAIL [{}_{}_{}_{}] our={}x{} ft={}x{} diffs={} max={} first={:?} size_delta={}",
+                            font_name,
+                            size,
+                            cp,
+                            script,
+                            mask.width,
+                            mask.height,
+                            ft_w,
+                            ft_h,
+                            dc,
+                            maxd,
+                            first,
+                            sd
+                        );
                     }
                 }
             }
@@ -248,7 +261,9 @@ fn test_direct_ft_comparison() {
                 };
                 (a, s.max_diff)
             });
-            eprintln!("║    {s}: {ok}/{total_s} passed ({fail_pct:.0}% fail) avg_diffs={avg:.1} max_diff={maxd}");
+            eprintln!(
+                "║    {s}: {ok}/{total_s} passed ({fail_pct:.0}% fail) avg_diffs={avg:.1} max_diff={maxd}"
+            );
         }
     }
     eprintln!("╚══════════════════════════════════════════════════════════════╝");

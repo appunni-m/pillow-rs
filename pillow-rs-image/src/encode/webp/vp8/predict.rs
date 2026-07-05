@@ -56,11 +56,7 @@ fn clamp_u8(v: i16) -> u8 {
 /// Absolute difference between two `u8` values.
 #[inline]
 fn abs_diff_u8(a: u8, b: u8) -> u8 {
-    if a > b {
-        a - b
-    } else {
-        b - a
-    }
+    if a > b { a - b } else { b - a }
 }
 
 /// Signed difference between two `u8` values, returned as `i16`.
@@ -668,19 +664,11 @@ fn evaluate_bpred_sad(block: &[u8], above: &[u8], left: &[u8], top_left: u8) -> 
             // This is a simplification for the basic encoder.
             let sub_above: [u8; 4] = core::array::from_fn(|i| {
                 let col = sub_x * 4 + i;
-                if col < 16 {
-                    above[col]
-                } else {
-                    0
-                }
+                if col < 16 { above[col] } else { 0 }
             });
             let sub_left: [u8; 4] = core::array::from_fn(|i| {
                 let row = sub_y * 4 + i;
-                if row < 16 {
-                    left[row]
-                } else {
-                    0
-                }
+                if row < 16 { left[row] } else { 0 }
             });
             let sub_tl = if sub_x == 0 && sub_y == 0 {
                 top_left
@@ -817,19 +805,11 @@ fn evaluate_bpred_sad_full(block: &[u8], above: &[u8], left: &[u8], top_left: u8
 
             let sub_above: [u8; 4] = core::array::from_fn(|i| {
                 let col = sub_x * 4 + i;
-                if col < 16 {
-                    above[col]
-                } else {
-                    0
-                }
+                if col < 16 { above[col] } else { 0 }
             });
             let sub_left: [u8; 4] = core::array::from_fn(|i| {
                 let row = sub_y * 4 + i;
-                if row < 16 {
-                    left[row]
-                } else {
-                    0
-                }
+                if row < 16 { left[row] } else { 0 }
             });
             let sub_tl = if sub_x == 0 && sub_y == 0 {
                 top_left

@@ -5,7 +5,7 @@
 use crate::encode_options::EncodeOptions;
 use crate::types::{ColorType, DecodedImage};
 use std::io::Cursor;
-use tiff::encoder::{colortype, TiffEncoder};
+use tiff::encoder::{TiffEncoder, colortype};
 /// Encode a `DecodedImage` as TIFF bytes.
 ///
 /// Maps color types to TIFF photometric interpretations:

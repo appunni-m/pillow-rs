@@ -30,7 +30,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
             return Err(PilError::ValueError(format!(
                 "Unsupported merge mode: {}",
                 mode
-            )))
+            )));
         }
     };
 

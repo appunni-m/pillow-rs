@@ -272,13 +272,13 @@ pub fn op_extract_band(img: &DynamicImage, index: u8) -> Result<DynamicImage, Pi
     // LA mode stored as La8: [L, A] at bytes 0, 1 per pixel.
     // RGB/RGBA/CMYK stored in their respective formats.
     match img {
-        DynamicImage::ImageLumaA8(ref la) => {
+        DynamicImage::ImageLumaA8(la) => {
             // La8: [L, A] per pixel, stride 2
             for (gp, lp) in gray.pixels_mut().zip(la.pixels()) {
                 gp[0] = lp[idx.min(1)];
             }
         }
-        DynamicImage::ImageRgba8(ref rgba) => {
+        DynamicImage::ImageRgba8(rgba) => {
             let ch = idx.min(3);
             for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
                 gp[0] = rp[ch];
