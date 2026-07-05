@@ -6,7 +6,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::{BitmapBackend, Font};
+use pillow_rs_freetype::Font;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::process::Command;
@@ -31,7 +31,7 @@ fn main() {
     let ch = char::from_u32(cp).unwrap_or('?');
 
     let data = fs::read(font_path).unwrap();
-    let font = Font::truetype(&data, size, BitmapBackend::FreeType).unwrap();
+    let font = Font::truetype(&data, size).unwrap();
     let mask = font.getmask(&ch.to_string()).unwrap();
     let bbox = font.getbbox(&ch.to_string());
 

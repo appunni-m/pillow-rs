@@ -25,7 +25,7 @@ Rules:
 2. No `extern "C"` blocks in `src/`.
 3. No `native_ft` bridge modules.
 4. No `freetype-sys`, `bindgen`, `pkg-config`, `cc::`, or `rustc-link-lib=freetype` in runtime crate files.
-5. `BitmapBackend::PIL` and `BitmapBackend::FreeType` are Rust behavior modes, not FFI selectors.
+5. Runtime `Font` APIs expose the FreeType C glyph-slot contract directly; adapter-specific text packaging lives outside `pillow-rs-freetype`.
 
 Allowed C use:
 

@@ -4,7 +4,7 @@ Faithful pseudo-Rust transcription of FreeType 2.14.1 `src/autofit/` (aflatin.c,
 afhints.c, afblue.c). This is the **spec** to port against. All coordinates are
 26.6 fixed unless noted; `FT_Pos` ≡ `i32`. Line numbers reference the vendored C.
 
-Reference provenance: fixtures are **PIL `getmask` = `FT_LOAD_DEFAULT|RENDER`**
+Reference provenance: fixtures are **FreeType `FT_LOAD_RENDER`**
 on bytecode-stripped `fonts_autohint/` → **AUTOHINTED**. The autohinter must run.
 
 Citation key:
@@ -439,7 +439,7 @@ for blue in blues where ADJUSTMENT and ACTIVE:
     if -128 < dist < 128: scale = new_scale
 axis.scale = scale; axis.delta = delta
 ```
-(limit comes from `face->internal->increase_x_height` — for PIL/non-instructed fonts
+(limit comes from `face->internal->increase_x_height` — for FreeType/non-instructed fonts
 this is 0, so threshold stays 40 and the branch is just `FT_PIX_ROUND(scaled)`-ish.)
 
 ### E.4 `af_latin_hints_compute_blue_edges` (aflatin.c:2529-2640)

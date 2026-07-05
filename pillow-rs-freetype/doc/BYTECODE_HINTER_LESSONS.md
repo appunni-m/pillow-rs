@@ -56,8 +56,8 @@ changing interpreter behavior.
 
 ## The Goal
 
-Match Python Pillow's `ImageFont.getmask()` / `getbbox()` pixel output. Pillow
-uses `FT_LOAD_DEFAULT` which activates FreeType's native TrueType bytecode
+Match FreeType `FT_LOAD_RENDER` pixel output. This path uses
+`FT_LOAD_DEFAULT`, which activates FreeType's native TrueType bytecode
 interpreter. Our code didn't have one. We built one.
 
 ---
@@ -469,15 +469,15 @@ Getting them backwards means we'd look up CVT[point_index] which is garbage.
 
 ---
 
-## 5. Attempted Fixes (Failed to Improve PIL Score)
+## 5. Attempted Fixes (Failed to Improve FreeType default score)
 
 | Fix Attempt | Why It Failed |
 |---|---|
 | Enable prep execution | CVT entries zeroed → mask dimensions explode (96 GB allocation) |
 | Run fpgm through full VM | GS corrupted → wrong auto-flip in subsequent MIRP |
 | Round CVT after scaling | No change (values already pixel-aligned at 10pt) |
-| Use autohinter for PIL | Regressed 697 tests (autohinter ≠ bytecode hinter) |
-| Unpad PIL masks | Regressed 1,089 tests (PIL uses rasterized bitmap size, not outline bbox) |
+| Use autohinter for FreeType | Regressed 697 tests (autohinter ≠ bytecode hinter) |
+| Unpad  masks | Regressed 1,089 tests ( uses rasterized bitmap size, not outline bbox) |
 | Per-contour IUP | Pixels shifted up → masks had wrong y-offset |
 
 ---
@@ -487,14 +487,14 @@ Getting them backwards means we'd look up CVT[point_index] which is garbage.
 | Commit | Description | Delta |
 |---|---|---|
 | 09893a3 | VSEP range check: C uses `adj <= 66`, we used `adj <= 128` | 3→0 FT failures |
-| 473fc22 | Bytecode VM + linear CVT scaling | -466 PIL failures |
-| d02d15b | Stack pop order: value then index, not index then value | -96 PIL failures |
+| 473fc22 | Bytecode VM + linear CVT scaling | -466  failures |
+| d02d15b | Stack pop order: value then index, not index then value | -96  failures |
 | a82e1fe | Rounding opcodes: 0x18=RTG,0x19=RTHG,0x3D=RTDG | Quality |
 | de8f26f | MPPEM: `ppem * 64` not raw `ppem` | Quality |
 
 ---
 
-## 7. Remaining Gap: 4,977 PIL Failures
+## 7. Remaining Gap: 4,977  Failures
 
 All 1px subpixel differences. Two sources:
 

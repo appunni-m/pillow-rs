@@ -20,7 +20,7 @@ user 120.10
 sys 8.95
 ```
 
-The test had compiled and was still inside `test_coverage_matrix_pil`. After
+The test had compiled and was still inside `test_native_tt_default_matrix`. After
 caching `Font` by `(font, size_pt)` in `tests/coverage_matrix_tests.rs`, the
 same test reached assertion reporting in:
 
@@ -50,20 +50,20 @@ and `FaceGlobals::new` thousands of times for only 40 unique font-size pairs.
 Status: fixed in `tests/coverage_matrix_tests.rs` by caching constructed
 `Font` values by `(font, size_pt.to_bits())`.
 
-Rule: fixture tests should cache at the highest reusable level. For PIL parity,
+Rule: fixture tests should cache at the highest reusable level. For FreeType parity,
 that means a loaded `Font`, not font bytes.
 
 ## Bottleneck 2: `FaceGlobals::new` Is Eager
 
 `Font::truetype` always constructs `FaceGlobals`, even when the selected backend
-is `BitmapBackend::PIL`. The PIL rendering path skips autohint metrics in
+is `LoadMode::Default`. The  rendering path skips autohint metrics in
 `getmask` and `getbbox`, so eager face-global coverage work is unnecessary for
-PIL-only fixture rows.
+adapter-only fixture rows.
 
 The harness-level cache makes this cost acceptable for normal fixture tests, but
 library construction is still heavier than it needs to be.
 
-Recommended follow-up: make autohint globals lazy or backend-scoped so PIL fonts
+Recommended follow-up: make autohint globals lazy or backend-scoped so default-load fonts
 do not run the full script coverage scan unless a FreeType/autohint operation
 requests it.
 
@@ -115,6 +115,6 @@ Use these tiers:
 - Focused debug: a single glyph through `examples/debug_glyph.rs` or
   `examples/trace_glyph.rs`.
 - Deep parity: live FreeType oracle over `font_inventory.json`.
-- Offline generation: `scripts/build_fixtures.py` and Pillow reference rebuilds.
+- Offline generation: `scripts/build_fixtures.py` and FreeType reference rebuilds.
 
 The normal fixture suite should stay in the first tier.

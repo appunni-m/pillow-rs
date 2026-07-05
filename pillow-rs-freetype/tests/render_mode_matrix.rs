@@ -7,7 +7,7 @@
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::{BitmapBackend, Font, PixelMode, RenderMode};
+use pillow_rs_freetype::{Font, PixelMode, RenderMode};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -122,7 +122,7 @@ fn load_font(manifest_dir: &Path, name: &str, size_pt: f32) -> Font {
         .join("fonts_autohint")
         .join(format!("{name}.ttf"));
     let data = fs::read(&path).unwrap_or_else(|_| panic!("missing font {}", path.display()));
-    Font::truetype(&data, size_pt, BitmapBackend::FreeType).unwrap()
+    Font::truetype(&data, size_pt).unwrap()
 }
 
 fn parse_mode(mode: &str) -> RenderMode {

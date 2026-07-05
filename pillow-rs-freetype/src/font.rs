@@ -1,7 +1,8 @@
-//! PIL `ImageFont` compatibility layer on top of the FreeType port.
+//! FreeType-compatible font face API implemented in pure Rust.
 //!
-//! Mirrors the subset of PIL's `FreeTypeFont` API used by the coverage matrix:
-//! `truetype`, `getmask`, `getbbox`, `getmetrics`, `getname`, `getlength`.
+//! Runtime code follows FreeType glyph-slot behavior. Higher-level adapters,
+//! including text layout or framework-specific packaging, live outside this
+//! crate.
 
 use crate::casts::{i32_from_f32, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
 
@@ -15,15 +16,14 @@ use crate::tables::FontData;
 use crate::tt::{self, tag};
 use std::sync::Arc;
 
-/// Selects the rendering pipeline for `getmask` / `getbbox`.
+/// FreeType glyph load behavior used by high-level render helpers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BitmapBackend {
-    /// PIL-style mask: baseline-padded with advance-aware width.
-    /// bbox uses ascender-relative screen coords.
+pub enum LoadMode {
+    /// `FT_LOAD_RENDER`: use the font's native TrueType program when present.
     #[default]
-    PIL,
-    /// Raw FreeType output: bitmap as-is, no padding, FreeType bbox coords.
-    FreeType,
+    Default,
+    /// `FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT`: force the auto-hinter.
+    ForceAutoHint,
 }
 
 /// A loaded TrueType font at a given point size.
@@ -31,8 +31,7 @@ pub enum BitmapBackend {
 pub struct Font {
     pub data: Arc<FontData>,
     pub size_pt: f32,
-    /// Selected rendering backend.
-    pub backend: BitmapBackend,
+    pub load_mode: LoadMode,
     /// Face-level global hinting data: per-glyph script assignment,
     /// lazy-computed per-style metrics (Latin, Greek, etc.).
     /// Matches FreeType's AF_FaceGlobals.
@@ -110,8 +109,7 @@ pub struct GlyphMask {
     /// Left bearing offset in pixels (bbox xmin, may be negative).
     /// Used by the compositor to place the glyph horizontally.
     pub xmin: i32,
-    /// Top bearing offset in pixels (bbox ymin — used for vertical placement).
-    /// PIL convention: positive = above baseline.
+    /// Top bearing offset in pixels (bbox ymin, FreeType y-up coordinate space).
     pub ymin: i32,
     /// Advance width in 26.6 fixed-point format.
     pub advance_width: i32,
@@ -144,7 +142,7 @@ impl Font {
     /// Load a TrueType/OpenType font from raw bytes at a given point size.
     ///
     /// Parses all required tables eagerly. Matches `FT_New_Memory_Face` +
-    /// `FT_Set_Char_Size` for the table subset PIL touches.
+    /// `FT_Set_Char_Size` for the table subset this crate exposes.
     ///
     /// # Errors
     ///
@@ -155,23 +153,37 @@ impl Font {
     /// # Examples
     ///
     /// ```no_run
-    /// use pillow_rs_freetype::{Font, BitmapBackend};
+    /// use pillow_rs_freetype::Font;
     /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
-    /// let font = Font::truetype(&font_data, 10.0, BitmapBackend::PIL).unwrap();
+    /// let font = Font::truetype(&font_data, 10.0).unwrap();
     /// assert_eq!(font.getname(), ("DejaVu Sans", "Book"));
     /// ```
-    pub fn truetype(data: &[u8], size_pt: f32, backend: BitmapBackend) -> Result<Self, FontError> {
-        Self::truetype_face(data, 0, size_pt, backend)
+    pub fn truetype(data: &[u8], size_pt: f32) -> Result<Self, FontError> {
+        Self::truetype_with_load_mode(data, size_pt, LoadMode::Default)
+    }
+
+    /// Load a TrueType/OpenType font with an explicit FreeType load mode.
+    pub fn truetype_with_load_mode(
+        data: &[u8],
+        size_pt: f32,
+        load_mode: LoadMode,
+    ) -> Result<Self, FontError> {
+        Self::truetype_face_with_load_mode(data, 0, size_pt, load_mode)
     }
 
     /// Load a specific face from raw SFNT/TTC bytes.
     ///
     /// `face_index` follows FreeType's zero-based face selection semantics.
-    pub fn truetype_face(
+    pub fn truetype_face(data: &[u8], face_index: usize, size_pt: f32) -> Result<Self, FontError> {
+        Self::truetype_face_with_load_mode(data, face_index, size_pt, LoadMode::Default)
+    }
+
+    /// Load a specific face from raw SFNT/TTC bytes with an explicit load mode.
+    pub fn truetype_face_with_load_mode(
         data: &[u8],
         face_index: usize,
         size_pt: f32,
-        backend: BitmapBackend,
+        load_mode: LoadMode,
     ) -> Result<Self, FontError> {
         let (num_faces, face_offset) = tt::resolve_face_index(data, face_index)?;
         let dir = tt::parse_table_directory_at(data, face_offset)?;
@@ -231,7 +243,8 @@ impl Font {
             .ok_or_else(|| FontError::InvalidFont("missing 'glyf' table".into()))?
             .to_vec();
 
-        // Bytecode tables: optional, required for PIL backend pixel parity.
+        // Bytecode tables are optional. When present they are used by the
+        // native TrueType path to match FreeType's default load behavior.
         // Missing tables fall back to unhinted scaling (same behavior as FreeType
         // without TT_USE_BYTECODE_INTERPRETER).
         let fpgm = dir.find(data, tag(b"fpgm")).map(|d| d.to_vec());
@@ -281,7 +294,7 @@ impl Font {
         Ok(Font {
             data: font_data,
             size_pt,
-            backend,
+            load_mode,
             face_globals,
             is_italic,
             size_metrics,
@@ -558,10 +571,10 @@ impl Font {
 
     /// `getmetrics()` → `(ascent, descent)` in pixels.
     ///
-    /// PIL returns `face->size->metrics.ascender >> 6` and
+    /// Returns `face->size->metrics.ascender >> 6` and
     /// `-face->size->metrics.descender >> 6`, where the FreeType metrics are
-    /// in 26.6 format after FT_PIX_ROUND. For the test fonts, this is
-    /// equivalent to ceil(|fu_val| * ppem / upem).
+    /// in 26.6 format after `FT_PIX_ROUND`. For the test fonts, this is
+    /// equivalent to `ceil(|fu_val| * ppem / upem)`.
     pub fn getmetrics(&self) -> (u32, u32) {
         let data = &self.data;
         let upem = data.head.units_per_em as i32;
@@ -618,33 +631,23 @@ impl Font {
         Ok(self.slot_metrics_from_scaled(glyph, &scaled))
     }
 
-    /// `getbbox(text)` → `(left, top, right, bottom)` in pixels.
+    /// `getbbox(text)` -> FreeType rendered bitmap bbox for the first glyph.
     ///
-    /// `BitmapBackend::PIL`: PIL coords, y-down from ascender with baseline padding.
-    /// `BitmapBackend::FreeType`: raw FreeType bbox, y-up from baseline.
+    /// `LoadMode::Default` returns the rendered slot bitmap box. `ForceAutoHint`
+    /// returns the raw auto-hinted outline box because that is the fixture
+    /// contract for the force-autohint lane.
     pub fn getbbox(&self, text: &str) -> (i32, i32, i32, i32) {
         if text.is_empty() {
             return (0, 0, 0, 0);
         }
-        if self.backend == BitmapBackend::FreeType {
-            return self.getbbox_single_glyph(text);
-        }
-        match self.layout_bounds(text) {
-            Ok((x_min, x_max, y_min, y_max)) => match self.backend {
-                BitmapBackend::PIL => {
-                    let scale = ScaleMetrics::new(self.data.size_pt, self.data.head.units_per_em);
-                    let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, scale.y_scale);
-                    let asc_px = pixel_ceil(asc_26);
-                    (x_min, asc_px - y_max, x_max, asc_px - y_min)
-                }
-                BitmapBackend::FreeType => (x_min, y_min, x_max, y_max),
-            },
-            Err(_) => (0, 0, 0, 0),
+        match self.load_mode {
+            LoadMode::Default => self.getbbox_default_rendered_slot(text),
+            LoadMode::ForceAutoHint => self.getbbox_single_glyph(text),
         }
     }
 
-    /// `getmask(text)` → 8-bit alpha bitmap sized to PIL's glyph mask box,
-    /// matching PIL's `getmask` on an `L` image.
+    /// `getmask(text)` -> FreeType-style 8-bit alpha bitmap for the first glyph,
+    /// with no text-run composition or adapter-specific layout.
     ///
     /// # Errors
     ///
@@ -655,9 +658,9 @@ impl Font {
     /// # Examples
     ///
     /// ```no_run
-    /// use pillow_rs_freetype::{Font, BitmapBackend};
+    /// use pillow_rs_freetype::Font;
     /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
-    /// let font = Font::truetype(&font_data, 10.0, BitmapBackend::PIL).unwrap();
+    /// let font = Font::truetype(&font_data, 10.0).unwrap();
     /// let mask = font.getmask("A").unwrap();
     /// assert!(mask.width > 0);
     /// ```
@@ -672,18 +675,49 @@ impl Font {
                 advance_width: 0,
             });
         }
-        if self.backend == BitmapBackend::FreeType {
-            return self.getmask_single_glyph(text);
+        match self.load_mode {
+            LoadMode::Default => self.getmask_default_rendered_slot(text),
+            LoadMode::ForceAutoHint => self.getmask_single_glyph(text),
         }
+    }
+}
 
-        let glyphs = self.layout_glyphs(text)?;
+impl Font {
+    fn getbbox_default_rendered_slot(&self, text: &str) -> (i32, i32, i32, i32) {
+        let glyph_text = text.chars().next().unwrap_or('\0').to_string();
+        match self.layout_bounds(&glyph_text) {
+            Ok((x_min, x_max, y_min, y_max)) => {
+                let scale = ScaleMetrics::new(self.data.size_pt, self.data.head.units_per_em);
+                let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, scale.y_scale);
+                let asc_px = pixel_ceil(asc_26);
+                (x_min, asc_px - y_max, x_max, asc_px - y_min)
+            }
+            Err(_) => (0, 0, 0, 0),
+        }
+    }
+
+    fn getbbox_single_glyph(&self, text: &str) -> (i32, i32, i32, i32) {
+        let ch = text.chars().next().unwrap_or('\0');
+        let glyph = self.char_index(ch as u32);
+        match self.scale_glyph_for_load_mode(glyph) {
+            Ok(g) if g.outline.n_contours > 0 => {
+                // Raw FreeType bbox: pixel coords from outline, y-up from baseline.
+                (g.bbox_x_min, g.bbox_y_min, g.bbox_x_max, g.bbox_y_max)
+            }
+            _ => (0, 0, 0, 0),
+        }
+    }
+
+    fn getmask_default_rendered_slot(&self, text: &str) -> Result<GlyphMask, FontError> {
+        let glyph_text = text.chars().next().unwrap_or('\0').to_string();
+        let glyphs = self.layout_glyphs(&glyph_text)?;
         let (x_min, x_max, y_min, y_max) = layout_bounds_from_glyphs(&glyphs);
         let width = u32_from_i32(x_max - x_min);
         let height = u32_from_i32(y_max - y_min);
         let width_usize = width as usize;
         let height_usize = height as usize;
         let len = width_usize.checked_mul(height_usize).ok_or_else(|| {
-            FontError::InvalidOutline("rendered text mask dimensions overflow".into())
+            FontError::InvalidOutline("rendered glyph slot dimensions overflow".into())
         })?;
         let mut pixels = vec![0u8; len];
 
@@ -717,32 +751,14 @@ impl Font {
             pixels,
             xmin: x_min,
             ymin: y_min,
-            advance_width: pixel_round(self.layout_advance(text)),
+            advance_width: pixel_round(self.layout_advance(&glyph_text)),
         })
-    }
-}
-
-impl Font {
-    fn getbbox_single_glyph(&self, text: &str) -> (i32, i32, i32, i32) {
-        let data = &self.data;
-        let ch = text.chars().next().unwrap_or('\0');
-        let glyph = self.char_index(ch as u32);
-        let metrics_cache = self.face_globals.get_metrics(glyph);
-        match scaler::scale_glyph(data, glyph, metrics_cache.as_ref(), self.is_italic) {
-            Ok(g) if g.outline.n_contours > 0 => {
-                // Raw FreeType bbox: pixel coords from outline, y-up from baseline.
-                (g.bbox_x_min, g.bbox_y_min, g.bbox_x_max, g.bbox_y_max)
-            }
-            _ => (0, 0, 0, 0),
-        }
     }
 
     fn getmask_single_glyph(&self, text: &str) -> Result<GlyphMask, FontError> {
-        let data = &self.data;
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = self.char_index(ch as u32);
-        let metrics_cache = self.face_globals.get_metrics(glyph);
-        let scaled = scaler::scale_glyph(data, glyph, metrics_cache.as_ref(), self.is_italic)?;
+        let scaled = self.scale_glyph_for_load_mode(glyph)?;
 
         if scaled.outline.n_contours == 0 {
             return Ok(GlyphMask {
@@ -766,29 +782,24 @@ impl Font {
         })
     }
 
+    fn scale_glyph_for_load_mode(&self, glyph: u16) -> Result<scaler::ScaledGlyph, FontError> {
+        match self.load_mode {
+            LoadMode::Default => {
+                scaler::scale_glyph_native_default(&self.data, glyph, None, self.is_italic)
+            }
+            LoadMode::ForceAutoHint => {
+                let metrics_cache = self.face_globals.get_metrics(glyph);
+                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)
+            }
+        }
+    }
+
     fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {
         let mut glyphs = Vec::new();
         let mut x_position = 0;
         for ch in text.chars() {
             let glyph_index = self.char_index(ch as u32);
-            let metrics_cache = self.face_globals.get_metrics(glyph_index);
-            // Pillow's `_imagingft.c` fallback layout uses FT_LOAD_DEFAULT for
-            // L-mode rendering, then positions each glyph with PIXEL(position).
-            let metrics_for_scale = match self.backend {
-                BitmapBackend::PIL => None,
-                BitmapBackend::FreeType => metrics_cache.as_ref(),
-            };
-            let scaled = match self.backend {
-                BitmapBackend::PIL => scaler::scale_glyph_native_default(
-                    &self.data,
-                    glyph_index,
-                    metrics_for_scale,
-                    self.is_italic,
-                )?,
-                BitmapBackend::FreeType => {
-                    scaler::scale_glyph(&self.data, glyph_index, metrics_for_scale, self.is_italic)?
-                }
-            };
+            let scaled = self.scale_glyph_for_load_mode(glyph_index)?;
             let raster = if scaled.outline.n_contours == 0 {
                 None
             } else {
@@ -1022,7 +1033,7 @@ fn ppem_from_char_size(char_size_26dot6: i32, dpi: u32) -> u16 {
 ///
 /// FreeType's `sfnt_init_face` uses OS/2 usWinAscent/usWinDescent for the
 /// face-level ascender/descender. The descender is converted to a positive
-/// value matching PIL's convention.
+/// value for the public `(ascent, descent)` pair.
 // ✅ VERIFIED: OS/2 priority lookup matches C (sfobjs.c).
 fn pick_metrics(data: &FontData) -> (i32, i32) {
     if let Some(pair) = pick_typo_metrics(data) {
@@ -1059,29 +1070,28 @@ fn pick_os2_metrics(data: &FontData) -> Option<(i32, i32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BitmapBackend, Font};
+    use super::Font;
 
     const DEJAVU_SANS: &[u8] = include_bytes!("../tests/fixtures/input/fonts/DejaVuSans.ttf");
 
     fn test_font() -> Font {
-        match Font::truetype(DEJAVU_SANS, 20.0, BitmapBackend::PIL) {
+        match Font::truetype(DEJAVU_SANS, 20.0) {
             Ok(font) => font,
             Err(err) => panic!("test font should load: {err}"),
         }
     }
 
     #[test]
-    fn getbbox_uses_the_whole_string() {
+    fn getbbox_uses_freetype_glyph_slot_contract() {
         let font = test_font();
         let single = font.getbbox("A");
         let text = font.getbbox("AA");
 
-        assert!(text.2 - text.0 > single.2 - single.0);
-        assert!(text.3 - text.1 >= single.3 - single.1);
+        assert_eq!(text, single);
     }
 
     #[test]
-    fn getmask_uses_the_whole_string() {
+    fn getmask_uses_freetype_glyph_slot_contract() {
         let font = test_font();
         let single = match font.getmask("A") {
             Ok(mask) => mask,
@@ -1092,12 +1102,16 @@ mod tests {
             Err(err) => panic!("text should render: {err}"),
         };
 
-        assert!(text.width > single.width);
+        assert_eq!(text.width, single.width);
+        assert_eq!(text.height, single.height);
+        assert_eq!(text.xmin, single.xmin);
+        assert_eq!(text.ymin, single.ymin);
+        assert_eq!(text.advance_width, single.advance_width);
         assert_eq!(
             text.pixels.len(),
             text.width as usize * text.height as usize
         );
-        assert!(text.pixels.iter().any(|&pixel| pixel != 0));
+        assert_eq!(text.pixels, single.pixels);
     }
 
     #[test]

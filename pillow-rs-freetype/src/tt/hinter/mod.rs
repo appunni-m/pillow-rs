@@ -6,8 +6,7 @@
 //! This module is called from `scaler.rs:scale_glyph()` when `latin_metrics`
 //! is `None` and the font has bytecode tables (fpgm, prep, cvt).
 //! It operates on 26.6 fixed-point coordinates and mutates them in-place
-//! to match Python Pillow's pixel output (which uses FreeType's native
-//! bytecode interpreter via `FT_LOAD_DEFAULT`).
+//! to match FreeType's native bytecode interpreter via `FT_LOAD_DEFAULT`.
 //!
 //! ## Architecture
 //!
@@ -61,9 +60,8 @@ pub struct HintOutcome {
 
 /// Entry point: run bytecode hinting on scaled 26.6 coordinates.
 ///
-/// This is called once per glyph when:
-/// - The backend is `BitmapBackend::PIL` (no autohinting available)
-/// - The font has `fpgm`, `prep`, and `cvt` tables
+/// This is called once per glyph when the font has `fpgm`, `prep`, and `cvt`
+/// tables and the default native TrueType path is selected.
 ///
 /// The `scaled` array is modified in-place with the hinted coordinates.
 /// After calling this function, the caller should compute bbox from
@@ -112,8 +110,8 @@ pub fn hint_glyph(
     //   pp3: top side bearing    (y = 0 in horizontal mode)
     //   pp4: bottom side bearing (y = 0 in horizontal mode)
     //
-    // For PIL emulation, we set horizontal phantom points (pp1, pp2)
-    // to zero and rely on the bytecode program to adjust them.
+    // FreeType seeds horizontal phantom points (pp1, pp2), then lets the
+    // bytecode program adjust them.
     // Vertical phantoms (pp3, pp4) are unused in Latin fonts.
 
     let n_points = scaled.len();
