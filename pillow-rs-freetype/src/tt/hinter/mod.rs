@@ -58,6 +58,36 @@ pub struct HintOutcome {
     pub advance_width: i32,
 }
 
+/// Build the reusable TrueType execution state for one face/size.
+///
+/// FreeType runs `fpgm` and `prep` for the active size, then reuses the saved
+/// context for glyph loads. Keeping the prepared state in Rust avoids paying
+/// bytecode setup cost for every glyph while preserving pure-Rust execution.
+pub fn prepare_context(
+    cvt: &[i32],
+    fpgm: &[u8],
+    prep: &[u8],
+    scale: &HintScale,
+) -> Result<exec::ExecContext, FontError> {
+    let mut ctx = exec::ExecContext::new(
+        scale.x_scale,
+        scale.y_scale,
+        scale.ppem,
+        cvt,
+        fpgm,
+        scale.storage_size,
+        scale.twilight_points,
+    );
+
+    if !fpgm.is_empty() {
+        ctx.run_fpgm()?;
+    }
+    let saved_storage = ctx.storage.clone();
+    ctx.run_prep(prep, &saved_storage)?;
+    ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
+    Ok(ctx)
+}
+
 /// Entry point: run bytecode hinting on scaled 26.6 coordinates.
 ///
 /// This is called once per glyph when the font has `fpgm`, `prep`, and `cvt`
@@ -100,6 +130,7 @@ pub fn hint_glyph(
     prep: &[u8],
     scale: &HintScale,
     glyph_ins: &[u8],
+    prepared_context: Option<&exec::ExecContext>,
 ) -> Result<HintOutcome, FontError> {
     // ── Build the glyph zone ──────────────────────────────────────────
     // C: ttgload.c:874-891 — adds 4 phantom points to the zone.
@@ -210,29 +241,12 @@ pub fn hint_glyph(
     }
 
     // ── Initialize execution context ──────────────────────────────────
-    let mut ctx = exec::ExecContext::new(
-        scale.x_scale,
-        scale.y_scale,
-        scale.ppem,
-        cvt,
-        fpgm,
-        scale.storage_size,
-        scale.twilight_points,
-    );
+    let mut ctx = if let Some(prepared) = prepared_context {
+        prepared.clone()
+    } else {
+        prepare_context(cvt, fpgm, prep, scale)?
+    };
     ctx.is_composite = scale.is_composite;
-
-    // Run the font program to set up function definitions
-    if !fpgm.is_empty() {
-        ctx.run_fpgm()?;
-    }
-    let saved_storage = ctx.storage.clone();
-
-    // Run prep setup for every hinted size. This scales CVT into 26.6 pixel
-    // units even when the font has no prep bytecode, then executes prep against
-    // the twilight zone when present.
-    ctx.run_prep(prep, &saved_storage)?;
-
-    ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {
