@@ -86,6 +86,12 @@ Run Rust plus the standalone C FreeType timing helper:
 python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c
 ```
 
+Run repeated Rust/C samples and print the comparative table:
+
+```bash
+python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --table
+```
+
 The runner writes:
 
 ```text
@@ -99,8 +105,19 @@ the `pillow-rs-freetype` runtime crate. The runtime purity gate remains
 
 The current seed matrix covers font load, scalar metrics, text length, text
 bbox, rendered masks, force autohint masks, glyph metrics, mono render, LCD
-render, and a non-Latin fallback-font mask. Expand this matrix through reviewed
-fixture-generator changes, not ad hoc local scripts.
+render, and a non-Latin fallback-font mask. Each row carries a `weight` for the
+weighted workload summary. Higher weights represent common operation families
+such as text length, bbox, and mask generation. Expand this matrix through
+reviewed fixture-generator changes, not ad hoc local scripts.
+
+With `--compare-c`, `--samples`, and `--table`, the output JSON includes:
+
+- raw rows for every sample in `rows`
+- per-operation summary rows in `summary.rows`
+- aggregate total operation count, Rust total time, C total time, and total
+  speedup in `summary.overall`
+- weighted workload speedup in `summary.overall.weighted_speedup_vs_c`
+- a Markdown table in `summary_markdown`
 
 ### Benchmark Targets
 
@@ -149,6 +166,14 @@ Rust benchmark output must include:
 - iterations
 - nanoseconds total and per iteration
 - output checksum to prevent dead-code elimination
+
+Comparative summary output must include:
+
+- Rust and C mean, p90, and p99 nanoseconds per iteration
+- mean, p90, and p99 speedup versus C (`c_ns_per_iter / rust_ns_per_iter`)
+- operation count per row across all samples
+- aggregate Rust/C total time and total operation count
+- weighted workload speedup based on the matrix `weight` values
 
 ### C FreeType Benchmark Oracle
 

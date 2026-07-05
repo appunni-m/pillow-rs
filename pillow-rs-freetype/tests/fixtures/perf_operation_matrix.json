@@ -9,6 +9,7 @@
       "operation": "load_font",
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
+      "weight": 1,
       "iterations": 50
     },
     {
@@ -16,6 +17,7 @@
       "operation": "getname",
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
+      "weight": 2,
       "iterations": 20000
     },
     {
@@ -23,6 +25,7 @@
       "operation": "getmetrics",
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
+      "weight": 8,
       "iterations": 20000
     },
     {
@@ -31,6 +34,7 @@
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
       "text": "AV",
+      "weight": 25,
       "iterations": 20000
     },
     {
@@ -39,6 +43,7 @@
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
       "text": "Hello",
+      "weight": 20,
       "iterations": 20000
     },
     {
@@ -47,6 +52,7 @@
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
       "text": "A",
+      "weight": 35,
       "iterations": 2000
     },
     {
@@ -56,6 +62,7 @@
       "size": 20,
       "text": "A",
       "load_mode": "force_autohint",
+      "weight": 5,
       "iterations": 2000
     },
     {
@@ -64,6 +71,7 @@
       "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
       "size": 20,
       "text": "A",
+      "weight": 15,
       "iterations": 20000
     },
     {
@@ -73,6 +81,7 @@
       "size": 20,
       "text": "A",
       "render_mode": "mono",
+      "weight": 4,
       "iterations": 2000
     },
     {
@@ -82,6 +91,7 @@
       "size": 20,
       "text": "A",
       "render_mode": "lcd",
+      "weight": 4,
       "iterations": 1000
     },
     {
@@ -90,6 +100,7 @@
       "font": "tests/fixtures/input/fonts_autohint/DroidSansFallbackFull.ttf",
       "size": 20,
       "text": "\u4e2d",
+      "weight": 6,
       "iterations": 1000
     }
   ]
