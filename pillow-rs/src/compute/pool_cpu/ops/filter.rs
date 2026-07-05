@@ -585,7 +585,7 @@ pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage,
             }
         }
     }
-    let mut out = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
+    let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
     for y in 0..h {
         for x in 0..w {
             for c in 0..channels {

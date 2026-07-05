@@ -1024,7 +1024,7 @@ fn fromarray_pixel_list(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult
     };
 
     let bytes = pillow_rs::ops::utils::flatten_pixel_list(&flat).map_err(map_error)?;
-    let n_bands = mode.map(|m| m.len() as u32).unwrap_or(1);
+    let n_bands = mode.map_or(1, |m| m.len() as u32);
     let w = flat.len() as u32 / n_bands;
     if w == 0 {
         return Err(pyo3::exceptions::PyValueError::new_err(

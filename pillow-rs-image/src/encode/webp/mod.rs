@@ -39,6 +39,6 @@ fn encode_lossless(img: &DecodedImage, _opts: &EncodeOptions) -> Option<Vec<u8>>
 /// Encodes VP8 keyframe bitstream in RIFF/WEBP container.
 fn encode_lossy(img: &DecodedImage, opts: &EncodeOptions) -> Option<Vec<u8>> {
     let quality = opts.quality.unwrap_or(80).min(100);
-    let encoded = vp8::encoder::encode_vp8_lossy(&img.pixels, img.width, img.height, quality as u8);
+    let encoded = vp8::encoder::encode_vp8_lossy(&img.pixels, img.width, img.height, quality);
     Some(encoded)
 }

@@ -14,6 +14,7 @@
 - Unified runner now executes `render_mono_matrix.json`, `render_lcd_matrix.json`, `metrics_only_matrix.json`, `no_hinting_matrix.json`, and `outline_cbox_matrix.json`; current failures are exposed as implementation gaps instead of hidden fixture debt.
 - Supplemental FreeType fixture generation now defaults to broad inventory coverage; the five supplemental matrices each contain 11,086 C-oracle rows.
 - Standalone project infrastructure: explicit package metadata and lints, crate-local toolchain policy, CI workflow, Makefile, supply-chain policy, contributor/security/code-of-conduct docs, agent instructions, and `doc/INDEPENDENCE_PLAN.md`.
+- Toolchain policy now keeps MSRV at Rust 1.87 while pinning local development and primary CI gates to Rust 1.96.1.
 
 ### Fixed
 - Removed the runtime native FreeType bridge (`build.rs`, `src/native_ft.rs`, `src/native_ft.c`); runtime behavior now routes through the Rust scaler, TrueType hinting, and rasterizer path.

@@ -738,7 +738,7 @@ mod tests {
             for b in 0..8 {
                 for ctx in 0..3 {
                     for &p in COEFF_PROBS[ct][b][ctx].iter() {
-                        assert!(p <= 255, "prob {} > 255 at [{}{}{}]", p, ct, b, ctx);
+                        assert!(p > 0, "prob is zero at [{}{}{}]", ct, b, ctx);
                     }
                 }
             }

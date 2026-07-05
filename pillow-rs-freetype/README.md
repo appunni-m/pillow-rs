@@ -28,8 +28,9 @@ cd pillow-rs-freetype
 cargo test --locked
 ```
 
-Minimum supported Rust version: 1.87. The checked-in toolchain file tracks the
-stable channel for local development and CI.
+Minimum supported Rust version: 1.87. The checked-in toolchain file pins Rust
+1.96.1 for local development; CI also runs a 1.87 MSRV test lane so the public
+MSRV contract remains enforced.
 
 ## Quick Start
 

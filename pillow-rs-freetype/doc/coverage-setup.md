@@ -21,7 +21,8 @@ This document covers:
 
 ### 2.1 Rust Toolchain
 
-Coverage works on **stable** Rust (1.60+). The project uses Rust 1.91.1.
+Coverage works on stable Rust. The project uses Rust 1.96.1 for local
+development and CI, while keeping Rust 1.87 as the MSRV.
 
 ```bash
 # Verify Rust version

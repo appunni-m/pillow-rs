@@ -525,7 +525,7 @@ fn test_encode_matrix() {
                 }
             };
 
-            let encoded = match img::encode(&decoded, format, &opts) {
+            let encoded = match img::encode(decoded, format, &opts) {
                 Some(e) => e,
                 None => {
                     eprintln!("  FAIL [{}]: encode returned None", row.id);

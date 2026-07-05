@@ -303,7 +303,6 @@ fn parse_export_symbol(lines: &[&str]) -> Option<String> {
     let before_open = signature[..open].trim_end();
     before_open
         .split(|c: char| c.is_whitespace() || c == '*')
-        .filter(|part| !part.is_empty())
-        .next_back()
+        .rfind(|part| !part.is_empty())
         .map(str::to_string)
 }
