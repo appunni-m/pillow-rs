@@ -53,6 +53,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make fontdone-test$(NC)  Run all fontdone tests\n"
 	@printf "  $(CYAN)make fontdone-parity$(NC) Run the FreeType coverage matrix harness\n"
 	@printf "  $(CYAN)make fontdone-ffi$(NC)   Run the no-runtime-FFI guard\n"
+	@printf "  $(CYAN)make fontdone-ffi-compat$(NC) Run FreeType-shaped facade tests\n"
 	@printf "  $(CYAN)make fontdone-doc$(NC)   Build strict fontdone rustdoc\n"
 	@printf "  $(CYAN)make fontdone-bench$(NC) Run Rust vs C FreeType benchmark report\n"
 	@printf "  $(CYAN)make fontdone-fixtures$(NC) Regenerate FreeType fixture families\n"
@@ -151,12 +152,12 @@ test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
 .PHONY: fontdone-help fontdone-build fontdone-doc fontdone-doc-test
-.PHONY: fontdone-test fontdone-parity fontdone-ffi fontdone-lint
+.PHONY: fontdone-test fontdone-parity fontdone-ffi fontdone-ffi-compat fontdone-lint
 .PHONY: fontdone-fmt fontdone-fmt-fix fontdone-clippy
 .PHONY: fontdone-bench fontdone-bench-quick fontdone-bench-self-test
 .PHONY: fontdone-fixtures fontdone-ci fontdone-clean
 .PHONY: freetype-help freetype-build freetype-doc freetype-doc-test
-.PHONY: freetype-test freetype-parity freetype-ffi freetype-lint
+.PHONY: freetype-test freetype-parity freetype-ffi freetype-ffi-compat freetype-lint
 .PHONY: freetype-fmt freetype-fmt-fix freetype-clippy
 .PHONY: freetype-bench freetype-bench-quick freetype-bench-self-test
 .PHONY: freetype-fixtures freetype-ci freetype-clean
@@ -181,6 +182,9 @@ fontdone-parity: ## Run FreeType parity matrix tests
 
 fontdone-ffi: ## Run no-runtime-FFI guard
 	$(MAKE) -C $(FONTDONE_SRC) test-ffi
+
+fontdone-ffi-compat: ## Run FreeType-shaped facade tests
+	$(MAKE) -C $(FONTDONE_SRC) test-ffi-compat
 
 fontdone-fmt: ## Check fontdone formatting
 	$(MAKE) -C $(FONTDONE_SRC) fmt
@@ -219,6 +223,7 @@ freetype-doc-test: fontdone-doc-test
 freetype-test: fontdone-test
 freetype-parity: fontdone-parity
 freetype-ffi: fontdone-ffi
+freetype-ffi-compat: fontdone-ffi-compat
 freetype-fmt: fontdone-fmt
 freetype-fmt-fix: fontdone-fmt-fix
 freetype-clippy: fontdone-clippy

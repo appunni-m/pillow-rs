@@ -48,6 +48,7 @@ pub mod api;
 pub mod autohint;
 pub mod casts;
 pub mod error;
+pub mod ffi;
 pub mod fixed;
 pub mod font;
 pub mod grays;

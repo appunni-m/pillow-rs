@@ -35,6 +35,7 @@ help:
 	@printf "  make test-render-mode Run render-mode matrix tests\n"
 	@printf "  make test-fixed       Run fixed arithmetic parity tests\n"
 	@printf "  make test-interface   Run public interface coverage report\n"
+	@printf "  make test-ffi-compat  Run FreeType-shaped ffi facade tests\n"
 	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make test-perf        Run benchmark contract tests\n"
 	@printf "  make test-direct-live Run ignored live C-oracle pixel comparison\n"
@@ -119,8 +120,12 @@ test-fixed:
 	$(CARGO) test --test fixed_parity --locked
 
 .PHONY: test-interface
-test-interface: oracle-fetch
+test-interface: oracle-fetch test-ffi-compat
 	$(CARGO) test --test interface_coverage --locked -- --nocapture
+
+.PHONY: test-ffi-compat
+test-ffi-compat:
+	$(CARGO) test --test ffi_compat --locked -- --nocapture
 
 .PHONY: api-abi-audit
 api-abi-audit: oracle-fetch

@@ -316,8 +316,10 @@ generated reports, build outputs, and package installs.
 |   |-- CONTRIBUTING.md
 |   |-- Cargo.lock
 |   |-- Cargo.toml
+|   |-- FTL.TXT
 |   |-- LICENSE
 |   |-- Makefile
+|   |-- NOTICE.md
 |   |-- PROJECT_GOALS.md
 |   |-- README.md
 |   |-- deny.toml
@@ -326,6 +328,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- debug_glyph.rs
 |   |   `-- trace_glyph.rs
 |   |-- scripts/
+|   |   |-- audit_api_abi.py
 |   |   |-- bench_freetype.py
 |   |   |-- bench_ft_ops.c
 |   |   |-- build_fixtures.py
@@ -335,10 +338,12 @@ generated reports, build outputs, and package installs.
 |   |   |-- build_render_mode_fixture.py
 |   |   |-- classify_failure_ids.py
 |   |   |-- extract_blues.py
+|   |   |-- fetch_ft.sh
 |   |   |-- gen_ft_refs.c
 |   |   |-- generate_globals.py
 |   |   `-- generate_script_meta.py
 |   |-- src/
+|   |   |-- api.rs
 |   |   |-- autohint/
 |   |   |   |-- ALGORITHMS.md
 |   |   |   |-- blue_strings.rs
@@ -353,6 +358,7 @@ generated reports, build outputs, and package installs.
 |   |   |   `-- types.rs
 |   |   |-- casts.rs
 |   |   |-- error.rs
+|   |   |-- ffi.rs
 |   |   |-- fixed.rs
 |   |   |-- font.rs
 |   |   |-- grays.rs
@@ -381,12 +387,17 @@ generated reports, build outputs, and package installs.
 |   |       |-- mod.rs
 |   |       |-- name.rs
 |   |       |-- os2.rs
+|   |       |-- post.rs
 |   |       |-- vhea.rs
 |   |       `-- vmtx.rs
 |   `-- tests/
 |       |-- core_face_size_charmap.rs
 |       |-- coverage_matrix_tests.rs
+|       |-- data/
+|       |   |-- interface_map.json
+|       |   `-- perf_operation_matrix.json
 |       |-- direct_ft_compare.rs
+|       |-- ffi_compat.rs
 |       |-- fixed_parity.rs
 |       |-- generator_contract.rs
 |       |-- harness_contract.rs
