@@ -209,6 +209,9 @@ def summarize_rows(
     weighted_rust_total = 0.0
     weighted_c_total = 0.0
     weighted_total = 0.0
+    all_rust_per_iter = []
+    all_c_per_iter = []
+    all_speedups = []
 
     for row_id in order:
         samples = by_id[row_id]
@@ -225,6 +228,9 @@ def summarize_rows(
             for row in samples
             if row.get("c_ns_per_iter") and row.get("rust_ns_per_iter")
         ]
+        all_rust_per_iter.extend(rust_per_iter)
+        all_c_per_iter.extend(c_per_iter)
+        all_speedups.extend(speedups)
         c_output_has_sha = any(row.get("c_output_sha256") for row in samples)
         output_match_checked = any(row.get("output_match") is not None for row in samples)
         rust_total = sum(float(row["rust_ns_total"]) for row in samples)
@@ -295,6 +301,18 @@ def summarize_rows(
             "speedup_vs_c_total": overall_speedup,
             "weighted_operation_weight": weighted_total,
             "weighted_speedup_vs_c": weighted_speedup,
+            "rust_ns_per_iter_mean": mean(all_rust_per_iter),
+            "rust_ns_per_iter_median": median(all_rust_per_iter),
+            "rust_ns_per_iter_p90": percentile(all_rust_per_iter, 90),
+            "rust_ns_per_iter_p99": percentile(all_rust_per_iter, 99),
+            "c_ns_per_iter_mean": mean(all_c_per_iter),
+            "c_ns_per_iter_median": median(all_c_per_iter),
+            "c_ns_per_iter_p90": percentile(all_c_per_iter, 90),
+            "c_ns_per_iter_p99": percentile(all_c_per_iter, 99),
+            "speedup_vs_c_mean": mean(all_speedups),
+            "speedup_vs_c_median": median(all_speedups),
+            "speedup_vs_c_p90": percentile(all_speedups, 90),
+            "speedup_vs_c_p99": percentile(all_speedups, 99),
         },
     }
 
@@ -522,6 +540,41 @@ def aggregate_table(summary: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def overall_distribution_table(summary: dict[str, Any]) -> str:
+    overall = summary["overall"]
+    rows = [
+        (
+            "Rust ns/iter",
+            overall["rust_ns_per_iter_mean"],
+            overall["rust_ns_per_iter_median"],
+            overall["rust_ns_per_iter_p90"],
+            overall["rust_ns_per_iter_p99"],
+        ),
+        (
+            "C ns/iter",
+            overall["c_ns_per_iter_mean"],
+            overall["c_ns_per_iter_median"],
+            overall["c_ns_per_iter_p90"],
+            overall["c_ns_per_iter_p99"],
+        ),
+        (
+            "Speedup vs C",
+            overall["speedup_vs_c_mean"],
+            overall["speedup_vs_c_median"],
+            overall["speedup_vs_c_p90"],
+            overall["speedup_vs_c_p99"],
+        ),
+    ]
+    lines = ["| Distribution | mean | median | p90 | p99 |", "| --- | --- | --- | --- | --- |"]
+    for label, avg, med, p90, p99 in rows:
+        suffix = "x" if label == "Speedup vs C" else " ns"
+        lines.append(
+            f"| {label} | {avg:.3f}{suffix} | {med:.3f}{suffix} | "
+            f"{p90:.3f}{suffix} | {p99:.3f}{suffix} |"
+        )
+    return "\n".join(lines)
+
+
 def metadata_table(metadata: dict[str, Any]) -> str:
     cpu_frequency = metadata.get("cpu_frequency") or {}
     memory = metadata.get("memory") or {}
@@ -603,6 +656,8 @@ def format_report(metadata: dict[str, Any], summary: dict[str, Any] | None) -> s
         lines.append("No C comparison summary was generated. Run with `--compare-c`.")
     else:
         lines.append(aggregate_table(summary))
+        lines.extend(["", "## Overall Distribution", ""])
+        lines.append(overall_distribution_table(summary))
         lines.extend(["", "## Per-Operation Results", ""])
         lines.append(format_table(summary, include_aggregate=False))
     lines.extend(
@@ -692,6 +747,9 @@ def run_self_test() -> int:
     assert summary["overall"]["c_ns_total"] == 750
     assert round(summary["overall"]["speedup_vs_c_total"], 6) == 1.25
     assert round(summary["overall"]["weighted_speedup_vs_c"], 6) == 1.25
+    assert summary["overall"]["rust_ns_per_iter_p90"] == 34.0
+    assert round(summary["overall"]["c_ns_per_iter_p99"], 1) == 39.4
+    assert summary["overall"]["speedup_vs_c_p90"] == 2.0
     assert summary["rows"][0]["speedup_vs_c_mean"] == 2.0
     assert summary["rows"][1]["speedup_vs_c_mean"] == 0.5
     print("bench_freetype.py self-test passed")
