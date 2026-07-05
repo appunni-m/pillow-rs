@@ -32,6 +32,7 @@ pub struct FT_GlyphSlot {
     pub bitmap_left: FT_Int,
     pub bitmap_top: FT_Int,
     source_face: api::Face,
+    load_flags: api::LoadFlags,
 }
 
 pub fn FT_Init_FreeType() -> FT_Library {
@@ -105,7 +106,7 @@ pub fn FT_Load_Glyph(
     let flags = load_flags_to_core(load_flags)?;
     face.inner
         .load_glyph(glyph_index, flags)
-        .map(|slot| slot_to_ffi(face, slot))
+        .map(|slot| slot_to_ffi(face, slot, flags))
         .map_err(error_to_ft)
 }
 
@@ -115,7 +116,7 @@ pub fn FT_Render_Glyph(
 ) -> Result<FT_GlyphSlot, FT_Error> {
     let mode = render_mode_to_core(render_mode).ok_or(FT_Err_Cannot_Render_Glyph)?;
     let glyph_index = u16::try_from(slot.glyph_index).map_err(|_| FT_Err_Invalid_Glyph_Index)?;
-    let mut flags = api::LoadFlags::RENDER;
+    let mut flags = slot.load_flags | api::LoadFlags::RENDER;
     flags |= load_flag_for_render_mode(mode);
     slot.source_face
         .load_glyph(glyph_index, flags)
@@ -125,6 +126,7 @@ pub fn FT_Render_Glyph(
                     inner: slot.source_face,
                 },
                 rendered,
+                flags,
             )
         })
         .map_err(error_to_ft)
@@ -134,7 +136,7 @@ pub fn FT_Size_Metrics(face: &FT_Face) -> FT_Size_MetricsRec {
     face.inner.size_metrics().into()
 }
 
-fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot) -> FT_GlyphSlot {
+fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot, load_flags: api::LoadFlags) -> FT_GlyphSlot {
     FT_GlyphSlot {
         glyph_index: FT_UInt::from(slot.glyph_index),
         metrics: slot.metrics.into(),
@@ -144,5 +146,6 @@ fn slot_to_ffi(face: &FT_Face, slot: api::GlyphSlot) -> FT_GlyphSlot {
         bitmap_left: slot.bitmap_left,
         bitmap_top: slot.bitmap_top,
         source_face: face.inner.clone(),
+        load_flags,
     }
 }

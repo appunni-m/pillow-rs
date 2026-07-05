@@ -63,12 +63,17 @@ impl From<SizeMetrics> for FT_Size_Metrics {
 
 impl From<RenderedBitmap> for FT_Bitmap {
     fn from(value: RenderedBitmap) -> Self {
+        // FreeType exposes 256 grays on rendered glyph slot bitmaps in the
+        // matrix lanes, including FT_PIXEL_MODE_MONO.
+        let num_grays = match value.pixel_mode {
+            PixelMode::Mono | PixelMode::Gray | PixelMode::Lcd | PixelMode::LcdV => 256,
+        };
         Self {
             rows: value.rows,
             width: value.width,
             pitch: value.pitch,
             buffer: value.buffer,
-            num_grays: value.num_grays,
+            num_grays,
             pixel_mode: pixel_mode_from_core(value.pixel_mode),
         }
     }

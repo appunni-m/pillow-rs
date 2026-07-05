@@ -55,6 +55,8 @@ help:
 	@printf "  make fixture-force-autohint | fixture-native-tt-default | fixture-no-hinting\n"
 	@printf "  make fixture-metrics-only | fixture-outline-cbox | fixture-render-mono | fixture-render-lcd\n"
 	@printf "  make fixture-render-mode\n"
+	@printf "  make unified-inputs   Regenerate unified FFI input cases from matrices\n"
+	@printf "  make unified-inputs-check Check generated unified FFI input cases are current\n"
 	@printf "  make unified-oracle   Build the runtime C FreeType oracle helper\n"
 	@printf "\nBenchmark:\n"
 	@printf "  make bench            Run Rust vs C FreeType benchmark report\n"
@@ -132,13 +134,22 @@ unified-oracle: oracle-fetch
 	bash scripts/build_ft.sh
 	$(PYTHON) scripts/build_unified_oracle.py
 
+.PHONY: unified-inputs
+unified-inputs:
+	$(PYTHON) scripts/build_unified_fixture_inputs.py
+
+.PHONY: unified-inputs-check
+unified-inputs-check:
+	$(PYTHON) scripts/build_unified_fixture_inputs.py --check
+
 .PHONY: test-unified-fixtures
 test-unified-fixtures: unified-oracle
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_cases_match_runtime_c_oracle -- --nocapture
 
 .PHONY: test-unified-coverage
-test-unified-coverage: unified-oracle
+test-unified-coverage: unified-oracle unified-inputs-check
 	$(CARGO) test --test unified_fixture_parity --locked manifest_ -- --nocapture
+	$(CARGO) test --test unified_fixture_parity --locked matrix_derived_inputs_cover_supported_source_rows -- --nocapture
 
 .PHONY: test-ffi-compat
 test-ffi-compat:

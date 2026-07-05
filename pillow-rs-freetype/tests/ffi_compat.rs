@@ -227,7 +227,7 @@ fn ffi_facade_loads_and_renders_glyph_from_memory() {
 
     assert_eq!(rendered.format, FT_GLYPH_FORMAT_BITMAP);
     assert_eq!(bitmap.pixel_mode, FT_PIXEL_MODE_MONO);
-    assert_eq!(bitmap.num_grays, 2);
+    assert_eq!(bitmap.num_grays, 256);
     let pitch = usize::try_from(bitmap.pitch).expect("positive pitch");
     assert_eq!(bitmap.rows as usize * pitch, bitmap.buffer.len());
     assert!(bitmap.buffer.iter().any(|pixel| *pixel != 0));
