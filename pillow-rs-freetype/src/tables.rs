@@ -12,6 +12,7 @@ use crate::tt::kern::KernTable;
 use crate::tt::maxp::MaxpTable;
 use crate::tt::name::NameTable;
 use crate::tt::os2::Os2Table;
+use crate::tt::post::PostTable;
 use crate::tt::vhea::VheaTable;
 use crate::tt::vmtx::VmtxTable;
 
@@ -30,6 +31,7 @@ pub struct FontData {
     pub maxp: MaxpTable,
     pub name: NameTable,
     pub os2: Option<Os2Table>,
+    pub post: Option<PostTable>,
     pub vhea: Option<VheaTable>,
     pub vmtx: Option<VmtxTable>,
     pub hdmx: Option<HdmxTable>,

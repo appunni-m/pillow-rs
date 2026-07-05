@@ -23,6 +23,10 @@ pub enum FontError {
     /// Glyph outline data is malformed.
     #[error("Invalid glyph outline: {0}")]
     InvalidOutline(String),
+
+    /// The requested FreeType-style load flag combination is not implemented.
+    #[error("Unsupported load flags: {0}")]
+    UnsupportedLoadFlags(String),
 }
 
 #[cfg(test)]
@@ -51,5 +55,14 @@ mod tests {
     fn invalid_outline_displays_message() {
         let err = FontError::InvalidOutline("bad contour".into());
         assert_eq!(err.to_string(), "Invalid glyph outline: bad contour");
+    }
+
+    #[test]
+    fn unsupported_load_flags_displays_message() {
+        let err = FontError::UnsupportedLoadFlags("NO_HINTING | RENDER".into());
+        assert_eq!(
+            err.to_string(),
+            "Unsupported load flags: NO_HINTING | RENDER"
+        );
     }
 }

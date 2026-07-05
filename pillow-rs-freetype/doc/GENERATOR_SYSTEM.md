@@ -28,6 +28,7 @@ Every reference fixture must be reproducible from maintained generator code in t
 | `scripts/build_render_mode_fixture.py` | Dedicated render-mode fixture generator | `render_mode_matrix.json`, `tests/fixtures/outputs/render_modes` |
 | `scripts/build_fixtures.py` | Legacy force-autohint inventory pipeline | `font_inventory.json`, `force_autohint_matrix.json` |
 | `scripts/classify_failure_ids.py` | Developer triage report from `coverage_matrix_tests` failure ID files | Markdown summary; no fixture changes |
+| `scripts/audit_api_abi.py` | Three-way FreeType C / Servo binding / fontdone API and ABI surface audit | `target/api-abi-audit/api_abi_audit.{json,md}` |
 | `scripts/extract_blues.py` | Generates blue string Rust data from FreeType source | Rust source tables |
 | `scripts/generate_globals.py` | Generates script/style global data from FreeType source | Rust source tables |
 | `scripts/generate_script_meta.py` | Generates script metadata from FreeType source | Rust source tables |
@@ -92,3 +93,20 @@ fixtures.  Use `scripts/classify_failure_ids.py` with the lane-specific
 
 See `doc/PARITY_FAILURE_CLASSIFICATION.md` for the exact capture and report
 commands.
+
+## API And ABI Audit
+
+`make api-abi-audit` compares pinned FreeType C public headers, Servo's
+`rust-freetype` binding surface, and the local `fontdone` public Rust surface.
+This is stricter than endpoint coverage: it records C function signatures,
+macro constants, typedefs, struct fields, enum variants, Servo exposure, and
+the current `fontdone` mapping/status from `tests/data/interface_map.json`.
+
+Use this report when planning the future C ABI replacement layer. The safe Rust
+API can preserve FreeType semantics without being ABI-compatible; a C
+replacement must additionally export `FT_*` symbols and `repr(C)` record shapes
+with matching field names, order, units, and numeric constants.
+
+The compatibility target is FreeType C itself, not Servo `rust-freetype`.
+Servo is useful to compare what an FFI binding exposes, but a binding's choices
+are not sufficient for replacement claims.

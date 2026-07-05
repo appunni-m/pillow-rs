@@ -6,12 +6,12 @@
       "owner": "core",
       "symbols": {
         "FT_Init_FreeType": {
-          "rust": null,
-          "status": "planned"
+          "rust": "Library::init",
+          "status": "complete"
         },
         "FT_Done_FreeType": {
-          "rust": null,
-          "status": "planned"
+          "rust": "drop Library",
+          "status": "complete"
         },
         "FT_Library_Version": {
           "rust": null,
@@ -39,7 +39,7 @@
       "owner": "core",
       "symbols": {
         "FT_New_Memory_Face": {
-          "rust": "Font::truetype_face",
+          "rust": "Library::new_memory_face / Face::from_memory",
           "status": "complete"
         },
         "FT_New_Face": {
@@ -148,11 +148,11 @@
       "owner": "core",
       "symbols": {
         "FT_Set_Char_Size": {
-          "rust": "Font::set_char_size",
+          "rust": "Face::set_char_size",
           "status": "complete"
         },
         "FT_Set_Pixel_Sizes": {
-          "rust": "Font::set_pixel_sizes",
+          "rust": "Face::set_pixel_sizes",
           "status": "complete"
         },
         "FT_Select_Size": {
@@ -187,7 +187,7 @@
       "owner": "core",
       "symbols": {
         "FT_Get_Char_Index": {
-          "rust": "Font::char_index",
+          "rust": "Face::get_char_index / Font::char_index",
           "status": "complete"
         },
         "FT_Select_Charmap": {
@@ -321,12 +321,12 @@
       },
       "symbols": {
         "FT_Load_Glyph": {
-          "rust": "scaler::scale_glyph",
-          "status": "partial"
+          "rust": "Face::load_glyph",
+          "status": "complete"
         },
         "FT_Load_Char": {
-          "rust": "Font::getmask/getbbox",
-          "status": "partial"
+          "rust": "Face::load_char",
+          "status": "complete"
         }
       }
     },
@@ -340,8 +340,8 @@
       },
       "symbols": {
         "FT_Render_Glyph": {
-          "rust": "grays::rasterize",
-          "status": "partial"
+          "rust": "Face::load_glyph(..., LoadFlags::RENDER)",
+          "status": "complete"
         }
       }
     },
@@ -557,8 +557,8 @@
       },
       "symbols": {
         "FT_Render_Glyph": {
-          "rust": "grays::rasterize",
-          "status": "partial"
+          "rust": "Face::load_glyph(..., LoadFlags::RENDER)",
+          "status": "complete"
         }
       }
     },
@@ -652,12 +652,12 @@
       },
       "symbols": {
         "FT_Load_Glyph": {
-          "rust": "tt::hinter",
-          "status": "partial"
+          "rust": "Face::load_glyph",
+          "status": "complete"
         },
         "FT_Load_Char": {
-          "rust": "tt::hinter",
-          "status": "partial"
+          "rust": "Face::load_char",
+          "status": "complete"
         },
         "FT_Face_CheckTrueTypePatents": {
           "rust": null,
