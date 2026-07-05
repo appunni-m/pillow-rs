@@ -85,6 +85,12 @@ That plan defines the benchmark framework, documentation gates, allocation/clone
 audit, and review checklist for performance-focused refactors. Refactors are
 accepted only when parity remains exact and performance claims are measured.
 
+The first performance framework slice is implemented through
+`tests/fixtures/perf_operation_matrix.json`, `examples/bench_ops.rs`, and
+`scripts/bench_freetype.py`. The optional C timing helper is
+`scripts/bench_ft_ops.c`; it is diagnostic/oracle tooling only and must never be
+linked into runtime code.
+
 ## Promotion Rules
 
 A fixture family can move to "exact gate" only when:
