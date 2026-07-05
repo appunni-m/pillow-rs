@@ -745,14 +745,12 @@ impl ExecContext {
         if selector & 1 != 0 {
             result = 40;
         }
-        if selector & 32 != 0 {
-            result |= 1 << 12;
+        // FreeType v40 normal rendering sets `exec->grayscale = FALSE`
+        // in `ttgload.c::tt_loader_init`, so `Ins_GETINFO` does not return
+        // the old v1.6 grayscale bit (selector 32 -> result bit 12).
+        if selector & 64 != 0 {
+            result |= 1 << 13;
         }
-        // C: Ins_GETINFO only reports selector bit 6 (result bit 13) when
-        // FreeType is built with minimal subpixel hinting support enabled for
-        // the active render mode.  The native default grayscale fixture does
-        // not advertise that bit, which keeps legacy direct-move helpers on
-        // their grayscale branch.
         if selector & 1024 != 0 {
             result |= 1 << 17;
         }
