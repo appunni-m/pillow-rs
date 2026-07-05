@@ -1,0 +1,140 @@
+# FreeType Performance Benchmarking
+
+This document defines how to produce and review performance numbers for
+`pillow-rs-freetype`.
+
+The goal is not to produce the largest possible speedup. The goal is to produce
+numbers that another contributor can reproduce, audit, and challenge.
+
+## Required Command
+
+Use repeated samples and the standalone C helper:
+
+```bash
+python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --table
+```
+
+The output is written to:
+
+```text
+pillow-rs-freetype/target/freetype-bench/latest.json
+```
+
+The JSON contains:
+
+- `metadata`: git SHA, dirty flag, toolchain versions, CPU/OS details, matrix
+  version, selected workload profile, sample count, and timing notes.
+- `rows`: every raw sample row. These are the source of truth.
+- `summary.rows`: per-operation aggregate statistics derived from raw rows.
+- `summary.overall`: aggregate operation count, Rust total time, C total time,
+  total speedup, and weighted workload speedup.
+- `summary_markdown`: the printable comparison table.
+
+## Trust Labels
+
+Every row in `tests/fixtures/perf_operation_matrix.json` must declare
+`comparison_trust`.
+
+- `exact_sha256`: Rust and C output bytes are packed equivalently and exact
+  hashes are checked before speedup is trusted.
+- `timing_only`: the row has useful C timing and deterministic C fingerprint
+  metadata, but C output SHA parity is not yet exact.
+
+Rows marked `timing_only` must not be presented as correctness proof. Exact
+correctness remains enforced by fixture parity tests.
+
+## Timing Boundaries
+
+Every matrix row must declare `timing_boundary`.
+
+Examples:
+
+- Font construction rows include font creation and size setup inside the timed
+  loop on both Rust and C.
+- Cached scalar rows construct the font before timing on both Rust and C.
+- Render rows measure load, hint, rasterize, and public bitmap packaging.
+
+Changing a timing boundary is a benchmark-contract change. Review it like a
+test semantic change, not like formatting.
+
+## Workload Profiles
+
+The matrix defines named `workload_profiles`.
+
+Use the default profile unless the report explicitly says otherwise:
+
+```bash
+python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
+```
+
+Available profiles currently include:
+
+- `default`: balanced PIL-style text measurement and mask workload.
+- `interactive_text`: length, bbox, and grayscale mask dominated workload.
+- `font_loading_heavy`: repeated font construction workload.
+- `row_weight`: fallback profile using each row's direct `weight` field.
+
+Weights are part of the benchmark contract. Do not change them to improve an
+aggregate number. If a workload model changes, update the profile description
+and explain the reason in the commit.
+
+## Statistics
+
+Per operation, report:
+
+- Rust and C total milliseconds.
+- Rust and C median, mean, standard deviation, p90, and p99 nanoseconds per
+  iteration.
+- Median, mean, standard deviation, p90, and p99 speedup versus C.
+- Operation count across all samples.
+
+Aggregate rows report:
+
+- Total operation count.
+- Rust total nanoseconds.
+- C total nanoseconds.
+- Total speedup versus C.
+- Weighted workload speedup versus C.
+
+The raw rows stay in JSON so reviewers can recompute all summaries.
+
+## Environment Discipline
+
+For publishable numbers:
+
+1. Run a clean worktree, or clearly state why `metadata.git_dirty` is true.
+2. Use release mode only. The runner invokes `cargo run --release --locked`.
+3. Use at least `--samples 10`; use `--samples 30` for baseline updates.
+4. Prefer an idle machine with stable thermals.
+5. Prefer a performance CPU governor when available.
+6. Keep the full `metadata` block in any shared report.
+
+Do not compare numbers across different machines unless the report is about
+cross-machine behavior.
+
+## Validation Commands
+
+Before accepting benchmark tooling changes:
+
+```bash
+python3 -m py_compile pillow-rs-freetype/scripts/bench_freetype.py
+python3 pillow-rs-freetype/scripts/bench_freetype.py --self-test
+cargo test -p pillow-rs-freetype --test perf_benchmark_contract --locked
+cargo test -p pillow-rs-freetype --test no_runtime_ffi --locked -- --nocapture
+```
+
+Before accepting runtime performance claims, also run:
+
+```bash
+cargo test -p pillow-rs-freetype --test coverage_matrix_tests --locked -- --nocapture
+cargo test -p pillow-rs --test imagingft_matrix_tests --locked -- --nocapture
+python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --table
+```
+
+## Non-Negotiable Rules
+
+- Do not weaken fixture parity tests to improve performance numbers.
+- Do not link FreeType C into runtime code.
+- Do not report timing-only rows as output-parity proof.
+- Do not change workload weights without reviewable rationale.
+- Do not hide raw samples; summaries must be reproducible from `rows`.
