@@ -1109,7 +1109,6 @@ fn ppem_from_char_size(char_size_26dot6: i32, dpi: u32) -> u16 {
 /// FreeType's `sfnt_init_face` uses OS/2 usWinAscent/usWinDescent for the
 /// face-level ascender/descender. The descender is converted to a positive
 /// value for the public `(ascent, descent)` pair.
-// ✅ VERIFIED: OS/2 priority lookup matches C (sfobjs.c).
 fn pick_metrics(data: &FontData) -> (i32, i32) {
     if let Some(pair) = pick_typo_metrics(data) {
         return pair;

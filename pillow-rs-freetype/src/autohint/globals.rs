@@ -3,31 +3,23 @@
 //! Port of FreeType's `AF_FaceGlobals` and
 //! `af_face_globals_compute_style_coverage` from `afglobal.c`.
 //!
-//! ## Parity Fixes in this file
+//! The global object owns the per-face style coverage table and lazily
+//! constructs per-style Latin metrics. Coverage is computed from generated
+//! Unicode ranges in the same order as FreeType's `afstyles.h`; the first style
+//! whose range contains a glyph wins that glyph. Default native TrueType loads
+//! do not need this coverage, so construction defers it until `get_metrics`.
 //!
-//! 1. **Standard char fallback chain** (L135): C's standard_charstring is
-//!    "o O 0". Try '0' when 'o'/'O' are missing (common in non-Latin fonts).
+//! Parity-sensitive details:
 //!
-//! 2. **Per-script non-base glyph detection** (L80): generated globals_data.rs
-//!    pointed to RANGES_*_NONBASE (empty) instead of RANGES_*_NONBASE_UNI.
-//!    Corrected + scan all STYLE_TABLE non_base_ranges. 111 failures fixed.
+//! - Standard-character fallback follows FreeType's `"o O 0"` chain so
+//!   non-Latin fonts without lowercase Latin still have a measurement glyph.
+//! - Coverage scanning includes every generated non-base range from
+//!   `STYLE_TABLE`.
+//! - Hebrew blue-zone initialization accounts for outlines changed by
+//!   `FT_LOAD_NO_SCALE` TrueType programs in `latin.rs`.
 //!
-//! 3. **cmap coverage scan skip bug** (L205): skip optimization jumped past
-//!    valid codepoints between probe gaps. Removed skip → 10 fixed (cans).
-//!
-//! 4. **hebr bytecode blue zone correction**: TrueType font programs alter
-//!    outline at FT_LOAD_NO_SCALE. Handle in latin.rs::metrics_init_blues_impl.
-//!    48 failures fixed.
-//!
-//! Architecture:
-//! 1. Coverage scan: lazily iterate style classes from `globals_data.rs`,
-//!    scan each script's Unicode ranges in order (matching afstyles.h).
-//!    The first script whose range contains a codepoint for a glyph
-//!    "wins" that glyph. Default native TrueType loads do not need this
-//!    coverage, so construction defers it until `get_metrics`.
-//! 2. Lazy metrics: per-style AfLatinMetrics computed on first access,
-//!    cached via Rc<RefCell<>> for interior mutability.
-//! 3. Per-glyph lookup: `glyph_styles[gindex]` → style index → metrics.
+//! Per-style metrics are cached behind `Rc<RefCell<_>>` because the public
+//! global object is shared while metrics are initialized on demand.
 //!
 //! Full 52-script support via generated data from afranges.c + afstyles.h.
 

@@ -56,7 +56,6 @@ impl ScaleMetrics {
 
 /// FT_DivFix in 16.16 (local alias to avoid importing the whole fixed module).
 #[inline]
-// ✅ TRIVIAL: alias to ft_div_fix (verified there)
 fn ft_div_fix_local(a: i32, b: i32) -> i32 {
     crate::fixed::ft_div_fix(a, b)
 }
@@ -66,9 +65,6 @@ fn ft_div_fix_local(a: i32, b: i32) -> i32 {
 /// FreeType's default request (`FT_Request_Size`) rounds ppem via
 /// `FT_PIX_ROUND( size * 64 ) >> 6`, which for integral/half sizes matches
 /// `(size + 0.5).floor()`. We mirror that.
-/// ✅ VERIFIED: matches C's FT_PIX_ROUND( size << 6 ) >> 6 (tt_size_reset).
-/// Verified via getlength tests (all advance widths match C).
-/// pixels-per-em: `FT_PIX_ROUND(size << 6) >> 6`. Round to nearest integer ppem.
 fn ppem_from_size(size_pt: f32) -> i32 {
     // ppem = FT_PIX_ROUND( size << 6 ) >> 6  (size already in pixels at 72dpi).
     let size_26dot6 = i32_from_f32((size_pt * 64.0).round());
@@ -125,17 +121,11 @@ struct HintStyle {
 /// Scale a glyph's outline to 26.6 and translate it so its pixel bbox's
 /// bottom-left corner sits at (0,0) — the convention `ftsmooth`/`ft_bitmap`
 /// use when rendering into a sized bitmap.
-// ✅ VERIFIED: via 1708 FT tests (outline scaling matches C)
-/// Scale glyph outline to 26.6, apply autohinting, compute bbox.
 ///
 /// # Returns
+///
 /// `ScaledGlyph` with hinted outline points (translated to pixel-bbox origin),
 /// pixel bbox coordinates, and advance width.
-///
-/// # Debug: hinted coords differ from C
-/// - [ ] pp1.x using glyf HEADER xMin (not computed min)?
-/// - [ ] x_scale, y_scale match C for this ppem/UPEM?
-/// - [ ] Post-hint coords match C before off_x/off_y translation?
 pub fn scale_glyph(
     data: &FontData,
     glyph_index: u16,
@@ -1062,24 +1052,18 @@ fn bbox_conic_check(y1: i32, y2: i32, y3: i32, min: &mut i32, max: &mut i32) {
 
 /// `FT_PIX_ROUND(x)` on a 26.6 value → rounded pixel (in 26.6, subpixel cleared).
 #[inline]
-// ✅ TRIVIAL: alias to fixed::ft_round_fix (verified there).
-/// `FT_PIX_ROUND`: `(x + 32) & !63`. Round 26.6 to nearest pixel boundary.
 pub fn ft_pix_round(x: i32) -> i32 {
     (x + 32) & !63
 }
 
 /// `FT_PIX_FLOOR(x)` on a 26.6 value.
 #[inline]
-// ✅ TRIVIAL: alias to fixed::ft_floor_fix (verified there).
-/// `FT_PIX_FLOOR`: `x & !63`. Floor 26.6 to pixel boundary.
 pub fn ft_pix_floor(x: i32) -> i32 {
     x & !63
 }
 
 /// `FT_PIX_CEIL(x)` on a 26.6 value.
 #[inline]
-// ✅ TRIVIAL: alias to fixed::ft_ceil_fix (verified there).
-/// `FT_PIX_CEIL`: `(x + 63) & !63`. Ceil 26.6 to pixel boundary.
 pub fn ft_pix_ceil(x: i32) -> i32 {
     (x + 63) & !63
 }
@@ -1087,28 +1071,24 @@ pub fn ft_pix_ceil(x: i32) -> i32 {
 /// Convert a 26.6 value to an integer pixel (truncate subpixel). Used after a
 /// FT_PIX_* snap, or for raw floor.
 #[inline]
-// ✅ TRIVIAL: x >> 6.
 pub fn to_pixel(x: i32) -> i32 {
     x >> 6
 }
 
 /// Round 26.6 to nearest pixel (FT_PIX_ROUND → int).
 #[inline]
-// ✅ TRIVIAL: alias to ft_pix_round (verified there).
 pub fn pixel_round(x: i32) -> i32 {
     ft_pix_round(x) >> 6
 }
 
 /// Floor 26.6 to integer pixel.
 #[inline]
-// ✅ TRIVIAL: alias to fixed.rs (verified there)
 pub fn pixel_floor(x: i32) -> i32 {
     ft_pix_floor(x) >> 6
 }
 
 /// Ceil 26.6 to integer pixel.
 #[inline]
-// ✅ TRIVIAL: alias to fixed.rs (verified there)
 pub fn pixel_ceil(x: i32) -> i32 {
     ft_pix_ceil(x) >> 6
 }
@@ -1120,10 +1100,9 @@ pub fn pixel_ceil(x: i32) -> i32 {
 /// Builds a temporary Outline structure, invokes the Latin auto-hinter
 /// (`autohint::apply_hints`) which grid-fits edge positions and interpolates
 /// the remaining points, then reads the results back from the outline.
-// ✅ TRIVIAL: plumbing calling apply_hints (verified there)
-/// Bridge: build temporary Outline, call `apply_hints`, write back coords.
 ///
-/// Uses adjusted vertical scale from `latin_metrics` if available (x-height optimization).
+/// Uses the adjusted vertical scale from `latin_metrics` when the x-height
+/// optimization is active.
 #[allow(clippy::too_many_arguments)]
 fn autohint_glyph(
     scaled: &mut Vec<OutlinePoint>,

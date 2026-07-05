@@ -107,13 +107,12 @@ pub fn prepare_context(
 /// * `y_scale` — vertical scale factor (16.16)
 /// * `ppem` — pixels per em
 ///
-/// # Current status
+/// # Execution Stages
 ///
-/// Phase 1 (infrastructure): ✅ complete — parses tables, sets up zones,
-/// initializes execution context, runs fpgm for function definitions.
-///
-/// Phase 2 (VM opcodes): ✅ glyph opcodes implemented — 30+ opcodes operational.
-/// Phase 3 (prep + IUP): 🚧 in progress.
+/// The entry point prepares glyph and twilight zones, initializes the execution
+/// context, executes font-program definitions and prep state as required, runs
+/// glyph bytecode, and applies untouched-point interpolation before returning
+/// the modified coordinates to the caller.
 #[allow(clippy::too_many_arguments)]
 pub fn hint_glyph(
     scaled: &mut [OutlinePoint],

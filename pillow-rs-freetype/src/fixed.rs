@@ -1,18 +1,18 @@
-//! Fixed-point arithmetic — ✅ VERIFIED against FreeType 2.14.3 C library.
+//! Fixed-point arithmetic compatible with FreeType's integer helpers.
 //!
-//! Each function carries a verification marker documenting comparison status
-//! vs offline C reference fixtures generated from vendored FreeType 2.14.3.
-//!
-//! Parity tests in `tests/fixed_parity.rs` exhaustively compare all functions
-//! against the C oracle across 2M+ test cases.
+//! These routines mirror the fixed-point contracts used by FreeType 2.14.3:
+//! 16.16 multiplication and division, 26.6 pixel snapping, wrapping
+//! two's-complement arithmetic, and C-style sentinel values for division by
+//! zero. They avoid floating point so the scaler, auto-hinter, and TrueType VM
+//! share one deterministic arithmetic model.
 
-/// ✅ TRIVIAL: wrapping_add matching C's 2's-complement int.
+/// Wrapping 32-bit addition used by FreeType's `ADD_LONG` macro.
 #[inline]
 fn add_long(a: i32, b: i32) -> i32 {
     a.wrapping_add(b)
 }
 
-/// ✅ TRIVIAL: wrapping_sub matching C's NEG_LONG.
+/// Wrapping two's-complement negation used by FreeType's `NEG_LONG` macro.
 #[inline]
 fn neg_long(a: i32) -> i32 {
     0i32.wrapping_sub(a)
@@ -20,13 +20,12 @@ fn neg_long(a: i32) -> i32 {
 
 use crate::casts::{i32_from_i64, i32_from_u64};
 
-/// FT_MulDiv — ✅ VERIFIED: matches C FT_MulDiv (ftcalc.c:162, INT64 path).
+/// FreeType `FT_MulDiv` with rounded sign-stripped integer division.
 ///
 /// Sign-stripping: converts to unsigned magnitudes, does unsigned multiply +
 /// add half-divisor + divide, then restores sign with XOR of sign bits.
-/// Exhaustive parity: 0 diffs in 2M+ values (fixed_parity.rs).
+/// Returns FreeType's `0x7fff_ffff` sentinel when `c` is zero.
 #[inline]
-// ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
 pub fn ft_mul_div(a: i32, b: i32, c: i32) -> i32 {
     if c == 0 {
         return 0x7FFFFFFF;
@@ -57,30 +56,27 @@ pub fn ft_mul_div_no_round(a: i32, b: i32, c: i32) -> i32 {
     if negate { 0i32.wrapping_sub(d32) } else { d32 }
 }
 
-/// FT_MulFix — ✅ VERIFIED: matches C FT_MulFix_64 (ftcalc.h:91-102).
+/// FreeType `FT_MulFix`: multiply by a 16.16 fixed-point factor.
 ///
 /// `(ab + 0x8000 + (ab >> 63)) >> 16` with symmetric rounding.
 /// The `ab >> 63` term is -1 for negative products, 0 for positive —
-/// giving rounded-toward-infinity for both sign cases.
-/// Exhaustive parity: 0 diffs in 65K+ values (fixed_parity.rs).
+/// giving FreeType's rounded-toward-infinity behavior for both sign cases.
 #[inline]
-// ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
 pub fn ft_mul_fix(a: i32, b: i32) -> i32 {
     let ab = (a as i64).wrapping_mul(b as i64);
     let rounded = ab.wrapping_add(0x8000).wrapping_add(ab >> 63);
     i32_from_i64(rounded >> 16)
 }
 
-/// FT_DivFix — ✅ VERIFIED: matches C FT_DivFix (ftcalc.c:233, INT64 path).
+/// FreeType `FT_DivFix`: divide and return a 16.16 fixed-point quotient.
 ///
 /// C uses sign-stripping: `((|a|<<16) + (|b|>>1)) / |b|` as unsigned,
 /// then negates if input signs differ. This differs from signed division
 /// `((a<<16)+(b>>1))/b` when the numerator magnitude isn't evenly divisible
 /// — signed truncation-toward-zero produces a different result than
 /// unsigned-floor-then-negate.
-/// Exhaustive parity: 0 diffs in 65K+ values (fixed_parity.rs).
+/// Returns FreeType's `0x7fff_ffff` sentinel when `b` is zero.
 #[inline]
-// ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests)
 pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     // C's FT_DivFix (ftcalc.c:233, INT64 path) uses sign-stripping:
     //   FT_MOVE_SIGN(a) → ua, s; FT_MOVE_SIGN(b) → ub, s;
@@ -100,7 +96,7 @@ pub fn ft_div_fix(a: i32, b: i32) -> i32 {
     if negate { 0i32.wrapping_sub(q32) } else { q32 }
 }
 
-/// FT_RoundFix — ✅ VERIFIED: matches C FT_RoundFix (ftcalc.c:75).
+/// FreeType `FT_RoundFix`: round a 16.16 value to an integral 16.16 value.
 ///
 /// `ADD_LONG(a, 0x8000L - (a < 0)) & ~0xFFFFL`.
 #[inline]
@@ -109,14 +105,16 @@ pub fn ft_round_fix(a: i32) -> i32 {
     add_long(a, bias) & !0xFFFFi32
 }
 
-/// FT_CeilFix — ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests).
+/// FreeType `FT_CeilFix`: ceiling a 16.16 value to an integral 16.16 value.
+///
 /// Reference: `ftcalc.c:84`. `ADD_LONG(a, 0xFFFFL) & ~0xFFFFL`.
 #[inline]
 pub fn ft_ceil_fix(a: i32) -> i32 {
     add_long(a, 0xFFFF) & !0xFFFFi32
 }
 
-/// FT_FloorFix — ✅ VERIFIED: matches C (fixed_parity.rs exhaustive tests).
+/// FreeType `FT_FloorFix`: floor a 16.16 value to an integral 16.16 value.
+///
 /// Reference: `ftcalc.c:93`. `a & ~0xFFFFL`.
 #[inline]
 pub fn ft_floor_fix(a: i32) -> i32 {

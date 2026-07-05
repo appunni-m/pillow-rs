@@ -6,9 +6,9 @@ use crate::casts::{i16_from_i32, i32_from_usize, usize_from_i32};
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-/// ✅ VERIFIED: matches C's FT_HYPOT (ftobjs.h:80-85).
-/// Returns max(|x|,|y|) + 3*min(|x|,|y|)/8.
-/// Taxicab hypot: `|x| + |y|` for direction-chain distance accumulation.
+/// FreeType `FT_HYPOT` approximation for direction-chain distance.
+///
+/// Returns `max(|x|, |y|) + 3 * min(|x|, |y|) / 8`.
 fn ft_hypot(x: i32, y: i32) -> i32 {
     let ax = x.abs();
     let ay = y.abs();
@@ -23,9 +23,6 @@ fn ft_hypot(x: i32, y: i32) -> i32 {
 /// Returns true if the corner formed by in/out vectors is "flat" —
 /// i.e., one vector is much more dominant than the other.
 /// Test: d_in + d_out < (17/16) * d_hypot.
-// ✅ VERIFIED: matches C ft_corner_is_flat (ftcalc.c:1006-1042)
-/// Test: is the corner formed by two direction vectors "flat enough"?
-/// True when one vector dominates the other. `d_in + d_out - d_hypot < d_hypot/16`.
 ///
 /// Used by WEAK/STRONG classification: flat corners are WEAK (interpolated).
 fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
@@ -37,10 +34,11 @@ fn corner_is_flat(in_x: i32, in_y: i32, out_x: i32, out_y: i32) -> bool {
 
 // ── Direction computation ─────────────────────────────────────────────────
 
-/// ✅ VERIFIED: matches C's af_direction_compute (afhints.c:750-796) textually.
-/// Threshold: longer arm > 14× shorter (~4.1°).
-/// 8-direction classification from (dx, dy).
-/// Threshold: longer arm > 14× shorter (~4.1°). Returns None if balanced.
+/// Classify a vector into FreeType's cardinal auto-hint directions.
+///
+/// `af_direction_compute` treats a vector as cardinal when the longer axis is
+/// more than 14 times the shorter axis, roughly a 4.1 degree tolerance. Balanced
+/// vectors return [`Direction::None`].
 pub fn direction_compute(dx: i32, dy: i32) -> Direction {
     let ax = dx.abs();
     let ay = dy.abs();
@@ -66,14 +64,13 @@ pub fn direction_compute(dx: i32, dy: i32) -> Direction {
 /// Matching FreeType's heuristic for skipping points that are too close.
 const NEAR_THRESHOLD: i64 = 50; // font units
 
-/// ✅ VERIFIED: direction chain + WEAK classification matches C's afhints.c:1087-1298
-/// for all 49 '&' glyph points (confirmed via C's fprintf direction dump).
-/// Uses non-near-neighbor accumulation with C's near_limit = 20*upem/2048.
+/// Load outline points and classify them for FreeType's auto-hint pipeline.
 ///
 /// `raw_outline` provides font-unit coordinates (fx/fy). The already-scaled
 /// 26.6 outline in `scaled_outline` provides ox/oy (and initial x/y).
-// ✅ VERIFIED: direction chain matches C (afhints.c:1087-1298)
-/// Load outline → compute directions → classify WEAK/STRONG.
+/// The loader computes direction chains using FreeType's
+/// `near_limit = 20 * upem / 2048` heuristic, then classifies each point as
+/// weak or strong interpolation input.
 ///
 /// # Classification rules (afhints.c:1257-1298)
 ///
@@ -84,23 +81,12 @@ const NEAR_THRESHOLD: i64 = 50; // font units
 /// | Spike | `in_dir == -out_dir` | WEAK |
 /// | Both-None | `in_dir == out_dir == None` | see below |
 ///
-/// ## Both-None case — two sub-tests, sequential, NOT OR'd
+/// ## Both-None Case
 ///
-/// 1. XOR quadrant: same sign on X AND same sign on Y → WEAK
-/// 2. `corner_is_flat`: one vector dominates → WEAK **and** update
-///    `pv->u` / `nu->v` direction-chain deltas
-///
-/// ⚠️ If test 2's delta update is skipped, downstream points consult wrong
-/// neighbors → different WEAK flags → IUP uses wrong reference → +1 unit
-/// coordinate drift → pixel mismatch. Fixed in commit `1ecd364`.
-///
-/// # Debug checkpoints (when investigating a divergence)
-///
-/// - [ ] Edge fpos/opos/pos match C? → `compute_edges` + `hint_edges` OK
-/// - [ ] Touch flags after `align_edge` match C? → segment→edge assignment OK
-/// - [ ] WEAK flags after reload match C? → **classification diverged — check here**
-/// - [ ] `build_direction_chain` u/v pointers match C? → chain topology differs
-/// - [ ] `corner_is_flat` inputs same neighbors as C? → `near_limit` threshold issue
+/// FreeType evaluates two sequential tests, not one combined predicate:
+/// same-sign quadrant detection, then `corner_is_flat`. The flat-corner test
+/// also updates direction-chain deltas, which downstream IUP reference
+/// selection depends on.
 pub fn reload(
     hints: &mut GlyphHints,
     raw_outline: &crate::tt::glyf::GlyphOutline,
@@ -269,17 +255,16 @@ pub fn reload(
     // handles XOR quadrant check for both-None points, marking them WEAK
     // AND updating u/v deltas.  Pass 2 (HERE) handles remaining points.
     //
-    // ⚠️  CRITICAL FIX 1: Pass 2 SKIPS already-WEAK points (C: afhints.c:1249
+    // C requirement: Pass 2 skips already-weak points (afhints.c:1249
     //    `if (point->flags & AF_FLAG_WEAK_INTERPOLATION) continue;`).
     //    Without this, points marked by Pass 1 get re-processed with different
     //    u/v pointers → double delta update → wrong neighbors → pixel drift.
     //
-    // ⚠️  CRITICAL FIX 2: Pass 2 has NO XOR check for Both-None points.
+    // C requirement: Pass 2 has no XOR check for Both-None points.
     //    C only calls `ft_corner_is_flat` (afhints.c:1276-1290).  The XOR
     //    check lives EXCLUSIVELY in Pass 1 (simplify-topology above).
     //    Having XOR here short-circuits corner_is_flat and SKIPS the delta
-    //    update — the root cause of the 9 remaining fixture failures
-    //    documented in CLAUDE.md case study.
+    //    update that later direction-chain lookups depend on.
     for i in 0..hints.points.len() {
         // C (afhints.c:1249): skip already-WEAK points from Pass 1
         if hints.points[i].flags & AF_FLAG_WEAK_INTERPOLATION != 0 {
@@ -332,8 +317,6 @@ pub fn reload(
 /// and overrides per-point directions with the accumulated segment direction.
 /// This prevents `compute_segments` from splitting a smooth curve into
 /// multiple short segments when per-point directions differ.
-// ✅ VERIFIED: direction chain matches C (afhints.c:1100-1200)
-/// Merge smooth curve points into unified direction segments.
 ///
 /// Without this, a smooth 'O' fragments into many tiny segments → each gets
 /// its own edge → independent hinting → jagged output.
@@ -349,13 +332,6 @@ pub fn reload(
 ///   UPEM=2048 → 20 FU (sparse chain)
 ///   UPEM=1000 →  9 FU (dense chain, more points merge)
 /// ```
-///
-/// # Debug checkpoints
-///
-/// - [ ] `near_limit` correct for this font's UPEM?
-/// - [ ] Backward walk `first` point matches C?
-/// - [ ] Accumulated taxicab distance matches C at each chain transition?
-/// - [ ] Final u/v pointers identical to C for the diverging point?
 fn build_direction_chain(hints: &mut GlyphHints) {
     let near_limit_chain = if let Some(ref met) = hints.metrics {
         (20 * met.units_per_em / 2048).max(1)
