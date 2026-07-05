@@ -1,7 +1,8 @@
 //! PIL 12.2.0 `_imagingft.c` connector fixture tests.
 //!
-//! Scalar rows are exact parity gates. Pixel rows are an explicitly named
-//! incomplete baseline until the pure-Rust connector matches PIL byte-for-byte.
+//! Every fixture row is an exact parity gate. Historical `incomplete` rows stay
+//! in the fixture so older debt is visible, but the expected failure count is
+//! now zero.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
@@ -288,10 +289,44 @@ fn compare_pixel(font: &Font, row: &Row) -> Result<(), PixelFailure> {
     Ok(())
 }
 
+fn compare_row(font: &Font, row: &Row) -> Result<(), PixelFailure> {
+    match row.operation.as_str() {
+        "getbbox" | "getlength" | "getmetrics" | "getname" => compare_scalar_result(font, row),
+        _ => compare_pixel(font, row),
+    }
+}
+
+fn assert_required_rows_exist(matrix: &Matrix) {
+    const REQUIRED_IDS: &[&str] = &[
+        "dejavusans20_hello_getbbox",
+        "dejavusans20_hello_getlength",
+        "dejavusans20_hello_getmask_l",
+        "dejavusans20_hello_getmask2_l",
+        "dejavusans20_hello_draw_text_rgba",
+        "dejavusans20_av_getbbox",
+        "dejavusans20_av_getlength",
+        "dejavusans20_av_getmask_l",
+        "dejavusans20_av_getmask2_l",
+        "dejavusans20_av_draw_text_rgba",
+        "dejavusans20_jq_getbbox",
+        "dejavusans20_jq_getlength",
+        "dejavusans20_jq_getmask_l",
+        "dejavusans20_jq_getmask2_l",
+        "dejavusans20_jq_draw_text_rgba",
+    ];
+    for id in REQUIRED_IDS {
+        assert!(
+            matrix.rows.iter().any(|row| row.id == *id),
+            "imagingft regression fixture row missing: {id}"
+        );
+    }
+}
+
 #[test]
 fn imagingft_fixture_provenance_is_reproducible() {
     let matrix = read_matrix();
     assert_matrix_provenance(&matrix);
+    assert_required_rows_exist(&matrix);
     for row in &matrix.rows {
         assert_raw_file_matches_hash(row);
     }
@@ -301,14 +336,19 @@ fn imagingft_fixture_provenance_is_reproducible() {
 fn imagingft_scalar_rows_match_pil_12_2_0() {
     let matrix = read_matrix();
     let mut fonts = FontCache::default();
-    for row in matrix.rows.iter().filter(|row| row.status == "parity") {
+    for row in matrix.rows.iter().filter(|row| {
+        matches!(
+            row.operation.as_str(),
+            "getbbox" | "getlength" | "getmetrics" | "getname"
+        )
+    }) {
         let font = fonts.font_for(row);
         compare_scalar(font, row);
     }
 }
 
 #[test]
-fn imagingft_pixel_rows_remain_visible_incomplete_baseline() {
+fn imagingft_historical_incomplete_rows_have_zero_failures() {
     let matrix = read_matrix();
     let rows: Vec<&Row> = matrix
         .rows
@@ -322,12 +362,7 @@ fn imagingft_pixel_rows_remain_visible_incomplete_baseline() {
         .iter()
         .filter_map(|row| {
             let font = fonts.font_for(row);
-            match row.operation.as_str() {
-                "getbbox" | "getlength" | "getmetrics" | "getname" => {
-                    compare_scalar_result(font, row).err()
-                }
-                _ => compare_pixel(font, row).err(),
-            }
+            compare_row(font, row).err()
         })
         .collect();
 
@@ -343,7 +378,7 @@ fn imagingft_pixel_rows_remain_visible_incomplete_baseline() {
 }
 
 #[test]
-fn imagingft_large_pixel_matrix_has_7000_pil_12_2_0_matches() {
+fn imagingft_large_pixel_matrix_has_all_pil_12_2_0_matches() {
     let matrix = read_matrix();
     let rows: Vec<&Row> = matrix
         .rows
@@ -359,7 +394,7 @@ fn imagingft_large_pixel_matrix_has_7000_pil_12_2_0_matches() {
     let mut fonts = FontCache::default();
     let mut passed = 0usize;
     let mut failures = Vec::new();
-    for row in rows {
+    for row in &rows {
         let font = fonts.font_for(row);
         match compare_pixel(font, row) {
             Ok(()) => passed += 1,
@@ -368,13 +403,31 @@ fn imagingft_large_pixel_matrix_has_7000_pil_12_2_0_matches() {
     }
 
     assert!(
-        passed >= matrix.pixel_matrix_min_passed,
-        "PIL 12.2.0 imagingft pixel matches below floor: passed={passed} floor={} failures={:#?}",
-        matrix.pixel_matrix_min_passed,
-        failures
+        failures.is_empty(),
+        "PIL 12.2.0 imagingft pixel matrix has failures: passed={passed} total={} failures={failures:#?}",
+        passed + failures.len()
     );
+    assert_eq!(passed, rows.len(), "every pixel matrix row must pass");
     eprintln!(
         "imagingft large pixel matrix: {passed} passed, {} failed",
         failures.len()
+    );
+}
+
+#[test]
+fn imagingft_all_fixture_rows_match_pil_12_2_0() {
+    let matrix = read_matrix();
+    let mut fonts = FontCache::default();
+    let mut failures = Vec::new();
+    for row in &matrix.rows {
+        let font = fonts.font_for(row);
+        if let Err(failure) = compare_row(font, row) {
+            failures.push(failure);
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "all imagingft fixture rows must match PIL 12.2.0 exactly: {failures:#?}"
     );
 }
