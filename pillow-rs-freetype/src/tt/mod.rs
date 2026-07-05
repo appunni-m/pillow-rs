@@ -7,6 +7,7 @@
 
 pub mod cmap;
 pub mod glyf;
+pub mod hdmx;
 pub mod head;
 pub mod hhea;
 pub mod hinter;

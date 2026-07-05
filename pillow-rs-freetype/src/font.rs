@@ -218,6 +218,9 @@ impl Font {
             dir.find(data, tag(b"vmtx"))
                 .and_then(|d| tt::vmtx::parse_vmtx(d, vhea.num_vmetrics, maxp.num_glyphs).ok())
         });
+        let hdmx = dir
+            .find(data, tag(b"hdmx"))
+            .and_then(|d| tt::hdmx::parse_hdmx(d, maxp.num_glyphs).ok());
 
         let loca_data = dir
             .find(data, tag(b"loca"))
@@ -253,6 +256,7 @@ impl Font {
             os2,
             vhea,
             vmtx,
+            hdmx,
             loca_data,
             glyf_data,
             size_pt,

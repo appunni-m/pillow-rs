@@ -15,7 +15,17 @@ fn main() {
     }
     let font_path = &args[1];
     let size_pt: f32 = args[2].parse().expect("size_pt");
-    let ch = args[3].chars().next().expect("char");
+    let glyph_override = args[3]
+        .strip_prefix("gid:")
+        .map(|gid| gid.parse::<u16>().expect("glyph index"));
+    let ch = if glyph_override.is_some() {
+        '\0'
+    } else if let Some(hex) = args[3].strip_prefix("U+") {
+        let codepoint = u32::from_str_radix(hex, 16).expect("hex codepoint");
+        char::from_u32(codepoint).expect("valid codepoint")
+    } else {
+        args[3].chars().next().expect("char")
+    };
 
     let data = fs::read(font_path).expect("read font");
     let backend = if args.get(4).is_some_and(|arg| arg == "pil") {
@@ -25,9 +35,78 @@ fn main() {
     };
     let font = pillow_rs_freetype::Font::truetype(&data, size_pt, backend).expect("load font");
 
+    if env::var_os("FT_RS_DUMP_METRICS").is_some() {
+        let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
+        let metrics_scaled =
+            pillow_rs_freetype::scaler::scale_glyph_for_metrics(&font.data, glyph, font.is_italic)
+                .expect("scale glyph for metrics");
+        eprintln!(
+            "[R METRICS SCALED] glyph={} cbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {}) outline_bbox=({}, {}, {}, {}) bitmap=({}, {}, {}, {}) advance={} slot_advance={} lsb={}",
+            glyph,
+            metrics_scaled.cbox_x_min,
+            metrics_scaled.cbox_y_min,
+            metrics_scaled.cbox_x_max,
+            metrics_scaled.cbox_y_max,
+            metrics_scaled.outline_cbox_x_min,
+            metrics_scaled.outline_cbox_y_min,
+            metrics_scaled.outline_cbox_x_max,
+            metrics_scaled.outline_cbox_y_max,
+            metrics_scaled.outline_bbox_x_min,
+            metrics_scaled.outline_bbox_y_min,
+            metrics_scaled.outline_bbox_x_max,
+            metrics_scaled.outline_bbox_y_max,
+            metrics_scaled.bbox_x_min,
+            metrics_scaled.bbox_y_min,
+            metrics_scaled.bbox_x_max,
+            metrics_scaled.bbox_y_max,
+            metrics_scaled.advance_width,
+            metrics_scaled.slot_advance_width,
+            metrics_scaled.lsb
+        );
+        let outline_scaled =
+            pillow_rs_freetype::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
+                .expect("scale glyph for outline");
+        eprintln!(
+            "[R OUTLINE SCALED] glyph={} cbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {}) outline_bbox=({}, {}, {}, {}) bitmap=({}, {}, {}, {}) advance={} slot_advance={} lsb={}",
+            glyph,
+            outline_scaled.cbox_x_min,
+            outline_scaled.cbox_y_min,
+            outline_scaled.cbox_x_max,
+            outline_scaled.cbox_y_max,
+            outline_scaled.outline_cbox_x_min,
+            outline_scaled.outline_cbox_y_min,
+            outline_scaled.outline_cbox_x_max,
+            outline_scaled.outline_cbox_y_max,
+            outline_scaled.outline_bbox_x_min,
+            outline_scaled.outline_bbox_y_min,
+            outline_scaled.outline_bbox_x_max,
+            outline_scaled.outline_bbox_y_max,
+            outline_scaled.bbox_x_min,
+            outline_scaled.bbox_y_min,
+            outline_scaled.bbox_x_max,
+            outline_scaled.bbox_y_max,
+            outline_scaled.advance_width,
+            outline_scaled.slot_advance_width,
+            outline_scaled.lsb
+        );
+        if glyph_override.is_none() {
+            let metrics = font.glyph_metrics(ch as u32).expect("glyph metrics");
+            eprintln!(
+                "[R METRICS] width={} height={} hbx={} hby={} hadv={} vbx={} vby={} vadv={}",
+                metrics.width,
+                metrics.height,
+                metrics.hori_bearing_x,
+                metrics.hori_bearing_y,
+                metrics.hori_advance,
+                metrics.vert_bearing_x,
+                metrics.vert_bearing_y,
+                metrics.vert_advance
+            );
+        }
+    }
+
     if env::var_os("FT_RS_DUMP_OUTLINE").is_some() {
-        let glyph = font.char_index(ch as u32);
-        let metrics_cache = font.face_globals.get_metrics(glyph);
+        let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
         let scaled = match backend {
             pillow_rs_freetype::BitmapBackend::PIL => {
                 pillow_rs_freetype::scaler::scale_glyph_native_default(
@@ -37,12 +116,9 @@ fn main() {
                     font.is_italic,
                 )
             }
-            pillow_rs_freetype::BitmapBackend::FreeType => pillow_rs_freetype::scaler::scale_glyph(
-                &font.data,
-                glyph,
-                metrics_cache.as_ref(),
-                font.is_italic,
-            ),
+            pillow_rs_freetype::BitmapBackend::FreeType => {
+                pillow_rs_freetype::scaler::scale_glyph(&font.data, glyph, None, font.is_italic)
+            }
         }
         .expect("scale glyph");
         eprintln!(
@@ -61,6 +137,10 @@ fn main() {
                 point.x, point.y, point.on_curve
             );
         }
+    }
+
+    if glyph_override.is_some() {
+        return;
     }
 
     let mask = font.getmask(&ch.to_string()).expect("getmask");

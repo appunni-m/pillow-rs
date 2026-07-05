@@ -200,7 +200,7 @@ pub fn scale_glyph_for_metrics_with_autohint(
         },
         true,
         false,
-        true,
+        false,
         true,
         false,
         true,
@@ -594,6 +594,7 @@ fn scale_glyph_impl(
                 y_scale: y_adj,
                 ppem: scale.ppem,
                 storage_size: data.maxp.max_storage as usize,
+                twilight_points: data.maxp.max_twilight_points as usize,
                 is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
@@ -629,6 +630,20 @@ fn scale_glyph_impl(
                     log::debug!("[VM] gi={glyph_index}: {e}");
                 }
             }
+        }
+    }
+
+    if legacy_hinter_phantoms && allow_bytecode {
+        if let Some(width) = data
+            .hdmx
+            .as_ref()
+            .and_then(|hdmx| hdmx.width_for_ppem(scale.ppem, glyph_index))
+        {
+            // C `compute_glyph_metrics` prefers `loader->widthp[glyph] * 64`
+            // for hinted native TrueType loads when an hdmx ppem record is
+            // active (ttgload.c:1974-1977). It affects only slot metrics, not
+            // the outline cbox/bbox.
+            slot_advance_width = i32::from(width) * 64;
         }
     }
 
