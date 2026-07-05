@@ -114,6 +114,88 @@ pub fn ft_floor_fix(a: i32) -> i32 {
     a & !0xFFFFi32
 }
 
+#[inline]
+fn ft_msb(value: u32) -> i32 {
+    31 - value.leading_zeros() as i32
+}
+
+/// Normalize a TrueType vector to a 2.14 unit vector.
+///
+/// C reference: `Normalize` in `ttinterp.c:2326-2345`, which calls
+/// `FT_Vector_NormLen` in `ftcalc.c:787-877` and then divides the 16.16
+/// normalized vector by 4.  This intentionally avoids floating point; one-unit
+/// cbox differences can appear if SPVFS/SFVFS or line-vector opcodes use a
+/// host `sqrt` instead of FreeType's fixed Newton iteration.
+#[inline]
+pub fn ft_normalize_2dot14(vx: i32, vy: i32) -> Option<(i32, i32)> {
+    if vx == 0 && vy == 0 {
+        return None;
+    }
+
+    let mut sx = 1i32;
+    let mut sy = 1i32;
+    let mut x = if vx < 0 {
+        sx = -1;
+        (0u32).wrapping_sub(vx as u32)
+    } else {
+        vx as u32
+    };
+    let mut y = if vy < 0 {
+        sy = -1;
+        (0u32).wrapping_sub(vy as u32)
+    } else {
+        vy as u32
+    };
+
+    if x == 0 {
+        return Some((0, sy * 0x4000));
+    }
+    if y == 0 {
+        return Some((sx * 0x4000, 0));
+    }
+
+    let mut l = if x > y { x + (y >> 1) } else { y + (x >> 1) };
+    let mut shift = 31 - ft_msb(l);
+    shift -= 15 + i32::from(l >= (0xAAAA_AAAAu32 >> shift));
+
+    if shift > 0 {
+        x <<= shift;
+        y <<= shift;
+        l = if x > y { x + (y >> 1) } else { y + (x >> 1) };
+    } else {
+        x >>= -shift;
+        y >>= -shift;
+        l >>= -shift;
+    }
+
+    let mut b = 0x10000i32.wrapping_sub(l as i32);
+    let x_i = x as i32;
+    let y_i = y as i32;
+    let (u, v) = loop {
+        let u = x_i.wrapping_add((x_i.wrapping_mul(b)) >> 16) as u32;
+        let v = y_i.wrapping_add((y_i.wrapping_mul(b)) >> 16) as u32;
+        let mut z =
+            (u.wrapping_mul(u).wrapping_add(v.wrapping_mul(v)) as i32).wrapping_neg() / 0x200;
+        z = z.wrapping_mul((0x10000i32.wrapping_add(b)) >> 8) / 0x10000;
+        if z <= 0 {
+            break (u, v);
+        }
+        b = b.wrapping_add(z);
+    };
+
+    let x_norm = if sx < 0 {
+        0i32.wrapping_sub(u as i32)
+    } else {
+        u as i32
+    };
+    let y_norm = if sy < 0 {
+        0i32.wrapping_sub(v as i32)
+    } else {
+        v as i32
+    };
+    Some((x_norm / 4, y_norm / 4))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

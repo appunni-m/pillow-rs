@@ -36,6 +36,24 @@ Review requirement before merging similar patches:
    regression is probably an upstream VM-state dependency exposed by `MUL`,
    not permission to keep the old arithmetic silently.
 
+### 2026-07-05: Primitive C-oracle checks can narrow integration ambiguity
+
+Added `tests/vector_norm_parity.rs` and `fixed::ft_normalize_2dot14` to compare
+Rust directly with FreeType's `Normalize` + `FT_Vector_NormLen` path. This is a
+small primitive parity test, not a fixture rewrite and not a runtime C path.
+
+Local result on main `3866f4aa`:
+
+- The Rust fixed-point port matches the C oracle for the tested vectors.
+- Replacing the interpreter's current float/raw vector path with the exact
+  primitive regressed `native_tt_default_matrix` from `7413/7640` to
+  `7408/7640`, with metrics and outline unchanged.
+
+Conclusion: vector normalization is still a real suspect, but it is not a
+standalone mergeable integration fix. Use the primitive oracle to debug
+specific traced `SPVFS`/`SFVFS` inputs and first-divergence points before
+changing interpreter behavior.
+
 ## The Goal
 
 Match Python Pillow's `ImageFont.getmask()` / `getbbox()` pixel output. Pillow
