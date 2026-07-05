@@ -86,16 +86,81 @@ static void print_status(FT_Error err) {
 
 static int emit_constant(const char* symbol) {
     long value = 0;
-    if (streq(symbol, "FT_LOAD_RENDER")) {
-        value = FT_LOAD_RENDER;
-    } else if (streq(symbol, "FT_RENDER_MODE_MONO")) {
-        value = FT_RENDER_MODE_MONO;
-    } else if (streq(symbol, "FT_PIXEL_MODE_GRAY")) {
-        value = FT_PIXEL_MODE_GRAY;
-    } else {
+#define CONST_VALUE(name) \
+    if (streq(symbol, #name)) { \
+        value = name; \
+    } else
+    CONST_VALUE(FT_Err_Ok)
+    CONST_VALUE(FT_Err_Cannot_Open_Resource)
+    CONST_VALUE(FT_Err_Unknown_File_Format)
+    CONST_VALUE(FT_Err_Invalid_File_Format)
+    CONST_VALUE(FT_Err_Invalid_Argument)
+    CONST_VALUE(FT_Err_Unimplemented_Feature)
+    CONST_VALUE(FT_Err_Invalid_Table)
+    CONST_VALUE(FT_Err_Invalid_Glyph_Index)
+    CONST_VALUE(FT_Err_Invalid_Character_Code)
+    CONST_VALUE(FT_Err_Invalid_Glyph_Format)
+    CONST_VALUE(FT_Err_Cannot_Render_Glyph)
+    CONST_VALUE(FT_Err_Invalid_Outline)
+    CONST_VALUE(FT_Err_Invalid_Pixel_Size)
+    CONST_VALUE(FT_Err_Invalid_CharMap_Handle)
+    CONST_VALUE(FT_Err_Out_Of_Memory)
+    CONST_VALUE(FT_Err_Raster_Overflow)
+    CONST_VALUE(FT_Err_Invalid_CharMap_Format)
+    CONST_VALUE(FT_LOAD_DEFAULT)
+    CONST_VALUE(FT_LOAD_NO_SCALE)
+    CONST_VALUE(FT_LOAD_NO_HINTING)
+    CONST_VALUE(FT_LOAD_RENDER)
+    CONST_VALUE(FT_LOAD_NO_BITMAP)
+    CONST_VALUE(FT_LOAD_VERTICAL_LAYOUT)
+    CONST_VALUE(FT_LOAD_FORCE_AUTOHINT)
+    CONST_VALUE(FT_LOAD_CROP_BITMAP)
+    CONST_VALUE(FT_LOAD_PEDANTIC)
+    CONST_VALUE(FT_LOAD_ADVANCE_ONLY)
+    CONST_VALUE(FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH)
+    CONST_VALUE(FT_LOAD_NO_RECURSE)
+    CONST_VALUE(FT_LOAD_IGNORE_TRANSFORM)
+    CONST_VALUE(FT_LOAD_MONOCHROME)
+    CONST_VALUE(FT_LOAD_LINEAR_DESIGN)
+    CONST_VALUE(FT_LOAD_SBITS_ONLY)
+    CONST_VALUE(FT_LOAD_NO_AUTOHINT)
+    CONST_VALUE(FT_LOAD_COLOR)
+    CONST_VALUE(FT_LOAD_COMPUTE_METRICS)
+    CONST_VALUE(FT_LOAD_BITMAP_METRICS_ONLY)
+    CONST_VALUE(FT_LOAD_SVG_ONLY)
+    CONST_VALUE(FT_LOAD_NO_SVG)
+    CONST_VALUE(FT_RENDER_MODE_NORMAL)
+    CONST_VALUE(FT_RENDER_MODE_LIGHT)
+    CONST_VALUE(FT_RENDER_MODE_MONO)
+    CONST_VALUE(FT_RENDER_MODE_LCD)
+    CONST_VALUE(FT_RENDER_MODE_LCD_V)
+    CONST_VALUE(FT_RENDER_MODE_SDF)
+    CONST_VALUE(FT_RENDER_MODE_MAX)
+    CONST_VALUE(FT_LOAD_TARGET_NORMAL)
+    CONST_VALUE(FT_LOAD_TARGET_LIGHT)
+    CONST_VALUE(FT_LOAD_TARGET_MONO)
+    CONST_VALUE(FT_LOAD_TARGET_LCD)
+    CONST_VALUE(FT_LOAD_TARGET_LCD_V)
+    CONST_VALUE(FT_PIXEL_MODE_NONE)
+    CONST_VALUE(FT_PIXEL_MODE_MONO)
+    CONST_VALUE(FT_PIXEL_MODE_GRAY)
+    CONST_VALUE(FT_PIXEL_MODE_GRAY2)
+    CONST_VALUE(FT_PIXEL_MODE_GRAY4)
+    CONST_VALUE(FT_PIXEL_MODE_LCD)
+    CONST_VALUE(FT_PIXEL_MODE_LCD_V)
+    CONST_VALUE(FT_PIXEL_MODE_BGRA)
+    CONST_VALUE(FT_PIXEL_MODE_MAX)
+    CONST_VALUE(FT_GLYPH_FORMAT_NONE)
+    CONST_VALUE(FT_GLYPH_FORMAT_COMPOSITE)
+    CONST_VALUE(FT_GLYPH_FORMAT_BITMAP)
+    CONST_VALUE(FT_GLYPH_FORMAT_OUTLINE)
+    CONST_VALUE(FT_GLYPH_FORMAT_PLOTTER)
+    CONST_VALUE(FT_GLYPH_FORMAT_SVG)
+    {
         fprintf(stderr, "unsupported constant: %s\n", symbol);
         return 2;
     }
+#undef CONST_VALUE
     printf("{");
     print_status(0);
     printf(",\"output\":{\"value\":%ld}}\n", value);
@@ -206,6 +271,20 @@ static void print_slot(FT_GlyphSlot slot, FT_UInt glyph_index) {
     printf("}");
 }
 
+static void print_size_metrics(FT_Size_Metrics metrics) {
+    printf("\"output\":{");
+    printf("\"x_ppem\":%u,\"y_ppem\":%u,\"x_scale\":%ld,\"y_scale\":%ld,\"ascender\":%ld,\"descender\":%ld,\"height\":%ld,\"max_advance\":%ld",
+           metrics.x_ppem,
+           metrics.y_ppem,
+           metrics.x_scale,
+           metrics.y_scale,
+           metrics.ascender,
+           metrics.descender,
+           metrics.height,
+           metrics.max_advance);
+    printf("}");
+}
+
 static int emit_face_or_slot(int argc, char** argv) {
     const char* command = argv[1];
     const char* source_kind = argv[2];
@@ -231,7 +310,7 @@ static int emit_face_or_slot(int argc, char** argv) {
         return 2;
     }
 
-    FT_Library library;
+    FT_Library library = NULL;
     FT_Error err = FT_Init_FreeType(&library);
     if (err) {
         free(data);
@@ -248,15 +327,18 @@ static int emit_face_or_slot(int argc, char** argv) {
     }
 
     printf("{");
-    if (err || streq(command, "--new-memory-face")) {
+    if (err || streq(command, "--new-memory-face") || streq(command, "--set-pixel-sizes") || streq(command, "--size-metrics")) {
         print_status(err);
         if (err) {
             printf(",\"output\":null}\n");
+        } else if (streq(command, "--set-pixel-sizes")) {
+            printf(",\"output\":{\"set\":true}}\n");
+        } else if (streq(command, "--size-metrics")) {
+            printf(",");
+            print_size_metrics(face->size->metrics);
+            printf("}\n");
         } else {
-            printf(",\"output\":{\"num_faces\":%ld,\"face_index\":%ld,\"num_glyphs\":%ld}}\n",
-                   face->num_faces,
-                   face->face_index,
-                   face->num_glyphs);
+            printf(",\"output\":{\"opened\":true}}\n");
         }
         if (!err) {
             FT_Done_Face(face);
@@ -313,6 +395,60 @@ static int emit_face_or_slot(int argc, char** argv) {
     return 0;
 }
 
+static int emit_set_char_size(int argc, char** argv) {
+    (void)argc;
+    const char* source_kind = argv[2];
+    const char* source_value = argv[3];
+    FT_Long face_index = atol(argv[4]);
+    FT_F26Dot6 char_width = (FT_F26Dot6)strtol(argv[5], NULL, 10);
+    FT_F26Dot6 char_height = (FT_F26Dot6)strtol(argv[6], NULL, 10);
+    FT_UInt horz_resolution = (FT_UInt)strtoul(argv[7], NULL, 10);
+    FT_UInt vert_resolution = (FT_UInt)strtoul(argv[8], NULL, 10);
+
+    unsigned char* data = NULL;
+    long data_len = 0;
+    if (streq(source_kind, "file")) {
+        if (load_file(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to read font file: %s\n", source_value);
+            return 2;
+        }
+    } else if (streq(source_kind, "hex")) {
+        if (decode_hex(source_value, &data, &data_len) != 0) {
+            fprintf(stderr, "failed to decode inline hex\n");
+            return 2;
+        }
+    } else {
+        fprintf(stderr, "unsupported source kind: %s\n", source_kind);
+        return 2;
+    }
+
+    FT_Library library;
+    FT_Error err = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    if (!err) {
+        err = FT_New_Memory_Face(library, data, data_len, face_index, &face);
+    }
+    if (!err) {
+        err = FT_Set_Char_Size(face, char_width, char_height, horz_resolution, vert_resolution);
+    }
+
+    printf("{");
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"set\":true}}\n");
+    }
+    if (face) {
+        FT_Done_Face(face);
+    }
+    if (library) {
+        FT_Done_FreeType(library);
+    }
+    free(data);
+    return 0;
+}
+
 int main(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--constant")) {
         return emit_constant(argv[2]);
@@ -320,8 +456,11 @@ int main(int argc, char** argv) {
     if (argc == 3 && streq(argv[1], "--layout")) {
         return emit_layout(argv[2]);
     }
-    if (argc == 7 && streq(argv[1], "--new-memory-face")) {
+    if (argc == 7 && (streq(argv[1], "--new-memory-face") || streq(argv[1], "--set-pixel-sizes") || streq(argv[1], "--size-metrics"))) {
         return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--set-char-size")) {
+        return emit_set_char_size(argc, argv);
     }
     if (argc == 8 && streq(argv[1], "--get-char-index")) {
         return emit_face_or_slot(argc, argv);
@@ -332,6 +471,6 @@ int main(int argc, char** argv) {
     if (argc == 10 && streq(argv[1], "--render-glyph")) {
         return emit_face_or_slot(argc, argv);
     }
-    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --layout RECORD | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE\n");
+    fprintf(stderr, "usage: gen_unified_oracle --constant SYMBOL | --layout RECORD | --new-memory-face SRC_KIND SRC FACE_INDEX PX PY | --set-pixel-sizes SRC_KIND SRC FACE_INDEX PX PY | --set-char-size SRC_KIND SRC FACE_INDEX WIDTH HEIGHT HR VR | --size-metrics SRC_KIND SRC FACE_INDEX PX PY | --get-char-index SRC_KIND SRC FACE_INDEX PX PY CHAR | --load-char SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS | --load-glyph SRC_KIND SRC FACE_INDEX PX PY GID FLAGS | --render-glyph SRC_KIND SRC FACE_INDEX PX PY CHAR FLAGS MODE\n");
     return 2;
 }
