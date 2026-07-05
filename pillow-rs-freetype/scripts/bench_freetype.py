@@ -23,6 +23,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_MATRIX = ROOT / "tests" / "fixtures" / "perf_operation_matrix.json"
 DEFAULT_OUT = ROOT / "target" / "freetype-bench" / "latest.json"
+DEFAULT_REPORT = ROOT / "target" / "freetype-bench" / "latest.md"
 HELPER_SRC = ROOT / "scripts" / "bench_ft_ops.c"
 HELPER_BIN = ROOT / "target" / "freetype-bench" / "bench_ft_ops"
 WORKSPACE_ROOT = ROOT.parent
@@ -319,6 +320,75 @@ def read_cpu_governor() -> str | None:
     return ",".join(sorted(set(values))) if values else None
 
 
+def read_khz_file(path: pathlib.Path) -> int | None:
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def format_mhz(khz: float | int | None) -> str | None:
+    if khz is None:
+        return None
+    return f"{float(khz) / 1000.0:.0f} MHz"
+
+
+def read_cpu_frequencies() -> dict[str, Any]:
+    policies = sorted(pathlib.Path("/sys/devices/system/cpu/cpufreq").glob("policy*"))
+    current = []
+    maximum = []
+    for policy in policies:
+        cur = read_khz_file(policy / "scaling_cur_freq")
+        max_freq = read_khz_file(policy / "cpuinfo_max_freq")
+        if cur is not None:
+            current.append(cur)
+        if max_freq is not None:
+            maximum.append(max_freq)
+    if not current and not maximum:
+        return {}
+    return {
+        "current_min_mhz": format_mhz(min(current)) if current else None,
+        "current_max_mhz": format_mhz(max(current)) if current else None,
+        "current_mean_mhz": format_mhz(mean([float(value) for value in current])) if current else None,
+        "cpuinfo_max_mhz": format_mhz(max(maximum)) if maximum else None,
+        "policy_count": len(policies),
+    }
+
+
+def read_memory_info() -> dict[str, Any]:
+    meminfo = pathlib.Path("/proc/meminfo")
+    info: dict[str, Any] = {
+        "total": None,
+        "available": None,
+        "speed": None,
+        "clock": None,
+        "source": "/proc/meminfo; speed/clock not exposed",
+    }
+    if meminfo.exists():
+        values = {}
+        for line in meminfo.read_text(errors="ignore").splitlines():
+            key, _, rest = line.partition(":")
+            values[key] = rest.strip()
+        info["total"] = values.get("MemTotal")
+        info["available"] = values.get("MemAvailable")
+
+    # Desktop/server DIMM speed is usually exposed through SMBIOS/EDAC only
+    # with elevated privileges or platform-specific drivers. Keep explicit
+    # unknowns rather than manufacturing a number.
+    for candidate in (
+        pathlib.Path("/sys/class/dmi/id/product_version"),
+        pathlib.Path("/sys/class/dmi/id/board_name"),
+    ):
+        try:
+            value = candidate.read_text(errors="ignore").strip()
+        except OSError:
+            continue
+        if value:
+            info.setdefault("platform_hint", value)
+            break
+    return info
+
+
 def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dict[str, Any]:
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     return {
@@ -339,6 +409,8 @@ def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dic
         "machine": platform.machine(),
         "cpu_model": read_cpu_model(),
         "cpu_governor": read_cpu_governor(),
+        "cpu_frequency": read_cpu_frequencies(),
+        "memory": read_memory_info(),
         "c_compiler": cc,
         "c_compiler_version": run_optional([cc, "--version"], cwd=WORKSPACE_ROOT).splitlines()[0] if cc else None,
         "ft_include": str(args.ft_include),
@@ -352,7 +424,7 @@ def build_metadata(args: argparse.Namespace, matrix_data: dict[str, Any]) -> dic
     }
 
 
-def format_table(summary: dict[str, Any]) -> str:
+def format_table(summary: dict[str, Any], *, include_aggregate: bool = True) -> str:
     headers = [
         "id",
         "op",
@@ -412,18 +484,136 @@ def format_table(summary: dict[str, Any]) -> str:
             )
             + " |"
         )
+    if include_aggregate:
+        overall = summary["overall"]
+        lines.extend(
+            [
+                "",
+                "| aggregate | value |",
+                "| --- | --- |",
+                f"| total operation count | {overall['operation_count']} |",
+                f"| rust total ns | {overall['rust_ns_total']} |",
+                f"| c total ns | {overall['c_ns_total']} |",
+                f"| total speedup vs C | {overall['speedup_vs_c_total']:.3f}x |",
+                f"| weighted operation weight | {overall['weighted_operation_weight']:.2f} |",
+                f"| weighted speedup vs C | {overall['weighted_speedup_vs_c']:.3f}x |",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def format_ms(ns: int | float) -> str:
+    return f"{float(ns) / 1_000_000.0:.3f} ms"
+
+
+def aggregate_table(summary: dict[str, Any]) -> str:
     overall = summary["overall"]
+    rows = [
+        ("Total operation count", overall["operation_count"]),
+        ("Rust total time", format_ms(overall["rust_ns_total"])),
+        ("C total time", format_ms(overall["c_ns_total"])),
+        ("Total speedup vs C", f"{overall['speedup_vs_c_total']:.3f}x"),
+        ("Weighted operation weight", f"{overall['weighted_operation_weight']:.2f}"),
+        ("Weighted speedup vs C", f"{overall['weighted_speedup_vs_c']:.3f}x"),
+    ]
+    lines = ["| Metric | Value |", "| --- | --- |"]
+    for key, value in rows:
+        lines.append(f"| {key} | {value} |")
+    return "\n".join(lines)
+
+
+def metadata_table(metadata: dict[str, Any]) -> str:
+    cpu_frequency = metadata.get("cpu_frequency") or {}
+    memory = metadata.get("memory") or {}
+    rows = [
+        ("Created UTC", metadata.get("created_utc")),
+        ("Git SHA", metadata.get("git_sha")),
+        ("Git dirty", metadata.get("git_dirty")),
+        ("Workload profile", metadata.get("workload_profile")),
+        ("Samples", metadata.get("sample_count")),
+        ("Matrix", metadata.get("matrix")),
+        ("Matrix version", metadata.get("matrix_version")),
+        ("Platform", metadata.get("platform")),
+        ("Machine", metadata.get("machine")),
+        ("CPU", metadata.get("cpu_model")),
+        ("CPU governor", metadata.get("cpu_governor") or "not available"),
+        ("CPU current min", cpu_frequency.get("current_min_mhz") or "not available"),
+        ("CPU current max", cpu_frequency.get("current_max_mhz") or "not available"),
+        ("CPU current mean", cpu_frequency.get("current_mean_mhz") or "not available"),
+        ("CPU max", cpu_frequency.get("cpuinfo_max_mhz") or "not available"),
+        ("CPU policy count", cpu_frequency.get("policy_count") or "not available"),
+        ("Memory total", memory.get("total") or "not available"),
+        ("Memory available", memory.get("available") or "not available"),
+        ("Memory speed", memory.get("speed") or "not available"),
+        ("Memory clock", memory.get("clock") or "not available"),
+        ("Memory source", memory.get("source") or "not available"),
+        ("Rust", metadata.get("rustc_version")),
+        ("Cargo", metadata.get("cargo_version")),
+        ("Python", metadata.get("python_version")),
+        ("C compiler", metadata.get("c_compiler_version") or metadata.get("c_compiler")),
+        ("FreeType include", metadata.get("ft_include")),
+        ("FreeType lib", metadata.get("ft_lib")),
+    ]
+    lines = ["| Parameter | Value |", "| --- | --- |"]
+    for key, value in rows:
+        lines.append(f"| {key} | {value} |")
+    return "\n".join(lines)
+
+
+def benchmark_configuration_table(metadata: dict[str, Any]) -> str:
+    rows = [
+        ("Workload profile", metadata.get("workload_profile")),
+        ("Samples", metadata.get("sample_count")),
+        ("Compare C", metadata.get("compare_c")),
+        ("Matrix", metadata.get("matrix")),
+        ("Matrix version", metadata.get("matrix_version")),
+        ("FreeType include", metadata.get("ft_include")),
+        ("FreeType lib", metadata.get("ft_lib")),
+    ]
+    lines = ["| Parameter | Value |", "| --- | --- |"]
+    for key, value in rows:
+        lines.append(f"| {key} | {value} |")
+    return "\n".join(lines)
+
+
+def format_report(metadata: dict[str, Any], summary: dict[str, Any] | None) -> str:
+    lines = [
+        "# pillow-rs-freetype Benchmark Report",
+        "",
+        "This report is generated by `scripts/bench_freetype.py`. Raw samples and",
+        "machine-readable summaries are stored in the paired JSON artifact.",
+        "",
+        "## Benchmark Configuration",
+        "",
+        benchmark_configuration_table(metadata),
+        "",
+        "## Environment",
+        "",
+        metadata_table(metadata),
+        "",
+        "## Trust Notes",
+        "",
+    ]
+    for note in metadata.get("timing_notes", []):
+        lines.append(f"- {note}")
+    if metadata.get("git_dirty"):
+        lines.append("- Warning: the benchmark was generated from a dirty worktree.")
+    lines.extend(["", "## Aggregate Summary", ""])
+    if summary is None:
+        lines.append("No C comparison summary was generated. Run with `--compare-c`.")
+    else:
+        lines.append(aggregate_table(summary))
+        lines.extend(["", "## Per-Operation Results", ""])
+        lines.append(format_table(summary, include_aggregate=False))
     lines.extend(
         [
             "",
-            "| aggregate | value |",
-            "| --- | --- |",
-            f"| total operation count | {overall['operation_count']} |",
-            f"| rust total ns | {overall['rust_ns_total']} |",
-            f"| c total ns | {overall['c_ns_total']} |",
-            f"| total speedup vs C | {overall['speedup_vs_c_total']:.3f}x |",
-            f"| weighted operation weight | {overall['weighted_operation_weight']:.2f} |",
-            f"| weighted speedup vs C | {overall['weighted_speedup_vs_c']:.3f}x |",
+            "## Reproduction",
+            "",
+            "```bash",
+            "python3 pillow-rs-freetype/scripts/bench_freetype.py --compare-c --samples 10 --profile default --table",
+            "```",
+            "",
         ]
     )
     return "\n".join(lines)
@@ -431,16 +621,19 @@ def format_table(summary: dict[str, Any]) -> str:
 
 def write_output(
     path: pathlib.Path,
+    report_path: pathlib.Path,
     rows: list[dict[str, Any]],
     metadata: dict[str, Any],
     summary: dict[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {"metadata": metadata, "rows": rows}
     if summary is not None:
         payload["summary"] = summary
         payload["summary_markdown"] = format_table(summary)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    report_path.write_text(format_report(metadata, summary) + "\n")
 
 
 def run_self_test() -> int:
@@ -509,6 +702,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--matrix", type=pathlib.Path, default=DEFAULT_MATRIX)
     parser.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT)
+    parser.add_argument("--report", type=pathlib.Path, default=DEFAULT_REPORT)
     parser.add_argument("--compare-c", action="store_true")
     parser.add_argument("--profile", default="default")
     parser.add_argument("--samples", type=int, default=1)
@@ -553,10 +747,11 @@ def main() -> int:
 
     metadata = build_metadata(args, matrix_data)
     summary = summarize_rows(sample_rows, weights, matrix_rows_by_id(matrix_data)) if args.compare_c else None
-    write_output(args.out, rows, metadata, summary)
+    write_output(args.out, args.report, rows, metadata, summary)
     if args.table and summary is not None:
         print(format_table(summary))
     print(f"wrote {args.out}")
+    print(f"wrote {args.report}")
     return 0
 
 
