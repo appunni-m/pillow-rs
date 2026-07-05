@@ -20,61 +20,62 @@ use pillow_rs_image::DynamicImage;
 
 use crate::error::PilError;
 
-/// Optional parameter data for an operation execution.
-/// AS PER DESIGN: This is a slice, not a Vec — no allocation on every call.
+/// Borrowed parameter data for one backend operation execution.
+///
+/// # Internal Contract
+///
+/// Parameters are borrowed slices so hot-path dispatch does not allocate while
+/// routing operation metadata to CPU, SIMD, or GPU adapters.
 #[derive(Debug, Clone)]
 pub struct OpParams<'a> {
-    /// Integer parameters (dimensions, counts, mode codes)
+    /// Integer parameters such as dimensions, counts, and mode codes.
     pub ints: &'a [u32],
-    /// Floating-point parameters (scale factors, rotation angles)
+    /// Floating-point parameters such as scale factors and rotation angles.
     pub floats: &'a [f64],
 }
 
 impl<'a> OpParams<'a> {
-    /// Create empty params for ops with no parameters.
+    /// Empty parameter set for operations with no parameter block.
     pub const EMPTY: Self = Self {
         ints: &[],
         floats: &[],
     };
 
-    /// Create params from integer slice only.
+    /// Creates parameter data from integer values only.
     pub fn from_ints(ints: &'a [u32]) -> Self {
         Self { ints, floats: &[] }
     }
 }
 
-/// AS PER DESIGN — DO NOT REMOVE:
-/// Trait implemented by each compute backend (CpuBackend, GpuBackend, SimdBackend).
+/// Capability and execution interface implemented by each compute backend.
+///
+/// # Internal Contract
 ///
 /// Each backend owns its operation metadata and determines its own capabilities.
-/// Backends DO NOT share a single OpEntry struct — that was the old design that
-/// leaked GPU details into CPU-only ops.
+/// `supports` must check live capability, not only static registration, because
+/// GPU pipelines and SIMD feature availability can vary at runtime.
 pub trait BackendOp: Send + Sync {
-    /// Human-readable backend name, e.g., "cpu", "gpu", "simd".
-    /// AS PER DESIGN: Must match the Backend enum variant name.
+    /// Returns a lowercase backend name such as `"cpu"`, `"gpu"`, or `"simd"`.
     fn backend_name(&self) -> &'static str;
 
-    /// Priority: higher = preferred. CPU=0, SIMD=50, GPU=100.
-    /// AS PER DESIGN: route() uses this to pick the best available backend.
+    /// Returns routing priority; higher values are preferred.
     fn priority(&self) -> u8;
 
-    /// Does this backend support the given operation?
-    /// AS PER DESIGN: Must check LIVE capability, not static registration.
-    ///   - CPU: always true (universal fallback)
-    ///   - GPU: checks compiled pipeline cache, not shader source existence
-    ///   - SIMD: checks CPU feature flags + adapter availability
+    /// Returns whether this backend can execute `op_key`.
+    ///
+    /// CPU backends normally return true for registered operations. GPU and
+    /// SIMD backends should include runtime capability checks.
     fn supports(&self, op_key: &str) -> bool;
 
-    /// Execute one operation on this backend.
+    /// Executes one operation on this backend.
     ///
-    /// # Arguments
-    /// - `op_key`: operation key string (matches PipelineOp variant_key)
-    /// - `img`: input image (may be mutated or replaced)
-    /// - `params`: operation parameters
-    /// - `mode`: optional explicit color mode override
+    /// `explicit_mode` carries Pillow mode tags when [`DynamicImage`] cannot
+    /// represent the logical mode directly.
     ///
     /// # Errors
-    /// - `NotImplementedError` if the backend doesn't support this op
+    ///
+    /// Returns [`PilError`] when the operation is unsupported or execution
+    /// fails.
     fn execute(
         &self,
         op_key: &str,
@@ -83,10 +84,11 @@ pub trait BackendOp: Send + Sync {
         explicit_mode: Option<&str>,
     ) -> Result<DynamicImage, PilError>;
 
-    /// AS PER DESIGN: Check whether this backend can accelerate a batch of
-    /// operations. Default: true if all ops are individually supported.
-    /// Override for backends that have batch-level constraints (e.g., GPU
-    /// has overhead — skip for small images).
+    /// Returns whether this backend can execute an operation batch efficiently.
+    ///
+    /// The default requires every operation key to be supported. Backends with
+    /// batch-level constraints can override this, for example to keep small
+    /// images on CPU when transfer overhead dominates.
     fn supports_batch(&self, op_keys: &[&str], _pixel_count: u64) -> bool {
         if op_keys.is_empty() {
             return true;

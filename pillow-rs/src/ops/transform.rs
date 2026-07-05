@@ -1,13 +1,19 @@
-//! Image.transform — affine, perspective, and mesh transforms.
-//! Also Image.reduce for box-downscaling.
+//! Pillow-compatible geometric transforms and integer reduction.
 
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 
 impl Image {
-    /// Apply an affine transform: `[a, b, c, d, e, f]` where
-    /// x' = a*x + b*y + c,  y' = d*x + e*y + f
+    /// Applies an affine transform and returns a lazy result image.
+    ///
+    /// `matrix` must contain `[a, b, c, d, e, f]`, where
+    /// `x' = a*x + b*y + c` and `y' = d*x + e*y + f`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when `matrix` does not contain exactly
+    /// six coefficients.
     pub fn transform_affine(
         &self,
         size: (u32, u32),
@@ -36,12 +42,25 @@ impl Image {
         ))
     }
 
-    /// Reduce image size by an integer factor (box downsampling).
+    /// Reduces image size by an integer factor using box downsampling.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; invalid factor handling is reported by
+    /// pipeline execution.
     pub fn reduce(&self, factor: u32) -> Result<Image, PilError> {
         Ok(Image::push_op(self, PipelineOp::Reduce { factor }))
     }
 
-    /// Apply a MESH transform — piecewise bilinear quad mapping.
+    /// Applies a mesh transform using piecewise quadrilateral mappings.
+    ///
+    /// `data` carries the transform coefficients expected by the pipeline
+    /// backend for Pillow-style mesh transforms.
+    ///
+    /// # Errors
+    ///
+    /// Currently returns `Ok(Image)`; malformed mesh data is reported by
+    /// pipeline execution.
     pub fn transform_mesh(
         &self,
         size: (u32, u32),

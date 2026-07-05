@@ -21,15 +21,17 @@ use pillow_rs_image::DynamicImage;
 use crate::error::PilError;
 
 /// Options passed to format encoders.
+///
+/// Individual formats may ignore options that do not apply to their codec.
 #[derive(Debug, Clone, Default)]
 pub struct FormatEncodeOptions {
-    /// Compression quality (0-100, format-dependent meaning)
+    /// Compression quality in the `0..=100` range, with format-specific meaning.
     pub quality: Option<u8>,
-    /// Optimize for size (lossless compression level)
+    /// Whether the encoder should prefer smaller output when supported.
     pub optimize: bool,
-    /// Preserve ICC profile
+    /// ICC profile bytes to preserve in formats that support color profiles.
     pub icc_profile: Option<Vec<u8>>,
-    /// Preserve EXIF data
+    /// EXIF metadata bytes to preserve in formats that support EXIF.
     pub exif: Option<Vec<u8>>,
 }
 
@@ -40,42 +42,53 @@ pub struct FormatEncodeOptions {
 //   and file extensions. No more hard-coded match statements.
 // ============================================================================
 
-/// Trait for image format handlers (PNG, JPEG, GIF, BMP, etc.).
+/// Codec integration point for one image format.
 ///
-/// AS PER DESIGN — DO NOT REMOVE:
-/// Each format is a single struct implementing this trait. Format detection,
-/// decoding, encoding, and mode detection are all methods on the same struct.
-/// Adding a format = adding one file + one registration call.
+/// Each format implementation owns detection, decoding, encoding, and optional
+/// mode detection for a single format family. The registry uses this trait to
+/// avoid separate hard-coded match tables.
 pub trait FormatHandler: Send + Sync {
-    /// Human-readable format name, e.g., "PNG", "JPEG".
+    /// Returns the canonical format name, for example `"PNG"` or `"JPEG"`.
     fn name(&self) -> &'static str;
 
-    /// File extensions for this format, e.g., &["png"].
+    /// Returns recognized lowercase file extensions for this format.
     fn extensions(&self) -> &'static [&'static str];
 
-    /// MIME type, e.g., "image/png".
+    /// Returns the canonical MIME type, for example `"image/png"`.
     fn mime_type(&self) -> &'static str;
 
-    /// Magic byte signatures for detection.
-    /// Each entry is a byte sequence that must match at offset 0.
-    /// Longer signatures are checked first.
+    /// Returns magic byte signatures used for detection.
+    ///
+    /// Each signature must match at byte offset zero. Handlers should order
+    /// longer or more-specific signatures before shorter signatures.
     fn magic_bytes(&self) -> &'static [&'static [u8]];
 
-    /// Decode raw bytes into a DynamicImage.
+    /// Decodes encoded image bytes into a [`DynamicImage`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when the bytes are malformed or unsupported by the
+    /// handler.
     fn decode(&self, data: &[u8]) -> Result<DynamicImage, PilError>;
 
-    /// Encode a DynamicImage into raw bytes.
+    /// Encodes a [`DynamicImage`] into this format's byte stream.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when the image cannot be represented or the codec
+    /// fails.
     fn encode(
         &self,
         img: &DynamicImage,
         options: &FormatEncodeOptions,
     ) -> Result<Vec<u8>, PilError>;
 
-    /// Detect the mode string of an image without fully decoding.
-    /// Returns None if mode detection requires decoding.
+    /// Detects a Pillow mode string without fully decoding when possible.
+    ///
+    /// Returns `None` when mode detection requires a full decode.
     fn detect_mode(&self, data: &[u8]) -> Option<String>;
 
-    /// Whether this format can store palette-indexed images.
+    /// Returns whether this format can store palette-indexed images.
     fn supports_palette(&self) -> bool {
         false
     }
@@ -93,9 +106,12 @@ fn registry() -> &'static RwLock<Vec<Box<dyn FormatHandler>>> {
     FORMAT_REGISTRY.get_or_init(|| RwLock::new(Vec::new()))
 }
 
-/// Register a format handler.
-/// AS PER DESIGN: Call once per format at startup.
-/// Returns Err if a format with the same name is already registered.
+/// Registers a format handler.
+///
+/// # Errors
+///
+/// Returns an error string when a handler with the same name is already
+/// registered or the registry lock is poisoned.
 pub fn register_format(handler: Box<dyn FormatHandler>) -> Result<(), String> {
     let name = handler.name();
     match registry().write() {
@@ -122,9 +138,10 @@ fn read_registry() -> std::sync::RwLockReadGuard<'static, Vec<Box<dyn FormatHand
     })
 }
 
-/// Detect image format from magic bytes.
-/// Returns the first matching handler, or None if no format matches.
-/// AS PER DESIGN: Checks handlers in reverse registration order (most recent first).
+/// Detects an image format from magic bytes.
+///
+/// Registered handlers are checked in reverse registration order, so newer
+/// handlers can override generic signatures.
 pub fn detect_format_from_magic(data: &[u8]) -> Option<&'static str> {
     let reg = read_registry();
     // Reverse order: most recently registered = most preferred
@@ -138,7 +155,10 @@ pub fn detect_format_from_magic(data: &[u8]) -> Option<&'static str> {
     None
 }
 
-/// Find a format handler by name or extension (case-insensitive).
+/// Finds a registered format by canonical name or extension.
+///
+/// Matching is case-insensitive. The return value is the handler's canonical
+/// format name.
 pub fn find_format_by_name(name_or_ext: &str) -> Option<&'static str> {
     let reg = read_registry();
     let needle = name_or_ext.to_lowercase();
@@ -157,7 +177,7 @@ pub fn find_format_by_name(name_or_ext: &str) -> Option<&'static str> {
     None
 }
 
-/// List all registered format names.
+/// Returns canonical names for all registered formats.
 pub fn registered_formats() -> Vec<&'static str> {
     let reg = read_registry();
     reg.iter().map(|h| h.name()).collect()

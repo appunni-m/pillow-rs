@@ -1,5 +1,7 @@
-//! Image filter operations — built-in PIL filter kernels.
-//! Uses PIL-identical 3x3 convolution kernels with matching scale and offset.
+//! Pillow-compatible image filter operations.
+//!
+//! Built-in filter names use Pillow `ImageFilter` kernel definitions. The
+//! public methods return lazy pipeline images where possible.
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -78,8 +80,17 @@ const SMOOTH: FilterKernel =
     FilterKernel::new([1.0, 1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0, 1.0], 13.0, 0);
 
 impl Image {
-    /// Apply a named built-in filter. Supports all 10 PIL built-in kernels.
-    /// Handles mode conversions for "1", "I", and "F" modes matching PIL behavior.
+    /// Applies a named built-in Pillow filter.
+    ///
+    /// Supported names are the built-in `ImageFilter` kernels such as `"BLUR"`,
+    /// `"CONTOUR"`, `"DETAIL"`, `"EDGE_ENHANCE"`, `"FIND_EDGES"`, `"SHARPEN"`,
+    /// `"SMOOTH"`, and `"SMOOTH_MORE"`. Modes `"1"`, `"I"`, and `"F"` follow
+    /// Pillow's mode-specific conversion rules.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] for an unknown filter name, or another
+    /// [`PilError`] when mode conversion or materialization fails.
     pub fn filter(&self, filter_type: &str) -> Result<Image, PilError> {
         // I-mode: push the filter op directly — execute_op handles I-mode dispatch
         // by operating on int32 pixel values with no [0,255] clipping.
@@ -145,9 +156,15 @@ impl Image {
         }
     }
 
-    /// Apply a generic kernel filter (custom convolution).
-    /// `size` is the kernel dimension (3 or 5).
-    /// `kernel` must have `size*size` elements.
+    /// Applies a custom convolution kernel.
+    ///
+    /// `size` must be `3` or `5`. `kernel` must contain at least
+    /// `size * size` coefficients; extra coefficients are ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when `size` is unsupported or `kernel`
+    /// does not contain enough coefficients.
     pub fn kernel_filter(
         &self,
         kernel: &[f32],

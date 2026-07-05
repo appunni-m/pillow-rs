@@ -1,3 +1,9 @@
+//! Compact pixel-format metadata for compute backends.
+//!
+//! [`PixelFormat`] converts Pillow/core mode information into the fixed
+//! `L`/`LA`/`RGB`/`RGBA` family supported by CPU, SIMD, and GPU dispatch.
+//! Non-standard Pillow modes must be converted before reaching compute code.
+
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE:
 //   PixelFormat replaces all bare integer mode codes (0=L, 1=LA, 2=RGB, 3=RGBA)
@@ -21,15 +27,20 @@ use crate::pipeline::ColorMode;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum PixelFormat {
+    /// One 8-bit luma channel per pixel.
     L = 0,
+    /// 8-bit luma plus 8-bit alpha per pixel.
     LA = 1,
+    /// Three 8-bit red, green, and blue channels per pixel.
     RGB = 2,
+    /// Three 8-bit color channels plus 8-bit alpha per pixel.
     RGBA = 3,
 }
 
 impl PixelFormat {
-    /// Number of color channels (excluding alpha).
-    /// L=1, LA=1, RGB=3, RGBA=3.
+    /// Returns the number of color channels, excluding alpha.
+    ///
+    /// `L` and `LA` have one color channel. `RGB` and `RGBA` have three.
     #[inline]
     pub fn color_channels(self) -> u8 {
         match self {
@@ -38,8 +49,10 @@ impl PixelFormat {
         }
     }
 
-    /// Total number of channels (color + alpha).
-    /// L=1, LA=2, RGB=3, RGBA=4.
+    /// Returns the total number of stored channels per pixel.
+    ///
+    /// This is the byte multiplier used by tightly packed `u8` buffers:
+    /// `L=1`, `LA=2`, `RGB=3`, and `RGBA=4`.
     #[inline]
     pub fn channels(self) -> u8 {
         match self {
@@ -50,29 +63,31 @@ impl PixelFormat {
         }
     }
 
-    /// Does this format include an alpha channel?
-    /// True for LA and RGBA.
+    /// Returns whether this format stores alpha.
     #[inline]
     pub fn has_alpha(self) -> bool {
         matches!(self, Self::LA | Self::RGBA)
     }
 
-    /// Row stride in bytes for an image of width `w`.
-    /// Equals `w * channels`.
+    /// Returns the tightly packed row stride for width `w`.
+    ///
+    /// The result is `w * PixelFormat::channels()`.
     #[inline]
     pub fn row_stride(self, w: u32) -> usize {
         w as usize * self.channels() as usize
     }
 
-    /// GPU shader mode encoding.
-    /// AS PER DESIGN: Must match the mode_code constants in all WGSL shaders.
+    /// Returns the ABI value passed to GPU shaders.
+    ///
+    /// This must match `mode_code` constants in WGSL shader parameter blocks.
     #[inline]
     pub fn gpu_encoding(self) -> u32 {
         self as u32
     }
 
-    /// SIMD mode encoding.
-    /// AS PER DESIGN: Must match the `wide`-based SIMD dispatch in
+    /// Returns the ABI value passed to SIMD adapters.
+    ///
+    /// This must match the mode branching used by
     /// `compute/pool_simd/ops/adapters.rs`.
     #[inline]
     pub fn simd_encoding(self) -> u32 {

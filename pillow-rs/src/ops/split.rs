@@ -1,12 +1,19 @@
-//! Channel split operations — pipelined via ExtractBand.
+//! Channel split operations.
 
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 impl Image {
-    /// Split the image into individual bands (pipelined via ExtractBand).
-    /// Each output band is a lazy Pipeline image that extracts one channel on materialize.
+    /// Splits the image into one `L` image per band.
+    ///
+    /// `P` images return a single paletted clone. Other modes return lazy
+    /// pipeline images that extract one channel when materialized.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization is needed to determine band
+    /// count and that materialization fails.
     pub fn split(&self) -> Result<Vec<Image>, PilError> {
         // PIL: P-mode has 1 band → return a copy preserving mode + palette
         if let Image::Paletted(data) = self {

@@ -6,7 +6,10 @@
 
 use super::Font;
 
-/// Return `(family, style)` font names.
+/// Returns `(family, style)` font names.
+///
+/// Bitmap fallback fonts report the fixed name used by the bundled default
+/// glyph set.
 pub fn getname(font: &Font) -> (&str, &str) {
     match font {
         Font::TrueType(ttf) => ttf.inner.getname(),
@@ -14,7 +17,7 @@ pub fn getname(font: &Font) -> (&str, &str) {
     }
 }
 
-/// Return `(ascent, descent)` in pixels.
+/// Returns `(ascent, descent)` in pixels.
 pub fn getmetrics(font: &Font) -> (u32, u32) {
     match font {
         Font::TrueType(ttf) => ttf.inner.getmetrics(),
@@ -25,7 +28,7 @@ pub fn getmetrics(font: &Font) -> (u32, u32) {
     }
 }
 
-/// Return text advance in pixels.
+/// Returns text advance in pixels.
 pub fn getlength(font: &Font, text: &str) -> f32 {
     match font {
         Font::TrueType(ttf) => ttf.inner.getlength(text),
@@ -33,7 +36,7 @@ pub fn getlength(font: &Font, text: &str) -> f32 {
     }
 }
 
-/// Return PIL-style text bbox `(left, top, right, bottom)`.
+/// Returns Pillow-style text bbox `(left, top, right, bottom)`.
 pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     match font {
         Font::TrueType(ttf) => ttf.inner.getbbox(text),
@@ -44,7 +47,13 @@ pub fn getbbox(font: &Font, text: &str) -> (i32, i32, i32, i32) {
     }
 }
 
-/// Render text as an L-mode alpha mask. PIL endpoint: `FreeTypeFont.getmask`.
+/// Renders text as an `L`-mode alpha mask.
+///
+/// This mirrors Pillow `FreeTypeFont.getmask`.
+///
+/// # Returns
+///
+/// `(width, height, mask_bytes)` with one coverage byte per pixel.
 pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
     match font {
         Font::TrueType(ttf) => {
@@ -58,7 +67,13 @@ pub fn getmask(font: &Font, text: &str) -> (u32, u32, Vec<u8>) {
     }
 }
 
-/// Render text to an RGBA image. Returns `(width, height, rgba_bytes)`.
+/// Renders text to RGBA bytes.
+///
+/// `fill` is copied into RGB channels and glyph coverage controls alpha.
+///
+/// # Returns
+///
+/// `(width, height, rgba_bytes)` with tightly packed RGBA pixels.
 pub fn render_text(
     font: &Font,
     text: &str,
@@ -68,7 +83,9 @@ pub fn render_text(
     render_text_impl(font, text, fill, spacing, false)
 }
 
-/// Render text with PIL `fontmode="1"` binary coverage.
+/// Renders text with Pillow `fontmode="1"` binary coverage.
+///
+/// Coverage values are thresholded to binary mask output before RGBA packing.
 pub fn render_text_binary(
     font: &Font,
     text: &str,

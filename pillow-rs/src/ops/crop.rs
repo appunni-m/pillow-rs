@@ -3,8 +3,15 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
 impl Image {
-    /// Crop expects (x, y, width, height) — the Python wrapper converts
-    /// Pillow's (left, top, right, bottom) to this format internally.
+    /// Crops using `(x, y, width, height)` coordinates.
+    ///
+    /// Binding crates use this form after converting Pillow box coordinates.
+    /// Use [`Image::crop_box`] when you already have `(left, top, right,
+    /// bottom)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when width or height is zero.
     pub fn crop(&self, box_coords: (u32, u32, u32, u32)) -> Result<Image, PilError> {
         let (x, y, w, h) = box_coords;
         if w == 0 || h == 0 {
@@ -23,8 +30,14 @@ impl Image {
         ))
     }
 
-    /// Crop using PIL box format: (left, top, right, bottom).
-    /// Computes width = right - left, height = bottom - top internally.
+    /// Crops using Pillow box coordinates.
+    ///
+    /// `right` and `bottom` are exclusive edges. The method rejects boxes whose
+    /// saturated width or height is zero.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when the box has zero width or height.
     pub fn crop_box(
         &self,
         left: u32,

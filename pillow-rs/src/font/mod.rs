@@ -1,10 +1,12 @@
-//! Font loading and text rendering.
+//! Pillow-compatible font loading and text rendering.
 //!
-//! Supports two font backends:
-//! - **TrueTypeFont** — uses pillow-rs-freetype (pure-Rust FreeType compatible) for font rendering
-//! - **BitmapFont** — uses pre-rendered glyphs from PIL's default font for exact parity
+//! This module exposes the font surface used by drawing and binding crates.
+//! TrueType/OpenType rendering is delegated to `pillow-rs-freetype`, a pure Rust
+//! FreeType-compatible implementation. The default bitmap font uses pre-rendered
+//! Pillow glyph data for exact `ImageFont.load_default()` behavior.
 //!
-//! Both implement the same text rendering interface.
+//! Font APIs return Rust primitives: dimensions, bounding boxes, and mask bytes.
+//! Binding crates translate those into host-language objects.
 
 use std::rc::Rc;
 
@@ -14,7 +16,7 @@ use crate::error::PilError;
 /// PIL `_imagingft.c` integration adapter.
 pub mod imagingft;
 
-/// A loaded font that can render text to bitmaps.
+/// Loaded font source for Pillow-style text measurement and masks.
 pub enum Font {
     /// TrueType/OpenType font rendered via pillow-rs-freetype (pure-Rust FreeType-compatible).
     TrueType(TrueTypeFont),
@@ -22,14 +24,21 @@ pub enum Font {
     Bitmap(BitmapFont),
 }
 
-/// A TrueType font loaded via pillow-rs-freetype (pure-Rust FreeType equivalent).
+/// TrueType/OpenType font loaded through `pillow-rs-freetype`.
 pub struct TrueTypeFont {
     inner: Rc<pillow_rs_freetype::Font>,
     size: f32,
 }
 
 impl Font {
-    /// Load a TrueType font from raw bytes at a given point size.
+    /// Loads a TrueType/OpenType font from raw bytes.
+    ///
+    /// `size` is the requested point size used by the FreeType-compatible
+    /// backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when the font bytes cannot be parsed.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
         let inner =
             pillow_rs_freetype::Font::truetype(&data, size, pillow_rs_freetype::BitmapBackend::PIL)
@@ -40,12 +49,12 @@ impl Font {
         }))
     }
 
-    /// Create a default bitmap font matching PIL's `load_default()`.
+    /// Creates the default bitmap font matching Pillow `ImageFont.load_default`.
     pub fn load_default(size: f32) -> Self {
         Font::Bitmap(BitmapFont::new(size))
     }
 
-    /// Get font size in pixels.
+    /// Returns the configured font size.
     pub fn font_size(&self) -> f32 {
         match self {
             Font::TrueType(ttf) => ttf.size,
@@ -53,8 +62,10 @@ impl Font {
         }
     }
 
-    /// Compute the bounding box of a text string.
-    /// Returns (width, height).
+    /// Returns the width and height of `text` in pixels.
+    ///
+    /// This convenience method collapses the `_imagingft` bbox into dimensions.
+    /// Use [`crate::font::imagingft::getbbox`] when left/top offsets matter.
     pub fn text_bbox(&self, text: &str) -> (u32, u32) {
         let bbox = imagingft::getbbox(self, text);
         let w = (bbox.2 - bbox.0).max(0) as u32;
@@ -62,11 +73,16 @@ impl Font {
         (w, h)
     }
 
-    /// Render text as an L-mode alpha mask.
+    /// Renders text as an `L`-mode alpha mask.
     ///
     /// This is the public font-object surface, matching Pillow's
     /// `ImageFont.getmask`/`FreeTypeFont.getmask`. The `_imagingft`-style
     /// adapter remains an implementation detail behind this method.
+    ///
+    /// # Returns
+    ///
+    /// `(width, height, mask_bytes)` where `mask_bytes` contains one coverage
+    /// byte per pixel.
     pub fn getmask(&self, text: &str) -> (u32, u32, Vec<u8>) {
         imagingft::getmask(self, text)
     }

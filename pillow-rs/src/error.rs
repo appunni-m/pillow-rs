@@ -1,3 +1,9 @@
+//! Pillow-compatible error categories for core operations.
+//!
+//! The Python and JavaScript bindings translate these variants into their host
+//! exceptions. Core code should return a specific variant instead of using
+//! ad-hoc `String` errors so callers can preserve Pillow-like error categories.
+
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE OR WEAKEN:
 //   - Every error variant serves a specific PIL-compatible error category.
@@ -10,11 +16,18 @@
 
 use thiserror::Error;
 
+/// Error type returned by fallible `pillow-rs` core APIs.
+///
+/// Variants intentionally mirror common Pillow/Python exception categories
+/// where the Rust core needs to preserve user-visible behavior through
+/// bindings.
 #[derive(Error, Debug)]
 pub enum PilError {
+    /// Pillow-style I/O error message.
     #[error("{0}")]
     IOError(String),
 
+    /// Operating-system error message.
     #[error("{0}")]
     OsError(String),
 
@@ -23,27 +36,35 @@ pub enum PilError {
     #[error("assertion failed: {0}")]
     AssertionError(String),
 
+    /// Index lookup failed, usually for image coordinates, bands, or palette entries.
     #[error("{0}")]
     IndexError(String),
 
+    /// Input bytes could not be identified as a supported image format.
     #[error("cannot identify image file '{0}'")]
     UnidentifiedImageError(String),
 
+    /// Input value is syntactically valid Rust but invalid for the Pillow operation.
     #[error("{0}")]
     ValueError(String),
 
+    /// Input type or mode is incompatible with the requested Pillow operation.
     #[error("{0}")]
     TypeError(String),
 
+    /// Error propagated from the underlying image buffer or codec crate.
     #[error("image processing error: {0}")]
     ImageError(#[from] pillow_rs_image::ImageError),
 
+    /// Pillow-compatible placeholder for APIs that are intentionally incomplete.
     #[error("{0}")]
     NotImplementedError(String),
 
+    /// Image format name or extension is unknown to the format registry.
     #[error("unknown format: {0}")]
     UnknownFormat(String),
 
+    /// Standard library I/O error propagated through core format helpers.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

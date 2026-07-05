@@ -19,6 +19,7 @@
 /// guarantees the value is present — this survives in git blame unlike
 /// a bare expect() message.
 pub trait InfallibleExt {
+    /// Unwrapped output value.
     type Output;
 
     /// Unwrap the value, documenting WHY it's infallible.

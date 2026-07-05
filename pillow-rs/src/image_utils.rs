@@ -20,17 +20,17 @@ use pillow_rs_image::RgbaImage;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 
-/// AS PER DESIGN — DO NOT REMOVE:
-/// The ONE canonical function for raw-bytes → DynamicImage conversion.
-/// Every call site that creates a DynamicImage from a byte buffer MUST use this.
+/// Converts raw pixel bytes into a [`DynamicImage`] after allocation checks.
 ///
-/// Validates:
-/// 1. Dimensions via CheckedDims (overflow + DoS protection)
-/// 2. Buffer size matches declared dimensions
+/// `channels` is the number of stored bytes per pixel and must be `1`, `2`,
+/// `3`, or `4`. `data` may be longer than needed; only the validated
+/// `width * height * channels` prefix is copied into the image.
 ///
 /// # Errors
-/// - `DimensionError` if dimensions are invalid
-/// - `ValueError` if buffer is too small for the declared dimensions
+///
+/// Returns [`PilError::DimensionError`] if dimensions or byte counts are
+/// invalid, and [`PilError::ValueError`] if `data` is too short for the declared
+/// shape.
 pub fn raw_bytes_to_image(
     width: u32,
     height: u32,
@@ -79,11 +79,11 @@ pub fn raw_bytes_to_image(
     })
 }
 
-/// Create a DynamicImage from a buffer that was pre-allocated via
-/// CheckedDims::alloc_buffer(). No additional validation needed.
+/// Builds a [`DynamicImage`] from a buffer allocated for `dims`.
 ///
-/// AS PER DESIGN: Use this when you already have a CheckedDims and a buffer
-/// you allocated from it. The sizes are guaranteed to match.
+/// Use this only when `data` came from [`CheckedDims::alloc_buffer`] or an
+/// equivalent checked path. Debug builds assert that the byte length still
+/// matches [`CheckedDims::total_bytes`].
 pub fn raw_bytes_to_image_trusted(dims: CheckedDims, data: Vec<u8>) -> DynamicImage {
     debug_assert_eq!(
         data.len(),

@@ -208,6 +208,17 @@ impl QuantHash {
 
 // ── Main quantize function ──
 
+/// Quantizes tightly packed RGB pixels with Pillow-style median cut.
+///
+/// # Inputs
+///
+/// - `pixels`: RGB byte triplets.
+/// - `n_colors`: requested palette size, clamped to Pillow's 256-color limit.
+///
+/// # Returns
+///
+/// A tuple containing one palette index per input pixel and a palette of RGB
+/// triples.
 pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<[u8; 3]>) {
     let n = pixels.len() / 3;
     if n == 0 || n_colors < 2 {
@@ -1413,9 +1424,14 @@ const WEB_PALETTE: [u8; 678] = [
     255,
 ];
 
-/// Convert RGB pixels to P-mode using PIL's default WEB palette.
-/// Applies Floyd-Steinberg dither when `dither` is true (matching PIL default).
-/// Returns (palette_indices, palette_bytes).
+/// Quantizes RGB pixels to Pillow's default web palette.
+///
+/// `pixels` is tightly packed RGB data for a `w` by `h` image. When `dither` is
+/// true, Pillow-compatible Floyd-Steinberg error diffusion is applied.
+///
+/// # Returns
+///
+/// A tuple of palette index bytes and flat RGB palette bytes.
 pub fn web_palette_quantize(pixels: &[u8], w: u32, h: u32, dither: bool) -> (Vec<u8>, Vec<u8>) {
     let dims_pixels = match CheckedDims::new(w, h, 1) {
         Ok(d) => d,
@@ -1657,11 +1673,15 @@ fn find_nearest_web(r: u8, g: u8, b: u8) -> (u8, u8, u8, u8) {
 // ── Image method ──
 
 impl Image {
-    /// Reduce the number of colors in the image using median cut.
-    /// PIL-compatible: `quantize(colors=256, method=None, kmeans=0, palette=None, dither=1)`.
+    /// Reduces the image to a `P` image with at most `colors` palette entries.
     ///
-    /// For RGBA images, PIL uses FASTOCTREE (method=2) by default instead of
-    /// MEDIANCUT. We dispatch accordingly here.
+    /// RGB-family images use Pillow-compatible median cut. RGBA images use the
+    /// default Pillow fast-octree path. The returned image carries palette index
+    /// bytes plus RGB palette data.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when materialization fails.
     pub fn quantize(
         &self,
         colors: u32,

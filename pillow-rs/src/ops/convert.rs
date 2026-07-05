@@ -4,7 +4,12 @@ use crate::image::Image;
 use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
 use pillow_rs_image::DynamicImage;
 
-/// Parse a mode string into ColorMode.
+/// Parses a Pillow mode string into a pipeline color mode.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `s` is not one of the modes supported
+/// by core conversion.
 pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
     match s {
         "L" => Ok(ColorMode::L),
@@ -38,10 +43,29 @@ fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
     }
 }
 
-/// Convert image between modes.
-/// Supports: L, LA, RGB, RGBA, 1 (bilevel, with/without Floyd-Steinberg dither)
-/// Matrix-based conversion: 4-element for single-channel→RGB, 12-element for RGB→RGB color space
+/// Pillow-compatible image mode conversion methods.
 impl Image {
+    /// Converts this image to another Pillow mode.
+    ///
+    /// # Inputs
+    ///
+    /// - `mode`: destination Pillow mode, such as `"L"`, `"RGB"`, `"RGBA"`,
+    ///   `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, `"F"`, `"P"`, or `"1"`.
+    /// - `matrix`: optional Pillow conversion matrix for immediate conversion.
+    ///   Four values convert single-channel input to RGB-family output; twelve
+    ///   values convert RGB input through a 3x4 color matrix.
+    /// - `dither`: optional dither name for binary and palette-like conversion.
+    ///
+    /// # Returns
+    ///
+    /// A new [`Image`] tagged with the destination mode. Matrix conversions
+    /// execute immediately; mode-only conversions may be represented lazily in
+    /// the pipeline.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when the mode, matrix, dither option, or source
+    /// image data is invalid.
     pub fn convert(
         &self,
         mode: &str,

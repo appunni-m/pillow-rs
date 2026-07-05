@@ -2,8 +2,14 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 
-/// Parse a resample filter string into ResampleFilter.
-/// Defaults to Bicubic matching Pillow's BICUBIC default.
+/// Parses a Pillow resampling filter name.
+///
+/// `None` defaults to [`ResampleFilter::Bicubic`], matching Pillow's default
+/// for resize-like methods.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `s` is not a supported filter name.
 pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
     match s {
         None | Some("BICUBIC") | Some("bicubic") => Ok(ResampleFilter::Bicubic),
@@ -20,8 +26,14 @@ pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
 }
 
 impl Image {
-    /// Resize the image to the given size.
-    /// Returns a new image (does not mutate self).
+    /// Returns a resized image with dimensions `size`.
+    ///
+    /// The original image is unchanged. Mode `"1"` and `"P"` force nearest
+    /// sampling to avoid creating interpolated palette indices or binary pixels.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] for zero dimensions or unknown filters.
     pub fn resize(&self, size: (u32, u32), filter: Option<&str>) -> Result<Image, PilError> {
         let (w, h) = size;
         if w == 0 || h == 0 {
@@ -37,8 +49,14 @@ impl Image {
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
     }
 
-    /// Resize the image to thumbnail size, mutating in place.
-    /// Matching Pillow's Image.thumbnail() semantics.
+    /// Queues an in-place Pillow-style thumbnail resize.
+    ///
+    /// Mode `"1"` and `"P"` force nearest sampling to preserve binary pixels and
+    /// palette indices.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when either requested dimension is zero.
     pub fn thumbnail(
         &mut self,
         size: (u32, u32),

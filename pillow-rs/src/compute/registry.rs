@@ -1,11 +1,29 @@
-//! Unified operation registry — maps every PipelineOp to its per-backend implementation.
+//! Unified operation registry for compute backends.
 //!
-//! CPU ops live in `pool_cpu/ops/`, GPU shaders in `pool_gpu/shaders/`,
-//! WebGPU shaders in `pool_webgpu/shaders/`, SIMD ops in `pool_simd/ops/`.
-//! All backends query this single registry for `supports()` and `execute()`.
+//! This module maps each [`crate::pipeline::PipelineOp`] variant to
+//! the backend implementations that can execute it. CPU operations are normal
+//! Rust functions, GPU operations point at embedded WGSL shader sources, and
+//! SIMD operations use vectorized adapters where present.
 //!
 //! Performance: `variant_key()` returns a `&'static str` for O(1) HashMap lookup.
 //! No allocations on the hot path.
+//!
+//! # Internal Contract
+//!
+//! The registry is public for backend wiring and tests. It is not a stable
+//! end-user extension mechanism. A registry entry is valid only when its key,
+//! [`crate::pipeline::PipelineOp`] variant, backend implementation, and optional shader metadata
+//! all describe the same operation.
+//!
+//! # Dispatch Invariants
+//!
+//! - CPU is the universal fallback for materialized pipelines.
+//! - `variant_key` must return the key used during registration.
+//! - GPU shader names and embedded shader sources must stay aligned.
+//! - [`OpId`] variants are dispatch keys, not public operation names.
+//! - Specialized GPU IDs such as [`OpId::ResizeNearest`] and
+//!   [`OpId::ResizeBilinear`] may map from one higher-level
+//!   [`crate::pipeline::PipelineOp`] variant.
 
 use crate::compute::pool_simd::ops::adapters;
 use crate::error::PilError;
@@ -16,6 +34,7 @@ use std::sync::OnceLock;
 
 // ── Op function types ────────────────────────────────────────────────────────────
 
+/// CPU operation function signature used by registry entries.
 pub type CpuOpFn =
     fn(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> Result<DynamicImage, PilError>;
 
@@ -25,14 +44,20 @@ pub type SimdOpFn =
 
 // ── OpEntry — one entry per operation, all backends ──────────────────────────────
 
+/// Backend implementations registered for one pipeline operation.
 pub struct OpEntry {
+    /// CPU implementation, present for operations supported by scalar fallback.
     pub cpu_fn: Option<CpuOpFn>,
+    /// Embedded WGSL shader file name for GPU execution.
     pub gpu_shader: Option<&'static str>,
+    /// Embedded WGSL shader source for GPU execution.
     pub gpu_source: Option<&'static str>,
+    /// SIMD implementation, present when a vectorized adapter exists.
     pub simd_fn: Option<SimdOpFn>,
 }
 
 impl OpEntry {
+    /// Creates a registry entry with only a CPU implementation.
     pub const fn cpu_only(f: CpuOpFn) -> Self {
         OpEntry {
             cpu_fn: Some(f),
@@ -61,6 +86,7 @@ pub(crate) use gpu_entry;
 
 static REGISTRY: OnceLock<HashMap<&'static str, OpEntry>> = OnceLock::new();
 
+/// Returns the global operation registry keyed by [`variant_key`].
 pub fn registry() -> &'static HashMap<&'static str, OpEntry> {
     REGISTRY.get_or_init(|| {
         let mut m = HashMap::new();
@@ -71,106 +97,200 @@ pub fn registry() -> &'static HashMap<&'static str, OpEntry> {
 
 // ── GPU op types ──────────────────────────────────────────────────────────────
 
-/// Operation identifier for GPU compute pipelines.
-/// Each variant maps to a compiled wgpu shader pipeline.
+/// Stable dispatch key for GPU compute pipelines.
+///
+/// `OpId` is the compact operation identity used after a [`crate::pipeline::PipelineOp`] has
+/// been mapped to a shader-compatible form. Variants must stay synchronized
+/// with `op_id`, shader registration, parameter extraction, and the WGSL
+/// parameter layout for the corresponding operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpId {
+    /// Dispatch key for the shader that inverts color channels.
     Invert,
+    /// Dispatch key for the shader that converts RGB-family pixels to luma.
     Grayscale,
+    /// Dispatch key for the shader that solarizes channels above a threshold.
     Solarize,
+    /// Dispatch key for the shader that keeps the high bits of each channel.
     Posterize,
+    /// Dispatch key for the shader that applies Pillow brightness enhancement.
     Brightness,
+    /// Dispatch key for the shader that applies Pillow contrast enhancement.
     Contrast,
+    /// Dispatch key for the shader that adjusts color saturation.
     ColorSaturation,
+    /// Dispatch key for the shader that maps luma between two RGB endpoints.
     Colorize,
+    /// Dispatch key for the shader that emits a constant byte value.
     Constant,
+    /// Dispatch key for the shader that wraps pixels by an x/y offset.
     Offset,
+    /// Dispatch key for the shader that flips rows top-to-bottom.
     Flip,
+    /// Dispatch key for the shader that mirrors columns left-to-right.
     Mirror,
+    /// Dispatch key for the shader that copies pixels without changing them.
     Duplicate,
+    /// Dispatch key for the shader that performs ImageChops multiply.
     Multiply,
+    /// Dispatch key for the shader that performs ImageChops screen.
     Screen,
+    /// Dispatch key for the shader that computes absolute channel difference.
     Difference,
+    /// Dispatch key for the shader that keeps per-channel minima.
     Darker,
+    /// Dispatch key for the shader that keeps per-channel maxima.
     Lighter,
+    /// Dispatch key for the shader that adds channels modulo 256.
     AddModulo,
+    /// Dispatch key for the shader that subtracts channels modulo 256.
     SubtractModulo,
+    /// Dispatch key for the shader that adds with scale and offset.
     Add,
+    /// Dispatch key for the shader that subtracts with scale and offset.
     Subtract,
+    /// Dispatch key for the shader that applies bitwise AND.
     LogicalAnd,
+    /// Dispatch key for the shader that applies bitwise OR.
     LogicalOr,
+    /// Dispatch key for the shader that applies bitwise XOR.
     LogicalXor,
+    /// Dispatch key for the shader that performs overlay blending.
     Overlay,
+    /// Dispatch key for the shader that performs hard-light blending.
     HardLight,
+    /// Dispatch key for the shader that performs soft-light blending.
     SoftLight,
+    /// Dispatch key for the shader that blends two images by alpha.
     Blend,
+    /// Dispatch key for the module-level blend shader path.
     BlendModule,
+    /// Dispatch key for the shader that composites with a mask.
     Composite,
+    /// Dispatch key for the module-level composite shader path.
     CompositeModule,
+    /// Dispatch key for the shader that applies box blur.
     BoxBlur,
+    /// Dispatch key for the shader that applies median filtering.
     MedianFilter,
+    /// Dispatch key for the shader that applies maximum filtering.
     MaxFilter,
+    /// Dispatch key for the shader that applies minimum filtering.
     MinFilter,
+    /// Dispatch key for the shader that applies rank filtering.
     RankFilter,
+    /// Dispatch key for the shader that pastes a source image or color.
     Paste,
+    /// Dispatch key for the shader that performs alpha compositing.
     AlphaComposite,
+    /// Dispatch key for the shader that randomly spreads nearby pixels.
     EffectSpread,
+    /// Dispatch key for the shader that applies a 3x3 convolution kernel.
     Filter3x3,
+    /// Dispatch key for the shader that applies a 5x5 convolution kernel.
     Filter5x5,
+    /// Dispatch key for the nearest-neighbor resize shader specialization.
     ResizeNearest,
+    /// Dispatch key for the bilinear resize shader specialization.
     ResizeBilinear,
+    /// Dispatch key for the shader that evaluates a lookup table.
     Eval,
+    /// Dispatch key for the shader that applies point-operation lookup tables.
     PointOp,
+    /// Dispatch key for the shader that performs transpose-family operations.
     Transpose,
+    /// Dispatch key for the shader that applies sharpness enhancement.
     Sharpen,
+    /// Dispatch key for the ImageChops invert shader path.
     InvertChops,
+    /// Dispatch key for the shader that scales image dimensions.
     Scale,
+    /// Dispatch key for the shader that converts between supported modes.
     Convert,
+    /// Dispatch key for the shader that quantizes pixel colors.
     Quantize,
+    /// Dispatch key for the shader that generates noise.
     EffectNoise,
+    /// Dispatch key for the shader that replaces or sets alpha.
     PutAlpha,
+    /// Dispatch key for the shader that writes a single pixel.
     PutPixel,
+    /// Dispatch key for the shader that crops a source rectangle.
     Crop,
+    /// Dispatch key for the shader that reduces by an integer factor.
     Reduce,
+    /// Dispatch key for the shader that creates a bounded thumbnail.
     Thumbnail,
+    /// Dispatch key for the shader that resizes to contain within a box.
     Contain,
+    /// Dispatch key for the shader that resizes to cover a box.
     Cover,
+    /// Dispatch key for the shader that resizes and crops to fit.
     Fit,
+    /// Dispatch key for the shader that applies geometric transforms.
     Transform,
+    /// Dispatch key for the shader that replaces raw image data.
     PutData,
     // ── New GPU ops (manifest-driven) ──
+    /// Dispatch key for the shader that crops an equal border.
     CropBorder,
+    /// Dispatch key for the shader that expands with a border fill.
     Expand,
+    /// Dispatch key for the shader that merges bands into one image.
     Merge,
+    /// Dispatch key for the shader that remaps palette indices.
     RemapPalette,
+    /// Dispatch key for the shader that resizes and pads to a box.
     Pad,
+    /// Dispatch key for the shader that rotates an image.
     Rotate,
+    /// Dispatch key for the shader that applies a 3D color lookup table.
     Color3DLut,
     // ── Category B fixes (shaders existed, dispatch was broken) ──
+    /// Dispatch key for the shader that applies Gaussian blur.
     GaussianBlur,
+    /// Dispatch key for the shader that applies autocontrast.
     Autocontrast,
+    /// Dispatch key for the shader that equalizes channel histograms.
     Equalize,
+    /// Dispatch key for the shader that extracts one band.
     ExtractBand,
+    /// Dispatch key for the shader that generates a linear gradient.
     LinearGradient,
+    /// Dispatch key for the shader that generates a radial gradient.
     RadialGradient,
+    /// Dispatch key for the shader that generates a Mandelbrot image.
     EffectMandelbrot,
 }
 
-/// GPU operation definition — holds compiled shader metadata.
+/// Metadata describing one GPU shader operation.
+///
+/// `OpDef` is used by GPU routing and validation paths that need the full
+/// shader-level contract after a higher-level pipeline operation has been
+/// mapped to an [`OpId`].
 #[derive(Debug, Clone)]
 pub struct OpDef {
+    /// Stable GPU operation identifier used by shader dispatch.
     pub id: OpId,
+    /// Pipeline variant name associated with this GPU definition.
     pub variant_name: &'static str,
+    /// Embedded WGSL shader source.
     pub shader_source: &'static str,
+    /// Number of input images expected by the shader.
     pub input_count: u8,
+    /// Whether the shader consumes an operation-specific parameter block.
     pub has_params: bool,
+    /// Whether execution requires multiple shader passes.
     pub is_multi_pass: bool,
+    /// Number of shader passes when [`OpDef::is_multi_pass`] is true.
     pub pass_count: u8,
 }
 
-/// GPU operation descriptor returned by `map_op_to_gpu`.
+/// Shader descriptor returned after a pipeline operation is GPU-compatible.
 pub struct GpuOp {
+    /// Pipeline variant name.
     pub variant_name: &'static str,
+    /// Embedded WGSL shader source.
     pub shader: &'static str,
 }
 
@@ -181,21 +301,26 @@ fn gpu_registry_inner() -> &'static std::sync::Mutex<Vec<OpDef>> {
     GPU_REGISTRY.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
-/// Build the GPU operation registry from a list of definitions.
-/// Called by `op_map::init()` at startup.
+/// Builds the auxiliary GPU operation registry from shader definitions.
+///
+/// This registry is separate from the CPU/SIMD operation map. It is used by GPU
+/// setup and validation paths that need [`OpDef`] metadata.
 pub fn build_registry(defs: Vec<OpDef>) {
     let mut r = gpu_registry_inner().lock().expect("mutex poisoned");
     *r = defs;
 }
 
-/// Get all registered GPU operation definitions.
+/// Returns all registered GPU operation definitions.
 pub fn get_registry() -> Vec<OpDef> {
     gpu_registry_inner().lock().expect("mutex poisoned").clone()
 }
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
 
-/// O(1) lookup — returns the static key for any PipelineOp variant.
+/// Returns the registry key for a pipeline operation variant.
+///
+/// The key must match the string used during operation registration. It is kept
+/// static so backend support checks avoid allocation.
 pub fn variant_key(op: &PipelineOp) -> &'static str {
     match op {
         PipelineOp::Resize { .. } => "Resize",
@@ -287,24 +412,33 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
     }
 }
 
+/// Returns whether the CPU backend has an implementation for `op`.
 pub fn cpu_supports(op: &PipelineOp) -> bool {
     registry()
         .get(variant_key(op))
         .is_some_and(|e| e.cpu_fn.is_some())
 }
 
+/// Returns whether the GPU backend has an implementation for `op`.
 pub fn gpu_supports(op: &PipelineOp) -> bool {
     registry()
         .get(variant_key(op))
         .is_some_and(|e| e.gpu_shader.is_some())
 }
 
+/// Returns whether the SIMD backend has an implementation for `op`.
 pub fn simd_supports(op: &PipelineOp) -> bool {
     registry()
         .get(variant_key(op))
         .is_some_and(|e| e.simd_fn.is_some())
 }
 
+/// Executes one operation on the scalar CPU backend.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when the operation is unknown to the
+/// registry or has no CPU implementation.
 pub fn execute_cpu(
     op: &PipelineOp,
     img: &DynamicImage,
@@ -320,21 +454,25 @@ pub fn execute_cpu(
     f(img, op, mode)
 }
 
+/// Returns the registered GPU shader file name for `op`.
 pub fn gpu_shader_name(op: &PipelineOp) -> Option<&'static str> {
     registry().get(variant_key(op)).and_then(|e| e.gpu_shader)
 }
 
-/// Get the embedded WGSL source for a GPU shader by variant key.
+/// Returns embedded WGSL source for a registered variant key.
 pub fn gpu_shader_source_for_key(key: &str) -> Option<&'static str> {
     registry().get(key).and_then(|e| e.gpu_source)
 }
 
-/// Get the embedded WGSL source for a GPU shader.
+/// Returns embedded WGSL source for the GPU implementation of `op`.
 pub fn gpu_shader_source(op: &PipelineOp) -> Option<&'static str> {
     gpu_shader_source_for_key(variant_key(op))
 }
 
-/// Map a PipelineOp to its GPU OpId, if a GPU implementation exists.
+/// Maps a pipeline operation to its GPU dispatch ID.
+///
+/// Returns `None` when the operation has no GPU specialization or cannot be
+/// represented by a single shader dispatch ID.
 pub fn op_id(op: &PipelineOp) -> Option<OpId> {
     match op {
         PipelineOp::Resize { filter, .. } => match filter {
@@ -422,7 +560,7 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
     }
 }
 
-/// Map a PipelineOp to its GpuOp descriptor (returns Some if GPU-supported).
+/// Returns a shader descriptor when `op` is GPU-supported.
 pub fn map_op_to_gpu(op: &PipelineOp) -> Option<GpuOp> {
     let _id = op_id(op)?;
     let shader = gpu_shader_name(op)?;
@@ -432,9 +570,11 @@ pub fn map_op_to_gpu(op: &PipelineOp) -> Option<GpuOp> {
     })
 }
 
-/// Extract GPU compute shader parameters from a PipelineOp.
-/// The returned Vec<u32> follows each shader's Params struct (fields after the
-/// 4-element header: width, height, pad0, pad1).
+/// Extracts GPU shader parameter words from a pipeline operation.
+///
+/// The returned `Vec<u32>` follows each shader's `Params` struct after the
+/// shared four-word header: `width`, `height`, `pad0`, `pad1`. Operations with
+/// no shader parameter block return an empty vector.
 pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
     match op {
         // ── No-param ops ──

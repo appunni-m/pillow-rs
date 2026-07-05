@@ -1,4 +1,4 @@
-//! Bitmap font renderer — pre-rendered glyphs from PIL's default FreeType font.
+//! Bitmap font renderer for Pillow's default font.
 //!
 //! This module embeds all 95 ASCII printable characters pre-rendered using
 //! PIL's default font (Aileron, size 10) via FreeType. By using the exact
@@ -11,25 +11,29 @@ use data::BITMAP_GLYPH_DATA_BINARY;
 
 use crate::checked_dims::CheckedDims;
 
-/// A bitmap font using pre-rendered glyphs matching PIL's default font exactly.
+/// Pre-rendered bitmap font matching Pillow `ImageFont.load_default`.
 #[derive(Debug, Clone)]
 pub struct BitmapFont {
     size: f32,
 }
 
 impl BitmapFont {
-    /// Create a new bitmap font at the given size.
+    /// Creates a bitmap font handle with the requested display size.
+    ///
+    /// The bundled glyph atlas is fixed; `size` is carried for API compatibility
+    /// and caller-visible font metadata.
     pub fn new(size: f32) -> Self {
         BitmapFont { size }
     }
 
-    /// Get font size in pixels.
+    /// Returns the configured font size.
     pub fn font_size(&self) -> f32 {
         self.size
     }
 
-    /// Compute the bounding box of a text string.
-    /// Returns (width, height). Height includes the font's y-offset (matches PIL).
+    /// Returns the `(width, height)` of `text` in pixels.
+    ///
+    /// Height includes the glyph y-offset used by Pillow's default font.
     pub fn text_bbox(&self, text: &str) -> (u32, u32) {
         let mut w = 0u32;
         let mut max_ymax = 0i32;
@@ -56,9 +60,9 @@ impl BitmapFont {
         (w, (max_ymax - min_ymin) as u32)
     }
 
-    /// Render text as an alpha mask (L-mode). PIL: getmask().
+    /// Renders text as an `L`-mode alpha mask.
     ///
-    /// Returns (width, height, mask_data). The mask is pre-shifted so that
+    /// Returns `(width, height, mask_data)`. The mask is pre-shifted so that
     /// placing it at (text_x, text_y) yields the same positioning as PIL.
     /// Row 0 of the mask corresponds to font coordinate y = min_ymin,
     /// which means the tallest glyph's top is at text_y + min_ymin on the image.

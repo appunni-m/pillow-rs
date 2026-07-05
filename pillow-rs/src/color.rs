@@ -1,9 +1,36 @@
+//! Pillow-compatible color parsing and color-space conversion.
+//!
+//! This module accepts Rust primitives and `pillow-rs-image` buffers, then
+//! applies the same mode-aware color behavior that Pillow exposes through
+//! `ImageColor`, `Image.new`, and `Image.convert`.
+//!
+//! # Input Conventions
+//!
+//! - Mode values are Pillow mode strings such as `"L"`, `"RGB"`, `"RGBA"`,
+//!   `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
+//! - Multi-byte scalar modes are represented in little-endian byte order inside
+//!   RGBA-like storage when this crate needs to carry them through
+//!   `pillow-rs-image` buffers.
+//! - CMYK is stored in an RGBA buffer as `C`, `M`, `Y`, `K` channels.
+//! - HSV and YCbCr are stored in RGB buffers using their channel names in order.
+//!
+//! # Output Conventions
+//!
+//! Conversion helpers return concrete `pillow-rs-image` image buffers or
+//! [`pillow_rs_image::DynamicImage`] values with tightly packed rows. Color
+//! resolver helpers return `(r, g, b, a)` tuples even when the destination mode
+//! will later use only one or two channels.
+
 use crate::checked_dims::CheckedDims;
 use pillow_rs_image::{ColorType, DynamicImage, RgbImage};
 
-/// PIL-compatible grayscale conversion using ITU-R BT.601 coefficients.
-/// R: 0.299, G: 0.587, B: 0.114. PIL truncates (no rounding).
-/// This differs from the image crate's sRGB luminance weights (0.2126, 0.7152, 0.0722).
+/// Maps a `pillow-rs-image` color type to the nearest Pillow mode string.
+///
+/// # Returns
+///
+/// A static mode identifier such as `"L"`, `"LA"`, `"RGB"`, `"RGBA"`, or
+/// `"I;16"`. Unsupported color types currently fall back to `"RGB"` because
+/// the core image APIs operate on RGB-compatible buffers for unknown modes.
 pub fn color_type_to_mode(ct: ColorType) -> &'static str {
     match ct {
         ColorType::L8 => "L",
@@ -17,6 +44,20 @@ pub fn color_type_to_mode(ct: ColorType) -> &'static str {
     }
 }
 
+/// Parses a CSS/Pillow-style color string into an RGBA tuple.
+///
+/// # Inputs
+///
+/// - `s`: a color string accepted by `csscolorparser`, such as `"#ff0000"`,
+///   `"red"`, or `"rgba(255, 0, 0, 0.5)"`.
+///
+/// # Returns
+///
+/// A tuple in `(red, green, blue, alpha)` byte order.
+///
+/// # Errors
+///
+/// Returns [`crate::PilError::ValueError`] when the string cannot be parsed.
 pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
     let c = csscolorparser::parse(s)
         .map_err(|e| crate::error::PilError::ValueError(format!("Invalid color string: {}", e)))?;
@@ -24,9 +65,9 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
     Ok((rgba[0], rgba[1], rgba[2], rgba[3]))
 }
 
-/// Convert RGB to L value using PIL's BT.601 formula.
 #[inline]
-/// PIL-identical 16-bit fixed-point BT.601 luma.
+/// Converts one RGB pixel to a Pillow-compatible `L` value.
+///
 /// PIL uses: Y = (19595*R + 38470*G + 7471*B + 32768) >> 16
 /// This matches PIL pixel-for-pixel. Decimal approximation (299/587/114)
 /// differs for ~3/10000 pixels due to rounding in different directions.
@@ -34,15 +75,20 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
     (((19595u32 * r as u32 + 38470u32 * g as u32 + 7471u32 * b as u32 + 32768) >> 16) & 0xFF) as u8
 }
 
-/// PIL-identical BT.601 grayscale: Y = round(0.299*R + 0.587*G + 0.114*B)
-/// Uses precomputed lookup tables — no per-pixel multiplication or division.
-/// Tight single loop, no rayon overhead, no bounds checks.
+/// Converts an image to Pillow-compatible `L` grayscale.
+///
+/// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
+/// `image` crate's sRGB luminance weights. The returned image has the same
+/// dimensions as `img` and one byte per pixel.
 pub fn pil_grayscale(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     pil_grayscale_inner(img, true)
 }
 
-/// Non-rounded BT.601 grayscale for mode "1" conversion.
-/// PIL convert("1") uses truncation (no +32768), while convert("L") uses rounding.
+/// Converts an image to grayscale with Pillow's mode `"1"` truncation rule.
+///
+/// `Image.convert("1")` uses the BT.601 coefficients without the rounding bias
+/// used by `"L"` conversion. The returned buffer is still an 8-bit grayscale
+/// image; callers perform the final binary thresholding step.
 pub fn pil_grayscale_truncate(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     pil_grayscale_inner(img, false)
 }
@@ -72,8 +118,10 @@ fn pil_grayscale_inner(img: &DynamicImage, round: bool) -> pillow_rs_image::Gray
     pillow_rs_image::GrayImage::from_raw(w, h, gray).expect("pil_grayscale buffer mismatch")
 }
 
-/// PIL-compatible CMYK→grayscale using MULDIV255 formula.
-/// CMYK stored as RGBA (C→R, M→G, Y→B, K→A).
+/// Converts a CMYK image to Pillow-compatible grayscale.
+///
+/// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
+/// Output dimensions match the input and each output pixel is an `L` byte.
 pub fn cmyk_to_grayscale(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -94,9 +142,22 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     pillow_rs_image::GrayImage::from_raw(w, h, gray).expect("cmyk_to_grayscale buffer mismatch")
 }
 
-/// Resolve a color value for a given image mode. The binding layer extracts
-/// Python types (int/tuple/string) and passes raw values here. Core handles
-/// ALL mode-aware logic: single-int semantics, tuple lengths, defaults.
+/// Resolves `Image.new` color input into core RGBA storage.
+///
+/// Binding crates normalize host-language values into the optional Rust
+/// arguments here. This function owns the mode-aware Pillow rules: string
+/// colors, scalar `L`/`I`/`F` values, tuple expansion, default black, and
+/// single-int semantics for multi-band images.
+///
+/// # Returns
+///
+/// A tuple in core `(r, g, b, a)` byte order. For modes with fewer channels,
+/// later image construction code chooses which fields are stored.
+///
+/// # Errors
+///
+/// Returns [`crate::PilError::ValueError`] when `hex_str` is present but cannot
+/// be parsed as a color.
 pub fn resolve_new_color(
     mode: &str,
     hex_str: Option<&str>,
@@ -148,8 +209,19 @@ pub fn resolve_new_color(
     Ok((0, 0, 0, 0)) // default: black
 }
 
-/// Resolve a color value for a given mode (like PIL's ImageColor.getcolor).
-/// Takes RGB tuple and mode string, returns mode-appropriate value.
+/// Resolves an RGB color for a Pillow `ImageColor.getcolor` destination mode.
+///
+/// # Inputs
+///
+/// - `r`, `g`, `b`: source color channels.
+/// - `mode`: destination Pillow mode.
+///
+/// # Returns
+///
+/// A tuple in `(r, g, b, a)` order. For `"L"` and `"LA"`, the luma value is
+/// duplicated into the RGB fields so callers can store the channel appropriate
+/// for their target buffer. For `"1"`, the first field is thresholded to
+/// either `0` or `255`.
 pub fn getcolor(
     r: u8,
     g: u8,
@@ -175,7 +247,15 @@ pub fn getcolor(
     }
 }
 
-/// Search a flat palette [r,g,b, r,g,b, ...] for a color, return index.
+/// Searches a flat RGB palette for an exact color match.
+///
+/// # Inputs
+///
+/// `palette` is laid out as `[r, g, b, r, g, b, ...]`.
+///
+/// # Returns
+///
+/// The palette index when found, or `None` when the RGB triple is absent.
 pub fn palette_getcolor(palette: &[u8], r: u8, g: u8, b: u8) -> Option<usize> {
     for i in (0..palette.len()).step_by(3) {
         if i + 2 < palette.len() && palette[i] == r && palette[i + 1] == g && palette[i + 2] == b {
@@ -185,9 +265,22 @@ pub fn palette_getcolor(palette: &[u8], r: u8, g: u8, b: u8) -> Option<usize> {
     None
 }
 
-/// PIL-compatible palette getcolor: search for (r,g,b,a) in palette, append if not found.
-/// Returns the index. Fails if palette already has 256 entries and color is new.
-/// `mode` is "RGB" (3 bytes/entry) or "RGBA" (4 bytes/entry).
+/// Finds or appends a color in a Pillow-compatible palette.
+///
+/// # Inputs
+///
+/// - `palette`: mutable flat palette storage.
+/// - `r`, `g`, `b`, `a`: color to locate.
+/// - `mode`: `"RGB"` for 3-byte entries or `"RGBA"` for 4-byte entries.
+///
+/// # Returns
+///
+/// The palette index for an existing or newly appended entry.
+///
+/// # Errors
+///
+/// Returns an error string when the palette already has 256 entries and the
+/// color is not present.
 pub fn palette_getcolor_append(
     palette: &mut Vec<u8>,
     r: u8,
@@ -223,7 +316,10 @@ pub fn palette_getcolor_append(
     Ok(idx)
 }
 
-/// Format a palette as PIL-compatible text (header + 256-entry table).
+/// Formats a palette as Pillow-compatible text.
+///
+/// The output contains a header and 256 indexed rows. Missing palette entries
+/// are emitted as zeroes, matching Pillow's fixed-size text palette format.
 pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
     let step = if mode == "RGBA" { 4 } else { 3 };
     let _palette_len = palette.len();
@@ -244,7 +340,10 @@ pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
     out
 }
 
-/// Convert an RGB image to LA using PIL's BT.601 formula + opaque alpha.
+/// Converts an image to Pillow-compatible `LA`.
+///
+/// The luma channel uses [`pil_grayscale`]. The alpha channel is set to fully
+/// opaque (`255`) for every pixel.
 pub fn pil_grayscale_alpha(img: &DynamicImage) -> pillow_rs_image::GrayAlphaImage {
     let gray = pil_grayscale(img);
     let (w, h) = gray.dimensions();
@@ -258,17 +357,19 @@ pub fn pil_grayscale_alpha(img: &DynamicImage) -> pillow_rs_image::GrayAlphaImag
 
 // ── Non-standard mode conversions ──
 
-/// PIL's MULDIV255 macro: `(a * b + 128) * 257 >> 16`
-/// Equivalent to `(a * b + 128) / 255` with proper rounding.
+/// Applies Pillow's `MULDIV255` integer scaling helper.
+///
+/// This is equivalent to `(a * b + 128) / 255` with Pillow-compatible rounding.
 #[inline]
 pub fn muldiv255(a: u32, b: u32) -> u32 {
     let t = a * b + 128;
     ((t >> 8) + t) >> 8
 }
 
-/// CMYK → RGB using PIL's exact integer arithmetic.
-/// CMYK is stored as RGBA (C→R, M→G, Y→B, K→A).
-/// Formula: nk = 255 - K; R = nk - MULDIV255(C, nk); same for G,B.
+/// Converts CMYK storage to RGB using Pillow-compatible integer arithmetic.
+///
+/// The input is an RGBA buffer interpreted as `C`, `M`, `Y`, `K`. The returned
+/// image is `RGB8` with the same dimensions.
 pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -287,12 +388,13 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// HSV → RGB using PIL's exact integer-domain algorithm from libImaging/Convert.c.
-/// PIL keeps V in 0-255 range (not normalized), computes p/q/t in 0-255 range,
-/// rounds with round(), and clamps with CLIP8.
-/// HSV is stored as RGB (H→R, S→G, V→B).
-/// H,S,V are all 0-255 byte values.
+/// Converts HSV storage to RGB using Pillow's integer-domain algorithm.
+///
+/// HSV is stored as an RGB buffer interpreted as `H`, `S`, `V`, all in the
+/// `0..=255` byte range. The returned image is `RGB8` with the same dimensions.
+///
 /// PIL's formula (from C source):
+/// ```text
 ///   fs = s / 255.0    (normalized saturation)
 ///   h = h * 6.0 / 255.0  (0-6 sector mapping)
 ///   j = floor(h); f = h - j
@@ -300,6 +402,7 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
 ///   q = v * (1.0 - fs * f)
 ///   t = v * (1.0 - fs * (1.0 - f))
 ///   Then round all to nearest integer, CLIP8
+/// ```
 pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
@@ -340,8 +443,11 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// I (int32) → L: scale from I range to 0-255 using PIL's formula.
-/// PIL: L = (I + 32768) / 256
+/// Converts Pillow `"I"` storage to `L`.
+///
+/// The input is RGBA storage interpreted as little-endian `i32` pixels.
+/// Output uses Pillow's scaling formula: `L = (I + 32768) / 256`, clamped to a
+/// byte.
 pub fn i32_to_l(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -354,7 +460,10 @@ pub fn i32_to_l(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     gray
 }
 
-/// F (float32) → L: clamp to 0-255 range.
+/// Converts Pillow `"F"` storage to `L`.
+///
+/// The input is RGBA storage interpreted as little-endian `f32` pixels. Output
+/// clamps each value to `0..=255` and truncates to a byte.
 pub fn f32_to_l(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -367,8 +476,11 @@ pub fn f32_to_l(img: &DynamicImage) -> pillow_rs_image::GrayImage {
     gray
 }
 
-/// RGB → HSV using PIL's exact algorithm from rgb2hsv in libImaging/Convert.c.
-/// Based on CPython's colorsys module. All inputs/outputs are u8 (0-255).
+/// Converts RGB to HSV using Pillow's `rgb2hsv` precision behavior.
+///
+/// Input and output are `RGB8` buffers. Output channels are `H`, `S`, `V`, each
+/// in `0..=255`.
+///
 /// PIL uses float (f32) for intermediate values (rc, gc, bc, cr, h), only
 /// promoting to double when combining with `2.0`/`4.0`/`6.0`/`255.0` literals.
 /// The result is stored back to f32, and the final `(int)(h * 255.0)` truncates.
@@ -424,9 +536,11 @@ pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// RGB → YCbCr using PIL's exact lookup-table-based ITU-R BT.601 conversion.
+/// Converts RGB to YCbCr using Pillow's lookup-table BT.601 conversion.
+///
+/// The returned image is `RGB8` storage interpreted as `Y`, `Cb`, `Cr`.
 /// Uses precomputed tables matching PIL's ConvertYCbCr.c with SCALE=6.
-/// Table formula: table[i] = (int)(i * coeff * 64 + 0.5)
+/// Table formula: `table[i] = (int)(i * coeff * 64 + 0.5)`.
 pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
     use std::sync::OnceLock;
 
@@ -473,11 +587,16 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// YCbCr → RGB using PIL's exact lookup-table-based ITU-R BT.601 conversion.
+/// Converts YCbCr storage to RGB using Pillow's lookup-table BT.601 conversion.
+///
+/// The input is `RGB8` storage interpreted as `Y`, `Cb`, `Cr`; the returned
+/// image is `RGB8`.
 /// PIL uses precomputed tables with 6-bit fixed-point (SCALE=6, multiply by 64):
+/// ```text
 ///   R = Y + (R_Cr[Cr] >> 6)
 ///   G = Y + ((G_Cb[Cb] + G_Cr[Cr]) >> 6)
 ///   B = Y + (B_Cb[Cb] >> 6)
+/// ```
 /// Tables extracted directly from PIL's _imaging C extension.
 pub fn ycbcr_to_rgb(img: &DynamicImage) -> DynamicImage {
     const R_CR: [i32; 256] = [
@@ -586,9 +705,10 @@ pub fn ycbcr_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// I (32-bit signed integer) → RGB.
-/// I mode is stored as RGBA (4 bytes per pixel, little-endian int32).
-/// Convert: clamp int32 to [0, 255], broadcast to R=G=B.
+/// Converts Pillow `"I"` storage to RGB.
+///
+/// The input is RGBA storage interpreted as little-endian `i32` pixels. Each
+/// value is clamped to `0..=255` and broadcast to `R=G=B`.
 pub fn i_to_rgb(img: &DynamicImage) -> DynamicImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -602,9 +722,10 @@ pub fn i_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// F (32-bit float) → RGB.
-/// F mode is stored as RGBA (4 bytes per pixel, f32).
-/// Convert: clamp f32 to [0, 255], truncate to u8, broadcast to R=G=B.
+/// Converts Pillow `"F"` storage to RGB.
+///
+/// The input is RGBA storage interpreted as little-endian `f32` pixels. Each
+/// value is clamped to `0..=255`, truncated to a byte, and broadcast to `R=G=B`.
 pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
@@ -618,12 +739,11 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// P (palette) → RGB using the embedded palette data.
-/// P mode is stored as Luma8 (index bytes) with an attached palette.
-/// When no palette is provided, PIL's default grayscale ramp is used:
-/// each index i maps to RGB(i, i, i).
-/// When a palette is provided (768 bytes: 256 × R,G,B triples), the actual
-/// palette colors are looked up.
+/// Converts `P` palette-index storage to RGB.
+///
+/// `img` is interpreted as one index byte per pixel. When `palette` is present,
+/// it must be a flat sequence of RGB triples; missing entries map to black.
+/// Without a palette, each index maps to the grayscale ramp `RGB(i, i, i)`.
 pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     let luma = img.to_luma8();
     let (w, h) = luma.dimensions();
@@ -650,9 +770,14 @@ pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// Convert an image from a non-standard PIL mode to a standard one.
-/// `palette` provides the optional palette data for P-mode conversion.
-/// Returns None if the source mode is already standard.
+/// Converts a non-standard Pillow mode into a standard RGB-family image.
+///
+/// `palette` supplies `P` mode RGB triples when `src_mode == "P"`.
+///
+/// # Returns
+///
+/// `Some(image)` for modes that need reinterpretation (`CMYK`, `HSV`, `YCbCr`,
+/// `I`, `F`, `P`) and `None` for modes that are already standard.
 pub fn convert_from_nonstandard(
     src_mode: &str,
     img: &DynamicImage,
@@ -669,11 +794,15 @@ pub fn convert_from_nonstandard(
     }
 }
 
-/// Validate a color for palette mode and append it.
-/// Handles mode-specific logic:
-/// - RGB mode: reject non-opaque RGBA colors (alpha != 255)
-/// - RGBA mode: auto-fill missing alpha to 255
-/// Delegates to `palette_getcolor_append` for the actual append.
+/// Validates and finds or appends a palette color.
+///
+/// RGB palettes reject non-opaque RGBA colors. RGBA palettes use alpha from the
+/// color input when present and default to `255` otherwise.
+///
+/// # Errors
+///
+/// Returns an error string when the color is too short, invalid for the palette
+/// mode, or cannot be appended because the palette is full.
 pub fn palette_getcolor_validate(
     palette: &mut Vec<u8>,
     color: &[u8],
@@ -696,7 +825,11 @@ pub fn palette_getcolor_validate(
     palette_getcolor_append(palette, r, g, b, a, mode)
 }
 
-/// Save palette data to a text file.
+/// Saves palette data as Pillow-compatible text.
+///
+/// # Errors
+///
+/// Returns a string describing filesystem write failures.
 pub fn palette_save_to_file(palette: &[u8], mode: &str, path: &str) -> Result<(), String> {
     let text = palette_to_text(palette, mode);
     std::fs::write(path, &text).map_err(|e| format!("Cannot write palette file: {}", e))
