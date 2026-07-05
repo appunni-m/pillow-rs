@@ -13,7 +13,7 @@ use super::gs::RoundMode;
 use super::iup;
 use super::zone::GlyphZone;
 use crate::error::FontError;
-use crate::fixed::ft_mul_fix;
+use crate::fixed::{ft_mul_fix, ft_normalize_2dot14};
 
 /// Maximum stack depth. TrueType spec says max 255, but fonts may request
 /// more via maxp->maxStackElements. We use a generous default.
@@ -497,6 +497,14 @@ impl ExecContext {
         }
     }
 
+    fn tag_in(&self, glyph: &GlyphZone, zp: u8, p: usize) -> Option<u8> {
+        if zp == 0 {
+            self.twilight.tags.get(p).copied()
+        } else {
+            glyph.tags.get(p).copied()
+        }
+    }
+
     fn clear_touch_in(&mut self, glyph: &mut GlyphZone, zp: u8, p: usize) {
         let mut mask = 0u8;
         if self.gs.freedom_vector.0 != 0 {
@@ -723,21 +731,20 @@ impl ExecContext {
         Ok(())
     }
 
-    fn line_vector(dx: i32, dy: i32, perpendicular: bool) -> Option<(i32, i32)> {
-        let (vx, vy) = if perpendicular { (-dy, dx) } else { (dx, dy) };
+    fn line_vector(dx: i32, dy: i32, perpendicular: bool) -> (i32, i32) {
+        let (vx, vy) = if perpendicular {
+            (dy.wrapping_neg(), dx)
+        } else {
+            (dx, dy)
+        };
         if vx == 0 && vy == 0 {
-            return None;
+            return (0x4000, 0);
         }
 
-        let len = ((vx as i64 * vx as i64 + vy as i64 * vy as i64) as f64).sqrt() as i64;
-        if len == 0 {
-            return None;
-        }
-
-        Some((
-            (vx as i64 * 0x4000 / len) as i32,
-            (vy as i64 * 0x4000 / len) as i32,
-        ))
+        // C: `Ins_SxVTL`/`Ins_SDPVTL` call `Normalize`, which uses
+        // FreeType's fixed `FT_Vector_NormLen`; host `sqrt` truncation shifts
+        // diagonal vectors by one 2.14 unit and changes hinted outlines.
+        ft_normalize_2dot14(vx, vy).unwrap_or((0x4000, 0))
     }
 
     fn get_info(selector: i32) -> i32 {
@@ -1423,11 +1430,26 @@ impl ExecContext {
                 0x38 => {
                     let amount = self.pop()?;
                     let (dx, dy) = self.gs.move_along_raw_free(amount);
+                    let in_twilight = self.gs.zp0 == 0 || self.gs.zp1 == 0 || self.gs.zp2 == 0;
                     for _ in 0..self.gs.loop_counter {
                         let p = self.pop()? as usize;
                         let (cx, cy) = self.cur_in(zone, self.gs.zp2, p);
-                        self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
-                        self.touch_in(zone, self.gs.zp2, p);
+                        if self.backward_compatibility == 0 {
+                            self.set_cur_in(zone, self.gs.zp2, p, cx + dx, cy + dy);
+                            self.touch_in(zone, self.gs.zp2, p);
+                        } else if in_twilight
+                            || (self.backward_compatibility != 0x7
+                                && ((self.is_composite && self.gs.freedom_vector.1 != 0)
+                                    || (self
+                                        .tag_in(zone, self.gs.zp2, p)
+                                        .is_some_and(|tag| tag & 0x02 != 0))))
+                        {
+                            // C `Ins_SHPIX` in v40 compatibility mode treats
+                            // SHPIX like DELTAP: block until the point is
+                            // Y-touched, except twilight and composite-y moves.
+                            self.set_cur_in(zone, self.gs.zp2, p, cx, cy + dy);
+                            self.touch_in(zone, self.gs.zp2, p);
+                        }
                     }
                     self.gs.loop_counter = 1;
                 }
@@ -1519,26 +1541,30 @@ impl ExecContext {
                     let p_deeper = self.pop()? as usize;
                     let (x1, y1) = self.cur_in(zone, self.gs.zp2, p_deeper);
                     let (x2, y2) = self.cur_in(zone, self.gs.zp1, p_top);
-                    if let Some(vector) = Self::line_vector(x2 - x1, y2 - y1, opcode & 1 != 0) {
-                        self.gs.freedom_vector = vector;
-                    } else {
-                        self.gs.freedom_vector = (0x4000, 0);
-                    }
+                    self.gs.freedom_vector = Self::line_vector(
+                        x2.wrapping_sub(x1),
+                        y2.wrapping_sub(y1),
+                        opcode & 1 != 0,
+                    );
                     self.gs.compute_move_vector();
                 }
                 // ── SPVFS (0x0A) — Set Proj Vector From Stack ──────
                 0x0A => {
-                    let y = self.pop()?;
-                    let x = self.pop()?;
-                    self.gs.proj_vector = (x, y);
-                    self.gs.dual_proj_vector = (x, y);
+                    let y = self.pop()? as i16 as i32;
+                    let x = self.pop()? as i16 as i32;
+                    if let Some(vector) = ft_normalize_2dot14(x, y) {
+                        self.gs.proj_vector = vector;
+                    }
+                    self.gs.dual_proj_vector = self.gs.proj_vector;
                     self.gs.compute_move_vector();
                 }
                 // ── SFVFS (0x0B) — Set Freedom Vector From Stack ────
                 0x0B => {
-                    let y = self.pop()?;
-                    let x = self.pop()?;
-                    self.gs.freedom_vector = (x, y);
+                    let y = self.pop()? as i16 as i32;
+                    let x = self.pop()? as i16 as i32;
+                    if let Some(vector) = ft_normalize_2dot14(x, y) {
+                        self.gs.freedom_vector = vector;
+                    }
                     self.gs.compute_move_vector();
                 }
                 // ── SFVTPV (0x0E) — Set Freedom Vector To Proj Vector ─
@@ -1559,7 +1585,7 @@ impl ExecContext {
                     let loop_count = self.gs.loop_counter;
                     let rp1 = self.gs.rp1 as usize;
                     let rp2 = self.gs.rp2 as usize;
-                    let use_twilight_org = self.gs.zp0 == 0 || self.gs.zp1 == 0;
+                    let use_twilight_org = self.gs.zp0 == 0 || self.gs.zp1 == 0 || self.gs.zp2 == 0;
                     let (r1_ox, r1_oy) = if use_twilight_org {
                         self.org_in(zone, self.gs.zp0, rp1)
                     } else {
@@ -1606,21 +1632,17 @@ impl ExecContext {
                         };
                         let (pcx, pcy) = self.cur_in(zone, self.gs.zp2, p);
                         let cur_dist = self.gs.project(pcx - r1_cx, pcy - r1_cy);
-                        let new_dist = if old_range == 0 || p_old == 0 {
+                        let new_dist = if p_old == 0 {
                             0
+                        } else if old_range == 0 {
+                            // C Ins_IP uses `org_dist` unchanged when the
+                            // reference range collapses.
+                            p_old
                         } else {
-                            let (old_range_abs, p_old_abs) = if old_range < 0 {
-                                (-old_range, -p_old)
-                            } else {
-                                (old_range, p_old)
-                            };
-                            if p_old_abs <= 0 {
-                                0
-                            } else if p_old_abs >= old_range_abs {
-                                cur_range
-                            } else {
-                                crate::fixed::ft_mul_div(p_old_abs, cur_range, old_range_abs)
-                            }
+                            // C: ttinterp.c Ins_IP uses signed FT_MulDiv
+                            // directly.  Do not clamp points outside the
+                            // reference range; fonts rely on extrapolation.
+                            crate::fixed::ft_mul_div(p_old, cur_range, old_range)
                         };
                         let (dx, dy) = self.gs.move_along_free(new_dist - cur_dist);
                         self.set_cur_in(zone, self.gs.zp2, p, pcx + dx, pcy + dy);
@@ -1686,15 +1708,13 @@ impl ExecContext {
                     let p_deeper = self.pop()? as usize;
                     let (x1, y1) = self.cur_in(zone, self.gs.zp2, p_deeper);
                     let (x2, y2) = self.cur_in(zone, self.gs.zp1, p_top);
-                    if let Some(vector) =
-                        Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
-                    {
-                        self.gs.proj_vector = vector;
-                        self.gs.dual_proj_vector = vector;
-                    } else {
-                        self.gs.proj_vector = (0x4000, 0);
-                        self.gs.dual_proj_vector = (0x4000, 0);
-                    }
+                    let vector = Self::line_vector(
+                        x2.wrapping_sub(x1),
+                        y2.wrapping_sub(y1),
+                        opcode & 1 != 0,
+                    );
+                    self.gs.proj_vector = vector;
+                    self.gs.dual_proj_vector = vector;
                     self.gs.compute_move_vector();
                 }
                 // ── GPV (0x0C) — Get Projection Vector ─────────────
@@ -1825,13 +1845,11 @@ impl ExecContext {
                     let p_deeper = self.pop()? as usize;
                     let (x1, y1) = zone.org(p_deeper);
                     let (x2, y2) = zone.org(p_top);
-                    if let Some(vector) =
-                        Self::line_vector(x2.wrapping_sub(x1), y2.wrapping_sub(y1), opcode & 1 != 0)
-                    {
-                        self.gs.dual_proj_vector = vector;
-                    } else {
-                        self.gs.dual_proj_vector = (0x4000, 0);
-                    }
+                    self.gs.dual_proj_vector = Self::line_vector(
+                        x2.wrapping_sub(x1),
+                        y2.wrapping_sub(y1),
+                        opcode & 1 != 0,
+                    );
                     self.gs.compute_move_vector();
                 }
 

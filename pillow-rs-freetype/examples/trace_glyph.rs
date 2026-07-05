@@ -25,6 +25,44 @@ fn main() {
     };
     let font = pillow_rs_freetype::Font::truetype(&data, size_pt, backend).expect("load font");
 
+    if env::var_os("FT_RS_DUMP_OUTLINE").is_some() {
+        let glyph = font.char_index(ch as u32);
+        let metrics_cache = font.face_globals.get_metrics(glyph);
+        let scaled = match backend {
+            pillow_rs_freetype::BitmapBackend::PIL => {
+                pillow_rs_freetype::scaler::scale_glyph_native_default(
+                    &font.data,
+                    glyph,
+                    None,
+                    font.is_italic,
+                )
+            }
+            pillow_rs_freetype::BitmapBackend::FreeType => pillow_rs_freetype::scaler::scale_glyph(
+                &font.data,
+                glyph,
+                metrics_cache.as_ref(),
+                font.is_italic,
+            ),
+        }
+        .expect("scale glyph");
+        eprintln!(
+            "[R OUTLINE] glyph={} contours={} points={} cbox=({}, {}, {}, {})",
+            glyph,
+            scaled.outline.n_contours,
+            scaled.outline.points.len(),
+            scaled.outline.cbox_x_min,
+            scaled.outline.cbox_y_min,
+            scaled.outline.cbox_x_max,
+            scaled.outline.cbox_y_max
+        );
+        for (idx, point) in scaled.outline.points.iter().enumerate() {
+            eprintln!(
+                "[R POINT {idx:02}] x={} y={} on={}",
+                point.x, point.y, point.on_curve
+            );
+        }
+    }
+
     let mask = font.getmask(&ch.to_string()).expect("getmask");
 
     eprintln!(

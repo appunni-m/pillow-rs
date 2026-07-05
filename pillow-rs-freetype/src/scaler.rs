@@ -594,6 +594,7 @@ fn scale_glyph_impl(
                 y_scale: y_adj,
                 ppem: scale.ppem,
                 storage_size: data.maxp.max_storage as usize,
+                is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
             };

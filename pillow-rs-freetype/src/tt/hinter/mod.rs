@@ -46,6 +46,7 @@ pub struct HintScale {
     pub y_scale: i32,
     pub ppem: i32,
     pub storage_size: usize,
+    pub is_composite: bool,
     pub reset_vectors_at_glyph_entry: bool,
     pub metrics_legacy_phantoms: bool,
 }
@@ -214,6 +215,7 @@ pub fn hint_glyph(
         fpgm,
         scale.storage_size,
     );
+    ctx.is_composite = scale.is_composite;
 
     // Run the font program to set up function definitions
     if !fpgm.is_empty() {

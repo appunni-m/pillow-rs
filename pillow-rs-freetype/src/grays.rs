@@ -4,12 +4,9 @@
 //! `gray_render_conic` DDA, `gray_render_cubic`, `gray_convert_glyph` band
 //! bisection, `gray_sweep`).
 //!
-//! ## Parity status: 36 remaining failures confirmed rasterizer-level
-//! Auto-hinted outline coordinates and edge positions match C byte-for-byte
-//! for all remaining failures. Pixel diffs (1-2 coverage units) originate
-//! from `left_shift` conversion (u64 cast vs C signed int64) and DDA step
-//! distribution in `render_scanline`. No algorithmic bugs remaining — this
-//! is a subpixel-precision arithmetic gap.
+//! The vendored FreeType oracle defines `FT_INT64`, so conic flattening uses
+//! the 64-bit forward-difference path and line rasterization uses the matching
+//! cell-to-cell `FT_UDIV` path.
 //!
 //! Debug: `FT2_DEBUG="any:7" /tmp/gen_refs_v4` for C grays traces.
 //!
@@ -63,7 +60,7 @@ fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
     (quotient, remainder)
 }
 
-// ✅ VERIFIED: via 1708 FT tests. Port of FT_UDIVPREP (ftgrays.h).
+// Port of FT_UDIVPREP (ftgrays.c:394-397).
 /// Computes `(FT_Int64)0xFFFFFFFF / b` with the actual sign of `b`, matching
 /// FreeType's signed-int64 division. The result may be negative.
 #[inline]
@@ -76,7 +73,7 @@ fn ft_udivprep(c: bool, b: i64) -> i64 {
     }
 }
 
-// ✅ VERIFIED: via 1708 FT tests. Port of FT_UDIV (ftgrays.h).
+// Port of FT_UDIV (ftgrays.c:394-397).
 /// FreeType: `(TCoord)( ((FT_UInt64)(a) * (FT_UInt64)(b_r)) >> 32 )`
 /// The reciprocal `r` is signed (may be negative); casting to u64 gives the
 /// correct unsigned multiplication value.
@@ -358,7 +355,7 @@ impl Worker {
         self.integrate(y2 - y1, fx1 + fx2);
     }
 
-    // ── gray_render_line (ftgrays.c:873, FT_INT64 path) ────────────────────
+    // ── gray_render_line (ftgrays.c:878, FT_INT64 path) ────────────────────
     fn render_line(&mut self, to_x: i64, to_y: i64) {
         let mut ey1 = trunc(self.y);
         let ey2 = trunc(to_y);
@@ -417,7 +414,7 @@ impl Worker {
                 }
             }
         } else {
-            // any other line (FT_INT64 DDA path, ftgrays.c:927)
+            // any other line (FT_INT64 DDA path, ftgrays.c:929)
             let mut prod = dx * fy1 as i64 - dy * fx1 as i64;
             let dx_r = ft_udivprep(ex1 != ex2, dx);
             let dy_r = ft_udivprep(ey1 != ey2, dy);
@@ -425,7 +422,6 @@ impl Worker {
             loop {
                 if prod - dx * ONE_PIXEL > 0 && prod <= 0 {
                     // left
-                    // FT_UDIV(-prod, -dx) → uses -dx_r
                     let fx2 = 0;
                     let fy2 = ft_udiv(-prod, -dx_r);
                     prod -= dy * ONE_PIXEL;
@@ -454,7 +450,6 @@ impl Worker {
                     ex1 += 1;
                 } else {
                     // down
-                    // FT_UDIV(prod, -dy) → uses -dy_r
                     let fx2 = ft_udiv(prod, -dy_r);
                     let fy2 = 0;
                     prod += dx * ONE_PIXEL;
