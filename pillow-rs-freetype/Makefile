@@ -48,6 +48,9 @@ help:
 	@printf "\nCI:\n"
 	@printf "  make ci               Run the required local CI sequence\n"
 	@printf "  make supply-chain     Run cargo-deny and cargo-audit\n"
+	@printf "\nRelease:\n"
+	@printf "  make release-dry-run  Validate crate publishing package\n"
+	@printf "  make release          Publish crate to crates.io\n"
 	@printf "\nClean:\n"
 	@printf "  make clean            Remove local build/report artifacts\n"
 
@@ -181,6 +184,14 @@ supply-chain:
 	$(CARGO) deny check licenses
 	$(CARGO) deny check sources
 	$(CARGO) audit
+
+.PHONY: release-dry-run
+release-dry-run:
+	$(CARGO) publish --dry-run --locked
+
+.PHONY: release
+release:
+	$(CARGO) publish --locked
 
 .PHONY: ci
 ci: fmt clippy doc doc-test test bench-self-test

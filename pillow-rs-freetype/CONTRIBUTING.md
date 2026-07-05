@@ -10,13 +10,13 @@ The crate's MSRV is Rust 1.87. The checked-in `rust-toolchain.toml` pins Rust
 MSRV test lane.
 
 ```bash
-cargo build --locked
-cargo test --locked
-cargo fmt -- --check
-cargo clippy --all-targets --all-features --locked -- -D warnings
+make build
+make test
+make fmt
+make clippy
 ```
 
-The Makefile wraps the same commands:
+Run the complete local gate before handing off a change:
 
 ```bash
 make ci
@@ -25,7 +25,7 @@ make ci
 Optional supply-chain checks:
 
 ```bash
-cargo install cargo-deny cargo-audit --locked
+make setup
 make supply-chain
 ```
 
@@ -55,8 +55,8 @@ When a glyph, metric, bbox, or bitmap differs from C FreeType:
 Useful commands:
 
 ```bash
-cargo test --test coverage_matrix_tests --locked -- --nocapture
-cargo test --test no_runtime_ffi --locked -- --nocapture
+make test-parity
+make test-ffi
 ```
 
 Never clamp output, special-case a glyph, delete a fixture row, or weaken a
@@ -83,10 +83,9 @@ Before changing benchmark code or reporting speedups, read:
 Required validation:
 
 ```bash
-PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
-python3 scripts/bench_freetype.py --self-test
-python3 scripts/bench_freetype.py --compare-c --samples 2 --table
-cargo test --test perf_benchmark_contract --locked
+make bench-self-test
+make bench-quick
+make test-perf
 ```
 
 Performance reports must keep raw samples, machine metadata, trust labels,
@@ -97,6 +96,8 @@ timing boundaries, and workload profiles visible.
 - Use rustdoc for public APIs.
 - Use short comments only for non-obvious implementation decisions.
 - Put long debugging or process guidance in `doc/`.
+- Keep `../docs/REPO_MAP.md` current when important source, harness,
+  generator, or project-goal files move.
 - Update `CHANGELOG.md` for user-visible runtime, harness, fixture, benchmark,
   or release changes.
 
@@ -116,11 +117,11 @@ timing boundaries, and workload profiles visible.
 5. Run a publish dry run:
 
 ```bash
-cargo publish --dry-run --locked
+make release-dry-run
 ```
 
 6. Publish:
 
 ```bash
-cargo publish --locked
+make release
 ```

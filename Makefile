@@ -70,6 +70,9 @@ help: ## Show this help
 	@printf "  $(CYAN)make coverage-validate$(NC) Validate coverage against manifest\n"
 	@printf "  $(CYAN)make coverage-report$(NC) Generate docs/COVERAGE.md\n"
 	@printf "  $(CYAN)make coverage-wasm$(NC)  Generate WASM coverage report\n"
+	@printf "\n$(BOLD)Docs$(NC)\n"
+	@printf "  $(CYAN)make repo-map-check$(NC) Validate docs/REPO_MAP.md generated tree\n"
+	@printf "  $(CYAN)make repo-map-update$(NC) Refresh docs/REPO_MAP.md generated tree\n"
 	@printf "\n$(BOLD)Benchmark$(NC)\n"
 	@printf "  $(CYAN)make bench$(NC)          Full benchmark suite (166 functions, ~20 min)\n"
 	@printf "  $(CYAN)make bench-incr$(NC)     Incremental (only changed functions)\n"
@@ -265,10 +268,19 @@ bench-incr: ## Incremental benchmark (only changed functions)
 bench-priority: ## Priority tier benchmark (12 ops)
 	bash scripts/bench/bench_all.sh --group priority
 
+# ── Documentation ─────────────────────────────────────────────────────────────
+.PHONY: repo-map-check repo-map-update
+
+repo-map-check: ## Validate docs/REPO_MAP.md generated tree
+	$(PYTHON) scripts/check_repo_map.py
+
+repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
+	$(PYTHON) scripts/check_repo_map.py --write
+
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: fmt clippy test-core fixtures-suite0 test coverage-validate ## Full CI pipeline
+ci: repo-map-check fmt clippy test-core fixtures-suite0 test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
 
 verify: ci freetype-ci ## Full workspace CI plus FreeType CI

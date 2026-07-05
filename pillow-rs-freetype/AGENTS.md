@@ -27,22 +27,21 @@ Match version-pinned C FreeType behavior with Rust runtime code.
 
 ## Required Commands
 
-Run narrow checks first, then the broader gates:
+Run narrow checks first, then the broader gates through Makefile targets:
 
 ```bash
-cargo test --test coverage_matrix_tests --locked -- --nocapture
-cargo test --test no_runtime_ffi --locked -- --nocapture
-cargo fmt -- --check
-cargo clippy --all-targets --all-features --locked -- -D warnings
+make test-parity
+make test-ffi
+make fmt
+make clippy
 ```
 
 For benchmark changes:
 
 ```bash
-PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
-python3 scripts/bench_freetype.py --self-test
-python3 scripts/bench_freetype.py --compare-c --samples 2 --table
-cargo test --test perf_benchmark_contract --locked
+make bench-self-test
+make bench-quick
+make test-perf
 ```
 
 ## Debugging Protocol
@@ -71,3 +70,5 @@ Important stages:
 
 Update docs when behavior, benchmarks, fixture generation, or harness semantics
 change. Keep long playbooks in `doc/`; keep this file short and enforceable.
+The root repository ownership map is `../docs/REPO_MAP.md`; update it when
+FreeType source, harness, generator, or project-goal files move.
