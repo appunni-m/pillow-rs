@@ -2,8 +2,8 @@
 //!
 //! Faithful ports of the table-loading paths in FreeType's
 //! `src/sfnt/ttload.c`, `src/sfnt/ttcmap.c`, and `src/truetype/ttgload.c`
-//! for the subset needed by the FreeType-compatible renderer (head, maxp, hhea, hmtx, cmap,
-//! name, loca, glyf, OS/2).
+//! for the subset needed by the FreeType-compatible renderer (head, maxp, hhea,
+//! hmtx, kern, cmap, name, loca, glyf, OS/2).
 
 pub mod cmap;
 pub mod glyf;
@@ -12,6 +12,7 @@ pub mod head;
 pub mod hhea;
 pub mod hinter;
 pub mod hmtx;
+pub mod kern;
 pub mod loca;
 pub mod maxp;
 pub mod name;

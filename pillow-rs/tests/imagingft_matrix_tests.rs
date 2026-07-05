@@ -331,7 +331,7 @@ fn imagingft_pixel_rows_remain_visible_incomplete_baseline() {
         })
         .collect();
 
-    let expected_failures = 7;
+    let expected_failures = 0;
     assert_eq!(
         failures.len(),
         expected_failures,
