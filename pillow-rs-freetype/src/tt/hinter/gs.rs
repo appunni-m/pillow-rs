@@ -25,6 +25,12 @@ const DEFAULT_MINIMUM_DISTANCE: i32 = 64;
 /// Default control value cut-in: 17/16 pixel.
 const DEFAULT_CONTROL_VALUE_CUTIN: i32 = 68;
 
+#[inline]
+fn dot_fix14(ax: i32, ay: i32, bx: i32, by: i32) -> i32 {
+    let c = ax as i64 * bx as i64 + ay as i64 * by as i64;
+    ((c + 0x2000 + (c >> 63)) >> 14) as i32
+}
+
 /// Rounding mode constants (matching `ttinterp.h`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -250,18 +256,16 @@ impl GraphicsState {
     /// Returns the signed scalar projection in 26.6 format.
     /// C: `TT_Project` / `FT_Project` in ttinterp.c.
     pub fn project(&self, vx: i32, vy: i32) -> i32 {
-        // proj_vector is in 2.14 format (0x4000 = 1.0)
-        // Result: (vx * proj_x + vy * proj_y) >> 14 → 26.6
-        let px = ft_mul_fix(vx, self.proj_vector.0 << 2);
-        let py = ft_mul_fix(vy, self.proj_vector.1 << 2);
-        px + py
+        // FreeType `Project`/`Dual_Project` call `TT_DotFix14`
+        // (ttinterp.c:1190-1210, 2130-2168): sum both 2.14 products first,
+        // then apply one signed rounding phase. Rounding each axis separately
+        // shifts diagonal ALIGNRP/IP distances by one 26.6 unit.
+        dot_fix14(vx, vy, self.proj_vector.0, self.proj_vector.1)
     }
 
     /// Project a 2D vector onto the dual projection vector.
     pub fn dual_project(&self, vx: i32, vy: i32) -> i32 {
-        let px = ft_mul_fix(vx, self.dual_proj_vector.0 << 2);
-        let py = ft_mul_fix(vy, self.dual_proj_vector.1 << 2);
-        px + py
+        dot_fix14(vx, vy, self.dual_proj_vector.0, self.dual_proj_vector.1)
     }
 
     /// Move a point along the freedom vector by a given distance.
