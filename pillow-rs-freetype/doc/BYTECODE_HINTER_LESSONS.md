@@ -514,14 +514,14 @@ ftgrays.c for curved segments. Fix requires DDA line renderer port.
 ## 8. File Inventory
 
 ```
-pillow-rs-freetype/src/tt/hinter/
+src/tt/hinter/
 ├── mod.rs    (210 lines) — Entry point, zone setup, CVT scaling, dispatch
 ├── tables.rs ( 95 lines) — Parse cvt, fpgm, prep tables (4 unit tests)
 ├── zone.rs   ( 92 lines) — GlyphZone struct (cur/org/orus, tags, contours)
 ├── gs.rs     (240 lines) — GraphicsState (vectors, rounding, auto-flip)
 ├── exec.rs   (1100 lines) — ExecContext, fpgm/prep/glyph execution, 50+ opcodes
 
-pillow-rs-freetype/doc/
+doc/
 ├── BYTECODE_HINTER_IMPL.md — Original implementation plan
 └── BYTECODE_HINTER_LESSONS.md — This document
 ```

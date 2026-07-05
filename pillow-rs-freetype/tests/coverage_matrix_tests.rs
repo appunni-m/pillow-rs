@@ -1,7 +1,7 @@
 //! Unified coverage matrix test: one runner for static FreeType oracle matrices.
 //!
-//! Exact parity gates require raw pixel bytes. SHA-256/size fallbacks are only
-//! allowed for explicitly incomplete threshold baselines.
+//! Exact parity gates require raw pixel bytes when the endpoint renders a
+//! bitmap, and exact scalar/geometry values for non-rendering endpoints.
 //! Failures include byte-level diff stats for rasterizer parity debugging.
 //!
 //! Summary shows per-script pass/fail clearly.
@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
-use freetype::{Font, LoadMode, RenderMode, grays, scaler};
+use fontdone::{Font, LoadMode, RenderMode, grays, scaler};
 use log as _;
 use thiserror as _;
 
@@ -304,76 +304,48 @@ fn pixel_diff(
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-/// Full 55-script pixel-level comparison against the live vendored C binary is
+/// Full 55-script pixel-level comparison against the live pinned C binary is
 /// handled by `tests/direct_ft_compare.rs` — no static fixtures needed.
 ///
 /// The native TrueType test below compares our Rust native bytecode path
 /// against a FreeType-compatible default TrueType fixture.
 
 #[test]
-fn test_native_tt_default_threshold_baseline_not_parity_gate() {
+fn test_native_tt_default_matrix_exact_parity() {
     // Native TrueType default parity: FreeType's default load/render path runs
     // embedded TrueType bytecode instead of forcing the autohinter.
-    //
-    // This is intentionally not a parity gate yet. The threshold locks the
-    // current incomplete baseline so the Rust bytecode path cannot regress
-    // while we promote it to exact pixel/byte parity.
-    run_unified(
-        "native_tt_default_matrix.json",
-        LoadMode::Default,
-        Some((3176, 7640)),
-    );
+    run_unified("native_tt_default_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
 fn test_coverage_matrix_force_autohint() {
-    // Static FT parity: checks raw pixel refs generated from vendored FreeType.
+    // Static FT parity: checks raw pixel refs generated from pinned FreeType.
     run_unified("force_autohint_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
-fn test_render_mono_matrix_baseline_is_executed() {
-    run_unified(
-        "render_mono_matrix.json",
-        LoadMode::ForceAutoHint,
-        Some((915, 11_086)),
-    );
+fn test_render_mono_matrix_exact_parity() {
+    run_unified("render_mono_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
-fn test_render_lcd_matrix_baseline_is_executed() {
-    run_unified(
-        "render_lcd_matrix.json",
-        LoadMode::ForceAutoHint,
-        Some((215, 11_086)),
-    );
+fn test_render_lcd_matrix_exact_parity() {
+    run_unified("render_lcd_matrix.json", LoadMode::ForceAutoHint, None);
 }
 
 #[test]
-fn test_no_hinting_matrix_baseline_is_executed() {
-    run_unified(
-        "no_hinting_matrix.json",
-        LoadMode::Default,
-        Some((10_029, 11_086)),
-    );
+fn test_no_hinting_matrix_exact_parity() {
+    run_unified("no_hinting_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
-fn test_metrics_only_matrix_baseline_is_executed() {
-    run_unified(
-        "metrics_only_matrix.json",
-        LoadMode::Default,
-        Some((13, 11_086)),
-    );
+fn test_metrics_only_matrix_exact_parity() {
+    run_unified("metrics_only_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
-fn test_outline_cbox_matrix_baseline_is_executed() {
-    run_unified(
-        "outline_cbox_matrix.json",
-        LoadMode::Default,
-        Some((7, 11_086)),
-    );
+fn test_outline_cbox_matrix_exact_parity() {
+    run_unified("outline_cbox_matrix.json", LoadMode::Default, None);
 }
 
 #[test]
@@ -679,25 +651,27 @@ fn run_unified(matrix_file: &str, load_mode: LoadMode, expected_partial: Option<
             }
 
             "getmetrics" | "getname" | "getlength" => {
+                let mut detail = String::new();
                 let ok = match row.operation.as_str() {
                     "getmetrics" => {
                         let (a, d) = font.getmetrics();
-                        row.ref_value
-                            .as_ref()
-                            .map_or(false, |ev| &serde_json::json!([a, d]) == ev)
+                        let actual = serde_json::json!([a, d]);
+                        let expected = row.ref_value.as_ref();
+                        detail = format!(" actual={actual} expected={:?}", expected);
+                        expected == Some(&actual)
                     }
                     "getname" => {
                         let (f, s) = font.getname();
-                        row.ref_value
-                            .as_ref()
-                            .map_or(false, |ev| &serde_json::json!([f, s]) == ev)
+                        let actual = serde_json::json!([f, s]);
+                        let expected = row.ref_value.as_ref();
+                        detail = format!(" actual={actual} expected={:?}", expected);
+                        expected == Some(&actual)
                     }
                     "getlength" => {
                         let len = font.getlength("Hello");
-                        row.ref_value
-                            .as_ref()
-                            .and_then(|ev| ev.as_f64())
-                            .map_or(false, |ef| (len - ef as f32).abs() < 0.5)
+                        let expected = row.ref_value.as_ref().and_then(|ev| ev.as_f64());
+                        detail = format!(" actual={len:.6} expected={expected:?}");
+                        expected.is_some_and(|ef| (len - ef as f32).abs() < 0.5)
                     }
                     _ => false,
                 };
@@ -707,9 +681,10 @@ fn run_unified(matrix_file: &str, load_mode: LoadMode, expected_partial: Option<
                     failed += 1;
                     *stage_counts.entry(FailureStage::Metrics).or_default() += 1;
                     failures.push(format!(
-                        "{} stage={}",
+                        "{} stage={}{}",
                         row.id,
-                        FailureStage::Metrics.label()
+                        FailureStage::Metrics.label(),
+                        detail
                     ));
                 }
             }
@@ -793,7 +768,7 @@ fn run_unified(matrix_file: &str, load_mode: LoadMode, expected_partial: Option<
             );
         }
         // Write full failure list to file for analysis
-        let report_path = "/tmp/pillow_failure_ids.txt";
+        let report_path = "/tmp/freetype_failure_ids.txt";
         std::fs::write(report_path, failures.join("\n")).ok();
         eprintln!("║  Full list: {report_path}");
     }

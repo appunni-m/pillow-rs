@@ -19,7 +19,7 @@ Input:  tests/fixtures/font_inventory.json
 Output: tests/fixtures/force_autohint_matrix.json (55-script pixel fixture)
 
 Dependencies:
-  - /tmp/gen_refs_v4 (vendored FreeType 2.14.3 binary)
+  - FT_REF_BIN or /tmp/gen_refs_v4 (FreeType 2.14.3 oracle helper)
 """
 
 import os, sys, json, subprocess, hashlib, re, argparse
@@ -31,7 +31,7 @@ UNIFIED_PATH = os.path.join(ROOT, 'tests/fixtures/force_autohint_matrix.json')
 RAW_DIR = os.path.join(ROOT, 'tests/fixtures/outputs/raws_ft')
 BLUE_DAT = os.path.join(ROOT, 'freetype/src/autofit/afblue.dat')
 BUILD_DIR = os.path.join(ROOT, 'freetype/build')
-REF_BIN = '/tmp/gen_refs_v4'
+REF_BIN = os.environ.get('FT_REF_BIN', '/tmp/gen_refs_v4')
 
 SIZES = (10, 20)
 
@@ -182,6 +182,7 @@ def build_fixture(inventory):
                         "script": script,
                         "codepoint": cp, "char": chr(cp) if cp < 0x10000 else "",
                         "operation": "getmask", "status": "active",
+                        "metrics": {},
                         "bitmap": {"width": w, "rows": h, "left": l, "top": t},
                         "bbox": {"bitmap_pixels": {"x_min": l, "y_min": t - h, "x_max": l + w, "y_max": t}},
                         "bitmap_placement": {"left": l, "top": t},
@@ -199,6 +200,7 @@ def build_fixture(inventory):
                         "script": script,
                         "codepoint": cp, "char": chr(cp) if cp < 0x10000 else "",
                         "operation": "getbbox", "status": "active",
+                        "metrics": {},
                         "bitmap": {"width": w, "rows": h, "left": l, "top": t},
                         "bbox": {"bitmap_pixels": {"x_min": l, "y_min": t - h, "x_max": l + w, "y_max": t}},
                         "bitmap_placement": {"left": l, "top": t},
@@ -231,7 +233,7 @@ def main():
         "version": "5.1.0",
         "fixture_family": "force_autohint",
         "generator": "scripts/build_fixtures.py",
-        "source": "font_inventory.json -> vendored FreeType 2.14.3",
+        "source": "font_inventory.json -> pinned FreeType 2.14.3",
         "font_source": "fonts_autohint",
         "load_flags": ["FT_LOAD_RENDER", "FT_LOAD_FORCE_AUTOHINT"],
         "render_mode": "FT_RENDER_MODE_NORMAL",

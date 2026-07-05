@@ -1,7 +1,7 @@
 # FreeType Performance Benchmarking
 
 This document defines how to produce and review performance numbers for
-`pillow-rs-freetype`.
+`fontdone`.
 
 The goal is not to produce the largest possible speedup. The goal is to produce
 numbers that another contributor can reproduce, audit, and challenge.
@@ -11,14 +11,14 @@ numbers that another contributor can reproduce, audit, and challenge.
 Use repeated samples and the standalone C helper:
 
 ```bash
-python3 scripts/bench_freetype.py --compare-c --samples 10 --table
+make bench
 ```
 
 The output is written to:
 
 ```text
-target/freetype-bench/latest.json
-target/freetype-bench/latest.md
+target/fontdone-bench/latest.json
+target/fontdone-bench/latest.md
 ```
 
 The JSON contains:
@@ -53,7 +53,7 @@ The Markdown report contains:
 
 ## Trust Labels
 
-Every row in `tests/fixtures/perf_operation_matrix.json` must declare
+Every row in `tests/data/perf_operation_matrix.json` must declare
 `comparison_trust`.
 
 - `exact_sha256`: Rust and C output bytes are packed equivalently and exact
@@ -85,12 +85,12 @@ The matrix defines named `workload_profiles`.
 Use the default profile unless the report explicitly says otherwise:
 
 ```bash
-python3 scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
+make bench BENCH_PROFILE=default BENCH_SAMPLES=10
 ```
 
 Available profiles currently include:
 
-- `default`: balanced PIL-style text measurement and mask workload.
+- `default`: balanced text measurement, glyph metrics, and mask workload.
 - `interactive_text`: length, bbox, and grayscale mask dominated workload.
 - `font_loading_heavy`: repeated font construction workload.
 - `row_weight`: fallback profile using each row's direct `weight` field.
@@ -155,24 +155,23 @@ cross-machine behavior.
 Before accepting benchmark tooling changes:
 
 ```bash
-PYTHONPYCACHEPREFIX=target/pycache python3 -m py_compile scripts/bench_freetype.py
-python3 scripts/bench_freetype.py --self-test
-python3 scripts/bench_freetype.py --compare-c --samples 2 --table
-cargo test --test perf_benchmark_contract --locked
-cargo test --test no_runtime_ffi --locked -- --nocapture
+make bench-self-test
+make bench-quick
+make test-perf
+make test-ffi
 ```
 
 Before accepting runtime performance claims, also run:
 
 ```bash
-cargo test --test coverage_matrix_tests --locked -- --nocapture
-cargo test --locked
-python3 scripts/bench_freetype.py --compare-c --samples 10 --table
+make test-parity
+make test
+make bench
 ```
 
-Parent-project integration gates, such as a Pillow connector matrix, belong in
-the downstream integration repository. They can catch adapter regressions, but
-they are not required to validate this standalone crate.
+Parent-project integration gates belong in downstream integration repositories.
+They can catch adapter regressions, but they are not required to validate this
+standalone crate.
 
 ## Non-Negotiable Rules
 

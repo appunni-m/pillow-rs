@@ -1,17 +1,17 @@
 [package]
-name = "freetype"
+name = "fontdone"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.87"
 license = "FTL"
 description = "Pure-Rust FreeType-compatible font engine: TrueType loader, hinters, rasterizer, and table parsers"
 readme = "README.md"
-repository = "https://github.com/appunni-m/freetype"
+repository = "https://github.com/appunni-m/fontdone"
 keywords = ["freetype", "truetype", "font", "rendering", "autohint"]
 categories = ["rendering", "text-processing"]
 
 [lib]
-name = "freetype"
+name = "fontdone"
 
 [dependencies]
 log = "0.4"

@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use freetype::Font;
+use fontdone::Font;
 
 fn fixture_font(name: &str) -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -153,7 +153,7 @@ fn sfnt_table_access_matches_raw_table_bytes() {
     let cmap_info = font
         .sfnt_tables()
         .into_iter()
-        .find(|info| info.tag == freetype::tt::tag(b"cmap"))
+        .find(|info| info.tag == fontdone::tt::tag(b"cmap"))
         .expect("cmap table");
 
     let raw = font.load_sfnt_table(cmap_info.tag, 0, None).unwrap();

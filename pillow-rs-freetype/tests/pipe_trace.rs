@@ -1,16 +1,15 @@
 //! Pipeline trace test: call autohinter stages directly for one glyph.
 //! Interactive debug only — ignored by default. Enable with --include-ignored.
-//! Run: PIPE_FONT=DejaVuSerif-Bold PIPE_SIZE=10 PIPE_CHAR='$' \
-//!   RUST_LOG=autohint::pipeline=trace \
-//!   cargo test --test pipe_trace -- --nocapture --include-ignored
+//! Run with environment variables, for example:
+//! `PIPE_FONT=DejaVuSerif-Bold PIPE_SIZE=10 PIPE_CHAR='$' RUST_LOG=autohint::pipeline=trace make test-pipe-trace`
 
 #![allow(unused_variables)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unwrap_used)]
 #![allow(unused_crate_dependencies)]
 
-use freetype::autohint::latin;
-use freetype::{Font, RenderMode, scaler, tt};
+use fontdone::autohint::latin;
+use fontdone::{Font, RenderMode, scaler, tt};
 
 fn sha256(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
@@ -81,7 +80,7 @@ fn trace_one_glyph() {
     };
 
     let is_italic = (fd.head.mac_style & 2) != 0;
-    let mut outline = freetype::outline::Outline::default();
+    let mut outline = fontdone::outline::Outline::default();
     latin::apply_hints(
         &mut outline,
         &shifted_raw,

@@ -12,7 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
-use freetype as _;
+use fontdone as _;
 use log as _;
 use sha2 as _;
 use thiserror as _;
@@ -206,17 +206,17 @@ fn render_mode_matrix_is_static_c_oracle_data() {
 }
 
 #[test]
-fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
+fn generated_matrices_are_exact_parity_gates() {
     let matrix = read_coverage_matrix("native_tt_default_matrix.json");
     assert_coverage_header("native_tt_default_matrix.json", &matrix);
     assert!(
-        !matrix.assert_pixel_parity,
-        "native_tt_default_matrix.json must stay marked incomplete until it is exact"
+        matrix.assert_pixel_parity,
+        "native_tt_default_matrix.json must remain an exact parity gate"
     );
     assert_eq!(
         matrix.rows.len(),
         7_640,
-        "native_tt_default_matrix.json coverage changed; update the threshold baseline intentionally"
+        "native_tt_default_matrix.json coverage changed; refresh from the C oracle intentionally"
     );
 
     let counts = operation_counts(&matrix.rows);
@@ -230,13 +230,13 @@ fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
         let matrix = read_coverage_matrix(name);
         assert_coverage_header(name, &matrix);
         assert!(
-            !matrix.assert_pixel_parity,
-            "{name} must stay marked incomplete until its executed baseline is exact"
+            matrix.assert_pixel_parity,
+            "{name} must remain an exact parity gate"
         );
         assert_eq!(
             matrix.rows.len(),
             11_086,
-            "{name} coverage changed; update the executed baseline intentionally"
+            "{name} coverage changed; refresh from the C oracle intentionally"
         );
 
         let counts = operation_counts(&matrix.rows);
@@ -262,13 +262,13 @@ fn incomplete_threshold_matrices_cannot_pose_as_parity_gates() {
         let matrix = read_coverage_matrix(name);
         assert_coverage_header(name, &matrix);
         assert!(
-            !matrix.assert_pixel_parity,
-            "{name} must stay marked incomplete until its executed baseline is exact"
+            matrix.assert_pixel_parity,
+            "{name} must remain an exact parity gate"
         );
         assert_eq!(
             matrix.rows.len(),
             11_086,
-            "{name} coverage changed; update the executed baseline intentionally"
+            "{name} coverage changed; refresh from the C oracle intentionally"
         );
 
         let counts = operation_counts(&matrix.rows);
@@ -281,13 +281,13 @@ fn all_committed_supplemental_matrices_have_executed_status() {
     let no_hinting = read_coverage_matrix("no_hinting_matrix.json");
     assert_coverage_header("no_hinting_matrix.json", &no_hinting);
     assert!(
-        !no_hinting.assert_pixel_parity,
-        "no_hinting_matrix.json is an executed broad baseline but not yet an exact parity gate"
+        no_hinting.assert_pixel_parity,
+        "no_hinting_matrix.json must remain an exact parity gate"
     );
     assert_eq!(
         no_hinting.rows.len(),
         11_086,
-        "no_hinting_matrix.json coverage changed; update the executed baseline intentionally"
+        "no_hinting_matrix.json coverage changed; refresh from the C oracle intentionally"
     );
 
     let counts = operation_counts(&no_hinting.rows);

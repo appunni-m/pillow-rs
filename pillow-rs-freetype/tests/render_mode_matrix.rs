@@ -7,7 +7,7 @@
 #![allow(missing_docs)]
 #![allow(unused_crate_dependencies)]
 
-use freetype::{Font, PixelMode, RenderMode};
+use fontdone::{Font, PixelMode, RenderMode};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -77,7 +77,7 @@ fn render_modes_match_static_fixture_matrix() {
             || bitmap.buffer != expected_raw
         {
             failures.push(format!(
-                "{} actual mode={} {}x{} pitch={} left={} top={} sha={} len={} expected mode={} {}x{} pitch={} left={} top={} sha={} len={}",
+                "{} actual mode={} {}x{} pitch={} left={} top={} sha={} len={} bytes={} expected mode={} {}x{} pitch={} left={} top={} sha={} len={} bytes={}",
                 row.id,
                 bitmap.pixel_mode.fixture_name(),
                 bitmap.width,
@@ -87,6 +87,7 @@ fn render_modes_match_static_fixture_matrix() {
                 bitmap.top,
                 actual_sha,
                 bitmap.buffer.len(),
+                compact_hex(&bitmap.buffer),
                 row.pixel_mode,
                 row.width,
                 row.rows,
@@ -95,6 +96,7 @@ fn render_modes_match_static_fixture_matrix() {
                 row.top,
                 row.ref_sha256,
                 expected_raw.len(),
+                compact_hex(&expected_raw),
             ));
         }
 
@@ -166,4 +168,18 @@ fn sha256_hex(data: &[u8]) -> String {
         .iter()
         .map(|b| format!("{:02x}", b))
         .collect()
+}
+
+fn compact_hex(data: &[u8]) -> String {
+    const LIMIT: usize = 48;
+    let shown = data
+        .iter()
+        .take(LIMIT)
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    if data.len() > LIMIT {
+        format!("{shown}...")
+    } else {
+        shown
+    }
 }

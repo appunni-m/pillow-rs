@@ -1,6 +1,7 @@
-# freetype Agent Instructions
+# fontdone Agent Instructions
 
 This repository is the standalone pure-Rust FreeType parity project.
+`AGENT.md` is a symlink to this file. Maintain this file only.
 
 ## Goal
 
@@ -19,10 +20,16 @@ Match version-pinned C FreeType behavior with Rust runtime code.
   native FreeType calls, or runtime C build hooks.
 - C FreeType is an offline oracle only: fixture generation, diagnostics, and
   trace comparison.
+- FreeType C source lives in ignored `/freetype/` and is fetched through
+  `make oracle-fetch`; never commit it.
+- Generated fixture matrices and raw outputs live in ignored
+  `tests/fixtures/*.json` and `tests/fixtures/outputs/`; keep only font inputs
+  tracked under `tests/fixtures/input/`.
+- Maintained non-generated test contracts live under `tests/data/`.
 - Never edit fixtures, expected hashes, thresholds, or tests to make code pass.
 - Never add temporary debug prints to committed runtime code. Use guarded
   `log::trace!` for permanent traces.
-- Do not revive legacy Pillow font backends. This project owns the FreeType
+- Do not revive legacy parent-project font backends. This project owns the FreeType
   implementation directly.
 
 ## Required Commands
@@ -30,11 +37,16 @@ Match version-pinned C FreeType behavior with Rust runtime code.
 Run narrow checks first, then the broader gates through Makefile targets:
 
 ```bash
+make setup
 make test-parity
 make test-ffi
 make fmt
 make clippy
 ```
+
+`make test-parity` must include every FreeType parity gate. Keep narrower
+targets, such as `make test-coverage` and `make test-render-mode`, only as
+debugging conveniences.
 
 For benchmark changes:
 
@@ -70,5 +82,5 @@ Important stages:
 
 Update docs when behavior, benchmarks, fixture generation, or harness semantics
 change. Keep long playbooks in `doc/`; keep this file short and enforceable.
-The root repository ownership map is `../docs/REPO_MAP.md`; update it when
-FreeType source, harness, generator, or project-goal files move.
+When a nuance is discovered by C-vs-Rust tracing, document the durable reason at
+the relevant code site with a short comment, not in a throwaway status note.

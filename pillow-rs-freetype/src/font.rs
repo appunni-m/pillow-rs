@@ -4,14 +4,12 @@
 //! including text layout or framework-specific packaging, live outside this
 //! crate.
 
-use crate::casts::{i32_from_f32, u32_from_i32, u32_from_i64, u32_from_usize, usize_from_i32};
+use crate::casts::{i32_from_f32, u32_from_i64, u32_from_usize};
 
 use crate::error::FontError;
 use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::grays::{self, RasterResult};
-use crate::scaler::{
-    self, ScaleMetrics, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_ceil, pixel_round,
-};
+use crate::scaler::{self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_round};
 use crate::tables::FontData;
 use crate::tt::{self, tag};
 use std::sync::{Arc, OnceLock};
@@ -112,7 +110,7 @@ pub struct GlyphMask {
     pub xmin: i32,
     /// Top bearing offset in pixels (bbox ymin, FreeType y-up coordinate space).
     pub ymin: i32,
-    /// Advance width in 26.6 fixed-point format.
+    /// Rounded horizontal advance in integer pixels.
     pub advance_width: i32,
 }
 
@@ -154,7 +152,7 @@ impl Font {
     /// # Examples
     ///
     /// ```no_run
-    /// use freetype::Font;
+    /// use fontdone::Font;
     /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
     /// let font = Font::truetype(&font_data, 10.0).unwrap();
     /// assert_eq!(font.getname(), ("DejaVu Sans", "Book"));
@@ -599,7 +597,10 @@ impl Font {
         (asc, desc)
     }
 
-    /// `getlength(text)` → total advance width in pixels (float).
+    /// `getlength(text)` -> total glyph-slot advance in pixels.
+    ///
+    /// FreeType does not apply pair kerning as part of `FT_Load_Glyph`; callers
+    /// that need legacy `kern` table adjustment can use [`Self::getkerning`].
     pub fn getlength(&self, text: &str) -> f32 {
         self.layout_advance(text) as f32 / 64.0
     }
@@ -611,6 +612,19 @@ impl Font {
         self.glyph_kerning(left, right)
     }
 
+    /// Return the scaled horizontal advance for one Unicode codepoint in 26.6 pixels.
+    ///
+    /// This exposes the fractional pen advance from the font's `hmtx` entry.
+    /// It intentionally stays separate from [`Self::getlength`] and
+    /// [`Self::glyph_metrics`], which report grid-fit FreeType metric parity.
+    /// Kerning is not included; callers that build text runs should add
+    /// [`Self::getkerning`] between adjacent glyphs.
+    pub fn glyph_hori_advance_26dot6(&self, codepoint: u32) -> i32 {
+        let glyph = self.char_index(codepoint);
+        let advance = self.data.hmtx.get(glyph).advance_width as i32;
+        ft_mul_fix(advance, self.size_metrics.x_scale)
+    }
+
     /// Return `FT_GlyphSlotRec::metrics` for a Unicode codepoint loaded with
     /// FreeType's default TrueType load path.
     ///
@@ -619,6 +633,10 @@ impl Font {
     /// requested.
     pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
         let glyph = self.char_index(codepoint);
+        self.glyph_metrics_for_index(glyph)
+    }
+
+    fn glyph_metrics_for_index(&self, glyph: u16) -> Result<GlyphSlotMetrics, FontError> {
         let scaled = if self.data.fpgm.is_some() && self.data.cvt.is_some() {
             let bytecode_context = self.native_bytecode_context()?;
             let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context(
@@ -652,17 +670,12 @@ impl Font {
 
     /// `getbbox(text)` -> FreeType rendered bitmap bbox for the first glyph.
     ///
-    /// `LoadMode::Default` returns the rendered slot bitmap box. `ForceAutoHint`
-    /// returns the raw auto-hinted outline box because that is the fixture
-    /// contract for the force-autohint lane.
+    /// Returns the rendered glyph-slot bitmap box for the first glyph.
     pub fn getbbox(&self, text: &str) -> (i32, i32, i32, i32) {
         if text.is_empty() {
             return (0, 0, 0, 0);
         }
-        match self.load_mode {
-            LoadMode::Default => self.getbbox_default_rendered_slot(text),
-            LoadMode::ForceAutoHint => self.getbbox_single_glyph(text),
-        }
+        self.getbbox_single_glyph(text)
     }
 
     /// `getmask(text)` -> FreeType-style 8-bit alpha bitmap for the first glyph,
@@ -677,7 +690,7 @@ impl Font {
     /// # Examples
     ///
     /// ```no_run
-    /// use freetype::Font;
+    /// use fontdone::Font;
     /// let font_data = std::fs::read("DejaVuSans.ttf").unwrap();
     /// let font = Font::truetype(&font_data, 10.0).unwrap();
     /// let mask = font.getmask("A").unwrap();
@@ -694,32 +707,11 @@ impl Font {
                 advance_width: 0,
             });
         }
-        match self.load_mode {
-            LoadMode::Default => self.getmask_default_rendered_slot(text),
-            LoadMode::ForceAutoHint => self.getmask_single_glyph(text),
-        }
+        self.getmask_single_glyph(text)
     }
 }
 
 impl Font {
-    fn getbbox_default_rendered_slot(&self, text: &str) -> (i32, i32, i32, i32) {
-        let ch = text.chars().next().unwrap_or('\0');
-        let glyph = self.char_index(ch as u32);
-        match self.scale_glyph_for_load_mode(glyph) {
-            Ok(scaled) if scaled.outline.n_contours > 0 => {
-                let x_min = 0.min(scaled.bbox_x_min);
-                let x_max = pixel_round(scaled.advance_width).max(scaled.bbox_x_max);
-                let y_min = 0.min(scaled.bbox_y_min);
-                let y_max = 0.max(scaled.bbox_y_max);
-                let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, self.size_metrics.y_scale);
-                let asc_px = pixel_ceil(asc_26);
-                (x_min, asc_px - y_max, x_max, asc_px - y_min)
-            }
-            Err(_) => (0, 0, 0, 0),
-            _ => (0, 0, 0, 0),
-        }
-    }
-
     fn getbbox_single_glyph(&self, text: &str) -> (i32, i32, i32, i32) {
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = self.char_index(ch as u32);
@@ -730,64 +722,6 @@ impl Font {
             }
             _ => (0, 0, 0, 0),
         }
-    }
-
-    fn getmask_default_rendered_slot(&self, text: &str) -> Result<GlyphMask, FontError> {
-        let ch = text.chars().next().unwrap_or('\0');
-        let glyph = self.char_index(ch as u32);
-        let scaled = self.scale_glyph_for_load_mode(glyph)?;
-        let x_min = 0.min(scaled.bbox_x_min);
-        let x_max = pixel_round(scaled.advance_width).max(scaled.bbox_x_max);
-        let y_min = 0.min(scaled.bbox_y_min);
-        let y_max = 0.max(scaled.bbox_y_max);
-        let advance_width = pixel_round(scaled.advance_width);
-        let width = u32_from_i32(x_max - x_min);
-        let height = u32_from_i32(y_max - y_min);
-        let width_usize = width as usize;
-        let height_usize = height as usize;
-        let len = width_usize.checked_mul(height_usize).ok_or_else(|| {
-            FontError::InvalidOutline("rendered glyph slot dimensions overflow".into())
-        })?;
-
-        let pixels = if scaled.outline.n_contours == 0 || len == 0 {
-            Vec::new()
-        } else {
-            let raster = grays::rasterize(scaled.outline)?;
-            if scaled.bbox_x_min == x_min
-                && scaled.bbox_x_max == x_max
-                && scaled.bbox_y_min == y_min
-                && scaled.bbox_y_max == y_max
-                && raster.width == width_usize
-                && raster.height == height_usize
-            {
-                raster.pixels
-            } else {
-                let mut pixels = vec![0u8; len];
-                let dst_x = usize_from_i32(scaled.bbox_x_min - x_min);
-                let dst_y = usize_from_i32(y_max - scaled.bbox_y_max);
-                for y in 0..raster.height {
-                    let src = y * raster.width;
-                    let dst = (dst_y + y) * width_usize + dst_x;
-                    if dst + raster.width <= pixels.len()
-                        && dst_x + raster.width <= width_usize
-                        && src + raster.width <= raster.pixels.len()
-                    {
-                        pixels[dst..dst + raster.width]
-                            .copy_from_slice(&raster.pixels[src..src + raster.width]);
-                    }
-                }
-                pixels
-            }
-        };
-
-        Ok(GlyphMask {
-            width,
-            height,
-            pixels,
-            xmin: x_min,
-            ymin: y_min,
-            advance_width,
-        })
     }
 
     fn getmask_single_glyph(&self, text: &str) -> Result<GlyphMask, FontError> {
@@ -817,7 +751,10 @@ impl Font {
         })
     }
 
-    fn scale_glyph_for_load_mode(&self, glyph: u16) -> Result<scaler::ScaledGlyph, FontError> {
+    pub(crate) fn scale_glyph_for_load_mode(
+        &self,
+        glyph: u16,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
         match self.load_mode {
             LoadMode::Default => {
                 let bytecode_context = self.native_bytecode_context()?;
@@ -889,15 +826,15 @@ impl Font {
     }
 
     fn layout_advance(&self, text: &str) -> i32 {
-        let data = &self.data;
-        let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
-        let mut previous = None;
         text.chars().fold(0, |total, ch| {
             let glyph = self.char_index(ch as u32);
-            let m = data.hmtx.get(glyph);
-            let kerning = previous.map_or(0, |left| self.glyph_kerning(left, glyph));
-            previous = Some(glyph);
-            total + kerning + ft_mul_fix(m.advance_width as i32, scale.x_scale)
+            if glyph == 0 {
+                return total;
+            }
+            match self.glyph_metrics_for_index(glyph) {
+                Ok(metrics) => total + metrics.hori_advance,
+                Err(_) => total,
+            }
         })
     }
 
@@ -1189,13 +1126,12 @@ mod tests {
     }
 
     #[test]
-    fn getlength_reports_run_advance_with_pair_kerning() {
+    fn getlength_reports_glyph_slot_advance_without_implicit_kerning() {
         let font = test_font();
         let single = font.getlength("A");
         let text = font.getlength("AA");
-        let pair_kerning = font.getkerning('A', 'A') as f32 / 64.0;
 
         assert!(text > single);
-        assert_eq!(text, single * 2.0 + pair_kerning);
+        assert_eq!(text, single * 2.0);
     }
 }

@@ -5,8 +5,8 @@ Parses both the AF_BLUE_STRING_ENUM section (character data) and
 AF_BLUE_STRINGSET_ENUM section (script-to-entries mapping with property flags).
 
 Usage: python3 scripts/extract_blues.py \
-    pillow-rs-freetype/freetype/src/autofit/afblue.dat \
-    > pillow-rs-freetype/src/autohint/blue_strings.rs
+    freetype/src/autofit/afblue.dat \
+    > src/autohint/blue_strings.rs
 """
 
 import re

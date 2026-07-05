@@ -13,7 +13,7 @@ MANIFEST     := manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
-FREETYPE_SRC := pillow-rs-freetype
+FONTDONE_SRC := pillow-rs-freetype
 FIXTURES_DIR := tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
@@ -47,17 +47,18 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
-	@printf "\n$(BOLD)FreeType$(NC)\n"
-	@printf "  $(CYAN)make freetype-help$(NC)  Show crate-local FreeType targets\n"
-	@printf "  $(CYAN)make freetype-ci$(NC)    Run FreeType docs, lint, tests, parity, FFI, bench contracts\n"
-	@printf "  $(CYAN)make freetype-test$(NC)  Run all pillow-rs-freetype tests\n"
-	@printf "  $(CYAN)make freetype-parity$(NC) Run the FreeType coverage matrix harness\n"
-	@printf "  $(CYAN)make freetype-ffi$(NC)   Run the no-runtime-FFI guard\n"
-	@printf "  $(CYAN)make freetype-doc$(NC)   Build strict FreeType rustdoc\n"
-	@printf "  $(CYAN)make freetype-bench$(NC) Run Rust vs C FreeType benchmark report\n"
-	@printf "  $(CYAN)make freetype-fixtures$(NC) Regenerate FreeType fixture families\n"
+	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
+	@printf "  $(CYAN)make fontdone-help$(NC)  Show crate-local fontdone targets\n"
+	@printf "  $(CYAN)make fontdone-ci$(NC)    Run fontdone docs, lint, tests, parity, FFI, bench contracts\n"
+	@printf "  $(CYAN)make fontdone-test$(NC)  Run all fontdone tests\n"
+	@printf "  $(CYAN)make fontdone-parity$(NC) Run the FreeType coverage matrix harness\n"
+	@printf "  $(CYAN)make fontdone-ffi$(NC)   Run the no-runtime-FFI guard\n"
+	@printf "  $(CYAN)make fontdone-doc$(NC)   Build strict fontdone rustdoc\n"
+	@printf "  $(CYAN)make fontdone-bench$(NC) Run Rust vs C FreeType benchmark report\n"
+	@printf "  $(CYAN)make fontdone-fixtures$(NC) Regenerate FreeType fixture families\n"
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
+	@printf "  $(CYAN)make imagingft-fixtures$(NC) Generate ignored PIL imagingft fixture matrix\n"
 	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
 	@printf "  $(CYAN)make fixtures-clean$(NC) Remove fixture outputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
@@ -148,69 +149,95 @@ test-wasm: ## Run WASM/JS tests
 
 test-all: test-core test test-wasm ## Run core + Python + WASM tests
 
-# ── FreeType ─────────────────────────────────────────────────────────────────
+# ── fontdone / FreeType parity ───────────────────────────────────────────────
+.PHONY: fontdone-help fontdone-build fontdone-doc fontdone-doc-test
+.PHONY: fontdone-test fontdone-parity fontdone-ffi fontdone-lint
+.PHONY: fontdone-fmt fontdone-fmt-fix fontdone-clippy
+.PHONY: fontdone-bench fontdone-bench-quick fontdone-bench-self-test
+.PHONY: fontdone-fixtures fontdone-ci fontdone-clean
 .PHONY: freetype-help freetype-build freetype-doc freetype-doc-test
 .PHONY: freetype-test freetype-parity freetype-ffi freetype-lint
 .PHONY: freetype-fmt freetype-fmt-fix freetype-clippy
 .PHONY: freetype-bench freetype-bench-quick freetype-bench-self-test
 .PHONY: freetype-fixtures freetype-ci freetype-clean
 
-freetype-help: ## Show pillow-rs-freetype targets
-	$(MAKE) -C $(FREETYPE_SRC) help
+fontdone-help: ## Show pillow-rs-freetype targets
+	$(MAKE) -C $(FONTDONE_SRC) help
 
-freetype-build: ## Build pillow-rs-freetype
-	$(MAKE) -C $(FREETYPE_SRC) build
+fontdone-build: ## Build fontdone
+	$(MAKE) -C $(FONTDONE_SRC) build
 
-freetype-doc: ## Build strict pillow-rs-freetype rustdoc
-	$(MAKE) -C $(FREETYPE_SRC) doc
+fontdone-doc: ## Build strict fontdone rustdoc
+	$(MAKE) -C $(FONTDONE_SRC) doc
 
-freetype-doc-test: ## Run pillow-rs-freetype doctests
-	$(MAKE) -C $(FREETYPE_SRC) doc-test
+fontdone-doc-test: ## Run fontdone doctests
+	$(MAKE) -C $(FONTDONE_SRC) doc-test
 
-freetype-test: ## Run all pillow-rs-freetype tests
-	$(MAKE) -C $(FREETYPE_SRC) test
+fontdone-test: ## Run all fontdone tests
+	$(MAKE) -C $(FONTDONE_SRC) test
 
-freetype-parity: ## Run FreeType parity matrix tests
-	$(MAKE) -C $(FREETYPE_SRC) test-parity
+fontdone-parity: ## Run FreeType parity matrix tests
+	$(MAKE) -C $(FONTDONE_SRC) test-parity
 
-freetype-ffi: ## Run no-runtime-FFI guard
-	$(MAKE) -C $(FREETYPE_SRC) test-ffi
+fontdone-ffi: ## Run no-runtime-FFI guard
+	$(MAKE) -C $(FONTDONE_SRC) test-ffi
 
-freetype-fmt: ## Check pillow-rs-freetype formatting
-	$(MAKE) -C $(FREETYPE_SRC) fmt
+fontdone-fmt: ## Check fontdone formatting
+	$(MAKE) -C $(FONTDONE_SRC) fmt
 
-freetype-fmt-fix: ## Apply pillow-rs-freetype formatting
-	$(MAKE) -C $(FREETYPE_SRC) fmt-fix
+fontdone-fmt-fix: ## Apply fontdone formatting
+	$(MAKE) -C $(FONTDONE_SRC) fmt-fix
 
-freetype-clippy: ## Run strict pillow-rs-freetype clippy
-	$(MAKE) -C $(FREETYPE_SRC) clippy
+fontdone-clippy: ## Run strict fontdone clippy
+	$(MAKE) -C $(FONTDONE_SRC) clippy
 
-freetype-lint: ## Run pillow-rs-freetype fmt + clippy
-	$(MAKE) -C $(FREETYPE_SRC) lint
+fontdone-lint: ## Run fontdone fmt + clippy
+	$(MAKE) -C $(FONTDONE_SRC) lint
 
-freetype-bench: ## Run Rust vs C FreeType benchmark report
-	$(MAKE) -C $(FREETYPE_SRC) bench
+fontdone-bench: ## Run Rust vs C FreeType benchmark report
+	$(MAKE) -C $(FONTDONE_SRC) bench
 
-freetype-bench-quick: ## Run short FreeType benchmark smoke comparison
-	$(MAKE) -C $(FREETYPE_SRC) bench-quick
+fontdone-bench-quick: ## Run short FreeType benchmark smoke comparison
+	$(MAKE) -C $(FONTDONE_SRC) bench-quick
 
-freetype-bench-self-test: ## Run FreeType benchmark tooling self-test
-	$(MAKE) -C $(FREETYPE_SRC) bench-self-test
+fontdone-bench-self-test: ## Run benchmark tooling self-test
+	$(MAKE) -C $(FONTDONE_SRC) bench-self-test
 
-freetype-fixtures: ## Regenerate all FreeType fixture families
-	$(MAKE) -C $(FREETYPE_SRC) fixtures
+fontdone-fixtures: ## Regenerate all FreeType fixture families
+	$(MAKE) -C $(FONTDONE_SRC) fixtures
 
-freetype-ci: ## Run required FreeType local CI sequence
-	$(MAKE) -C $(FREETYPE_SRC) ci
+fontdone-ci: ## Run required fontdone local CI sequence
+	$(MAKE) -C $(FONTDONE_SRC) ci
 
-freetype-clean: ## Clean pillow-rs-freetype artifacts
-	$(MAKE) -C $(FREETYPE_SRC) clean
+fontdone-clean: ## Clean fontdone artifacts
+	$(MAKE) -C $(FONTDONE_SRC) clean
+
+freetype-help: fontdone-help
+freetype-build: fontdone-build
+freetype-doc: fontdone-doc
+freetype-doc-test: fontdone-doc-test
+freetype-test: fontdone-test
+freetype-parity: fontdone-parity
+freetype-ffi: fontdone-ffi
+freetype-fmt: fontdone-fmt
+freetype-fmt-fix: fontdone-fmt-fix
+freetype-clippy: fontdone-clippy
+freetype-lint: fontdone-lint
+freetype-bench: fontdone-bench
+freetype-bench-quick: fontdone-bench-quick
+freetype-bench-self-test: fontdone-bench-self-test
+freetype-fixtures: fontdone-fixtures
+freetype-ci: fontdone-ci
+freetype-clean: fontdone-clean
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
+.PHONY: fixtures imagingft-fixtures fixtures-suite0 fixtures-suite1 fixtures-clean
 
 fixtures: ## Generate all test fixtures
 	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR)
+
+imagingft-fixtures: ## Generate ignored PIL imagingft fixture matrix
+	$(PYTHON) pillow-rs/scripts/build_imagingft_fixtures.py
 
 fixtures-suite0: ## Generate suite0 fixtures
 	$(PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0
@@ -283,7 +310,7 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 ci: repo-map-check fmt clippy test-core fixtures-suite0 test coverage-validate ## Full CI pipeline
 	@echo "=== done ==="
 
-verify: ci freetype-ci ## Full workspace CI plus FreeType CI
+verify: ci fontdone-ci ## Full workspace CI plus FreeType CI
 	@echo "=== all verification done ==="
 
 # ── Clean ─────────────────────────────────────────────────────────────────────

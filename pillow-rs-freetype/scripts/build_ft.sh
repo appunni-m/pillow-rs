@@ -1,8 +1,10 @@
 #!/bin/bash
-# Build FreeType 2.14.3 from vendored source and install to ~/.local
+# Build FreeType 2.14.3 from fetched oracle source and install to ~/.local
 # Used by gen_ft_refs.c and trace_edges.c for reference generation.
-set -e
-cd "$(dirname "$0")/../freetype"
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+"${ROOT}/scripts/fetch_ft.sh"
+cd "${ROOT}/freetype"
 rm -rf build && mkdir build && cd build
 cmake .. \
   -DCMAKE_INSTALL_PREFIX="$HOME/.local" \

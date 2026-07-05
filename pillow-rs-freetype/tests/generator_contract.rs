@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
-use freetype as _;
+use fontdone as _;
 use log as _;
 use serde as _;
 use serde_json as _;
@@ -16,6 +16,7 @@ use thiserror as _;
 
 const GENERATORS: &[&str] = &[
     "scripts/build_ft.sh",
+    "scripts/fetch_ft.sh",
     "scripts/gen_ft_refs.c",
     "scripts/build_ft_fixture.py",
     "scripts/build_native_tt_fixture.py",
@@ -48,7 +49,7 @@ fn read_project_file(path: &str) -> String {
 fn maintained_generators_are_documented() {
     let doc = read_project_file("doc/GENERATOR_SYSTEM.md");
     assert!(
-        doc.contains("Fixture generation is part of the `freetype` harness"),
+        doc.contains("Fixture generation is part of the `fontdone` harness"),
         "generator system doc must state that generation is part of the harness"
     );
     assert!(

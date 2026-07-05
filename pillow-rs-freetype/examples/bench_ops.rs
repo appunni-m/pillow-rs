@@ -1,4 +1,4 @@
-//! Emit JSONL timing rows for `freetype` operations.
+//! Emit JSONL timing rows for `fontdone` operations.
 //!
 //! This example is intentionally dependency-light and deterministic. It is the
 //! Rust side of `scripts/bench_freetype.py`; C FreeType comparison is handled
@@ -15,7 +15,7 @@ use std::hint::black_box;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use freetype::{Font, LoadMode, RenderMode};
+use fontdone::{Font, LoadMode, RenderMode};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
@@ -49,7 +49,7 @@ struct FontKey {
 fn main() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let matrix_path = std::env::args().nth(1).map_or_else(
-        || manifest_dir.join("tests/fixtures/perf_operation_matrix.json"),
+        || manifest_dir.join("tests/data/perf_operation_matrix.json"),
         PathBuf::from,
     );
     let matrix = read_matrix(&matrix_path);

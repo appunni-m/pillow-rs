@@ -1,4 +1,4 @@
-# freetype
+# fontdone
 
 Pure-Rust font rendering engine — a FreeType-compatible TrueType loader,
 Latin auto-hinter, bytecode hinter, and smooth anti-aliased rasterizer.
@@ -11,20 +11,21 @@ are maintained from this directory.
 
 Project goal: exact FreeType C pixel/byte parity produced by Rust code. C is an
 oracle for fixtures only. Broad parity matrices must not be reduced to smoke
-tests; incomplete threshold baselines are tracked as unfinished parity work.
+tests; generated fixture lanes are exact gates once rebuilt.
 See `PROJECT_GOALS.md`.
 
 ## Install
 
 ```bash
-cargo add freetype
+cargo add fontdone
 ```
 
 From source:
 
 ```bash
-git clone https://github.com/appunni-m/freetype
-cd freetype
+git clone https://github.com/appunni-m/fontdone
+cd fontdone
+make setup
 make test
 ```
 
@@ -35,7 +36,7 @@ runs a 1.87 MSRV test lane so the public MSRV contract remains enforced.
 ## Quick Start
 
 ```rust
-use freetype::{Font, FontError};
+use fontdone::{Font, FontError};
 
 fn main() -> Result<(), FontError> {
     let font_data = std::fs::read("DejaVuSans.ttf")?;
@@ -66,11 +67,12 @@ fn main() -> Result<(), FontError> {
   — grid-fits edges to pixel boundaries for crisp small-size text
 - **Smooth rasterizer**: FT_INT64 DDA path from `ftgrays.c` — 8-bit alpha output
 - **Table parsing**: `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `name`, `OS/2`
-- **No runtime FreeType C dependency**: Vendored C source and scripts are offline fixture references only
+- **No runtime FreeType C dependency**: pinned C source and scripts are offline fixture references only
 
 ## Current Parity Gates
 
-The default parity runner executes every committed fixture family. Current
+The default parity runner executes every generated fixture family. Make rebuilds
+the ignored C-oracle matrices and raw bytes from tracked font inputs. Current
 exact gates include:
 
 | Gate | Rows |
@@ -161,13 +163,19 @@ Harness intent:
 - `no_runtime_ffi.rs` keeps runtime FreeType C impossible.
 - `generator_contract.rs` keeps fixture generation documented and reproducible.
 - `harness_contract.rs` locks fixture breadth and gate strength.
-- `coverage_matrix_tests.rs` runs exact and incomplete FreeType matrix gates.
+- `make test-parity` runs both `coverage_matrix_tests.rs` and
+  `render_mode_matrix.rs`; use the narrower targets only while debugging.
+- `coverage_matrix_tests.rs` runs exact generated FreeType matrix gates.
 - `render_mode_matrix.rs` compares raw render-mode bytes and metadata.
 - `fixed_parity.rs` runs mandatory scalar C-oracle parity.
 - `interface_coverage.rs` keeps FreeType endpoint status truthful.
 
-Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C
-2.14.3 reference output. See `PROJECT_GOALS.md` and
+Test fixtures are FreeType-path JSON matrices generated from pinned FreeType C
+2.14.3 reference output. Generated matrices live under `tests/fixtures/*.json`
+and raw bytes under `tests/fixtures/outputs/`; both are ignored and rebuilt by
+`make fixtures`. The tracked fixture inputs are the fonts under
+`tests/fixtures/input/`. Maintained contract data that is not generated oracle
+output lives under `tests/data/`. See `PROJECT_GOALS.md` and
 `doc/GENERATOR_SYSTEM.md` before changing fixtures, generators, or gates.
 
 ## Benchmarking
@@ -176,8 +184,8 @@ Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C
 make bench
 ```
 
-Reports are written to `target/freetype-bench/latest.json` and
-`target/freetype-bench/latest.md`. See `doc/PERFORMANCE_BENCHMARKING.md` for
+Reports are written to `target/fontdone-bench/latest.json` and
+`target/fontdone-bench/latest.md`. See `doc/PERFORMANCE_BENCHMARKING.md` for
 trust labels, timing boundaries, machine metadata, and review rules.
 
 ## Contributing
@@ -194,6 +202,6 @@ Start with `CONTRIBUTING.md` and `PROJECT_GOALS.md`. The short version:
 
 FreeType License (`FTL`) — see `LICENSE` and `FTL.TXT`.
 
-The vendored FreeType C source under `freetype/` is retained as an offline
-oracle for fixture generation and diagnosis. Runtime code is pure Rust and does
-not link to FreeType C.
+The pinned FreeType C source is fetched into ignored `freetype/` by
+`make oracle-fetch` as an offline oracle for fixture generation and diagnosis.
+Runtime code is pure Rust and does not link to FreeType C.

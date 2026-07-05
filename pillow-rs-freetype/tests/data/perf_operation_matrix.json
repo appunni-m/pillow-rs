@@ -1,0 +1,179 @@
+{
+  "fixture_family": "fontdone-performance",
+  "generator": "manual seed matrix; expand through scripts/bench_freetype.py",
+  "oracle": "Rust runtime timings with optional batched FreeType C comparison",
+  "version": 1,
+  "workload_profiles": {
+    "default": {
+      "description": "Balanced text measurement, glyph metrics, and mask workload.",
+      "weights": {
+        "dejavusans_load_20": 1,
+        "dejavusans_getname_20": 2,
+        "dejavusans_getmetrics_20": 8,
+        "dejavusans_getlength_av_20": 25,
+        "dejavusans_getbbox_hello_20": 20,
+        "dejavusans_getmask_a_20": 35,
+        "dejavusans_getmask_force_autohint_a_20": 5,
+        "dejavusans_glyph_metrics_a_20": 15,
+        "dejavusans_render_mono_a_20": 4,
+        "dejavusans_render_lcd_a_20": 4,
+        "droidsansfallback_getmask_hani_20": 6
+      }
+    },
+    "interactive_text": {
+      "description": "Common interactive text calls: length, bbox, and grayscale masks dominate.",
+      "weights": {
+        "dejavusans_load_20": 1,
+        "dejavusans_getname_20": 1,
+        "dejavusans_getmetrics_20": 5,
+        "dejavusans_getlength_av_20": 35,
+        "dejavusans_getbbox_hello_20": 30,
+        "dejavusans_getmask_a_20": 45,
+        "dejavusans_getmask_force_autohint_a_20": 2,
+        "dejavusans_glyph_metrics_a_20": 10,
+        "dejavusans_render_mono_a_20": 2,
+        "dejavusans_render_lcd_a_20": 2,
+        "droidsansfallback_getmask_hani_20": 8
+      }
+    },
+    "font_loading_heavy": {
+      "description": "Workload for applications repeatedly constructing font objects.",
+      "weights": {
+        "dejavusans_load_20": 40,
+        "dejavusans_getname_20": 4,
+        "dejavusans_getmetrics_20": 8,
+        "dejavusans_getlength_av_20": 10,
+        "dejavusans_getbbox_hello_20": 8,
+        "dejavusans_getmask_a_20": 10,
+        "dejavusans_getmask_force_autohint_a_20": 2,
+        "dejavusans_glyph_metrics_a_20": 6,
+        "dejavusans_render_mono_a_20": 2,
+        "dejavusans_render_lcd_a_20": 2,
+        "droidsansfallback_getmask_hani_20": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "dejavusans_load_20",
+      "operation": "load_font",
+      "timing_boundary": "construct Font::truetype_with_load_mode or FT_Face and set char size inside the timed loop",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "weight": 1,
+      "iterations": 50
+    },
+    {
+      "id": "dejavusans_getname_20",
+      "operation": "getname",
+      "timing_boundary": "font face is constructed before timing; measure name lookup only",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "weight": 2,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getmetrics_20",
+      "operation": "getmetrics",
+      "timing_boundary": "font face is constructed before timing; measure size metrics lookup only",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "weight": 8,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getlength_av_20",
+      "operation": "getlength",
+      "timing_boundary": "font face is constructed before timing; measure two-codepoint advance and kerning path",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "AV",
+      "weight": 25,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getbbox_hello_20",
+      "operation": "getbbox",
+      "timing_boundary": "font face is constructed before timing; measure public bbox operation",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "Hello",
+      "weight": 20,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_getmask_a_20",
+      "operation": "getmask",
+      "timing_boundary": "font face is constructed before timing; measure native default grayscale mask generation",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "weight": 35,
+      "iterations": 2000
+    },
+    {
+      "id": "dejavusans_getmask_force_autohint_a_20",
+      "operation": "getmask",
+      "timing_boundary": "font face is constructed before timing; measure force-autohint grayscale mask generation",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "load_mode": "force_autohint",
+      "weight": 5,
+      "iterations": 2000
+    },
+    {
+      "id": "dejavusans_glyph_metrics_a_20",
+      "operation": "glyph_metrics",
+      "timing_boundary": "font face is constructed before timing; measure glyph slot metrics load",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "weight": 15,
+      "iterations": 20000
+    },
+    {
+      "id": "dejavusans_render_mono_a_20",
+      "operation": "render_mode",
+      "timing_boundary": "font face is constructed before timing; measure monochrome render mode",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "render_mode": "mono",
+      "weight": 4,
+      "iterations": 2000
+    },
+    {
+      "id": "dejavusans_render_lcd_a_20",
+      "operation": "render_mode",
+      "timing_boundary": "font face is constructed before timing; measure LCD render mode",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts/DejaVuSans.ttf",
+      "size": 20,
+      "text": "A",
+      "render_mode": "lcd",
+      "weight": 4,
+      "iterations": 1000
+    },
+    {
+      "id": "droidsansfallback_getmask_hani_20",
+      "operation": "getmask",
+      "timing_boundary": "font face is constructed before timing; measure fallback-font non-Latin mask generation",
+      "comparison_trust": "timing_only",
+      "font": "tests/fixtures/input/fonts_autohint/DroidSansFallbackFull.ttf",
+      "size": 20,
+      "text": "\u4e2d",
+      "weight": 6,
+      "iterations": 1000
+    }
+  ]
+}

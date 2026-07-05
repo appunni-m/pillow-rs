@@ -2,13 +2,13 @@
 
 Faithful pseudo-Rust transcription of FreeType 2.14.1 `src/autofit/` (aflatin.c,
 afhints.c, afblue.c). This is the **spec** to port against. All coordinates are
-26.6 fixed unless noted; `FT_Pos` ≡ `i32`. Line numbers reference the vendored C.
+26.6 fixed unless noted; `FT_Pos` ≡ `i32`. Line numbers reference the pinned C oracle.
 
 Reference provenance: fixtures are **FreeType `FT_LOAD_RENDER`**
 on bytecode-stripped `fonts_autohint/` → **AUTOHINTED**. The autohinter must run.
 
 Citation key:
-- `aflatin.c:N` — `freetype/src/autofit/aflatin.c` in the vendored C oracle
+- `aflatin.c:N` — `freetype/src/autofit/aflatin.c` in the pinned C oracle
 - `afhints.c:N` — `.../afhints.c`
 - `aflatin.h:N`, `afblue.c:N`, `afblue.h:N`, `afblue.dat`
 

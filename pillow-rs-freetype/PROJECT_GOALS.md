@@ -1,6 +1,6 @@
 # Project Goals
 
-`freetype` exists to prove one thing: a 100% Rust runtime can match FreeType C behavior exactly.
+`fontdone` exists to prove one thing: a 100% Rust runtime can match FreeType C behavior exactly.
 
 The project succeeds only when the harness makes false success impossible. Rust code must have one path to green: produce the same values, metadata, pixels, and bytes as the FreeType C oracle for every in-scope endpoint and fixture row.
 
@@ -47,7 +47,7 @@ The runtime crate must not contain:
 
 C is allowed only under oracle tooling:
 
-- Vendored FreeType source for audits.
+- Pinned FreeType source fetched into ignored `/freetype/` for audits.
 - Maintained `scripts/` helpers that generate reference fixtures.
 - Test-local oracle helpers for scalar parity, provided they are not linked into the runtime crate.
 
@@ -58,7 +58,8 @@ Fixture generators are project infrastructure. They must be reproducible, docume
 - `doc/GENERATOR_SYSTEM.md` is the source of truth for fixture generation.
 - Generator scripts live under `scripts/` and are reviewed like source code.
 - New fixture families must extend `scripts/gen_ft_refs.c` and `scripts/build_ft_fixture.py` unless there is a documented reason for a dedicated generator.
-- Committed matrices must identify their generator, fixture family, load flags, render mode, and raw byte paths.
+- Generated matrices must identify their generator, fixture family, load flags, render mode, and raw byte paths.
+- Generated matrices and raw byte outputs are ignored. Tracked fixture inputs are fonts only.
 - Fixture updates must be reproducible through documented commands.
 - One-off scripts are not acceptable as hidden dependencies for future fixture maintenance.
 
@@ -73,7 +74,7 @@ The harness is the project control system. It must enforce all of these rules:
 - Error gates compare exact error behavior for invalid inputs.
 - Fixture update paths cannot bless Rust output as the reference.
 - Coverage contracts lock row counts and operation families so broad matrices cannot shrink quietly.
-- Interface reports cannot claim a path is 100% when its fixture family is incomplete.
+- Interface reports cannot claim a path is 100% unless its fixture family is an exact executed gate.
 - Unexecuted fixture families must be listed as debt, not counted as parity.
 
 ## Current Gate Status
@@ -93,22 +94,14 @@ Exact gates:
 - `no_runtime_ffi.rs`: runtime boundary guard.
 - `harness_contract.rs`: gate strength and fixture breadth guard.
 - `generator_contract.rs`: generator documentation and reproducibility guard.
-- `pillow-rs --test imagingft_matrix_tests`: exact PIL 12.2.0 `_imagingft.c` connector gate; every fixture row must match, including historical incomplete rows and the 7,520-row pixel matrix.
-
-Current committed fixture families are executed by the default coverage runner.
+Current generated fixture families are executed by the default coverage runner.
 They are not success unless every row is exact. A new incomplete or threshold
 lane is debt until the harness forces exact parity and passes.
 
 ## Refactor Quality Plan
 
-Future Rust quality work must follow
-[`doc/PERFORMANCE_DOCUMENTATION_REFACTOR_PLAN.md`](doc/PERFORMANCE_DOCUMENTATION_REFACTOR_PLAN.md).
-That plan defines the benchmark framework, documentation gates, allocation/clone
-audit, and review checklist for performance-focused refactors. Refactors are
-accepted only when parity remains exact and performance claims are measured.
-
 The first performance framework slice is implemented through
-`tests/fixtures/perf_operation_matrix.json`, `examples/bench_ops.rs`, and
+`tests/data/perf_operation_matrix.json`, `examples/bench_ops.rs`, and
 `scripts/bench_freetype.py`. The optional C timing helper is
 `scripts/bench_ft_ops.c`; it is diagnostic/oracle tooling only and must never be
 linked into runtime code.
@@ -127,7 +120,7 @@ A fixture family can move to "exact gate" only when:
 3. The default test runner executes every active row.
 4. Every active row compares the required raw bytes, values, metadata, and errors.
 5. The test fails on missing fixtures, unsupported operations, or missing raw references.
-6. `interface_map.json` reports truthful `passing/total` numbers.
+6. `tests/data/interface_map.json` reports truthful `passing/total` numbers.
 
 No plan item is complete because code exists. It is complete only when the harness forces exact parity and passes.
 

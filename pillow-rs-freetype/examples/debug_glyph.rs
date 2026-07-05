@@ -6,7 +6,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(unused_crate_dependencies)]
 
-use freetype::Font;
+use fontdone::Font;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::process::Command;

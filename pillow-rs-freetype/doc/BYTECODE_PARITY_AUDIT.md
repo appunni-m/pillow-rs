@@ -88,7 +88,7 @@ against FreeType's C implementation in ttinterp.c.
 ### C reference map (every opcode):
 
 All opcode implementations have been verified against C source in
-`pillow-rs-freetype/freetype/src/truetype/ttinterp.c`.
+`freetype/src/truetype/ttinterp.c`.
 
 | Rust Source | C Equivalent | Status |
 |---|---|---|
@@ -107,5 +107,5 @@ All opcode implementations have been verified against C source in
 | Test Suite | Result |
 |---|---|
 | `direct_ft_compare` | 11,084/11,084 — 100% FreeType pixel parity |
-| `pillow-rs-freetype` lib | 20/20 |
-| `pillow-rs` core | 64/64 |
+| `fontdone` lib | 20/20 |
+| `fontdone` core | 64/64 |

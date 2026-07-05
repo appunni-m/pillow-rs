@@ -14,10 +14,17 @@ struct TextMask {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct PositionedGlyph {
-    bbox_x: i32,
-    mask_x: i32,
+struct LayoutGlyph {
+    x: i32,
+    y: i32,
+    mask_index: usize,
+}
+
+#[derive(Debug, Clone)]
+struct TextLayout {
     bbox: (i32, i32, i32, i32),
+    masks: Vec<fontdone::GlyphMask>,
+    glyphs: Vec<LayoutGlyph>,
 }
 
 /// Returns `(family, style)` font names.
@@ -45,7 +52,7 @@ pub fn getmetrics(font: &Font) -> (u32, u32) {
 /// Returns text advance in pixels.
 pub fn getlength(font: &Font, text: &str) -> f32 {
     match font {
-        Font::TrueType(ttf) => ttf.inner.getlength(text),
+        Font::TrueType(ttf) => text_advance_26dot6(ttf, text) as f32 / 64.0,
         Font::Bitmap(bf) => bf.text_bbox(text).0 as f32,
     }
 }
@@ -152,61 +159,25 @@ fn render_text_impl(
 }
 
 fn layout_bbox(ttf: &super::TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
-    let glyphs = positioned_glyphs(ttf, text);
-    if glyphs.is_empty() {
-        return (0, 0, 0, 0);
-    }
-    let (left, top, right, bottom) = glyphs.into_iter().fold(
-        (i32::MAX, i32::MAX, i32::MIN, i32::MIN),
-        |(left, top, right, bottom), glyph| {
-            (
-                left.min(glyph.bbox_x + glyph.bbox.0),
-                top.min(glyph.bbox.1),
-                right.max(glyph.bbox_x + glyph.bbox.2),
-                bottom.max(glyph.bbox.3),
-            )
-        },
-    );
-
-    // PIL's `_imagingft` connector exposes a text-layout bbox, while
-    // `freetype` exposes FreeType glyph-slot boxes.  For positive
-    // origin multi-glyph text, the connector lets the run advance define the
-    // right edge when it extends farther than rendered ink.  Single glyphs and
-    // negative-left runs keep their ink bbox, matching the generated oracle.
-    let has_multiple_glyphs = text.chars().nth(1).is_some();
-    let right = if has_multiple_glyphs && left >= 0 {
-        let advance_26dot6 = (ttf.inner.getlength(text) * 64.0).round() as i32;
-        right.max(freetype::scaler::pixel_round(advance_26dot6))
-    } else {
-        right
-    };
-    (left, top, right, bottom)
+    layout_run(ttf, text).map_or((0, 0, 0, 0), |layout| layout.bbox)
 }
 
 fn layout_mask(ttf: &super::TrueTypeFont, text: &str) -> Option<TextMask> {
-    let glyphs = positioned_glyphs(ttf, text);
-    if glyphs.is_empty() {
-        return Some(TextMask {
-            width: 0,
-            height: 0,
-            pixels: Vec::new(),
-        });
-    }
-
-    let (left, top, right, bottom) = layout_bbox(ttf, text);
+    let layout = layout_run(ttf, text)?;
+    let (left, top, right, bottom) = layout.bbox;
     let width = u32::try_from((right - left).max(0)).ok()?;
     let height = u32::try_from((bottom - top).max(0)).ok()?;
     let width_usize = width as usize;
     let height_usize = height as usize;
     let mut pixels = vec![0u8; width_usize.checked_mul(height_usize)?];
 
-    for (ch, glyph) in text.chars().zip(glyphs) {
-        let mask = ttf.inner.getmask(&ch.to_string()).ok()?;
+    for glyph in &layout.glyphs {
+        let mask = layout.masks.get(glyph.mask_index)?;
         if mask.width == 0 || mask.height == 0 {
             continue;
         }
-        let dst_x = usize::try_from(glyph.mask_x + glyph.bbox.0 - left).ok()?;
-        let dst_y = usize::try_from(glyph.bbox.1 - top).ok()?;
+        let dst_x = usize::try_from(glyph.x - left).ok()?;
+        let dst_y = usize::try_from(glyph.y - top).ok()?;
         let src_width = mask.width as usize;
         let src_height = mask.height as usize;
         if dst_x >= width_usize || dst_y + src_height > height_usize {
@@ -231,24 +202,91 @@ fn layout_mask(ttf: &super::TrueTypeFont, text: &str) -> Option<TextMask> {
     })
 }
 
-fn positioned_glyphs(ttf: &super::TrueTypeFont, text: &str) -> Vec<PositionedGlyph> {
-    let mut glyphs = Vec::new();
+fn text_advance_26dot6(ttf: &super::TrueTypeFont, text: &str) -> i32 {
     let mut cursor_26dot6 = 0i32;
     let mut previous = None;
     for ch in text.chars() {
         if let Some(previous) = previous {
-            cursor_26dot6 += ttf.inner.getkerning(previous, ch);
+            cursor_26dot6 = cursor_26dot6.saturating_add(ttf.inner.getkerning(previous, ch));
         }
-        let bbox = ttf.inner.getbbox(&ch.to_string());
-        glyphs.push(PositionedGlyph {
-            bbox_x: freetype::scaler::pixel_floor(cursor_26dot6),
-            mask_x: freetype::scaler::pixel_round(cursor_26dot6),
-            bbox,
-        });
-        cursor_26dot6 +=
-            i32::try_from((ttf.inner.getlength(&ch.to_string()) * 64.0).round() as i64)
-                .unwrap_or(0);
+        cursor_26dot6 =
+            cursor_26dot6.saturating_add(ttf.inner.glyph_hori_advance_26dot6(ch as u32));
         previous = Some(ch);
     }
-    glyphs
+    cursor_26dot6
+}
+
+fn layout_run(ttf: &super::TrueTypeFont, text: &str) -> Option<TextLayout> {
+    if text.is_empty() {
+        return Some(TextLayout {
+            bbox: (0, 0, 0, 0),
+            masks: Vec::new(),
+            glyphs: Vec::new(),
+        });
+    }
+
+    let ascent = i32::try_from(ttf.inner.getmetrics().0).ok()?;
+    let mut cursor_26dot6 = 0i32;
+    let mut previous = None;
+    let mut left = 0i32;
+    let mut top = i32::MAX;
+    let mut right = i32::MIN;
+    let mut bottom = i32::MIN;
+    let mut masks = Vec::new();
+    let mut glyphs = Vec::new();
+
+    for ch in text.chars() {
+        if let Some(previous) = previous {
+            cursor_26dot6 = cursor_26dot6.saturating_add(ttf.inner.getkerning(previous, ch));
+        }
+
+        let mut encoded = [0u8; 4];
+        let ch_str = ch.encode_utf8(&mut encoded);
+        let mask = ttf.inner.getmask(ch_str).ok()?;
+        let width = i32::try_from(mask.width).ok()?;
+        let height = i32::try_from(mask.height).ok()?;
+        let glyph_left = fontdone::scaler::pixel_round(cursor_26dot6).saturating_add(mask.xmin);
+        let glyph_top_y = mask.ymin.saturating_add(height);
+        let ink_top = ascent.saturating_sub(glyph_top_y);
+        let bbox_top = ascent.saturating_sub(glyph_top_y.max(0));
+        let bbox_bottom = ascent.saturating_sub(mask.ymin.min(0));
+
+        if width > 0 && height > 0 {
+            left = left.min(glyph_left);
+            top = top.min(bbox_top);
+            right = right.max(glyph_left.saturating_add(width));
+            bottom = bottom.max(bbox_bottom);
+        }
+
+        let mask_index = masks.len();
+        masks.push(mask);
+        glyphs.push(LayoutGlyph {
+            x: glyph_left,
+            y: ink_top,
+            mask_index,
+        });
+
+        cursor_26dot6 =
+            cursor_26dot6.saturating_add(ttf.inner.glyph_hori_advance_26dot6(ch as u32));
+        previous = Some(ch);
+    }
+
+    let rounded_advance = fontdone::scaler::pixel_round(cursor_26dot6);
+    if top == i32::MAX {
+        top = 0;
+        right = rounded_advance;
+        bottom = 0;
+    } else {
+        right = right.max(rounded_advance);
+    }
+
+    // PIL's `_imagingft` bbox is in text-run coordinates: y is measured down
+    // from ascender space, the baseline is included in the vertical extent, x
+    // includes the run origin, and bitmap placement follows the rounded 26.6
+    // pen position used by FreeType's glyph cache path.
+    Some(TextLayout {
+        bbox: (left, top, right, bottom),
+        masks,
+        glyphs,
+    })
 }

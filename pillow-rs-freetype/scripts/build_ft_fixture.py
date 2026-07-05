@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build FreeType-path fixture matrices from vendored FreeType C.
+"""Build FreeType-path fixture matrices from pinned FreeType C.
 
 The C helper is the source of truth for every generated row.  It records the
 exact load flags, render mode, glyph index, metrics, bboxes, bitmap placement,
@@ -94,6 +94,19 @@ def run_ref(ref_bin: Path, font_path: Path, cp: int, size: int, family: str) -> 
     return data
 
 
+def run_face_ref(ref_bin: Path, font_path: Path, size: int) -> dict:
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = str(BUILD_DIR)
+    result = subprocess.run(
+        [str(ref_bin), "--face-json", str(font_path), str(size)],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        env=env,
+    )
+    return json.loads(result.stdout)
+
+
 def operation_for_family(family: str) -> str:
     if family == "metrics_only":
         return "metrics_only"
@@ -112,9 +125,20 @@ def full_inventory_selection() -> tuple[dict[str, str], tuple[int, ...], dict[st
     return fonts, FULL_SIZES, codepoints_by_font
 
 
+def bitmap_bbox_array(bbox: dict) -> list[int]:
+    pixels = bbox["bitmap_pixels"]
+    return [pixels["x_min"], pixels["y_min"], pixels["x_max"], pixels["y_max"]]
+
+
+def glyph_row_id(family: str, font_name: str, size: int, cp: int, op: str) -> str:
+    if family == "native_tt_default":
+        return f"{font_name}_{size}_{cp}_{op}"
+    return f"{font_name}_{size}_{cp}_{family}_{op}"
+
+
 def row_from_ref(family: str, font_name: str, size: int, cp: int, ref: dict, raw_dir: Path) -> dict:
     op = operation_for_family(family)
-    row_id = f"{font_name}_{size}_{cp}_{family}_{op}"
+    row_id = glyph_row_id(family, font_name, size, cp, op)
     raw_bytes = bytes.fromhex(ref["raw_pixels"])
 
     bitmap = ref["bitmap"]
@@ -156,6 +180,65 @@ def row_from_ref(family: str, font_name: str, size: int, cp: int, ref: dict, raw
     return row
 
 
+def rows_from_ref(family: str, font_name: str, size: int, cp: int, ref: dict, raw_dir: Path) -> list[dict]:
+    row = row_from_ref(family, font_name, size, cp, ref, raw_dir)
+    if family != "native_tt_default" or row["operation"] != "getmask":
+        return [row]
+
+    bbox_row = dict(row)
+    bbox_row["id"] = glyph_row_id(family, font_name, size, cp, "getbbox")
+    bbox_row["operation"] = "getbbox"
+    bbox_row["ref_value"] = bitmap_bbox_array(row["bbox"])
+    bbox_row.pop("ref_raw", None)
+    return [row, bbox_row]
+
+
+def native_face_rows(ref_bin: Path, font_name: str, font_path: Path, sizes: tuple[int, ...]) -> list[dict]:
+    rows = []
+    for size in sizes:
+        ref = run_face_ref(ref_bin, font_path, size)
+        common = {
+            "fixture_family": "native_tt_default",
+            "generator": "scripts/build_ft_fixture.py + scripts/gen_ft_refs.c",
+            "freetype_version": ref["freetype_version"],
+            "load_flags": ["FT_LOAD_RENDER"],
+            "load_flags_value": 4,
+            "render_mode": "FT_RENDER_MODE_NORMAL",
+            "font": font_name,
+            "font_file": ref["font"],
+            "size_pt": size,
+            "codepoint": 0,
+            "glyph_index": 0,
+            "char": "",
+            "status": "active",
+            "metrics": {},
+            "bbox": {},
+            "bitmap": {},
+            "bitmap_placement": {},
+            "raw_pixels": "",
+            "script": "latn",
+        }
+        rows.append({
+            **common,
+            "id": f"{font_name}_{size}_getmetrics",
+            "operation": "getmetrics",
+            "ref_value": ref["metrics"],
+        })
+        rows.append({
+            **common,
+            "id": f"{font_name}_{size}_getname",
+            "operation": "getname",
+            "ref_value": ref["name"],
+        })
+        rows.append({
+            **common,
+            "id": f"{font_name}_{size}_getlength_hello",
+            "operation": "getlength",
+            "ref_value": ref["length_hello"],
+        })
+    return rows
+
+
 def build_family(
     family: str,
     ref_bin: Path,
@@ -188,26 +271,28 @@ def build_family(
         if not font_path.exists():
             print(f"SKIP {font_name}: {font_file} not found", file=sys.stderr)
             continue
+        if family == "native_tt_default":
+            rows.extend(native_face_rows(ref_bin, font_name, font_path, sizes))
         for script, codepoints in codepoints_by_font[font_name].items():
             for size in sizes:
                 for cp in codepoints:
                     ref = run_ref(ref_bin, font_path, cp, size, family)
                     if ref is None:
                         continue
-                    row = row_from_ref(family, font_name, size, cp, ref, raw_dir)
-                    row["script"] = script
-                    rows.append(row)
+                    for row in rows_from_ref(family, font_name, size, cp, ref, raw_dir):
+                        row["script"] = script
+                        rows.append(row)
 
     matrix_path = output or (FIXTURE_DIR / f"{family}_matrix.json")
     matrix = {
         "version": "6.0.0",
         "fixture_family": family,
         "generator": "scripts/build_ft_fixture.py + scripts/gen_ft_refs.c",
-        "source": "vendored FreeType C",
+        "source": "pinned FreeType C",
         "font_source": "fonts_autohint",
         "load_flags": rows[0]["load_flags"] if rows else [],
         "render_mode": rows[0]["render_mode"] if rows else "none",
-        "assert_pixel_parity": family == FULL_FAMILY,
+        "assert_pixel_parity": True,
         "rows": rows,
         "summary": {
             "total_rows": len(rows),
@@ -237,7 +322,7 @@ def main() -> int:
         build_ref_bin(args.ref_bin)
     if not args.ref_bin.exists():
         print(f"missing FreeType reference helper: {args.ref_bin}", file=sys.stderr)
-        print("run with --build-ref-bin after building vendored FreeType", file=sys.stderr)
+        print("run with --build-ref-bin after building pinned FreeType", file=sys.stderr)
         return 1
 
     families = FAMILIES if args.all_small else (args.family,)
