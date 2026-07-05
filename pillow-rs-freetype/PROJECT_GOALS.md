@@ -31,6 +31,11 @@ Commands in maintained docs should assume the repository root is this directory.
 Historical notes may mention older worktrees, but active workflow docs must be
 standalone.
 
+The crate's MSRV is `1.87`. The checked-in local development toolchain is
+`1.96.1`, and CI must keep both visible: a 1.87 MSRV test lane plus the full
+format, clippy, docs, benchmark contract, parity, and supply-chain gates on
+1.96.1.
+
 ## Runtime Boundary
 
 The runtime crate must not contain:

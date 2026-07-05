@@ -1099,9 +1099,9 @@ mod tests {
 
         // Manual: build VP8 data exactly as encode_vp8_lossy would
         let (y_plane, u_plane, v_plane) = rgb_to_yuv_planes_internal(&rgb, w, h);
-        let mut yp = y_plane.clone();
-        let mut up = u_plane.clone();
-        let mut vp = v_plane.clone();
+        let mut yp = y_plane;
+        let mut up = u_plane;
+        let mut vp = v_plane;
         yp.resize(256, 128);
         up.resize(64, 128);
         vp.resize(64, 128);

@@ -17,6 +17,7 @@ use png::{BitDepth, ColorType as PngColorType};
 /// # Examples
 ///
 /// ```
+/// use pillow_rs_image::encode_options::EncodeOptions;
 /// use pillow_rs_image::types::{DecodedImage, ColorType};
 /// use pillow_rs_image::encode::png::encode;
 ///

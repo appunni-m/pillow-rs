@@ -5,6 +5,10 @@ Correctness and reproducibility matter more than clever shortcuts.
 
 ## Development Setup
 
+The crate's MSRV is Rust 1.87. The checked-in `rust-toolchain.toml` pins Rust
+1.96.1 for day-to-day development and primary CI gates; CI also runs a 1.87
+MSRV test lane.
+
 ```bash
 cargo build --locked
 cargo test --locked

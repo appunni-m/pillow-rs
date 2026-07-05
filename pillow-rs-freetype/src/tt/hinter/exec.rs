@@ -540,17 +540,13 @@ impl ExecContext {
             0xB8..=0xBF => {
                 *ip = ip.saturating_add((opcode - 0xB8 + 1) as usize * 2);
             }
-            0x40 => {
-                if *ip < program.len() {
-                    let count = program[*ip] as usize;
-                    *ip = ip.saturating_add(1 + count);
-                }
+            0x40 if *ip < program.len() => {
+                let count = program[*ip] as usize;
+                *ip = ip.saturating_add(1 + count);
             }
-            0x41 => {
-                if *ip < program.len() {
-                    let count = program[*ip] as usize;
-                    *ip = ip.saturating_add(1 + count * 2);
-                }
+            0x41 if *ip < program.len() => {
+                let count = program[*ip] as usize;
+                *ip = ip.saturating_add(1 + count * 2);
             }
             _ => {}
         }

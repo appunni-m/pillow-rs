@@ -107,7 +107,7 @@ pub fn idct_4x4(coeffs: &[i16; 16]) -> [i16; 16] {
 const C1: f64 = 0.9807852804032304; // cos(π/16)
 const C2: f64 = 0.9238795325112867; // cos(2π/16)
 const C3: f64 = 0.8314696123025452; // cos(3π/16)
-const S2: f64 = 0.7071067811865476; // 1/√2
+const S2: f64 = std::f64::consts::FRAC_1_SQRT_2;
 
 /// 1-D DCT for 4 points, coefficient k (output index).
 fn dct_1d_k(a: f64, b: f64, c: f64, d: f64, k: usize) -> f64 {

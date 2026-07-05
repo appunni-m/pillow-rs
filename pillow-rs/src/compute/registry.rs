@@ -82,8 +82,6 @@ macro_rules! gpu_entry {
     };
 }
 
-pub(crate) use gpu_entry;
-
 static REGISTRY: OnceLock<HashMap<&'static str, OpEntry>> = OnceLock::new();
 
 /// Returns the global operation registry keyed by [`variant_key`].
