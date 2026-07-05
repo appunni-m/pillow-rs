@@ -130,6 +130,16 @@ pub struct GlyphSlotMetrics {
     pub vert_advance: i32,
 }
 
+struct PositionedGlyph {
+    x_position: i32,
+    advance_width: i32,
+    bbox_x_min: i32,
+    bbox_x_max: i32,
+    bbox_y_min: i32,
+    bbox_y_max: i32,
+    raster: Option<RasterResult>,
+}
+
 impl Font {
     /// Load a TrueType/OpenType font from raw bytes at a given point size.
     ///
@@ -568,16 +578,7 @@ impl Font {
 
     /// `getlength(text)` → total advance width in pixels (float).
     pub fn getlength(&self, text: &str) -> f32 {
-        let data = &self.data;
-        let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
-        let mut total: f32 = 0.0;
-        for ch in text.chars() {
-            let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-            let m = data.hmtx.get(glyph);
-            let adv_26dot6 = ft_mul_fix(m.advance_width as i32, scale.x_scale);
-            total += adv_26dot6 as f32 / 64.0;
-        }
-        total
+        self.layout_advance(text) as f32 / 64.0
     }
 
     /// Return `FT_GlyphSlotRec::metrics` for a Unicode codepoint loaded with
@@ -621,59 +622,24 @@ impl Font {
         if text.is_empty() {
             return (0, 0, 0, 0);
         }
-        let data = &self.data;
-        let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
-        let asc_26 = ft_mul_fix(pick_metrics(data).0, scale.y_scale);
-        let asc_px = pixel_ceil(asc_26);
-
-        let ch = text.chars().next().unwrap_or('\0');
-        let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-        let advance = pixel_round(ft_mul_fix(
-            data.hmtx.get(glyph).advance_width as i32,
-            scale.x_scale,
-        ));
-        let metrics_cache = self.face_globals.get_metrics(glyph);
-        // PIL backend: skip autohinting
-        let metrics_for_scale = match self.backend {
-            BitmapBackend::PIL => None,
-            BitmapBackend::FreeType => metrics_cache.as_ref(),
-        };
-        let scaled = match self.backend {
-            BitmapBackend::PIL => {
-                scaler::scale_glyph_native_default(data, glyph, metrics_for_scale, self.is_italic)
-            }
-            BitmapBackend::FreeType => {
-                scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic)
-            }
-        };
-        match scaled {
-            Ok(g) if g.outline.n_contours > 0 => {
-                match self.backend {
-                    BitmapBackend::PIL => {
-                        let gx_min = 0_i32.min(g.bbox_x_min);
-                        let gx_max = advance.max(g.bbox_x_max);
-                        let gy_min = asc_px - g.bbox_y_max.max(0);
-                        let gy_max = asc_px - g.bbox_y_min.min(0);
-                        (gx_min, gy_min, gx_max, gy_max)
-                    }
-                    BitmapBackend::FreeType => {
-                        // Raw FreeType bbox: pixel coords from outline,
-                        // y-up from baseline.
-                        (g.bbox_x_min, g.bbox_y_min, g.bbox_x_max, g.bbox_y_max)
-                    }
+        if self.backend == BitmapBackend::FreeType {
+            return self.getbbox_single_glyph(text);
+        }
+        match self.layout_bounds(text) {
+            Ok((x_min, x_max, y_min, y_max)) => match self.backend {
+                BitmapBackend::PIL => {
+                    let scale = ScaleMetrics::new(self.data.size_pt, self.data.head.units_per_em);
+                    let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, scale.y_scale);
+                    let asc_px = pixel_ceil(asc_26);
+                    (x_min, asc_px - y_max, x_max, asc_px - y_min)
                 }
-            }
-            _ => {
-                if self.backend == BitmapBackend::PIL {
-                    (0, asc_px, advance, asc_px)
-                } else {
-                    (0, 0, 0, 0)
-                }
-            }
+                BitmapBackend::FreeType => (x_min, y_min, x_max, y_max),
+            },
+            Err(_) => (0, 0, 0, 0),
         }
     }
 
-    /// `getmask(char)` → 8-bit alpha bitmap sized to PIL's glyph mask box,
+    /// `getmask(text)` → 8-bit alpha bitmap sized to PIL's glyph mask box,
     /// matching PIL's `getmask` on an `L` image.
     ///
     /// # Errors
@@ -692,7 +658,6 @@ impl Font {
     /// assert!(mask.width > 0);
     /// ```
     pub fn getmask(&self, text: &str) -> Result<GlyphMask, FontError> {
-        let data = &self.data;
         if text.is_empty() {
             return Ok(GlyphMask {
                 width: 0,
@@ -703,29 +668,79 @@ impl Font {
                 advance_width: 0,
             });
         }
+        if self.backend == BitmapBackend::FreeType {
+            return self.getmask_single_glyph(text);
+        }
 
+        let glyphs = self.layout_glyphs(text)?;
+        let (x_min, x_max, y_min, y_max) = layout_bounds_from_glyphs(&glyphs);
+        let width = u32_from_i32(x_max - x_min);
+        let height = u32_from_i32(y_max - y_min);
+        let width_usize = width as usize;
+        let height_usize = height as usize;
+        let len = width_usize.checked_mul(height_usize).ok_or_else(|| {
+            FontError::InvalidOutline("rendered text mask dimensions overflow".into())
+        })?;
+        let mut pixels = vec![0u8; len];
+
+        if width_usize != 0 && height_usize != 0 {
+            for glyph in &glyphs {
+                if let Some(raster) = &glyph.raster {
+                    let dst_x =
+                        usize_from_i32(pixel_round(glyph.x_position) + glyph.bbox_x_min - x_min);
+                    let dst_y = usize_from_i32(y_max - glyph.bbox_y_max);
+                    for y in 0..raster.height {
+                        let src = y * raster.width;
+                        let dst = (dst_y + y) * width_usize + dst_x;
+                        if dst + raster.width <= pixels.len()
+                            && dst_x + raster.width <= width_usize
+                            && src + raster.width <= raster.pixels.len()
+                        {
+                            for x in 0..raster.width {
+                                let value = raster.pixels[src + x];
+                                let target = &mut pixels[dst + x];
+                                *target = (*target).max(value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(GlyphMask {
+            width,
+            height,
+            pixels,
+            xmin: x_min,
+            ymin: y_min,
+            advance_width: pixel_round(self.layout_advance(text)),
+        })
+    }
+}
+
+impl Font {
+    fn getbbox_single_glyph(&self, text: &str) -> (i32, i32, i32, i32) {
+        let data = &self.data;
         let ch = text.chars().next().unwrap_or('\0');
-        let glyph = data.cmap.char_index(ch as u32).unwrap_or(0);
-        // PIL backend: skip autohinting. PIL uses native bytecode hinter.
-        // Our autohinter produces different bbox/pixel values.
+        let glyph = self.char_index(ch as u32);
         let metrics_cache = self.face_globals.get_metrics(glyph);
-        let metrics_for_scale = match self.backend {
-            BitmapBackend::PIL => None,
-            BitmapBackend::FreeType => metrics_cache.as_ref(),
-        };
-        let scaled = match self.backend {
-            BitmapBackend::PIL => {
-                scaler::scale_glyph_native_default(data, glyph, metrics_for_scale, self.is_italic)?
+        match scaler::scale_glyph(data, glyph, metrics_cache.as_ref(), self.is_italic) {
+            Ok(g) if g.outline.n_contours > 0 => {
+                // Raw FreeType bbox: pixel coords from outline, y-up from baseline.
+                (g.bbox_x_min, g.bbox_y_min, g.bbox_x_max, g.bbox_y_max)
             }
-            BitmapBackend::FreeType => {
-                scaler::scale_glyph(data, glyph, metrics_for_scale, self.is_italic)?
-            }
-        };
+            _ => (0, 0, 0, 0),
+        }
+    }
+
+    fn getmask_single_glyph(&self, text: &str) -> Result<GlyphMask, FontError> {
+        let data = &self.data;
+        let ch = text.chars().next().unwrap_or('\0');
+        let glyph = self.char_index(ch as u32);
+        let metrics_cache = self.face_globals.get_metrics(glyph);
+        let scaled = scaler::scale_glyph(data, glyph, metrics_cache.as_ref(), self.is_italic)?;
 
         if scaled.outline.n_contours == 0 {
-            // No outline → empty mask (but PIL still returns the advance-sized
-            // zero box when there is an advance). For the coverage fixtures,
-            // empty glyphs produce an all-zero mask of advance width.
             return Ok(GlyphMask {
                 width: 0,
                 height: 0,
@@ -737,70 +752,73 @@ impl Font {
         }
 
         let raster = grays::rasterize(scaled.outline)?;
-        let advance_px = pixel_round(scaled.advance_width);
-
-        match self.backend {
-            BitmapBackend::PIL => {
-                // PIL mask: x is advance-aware; y is padded to include the
-                // baseline when the glyph is wholly above or below it.
-                let x_min = scaled.bbox_x_min.min(0);
-                let x_max = scaled.bbox_x_max.max(advance_px);
-                let new_width = u32_from_i32(x_max - x_min);
-                let new_height = u32_from_i32(scaled.bbox_y_max.max(0) - scaled.bbox_y_min.min(0));
-                let nw = new_width as usize;
-                let nh = new_height as usize;
-
-                if nw == 0 || nh == 0 {
-                    return Ok(GlyphMask {
-                        width: new_width,
-                        height: new_height,
-                        pixels: Vec::new(),
-                        xmin: scaled.bbox_x_min,
-                        ymin: scaled.bbox_y_min,
-                        advance_width: advance_px,
-                    });
-                }
-
-                let mut pixels = vec![0u8; nw * nh];
-                let x_offs = usize_from_i32(scaled.bbox_x_min - x_min);
-                let y_offs = usize_from_i32(scaled.bbox_y_max.max(0) - scaled.bbox_y_max);
-                let rw = raster.width;
-                for y in 0..raster.height {
-                    let src = y * rw;
-                    let dst = (y_offs + y) * nw + x_offs;
-                    if dst + rw <= pixels.len() && x_offs + rw <= nw {
-                        let copy = rw.min(nw.saturating_sub(x_offs));
-                        pixels[dst..dst + copy].copy_from_slice(&raster.pixels[src..src + copy]);
-                    }
-                }
-
-                Ok(GlyphMask {
-                    width: new_width,
-                    height: new_height,
-                    pixels,
-                    xmin: scaled.bbox_x_min,
-                    ymin: scaled.bbox_y_min,
-                    advance_width: advance_px,
-                })
-            }
-            BitmapBackend::FreeType => {
-                // Raw FreeType: raster as-is, no padding.
-                let w = u32_from_usize(raster.width);
-                let h = u32_from_usize(raster.height);
-                Ok(GlyphMask {
-                    width: w,
-                    height: h,
-                    pixels: raster.pixels,
-                    xmin: scaled.bbox_x_min,
-                    ymin: scaled.bbox_y_min,
-                    advance_width: advance_px,
-                })
-            }
-        }
+        Ok(GlyphMask {
+            width: u32_from_usize(raster.width),
+            height: u32_from_usize(raster.height),
+            pixels: raster.pixels,
+            xmin: scaled.bbox_x_min,
+            ymin: scaled.bbox_y_min,
+            advance_width: pixel_round(scaled.advance_width),
+        })
     }
-}
 
-impl Font {
+    fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {
+        let mut glyphs = Vec::new();
+        let mut x_position = 0;
+        for ch in text.chars() {
+            let glyph_index = self.char_index(ch as u32);
+            let metrics_cache = self.face_globals.get_metrics(glyph_index);
+            // Pillow's `_imagingft.c` fallback layout uses FT_LOAD_DEFAULT for
+            // L-mode rendering, then positions each glyph with PIXEL(position).
+            let metrics_for_scale = match self.backend {
+                BitmapBackend::PIL => None,
+                BitmapBackend::FreeType => metrics_cache.as_ref(),
+            };
+            let scaled = match self.backend {
+                BitmapBackend::PIL => scaler::scale_glyph_native_default(
+                    &self.data,
+                    glyph_index,
+                    metrics_for_scale,
+                    self.is_italic,
+                )?,
+                BitmapBackend::FreeType => {
+                    scaler::scale_glyph(&self.data, glyph_index, metrics_for_scale, self.is_italic)?
+                }
+            };
+            let raster = if scaled.outline.n_contours == 0 {
+                None
+            } else {
+                Some(grays::rasterize(scaled.outline)?)
+            };
+            glyphs.push(PositionedGlyph {
+                x_position,
+                advance_width: scaled.advance_width,
+                bbox_x_min: scaled.bbox_x_min,
+                bbox_x_max: scaled.bbox_x_max,
+                bbox_y_min: scaled.bbox_y_min,
+                bbox_y_max: scaled.bbox_y_max,
+                raster,
+            });
+            x_position += scaled.advance_width;
+        }
+        Ok(glyphs)
+    }
+
+    fn layout_advance(&self, text: &str) -> i32 {
+        let data = &self.data;
+        let scale = ScaleMetrics::new(data.size_pt, data.head.units_per_em);
+        text.chars().fold(0, |total, ch| {
+            let glyph = self.char_index(ch as u32);
+            let m = data.hmtx.get(glyph);
+            total + ft_mul_fix(m.advance_width as i32, scale.x_scale)
+        })
+    }
+
+    fn layout_bounds(&self, text: &str) -> Result<(i32, i32, i32, i32), FontError> {
+        let glyphs = self.layout_glyphs(text)?;
+        Ok(layout_bounds_from_glyphs(&glyphs))
+    }
+
     fn slot_metrics_from_scaled(
         &self,
         glyph_index: u16,
@@ -844,6 +862,26 @@ impl Font {
         grid_fit_horizontal_metrics(&mut metrics);
         metrics
     }
+}
+
+fn layout_bounds_from_glyphs(glyphs: &[PositionedGlyph]) -> (i32, i32, i32, i32) {
+    let mut x_min = 0;
+    let mut x_max = 0;
+    let mut y_min = 0;
+    let mut y_max = 0;
+    let mut position = 0;
+    for glyph in glyphs {
+        let px = pixel_round(position);
+        position += glyph.advance_width;
+        x_max = x_max.max(pixel_round(position));
+        if glyph.raster.is_some() {
+            x_min = x_min.min(px + glyph.bbox_x_min);
+            x_max = x_max.max(px + glyph.bbox_x_max);
+            y_min = y_min.min(glyph.bbox_y_min);
+            y_max = y_max.max(glyph.bbox_y_max);
+        }
+    }
+    (x_min, x_max, y_min, y_max)
 }
 
 fn vertical_advance_font_units(data: &FontData) -> i32 {
@@ -1015,6 +1053,56 @@ fn pick_os2_metrics(data: &FontData) -> Option<(i32, i32)> {
     Some((os2.us_win_ascent as i32, os2.us_win_descent as i32))
 }
 
-// Silence unused-import warning for RasterResult (kept for clarity).
-#[allow(dead_code)]
-fn _t(_: RasterResult) {}
+#[cfg(test)]
+mod tests {
+    use super::{BitmapBackend, Font};
+
+    const DEJAVU_SANS: &[u8] = include_bytes!("../tests/fixtures/input/fonts/DejaVuSans.ttf");
+
+    fn test_font() -> Font {
+        match Font::truetype(DEJAVU_SANS, 20.0, BitmapBackend::PIL) {
+            Ok(font) => font,
+            Err(err) => panic!("test font should load: {err}"),
+        }
+    }
+
+    #[test]
+    fn getbbox_uses_the_whole_string() {
+        let font = test_font();
+        let single = font.getbbox("A");
+        let text = font.getbbox("AA");
+
+        assert!(text.2 - text.0 > single.2 - single.0);
+        assert!(text.3 - text.1 >= single.3 - single.1);
+    }
+
+    #[test]
+    fn getmask_uses_the_whole_string() {
+        let font = test_font();
+        let single = match font.getmask("A") {
+            Ok(mask) => mask,
+            Err(err) => panic!("single glyph should render: {err}"),
+        };
+        let text = match font.getmask("AA") {
+            Ok(mask) => mask,
+            Err(err) => panic!("text should render: {err}"),
+        };
+
+        assert!(text.width > single.width);
+        assert_eq!(
+            text.pixels.len(),
+            text.width as usize * text.height as usize
+        );
+        assert!(text.pixels.iter().any(|&pixel| pixel != 0));
+    }
+
+    #[test]
+    fn getlength_reports_run_advance() {
+        let font = test_font();
+        let single = font.getlength("A");
+        let text = font.getlength("AA");
+
+        assert!(text > single);
+        assert_eq!(text, single * 2.0);
+    }
+}

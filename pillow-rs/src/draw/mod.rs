@@ -859,9 +859,9 @@ impl Draw {
         // in text_compose_direct / text_compose_rgba.
         let render_fill = (fill.0, fill.1, fill.2, 255u8);
         let (w, h, pixels) = if binary {
-            font.render_text_binary(text, render_fill, 0.0)
+            crate::font::imagingft::render_text_binary(font, text, render_fill, 0.0)
         } else {
-            font.render_text(text, render_fill, 0.0)
+            crate::font::imagingft::render_text(font, text, render_fill, 0.0)
         };
         if w == 0 || h == 0 {
             return Ok(());

@@ -1218,12 +1218,25 @@ impl PyFont {
         Ok(PyFont { inner: font })
     }
 
-    fn getbbox(&self, text: &str) -> PyResult<(u32, u32)> {
-        Ok(self.inner.text_bbox(text))
+    fn getbbox(&self, text: &str) -> PyResult<(i32, i32, i32, i32)> {
+        Ok(pillow_rs::font::imagingft::getbbox(&self.inner, text))
     }
 
     fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
-        Ok(self.inner.getmask(text))
+        Ok(pillow_rs::font::imagingft::getmask(&self.inner, text))
+    }
+
+    fn getlength(&self, text: &str) -> f32 {
+        pillow_rs::font::imagingft::getlength(&self.inner, text)
+    }
+
+    fn getmetrics(&self) -> (u32, u32) {
+        pillow_rs::font::imagingft::getmetrics(&self.inner)
+    }
+
+    fn get_name(&self) -> (String, String) {
+        let (family, style) = pillow_rs::font::imagingft::getname(&self.inner);
+        (family.to_owned(), style.to_owned())
     }
 
     fn get_size(&self) -> f32 {
@@ -1609,7 +1622,7 @@ impl PyDraw {
                 self.draw
                     .text(xy.0 as i32, y as i32, line, &borrowed.inner, color)
                     .map_err(map_error)?;
-                let (_, h) = borrowed.getbbox(line)?;
+                let (_, h) = borrowed.inner.text_bbox(line);
                 y += h as f64 + sp;
             } else {
                 return Err(pyo3::exceptions::PyNotImplementedError::new_err(
@@ -1629,19 +1642,25 @@ impl PyDraw {
         text: &str,
         font: Option<&Bound<'_, PyFont>>,
     ) -> PyResult<(i32, i32, i32, i32)> {
-        let (w, h) = match font {
-            Some(f) => f.borrow().inner.text_bbox(text),
-            None => pillow_rs::font::Font::load_default(10.0).text_bbox(text),
+        let bbox = match font {
+            Some(f) => pillow_rs::font::imagingft::getbbox(&f.borrow().inner, text),
+            None => {
+                let font = pillow_rs::font::Font::load_default(10.0);
+                pillow_rs::font::imagingft::getbbox(&font, text)
+            }
         };
-        Ok((xy.0, xy.1, xy.0 + w as i32, xy.1 + h as i32))
+        Ok((xy.0 + bbox.0, xy.1 + bbox.1, xy.0 + bbox.2, xy.1 + bbox.3))
     }
 
     /// Compute text length in pixels. Loads default FreeType font if font is None.
     #[pyo3(signature = (text, font=None))]
     fn textlength(&mut self, text: &str, font: Option<&Bound<'_, PyFont>>) -> PyResult<f64> {
         let w = match font {
-            Some(f) => f.borrow().inner.text_bbox(text).0,
-            None => pillow_rs::font::Font::load_default(10.0).text_bbox(text).0,
+            Some(f) => pillow_rs::font::imagingft::getlength(&f.borrow().inner, text),
+            None => {
+                let font = pillow_rs::font::Font::load_default(10.0);
+                pillow_rs::font::imagingft::getlength(&font, text)
+            }
         };
         Ok(w as f64)
     }
