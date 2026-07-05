@@ -632,7 +632,7 @@ impl Font {
                 scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
                     &self.data,
                     glyph,
-                    metrics_cache.as_ref(),
+                    metrics_cache.as_deref(),
                     self.is_italic,
                 )?
             } else {
@@ -643,7 +643,7 @@ impl Font {
             scaler::scale_glyph_for_metrics_with_autohint(
                 &self.data,
                 glyph,
-                metrics_cache.as_ref(),
+                metrics_cache.as_deref(),
                 self.is_italic,
             )?
         };
@@ -831,7 +831,7 @@ impl Font {
             }
             LoadMode::ForceAutoHint => {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
-                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_ref(), self.is_italic)
+                scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)
             }
         }
     }

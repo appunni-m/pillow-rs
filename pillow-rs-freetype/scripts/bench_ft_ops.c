@@ -169,6 +169,95 @@ static FT_Int32 load_flags_for_row(const Row* row) {
     return flags;
 }
 
+static void run_load_font_iteration(FT_Library library,
+                                    const char* path,
+                                    const Row* row,
+                                    uint64_t* hash,
+                                    size_t* out_len) {
+    FT_Face loaded = NULL;
+    FT_New_Face(library, path, 0, &loaded);
+    FT_Set_Char_Size(loaded, 0, (FT_F26Dot6)(row->size * 64.0), 72, 72);
+    *hash = (uint64_t)loaded->num_glyphs;
+    *out_len = sizeof(loaded->num_glyphs);
+    FT_Done_Face(loaded);
+}
+
+static void run_cached_iteration(FT_Face face,
+                                 const Row* row,
+                                 uint64_t* hash,
+                                 size_t* out_len) {
+    const char* text = row->text[0] ? row->text : "A";
+    const char* cursor = text;
+    int cp = next_codepoint(&cursor);
+    FT_UInt glyph = FT_Get_Char_Index(face, (FT_ULong)cp);
+    FT_Int32 flags = load_flags_for_row(row);
+    if (strcmp(row->operation, "getname") == 0) {
+        *hash = fnv1a((const unsigned char*)face->family_name, strlen(face->family_name));
+        *hash ^= fnv1a((const unsigned char*)face->style_name, strlen(face->style_name));
+        *out_len = strlen(face->family_name) + strlen(face->style_name);
+    } else if (strcmp(row->operation, "getmetrics") == 0) {
+        long values[2] = {face->size->metrics.ascender >> 6,
+                          -face->size->metrics.descender >> 6};
+        *hash = fnv1a((const unsigned char*)values, sizeof(values));
+        *out_len = sizeof(values);
+    } else if (strcmp(row->operation, "getlength") == 0) {
+        long advance = 0;
+        FT_UInt previous = 0;
+        cursor = text;
+        while ((cp = next_codepoint(&cursor)) != 0) {
+            glyph = FT_Get_Char_Index(face, (FT_ULong)cp);
+            if (previous && FT_HAS_KERNING(face)) {
+                FT_Vector kern;
+                FT_Get_Kerning(face, previous, glyph, FT_KERNING_DEFAULT, &kern);
+                advance += kern.x;
+            }
+            FT_Load_Glyph(face, glyph, FT_LOAD_DEFAULT);
+            advance += face->glyph->advance.x;
+            previous = glyph;
+        }
+        *hash = fnv1a((const unsigned char*)&advance, sizeof(advance));
+        *out_len = sizeof(advance);
+    } else if (strcmp(row->operation, "getbbox") == 0) {
+        long pen_x = 0;
+        long min_x = 0;
+        long min_y = 0;
+        long max_x = 0;
+        long max_y = 0;
+        int have_box = 0;
+        cursor = text;
+        while ((cp = next_codepoint(&cursor)) != 0) {
+            glyph = FT_Get_Char_Index(face, (FT_ULong)cp);
+            FT_Load_Glyph(face, glyph, flags);
+            long left = (pen_x >> 6) + face->glyph->bitmap_left;
+            long top = face->glyph->bitmap_top;
+            long right = left + (long)face->glyph->bitmap.width;
+            long bottom = top - (long)face->glyph->bitmap.rows;
+            if (!have_box || left < min_x) {
+                min_x = left;
+            }
+            if (!have_box || bottom < min_y) {
+                min_y = bottom;
+            }
+            if (!have_box || right > max_x) {
+                max_x = right;
+            }
+            if (!have_box || top > max_y) {
+                max_y = top;
+            }
+            have_box = 1;
+            pen_x += face->glyph->advance.x;
+        }
+        long values[4] = {min_x, min_y, max_x, max_y};
+        *hash = fnv1a((const unsigned char*)values, sizeof(values));
+        *out_len = sizeof(values);
+    } else {
+        FT_Load_Glyph(face, glyph, flags);
+        *hash = fnv1a(face->glyph->bitmap.buffer,
+                      (size_t)(face->glyph->bitmap.rows * labs(face->glyph->bitmap.pitch)));
+        *out_len = (size_t)(face->glyph->bitmap.rows * labs(face->glyph->bitmap.pitch));
+    }
+}
+
 static void run_row(const char* root, const Row* row) {
     char path[512];
     snprintf(path, sizeof(path), "%s/%s", root, row->font);
@@ -187,87 +276,18 @@ static void run_row(const char* root, const Row* row) {
     uint64_t hash = 0;
     size_t out_len = 0;
 
+    if (!is_load_font) {
+        run_cached_iteration(face, row, &hash, &out_len);
+    }
+
+    start = now_ns();
     for (long i = 0; i < row->iterations; i++) {
         if (is_load_font) {
-            FT_Face loaded = NULL;
-            FT_New_Face(library, path, 0, &loaded);
-            FT_Set_Char_Size(loaded, 0, (FT_F26Dot6)(row->size * 64.0), 72, 72);
-            hash = (uint64_t)loaded->num_glyphs;
-            out_len = sizeof(loaded->num_glyphs);
-            FT_Done_Face(loaded);
+            run_load_font_iteration(library, path, row, &hash, &out_len);
             continue;
         }
 
-        const char* text = row->text[0] ? row->text : "A";
-        const char* cursor = text;
-        int cp = next_codepoint(&cursor);
-        FT_UInt glyph = FT_Get_Char_Index(face, (FT_ULong)cp);
-        FT_Int32 flags = load_flags_for_row(row);
-        if (strcmp(row->operation, "getname") == 0) {
-            hash = fnv1a((const unsigned char*)face->family_name, strlen(face->family_name));
-            hash ^= fnv1a((const unsigned char*)face->style_name, strlen(face->style_name));
-            out_len = strlen(face->family_name) + strlen(face->style_name);
-        } else if (strcmp(row->operation, "getmetrics") == 0) {
-            long values[2] = {face->size->metrics.ascender >> 6,
-                              -face->size->metrics.descender >> 6};
-            hash = fnv1a((const unsigned char*)values, sizeof(values));
-            out_len = sizeof(values);
-        } else if (strcmp(row->operation, "getlength") == 0) {
-            long advance = 0;
-            FT_UInt previous = 0;
-            cursor = text;
-            while ((cp = next_codepoint(&cursor)) != 0) {
-                glyph = FT_Get_Char_Index(face, (FT_ULong)cp);
-                if (previous && FT_HAS_KERNING(face)) {
-                    FT_Vector kern;
-                    FT_Get_Kerning(face, previous, glyph, FT_KERNING_DEFAULT, &kern);
-                    advance += kern.x;
-                }
-                FT_Load_Glyph(face, glyph, FT_LOAD_DEFAULT);
-                advance += face->glyph->advance.x;
-                previous = glyph;
-            }
-            hash = fnv1a((const unsigned char*)&advance, sizeof(advance));
-            out_len = sizeof(advance);
-        } else if (strcmp(row->operation, "getbbox") == 0) {
-            long pen_x = 0;
-            long min_x = 0;
-            long min_y = 0;
-            long max_x = 0;
-            long max_y = 0;
-            int have_box = 0;
-            cursor = text;
-            while ((cp = next_codepoint(&cursor)) != 0) {
-                glyph = FT_Get_Char_Index(face, (FT_ULong)cp);
-                FT_Load_Glyph(face, glyph, flags);
-                long left = (pen_x >> 6) + face->glyph->bitmap_left;
-                long top = face->glyph->bitmap_top;
-                long right = left + (long)face->glyph->bitmap.width;
-                long bottom = top - (long)face->glyph->bitmap.rows;
-                if (!have_box || left < min_x) {
-                    min_x = left;
-                }
-                if (!have_box || bottom < min_y) {
-                    min_y = bottom;
-                }
-                if (!have_box || right > max_x) {
-                    max_x = right;
-                }
-                if (!have_box || top > max_y) {
-                    max_y = top;
-                }
-                have_box = 1;
-                pen_x += face->glyph->advance.x;
-            }
-            long values[4] = {min_x, min_y, max_x, max_y};
-            hash = fnv1a((const unsigned char*)values, sizeof(values));
-            out_len = sizeof(values);
-        } else {
-            FT_Load_Glyph(face, glyph, flags);
-            hash = fnv1a(face->glyph->bitmap.buffer,
-                         (size_t)(face->glyph->bitmap.rows * labs(face->glyph->bitmap.pitch)));
-            out_len = (size_t)(face->glyph->bitmap.rows * labs(face->glyph->bitmap.pitch));
-        }
+        run_cached_iteration(face, row, &hash, &out_len);
     }
 
     uint64_t elapsed = now_ns() - start;

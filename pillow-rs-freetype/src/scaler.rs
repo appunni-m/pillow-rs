@@ -503,7 +503,7 @@ fn scale_glyph_impl(
     } else {
         None
     };
-    let hint_metrics = latin_metrics.or(fallback_metrics.as_ref());
+    let hint_metrics = latin_metrics.or(fallback_metrics.as_deref());
 
     // Scale all points to 26.6.  X uses the base scale; Y uses the adjusted
     // vertical scale (x-height optimization) from latin_metrics if available.
@@ -1130,7 +1130,7 @@ pub fn pixel_ceil(x: i32) -> i32 {
 /// Uses adjusted vertical scale from `latin_metrics` if available (x-height optimization).
 #[allow(clippy::too_many_arguments)]
 fn autohint_glyph(
-    scaled: &mut [OutlinePoint],
+    scaled: &mut Vec<OutlinePoint>,
     raw_outline: &GlyphOutline,
     scale: &ScaleMetrics,
     glyph_index: u16,
@@ -1146,7 +1146,10 @@ fn autohint_glyph(
         return None;
     }
 
-    // Build a temporary Outline with scaled 26.6 coords.
+    // Build a temporary Outline with scaled 26.6 coords.  Move the point
+    // buffer into the outline and back out after hinting so glyph loads mirror
+    // C's in-place glyph-zone mutation without cloning every point.
+    let points = std::mem::take(scaled);
     let mut outline = Outline {
         n_contours: num_contours,
         contours: raw_outline
@@ -1154,7 +1157,7 @@ fn autohint_glyph(
             .iter()
             .map(|&e| e as i16)
             .collect(),
-        points: scaled.to_vec(),
+        points,
         flags: 0,
         cbox_x_min: 0,
         cbox_y_min: 0,
@@ -1190,13 +1193,7 @@ fn autohint_glyph(
         target.mono,
     );
 
-    // Write hinted coordinates back.
-    for (i, p) in outline.points.iter().enumerate() {
-        if let Some(s) = scaled.get_mut(i) {
-            s.x = p.x;
-            s.y = p.y;
-        }
-    }
+    *scaled = outline.points;
     output.advance_width
 }
 
