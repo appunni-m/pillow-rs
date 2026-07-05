@@ -1,17 +1,17 @@
 [package]
-name = "pillow-rs-freetype"
+name = "freetype"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.87"
-license = "MIT"
-description = "Pure-Rust TrueType font renderer — auto-hinter, rasterizer, and table parsers"
+license = "FTL"
+description = "Pure-Rust FreeType-compatible font engine: TrueType loader, hinters, rasterizer, and table parsers"
 readme = "README.md"
-repository = "https://github.com/pillow-rs/pillow-rs-freetype"
+repository = "https://github.com/appunni-m/freetype"
 keywords = ["freetype", "truetype", "font", "rendering", "autohint"]
 categories = ["rendering", "text-processing"]
 
 [lib]
-name = "pillow_rs_freetype"
+name = "freetype"
 
 [dependencies]
 log = "0.4"

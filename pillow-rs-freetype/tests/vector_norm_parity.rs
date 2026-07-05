@@ -9,7 +9,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::fixed::ft_normalize_2dot14;
+use freetype::fixed::ft_normalize_2dot14;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;

@@ -1,6 +1,6 @@
 # Fixture Generator System
 
-Fixture generation is part of the `pillow-rs-freetype` harness. It is not disposable scratch work.
+Fixture generation is part of the `freetype` harness. It is not disposable scratch work.
 
 Every reference fixture must be reproducible from maintained generator code in this repository. A fixture update is acceptable only when the generator path, oracle source, command, and expected harness effect are clear.
 
@@ -59,7 +59,7 @@ Before committing fixture changes:
 2. Do not edit generated matrix rows or raw byte files by hand.
 3. Confirm the matrix `generator`, `fixture_family`, `load_flags`, and `render_mode` are correct.
 4. Run the exact gate or contract that owns the fixture family.
-5. Run `cargo test --test harness_contract --locked`.
+5. Run `make test-harness`.
 6. Document any threshold, incomplete, small-baseline, or unexecuted state as debt.
 
 ## Adding A New Fixture Family

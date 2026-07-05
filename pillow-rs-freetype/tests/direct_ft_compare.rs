@@ -13,7 +13,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::Font;
+use freetype::Font;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;

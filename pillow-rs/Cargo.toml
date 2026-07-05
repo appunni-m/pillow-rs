@@ -20,7 +20,7 @@ image-webp = ["pillow-rs-image/webp"]
 
 [dependencies]
 pillow-rs-image = { path = "../pillow-rs-image", default-features = false }
-pillow-rs-freetype = { path = "../pillow-rs-freetype" }
+freetype = { path = "../pillow-rs-freetype" }
 log = "0.4"
 png = "0.18"
 thiserror = "2"

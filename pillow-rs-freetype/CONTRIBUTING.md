@@ -1,6 +1,6 @@
 # Contributing
 
-`pillow-rs-freetype` is a harness-first pure-Rust FreeType parity project.
+`freetype` is a harness-first pure-Rust FreeType parity project.
 Correctness and reproducibility matter more than clever shortcuts.
 
 ## Development Setup

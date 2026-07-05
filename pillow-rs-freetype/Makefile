@@ -1,4 +1,4 @@
-# pillow-rs-freetype Makefile
+# freetype Makefile
 # ===========================
 # Standalone entry point for build, test, lint, parity, and benchmark work.
 
@@ -13,7 +13,7 @@ BENCH_PROFILE ?= default
 
 .PHONY: help
 help:
-	@printf "pillow-rs-freetype\n\n"
+	@printf "freetype\n\n"
 	@printf "Setup:\n"
 	@printf "  make setup            Install optional audit tooling\n"
 	@printf "\nBuild:\n"

@@ -1,4 +1,4 @@
-# pillow-rs-freetype
+# freetype
 
 Pure-Rust font rendering engine — a FreeType-compatible TrueType loader,
 Latin auto-hinter, bytecode hinter, and smooth anti-aliased rasterizer.
@@ -17,15 +17,15 @@ See `PROJECT_GOALS.md`.
 ## Install
 
 ```bash
-cargo add pillow-rs-freetype
+cargo add freetype
 ```
 
 From source:
 
 ```bash
-git clone https://github.com/pillow-rs/pillow-rs-freetype
-cd pillow-rs-freetype
-cargo test --locked
+git clone https://github.com/appunni-m/freetype
+cd freetype
+make test
 ```
 
 The crate uses the Rust 2024 edition. Minimum supported Rust version: 1.87.
@@ -35,7 +35,7 @@ runs a 1.87 MSRV test lane so the public MSRV contract remains enforced.
 ## Quick Start
 
 ```rust
-use pillow_rs_freetype::{Font, FontError};
+use freetype::{Font, FontError};
 
 fn main() -> Result<(), FontError> {
     let font_data = std::fs::read("DejaVuSans.ttf")?;
@@ -86,13 +86,13 @@ exact gates include:
 Run:
 
 ```bash
-cargo test --test coverage_matrix_tests --locked -- --nocapture
+make test-parity
 ```
 
 The no-runtime-FFI guard is mandatory:
 
 ```bash
-cargo test --test no_runtime_ffi --locked -- --nocapture
+make test-ffi
 ```
 
 ## API
@@ -145,9 +145,9 @@ Key modules:
 ## Testing
 
 ```bash
-cargo fmt -- --check
-cargo test --locked
-cargo clippy --all-targets --all-features --locked -- -D warnings
+make fmt
+make test
+make clippy
 ```
 
 Or use the standalone Makefile:
@@ -173,7 +173,7 @@ Test fixtures are FreeType-path JSON matrices generated from vendored FreeType C
 ## Benchmarking
 
 ```bash
-python3 scripts/bench_freetype.py --compare-c --samples 10 --profile default --table
+make bench
 ```
 
 Reports are written to `target/freetype-bench/latest.json` and
@@ -192,5 +192,8 @@ Start with `CONTRIBUTING.md` and `PROJECT_GOALS.md`. The short version:
 
 ## License
 
-MIT — see `LICENSE`. The vendored FreeType C source under `freetype/` is
-covered by the FreeType License (FTL).
+FreeType License (`FTL`) — see `LICENSE` and `FTL.TXT`.
+
+The vendored FreeType C source under `freetype/` is retained as an offline
+oracle for fixture generation and diagnosis. Runtime code is pure Rust and does
+not link to FreeType C.

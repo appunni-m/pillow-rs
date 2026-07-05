@@ -22,8 +22,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use env_logger as _;
+use freetype::{Font, LoadMode, RenderMode, grays, scaler};
 use log as _;
-use pillow_rs_freetype::{Font, LoadMode, RenderMode, grays, scaler};
 use thiserror as _;
 
 #[derive(Debug, Deserialize)]

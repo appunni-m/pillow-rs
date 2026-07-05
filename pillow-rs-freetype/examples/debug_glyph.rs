@@ -6,7 +6,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(unused_crate_dependencies)]
 
-use pillow_rs_freetype::Font;
+use freetype::Font;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::process::Command;
@@ -49,7 +49,7 @@ fn main() {
         .arg(font_path)
         .arg(&format!("{:04X}", cp))
         .arg(&format!("{}", size))
-        .env("LD_LIBRARY_PATH", "pillow-rs-freetype/freetype/build")
+        .env("LD_LIBRARY_PATH", "freetype/build")
         .output()
         .unwrap();
 

@@ -1,4 +1,4 @@
-//! Emit JSONL timing rows for `pillow-rs-freetype` operations.
+//! Emit JSONL timing rows for `freetype` operations.
 //!
 //! This example is intentionally dependency-light and deterministic. It is the
 //! Rust side of `scripts/bench_freetype.py`; C FreeType comparison is handled
@@ -15,7 +15,7 @@ use std::hint::black_box;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use pillow_rs_freetype::{Font, LoadMode, RenderMode};
+use freetype::{Font, LoadMode, RenderMode};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 

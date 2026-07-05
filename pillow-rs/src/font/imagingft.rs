@@ -169,14 +169,14 @@ fn layout_bbox(ttf: &super::TrueTypeFont, text: &str) -> (i32, i32, i32, i32) {
     );
 
     // PIL's `_imagingft` connector exposes a text-layout bbox, while
-    // `pillow-rs-freetype` exposes FreeType glyph-slot boxes.  For positive
+    // `freetype` exposes FreeType glyph-slot boxes.  For positive
     // origin multi-glyph text, the connector lets the run advance define the
     // right edge when it extends farther than rendered ink.  Single glyphs and
     // negative-left runs keep their ink bbox, matching the generated oracle.
     let has_multiple_glyphs = text.chars().nth(1).is_some();
     let right = if has_multiple_glyphs && left >= 0 {
         let advance_26dot6 = (ttf.inner.getlength(text) * 64.0).round() as i32;
-        right.max(pillow_rs_freetype::scaler::pixel_round(advance_26dot6))
+        right.max(freetype::scaler::pixel_round(advance_26dot6))
     } else {
         right
     };
@@ -241,8 +241,8 @@ fn positioned_glyphs(ttf: &super::TrueTypeFont, text: &str) -> Vec<PositionedGly
         }
         let bbox = ttf.inner.getbbox(&ch.to_string());
         glyphs.push(PositionedGlyph {
-            bbox_x: pillow_rs_freetype::scaler::pixel_floor(cursor_26dot6),
-            mask_x: pillow_rs_freetype::scaler::pixel_round(cursor_26dot6),
+            bbox_x: freetype::scaler::pixel_floor(cursor_26dot6),
+            mask_x: freetype::scaler::pixel_round(cursor_26dot6),
             bbox,
         });
         cursor_26dot6 +=

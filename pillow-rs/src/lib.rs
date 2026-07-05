@@ -44,7 +44,7 @@
 //! - [`ops`] contains reusable image operation implementations.
 //! - [`draw`] contains drawing and text rendering helpers.
 //! - [`font`] contains Pillow-compatible font surfaces backed by
-//!   `pillow-rs-freetype`.
+//!   `freetype`.
 //! - [`color`] contains mode-aware color parsing and color-space conversions.
 //! - [`formats`] contains codec-facing image format handlers.
 //! - [`compute`] contains CPU/GPU/SIMD operation dispatch infrastructure.

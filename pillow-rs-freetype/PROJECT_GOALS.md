@@ -1,6 +1,6 @@
 # Project Goals
 
-`pillow-rs-freetype` exists to prove one thing: a 100% Rust runtime can match FreeType C behavior exactly.
+`freetype` exists to prove one thing: a 100% Rust runtime can match FreeType C behavior exactly.
 
 The project succeeds only when the harness makes false success impossible. Rust code must have one path to green: produce the same values, metadata, pixels, and bytes as the FreeType C oracle for every in-scope endpoint and fixture row.
 
