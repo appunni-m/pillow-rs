@@ -216,6 +216,9 @@ pillow-rs-js/       wasm-bindgen — thin wrapper, ~200 lines
 
 **Iron rule:** Core never touches Python objects, JS objects, file paths, or network. All I/O and type conversion live in the binding crates. The binding layers contain **no control flow** — no loops, no list comprehensions, no arithmetic. Every decision happens in Rust.
 
+For the maintained ownership map, important files, and generated source tree,
+see **[docs/REPO_MAP.md](docs/REPO_MAP.md)**.
+
 ---
 
 ## Deferred Pipeline

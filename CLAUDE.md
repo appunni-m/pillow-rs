@@ -52,6 +52,11 @@ Core crates never touch Python objects, JS objects, file paths, or network.
 Core takes Rust primitives and returns Rust primitives. I/O and conversion live
 in binding crates.
 
+The maintained ownership map and generated source tree live in
+`docs/REPO_MAP.md`. When important files move, are added, or are removed, update
+that document with `make repo-map-update` and verify it with
+`make repo-map-check`.
+
 ## Non-Negotiable Rules
 
 - No runtime FFI shortcuts in core or `pillow-rs-freetype`: no `freetype-sys`,
@@ -202,6 +207,8 @@ make fmt
 make fmt-fix
 make clippy
 make lint
+make repo-map-check
+make repo-map-update
 make ci
 make verify
 ```
