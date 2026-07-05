@@ -20,10 +20,11 @@
 //!    48 failures fixed.
 //!
 //! Architecture:
-//! 1. Coverage scan: iterate style classes from `globals_data.rs`,
+//! 1. Coverage scan: lazily iterate style classes from `globals_data.rs`,
 //!    scan each script's Unicode ranges in order (matching afstyles.h).
 //!    The first script whose range contains a codepoint for a glyph
-//!    "wins" that glyph.
+//!    "wins" that glyph. Default native TrueType loads do not need this
+//!    coverage, so construction defers it until `get_metrics`.
 //! 2. Lazy metrics: per-style AfLatinMetrics computed on first access,
 //!    cached via Rc<RefCell<>> for interior mutability.
 //! 3. Per-glyph lookup: `glyph_styles[gindex]` → style index → metrics.
@@ -48,11 +49,10 @@ use std::cell::RefCell;
 pub struct FaceGlobals {
     /// Total number of glyphs in the font.
     pub glyph_count: u16,
-    /// Per-glyph style assignment. glyph_styles[gi] gives the index
-    /// into `STYLE_TABLE` (usize), or STYLE_UNASSIGNED if uncovered.
-    pub glyph_styles: Vec<usize>,
-    /// Non-base glyph flags (Latin diacritics, etc.), shared across styles.
-    pub non_base_glyphs: std::rc::Rc<Vec<bool>>,
+    /// Lazily computed coverage data. Default/native TrueType loads do not
+    /// need autohint style coverage, so this mirrors FreeType's pay-for-use
+    /// behavior more closely than eager construction.
+    coverage: std::rc::Rc<RefCell<Option<FaceCoverage>>>,
     /// Per-style cached metrics. Index into STYLE_TABLE → Option<AfLatinMetrics>.
     pub metrics_cache: std::rc::Rc<RefCell<Vec<Option<AfLatinMetrics>>>>,
     /// Font data for lazy metric computation.
@@ -61,92 +61,46 @@ pub struct FaceGlobals {
     pub is_italic: bool,
 }
 
+struct FaceCoverage {
+    glyph_styles: Vec<usize>,
+    non_base_glyphs: Vec<bool>,
+}
+
 impl FaceGlobals {
-    /// Create FaceGlobals and run the coverage scan over all 52+ scripts.
+    /// Create FaceGlobals. Script coverage is computed lazily on first
+    /// auto-hint metrics access, so default native TrueType loads do not pay
+    /// for 52-script coverage scans during font construction.
     pub fn new(font_data: std::sync::Arc<FontData>, is_italic: bool) -> Self {
         let ng = font_data.maxp.num_glyphs as usize;
         let num_styles = STYLE_TABLE.len();
-
-        // Build non-base glyph table (Latin diacritics etc.)
-        let nonbase_ranges: &[(u32, u32)] = &[
-            (0x005E, 0x0060),
-            (0x007E, 0x007E),
-            (0x00A8, 0x00A9),
-            (0x00AE, 0x00B0),
-            (0x00B4, 0x00B4),
-            (0x00B8, 0x00B8),
-            (0x00BC, 0x00BE),
-            (0x02B9, 0x02DF),
-            (0x02E5, 0x02FF),
-            (0x0300, 0x036F),
-            (0x1AB0, 0x1AEB),
-            (0x1DC0, 0x1DFF),
-            (0x2017, 0x2017),
-            (0x203E, 0x203E),
-            (0xA788, 0xA788),
-            (0xA7F8, 0xA7FA),
-        ];
-        let mut non_base = vec![false; ng];
-        for &(first, last) in nonbase_ranges {
-            let mut ch = first;
-            loop {
-                if let Some(gi) = font_data.cmap.char_index(ch) {
-                    if (gi as usize) < ng {
-                        non_base[gi as usize] = true;
-                    }
-                }
-                if ch >= last {
-                    break;
-                }
-                ch += 1;
-            }
-        }
-
-        let mut glyph_styles = vec![STYLE_UNASSIGNED; ng];
-        let metrics_cache = std::rc::Rc::new(RefCell::new(vec![None; num_styles]));
-
-        // Run coverage scan
-        compute_style_coverage(&font_data.cmap, ng as u16, &mut glyph_styles);
-
-        // Per-script non-base ranges: C checks glyph_styles[gi] & AF_NONBASE
-        // during coverage. Each style's non_base_ranges (RANGES_*_NONBASE
-        // and RANGES_*_NONBASE_UNI) contain combining marks and diacritics
-        // that should NOT get blue zone alignment (afglobal.c).
-        for style in STYLE_TABLE {
-            for range in style.non_base_ranges {
-                let mut cp = range.first;
-                while cp <= range.last {
-                    if let Some(gi) = font_data.cmap.char_index(cp) {
-                        if (gi as usize) < ng {
-                            non_base[gi as usize] = true;
-                        }
-                    }
-                    cp += 1;
-                    if cp > range.last {
-                        break;
-                    }
-                }
-            }
-        }
-
         FaceGlobals {
             glyph_count: ng as u16,
-            glyph_styles,
-            non_base_glyphs: std::rc::Rc::new(non_base),
-            metrics_cache,
+            coverage: std::rc::Rc::new(RefCell::new(None)),
+            metrics_cache: std::rc::Rc::new(RefCell::new(vec![None; num_styles])),
             font_data,
             is_italic,
         }
     }
 
+    fn ensure_coverage(&self) {
+        if self.coverage.borrow().is_some() {
+            return;
+        }
+        let coverage = build_coverage(&self.font_data, self.glyph_count);
+        *self.coverage.borrow_mut() = Some(coverage);
+    }
+
     /// Get the metrics for a given glyph index, lazily computing if needed.
     pub fn get_metrics(&self, glyph_index: u16) -> Option<AfLatinMetrics> {
+        self.ensure_coverage();
+        let coverage = self.coverage.borrow();
+        let coverage = coverage.as_ref()?;
         let gi = glyph_index as usize;
-        if gi >= self.glyph_styles.len() {
+        if gi >= coverage.glyph_styles.len() {
             return None;
         }
 
-        let mut si = self.glyph_styles[gi];
+        let mut si = coverage.glyph_styles[gi];
         if si == STYLE_UNASSIGNED || si >= STYLE_TABLE.len() {
             si = STYLE_FALLBACK;
         }
@@ -159,7 +113,7 @@ impl FaceGlobals {
             let mut m = AfLatinMetrics::new(upem, self.glyph_count);
 
             // Copy non-base flags
-            for (i, &nb) in self.non_base_glyphs.iter().enumerate() {
+            for (i, &nb) in coverage.non_base_glyphs.iter().enumerate() {
                 if nb {
                     m.non_base_glyphs[i] = true;
                 }
@@ -247,6 +201,75 @@ impl FaceGlobals {
         }
 
         cache[si].clone()
+    }
+}
+
+fn build_coverage(font_data: &FontData, glyph_count: u16) -> FaceCoverage {
+    let ng = glyph_count as usize;
+    // Build non-base glyph table (Latin diacritics etc.)
+    let nonbase_ranges: &[(u32, u32)] = &[
+        (0x005E, 0x0060),
+        (0x007E, 0x007E),
+        (0x00A8, 0x00A9),
+        (0x00AE, 0x00B0),
+        (0x00B4, 0x00B4),
+        (0x00B8, 0x00B8),
+        (0x00BC, 0x00BE),
+        (0x02B9, 0x02DF),
+        (0x02E5, 0x02FF),
+        (0x0300, 0x036F),
+        (0x1AB0, 0x1AEB),
+        (0x1DC0, 0x1DFF),
+        (0x2017, 0x2017),
+        (0x203E, 0x203E),
+        (0xA788, 0xA788),
+        (0xA7F8, 0xA7FA),
+    ];
+    let mut non_base = vec![false; ng];
+    for &(first, last) in nonbase_ranges {
+        let mut ch = first;
+        loop {
+            if let Some(gi) = font_data.cmap.char_index(ch) {
+                if (gi as usize) < ng {
+                    non_base[gi as usize] = true;
+                }
+            }
+            if ch >= last {
+                break;
+            }
+            ch += 1;
+        }
+    }
+
+    let mut glyph_styles = vec![STYLE_UNASSIGNED; ng];
+
+    // Run coverage scan
+    compute_style_coverage(&font_data.cmap, glyph_count, &mut glyph_styles);
+
+    // Per-script non-base ranges: C checks glyph_styles[gi] & AF_NONBASE
+    // during coverage. Each style's non_base_ranges (RANGES_*_NONBASE
+    // and RANGES_*_NONBASE_UNI) contain combining marks and diacritics
+    // that should NOT get blue zone alignment (afglobal.c).
+    for style in STYLE_TABLE {
+        for range in style.non_base_ranges {
+            let mut cp = range.first;
+            while cp <= range.last {
+                if let Some(gi) = font_data.cmap.char_index(cp) {
+                    if (gi as usize) < ng {
+                        non_base[gi as usize] = true;
+                    }
+                }
+                cp += 1;
+                if cp > range.last {
+                    break;
+                }
+            }
+        }
+    }
+
+    FaceCoverage {
+        glyph_styles,
+        non_base_glyphs: non_base,
     }
 }
 

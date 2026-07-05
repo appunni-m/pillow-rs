@@ -695,15 +695,21 @@ impl Font {
 
 impl Font {
     fn getbbox_default_rendered_slot(&self, text: &str) -> (i32, i32, i32, i32) {
-        let glyph_text = text.chars().next().unwrap_or('\0').to_string();
-        match self.layout_bounds(&glyph_text) {
-            Ok((x_min, x_max, y_min, y_max)) => {
+        let ch = text.chars().next().unwrap_or('\0');
+        let glyph = self.char_index(ch as u32);
+        match self.scale_glyph_for_load_mode(glyph) {
+            Ok(scaled) if scaled.outline.n_contours > 0 => {
+                let x_min = 0.min(scaled.bbox_x_min);
+                let x_max = pixel_round(scaled.advance_width).max(scaled.bbox_x_max);
+                let y_min = 0.min(scaled.bbox_y_min);
+                let y_max = 0.max(scaled.bbox_y_max);
                 let scale = ScaleMetrics::new(self.data.size_pt, self.data.head.units_per_em);
                 let asc_26 = ft_mul_fix(pick_metrics(&self.data).0, scale.y_scale);
                 let asc_px = pixel_ceil(asc_26);
                 (x_min, asc_px - y_max, x_max, asc_px - y_min)
             }
             Err(_) => (0, 0, 0, 0),
+            _ => (0, 0, 0, 0),
         }
     }
 
