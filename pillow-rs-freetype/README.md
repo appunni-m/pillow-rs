@@ -99,6 +99,38 @@ make test-ffi
 
 ## API
 
+The public API has two layers:
+
+- `Library` / `Face` / `GlyphSlot` / `LoadFlags`: safe Rust names aligned with
+  common FreeType usage (`FT_Init_FreeType`, `FT_New_Memory_Face`,
+  `FT_Load_Glyph`, `FT_Load_Char`, `FT_Render_Glyph`).
+- `Font`: a compact helper API used by Pillow-style integration and tests.
+
+FreeType-shaped usage:
+
+```rust
+use fontdone::{FontError, Library, LoadFlags, PixelMode};
+
+fn main() -> Result<(), FontError> {
+    let data = std::fs::read("DejaVuSans.ttf")?;
+    let face = Library::init().new_memory_face(&data, 0, 20.0)?;
+
+    let glyph = face.load_char(
+        'A' as u32,
+        LoadFlags::RENDER | LoadFlags::TARGET_MONO,
+    )?;
+    let bitmap = glyph.bitmap.as_ref().expect("rendered bitmap");
+
+    assert_eq!(glyph.pixel_mode(), Some(PixelMode::Mono));
+    println!(
+        "advance={} bitmap={}x{} pitch={}",
+        glyph.advance.x, bitmap.width, bitmap.rows, bitmap.pitch
+    );
+
+    Ok(())
+}
+```
+
 ### `Font::truetype(data, size_pt) -> Result<Font, FontError>`
 Load a TrueType font from memory. Computes auto-hinter metrics (stem widths,
 blue zones) at font creation time.

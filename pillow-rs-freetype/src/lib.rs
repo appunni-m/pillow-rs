@@ -44,6 +44,7 @@
 // trigger dead_code. Remove once they have dedicated unit tests.
 #![allow(dead_code)]
 
+pub mod api;
 pub mod autohint;
 pub mod casts;
 pub mod error;
@@ -56,6 +57,9 @@ pub mod scaler;
 pub mod tables;
 pub mod tt;
 
+pub use api::{Face, GlyphFormat, GlyphSlot, Library, LoadFlags, Vector};
 pub use error::FontError;
-pub use font::{CharmapInfo, FaceInfo, Font, GlyphMask, LoadMode, SfntTableInfo, SizeMetrics};
+pub use font::{
+    BBox, CharmapInfo, FaceInfo, Font, GlyphMask, LoadMode, SfntTableInfo, SizeMetrics,
+};
 pub use render::{PixelMode, RenderMode, RenderedBitmap};

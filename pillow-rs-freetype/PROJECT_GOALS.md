@@ -1,14 +1,22 @@
 # Project Goals
 
-`fontdone` exists to prove one thing: a 100% Rust runtime can match FreeType C behavior exactly.
+`fontdone` exists to prove one thing: a 100% Rust runtime can replace
+version-pinned FreeType C.
 
-The project succeeds only when the harness makes false success impossible. Rust code must have one path to green: produce the same values, metadata, pixels, and bytes as the FreeType C oracle for every in-scope endpoint and fixture row.
+The project succeeds only when the harness makes false success impossible.
+Rust code must have one path to green: expose the same in-scope interfaces and
+produce the same values, metadata, pixels, and bytes as the FreeType C oracle
+for every in-scope endpoint and fixture row.
 
 ## Non-Negotiable Goal
 
 - Runtime implementation is 100% Rust.
 - FreeType C is the oracle for references, never the runtime engine.
+- FreeType C public headers are the source of truth for interface shape:
+  functions, constants, structs, enums, field units, and call lifecycle.
 - Exact pixel/byte/value parity is the goal; approximate visual similarity is failure.
+- Future C-library replacement requires C ABI parity in a separate Rust-backed
+  C export layer, not just a safe Rust semantic wrapper.
 - Broad fixture matrices must not be reduced to smoke tests.
 - A test that passes by threshold, skipped oracle, missing raw bytes, or unexecuted fixture presence is not a parity gate.
 - Incomplete work must be named as debt until it becomes an exact executable gate.
@@ -50,6 +58,23 @@ C is allowed only under oracle tooling:
 - Pinned FreeType source fetched into ignored `/freetype/` for audits.
 - Maintained `scripts/` helpers that generate reference fixtures.
 - Test-local oracle helpers for scalar parity, provided they are not linked into the runtime crate.
+
+## Interface Boundary
+
+The target interface is FreeType C, not Servo `rust-freetype`. Servo is useful
+as a binding comparison because it mirrors many C records, constants, and raw
+functions, but it is not the compatibility target.
+
+Active public API must be classified into one of three layers:
+
+- Internal pure-Rust engine: implementation details, preferably `pub(crate)`.
+- Safe Rust FreeType API: ergonomic wrappers preserving FreeType semantics.
+- Future C ABI layer: exported `FT_*` symbols, `#[repr(C)]` records, and exact
+  numeric constants for C users migrating from FreeType.
+
+Do not treat internal parser/hinter/rasterizer modules or Pillow-style helpers
+as proof of FreeType interface compatibility. See
+[`doc/C_API_COMPATIBILITY_PLAN.md`](doc/C_API_COMPATIBILITY_PLAN.md).
 
 ## Generator System
 

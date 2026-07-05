@@ -41,6 +41,19 @@ pub struct Font {
     bytecode_context: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
 }
 
+/// FreeType-style bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BBox {
+    /// Minimum x coordinate.
+    pub x_min: i32,
+    /// Minimum y coordinate.
+    pub y_min: i32,
+    /// Maximum x coordinate.
+    pub x_max: i32,
+    /// Maximum y coordinate.
+    pub y_max: i32,
+}
+
 /// FreeType-like size metrics for the active size object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SizeMetrics {
@@ -52,6 +65,14 @@ pub struct SizeMetrics {
     pub x_scale: i32,
     /// Vertical font-unit to 26.6 scale in 16.16.
     pub y_scale: i32,
+    /// Scaled ascender in 26.6 pixels.
+    pub ascender: i32,
+    /// Scaled descender in 26.6 pixels.
+    pub descender: i32,
+    /// Scaled line height in 26.6 pixels.
+    pub height: i32,
+    /// Scaled maximum horizontal advance in 26.6 pixels.
+    pub max_advance: i32,
     /// Requested horizontal DPI.
     pub x_dpi: u32,
     /// Requested vertical DPI.
@@ -73,9 +94,14 @@ pub struct FaceInfo {
     pub font_format: &'static str,
     pub units_per_em: u16,
     pub num_glyphs: u16,
+    pub bbox: BBox,
     pub ascender: i16,
     pub descender: i16,
     pub height: i16,
+    pub max_advance_width: i32,
+    pub max_advance_height: i32,
+    pub underline_position: i16,
+    pub underline_thickness: i16,
     pub face_flags: u32,
     pub style_flags: u32,
     pub fs_type_flags: u16,
@@ -222,6 +248,7 @@ impl Font {
         };
 
         let os2 = dir.find(data, tag(b"OS/2")).and_then(tt::os2::parse_os2);
+        let post = dir.find(data, tag(b"post")).and_then(tt::post::parse_post);
         let vhea = dir
             .find(data, tag(b"vhea"))
             .and_then(|d| tt::vhea::parse_vhea(d).ok());
@@ -269,6 +296,7 @@ impl Font {
             maxp,
             name,
             os2,
+            post,
             vhea,
             vmtx,
             hdmx,
@@ -289,7 +317,7 @@ impl Font {
             i32_from_f32((size_pt * 64.0).round()),
             72,
             72,
-            font_data.head.units_per_em,
+            font_data.as_ref(),
         );
 
         let selected_charmap = default_unicode_charmap_index(&font_data.cmap);
@@ -332,9 +360,31 @@ impl Font {
             font_format: self.font_format(),
             units_per_em: self.data.head.units_per_em,
             num_glyphs: self.data.maxp.num_glyphs,
+            bbox: BBox {
+                x_min: i32::from(self.data.head.x_min),
+                y_min: i32::from(self.data.head.y_min),
+                x_max: i32::from(self.data.head.x_max),
+                y_max: i32::from(self.data.head.y_max),
+            },
             ascender: self.data.hhea.ascent,
             descender: self.data.hhea.descent,
             height: self.data.hhea.ascent - self.data.hhea.descent + self.data.hhea.line_gap,
+            max_advance_width: i32::from(self.data.hhea.advance_width_max),
+            max_advance_height: self
+                .data
+                .vhea
+                .as_ref()
+                .map_or(0, |vhea| i32::from(vhea.advance_height_max)),
+            underline_position: self
+                .data
+                .post
+                .as_ref()
+                .map_or(0, |post| post.underline_position),
+            underline_thickness: self
+                .data
+                .post
+                .as_ref()
+                .map_or(0, |post| post.underline_thickness),
             face_flags: self.face_flags(),
             style_flags: self.style_flags(),
             fs_type_flags: self.get_fstype_flags(),
@@ -414,7 +464,7 @@ impl Font {
             height,
             normalize_dpi(x_dpi),
             normalize_dpi(y_dpi),
-            self.data.head.units_per_em,
+            &self.data,
         );
         Arc::make_mut(&mut self.data).size_pt = self.size_pt;
         self.face_globals =
@@ -429,8 +479,7 @@ impl Font {
             pixel_height
         };
         self.size_pt = height as f32;
-        self.size_metrics =
-            SizeMetrics::from_pixel_size(pixel_width, height, self.data.head.units_per_em);
+        self.size_metrics = SizeMetrics::from_pixel_size(pixel_width, height, &self.data);
         Arc::make_mut(&mut self.data).size_pt = self.size_pt;
         self.face_globals =
             crate::autohint::globals::FaceGlobals::new(self.data.clone(), self.is_italic);
@@ -633,38 +682,36 @@ impl Font {
     /// requested.
     pub fn glyph_metrics(&self, codepoint: u32) -> Result<GlyphSlotMetrics, FontError> {
         let glyph = self.char_index(codepoint);
-        self.glyph_metrics_for_index(glyph)
+        self.glyph_metrics_for_index_default(glyph)
     }
 
-    fn glyph_metrics_for_index(&self, glyph: u16) -> Result<GlyphSlotMetrics, FontError> {
-        let scaled = if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context()?;
-            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context(
-                &self.data,
-                glyph,
-                self.is_italic,
-                bytecode_context,
-            )?;
-            if is_pathological_metrics_cbox(&scaled) || is_pathological_metrics_advance(&scaled) {
-                let metrics_cache = self.face_globals.get_metrics(glyph);
-                scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
-                    &self.data,
-                    glyph,
-                    metrics_cache.as_deref(),
-                    self.is_italic,
-                )?
-            } else {
-                scaled
-            }
-        } else {
-            let metrics_cache = self.face_globals.get_metrics(glyph);
-            scaler::scale_glyph_for_metrics_with_autohint(
-                &self.data,
-                glyph,
-                metrics_cache.as_deref(),
-                self.is_italic,
-            )?
-        };
+    pub(crate) fn glyph_metrics_for_index_default(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let scaled = self.scale_glyph_for_metrics_default(glyph)?;
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+    }
+
+    pub(crate) fn glyph_metrics_for_index_force_autohint(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let metrics_cache = self.face_globals.get_metrics(glyph);
+        let scaled = scaler::scale_glyph_for_metrics_with_autohint(
+            &self.data,
+            glyph,
+            metrics_cache.as_deref(),
+            self.is_italic,
+        )?;
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+    }
+
+    pub(crate) fn glyph_metrics_for_index_no_hinting(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let scaled = scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)?;
         Ok(self.slot_metrics_from_scaled(glyph, &scaled))
     }
 
@@ -773,6 +820,40 @@ impl Font {
         }
     }
 
+    pub(crate) fn scale_glyph_for_metrics_default(
+        &self,
+        glyph: u16,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
+        if self.data.fpgm.is_some() && self.data.cvt.is_some() {
+            let bytecode_context = self.native_bytecode_context()?;
+            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context(
+                &self.data,
+                glyph,
+                self.is_italic,
+                bytecode_context,
+            )?;
+            if is_pathological_metrics_cbox(&scaled) || is_pathological_metrics_advance(&scaled) {
+                let metrics_cache = self.face_globals.get_metrics(glyph);
+                scaler::scale_glyph_for_metrics_with_autohint_preserve_advance(
+                    &self.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    self.is_italic,
+                )
+            } else {
+                Ok(scaled)
+            }
+        } else {
+            let metrics_cache = self.face_globals.get_metrics(glyph);
+            scaler::scale_glyph_for_metrics_with_autohint(
+                &self.data,
+                glyph,
+                metrics_cache.as_deref(),
+                self.is_italic,
+            )
+        }
+    }
+
     fn native_bytecode_context(&self) -> Result<Option<&tt::hinter::exec::ExecContext>, FontError> {
         let (Some(fpgm), Some(cvt)) = (&self.data.fpgm, &self.data.cvt) else {
             return Ok(None);
@@ -831,7 +912,7 @@ impl Font {
             if glyph == 0 {
                 return total;
             }
-            match self.glyph_metrics_for_index(glyph) {
+            match self.glyph_metrics_for_index_default(glyph) {
                 Ok(metrics) => total + metrics.hori_advance,
                 Err(_) => total,
             }
@@ -986,27 +1067,33 @@ impl SizeMetrics {
         char_height: i32,
         x_dpi: u32,
         y_dpi: u32,
-        units_per_em: u16,
+        data: &FontData,
     ) -> Self {
         let x_dpi = normalize_dpi(x_dpi);
         let y_dpi = normalize_dpi(y_dpi);
         let x_ppem = ppem_from_char_size(char_width, x_dpi);
         let y_ppem = ppem_from_char_size(char_height, y_dpi);
-        let x_scale = ft_div_fix((x_ppem as i32) << 6, units_per_em as i32);
-        let y_scale = ft_div_fix((y_ppem as i32) << 6, units_per_em as i32);
+        let units_per_em = i32::from(data.head.units_per_em);
+        let x_scale = ft_div_fix((x_ppem as i32) << 6, units_per_em);
+        let y_scale = ft_div_fix((y_ppem as i32) << 6, units_per_em);
         SizeMetrics {
             x_ppem,
             y_ppem,
             x_scale,
             y_scale,
+            ascender: 0,
+            descender: 0,
+            height: 0,
+            max_advance: 0,
             x_dpi,
             y_dpi,
             char_width,
             char_height,
         }
+        .with_face_metrics(data)
     }
 
-    fn from_pixel_size(pixel_width: u32, pixel_height: u32, units_per_em: u16) -> Self {
+    fn from_pixel_size(pixel_width: u32, pixel_height: u32, data: &FontData) -> Self {
         let width = if pixel_width == 0 {
             pixel_height
         } else {
@@ -1017,18 +1104,38 @@ impl SizeMetrics {
         } else {
             pixel_height
         };
-        let x_scale = ft_div_fix((width as i32) << 6, units_per_em as i32);
-        let y_scale = ft_div_fix((height as i32) << 6, units_per_em as i32);
+        let units_per_em = i32::from(data.head.units_per_em);
+        let x_scale = ft_div_fix((width as i32) << 6, units_per_em);
+        let y_scale = ft_div_fix((height as i32) << 6, units_per_em);
         SizeMetrics {
             x_ppem: width as u16,
             y_ppem: height as u16,
             x_scale,
             y_scale,
+            ascender: 0,
+            descender: 0,
+            height: 0,
+            max_advance: 0,
             x_dpi: 72,
             y_dpi: 72,
             char_width: (width as i32) << 6,
             char_height: (height as i32) << 6,
         }
+        .with_face_metrics(data)
+    }
+
+    fn with_face_metrics(mut self, data: &FontData) -> Self {
+        let ascender = i32::from(data.hhea.ascent);
+        let descender = i32::from(data.hhea.descent);
+        let height = i32::from(data.hhea.ascent) - i32::from(data.hhea.descent)
+            + i32::from(data.hhea.line_gap);
+        let max_advance = i32::from(data.hhea.advance_width_max);
+
+        self.ascender = ft_pix_ceil(ft_mul_fix(ascender, self.y_scale));
+        self.descender = ft_pix_floor(ft_mul_fix(descender, self.y_scale));
+        self.height = ft_pix_round(ft_mul_fix(height, self.y_scale));
+        self.max_advance = ft_pix_round(ft_mul_fix(max_advance, self.x_scale));
+        self
     }
 }
 

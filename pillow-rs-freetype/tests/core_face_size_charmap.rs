@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use fontdone::Font;
+use fontdone::{BBox, Face, Font, GlyphFormat, Library, LoadFlags, PixelMode};
 
 fn fixture_font(name: &str) -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -61,8 +61,12 @@ fn face_metadata_exposes_names_flags_metrics_and_format() {
             info.font_format,
             info.units_per_em,
             info.num_glyphs,
+            info.bbox,
             info.ascender,
             info.descender,
+            info.max_advance_width,
+            info.underline_position,
+            info.underline_thickness,
         ),
         (
             "DejaVu Sans",
@@ -71,8 +75,17 @@ fn face_metadata_exposes_names_flags_metrics_and_format() {
             "TrueType",
             2048,
             6253,
+            BBox {
+                x_min: -2090,
+                y_min: -948,
+                x_max: 3673,
+                y_max: 2524,
+            },
             1901,
             -483,
+            3838,
+            -40,
+            90,
         )
     );
 }
@@ -93,11 +106,57 @@ fn size_select_distinguishes_char_size_pixel_size_dpi_ppem_and_scale() {
             char_size.y_dpi,
             char_size.y_ppem,
             char_size.y_scale,
+            char_size.ascender,
+            char_size.descender,
+            char_size.height,
+            char_size.max_advance,
             pixel_size.y_dpi,
             pixel_size.y_ppem,
             pixel_size.y_scale,
         ),
-        (72, 144, 20, 40960, 72, 18, 36864)
+        (72, 144, 20, 40960, 1216, -320, 1472, 1216, 72, 18, 36864)
+    );
+}
+
+#[test]
+fn freetype_shaped_facade_loads_face_and_glyph_slot() {
+    let data = fixture_font("DejaVuSans.ttf");
+
+    let library = Library::init();
+    let face = library.new_memory_face(&data, 0, 20.0).unwrap();
+    let glyph_index = face.get_char_index('A' as u32);
+    let slot = face
+        .load_char('A' as u32, LoadFlags::RENDER | LoadFlags::TARGET_MONO)
+        .unwrap();
+    let bitmap = slot.bitmap.as_ref().expect("rendered bitmap");
+
+    assert_eq!(glyph_index, 36);
+    assert_eq!(slot.glyph_index, glyph_index);
+    assert_eq!(slot.format, GlyphFormat::Bitmap);
+    assert_eq!(slot.advance.x, slot.metrics.hori_advance);
+    assert_eq!(slot.advance.y, 0);
+    assert_eq!(slot.pixel_mode(), Some(PixelMode::Mono));
+    assert_eq!(bitmap.pixel_mode, PixelMode::Mono);
+    assert_eq!(bitmap.num_grays, 2);
+    assert_eq!(
+        (bitmap.left, bitmap.top),
+        (slot.bitmap_left, slot.bitmap_top)
+    );
+}
+
+#[test]
+fn freetype_shaped_facade_rejects_unimplemented_no_hinting_render() {
+    let data = fixture_font("DejaVuSans.ttf");
+    let face = Face::from_memory(&data, 0, 20.0).unwrap();
+
+    let err = match face.load_char('A' as u32, LoadFlags::NO_HINTING | LoadFlags::RENDER) {
+        Ok(_) => panic!("NO_HINTING | RENDER should not silently use another render path"),
+        Err(err) => err,
+    };
+
+    assert_eq!(
+        err.to_string(),
+        "Unsupported load flags: NO_HINTING | RENDER"
     );
 }
 

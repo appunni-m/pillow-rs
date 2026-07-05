@@ -5,8 +5,10 @@ This repository is the standalone pure-Rust FreeType parity project.
 
 ## Goal
 
-Match version-pinned C FreeType behavior with Rust runtime code.
+Replace version-pinned C FreeType with Rust runtime code.
 
+- Match C FreeType public interface intent: functions, constants, records,
+  usage lifecycle, and output behavior.
 - Pixel or bitmap byte parity where rendering produces a mask.
 - Exact metric parity where metrics are exposed.
 - Exact bbox/cbox parity where geometry is exposed.
@@ -31,6 +33,11 @@ Match version-pinned C FreeType behavior with Rust runtime code.
   `log::trace!` for permanent traces.
 - Do not revive legacy parent-project font backends. This project owns the FreeType
   implementation directly.
+- Servo `rust-freetype` is only a binding comparison reference. The target is
+  pinned FreeType C headers plus C oracle behavior.
+- Do not treat internal Rust modules or Pillow-style convenience helpers as
+  FreeType replacement API. Compatibility claims require C-header mapping,
+  exact constants/records where applicable, and output parity.
 
 ## Required Commands
 
@@ -40,6 +47,7 @@ Run narrow checks first, then the broader gates through Makefile targets:
 make setup
 make test-parity
 make test-ffi
+make api-abi-audit
 make fmt
 make clippy
 ```

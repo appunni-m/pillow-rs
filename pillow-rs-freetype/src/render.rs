@@ -42,6 +42,13 @@ pub enum PixelMode {
 }
 
 impl PixelMode {
+    pub fn num_grays(self) -> u16 {
+        match self {
+            PixelMode::Mono => 2,
+            PixelMode::Gray | PixelMode::Lcd | PixelMode::LcdV => 256,
+        }
+    }
+
     pub fn fixture_name(self) -> &'static str {
         match self {
             PixelMode::Gray => "gray",
@@ -58,6 +65,7 @@ pub struct RenderedBitmap {
     pub rows: u32,
     pub pitch: i32,
     pub pixel_mode: PixelMode,
+    pub num_grays: u16,
     pub left: i32,
     pub top: i32,
     pub buffer: Vec<u8>,
@@ -72,6 +80,7 @@ impl Font {
                 rows: 0,
                 pitch: 0,
                 pixel_mode: PixelMode::Gray,
+                num_grays: PixelMode::Gray.num_grays(),
                 left: 0,
                 top: 0,
                 buffer: Vec::new(),
@@ -86,6 +95,14 @@ impl Font {
         mode: RenderMode,
     ) -> Result<RenderedBitmap, FontError> {
         let glyph = self.data.cmap.char_index(ch as u32).unwrap_or(0);
+        self.render_char_mode_for_index(glyph, mode)
+    }
+
+    pub(crate) fn render_char_mode_for_index(
+        &self,
+        glyph: u16,
+        mode: RenderMode,
+    ) -> Result<RenderedBitmap, FontError> {
         let metrics_cache = self.face_globals.get_metrics(glyph);
         let scaled = match mode {
             RenderMode::Lcd => scaler::scale_glyph_lcd(
@@ -120,21 +137,24 @@ impl Font {
                     rows: 1,
                     pitch: 2,
                     pixel_mode: PixelMode::Mono,
+                    num_grays: PixelMode::Mono.num_grays(),
                     left: 0,
                     top: 1,
                     buffer: vec![0, 0],
                 });
             }
+            let pixel_mode = match mode {
+                RenderMode::Mono => PixelMode::Mono,
+                RenderMode::Lcd => PixelMode::Lcd,
+                RenderMode::LcdV => PixelMode::LcdV,
+                RenderMode::Normal => PixelMode::Gray,
+            };
             return Ok(RenderedBitmap {
                 width: 0,
                 rows: 0,
                 pitch: 0,
-                pixel_mode: match mode {
-                    RenderMode::Mono => PixelMode::Mono,
-                    RenderMode::Lcd => PixelMode::Lcd,
-                    RenderMode::LcdV => PixelMode::LcdV,
-                    RenderMode::Normal => PixelMode::Gray,
-                },
+                pixel_mode,
+                num_grays: pixel_mode.num_grays(),
                 left: 0,
                 top: 0,
                 buffer: Vec::new(),
@@ -159,6 +179,7 @@ fn render_normal(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap
         rows: u32_from_usize(raster.height),
         pitch: i32_from_usize(raster.width),
         pixel_mode: PixelMode::Gray,
+        num_grays: PixelMode::Gray.num_grays(),
         left,
         top,
         buffer: raster.pixels,
@@ -192,6 +213,7 @@ fn render_mono(
         rows: u32_from_usize(rows),
         pitch: i32_from_usize(pitch),
         pixel_mode: PixelMode::Mono,
+        num_grays: PixelMode::Mono.num_grays(),
         left: mono_box.x_min,
         top,
         buffer,
@@ -2024,6 +2046,7 @@ fn render_lcd(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap, F
         rows: u32_from_usize(height),
         pitch: i32_from_usize(pitch),
         pixel_mode: PixelMode::Lcd,
+        num_grays: PixelMode::Lcd.num_grays(),
         left: left + box_.x_min,
         top: top - outline.cbox_y_max + box_.y_max,
         buffer,
@@ -2064,6 +2087,7 @@ fn render_lcd_v(outline: Outline, left: i32, top: i32) -> Result<RenderedBitmap,
         rows: u32_from_usize(rows),
         pitch: i32_from_usize(pitch),
         pixel_mode: PixelMode::LcdV,
+        num_grays: PixelMode::LcdV.num_grays(),
         left: left + box_.x_min,
         top: top - outline.cbox_y_max + box_.y_max,
         buffer,

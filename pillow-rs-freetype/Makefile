@@ -26,7 +26,8 @@ help:
 	@printf "\nTest:\n"
 	@printf "  make test             Run all crate tests\n"
 	@printf "  make test-parity      Run all FreeType parity gates\n"
-	@printf "  make test-coverage    Run the broad coverage matrix\n"
+	@printf "  make test-coverage    Run all FreeType coverage gates\n"
+	@printf "  make test-coverage-matrix Run the broad unified coverage matrix only\n"
 	@printf "                       Use PARITY_ARGS='test_name -- --nocapture' for one coverage lane\n"
 	@printf "  make test-ffi         Run the no-runtime-FFI guard\n"
 	@printf "  make test-harness     Run harness contract tests\n"
@@ -34,6 +35,7 @@ help:
 	@printf "  make test-render-mode Run render-mode matrix tests\n"
 	@printf "  make test-fixed       Run fixed arithmetic parity tests\n"
 	@printf "  make test-interface   Run public interface coverage report\n"
+	@printf "  make api-abi-audit    Generate C/Servo/fontdone API and ABI surface audit\n"
 	@printf "  make test-perf        Run benchmark contract tests\n"
 	@printf "  make test-direct-live Run ignored live C-oracle pixel comparison\n"
 	@printf "  make test-pipe-trace  Run ignored single-glyph pipeline trace\n"
@@ -87,10 +89,13 @@ test:
 	$(CARGO) test --locked
 
 .PHONY: test-parity
-test-parity: fixtures test-coverage test-render-mode
+test-parity: fixtures test-coverage
 
 .PHONY: test-coverage
-test-coverage:
+test-coverage: test-coverage-matrix test-render-mode
+
+.PHONY: test-coverage-matrix
+test-coverage-matrix:
 	$(CARGO) test --test coverage_matrix_tests --locked $(PARITY_ARGS)
 
 .PHONY: test-ffi
@@ -106,7 +111,7 @@ test-generator:
 	$(CARGO) test --test generator_contract --locked
 
 .PHONY: test-render-mode
-test-render-mode:
+test-render-mode: fixture-render-mode
 	$(CARGO) test --test render_mode_matrix --locked
 
 .PHONY: test-fixed
@@ -116,6 +121,10 @@ test-fixed:
 .PHONY: test-interface
 test-interface: oracle-fetch
 	$(CARGO) test --test interface_coverage --locked -- --nocapture
+
+.PHONY: api-abi-audit
+api-abi-audit: oracle-fetch
+	$(PYTHON) scripts/audit_api_abi.py
 
 .PHONY: test-perf
 test-perf:
