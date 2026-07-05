@@ -165,6 +165,29 @@ def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def weighted_mean(values: list[float], weights: list[float]) -> float:
+    total_weight = sum(weights)
+    if not values or total_weight == 0.0:
+        return 0.0
+    return sum(value * weight for value, weight in zip(values, weights, strict=True)) / total_weight
+
+
+def weighted_percentile(values: list[float], weights: list[float], pct: float) -> float:
+    if not values:
+        return 0.0
+    pairs = sorted(zip(values, weights, strict=True), key=lambda item: item[0])
+    total_weight = sum(weight for _, weight in pairs)
+    if total_weight == 0.0:
+        return 0.0
+    threshold = total_weight * pct / 100.0
+    cumulative = 0.0
+    for value, weight in pairs:
+        cumulative += weight
+        if cumulative >= threshold:
+            return value
+    return pairs[-1][0]
+
+
 def median(values: list[float]) -> float:
     return percentile(values, 50)
 
@@ -212,11 +235,14 @@ def summarize_rows(
     all_rust_per_iter = []
     all_c_per_iter = []
     all_speedups = []
+    all_sample_weights = []
+    groups: dict[str, dict[str, Any]] = {}
 
     for row_id in order:
         samples = by_id[row_id]
         first = samples[0]
         matrix_row = (matrix_by_id or {}).get(row_id, {})
+        timing_category = timing_category_for_row(first, matrix_row)
         rust_per_iter = [float(row["rust_ns_per_iter"]) for row in samples]
         c_per_iter = [
             float(row["c_ns_per_iter"])
@@ -228,9 +254,6 @@ def summarize_rows(
             for row in samples
             if row.get("c_ns_per_iter") and row.get("rust_ns_per_iter")
         ]
-        all_rust_per_iter.extend(rust_per_iter)
-        all_c_per_iter.extend(c_per_iter)
-        all_speedups.extend(speedups)
         c_output_has_sha = any(row.get("c_output_sha256") for row in samples)
         output_match_checked = any(row.get("output_match") is not None for row in samples)
         rust_total = sum(float(row["rust_ns_total"]) for row in samples)
@@ -238,6 +261,39 @@ def summarize_rows(
         iterations = int(first["iterations"])
         total_iterations = iterations * len(samples)
         weight = weights.get(row_id, 1.0)
+        sample_weights = [float(iterations)] * len(samples)
+
+        all_rust_per_iter.extend(rust_per_iter)
+        all_c_per_iter.extend(c_per_iter)
+        all_speedups.extend(speedups)
+        all_sample_weights.extend(sample_weights)
+
+        group = groups.setdefault(
+            timing_category,
+            {
+                "operation_count": 0,
+                "rust_ns_total": 0.0,
+                "c_ns_total": 0.0,
+                "weighted_operation_weight": 0.0,
+                "weighted_rust_total": 0.0,
+                "weighted_c_total": 0.0,
+                "rust_per_iter": [],
+                "c_per_iter": [],
+                "speedups": [],
+                "sample_weights": [],
+            },
+        )
+        group["operation_count"] += total_iterations
+        group["rust_ns_total"] += rust_total
+        group["c_ns_total"] += c_total
+        group["weighted_operation_weight"] += weight
+        group["weighted_rust_total"] += weight * mean(rust_per_iter)
+        if c_per_iter:
+            group["weighted_c_total"] += weight * mean(c_per_iter)
+        group["rust_per_iter"].extend(rust_per_iter)
+        group["c_per_iter"].extend(c_per_iter)
+        group["speedups"].extend(speedups)
+        group["sample_weights"].extend(sample_weights)
 
         rust_total_ns += rust_total
         c_total_ns += c_total
@@ -251,6 +307,7 @@ def summarize_rows(
             {
                 "id": row_id,
                 "operation": first["operation"],
+                "timing_category": timing_category,
                 "comparison_trust": matrix_row.get("comparison_trust", "unspecified"),
                 "timing_boundary": matrix_row.get("timing_boundary", ""),
                 "output_match_checked": output_match_checked,
@@ -301,20 +358,72 @@ def summarize_rows(
             "speedup_vs_c_total": overall_speedup,
             "weighted_operation_weight": weighted_total,
             "weighted_speedup_vs_c": weighted_speedup,
-            "rust_ns_per_iter_mean": mean(all_rust_per_iter),
-            "rust_ns_per_iter_median": median(all_rust_per_iter),
-            "rust_ns_per_iter_p90": percentile(all_rust_per_iter, 90),
-            "rust_ns_per_iter_p99": percentile(all_rust_per_iter, 99),
-            "c_ns_per_iter_mean": mean(all_c_per_iter),
-            "c_ns_per_iter_median": median(all_c_per_iter),
-            "c_ns_per_iter_p90": percentile(all_c_per_iter, 90),
-            "c_ns_per_iter_p99": percentile(all_c_per_iter, 99),
-            "speedup_vs_c_mean": mean(all_speedups),
-            "speedup_vs_c_median": median(all_speedups),
-            "speedup_vs_c_p90": percentile(all_speedups, 90),
-            "speedup_vs_c_p99": percentile(all_speedups, 99),
+            **distribution_stats(all_rust_per_iter, all_c_per_iter, all_speedups, all_sample_weights),
         },
+        "groups": summarize_groups(groups),
     }
+
+
+def timing_category_for_row(row: dict[str, Any], matrix_row: dict[str, Any]) -> str:
+    boundary = matrix_row.get("timing_boundary", "")
+    if row.get("operation") == "load_font" or "construct" in boundary and "timed loop" in boundary:
+        return "font_load_path_dependent"
+    return "cached_font_operation"
+
+
+def distribution_stats(
+    rust_per_iter: list[float],
+    c_per_iter: list[float],
+    speedups: list[float],
+    sample_weights: list[float],
+) -> dict[str, float]:
+    speedup_weights = sample_weights[: len(speedups)]
+    return {
+        "rust_ns_per_iter_mean": weighted_mean(rust_per_iter, sample_weights),
+        "rust_ns_per_iter_median": weighted_percentile(rust_per_iter, sample_weights, 50),
+        "rust_ns_per_iter_p90": weighted_percentile(rust_per_iter, sample_weights, 90),
+        "rust_ns_per_iter_p99": weighted_percentile(rust_per_iter, sample_weights, 99),
+        "c_ns_per_iter_mean": weighted_mean(c_per_iter, sample_weights[: len(c_per_iter)]),
+        "c_ns_per_iter_median": weighted_percentile(c_per_iter, sample_weights[: len(c_per_iter)], 50),
+        "c_ns_per_iter_p90": weighted_percentile(c_per_iter, sample_weights[: len(c_per_iter)], 90),
+        "c_ns_per_iter_p99": weighted_percentile(c_per_iter, sample_weights[: len(c_per_iter)], 99),
+        "speedup_vs_c_mean": weighted_mean(speedups, speedup_weights),
+        "speedup_vs_c_median": weighted_percentile(speedups, speedup_weights, 50),
+        "speedup_vs_c_p90": weighted_percentile(speedups, speedup_weights, 90),
+        "speedup_vs_c_p99": weighted_percentile(speedups, speedup_weights, 99),
+    }
+
+
+def summarize_groups(groups: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    labels = {
+        "cached_font_operation": "Cached font operations",
+        "font_load_path_dependent": "Font load / path-dependent setup",
+    }
+    rows = []
+    for category, group in sorted(groups.items()):
+        rust_total = float(group["rust_ns_total"])
+        c_total = float(group["c_ns_total"])
+        weighted_rust = float(group["weighted_rust_total"])
+        weighted_c = float(group["weighted_c_total"])
+        rows.append(
+            {
+                "category": category,
+                "label": labels.get(category, category),
+                "operation_count": group["operation_count"],
+                "rust_ns_total": int(rust_total),
+                "c_ns_total": int(c_total),
+                "speedup_vs_c_total": c_total / rust_total if rust_total else 0.0,
+                "weighted_operation_weight": group["weighted_operation_weight"],
+                "weighted_speedup_vs_c": weighted_c / weighted_rust if weighted_rust and weighted_c else 0.0,
+                **distribution_stats(
+                    group["rust_per_iter"],
+                    group["c_per_iter"],
+                    group["speedups"],
+                    group["sample_weights"],
+                ),
+            }
+        )
+    return rows
 
 
 def read_cpu_model() -> str | None:
@@ -540,6 +649,22 @@ def aggregate_table(summary: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def group_summary_table(summary: dict[str, Any]) -> str:
+    lines = [
+        "| Group | count | rust total ms | c total ms | total speedup vs C | weighted speedup vs C |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for group in summary.get("groups", []):
+        lines.append(
+            f"| {group['label']} | {group['operation_count']} | "
+            f"{group['rust_ns_total'] / 1_000_000.0:.3f} | "
+            f"{group['c_ns_total'] / 1_000_000.0:.3f} | "
+            f"{group['speedup_vs_c_total']:.3f}x | "
+            f"{group['weighted_speedup_vs_c']:.3f}x |"
+        )
+    return "\n".join(lines)
+
+
 def overall_distribution_table(summary: dict[str, Any]) -> str:
     overall = summary["overall"]
     rows = [
@@ -558,7 +683,7 @@ def overall_distribution_table(summary: dict[str, Any]) -> str:
             overall["c_ns_per_iter_p99"],
         ),
         (
-            "Speedup vs C",
+            "Per-row speedup vs C",
             overall["speedup_vs_c_mean"],
             overall["speedup_vs_c_median"],
             overall["speedup_vs_c_p90"],
@@ -567,11 +692,60 @@ def overall_distribution_table(summary: dict[str, Any]) -> str:
     ]
     lines = ["| Distribution | mean | median | p90 | p99 |", "| --- | --- | --- | --- | --- |"]
     for label, avg, med, p90, p99 in rows:
-        suffix = "x" if label == "Speedup vs C" else " ns"
+        suffix = "x" if "speedup" in label else " ns"
         lines.append(
             f"| {label} | {avg:.3f}{suffix} | {med:.3f}{suffix} | "
             f"{p90:.3f}{suffix} | {p99:.3f}{suffix} |"
         )
+    return "\n".join(lines)
+
+
+def group_distribution_table(group: dict[str, Any]) -> str:
+    rows = [
+        (
+            "Rust ns/iter",
+            group["rust_ns_per_iter_mean"],
+            group["rust_ns_per_iter_median"],
+            group["rust_ns_per_iter_p90"],
+            group["rust_ns_per_iter_p99"],
+        ),
+        (
+            "C ns/iter",
+            group["c_ns_per_iter_mean"],
+            group["c_ns_per_iter_median"],
+            group["c_ns_per_iter_p90"],
+            group["c_ns_per_iter_p99"],
+        ),
+        (
+            "Per-row speedup vs C",
+            group["speedup_vs_c_mean"],
+            group["speedup_vs_c_median"],
+            group["speedup_vs_c_p90"],
+            group["speedup_vs_c_p99"],
+        ),
+    ]
+    lines = ["| Distribution | mean | median | p90 | p99 |", "| --- | --- | --- | --- | --- |"]
+    for label, avg, med, p90, p99 in rows:
+        suffix = "x" if "speedup" in label else " ns"
+        lines.append(
+            f"| {label} | {avg:.3f}{suffix} | {med:.3f}{suffix} | "
+            f"{p90:.3f}{suffix} | {p99:.3f}{suffix} |"
+        )
+    return "\n".join(lines)
+
+
+def split_operation_tables(summary: dict[str, Any]) -> str:
+    labels = {
+        "cached_font_operation": "Cached Font Operations",
+        "font_load_path_dependent": "Font Load / Path-Dependent Setup",
+    }
+    lines = []
+    for category in ("cached_font_operation", "font_load_path_dependent"):
+        rows = [row for row in summary["rows"] if row.get("timing_category") == category]
+        if not rows:
+            continue
+        lines.extend(["", f"### {labels.get(category, category)}", ""])
+        lines.append(format_table({"rows": rows, "overall": summary["overall"]}, include_aggregate=False))
     return "\n".join(lines)
 
 
@@ -651,15 +825,35 @@ def format_report(metadata: dict[str, Any], summary: dict[str, Any] | None) -> s
         lines.append(f"- {note}")
     if metadata.get("git_dirty"):
         lines.append("- Warning: the benchmark was generated from a dirty worktree.")
+    lines.extend(
+        [
+            "",
+            "## Interpretation Notes",
+            "",
+            "- Aggregate speedup is the ratio of total C time to total Rust time.",
+            "- Weighted speedup uses the selected workload profile weights.",
+            "- Distribution rows are operation-count weighted. They describe the",
+            "  distribution of row-level timings, not a replacement for aggregate speedup.",
+            "- Per-row speedup percentiles are useful for spotting operation families,",
+            "  but they are not mathematically equivalent to total speedup.",
+            "- Font load/path-dependent setup is separated from cached font operations",
+            "  because path-backed face creation can include filesystem and OS page-cache effects.",
+        ]
+    )
     lines.extend(["", "## Aggregate Summary", ""])
     if summary is None:
         lines.append("No C comparison summary was generated. Run with `--compare-c`.")
     else:
         lines.append(aggregate_table(summary))
+        lines.extend(["", "## Operation Groups", ""])
+        lines.append(group_summary_table(summary))
         lines.extend(["", "## Overall Distribution", ""])
         lines.append(overall_distribution_table(summary))
+        for group in summary.get("groups", []):
+            lines.extend(["", f"## {group['label']} Distribution", ""])
+            lines.append(group_distribution_table(group))
         lines.extend(["", "## Per-Operation Results", ""])
-        lines.append(format_table(summary, include_aggregate=False))
+        lines.append(split_operation_tables(summary))
     lines.extend(
         [
             "",
@@ -747,9 +941,12 @@ def run_self_test() -> int:
     assert summary["overall"]["c_ns_total"] == 750
     assert round(summary["overall"]["speedup_vs_c_total"], 6) == 1.25
     assert round(summary["overall"]["weighted_speedup_vs_c"], 6) == 1.25
-    assert summary["overall"]["rust_ns_per_iter_p90"] == 34.0
-    assert round(summary["overall"]["c_ns_per_iter_p99"], 1) == 39.4
+    assert summary["overall"]["rust_ns_per_iter_mean"] == 20.0
+    assert summary["overall"]["rust_ns_per_iter_median"] == 20.0
+    assert summary["overall"]["rust_ns_per_iter_p90"] == 40.0
+    assert summary["overall"]["c_ns_per_iter_p99"] == 40.0
     assert summary["overall"]["speedup_vs_c_p90"] == 2.0
+    assert summary["groups"][0]["category"] == "cached_font_operation"
     assert summary["rows"][0]["speedup_vs_c_mean"] == 2.0
     assert summary["rows"][1]["speedup_vs_c_mean"] == 0.5
     print("bench_freetype.py self-test passed")

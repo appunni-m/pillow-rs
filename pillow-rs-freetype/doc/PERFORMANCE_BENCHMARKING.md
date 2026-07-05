@@ -30,6 +30,9 @@ The JSON contains:
 - `summary.overall`: aggregate operation count, Rust total time, C total time,
   total speedup, weighted workload speedup, and overall mean/median/p90/p99
   distributions for Rust time, C time, and speedup.
+- `summary.groups`: the same aggregate and distribution values split by timing
+  category. Font-load/path-dependent setup is reported separately from cached
+  font operations.
 - `summary_markdown`: the printable comparison table.
 
 The Markdown report contains:
@@ -37,6 +40,8 @@ The Markdown report contains:
 - benchmark configuration and reproduction command
 - the same result table in review-friendly form
 - aggregate Rust/C total time and speedup summary
+- a group summary that separates cached font operations from font-load or
+  path-dependent setup
 - overall mean, median, p90, and p99 distributions for Rust time, C time, and
   speedup
 - git/toolchain metadata
@@ -113,6 +118,21 @@ Aggregate rows report:
 - Weighted workload speedup versus C.
 - Overall mean, median, p90, and p99 Rust time, C time, and speedup
   distributions.
+
+Overall distributions are weighted by operation count. A benchmark row with
+40,000 measured operations therefore contributes more to the overall percentiles
+than a 100-operation setup row. This avoids presenting row-average statistics as
+operation-level behavior.
+
+Speedup percentiles are distributions of per-row speedup ratios. They are useful
+for spotting which operation families are faster or slower, but they are not a
+replacement for aggregate speedup. Treat total speedup (`C total time / Rust
+total time`) and weighted workload speedup as the headline values.
+
+Font load/path-dependent setup is reported separately from cached font
+operations. Review cached-operation performance first when evaluating common
+text rendering paths; review the setup group separately because path-backed
+`FT_New_Face` timing can include filesystem and OS page-cache effects.
 
 The raw rows stay in JSON so reviewers can recompute all summaries.
 
