@@ -5,6 +5,8 @@ members = [
     "pillow-rs-js",
     "pillow-rs-image",
     "pillow-rs-freetype",
+    "pillow-rs-freetype/ffi-c",
+    "pillow-rs-freetype/ffi-wasm",
 ]
 resolver = "2"
 

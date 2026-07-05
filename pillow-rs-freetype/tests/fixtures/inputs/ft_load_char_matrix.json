@@ -1,0 +1,109 @@
+{
+  "cases": [],
+  "generated_by": "scripts/build_unified_fixture_inputs.py",
+  "matrix_cases": [
+    {
+      "case": "matrix_load",
+      "classifiers": [
+        "area:ffi",
+        "kind:function",
+        "matrix:force_autohint"
+      ],
+      "id": "load_char.matrix.force_autohint.getmask",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "source": {
+        "matrix": "force_autohint_matrix.json",
+        "requires_glyph_index": false,
+        "row_operation": "getmask"
+      },
+      "subject": "freetype.FT_Load_Char"
+    },
+    {
+      "case": "matrix_load",
+      "classifiers": [
+        "area:ffi",
+        "kind:function",
+        "matrix:metrics_only"
+      ],
+      "id": "load_char.matrix.metrics_only.metrics_only",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "source": {
+        "matrix": "metrics_only_matrix.json",
+        "requires_glyph_index": false,
+        "row_operation": "metrics_only"
+      },
+      "subject": "freetype.FT_Load_Char"
+    },
+    {
+      "case": "matrix_load",
+      "classifiers": [
+        "area:ffi",
+        "kind:function",
+        "matrix:native_tt_default"
+      ],
+      "id": "load_char.matrix.native_tt_default.getmask",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "source": {
+        "matrix": "native_tt_default_matrix.json",
+        "requires_glyph_index": false,
+        "row_operation": "getmask"
+      },
+      "subject": "freetype.FT_Load_Char"
+    },
+    {
+      "case": "matrix_load",
+      "classifiers": [
+        "area:ffi",
+        "kind:function",
+        "matrix:no_hinting"
+      ],
+      "id": "load_char.matrix.no_hinting.getmask",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "source": {
+        "matrix": "no_hinting_matrix.json",
+        "requires_glyph_index": false,
+        "row_operation": "getmask"
+      },
+      "subject": "freetype.FT_Load_Char"
+    },
+    {
+      "case": "matrix_load",
+      "classifiers": [
+        "area:ffi",
+        "kind:function",
+        "matrix:render_lcd"
+      ],
+      "id": "load_char.matrix.render_lcd.getmask",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "source": {
+        "matrix": "render_lcd_matrix.json",
+        "requires_glyph_index": false,
+        "row_operation": "getmask"
+      },
+      "subject": "freetype.FT_Load_Char"
+    },
+    {
+      "case": "matrix_load",
+      "classifiers": [
+        "area:ffi",
+        "kind:function",
+        "matrix:render_mono"
+      ],
+      "id": "load_char.matrix.render_mono.getmask",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "source": {
+        "matrix": "render_mono_matrix.json",
+        "requires_glyph_index": false,
+        "row_operation": "getmask"
+      },
+      "subject": "freetype.FT_Load_Char"
+    }
+  ],
+  "version": 1
+}

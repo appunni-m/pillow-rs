@@ -285,6 +285,12 @@ subjects:
             folder: input/fonts
             sizes: [20]
             char_codes: [65]
+      - id: matrix_char_code
+        description: Resolves character codes from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
 
   - id: freetype.FT_GlyphSlot
     kind: record
@@ -579,6 +585,12 @@ subjects:
             sizes: [20]
             char_codes: [65]
             load_flags: [4]
+      - id: matrix_load
+        description: Loads character-selected glyphs from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
 
   - id: freetype.FT_Load_Glyph
     kind: function
@@ -593,6 +605,12 @@ subjects:
             sizes: [20]
             glyph_indices: [36]
             load_flags: [0]
+      - id: matrix_load
+        description: Loads glyph-index-selected glyphs from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
 
   - id: freetype.FT_Long
     kind: type
@@ -781,6 +799,12 @@ subjects:
             char_codes: [65]
             load_flags: [0]
             render_modes: [99]
+      - id: matrix_render
+        description: Renders glyphs from the broad matrix fixture corpus.
+        coverage:
+          font_variability:
+            folder: input/fonts_autohint
+            sizes: [10, 20]
 
   - id: freetype.FT_Render_Mode
     kind: type
@@ -819,6 +843,8 @@ subjects:
           font_variability:
             folder: input/fonts
             sizes: [20]
+      - id: matrix_active_size_metrics
+        description: Accessor returns active face size metrics for matrix fixture fonts and sizes.
 
   - id: freetype.FT_UInt
     kind: type

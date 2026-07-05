@@ -1,35 +1,24 @@
 [package]
-name = "fontdone"
+name = "fontdone-ffi-wasm"
 version = "2.14.3"
 edition = "2024"
 rust-version = "1.87"
 license = "FTL"
-description = "Pure-Rust FreeType-compatible font engine: TrueType loader, hinters, rasterizer, and table parsers"
-readme = "README.md"
-repository = "https://github.com/appunni-m/fontdone"
-keywords = ["freetype", "truetype", "font", "rendering", "autohint"]
-categories = ["rendering", "text-processing"]
+description = "Wasm ABI export layer for fontdone"
+publish = false
 
 [lib]
-name = "fontdone"
+name = "fontdone_ffi_wasm"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-log = "0.4"
-thiserror = "2"
-
-[dev-dependencies]
-sha2 = "0.11"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-env_logger = "0.11"
-fontdone-ffi-c = { path = "ffi-c" }
-fontdone-ffi-wasm = { path = "ffi-wasm" }
+fontdone = { path = ".." }
 
 [lints.rust]
 future-incompatible = { level = "deny", priority = -1 }
 nonstandard_style = { level = "deny", priority = -1 }
 unused = { level = "deny", priority = -1 }
-unsafe_code = "deny"
+unsafe_code = "allow"
 unused_crate_dependencies = "warn"
 dead_code = "deny"
 deprecated = "allow"
