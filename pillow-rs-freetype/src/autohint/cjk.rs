@@ -38,7 +38,9 @@ use crate::fixed::{ft_mul_div, ft_mul_fix};
 /// For Indic scripts, the standard character is script-specific
 /// (e.g., Bengali uses U+09E6 "০" from afscript.h).
 ///
-/// UNVERIFIED: full port with annotated C line references.
+/// This function is part of the CJK metrics path; callers provide the already
+/// scaled standard-character outline so width extraction can reuse the Latin
+/// segment and link machinery.
 pub fn cjk_metrics_init_widths(
     metrics: &mut AfLatinMetrics,
     outline: &crate::tt::glyf::GlyphOutline,
@@ -161,8 +163,11 @@ pub fn cjk_metrics_init_widths(
 ///   2. Linked segment compatibility check
 ///   3. Top-to-bottom edge insertion order
 ///
-/// UNVERIFIED — not yet wired into the pipeline. The Latin compute_edges
-/// with top_to_bottom sort is used instead.
+/// Internal CJK edge-grouping helper.
+///
+/// The current pipeline still uses Latin edge grouping with top-to-bottom
+/// sorting for these scripts, so this helper remains private to experiments and
+/// parity investigations.
 #[allow(dead_code)]
 pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: bool) {
     let axis = &mut hints.axis[dim as usize];

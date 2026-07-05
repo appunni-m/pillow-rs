@@ -8,8 +8,8 @@
 //! # Performance
 //!
 //! All functions are `#[inline(always)]`. The compiler substitutes the single
-//! `as` instruction at the call site — zero overhead vs a raw cast. Verified
-//! by comparing assembly output at opt-level=3.
+//! `as` instruction at the call site, so callers get the same generated code as
+//! a raw cast while centralizing the range invariant.
 //!
 //! # Migration plan (TODO #847)
 //!

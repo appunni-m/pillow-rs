@@ -1252,7 +1252,7 @@ impl ExecContext {
                 }
 
                 // ── ALIGNRP (0x3C) — Align Relative Point ──
-                // ✅ VERIFIED: C: Ins_ALIGNRP (ttinterp.c:5673-5720)
+                // C: Ins_ALIGNRP (ttinterp.c:5673-5720).
                 // Pops GS.loop counter points. For each, snaps position
                 // to rp0: distance = PROJECT(cur[p], cur[rp0]), move by -distance
                 0x3C => {
@@ -1325,7 +1325,8 @@ impl ExecContext {
                 }
 
                 // ── IUP — Interpolate Untouched Points ────────────
-                // ✅ VERIFIED: Delegates to hinter/iup.rs (C: Ins_IUP, ttinterp.c:6189+)
+                // C: Ins_IUP (ttinterp.c:6189+); implementation lives in
+                // hinter/iup.rs because it operates on whole contours.
                 0x30 => {
                     if self.backward_compatibility != 0 {
                         if self.backward_compatibility == 0x7 {
@@ -1577,7 +1578,7 @@ impl ExecContext {
                     self.push(self.stack.len() as i32);
                 }
                 // ── IP (0x39) — Interpolate Point ───────────────────
-                // ✅ VERIFIED: C: Ins_IP (ttinterp.c:5854-5940)
+                // C: Ins_IP (ttinterp.c:5854-5940).
                 // Pops GS.loop points. Interpolates between rp1 and rp2.
                 // Uses orus for glyph zone, org for twilight zone.
                 // old_range via DUALPROJ, cur_range via PROJECT.
@@ -1854,8 +1855,8 @@ impl ExecContext {
                 }
 
                 // ── DELTAP/DELTAC — Delta exceptions ───────────────
-                // ✅ VERIFIED: C: Ins_DELTAP (ttinterp.c:6300-6395),
-                //    Ins_DELTAC (ttinterp.c:6396-6475)
+                // C: Ins_DELTAP (ttinterp.c:6300-6395) and
+                // Ins_DELTAC (ttinterp.c:6396-6475).
                 // Per-ppem point/CVT adjustments. Pops count then
                 // (point_index, delta) pairs. Applies delta * F to
                 // points (DELTAP) or CVT entries (DELTAC) when the

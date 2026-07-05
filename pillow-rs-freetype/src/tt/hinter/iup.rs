@@ -1,6 +1,9 @@
 //! IUP — Interpolate Untouched Points.
-//! ✅ VERIFIED against FreeType Ins_IUP (ttinterp.c:6189-6750).
-//! Per-contour, orus-based ratio, single-touch shift, multi-touch interp.
+//!
+//! Implements FreeType's `Ins_IUP` contour rules from `ttinterp.c`: untouched
+//! points are either shifted by a single touched reference point or linearly
+//! interpolated between two touched reference points using original
+//! coordinates.
 use crate::fixed::{ft_div_fix, ft_mul_fix};
 
 use super::zone::GlyphZone;

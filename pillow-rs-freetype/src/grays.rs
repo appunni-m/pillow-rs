@@ -24,32 +24,29 @@ const PIXEL_BITS: u32 = 8;
 const ONE_PIXEL: i64 = 1 << PIXEL_BITS; // 256
 const UPSCALE: i64 = ONE_PIXEL >> 6; // 4 — multiply 26.6 by this → subpixel units
 
-#[inline]
-// ✅ TRIVIAL: >> PIXEL_BITS.
 /// `(x >> 8)`: extract integer pixel coordinate from subpixel.
+#[inline]
 fn trunc(x: i64) -> i32 {
     i32_from_i64(x >> PIXEL_BITS)
 }
 
-#[inline]
-// ✅ TRIVIAL: & (ONE_PIXEL-1).
 /// `(x & 255)`: extract subpixel fraction (0..255).
+#[inline]
 fn fract(x: i64) -> i32 {
     i32_from_i64(x & (ONE_PIXEL - 1))
 }
 
-#[inline]
-// ✅ TRIVIAL: wrapping_add.
 /// C's `(int)((unsigned)a + (unsigned)b)`: wrapping add via u32.
+#[inline]
 fn add_int(a: i32, b: i32) -> i32 {
     a.wrapping_add(b)
 }
 
-// ✅ VERIFIED: via 1708 FT coverage tests passing (implicitly).
-// Port of FT_DIV_MOD (ftgrays.h:290-302). Signed division with non-negative remainder.
+/// FreeType `FT_DIV_MOD`: signed division with a non-negative remainder.
+///
+/// The quotient is floored when the remainder would otherwise be negative.
+/// `render_scanline` relies on this for DDA step distribution across cells.
 #[inline]
-/// Euclidean division: quotient floored, remainder >= 0.
-/// Used by `render_scanline` for DDA step distribution.
 fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
     let mut quotient = i32_from_i64(dividend / divisor);
     let mut remainder = i32_from_i64(dividend % divisor);
@@ -60,30 +57,30 @@ fn ft_div_mod(dividend: i64, divisor: i64) -> (i32, i32) {
     (quotient, remainder)
 }
 
-// Port of FT_UDIVPREP (ftgrays.c:394-397).
+/// `FT_UDIVPREP`: precompute `0xFFFF_FFFF / b` reciprocal for fast division.
+///
 /// Computes `(FT_Int64)0xFFFFFFFF / b` with the actual sign of `b`, matching
 /// FreeType's signed-int64 division. The result may be negative.
 #[inline]
-/// `FT_UDIVPREP`: precompute `0xFFFF_FFFF / b` reciprocal for fast division.
 fn ft_udivprep(c: bool, b: i64) -> i64 {
     if c { 0xFFFF_FFFFi64 / b } else { 0 }
 }
 
-// Port of FT_UDIV (ftgrays.c:394-397).
+/// `FT_UDIV`: `(a * reciprocal) >> 32` for DDA stepping.
+///
 /// FreeType: `(TCoord)( ((FT_UInt64)(a) * (FT_UInt64)(b_r)) >> 32 )`
 /// The reciprocal `r` is signed (may be negative); casting to u64 gives the
 /// correct unsigned multiplication value.
 #[inline]
-/// `FT_UDIV`: `(a * reciprocal) >> 32`. Fast fixed-point division.
-/// Used in DDA stepping to compute subpixel exit coordinates.
 fn ft_udiv(a: i64, r: i64) -> i32 {
     i32_from_u64((u64_from_i64(a).wrapping_mul(u64_from_i64(r))) >> 32)
 }
 
-// ✅ VERIFIED: via 1708 FT tests. Port of FT_FILL_RULE (ftgrays.h).
+/// `FT_FILL_RULE`: convert accumulated cell area to 8-bit coverage.
+///
+/// FreeType shifts by 9 for the 8-bit smooth rasterizer and then applies the
+/// fill-mode mask before clamping to a byte range.
 #[inline]
-/// `FT_FILL_RULE`: `area >> 9` with even-odd / non-zero clamp.
-/// Converts accumulated cell area to 8-bit coverage value.
 fn fill_rule(area: i32, fill: i32) -> i32 {
     let mut coverage = area >> 9; // PIXEL_BITS * 2 + 1 - 8 = 9
     #[cfg(debug_assertions)]
@@ -168,16 +165,11 @@ impl RasterScratch {
     }
 }
 
-/// ✅ VERIFIED: via 1708 FT tests. Port of ftgrays.c gray_convert_glyph.
-/// Convert hinted outline to 8-bit alpha bitmap via DDA rasterization.
+/// Convert a hinted outline to an 8-bit alpha bitmap via DDA rasterization.
 ///
-/// Pipeline: `convert_glyph` → `decompose` → `walk_contour` →
-/// `render_conic`/`render_cubic` → `render_line` (DDA) → `sweep`.
-///
-/// # Debug: pixel output differs but outline coords match C
-/// - [ ] `render_line` DDA `prod` init same as C?
-/// - [ ] `render_conic` subdivision endpoints match C?
-/// - [ ] Cell cover/area values after `decompose` match C?
+/// Mirrors `gray_convert_glyph` from `ftgrays.c`: decompose the outline,
+/// flatten conic and cubic curves, accumulate DDA cells, then sweep cells into
+/// the output buffer.
 pub fn rasterize(outline: Outline) -> Result<RasterResult, FontError> {
     if outline.points.is_empty() || outline.n_contours == 0 {
         return Ok(RasterResult {
@@ -767,12 +759,10 @@ impl<'a> Worker<'a> {
                 || (a0x - 3 * a2x + 2 * a3x).abs() > ONE_PIXEL / 2
                 || (a0y - 3 * a2y + 2 * a3y).abs() > ONE_PIXEL / 2
             {
-                // de Casteljau split t=0.5
-                // ✅ FIX: swapped push order to match C's gray_split_cubic + arc+=3
-                //    C renders RIGHT sub-arc first (midpoint→to), then LEFT (p0→midpoint).
-                //    Our old: pushed RIGHT then LEFT, LIFO pop gave LEFT first → wrong
-                //    rendering order: p0→to (skipping midpoint).
-                //    Verified: C traces show RIGHT arc processed before LEFT.
+                // de Casteljau split at t=0.5. FreeType's gray_split_cubic
+                // processes the right sub-arc first, then the left sub-arc.
+                // Preserve that stack order because it changes accumulated
+                // cells when subdivision boundaries fall on scanline edges.
                 let m01x = (a0x + a1x) / 2;
                 let m01y = (a0y + a1y) / 2;
                 let m12x = (a1x + a2x) / 2;
@@ -1093,8 +1083,8 @@ impl<'a> Worker<'a> {
     }
 }
 
-// ✅ TRIVIAL: memcpy to target buffer.
 /// Fill `count` bytes with coverage value `s`, clamped to 0..255.
+///
 /// Used by sweep for non-zero-winding span filling.
 fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32, step: usize) {
     if count <= 0 {
@@ -1120,9 +1110,8 @@ fn write_span(buf: &mut [u8], off: usize, s: i32, count: i32, step: usize) {
 }
 
 // Tag constants (ftimage.h).
-#[inline]
-// ✅ TRIVIAL: curve_tag(on_curve) → u8.
 /// TrueType curve tag: `1` for on-curve (line), `0` for off-curve (conic/cubic control).
+#[inline]
 fn curve_tag(on_curve: bool) -> u8 {
     if on_curve {
         CURVE_TAG_ON
