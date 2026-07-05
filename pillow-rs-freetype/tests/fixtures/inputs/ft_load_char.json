@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "case_id": "load_char.default.DejaVuSans.U+0041.20px",
+      "subject": "freetype.FT_Load_Char",
+      "case": "default_load",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf",
+            "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+            "length": 759720
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 0
+        }
+      },
+      "classifiers": [
+        "area:glyph",
+        "kind:function",
+        "hinting:native_tt"
+      ]
+    },
+    {
+      "case_id": "load_char.render.DejaVuSans.U+0041.20px",
+      "subject": "freetype.FT_Load_Char",
+      "case": "render_during_load",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf",
+            "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+            "length": 759720
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 4
+        }
+      },
+      "classifiers": [
+        "area:glyph",
+        "kind:function",
+        "checks:bitmap"
+      ]
+    },
+    {
+      "case_id": "load_char.default.LiberationSerif.U+0041.20px",
+      "subject": "freetype.FT_Load_Char",
+      "case": "default_load",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif.ttf",
+            "sha256": "705903ae1382f0150f115d6f10a30f5b2f3d6ade649c474afe6366c39174fb65",
+            "length": 393692
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 0
+        }
+      },
+      "classifiers": [
+        "area:glyph",
+        "kind:function",
+        "hinting:native_tt"
+      ]
+    },
+    {
+      "case_id": "load_char.default.LiberationSerif-Regular.U+0041.20px",
+      "subject": "freetype.FT_Load_Char",
+      "case": "default_load",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf",
+            "sha256": "705903ae1382f0150f115d6f10a30f5b2f3d6ade649c474afe6366c39174fb65",
+            "length": 393692
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 0
+        }
+      },
+      "classifiers": [
+        "area:glyph",
+        "kind:function",
+        "hinting:native_tt"
+      ]
+    },
+    {
+      "case_id": "load_char.render.LiberationSerif.U+0041.20px",
+      "subject": "freetype.FT_Load_Char",
+      "case": "render_during_load",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif.ttf",
+            "sha256": "705903ae1382f0150f115d6f10a30f5b2f3d6ade649c474afe6366c39174fb65",
+            "length": 393692
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 4
+        }
+      },
+      "classifiers": [
+        "area:glyph",
+        "kind:function",
+        "checks:bitmap"
+      ]
+    },
+    {
+      "case_id": "load_char.render.LiberationSerif-Regular.U+0041.20px",
+      "subject": "freetype.FT_Load_Char",
+      "case": "render_during_load",
+      "operation": "load_char",
+      "schema": "glyph_slot",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf",
+            "sha256": "705903ae1382f0150f115d6f10a30f5b2f3d6ade649c474afe6366c39174fb65",
+            "length": 393692
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          },
+          "char_code": 65,
+          "load_flags": 4
+        }
+      },
+      "classifiers": [
+        "area:glyph",
+        "kind:function",
+        "checks:bitmap"
+      ]
+    }
+  ]
+}

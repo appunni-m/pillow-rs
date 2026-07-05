@@ -216,6 +216,33 @@ Target responsibilities:
 Until these targets exist, use the current targets above for guard coverage and
 keep the planned target names stable in docs and dispatch instructions.
 
+## Initial Runtime-Oracle Implementation Notes
+
+The first implemented unified slice commits only `tests/manifest.yaml`,
+input-case JSON, and the C oracle source. It generates C FreeType outputs at
+test runtime under `target/` and compares normalized fields; no generated oracle
+JSON or bitmap bytes are committed.
+
+The initial passing slice intentionally covers only current exact Rust FFI
+matches: selected constants, leaf record layouts, valid memory-face creation,
+`FT_Get_Char_Index`, `FT_Load_Char` default and render-during-load behavior, and
+the `FT_Render_Glyph` invalid-render-mode error path.
+
+During seeding, these candidate rows exposed real Rust/C divergences and were
+not counted as passing coverage:
+
+- Invalid short font bytes: C FreeType returned error code 85 for the tiny byte
+  buffer, while the Rust facade mapped it to `FT_Err_Invalid_File_Format`.
+- `FT_Load_Char` with `FT_LOAD_RENDER | FT_LOAD_NO_SCALE`: C FreeType accepted
+  the flags for the tested outline path, while the Rust facade returned
+  `FT_Err_Unimplemented_Feature`.
+- `FT_Render_Glyph` mono mode after a loaded outline produced different packed
+  bitmap bytes from the current Rust facade path.
+
+Those rows should be added to the manifest only when the implementation is fixed
+or when the manifest gains an explicit incomplete/expected-failing lane that
+keeps them visible without counting them as passing parity.
+
 ## Reporting Rules
 
 Parity reports should group results by `ffi_id` and fixture family. A row counts

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "case_id": "constant.FT_LOAD_RENDER",
+      "subject": "freetype.FT_LOAD_RENDER",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_LOAD_RENDER"
+        }
+      },
+      "classifiers": [
+        "area:constants",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_RENDER_MODE_MONO",
+      "subject": "freetype.FT_RENDER_MODE_MONO",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_RENDER_MODE_MONO"
+        }
+      },
+      "classifiers": [
+        "area:constants",
+        "kind:constant"
+      ]
+    },
+    {
+      "case_id": "constant.FT_PIXEL_MODE_GRAY",
+      "subject": "freetype.FT_PIXEL_MODE_GRAY",
+      "case": "value_matches_header",
+      "operation": "constant",
+      "schema": "constant",
+      "inputs": {
+        "params": {
+          "symbol": "FT_PIXEL_MODE_GRAY"
+        }
+      },
+      "classifiers": [
+        "area:constants",
+        "kind:constant"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "case_id": "new_memory_face.valid.DejaVuSans",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "valid_font_bytes",
+      "operation": "new_memory_face",
+      "schema": "face_open",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf",
+            "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+            "length": 759720
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          }
+        }
+      },
+      "classifiers": [
+        "area:lifecycle",
+        "kind:function"
+      ]
+    },
+    {
+      "case_id": "new_memory_face.valid.LiberationSerif",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "valid_font_bytes",
+      "operation": "new_memory_face",
+      "schema": "face_open",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif.ttf",
+            "sha256": "705903ae1382f0150f115d6f10a30f5b2f3d6ade649c474afe6366c39174fb65",
+            "length": 393692
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          }
+        }
+      },
+      "classifiers": [
+        "area:lifecycle",
+        "kind:function"
+      ]
+    },
+    {
+      "case_id": "new_memory_face.valid.LiberationSerif-Regular",
+      "subject": "freetype.FT_New_Memory_Face",
+      "case": "valid_font_bytes",
+      "operation": "new_memory_face",
+      "schema": "face_open",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/LiberationSerif-Regular.ttf",
+            "sha256": "705903ae1382f0150f115d6f10a30f5b2f3d6ade649c474afe6366c39174fb65",
+            "length": 393692
+          }
+        },
+        "params": {
+          "face_index": 0,
+          "pixel_size": {
+            "x": 0,
+            "y": 20
+          }
+        }
+      },
+      "classifiers": [
+        "area:lifecycle",
+        "kind:function"
+      ]
+    }
+  ]
+}
