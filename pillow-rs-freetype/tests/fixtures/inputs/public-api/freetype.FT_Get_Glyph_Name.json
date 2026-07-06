@@ -32,6 +32,11 @@
             "A"
           ],
           "buffer_max": 64
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [
@@ -136,6 +141,11 @@
           ],
           "buffer_initial": "0xAA",
           "buffer_max": 64
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

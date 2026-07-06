@@ -103,6 +103,12 @@
           "probe": [
             "face.glyph.metrics"
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes",
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

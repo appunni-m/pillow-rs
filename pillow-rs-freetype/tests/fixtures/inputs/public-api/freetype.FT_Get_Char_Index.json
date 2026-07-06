@@ -87,6 +87,13 @@
           "load_flags": [
             0
           ]
+        },
+        "variability": {
+          "axes": [
+            "fonts",
+            "sizes",
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -145,6 +152,11 @@
             "unicode",
             "non_unicode_if_fixture_present"
           ]
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
@@ -189,6 +201,11 @@
           ],
           "char_codes": [
             65
+          ]
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
           ]
         }
       },

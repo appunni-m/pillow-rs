@@ -67,6 +67,11 @@
             36
           ],
           "post_probe": "FT_Get_Glyph_Name and FT_Get_Name_Index"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

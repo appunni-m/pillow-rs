@@ -131,6 +131,12 @@
           "probe": [
             "face.glyph public fields after load/render"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

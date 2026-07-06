@@ -65,6 +65,11 @@
             68
           ],
           "size_ppem": 20
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [
