@@ -2524,6 +2524,20 @@ fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32], ppem: 
     };
     dump_edge_phase("INITIAL", dim_label, &axis.edges);
 
+    if hints
+        .metrics
+        .as_ref()
+        .is_some_and(|metrics| metrics.no_advance_hinting)
+    {
+        // C: `hani_dflt` is `AF_WRITING_SYSTEM_CJK` in afstyles.h and
+        // dispatches to `af_cjk_hints_apply` in afcjk.c.  The Rust metrics
+        // marker is shared with CJK's no-advance behavior.
+        super::cjk::hint_edges(hints, dim, std_widths);
+        let axis = &hints.axis[dim as usize];
+        dump_edge_phase("CJK", dim_label, &axis.edges);
+        return;
+    }
+
     // C: top_to_bottom_hinting only applies to VERT dimension (aflatin.c:4271-4273).
     // For HORZ dimension, always use bottom-to-top ordering.
     // C: `if (dim == AF_DIMENSION_VERT) top_to_bottom = script_class->top_to_bottom`.

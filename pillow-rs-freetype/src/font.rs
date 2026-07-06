@@ -13,6 +13,7 @@ use crate::scaler::{self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_round};
 use crate::tables::FontData;
 use crate::tt::hinter::NativeHintMode;
 use crate::tt::{self, tag};
+use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 /// FreeType glyph load behavior used by high-level render helpers.
@@ -780,7 +781,7 @@ impl Font {
         glyph: u16,
         _vertical_layout: bool,
     ) -> Result<GlyphSlotMetrics, FontError> {
-        let metrics_cache = self.face_globals.get_metrics(glyph);
+        let metrics_cache = self.autohint_metrics_for_glyph(glyph);
         let scaled = scaler::scale_glyph_for_metrics_light(
             &self.data,
             glyph,
@@ -936,6 +937,19 @@ impl Font {
 }
 
 impl Font {
+    fn autohint_metrics_for_glyph(
+        &self,
+        glyph: u16,
+    ) -> Option<Rc<crate::autohint::AfLatinMetrics>> {
+        if glyph == 0 {
+            // C: afglobal.c assigns cmap-uncovered glyphs, including `.notdef`,
+            // to the module fallback style before afloader.c requests metrics.
+            self.face_globals.get_fallback_metrics()
+        } else {
+            self.face_globals.get_metrics(glyph)
+        }
+    }
+
     fn getbbox_single_glyph(&self, text: &str) -> (i32, i32, i32, i32) {
         let ch = text.chars().next().unwrap_or('\0');
         let glyph = self.char_index(ch as u32);
@@ -995,13 +1009,7 @@ impl Font {
                 scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)
             }
             LoadMode::TargetLight => {
-                let metrics_cache = if glyph == 0 {
-                    // C target-light loads keep `.notdef` slot metrics native,
-                    // but the render path still uses the fallback light outline.
-                    self.face_globals.get_fallback_metrics()
-                } else {
-                    self.face_globals.get_metrics(glyph)
-                };
+                let metrics_cache = self.autohint_metrics_for_glyph(glyph);
                 scaler::scale_glyph_light(
                     &self.data,
                     glyph,

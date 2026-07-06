@@ -165,9 +165,9 @@ pub fn cjk_metrics_init_widths(
 ///
 /// Internal CJK edge-grouping helper.
 ///
-/// The current pipeline still uses Latin edge grouping with top-to-bottom
-/// sorting for these scripts, so this helper remains private to experiments and
-/// parity investigations.
+/// The current Hani pipeline uses CJK edge fitting with Latin edge grouping.
+/// Full CJK edge grouping remains private to experiments and parity
+/// investigations until it is verified against the C fixture matrix.
 #[allow(dead_code)]
 pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: bool) {
     let axis = &mut hints.axis[dim as usize];
@@ -292,5 +292,412 @@ pub fn cjk_compute_edges(hints: &mut GlyphHints, dim: Dimension, top_to_bottom: 
     // afcjk.c:1170-1193 — edge flags (simplified for non-Hani scripts)
     for e in &mut axis.edges {
         e.flags = AF_EDGE_NORMAL;
+    }
+}
+
+fn ft_pix_floor(x: i32) -> i32 {
+    x & !63
+}
+
+fn cjk_snap_width(widths: &[i32], mut width: i32) -> i32 {
+    let mut best = 64 + 32 + 2;
+    let mut reference = width;
+
+    for &w in widths {
+        let dist = (width - w).abs();
+        if dist < best {
+            best = dist;
+            reference = w;
+        }
+    }
+
+    let scaled = (reference + 32) & !63;
+    if width >= reference {
+        if width < scaled + 48 {
+            width = reference;
+        }
+    } else if width > scaled - 48 {
+        width = reference;
+    }
+
+    width
+}
+
+fn compute_stem_width(
+    other_flags: u32,
+    dim: Dimension,
+    width: i32,
+    _base_flags: u8,
+    _stem_flags: u8,
+    std_widths: &[i32],
+) -> i32 {
+    let stem_adjust = other_flags & AF_LATIN_HINTS_STEM_ADJUST != 0;
+    if !stem_adjust {
+        return width;
+    }
+
+    let mut dist = width;
+    let mut sign = false;
+    if dist < 0 {
+        dist = -width;
+        sign = true;
+    }
+
+    let vertical = dim == Dimension::Vert;
+    let vert_snap = other_flags & AF_LATIN_HINTS_VERT_SNAP != 0;
+    let horz_snap = other_flags & AF_LATIN_HINTS_HORZ_SNAP != 0;
+
+    if (vertical && !vert_snap) || (!vertical && !horz_snap) {
+        if let Some(&stdw) = std_widths.first() {
+            if (dist - stdw).abs() < 40 {
+                dist = stdw;
+                if dist < 48 {
+                    dist = 48;
+                }
+                return if sign { -dist } else { dist };
+            }
+        }
+
+        if dist < 54 {
+            dist += (54 - dist) / 2;
+        } else if dist < 3 * 64 {
+            let delta = dist & 63;
+            dist &= !63;
+
+            if delta < 10 {
+                dist += delta;
+            } else if delta < 22 {
+                dist += 10;
+            } else if delta < 42 {
+                dist += delta;
+            } else if delta < 54 {
+                dist += 54;
+            } else {
+                dist += delta;
+            }
+        }
+    } else {
+        dist = cjk_snap_width(std_widths, dist);
+
+        if vertical {
+            if dist >= 64 {
+                dist = (dist + 16) & !63;
+            } else {
+                dist = 64;
+            }
+        } else if other_flags & AF_LATIN_HINTS_MONO != 0 {
+            if dist < 64 {
+                dist = 64;
+            } else {
+                dist = (dist + 32) & !63;
+            }
+        } else if dist < 48 {
+            dist = (dist + 64) >> 1;
+        } else if dist < 128 {
+            dist = (dist + 22) & !63;
+        } else {
+            dist = (dist + 32) & !63;
+        }
+    }
+
+    if sign { -dist } else { dist }
+}
+
+fn linked_edge_pos(
+    other_flags: u32,
+    dim: Dimension,
+    base_edge: &AFEdge,
+    stem_edge: &AFEdge,
+    std_widths: &[i32],
+) -> i32 {
+    let dist = stem_edge.opos - base_edge.opos;
+    let fitted_width = compute_stem_width(
+        other_flags,
+        dim,
+        dist,
+        base_edge.flags,
+        stem_edge.flags,
+        std_widths,
+    );
+    base_edge.pos + fitted_width
+}
+
+fn hint_normal_stem(
+    other_flags: u32,
+    dim: Dimension,
+    edge: &AFEdge,
+    edge2: &AFEdge,
+    anchor: i32,
+    std_widths: &[i32],
+) -> (i32, i32, i32) {
+    let mut threshold = 64;
+    if other_flags & AF_LATIN_HINTS_STEM_ADJUST == 0 {
+        if edge.flags & AF_EDGE_ROUND != 0 && edge2.flags & AF_EDGE_ROUND != 0 {
+            threshold = if dim == Dimension::Vert {
+                64 - 9
+            } else {
+                64 - 15
+            };
+        } else {
+            threshold = if dim == Dimension::Vert {
+                64 - 9 / 3
+            } else {
+                64 - 15 / 3
+            };
+        }
+    }
+
+    let org_len = edge2.opos - edge.opos;
+    let cur_len = compute_stem_width(
+        other_flags,
+        dim,
+        org_len,
+        edge.flags,
+        edge2.flags,
+        std_widths,
+    );
+    let org_center = (edge.opos + edge2.opos) / 2 + anchor;
+    let mut cur_pos1 = org_center - cur_len / 2;
+    let cur_pos2 = cur_pos1 + cur_len;
+    let mut d_off1 = cur_pos1 - ft_pix_floor(cur_pos1);
+    let d_off2 = cur_pos2 - ft_pix_floor(cur_pos2);
+    let mut u_off1 = 64 - d_off1;
+    let mut u_off2 = 64 - d_off2;
+    let mut delta = 0;
+
+    if d_off1 != 0 && d_off2 != 0 {
+        if cur_len <= threshold {
+            if d_off2 < cur_len {
+                delta = if u_off1 <= d_off2 { u_off1 } else { -d_off2 };
+            }
+        } else {
+            let mut apply = true;
+            if threshold < 64
+                && (d_off1 >= threshold
+                    || u_off1 >= threshold
+                    || d_off2 >= threshold
+                    || u_off2 >= threshold)
+            {
+                apply = false;
+            }
+            if apply {
+                let mut offset = cur_len & 63;
+                if offset < 32 {
+                    if u_off1 <= offset || d_off2 <= offset {
+                        apply = false;
+                    }
+                } else {
+                    offset = 64 - threshold;
+                }
+
+                if apply {
+                    d_off1 = threshold - u_off1;
+                    u_off1 -= offset;
+                    u_off2 = threshold - d_off2;
+                    let d_off2 = d_off2 - offset;
+
+                    if d_off1 <= u_off1 {
+                        u_off1 = -d_off1;
+                    }
+                    if d_off2 <= u_off2 {
+                        u_off2 = -d_off2;
+                    }
+
+                    delta = if u_off1.abs() <= u_off2.abs() {
+                        u_off1
+                    } else {
+                        u_off2
+                    };
+                }
+            }
+        }
+    }
+
+    if other_flags & AF_LATIN_HINTS_STEM_ADJUST == 0 {
+        delta = delta.clamp(-14, 14);
+    }
+
+    cur_pos1 += delta;
+
+    if edge.opos < edge2.opos {
+        (cur_pos1, cur_pos1 + cur_len, delta)
+    } else {
+        (cur_pos1 + cur_len, cur_pos1, delta)
+    }
+}
+
+fn align_serif_edge(base: &AFEdge, serif: &mut AFEdge) {
+    serif.pos = base.pos + (serif.opos - base.opos);
+}
+
+/// Position CJK edges using `af_cjk_hint_edges` behavior.
+pub(super) fn hint_edges(hints: &mut GlyphHints, dim: Dimension, std_widths: &[i32]) {
+    // C: afcjk.c:1495-1580,1690-1818,1818-2261 computes CJK stem
+    // widths, normal-stem positions, and skipped-edge interpolation.
+    let other_flags = hints.other_flags;
+    let axis = &mut hints.axis[dim as usize];
+    let num_edges = axis.edges.len();
+    let mut anchor: Option<usize> = None;
+    let mut delta = 0;
+    let mut skipped = 0usize;
+    let mut has_last_stem = false;
+    let mut last_stem_pos = 0;
+
+    for i in 0..num_edges {
+        if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+            continue;
+        }
+
+        let link = axis.edges[i].link;
+        let mut edge1 = None;
+        let mut edge2 = link;
+        let mut blue = axis.edges[i].blue_edge;
+        if blue.is_some() {
+            edge1 = Some(i);
+        } else if link != usize::MAX {
+            blue = axis.edges[link].blue_edge;
+            if blue.is_some() {
+                edge1 = Some(link);
+                edge2 = i;
+            }
+        }
+
+        let Some(edge1_idx) = edge1 else {
+            continue;
+        };
+        let Some(blue) = blue else {
+            continue;
+        };
+
+        axis.edges[edge1_idx].pos = blue.fit;
+        axis.edges[edge1_idx].flags |= AF_EDGE_DONE;
+
+        if edge2 != usize::MAX && axis.edges[edge2].blue_edge.is_none() {
+            let pos = linked_edge_pos(
+                other_flags,
+                dim,
+                &axis.edges[edge1_idx],
+                &axis.edges[edge2],
+                std_widths,
+            );
+            axis.edges[edge2].pos = pos;
+            axis.edges[edge2].flags |= AF_EDGE_DONE;
+        }
+
+        if anchor.is_none() {
+            anchor = Some(i);
+        }
+    }
+
+    for i in 0..num_edges {
+        if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+            continue;
+        }
+
+        let link = axis.edges[i].link;
+        if link == usize::MAX {
+            skipped += 1;
+            continue;
+        }
+
+        if has_last_stem
+            && (axis.edges[i].pos < last_stem_pos + 64 || axis.edges[link].pos < last_stem_pos + 64)
+        {
+            skipped += 1;
+            continue;
+        }
+
+        if axis.edges[link].blue_edge.is_some() || link < i {
+            let pos = linked_edge_pos(
+                other_flags,
+                dim,
+                &axis.edges[link],
+                &axis.edges[i],
+                std_widths,
+            );
+            axis.edges[i].pos = pos;
+            axis.edges[i].flags |= AF_EDGE_DONE;
+            has_last_stem = true;
+            last_stem_pos = pos;
+            continue;
+        }
+
+        let stem_anchor = if dim != Dimension::Vert && anchor.is_none() {
+            0
+        } else {
+            delta
+        };
+        let (pos1, pos2, new_delta) = hint_normal_stem(
+            other_flags,
+            dim,
+            &axis.edges[i],
+            &axis.edges[link],
+            stem_anchor,
+            std_widths,
+        );
+        axis.edges[i].pos = pos1;
+        axis.edges[link].pos = pos2;
+        delta = new_delta;
+        anchor = Some(i);
+        axis.edges[i].flags |= AF_EDGE_DONE;
+        axis.edges[link].flags |= AF_EDGE_DONE;
+        has_last_stem = true;
+        last_stem_pos = axis.edges[link].pos;
+    }
+
+    if skipped == 0 {
+        return;
+    }
+
+    for i in 0..num_edges {
+        if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+            continue;
+        }
+        let serif = axis.edges[i].serif;
+        if serif != usize::MAX {
+            let base = axis.edges[serif];
+            align_serif_edge(&base, &mut axis.edges[i]);
+            axis.edges[i].flags |= AF_EDGE_DONE;
+            skipped = skipped.saturating_sub(1);
+        }
+    }
+
+    if skipped == 0 {
+        return;
+    }
+
+    for i in 0..num_edges {
+        if axis.edges[i].flags & AF_EDGE_DONE != 0 {
+            continue;
+        }
+
+        let before = (0..i)
+            .rev()
+            .find(|&idx| axis.edges[idx].flags & AF_EDGE_DONE != 0);
+        let after = (i + 1..num_edges).find(|&idx| axis.edges[idx].flags & AF_EDGE_DONE != 0);
+
+        match (before, after) {
+            (None, Some(after)) => {
+                let base = axis.edges[after];
+                align_serif_edge(&base, &mut axis.edges[i]);
+            }
+            (Some(before), None) => {
+                let base = axis.edges[before];
+                align_serif_edge(&base, &mut axis.edges[i]);
+            }
+            (Some(before), Some(after)) => {
+                if axis.edges[after].fpos == axis.edges[before].fpos {
+                    axis.edges[i].pos = axis.edges[before].pos;
+                } else {
+                    axis.edges[i].pos = axis.edges[before].pos
+                        + ft_mul_div(
+                            axis.edges[i].fpos as i32 - axis.edges[before].fpos as i32,
+                            axis.edges[after].pos - axis.edges[before].pos,
+                            axis.edges[after].fpos as i32 - axis.edges[before].fpos as i32,
+                        );
+                }
+            }
+            (None, None) => {}
+        }
     }
 }
