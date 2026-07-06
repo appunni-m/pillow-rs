@@ -9,6 +9,7 @@
 use crate::error::FontError;
 use crate::font::{FaceInfo, Font, GlyphSlotMetrics, LoadMode, SizeMetrics};
 use crate::render::{PixelMode, RenderMode, RenderedBitmap};
+use crate::tt::hinter::NativeHintMode;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -75,6 +76,18 @@ impl LoadFlags {
             RenderMode::LcdV
         } else {
             RenderMode::Normal
+        }
+    }
+
+    fn native_hint_mode(self) -> NativeHintMode {
+        if self.contains(Self::TARGET_MONO) {
+            NativeHintMode::Mono
+        } else if self.contains(Self::TARGET_LCD) {
+            NativeHintMode::Lcd
+        } else if self.contains(Self::TARGET_LCD_V) {
+            NativeHintMode::LcdV
+        } else {
+            NativeHintMode::Normal
         }
     }
 }
@@ -253,6 +266,7 @@ impl Face {
     /// Load a glyph index, equivalent to `FT_Load_Glyph`.
     pub fn load_glyph(&self, glyph_index: u16, flags: LoadFlags) -> Result<GlyphSlot, FontError> {
         let vertical_layout = flags.contains(LoadFlags::VERTICAL_LAYOUT);
+        let native_hint_mode = flags.native_hint_mode();
         let metrics = if flags.contains(LoadFlags::NO_SCALE) {
             self.font.glyph_metrics_for_index_no_scale(glyph_index)?
         } else if flags.contains(LoadFlags::NO_HINTING) {
@@ -268,10 +282,18 @@ impl Face {
                 .glyph_metrics_for_index_force_autohint_with_layout(glyph_index, vertical_layout)?
         } else if flags.contains(LoadFlags::NO_AUTOHINT) {
             self.font
-                .glyph_metrics_for_index_no_autohint_with_layout(glyph_index, vertical_layout)?
+                .glyph_metrics_for_index_no_autohint_with_layout_and_mode(
+                    glyph_index,
+                    vertical_layout,
+                    native_hint_mode,
+                )?
         } else {
             self.font
-                .glyph_metrics_for_index_default_with_layout(glyph_index, vertical_layout)?
+                .glyph_metrics_for_index_default_with_layout_and_mode(
+                    glyph_index,
+                    vertical_layout,
+                    native_hint_mode,
+                )?
         };
 
         let render_requested = flags.contains(LoadFlags::RENDER);
