@@ -83,6 +83,11 @@
           "probe": [
             "slot.outline.tags[] & FT_CURVE_TAG_TOUCH_BOTH"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

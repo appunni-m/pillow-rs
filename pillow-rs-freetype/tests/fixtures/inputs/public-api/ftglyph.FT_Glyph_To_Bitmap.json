@@ -37,6 +37,12 @@
             36,
             43
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "render_modes"
+          ]
         }
       },
       "classifiers": [
@@ -97,6 +103,12 @@
             36,
             43
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "render_modes"
+          ]
         }
       },
       "classifiers": [
@@ -146,6 +158,11 @@
           "destroy": true,
           "render_modes": [
             "FT_RENDER_MODE_NORMAL"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
           ]
         }
       },
@@ -213,6 +230,11 @@
           ],
           "render_modes": [
             "FT_RENDER_MODE_NORMAL"
+          ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
           ]
         }
       },

@@ -81,6 +81,11 @@
             74
           ],
           "face_index": 0
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

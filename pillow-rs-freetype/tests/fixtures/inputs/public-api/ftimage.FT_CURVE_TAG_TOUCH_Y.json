@@ -82,6 +82,11 @@
             "slot.outline.tags[] & FT_CURVE_TAG_TOUCH_Y",
             "slot.outline.points[].y"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

@@ -104,6 +104,11 @@
             "FT_Outline_Get_CBox",
             "FT_Outline_Render direct clip_box preset"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

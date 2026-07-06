@@ -84,6 +84,11 @@
           "load_flags": [
             "FT_LOAD_NO_HINTING"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

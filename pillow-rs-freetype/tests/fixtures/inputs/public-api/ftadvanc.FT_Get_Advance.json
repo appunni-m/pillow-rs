@@ -229,6 +229,11 @@
             ]
           ],
           "sentinel_padvance": "0x13572468"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

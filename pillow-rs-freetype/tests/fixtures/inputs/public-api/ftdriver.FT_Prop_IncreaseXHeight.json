@@ -197,6 +197,11 @@
             "FT_RENDER_MODE_NORMAL"
           ],
           "pinned_source": "freetype/include/freetype/ftdriver.h:1215-1283 and freetype/src/autofit/afmodule.c:174-187"
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

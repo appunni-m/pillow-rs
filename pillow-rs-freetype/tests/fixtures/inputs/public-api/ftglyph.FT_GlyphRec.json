@@ -87,6 +87,11 @@
             36,
             43
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

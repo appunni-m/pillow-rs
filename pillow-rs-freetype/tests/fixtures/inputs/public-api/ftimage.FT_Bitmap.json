@@ -116,6 +116,11 @@
             "slot.bitmap.num_grays",
             "slot.bitmap.pixel_mode"
           ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

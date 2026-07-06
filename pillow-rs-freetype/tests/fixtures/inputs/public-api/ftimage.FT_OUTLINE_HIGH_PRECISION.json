@@ -85,6 +85,12 @@
             92
           ],
           "expected_behavior": "flag is a renderer hint; compare exact C output, including no-op equivalence where ignored"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

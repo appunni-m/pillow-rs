@@ -43,6 +43,11 @@
             }
           },
           "prefill_clip_box": "sentinel-vectors"
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

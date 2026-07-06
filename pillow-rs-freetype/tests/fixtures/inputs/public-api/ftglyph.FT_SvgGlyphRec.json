@@ -88,6 +88,11 @@
           "glyph_indices": [
             "svg_glyph"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

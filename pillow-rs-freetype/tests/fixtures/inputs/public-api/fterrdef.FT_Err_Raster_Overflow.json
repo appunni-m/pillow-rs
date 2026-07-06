@@ -83,6 +83,11 @@
             "freetype/src/raster/ftrend1.c:134",
             "freetype/src/sdf/ftsdfrend.c:297"
           ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

@@ -92,6 +92,11 @@
           "load_flags": [
             "FT_LOAD_NO_HINTING"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [
@@ -151,6 +156,11 @@
             "xMax": 333,
             "yMax": 444
           }
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

@@ -80,6 +80,11 @@
             31
           ],
           "face_index": 0
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

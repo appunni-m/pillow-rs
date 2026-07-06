@@ -80,6 +80,11 @@
             "FT_RENDER_MODE_LCD"
           ],
           "role": "baseline for individual outline-flag comparisons"
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

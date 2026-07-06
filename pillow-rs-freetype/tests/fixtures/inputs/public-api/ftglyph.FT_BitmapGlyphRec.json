@@ -86,6 +86,11 @@
             "NORMAL",
             "MONO"
           ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [
