@@ -1829,17 +1829,7 @@ impl BackendComparisonWorker {
         match canonical_operation(&case.operation) {
             "size_metrics" => {
                 let face = self.c_face(case)?;
-                let metrics = c_abi::FT_Size_Metrics_Get(face);
-                Ok(ok(json!({
-                    "x_ppem": metrics.x_ppem,
-                    "y_ppem": metrics.y_ppem,
-                    "x_scale": metrics.x_scale,
-                    "y_scale": metrics.y_scale,
-                    "ascender": metrics.ascender,
-                    "descender": metrics.descender,
-                    "height": metrics.height,
-                    "max_advance": metrics.max_advance
-                })))
+                c_size_metrics_json(face).map(ok)
             }
             "get_char_index" => {
                 let char_code = u64_param(&case.inputs.params, "char_code")?;
@@ -1876,7 +1866,7 @@ impl BackendComparisonWorker {
                 let face = self.c_face(case)?;
                 let load_err = c_abi::FT_Load_Char(face, char_code, load_flags);
                 let err = if load_err == FT_Err_Ok {
-                    c_abi::fontdone_test_render_glyph(face, render_mode)
+                    c_abi::abi_render_glyph_from_face(face, render_mode)
                 } else {
                     load_err
                 };
@@ -3129,20 +3119,10 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "size_metrics" => {
             let (library, face) = c_open_face(case)?;
-            let metrics = c_abi::FT_Size_Metrics_Get(face);
-            let output = json!({
-                "x_ppem": metrics.x_ppem,
-                "y_ppem": metrics.y_ppem,
-                "x_scale": metrics.x_scale,
-                "y_scale": metrics.y_scale,
-                "ascender": metrics.ascender,
-                "descender": metrics.descender,
-                "height": metrics.height,
-                "max_advance": metrics.max_advance
-            });
+            let output = c_size_metrics_json(face);
             c_done_face(face);
             c_done_library(library);
-            Ok(ok(output))
+            output.map(ok)
         }
         "get_char_index" => {
             let (library, face) = c_open_face(case)?;
@@ -3196,7 +3176,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
                 load_flags_param(&case.inputs.params)?,
             );
             let err = if load_err == FT_Err_Ok {
-                c_abi::fontdone_test_render_glyph(face, render_mode_param(&case.inputs.params)?)
+                c_abi::abi_render_glyph_from_face(face, render_mode_param(&case.inputs.params)?)
             } else {
                 load_err
             };
@@ -3342,7 +3322,7 @@ fn c_open_face(case: &InputCase) -> Result<(c_abi::FT_Library, c_abi::FT_Face), 
 }
 
 fn c_slot_json(face: c_abi::FT_Face) -> Result<Value, String> {
-    let slot = c_abi::fontdone_test_slot_snapshot(face)
+    let slot = c_abi::abi_slot_snapshot(face)
         .ok_or_else(|| "missing c glyph slot snapshot".to_string())?;
     let bitmap = slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
         json!({
@@ -3371,6 +3351,21 @@ fn c_slot_json(face: c_abi::FT_Face) -> Result<Value, String> {
             "vertAdvance": slot.metrics.vertAdvance
         },
         "bitmap": bitmap
+    }))
+}
+
+fn c_size_metrics_json(face: c_abi::FT_Face) -> Result<Value, String> {
+    let metrics =
+        c_abi::abi_size_metrics(face).ok_or_else(|| "missing c size metrics".to_string())?;
+    Ok(json!({
+        "x_ppem": metrics.x_ppem,
+        "y_ppem": metrics.y_ppem,
+        "x_scale": metrics.x_scale,
+        "y_scale": metrics.y_scale,
+        "ascender": metrics.ascender,
+        "descender": metrics.descender,
+        "height": metrics.height,
+        "max_advance": metrics.max_advance
     }))
 }
 
@@ -3411,7 +3406,7 @@ fn wasm_slot_output(handle: usize, err: i32) -> Result<RunOutput, String> {
     if err != FT_Err_Ok {
         return Ok(error(err));
     }
-    let slot = wasm_abi::fontdone_test_slot_snapshot(handle)
+    let slot = wasm_abi::abi_slot_snapshot(handle)
         .ok_or_else(|| "missing wasm glyph slot snapshot".to_string())?;
     let bitmap = slot.bitmap.as_ref().map_or(Value::Null, |bitmap| {
         json!({

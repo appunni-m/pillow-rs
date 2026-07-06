@@ -52,10 +52,14 @@ def parse_c_headers(include_root: Path) -> dict:
         "typedefs": {},
         "structs": {},
         "enums": {},
+        "enum_variants": {},
+        "error_codes": {},
         "fields": {},
     }
     header_root = include_root / "freetype"
     for path in sorted(header_root.rglob("*.h")):
+        if not is_public_header(path, include_root):
+            continue
         raw = read_text(path)
         text = strip_c_comments(raw)
         rel = str(path.relative_to(include_root))
@@ -97,9 +101,29 @@ def parse_c_headers(include_root: Path) -> dict:
                     continue
                 bucket = "structs" if kind == "struct" else "enums"
                 inventory[bucket][name] = {"file": rel}
-                inventory["fields"][name] = parse_c_fields(kind, body)
+                fields = parse_c_fields(kind, body)
+                inventory["fields"][name] = fields
+                if kind == "enum":
+                    for variant in fields:
+                        inventory["enum_variants"][variant] = {
+                            "enum": name,
+                            "file": rel,
+                        }
+
+        parse_error_code_header(inventory, raw, rel)
 
     return inventory
+
+
+def is_public_header(path: Path, include_root: Path) -> bool:
+    try:
+        rel = path.relative_to(include_root)
+    except ValueError:
+        return False
+    parts = rel.parts
+    if len(parts) != 2 or parts[0] != "freetype":
+        return False
+    return parts[1] not in {"ftchapters.h"}
 
 
 def parse_c_fields(kind: str, body: str) -> list[str]:
@@ -122,6 +146,28 @@ def parse_c_fields(kind: str, body: str) -> list[str]:
             if match:
                 fields.append(match.group(1))
     return fields
+
+
+def parse_error_code_header(inventory: dict, raw: str, rel: str) -> None:
+    if rel == "freetype/fterrdef.h":
+        text = strip_c_comments(raw)
+        for macro, prefix in (("FT_NOERRORDEF_", "FT_Err_"), ("FT_ERRORDEF_", "FT_Err_")):
+            pattern = r"^\s*" + macro + r"\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([^,\n]+)"
+            for label, value in re.findall(pattern, text, re.M):
+                inventory["error_codes"][prefix + label] = {
+                    "kind": "error",
+                    "value": normalize_ws(value),
+                    "file": rel,
+                }
+    elif rel == "freetype/ftmoderr.h":
+        text = strip_c_comments(raw)
+        pattern = r"^\s*FT_MODERRDEF\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([^,\n]+)"
+        for label, value in re.findall(pattern, text, re.M):
+            inventory["error_codes"]["FT_Mod_Err_" + label] = {
+                "kind": "module_error",
+                "value": normalize_ws(value),
+                "file": rel,
+            }
 
 
 def parse_servo(path: Path) -> dict:
@@ -270,9 +316,11 @@ def classify_type(name: str, c: dict, servo: dict, fontdone: dict) -> dict:
     fields = c["fields"].get(name, [])
     our_fields = fontdone["fields"].get(mapped, []) if mapped in fontdone["fields"] else []
     field_exact = bool(mapped) and fields == our_fields
+    source = c["structs"].get(name) or c["enums"].get(name) or c["typedefs"].get(name) or {}
     return {
         "type": name,
         "kind": "struct" if name in c["structs"] else "enum" if name in c["enums"] else "typedef",
+        "c_file": source.get("file", ""),
         "servo_present": servo_has_type(servo, name),
         "fontdone_mapping": mapped,
         "c_field_count": len(fields),
@@ -300,6 +348,32 @@ def classify_constant(name: str, c: dict, servo: dict) -> dict:
     }
 
 
+def classify_enum_variant(name: str, c: dict, servo: dict) -> dict:
+    source = c["enum_variants"][name]
+    return {
+        "constant": name,
+        "kind": "enum_variant",
+        "enum": source["enum"],
+        "c_value": "",
+        "c_file": source["file"],
+        "servo_present": any(name in fields for fields in servo["fields"].values()),
+        "fontdone_mapping": "",
+    }
+
+
+def classify_error_code(name: str, c: dict, servo: dict) -> dict:
+    source = c["error_codes"][name]
+    return {
+        "constant": name,
+        "kind": source["kind"],
+        "enum": "",
+        "c_value": source["value"],
+        "c_file": source["file"],
+        "servo_present": name in servo["consts"] or any(name in fields for fields in servo["fields"].values()),
+        "fontdone_mapping": "",
+    }
+
+
 def markdown_table(headers: list[str], rows: list[dict], limit: int | None = None) -> str:
     selected = rows if limit is None else rows[:limit]
     lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
@@ -322,6 +396,8 @@ def write_report(data: dict, output_dir: Path) -> None:
     functions = data["functions"]
     types = data["types"]
     constants = data["constants"]
+    enum_variants = data["enum_variants"]
+    error_codes = data["error_codes"]
     counts = data["counts"]
     status_counts = {}
     for row in functions:
@@ -416,6 +492,14 @@ def write_report(data: dict, output_dir: Path) -> None:
         "## Constants / Macros",
         "",
         markdown_table(["constant", "servo_present", "fontdone_mapping", "c_value", "c_file"], constants),
+        "",
+        "## Enum Variants",
+        "",
+        markdown_table(["constant", "enum", "servo_present", "c_file"], enum_variants),
+        "",
+        "## Error Codes",
+        "",
+        markdown_table(["constant", "kind", "servo_present", "c_value", "c_file"], error_codes),
     ]
     (output_dir / "api_abi_audit.md").write_text("\n".join(md))
 
@@ -442,6 +526,8 @@ def main() -> int:
         for name in sorted(set(c["typedefs"]) | set(c["structs"]) | set(c["enums"]))
     ]
     constants = [classify_constant(name, c, servo) for name in sorted(c["macros"])]
+    enum_variants = [classify_enum_variant(name, c, servo) for name in sorted(c["enum_variants"])]
+    error_codes = [classify_error_code(name, c, servo) for name in sorted(c["error_codes"])]
 
     data = {
         "counts": {
@@ -450,6 +536,8 @@ def main() -> int:
             "c_typedefs": len(c["typedefs"]),
             "c_structs": len(c["structs"]),
             "c_enums": len(c["enums"]),
+            "c_enum_variants": len(c["enum_variants"]),
+            "c_error_codes": len(c["error_codes"]),
             "servo_functions": len(servo["functions"]),
             "servo_consts": len(servo["consts"]),
             "servo_types": len(servo["types"]),
@@ -463,6 +551,8 @@ def main() -> int:
         "functions": functions,
         "types": types,
         "constants": constants,
+        "enum_variants": enum_variants,
+        "error_codes": error_codes,
     }
     write_report(data, args.output_dir)
     print(args.output_dir / "api_abi_audit.md")

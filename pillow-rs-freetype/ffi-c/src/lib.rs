@@ -2,8 +2,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(non_camel_case_types, non_snake_case)]
 
-use std::alloc::{Layout, alloc, dealloc};
-use std::ffi::{c_int, c_long, c_uchar, c_uint, c_ulong, c_void};
+use std::ffi::{c_int, c_long, c_uchar, c_uint, c_ulong, c_ushort, c_void};
 use std::ptr::{self, NonNull};
 use std::slice;
 
@@ -15,16 +14,17 @@ pub type FT_UInt = c_uint;
 pub type FT_Int32 = i32;
 pub type FT_Long = c_long;
 pub type FT_ULong = c_ulong;
-pub type FT_Pos = i64;
-pub type FT_Fixed = i64;
-pub type FT_F26Dot6 = i64;
-pub type FT_UShort = u16;
-pub type FT_Render_Mode = i32;
-pub type FT_Pixel_Mode = i32;
-pub type FT_Glyph_Format = i32;
+pub type FT_Pos = c_long;
+pub type FT_Fixed = c_long;
+pub type FT_F26Dot6 = c_long;
+pub type FT_UShort = c_ushort;
+pub type FT_Render_Mode = c_int;
+pub type FT_Pixel_Mode = c_int;
+pub type FT_Glyph_Format = c_int;
 
 pub type FT_Library = *mut FT_LibraryRec;
 pub type FT_Face = *mut FT_FaceRec;
+pub type FT_Size = *mut FT_SizeRec;
 pub type FT_GlyphSlot = *mut FT_GlyphSlotRec;
 
 #[repr(C)]
@@ -95,8 +95,15 @@ pub struct FT_GlyphSlotRec {
 }
 
 #[repr(C)]
+pub struct FT_SizeRec {
+    pub metrics: FT_Size_Metrics,
+    pub internal: *mut c_void,
+}
+
+#[repr(C)]
 pub struct FT_FaceRec {
     pub glyph: FT_GlyphSlot,
+    pub size: FT_Size,
     pub internal: *mut c_void,
 }
 
@@ -109,17 +116,19 @@ struct FaceState {
     inner: rust_ffi::FT_Face,
 }
 
+#[cfg(feature = "abi-test-support")]
 #[derive(Clone)]
-pub struct FontdoneCSlotSnapshot {
+pub struct AbiSlotSnapshot {
     pub glyph_index: FT_UInt,
     pub metrics: FT_Glyph_Metrics,
     pub advance: FT_Vector,
     pub format: FT_Glyph_Format,
-    pub bitmap: Option<FontdoneCBitmapSnapshot>,
+    pub bitmap: Option<AbiBitmapSnapshot>,
 }
 
+#[cfg(feature = "abi-test-support")]
 #[derive(Clone)]
-pub struct FontdoneCBitmapSnapshot {
+pub struct AbiBitmapSnapshot {
     pub rows: u32,
     pub width: u32,
     pub pitch: FT_Int,
@@ -130,22 +139,20 @@ pub struct FontdoneCBitmapSnapshot {
     pub buffer: Vec<u8>,
 }
 
-pub fn fontdone_test_slot_snapshot(face: FT_Face) -> Option<FontdoneCSlotSnapshot> {
-    let face = NonNull::new(face)?;
-    // SAFETY: this helper is for tests using handles produced by this crate.
-    let slot = unsafe { (*face.as_ptr()).glyph };
-    let slot = NonNull::new(slot)?;
-    // SAFETY: `slot` is owned by `face` and remains live for this call.
+#[cfg(feature = "abi-test-support")]
+pub fn abi_slot_snapshot(face: FT_Face) -> Option<AbiSlotSnapshot> {
+    let slot = abi_glyph_slot(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
     let slot = unsafe { slot.as_ref() };
     let bitmap = if slot.bitmap.buffer.is_null() {
         None
     } else {
-        let len = usize::try_from(slot.bitmap.pitch.abs())
+        let len = usize::try_from(i64::from(slot.bitmap.pitch).abs())
             .ok()?
             .checked_mul(usize::try_from(slot.bitmap.rows).ok()?)?;
-        // SAFETY: buffer and length are owned by the live slot.
+        // SAFETY: the buffer is owned by the live slot for the duration of this copy.
         let buffer = unsafe { slice::from_raw_parts(slot.bitmap.buffer, len) }.to_vec();
-        Some(FontdoneCBitmapSnapshot {
+        Some(AbiBitmapSnapshot {
             rows: slot.bitmap.rows,
             width: slot.bitmap.width,
             pitch: slot.bitmap.pitch,
@@ -156,7 +163,7 @@ pub fn fontdone_test_slot_snapshot(face: FT_Face) -> Option<FontdoneCSlotSnapsho
             buffer,
         })
     };
-    Some(FontdoneCSlotSnapshot {
+    Some(AbiSlotSnapshot {
         glyph_index: slot.glyph_index,
         metrics: slot.metrics,
         advance: slot.advance,
@@ -165,34 +172,29 @@ pub fn fontdone_test_slot_snapshot(face: FT_Face) -> Option<FontdoneCSlotSnapsho
     })
 }
 
-pub fn fontdone_test_render_glyph(face: FT_Face, render_mode: FT_Render_Mode) -> FT_Error {
-    let Some(face) = NonNull::new(face) else {
+#[cfg(feature = "abi-test-support")]
+pub fn abi_render_glyph_from_face(face: FT_Face, render_mode: FT_Render_Mode) -> FT_Error {
+    let Some(slot) = abi_glyph_slot(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    // SAFETY: this helper is for tests using handles produced by this crate.
-    let slot = unsafe { (*face.as_ptr()).glyph };
-    FT_Render_Glyph(slot, render_mode)
+    FT_Render_Glyph(slot.as_ptr(), render_mode)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fontdone_malloc(size: usize) -> *mut c_void {
-    let Ok(layout) = Layout::from_size_align(size.max(1), 8) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: `layout` is constructed above and has non-zero size.
-    unsafe { alloc(layout).cast::<c_void>() }
+#[cfg(feature = "abi-test-support")]
+pub fn abi_size_metrics(face: FT_Face) -> Option<FT_Size_Metrics> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    let size = unsafe { (*face.as_ptr()).size };
+    let size = NonNull::new(size)?;
+    // SAFETY: `size` is owned by the live face for the duration of this copy.
+    Some(unsafe { size.as_ref().metrics })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn fontdone_free(ptr: *mut c_void, size: usize) {
-    if ptr.is_null() {
-        return;
-    }
-    let Ok(layout) = Layout::from_size_align(size.max(1), 8) else {
-        return;
-    };
-    // SAFETY: callers must pass a pointer returned by `fontdone_malloc` with the same size.
-    unsafe { dealloc(ptr.cast::<u8>(), layout) };
+#[cfg(feature = "abi-test-support")]
+fn abi_glyph_slot(face: FT_Face) -> Option<NonNull<FT_GlyphSlotRec>> {
+    let face = NonNull::new(face)?;
+    // SAFETY: this feature-gated helper is only for tests using live handles from this crate.
+    NonNull::new(unsafe { (*face.as_ptr()).glyph })
 }
 
 #[unsafe(no_mangle)]
@@ -251,8 +253,13 @@ pub extern "C" fn FT_New_Memory_Face(
     let rust_library = unsafe { &*((*library.as_ptr()).internal.cast::<rust_ffi::FT_Library>()) };
     match rust_ffi::FT_New_Memory_Face(rust_library, data, face_index, 20.0) {
         Ok(inner) => {
+            let metrics = rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&inner));
             let face = Box::new(FT_FaceRec {
                 glyph: ptr::null_mut(),
+                size: Box::into_raw(Box::new(FT_SizeRec {
+                    metrics,
+                    internal: ptr::null_mut(),
+                })),
                 internal: Box::into_raw(Box::new(FaceState { inner })).cast::<c_void>(),
             });
             // SAFETY: `out` is a valid out pointer checked above.
@@ -272,6 +279,7 @@ pub extern "C" fn FT_Done_Face(face: FT_Face) -> FT_Error {
     unsafe {
         let face = Box::from_raw(face.as_ptr());
         drop_glyph(face.glyph);
+        drop_size(face.size);
         if !face.internal.is_null() {
             drop(Box::from_raw(face.internal.cast::<FaceState>()));
         }
@@ -290,13 +298,17 @@ pub extern "C" fn FT_Set_Char_Size(
     let Some(state) = face_state_mut(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    rust_ffi::FT_Set_Char_Size(
+    let error = rust_ffi::FT_Set_Char_Size(
         &mut state.inner,
         char_width,
         char_height,
         horz_resolution,
         vert_resolution,
-    )
+    );
+    if error == rust_ffi::FT_Err_Ok {
+        update_size_metrics(face, &state.inner);
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -308,7 +320,11 @@ pub extern "C" fn FT_Set_Pixel_Sizes(
     let Some(state) = face_state_mut(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;
     };
-    rust_ffi::FT_Set_Pixel_Sizes(&mut state.inner, pixel_width, pixel_height)
+    let error = rust_ffi::FT_Set_Pixel_Sizes(&mut state.inner, pixel_width, pixel_height);
+    if error == rust_ffi::FT_Err_Ok {
+        update_size_metrics(face, &state.inner);
+    }
+    error
 }
 
 #[unsafe(no_mangle)]
@@ -373,14 +389,6 @@ pub extern "C" fn FT_Render_Glyph(slot: FT_GlyphSlot, render_mode: FT_Render_Mod
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn FT_Size_Metrics_Get(face: FT_Face) -> FT_Size_Metrics {
-    let Some(state) = face_state(face) else {
-        return FT_Size_Metrics::default();
-    };
-    rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(&state.inner))
-}
-
 fn store_slot(face: FT_Face, slot: rust_ffi::FT_GlyphSlot, load_flags: FT_Int32) -> FT_Error {
     let Some(face_ptr) = non_null_mut(face) else {
         return rust_ffi::FT_Err_Invalid_Argument;
@@ -392,6 +400,19 @@ fn store_slot(face: FT_Face, slot: rust_ffi::FT_GlyphSlot, load_flags: FT_Int32)
             Box::into_raw(Box::new(rust_slot_to_abi(slot, face, load_flags)));
     }
     rust_ffi::FT_Err_Ok
+}
+
+fn update_size_metrics(face: FT_Face, rust_face: &rust_ffi::FT_Face) {
+    let Some(face_ptr) = non_null_mut(face) else {
+        return;
+    };
+    // SAFETY: `face_ptr` is a live handle allocated by this crate.
+    let size = unsafe { (*face_ptr.as_ptr()).size };
+    let Some(size_ptr) = non_null_mut(size) else {
+        return;
+    };
+    // SAFETY: `size_ptr` points to the live size record owned by `face`.
+    unsafe { (*size_ptr.as_ptr()).metrics = rust_size_metrics_to_abi(rust_ffi::FT_Size_Metrics(rust_face)) };
 }
 
 fn rust_slot_to_abi(
@@ -499,5 +520,12 @@ unsafe fn drop_glyph(slot: FT_GlyphSlot) {
     if !slot.is_null() {
         // SAFETY: `slot` is owned by its containing face and allocated with `Box::into_raw`.
         unsafe { drop(Box::from_raw(slot)) };
+    }
+}
+
+unsafe fn drop_size(size: FT_Size) {
+    if !size.is_null() {
+        // SAFETY: `size` is owned by its containing face and allocated with `Box::into_raw`.
+        unsafe { drop(Box::from_raw(size)) };
     }
 }
