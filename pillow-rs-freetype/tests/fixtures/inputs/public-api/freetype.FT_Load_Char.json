@@ -120,7 +120,7 @@
       "case_id": "freetype.FT_Load_Char.matrix_load",
       "subject": "freetype.FT_Load_Char",
       "case": "matrix_load",
-      "operation": "freetype.load_char_matrix",
+      "operation": "freetype.load_char",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

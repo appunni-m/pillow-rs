@@ -63,8 +63,8 @@
       "case_id": "freetype.FT_LOAD_TARGET_MODE.load_target_dispatch_behavior",
       "subject": "freetype.FT_LOAD_TARGET_MODE",
       "case": "load_target_dispatch_behavior",
-      "operation": "freetype.load_glyph_matrix",
-      "schema": "glyph_slot_matrix",
+      "operation": "freetype.load_glyph",
+      "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {
         "assets": {
@@ -81,7 +81,7 @@
             "y": 20
           },
           "glyph_index": 36,
-          "load_flags_matrix": [
+          "load_flag_sets": [
             [
               "FT_LOAD_RENDER",
               "FT_LOAD_TARGET_NORMAL"

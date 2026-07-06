@@ -39,7 +39,7 @@
               "count": 3
             }
           ],
-          "load_flags_matrix": [
+          "load_flag_sets": [
             [
               "FT_LOAD_DEFAULT"
             ],
@@ -307,7 +307,7 @@
       "subject": "ftadvanc.FT_Get_Advances",
       "case": "error_null_face_or_output",
       "operation": "ftadvanc.get_advances",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {
@@ -360,7 +360,7 @@
       "subject": "ftadvanc.FT_Get_Advances",
       "case": "error_invalid_range_or_flags",
       "operation": "ftadvanc.get_advances",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {

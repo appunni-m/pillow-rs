@@ -122,7 +122,7 @@
       "case_id": "ftoutln.FT_Orientation.geometry_fixture_matrix",
       "subject": "ftoutln.FT_Orientation",
       "case": "geometry_fixture_matrix",
-      "operation": "ftoutln.outline_geometry_matrix",
+      "operation": "ftoutln.outline_geometry",
       "schema": "api_result",
       "expect_error": true,
       "inputs": {

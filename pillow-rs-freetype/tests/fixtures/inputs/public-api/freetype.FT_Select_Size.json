@@ -82,7 +82,7 @@
             "strike_present_glyph",
             "strike_missing_outline_glyph"
           ],
-          "load_flags_matrix": [
+          "load_flag_sets": [
             "FT_LOAD_DEFAULT",
             "FT_LOAD_SBITS_ONLY",
             "FT_LOAD_NO_BITMAP"

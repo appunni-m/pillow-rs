@@ -12,8 +12,9 @@ the execution source of truth. Every input case must reference a manifest
 `subject` and `case`, and may list extra `covers_manifest_cases` when one
 aggregate input intentionally covers more than one manifest case.
 
-The runner expands only `cases[].inputs.variability`. Legacy `matrix_cases`
-imports are not active in the runner.
+The runner expands only `cases[].inputs.variability`. Top-level
+`matrix_cases`, `_matrix` operation/schema names, `schema: "scalar"`, and
+`load_flags_matrix` are rejected.
 
 ## Case Shape
 
@@ -61,8 +62,8 @@ Only common coverage dimensions are variability axes:
 - `sizes`: expands `sizes` or `pixel_sizes` into `pixel_size`.
 - `codepoints`: expands `codepoints` or `char_codes` into `char_code`.
 - `glyph_indices`: expands `glyph_indices` into `glyph_index`.
-- `load_flags`: expands `load_flag_sets`, `load_flags_matrix`, numeric
-  `load_flags`, and combines optional `target_modes`.
+- `load_flags`: expands `load_flag_sets`, numeric `load_flags`, and combines
+  optional `target_modes`.
 - `render_modes`: expands `render_modes` into `render_mode`.
 
 Do not materialize one JSON case per font/size/codepoint combination. Put the
@@ -91,9 +92,9 @@ Expected outputs are not committed. At runtime the runner:
 Use `expect_error: true` only when C FreeType is expected to return an error.
 Error cases still compare the error status and error code across all backends.
 
-`schema: "scalar"` is accepted only as a migration alias for `value`; new files
-should use a semantic schema such as `constant`, `value`, `glyph_slot`,
-`size_metrics`, `record_layout`, `face_open`, or `set_status`.
+Schema names should be semantic, such as `constant`, `value`, `glyph_slot`,
+`size_metrics`, `record_layout`, `face_open`, `set_status`, or `error`.
+Do not use migration names such as `scalar` or `*_matrix`.
 
 ## Worker Checklist
 

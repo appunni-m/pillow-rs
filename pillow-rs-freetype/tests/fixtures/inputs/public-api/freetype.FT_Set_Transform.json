@@ -203,7 +203,7 @@
             ]
           },
           "glyph_index": 36,
-          "load_flags_matrix": [
+          "load_flag_sets": [
             "FT_LOAD_DEFAULT",
             "FT_LOAD_IGNORE_TRANSFORM"
           ]

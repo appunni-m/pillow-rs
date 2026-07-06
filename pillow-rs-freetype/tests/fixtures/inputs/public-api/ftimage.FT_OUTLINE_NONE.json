@@ -54,7 +54,7 @@
       "case_id": "ftimage.FT_OUTLINE_NONE.default_outline_render_baseline",
       "subject": "ftimage.FT_OUTLINE_NONE",
       "case": "default_outline_render_baseline",
-      "operation": "ftoutln.outline_render_matrix",
+      "operation": "ftoutln.outline_render",
       "schema": "outline_raster",
       "expect_error": false,
       "inputs": {

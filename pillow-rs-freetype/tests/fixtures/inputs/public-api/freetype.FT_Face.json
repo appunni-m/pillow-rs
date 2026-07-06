@@ -136,7 +136,7 @@
       "subject": "freetype.FT_Face",
       "case": "null_and_done_handle_errors",
       "operation": "freetype.face_handle_error_policy",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {

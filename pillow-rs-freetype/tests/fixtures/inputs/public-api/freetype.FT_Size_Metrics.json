@@ -136,8 +136,8 @@
       "case_id": "freetype.FT_Size_Metrics.matrix_active_size_metrics",
       "subject": "freetype.FT_Size_Metrics",
       "case": "matrix_active_size_metrics",
-      "operation": "freetype.size_metrics_matrix",
-      "schema": "size_metrics_matrix",
+      "operation": "freetype.size_metrics",
+      "schema": "size_metrics",
       "expect_error": false,
       "inputs": {
         "assets": {

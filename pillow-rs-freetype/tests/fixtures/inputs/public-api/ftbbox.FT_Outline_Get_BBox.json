@@ -253,7 +253,7 @@
       "subject": "ftbbox.FT_Outline_Get_BBox",
       "case": "error_null_outline_or_output",
       "operation": "ftbbox.outline_get_bbox",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {

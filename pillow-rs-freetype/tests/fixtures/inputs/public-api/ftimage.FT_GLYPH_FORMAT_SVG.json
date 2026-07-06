@@ -21,7 +21,7 @@
       "operation": "freetype.load_svg_glyph",
       "schema": "glyph_slot",
       "expect_error": false,
-      "inputs": {"assets": {"svg_font": {"kind": "ref", "id": "fonts/svg/otsvg-glyph.ttf"}}, "params": {"glyph_index": "svg_document_glyph", "load_flags_matrix": [["FT_LOAD_COLOR"], ["FT_LOAD_SVG_ONLY"]], "inspect_svg_document": true}, "variability": {"axes": ["load_flags"]}},
+      "inputs": {"assets": {"svg_font": {"kind": "ref", "id": "fonts/svg/otsvg-glyph.ttf"}}, "params": {"glyph_index": "svg_document_glyph", "load_flag_sets": [["FT_LOAD_COLOR"], ["FT_LOAD_SVG_ONLY"]], "inspect_svg_document": true}, "variability": {"axes": ["load_flags"]}},
       "classifiers": ["kind:enum_variant", "header:ftimage", "path:runtime"],
       "expectation": {"status": "build_dependent", "output_shape": {"status": "FT_Error", "slot_format": "FT_GLYPH_FORMAT_SVG", "svg_document_length": "FT_ULong", "svg_document_hash": "hash"}, "compare": {"mode": "hash", "paths": ["status", "slot_format", "svg_document_length", "svg_document_hash"]}, "fixture_requirements": ["Requires an OT-SVG font asset and a build with SVG support."]}
     },

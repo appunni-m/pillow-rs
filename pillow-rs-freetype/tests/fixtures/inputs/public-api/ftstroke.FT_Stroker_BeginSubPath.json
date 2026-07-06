@@ -204,7 +204,7 @@
       "case_id": "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join",
       "subject": "ftstroke.FT_Stroker_BeginSubPath",
       "case": "wide_stroke_mode_depends_on_cap_and_join",
-      "operation": "ftstroke.begin_subpath_wide_stroke_matrix",
+      "operation": "ftstroke.begin_subpath_wide_stroke",
       "schema": "api_result",
       "expect_error": false,
       "abi": {

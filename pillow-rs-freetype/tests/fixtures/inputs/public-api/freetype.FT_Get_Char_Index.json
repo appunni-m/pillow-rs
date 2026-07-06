@@ -58,7 +58,7 @@
       "case_id": "freetype.FT_Get_Char_Index.matrix_char_code",
       "subject": "freetype.FT_Get_Char_Index",
       "case": "matrix_char_code",
-      "operation": "freetype.get_char_index_matrix",
+      "operation": "freetype.get_char_index",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {

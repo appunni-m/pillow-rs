@@ -33,7 +33,7 @@
             36,
             57
           ],
-          "load_flags_matrix": [
+          "load_flag_sets": [
             [
               "FT_LOAD_DEFAULT"
             ],
@@ -264,7 +264,7 @@
       "subject": "ftadvanc.FT_Get_Advance",
       "case": "error_null_face_or_output",
       "operation": "ftadvanc.get_advance",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {
@@ -316,7 +316,7 @@
       "subject": "ftadvanc.FT_Get_Advance",
       "case": "error_invalid_glyph_or_flags",
       "operation": "ftadvanc.get_advance",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {

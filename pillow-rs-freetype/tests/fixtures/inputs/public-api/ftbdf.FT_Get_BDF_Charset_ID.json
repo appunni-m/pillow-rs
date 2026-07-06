@@ -115,7 +115,7 @@
       "subject": "ftbdf.FT_Get_BDF_Charset_ID",
       "case": "error_non_bdf_face",
       "operation": "ftbdf.get_bdf_charset_id",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {
@@ -212,7 +212,7 @@
       "subject": "ftbdf.FT_Get_BDF_Charset_ID",
       "case": "error_null_face_or_outputs",
       "operation": "ftbdf.get_bdf_charset_id",
-      "schema": "error_matrix",
+      "schema": "error",
       "expect_error": true,
       "inputs": {
         "assets": {

@@ -133,7 +133,7 @@
       "subject": "freetype.FT_Render_Glyph",
       "case": "matrix_render",
       "operation": "freetype.render_glyph",
-      "schema": "glyph_render_matrix",
+      "schema": "glyph_slot",
       "expect_error": false,
       "inputs": {
         "assets": {

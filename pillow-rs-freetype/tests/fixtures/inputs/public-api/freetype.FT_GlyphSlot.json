@@ -29,7 +29,7 @@
             36,
             57
           ],
-          "load_flags_matrix": [
+          "load_flag_sets": [
             [
               "FT_LOAD_DEFAULT"
             ],

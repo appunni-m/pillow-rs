@@ -113,7 +113,7 @@
       "case_id": "ftoutln.FT_ORIENTATION_FILL_LEFT.reverse_toggles_orientation_fixture",
       "subject": "ftoutln.FT_ORIENTATION_FILL_LEFT",
       "case": "reverse_toggles_orientation_fixture",
-      "operation": "ftoutln.outline_reverse_orientation_matrix",
+      "operation": "ftoutln.outline_reverse_orientation",
       "schema": "api_result",
       "expect_error": false,
       "inputs": {
