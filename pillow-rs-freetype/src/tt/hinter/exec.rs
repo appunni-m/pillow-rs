@@ -1799,8 +1799,12 @@ impl ExecContext {
                 // Like MIRP, but uses a stack-provided distance and does not
                 // apply rounding or control-value cut-in.
                 0x3A | 0x3B => {
-                    let p = self.pop()? as usize;
+                    // C: `Ins_MSIRP` in `ttinterp.c` receives args[0] as the
+                    // point and args[1] as the distance. With this VM's pop
+                    // model, the stack top is the distance produced by the
+                    // preceding instruction, followed by the point.
                     let distance = self.pop()?;
+                    let p = self.pop()? as usize;
                     let rp = self.gs.rp0 as usize;
 
                     if self.gs.zp1 == 0 {

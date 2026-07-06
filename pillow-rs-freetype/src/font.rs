@@ -167,6 +167,13 @@ struct PositionedGlyph {
     raster: Option<RasterResult>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetricsGridFit {
+    None,
+    Horizontal,
+    Vertical,
+}
+
 impl Font {
     /// Load a TrueType/OpenType font from raw bytes at a given point size.
     ///
@@ -699,13 +706,29 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        self.glyph_metrics_for_index_default_with_layout(glyph, false)
+    }
+
+    pub(crate) fn glyph_metrics_for_index_default_with_layout(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+    ) -> Result<GlyphSlotMetrics, FontError> {
         let scaled = self.scale_glyph_for_metrics_default(glyph)?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     pub(crate) fn glyph_metrics_for_index_force_autohint(
         &self,
         glyph: u16,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        self.glyph_metrics_for_index_force_autohint_with_layout(glyph, false)
+    }
+
+    pub(crate) fn glyph_metrics_for_index_force_autohint_with_layout(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
     ) -> Result<GlyphSlotMetrics, FontError> {
         let metrics_cache = self.face_globals.get_metrics(glyph);
         let scaled = scaler::scale_glyph_for_metrics_with_autohint(
@@ -714,7 +737,7 @@ impl Font {
             metrics_cache.as_deref(),
             self.is_italic,
         )?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     pub(crate) fn glyph_metrics_for_index_no_hinting(
@@ -722,7 +745,10 @@ impl Font {
         glyph: u16,
     ) -> Result<GlyphSlotMetrics, FontError> {
         let scaled = scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+        // C: `FT_Load_Glyph` calls `ft_glyphslot_grid_fit_metrics` only when
+        // `FT_LOAD_NO_HINTING` is not set (`src/base/ftobjs.c`).  No-hinting
+        // slot metrics keep the fractional 26.6 values from `ttgload.c`.
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled, MetricsGridFit::None))
     }
 
     pub(crate) fn glyph_metrics_for_index_no_scale(
@@ -753,34 +779,23 @@ impl Font {
             return Ok(metrics);
         }
 
-        // C: `FT_LOAD_NO_SCALE` reaches `compute_glyph_metrics` in
-        // `src/truetype/ttgload.c` with x/y scale set to 1.0.  The outline is
-        // still translated by `-pp1.x` first (`ttgload.c:2582`), so metrics
-        // are raw font units after that origin shift, not raw glyf coordinates.
-        let pp1x = if outline.is_composite {
-            outline.xmin - outline.sub_lsb
-        } else {
-            outline.xmin - h_metric.lsb as i32
-        };
-        let (x_min, y_min, x_max, y_max) = if outline.is_composite {
-            // C: `compute_glyph_metrics` in `ttgload.c` uses the loader bbox
-            // for composite glyphs instead of walking flattened component
-            // points.  The saved header xMin preserves that public slot metric.
-            (outline.bbox_xmin, outline.ymin, outline.xmax, outline.ymax)
-        } else {
-            let mut x_min = outline.points[0].x - pp1x;
-            let mut y_min = outline.points[0].y;
-            let mut x_max = x_min;
-            let mut y_max = y_min;
-            for point in &outline.points[1..] {
-                let x = point.x - pp1x;
-                x_min = x_min.min(x);
-                y_min = y_min.min(point.y);
-                x_max = x_max.max(x);
-                y_max = y_max.max(point.y);
-            }
-            (x_min, y_min, x_max, y_max)
-        };
+        // C: normal recursive `FT_LOAD_NO_SCALE` leaves the slot format as an
+        // outline, translates it by `-pp1.x`, then `compute_glyph_metrics`
+        // calls `FT_Outline_Get_CBox` (`src/truetype/ttgload.c`).  The
+        // composite-header bbox is used only for unrecurred composite slots
+        // (`FT_LOAD_NO_RECURSE`), which this core path does not model.
+        let pp1x = outline.bbox_xmin - h_metric.lsb as i32;
+        let mut x_min = outline.points[0].x - pp1x;
+        let mut y_min = outline.points[0].y;
+        let mut x_max = x_min;
+        let mut y_max = y_min;
+        for point in &outline.points[1..] {
+            let x = point.x - pp1x;
+            x_min = x_min.min(x);
+            y_min = y_min.min(point.y);
+            x_max = x_max.max(x);
+            y_max = y_max.max(point.y);
+        }
 
         let mut metrics = GlyphSlotMetrics {
             width: x_max - x_min,
@@ -800,8 +815,16 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<GlyphSlotMetrics, FontError> {
+        self.glyph_metrics_for_index_no_autohint_with_layout(glyph, false)
+    }
+
+    pub(crate) fn glyph_metrics_for_index_no_autohint_with_layout(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+    ) -> Result<GlyphSlotMetrics, FontError> {
         let scaled = self.scale_glyph_no_autohint_for_metrics(glyph)?;
-        Ok(self.slot_metrics_from_scaled(glyph, &scaled))
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
     /// `getbbox(text)` -> FreeType rendered bitmap bbox for the first glyph.
@@ -1063,6 +1086,7 @@ impl Font {
         &self,
         glyph_index: u16,
         scaled: &scaler::ScaledGlyph,
+        grid_fit_metrics: MetricsGridFit,
     ) -> GlyphSlotMetrics {
         let mut metrics = GlyphSlotMetrics {
             width: scaled.cbox_x_max - scaled.cbox_x_min,
@@ -1099,7 +1123,11 @@ impl Font {
             metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
         }
 
-        grid_fit_horizontal_metrics(&mut metrics);
+        match grid_fit_metrics {
+            MetricsGridFit::None => {}
+            MetricsGridFit::Horizontal => grid_fit_horizontal_metrics(&mut metrics),
+            MetricsGridFit::Vertical => grid_fit_vertical_metrics(&mut metrics),
+        }
         metrics
     }
 
@@ -1148,6 +1176,14 @@ fn vertical_advance_font_units(data: &FontData) -> i32 {
         return os2.s_typo_ascender as i32 - os2.s_typo_descender as i32;
     }
     data.hhea.ascent as i32 - data.hhea.descent as i32
+}
+
+fn grid_fit_for_layout(vertical_layout: bool) -> MetricsGridFit {
+    if vertical_layout {
+        MetricsGridFit::Vertical
+    } else {
+        MetricsGridFit::Horizontal
+    }
 }
 
 fn is_pathological_metrics_cbox(scaled: &scaler::ScaledGlyph) -> bool {
@@ -1204,6 +1240,20 @@ fn grid_fit_horizontal_metrics(metrics: &mut GlyphSlotMetrics) {
     metrics.hori_bearing_y = ft_pix_ceil(metrics.hori_bearing_y);
     metrics.width = right - metrics.hori_bearing_x;
     metrics.height = metrics.hori_bearing_y - bottom;
+    metrics.hori_advance = ft_pix_round(metrics.hori_advance);
+    metrics.vert_advance = ft_pix_round(metrics.vert_advance);
+}
+
+fn grid_fit_vertical_metrics(metrics: &mut GlyphSlotMetrics) {
+    metrics.hori_bearing_x = ft_pix_floor(metrics.hori_bearing_x);
+    metrics.hori_bearing_y = ft_pix_ceil(metrics.hori_bearing_y);
+
+    let right = ft_pix_ceil(metrics.vert_bearing_x + metrics.width);
+    let bottom = ft_pix_ceil(metrics.vert_bearing_y + metrics.height);
+    metrics.vert_bearing_x = ft_pix_floor(metrics.vert_bearing_x);
+    metrics.vert_bearing_y = ft_pix_floor(metrics.vert_bearing_y);
+    metrics.width = right - metrics.vert_bearing_x;
+    metrics.height = bottom - metrics.vert_bearing_y;
     metrics.hori_advance = ft_pix_round(metrics.hori_advance);
     metrics.vert_advance = ft_pix_round(metrics.vert_advance);
 }
