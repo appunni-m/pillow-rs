@@ -85,6 +85,12 @@
             "FT_RENDER_MODE_MONO"
           ],
           "expected_behavior": "flag is a large-outline scan-converter hint; compare C output and limit errors exactly"
+        },
+        "variability": {
+          "axes": [
+            "sizes",
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

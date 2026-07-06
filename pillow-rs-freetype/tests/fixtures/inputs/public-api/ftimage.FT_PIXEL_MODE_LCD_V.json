@@ -92,6 +92,13 @@
           "render_mode": "FT_RENDER_MODE_LCD_V",
           "expected_pixel_mode": "FT_PIXEL_MODE_LCD_V",
           "shape_rule": "physical rows are logical rows times 3; width is not tripled; pitch equals width; num_grays is 256"
+        },
+        "variability": {
+          "axes": [
+            "sizes",
+            "glyph_indices",
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

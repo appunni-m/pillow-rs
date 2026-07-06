@@ -97,6 +97,12 @@
             {"shift": 0, "delta": 0},
             {"shift": 1, "delta": 32}
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "load_flags"
+          ]
         }
       },
       "classifiers": ["kind:macro", "header:ftimage", "path:runtime"],

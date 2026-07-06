@@ -146,6 +146,11 @@
             "U+00E9",
             "U+0100"
           ]
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [

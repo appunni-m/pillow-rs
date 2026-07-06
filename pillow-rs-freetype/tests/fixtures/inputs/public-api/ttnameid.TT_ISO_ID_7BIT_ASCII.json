@@ -146,6 +146,11 @@
             "U+007F",
             "U+0080"
           ]
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [

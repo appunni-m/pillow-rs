@@ -214,6 +214,11 @@
           "get_glyph_data_returns": "FT_Data pointer and length",
           "expect_free_glyph_data_after_success": true,
           "nested_composite_loads_allowed": true
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

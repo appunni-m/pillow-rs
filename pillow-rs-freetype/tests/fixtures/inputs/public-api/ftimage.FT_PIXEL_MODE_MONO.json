@@ -84,6 +84,12 @@
           "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
           "pitch_rule": "((width + 15) >> 4) << 1",
           "buffer_rule": "packed one-bit coverage, most significant bit first"
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices",
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -145,6 +151,11 @@
           ],
           "expected_pixel_mode": "FT_PIXEL_MODE_MONO",
           "preserve_embedded_pitch_and_buffer": true
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

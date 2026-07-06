@@ -81,6 +81,11 @@
             "FT_RENDER_MODE_LCD"
           ],
           "expected_behavior": "smooth renderer uses overlap oversampling path when the flag is set"
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

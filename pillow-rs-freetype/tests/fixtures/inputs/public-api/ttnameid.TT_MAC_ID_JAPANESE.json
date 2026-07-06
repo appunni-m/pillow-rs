@@ -150,6 +150,11 @@
             "U+30A2",
             "U+4E00"
           ]
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [

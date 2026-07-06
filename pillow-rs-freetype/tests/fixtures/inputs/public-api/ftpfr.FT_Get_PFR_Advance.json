@@ -40,6 +40,11 @@
             "freetype/include/freetype/ftpfr.h",
             "freetype/src/base/ftpfr.c"
           ]
+        },
+        "variability": {
+          "axes": [
+            "glyph_indices"
+          ]
         }
       },
       "classifiers": [

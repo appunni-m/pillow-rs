@@ -80,6 +80,11 @@
             "FT_RENDER_MODE_MONO"
           ],
           "expected_behavior": "flag records opposite contour orientation; scan converter may ignore it, so compare C effect classification exactly"
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

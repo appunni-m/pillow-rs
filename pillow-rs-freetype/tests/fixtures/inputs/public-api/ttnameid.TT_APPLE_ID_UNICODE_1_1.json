@@ -145,6 +145,11 @@
             "U+0041",
             "U+3400"
           ]
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [

@@ -50,6 +50,11 @@
             "freetype/include/freetype/ftpfr.h",
             "freetype/src/base/ftpfr.c"
           ]
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [
@@ -115,6 +120,11 @@
             "ametrics_y_scale"
           ],
           "c_behavior": "Non-PFR writes units_per_EM to both resolutions, writes face->size metrics scales when size exists or 0x10000 otherwise, then returns Unknown_File_Format"
+        },
+        "variability": {
+          "axes": [
+            "sizes"
+          ]
         }
       },
       "classifiers": [

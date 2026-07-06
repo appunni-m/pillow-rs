@@ -73,6 +73,11 @@
             "FT_RENDER_MODE_LCD_V"
           ],
           "expected_module_base": "FT_Mod_Err_Smooth"
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

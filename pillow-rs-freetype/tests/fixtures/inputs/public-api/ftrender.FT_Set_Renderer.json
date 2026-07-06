@@ -233,6 +233,11 @@
             "bitmap.descriptor",
             "bitmap.buffer_hash"
           ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [
