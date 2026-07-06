@@ -725,6 +725,77 @@ impl Font {
         Ok(self.slot_metrics_from_scaled(glyph, &scaled))
     }
 
+    pub(crate) fn glyph_metrics_for_index_no_scale(
+        &self,
+        glyph: u16,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let outline = tt::glyf::load_glyph(
+            &self.data.glyf_data,
+            &self.data.loca_data,
+            self.data.head.index_to_loc_format,
+            glyph,
+            &self.data.hmtx,
+        )?;
+        let h_metric = self.data.hmtx.get(glyph);
+        let hori_advance = h_metric.advance_width as i32;
+        if outline.num_contours == 0 || outline.points.is_empty() {
+            let mut metrics = GlyphSlotMetrics {
+                width: 0,
+                height: 0,
+                hori_bearing_x: 0,
+                hori_bearing_y: 0,
+                hori_advance,
+                vert_bearing_x: -(hori_advance / 2),
+                vert_bearing_y: 0,
+                vert_advance: 0,
+            };
+            self.fill_no_scale_vertical_metrics(glyph, &outline, &mut metrics);
+            return Ok(metrics);
+        }
+
+        // C: `FT_LOAD_NO_SCALE` reaches `compute_glyph_metrics` in
+        // `src/truetype/ttgload.c` with x/y scale set to 1.0.  The outline is
+        // still translated by `-pp1.x` first (`ttgload.c:2582`), so metrics
+        // are raw font units after that origin shift, not raw glyf coordinates.
+        let pp1x = if outline.is_composite {
+            outline.xmin - outline.sub_lsb
+        } else {
+            outline.xmin - h_metric.lsb as i32
+        };
+        let (x_min, y_min, x_max, y_max) = if outline.is_composite {
+            // C: `compute_glyph_metrics` in `ttgload.c` uses the loader bbox
+            // for composite glyphs instead of walking flattened component
+            // points.  The saved header xMin preserves that public slot metric.
+            (outline.bbox_xmin, outline.ymin, outline.xmax, outline.ymax)
+        } else {
+            let mut x_min = outline.points[0].x - pp1x;
+            let mut y_min = outline.points[0].y;
+            let mut x_max = x_min;
+            let mut y_max = y_min;
+            for point in &outline.points[1..] {
+                let x = point.x - pp1x;
+                x_min = x_min.min(x);
+                y_min = y_min.min(point.y);
+                x_max = x_max.max(x);
+                y_max = y_max.max(point.y);
+            }
+            (x_min, y_min, x_max, y_max)
+        };
+
+        let mut metrics = GlyphSlotMetrics {
+            width: x_max - x_min,
+            height: y_max - y_min,
+            hori_bearing_x: x_min,
+            hori_bearing_y: y_max,
+            hori_advance,
+            vert_bearing_x: 0,
+            vert_bearing_y: 0,
+            vert_advance: 0,
+        };
+        self.fill_no_scale_vertical_metrics(glyph, &outline, &mut metrics);
+        Ok(metrics)
+    }
+
     pub(crate) fn glyph_metrics_for_index_no_autohint(
         &self,
         glyph: u16,
@@ -1030,6 +1101,25 @@ impl Font {
 
         grid_fit_horizontal_metrics(&mut metrics);
         metrics
+    }
+
+    fn fill_no_scale_vertical_metrics(
+        &self,
+        glyph_index: u16,
+        outline: &tt::glyf::GlyphOutline,
+        metrics: &mut GlyphSlotMetrics,
+    ) {
+        if let Some(vmtx) = &self.data.vmtx {
+            let vertical = vmtx.get(glyph_index);
+            let pp3_y = outline.ymax + vertical.tsb as i32;
+            metrics.vert_bearing_y = pp3_y - metrics.hori_bearing_y;
+            metrics.vert_advance = vertical.advance_height as i32;
+        } else {
+            let advance = vertical_advance_font_units(&self.data);
+            metrics.vert_bearing_y = (advance - metrics.height) / 2;
+            metrics.vert_advance = advance;
+        }
+        metrics.vert_bearing_x = metrics.hori_bearing_x - metrics.hori_advance / 2;
     }
 }
 
