@@ -1266,11 +1266,12 @@ pub fn apply_hints(
         let advance_width = font_data.map_or(0, |data| {
             ft_mul_fix(data.hmtx.get(glyph_index).advance_width as i32, x_scale)
         });
+        let no_advance_hinting = hints.metrics.as_ref().is_some_and(|m| m.no_advance_hinting);
         #[cfg(debug_assertions)]
         if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
             log::trace!(target: "autohint::pipeline", "[PHANTOM_PRE] gi={glyph_index} num_horz_edges={num_horz_edges}");
         }
-        if num_horz_edges > 1 {
+        if num_horz_edges > 1 && !no_advance_hinting {
             let edge1 = &haxis.edges[0]; // leftmost
             let edge2 = &haxis.edges[num_horz_edges - 1]; // rightmost
 
@@ -1320,12 +1321,12 @@ pub fn apply_hints(
                 }
             }
         } else {
-            // C's afloader.c:454-460: even without edges, phantom points
-            // are always adjusted.  pp1.x = FT_PIX_ROUND(0) = 0 is a no-op,
-            // but pp2.x rounding affects lsb_delta/rsb_delta which C stores
-            // on the glyph slot.  We don't replicate rsb_delta (it only
-            // affects advance widths), but we document the path for clarity.
-            // The x coordinates are unchanged from the raw scaled values.
+            // C's afloader.c:454-460 also takes this branch when
+            // `AF_HINTS_DO_ADVANCE` is false.  CJK Hani sets
+            // `AF_SCALER_FLAG_NO_ADVANCE` in `afcjk.c:1419`, so pp2 is the
+            // rounded original phantom advance, not an edge-adjusted advance.
+            // pp1.x is FT_PIX_ROUND(0) for our zero-delta public fixtures, so
+            // the x coordinates are unchanged.
             #[cfg(debug_assertions)]
             if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
                 log::trace!(target: "autohint::pipeline", "[PHANTOM_SKIP] gi={glyph_index} num_horz_edges={num_horz_edges} (<=1, no adjust)");
