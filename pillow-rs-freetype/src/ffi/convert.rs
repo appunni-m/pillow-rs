@@ -121,13 +121,19 @@ pub fn load_flags_to_core(flags: FT_Int32) -> Result<api::LoadFlags, FT_Error> {
     core |= match FT_LOAD_TARGET_MODE(flags) {
         FT_RENDER_MODE_NORMAL => api::LoadFlags::DEFAULT,
         // C `FT_Load_Glyph` routes LIGHT target loads through the auto-hinter
-        // when the font driver does not provide native light hinting
-        // (`src/base/ftobjs.c`).  The resulting bitmap is still normal gray.
-        FT_RENDER_MODE_LIGHT => api::LoadFlags::FORCE_AUTOHINT,
+        // with `FT_RENDER_MODE_LIGHT` style flags (`src/base/ftobjs.c` and
+        // `src/autofit/aflatin.c`).  It is not identical to
+        // `FT_LOAD_FORCE_AUTOHINT`: light disables horizontal hinting and keeps
+        // integer original advances.
+        FT_RENDER_MODE_LIGHT => api::LoadFlags::TARGET_LIGHT,
         FT_RENDER_MODE_MONO => api::LoadFlags::TARGET_MONO,
         FT_RENDER_MODE_LCD => api::LoadFlags::TARGET_LCD,
         FT_RENDER_MODE_LCD_V => api::LoadFlags::TARGET_LCD_V,
-        _ => return Err(FT_Err_Unimplemented_Feature),
+        // FreeType does not reject unknown target nibbles during load-only
+        // calls.  It only fails later if FT_LOAD_RENDER asks the renderer to
+        // consume that invalid mode (ftobjs.c:1168-1176).
+        _ if flags & FT_LOAD_RENDER != 0 => return Err(FT_Err_Cannot_Render_Glyph),
+        _ => api::LoadFlags::DEFAULT,
     };
     Ok(core)
 }

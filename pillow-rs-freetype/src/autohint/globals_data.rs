@@ -2112,7 +2112,7 @@ pub static STYLE_TABLE: &[StyleClass] = &[
         non_base_ranges: RANGES_HANI_NONBASE_UNI,
     },
 ];
-pub const STYLE_FALLBACK: usize = 32;
+pub const STYLE_FALLBACK: usize = 58;
 pub const STYLE_UNASSIGNED: usize = usize::MAX;
 // ── Per-script standard characters (from afscript.h) ──────────
 

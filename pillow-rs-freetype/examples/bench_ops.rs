@@ -92,6 +92,7 @@ fn read_matrix(path: &Path) -> Matrix {
 fn parse_load_mode(value: &str) -> LoadMode {
     match value {
         "force_autohint" | "force-autohint" => LoadMode::ForceAutoHint,
+        "target_light" | "target-light" => LoadMode::TargetLight,
         "no_hinting" | "no-hinting" => LoadMode::NoHinting,
         "no_autohint" | "no-autohint" => LoadMode::NoAutoHint,
         _ => LoadMode::Default,
@@ -102,8 +103,9 @@ fn load_mode_key(mode: LoadMode) -> u8 {
     match mode {
         LoadMode::Default => 0,
         LoadMode::ForceAutoHint => 1,
-        LoadMode::NoHinting => 2,
-        LoadMode::NoAutoHint => 3,
+        LoadMode::TargetLight => 2,
+        LoadMode::NoHinting => 3,
+        LoadMode::NoAutoHint => 4,
     }
 }
 
