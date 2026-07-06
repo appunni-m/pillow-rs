@@ -90,7 +90,14 @@ pub fn prepare_context(
     }
     let saved_storage = ctx.storage.clone();
     ctx.run_prep(prep, &saved_storage)?;
-    ctx.backward_compatibility = (ctx.gs.instruct_control & 4) ^ 4;
+    ctx.backward_compatibility = if scale.native_hint_mode == NativeHintMode::Mono {
+        // C `tt_loader_init` disables v40 backward compatibility for
+        // `FT_RENDER_MODE_MONO` so monochrome target loads are fully controlled
+        // by the font program (ttgload.c:2284-2294).
+        0
+    } else {
+        (ctx.gs.instruct_control & 4) ^ 4
+    };
     Ok(ctx)
 }
 
@@ -234,7 +241,20 @@ pub fn hint_glyph(
     zone.org_x = zone.cur_x.clone();
     zone.org_y = zone.cur_y.clone();
 
-    if !scale.metrics_legacy_phantoms {
+    // ── Initialize execution context ──────────────────────────────────
+    let mut ctx = if let Some(prepared) = prepared_context {
+        prepared.clone()
+    } else {
+        prepare_context(cvt, fpgm, prep, scale)?
+    };
+    ctx.is_composite = scale.is_composite;
+
+    if !scale.metrics_legacy_phantoms || ctx.backward_compatibility == 0 {
+        // C `TT_Hint_Glyph` rounds phantom points before bytecode execution
+        // (ttgload.c:812-815).  In v40 backward-compatibility mode it returns
+        // before saving those phantoms (ttgload.c:845-857), so the legacy
+        // metrics branch preserves unrounded phantoms only while that mode is
+        // active.  Mono target loads disable backward compatibility.
         let pp1_idx = n_points;
         let pp2_idx = n_points + 1;
         let pp3_idx = n_points + 2;
@@ -244,14 +264,6 @@ pub fn hint_glyph(
         zone.cur_y[pp3_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp3_idx]);
         zone.cur_y[pp4_idx] = crate::scaler::ft_pix_round(zone.cur_y[pp4_idx]);
     }
-
-    // ── Initialize execution context ──────────────────────────────────
-    let mut ctx = if let Some(prepared) = prepared_context {
-        prepared.clone()
-    } else {
-        prepare_context(cvt, fpgm, prep, scale)?
-    };
-    ctx.is_composite = scale.is_composite;
 
     // ── Run the glyph's instruction stream ────────────────────────────
     if !glyph_ins.is_empty() {

@@ -736,7 +736,20 @@ impl Font {
         glyph: u16,
         vertical_layout: bool,
     ) -> Result<GlyphSlotMetrics, FontError> {
-        let scaled = self.scale_glyph_for_metrics_default(glyph)?;
+        self.glyph_metrics_for_index_default_with_layout_and_mode(
+            glyph,
+            vertical_layout,
+            NativeHintMode::Normal,
+        )
+    }
+
+    pub(crate) fn glyph_metrics_for_index_default_with_layout_and_mode(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let scaled = self.scale_glyph_for_metrics_default_with_mode(glyph, native_hint_mode)?;
         Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
@@ -862,7 +875,20 @@ impl Font {
         glyph: u16,
         vertical_layout: bool,
     ) -> Result<GlyphSlotMetrics, FontError> {
-        let scaled = self.scale_glyph_no_autohint_for_metrics(glyph)?;
+        self.glyph_metrics_for_index_no_autohint_with_layout_and_mode(
+            glyph,
+            vertical_layout,
+            NativeHintMode::Normal,
+        )
+    }
+
+    pub(crate) fn glyph_metrics_for_index_no_autohint_with_layout_and_mode(
+        &self,
+        glyph: u16,
+        vertical_layout: bool,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let scaled = self.scale_glyph_no_autohint_for_metrics_with_mode(glyph, native_hint_mode)?;
         Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
@@ -994,12 +1020,21 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<scaler::ScaledGlyph, FontError> {
+        self.scale_glyph_for_metrics_default_with_mode(glyph, NativeHintMode::Normal)
+    }
+
+    fn scale_glyph_for_metrics_default_with_mode(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
         if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context()?;
-            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context(
+            let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+            let scaled = scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
                 &self.data,
                 glyph,
                 self.is_italic,
+                native_hint_mode,
                 bytecode_context,
             )?;
             if is_pathological_metrics_cbox(&scaled) || is_pathological_metrics_advance(&scaled) {
@@ -1046,12 +1081,21 @@ impl Font {
         &self,
         glyph: u16,
     ) -> Result<scaler::ScaledGlyph, FontError> {
+        self.scale_glyph_no_autohint_for_metrics_with_mode(glyph, NativeHintMode::Normal)
+    }
+
+    fn scale_glyph_no_autohint_for_metrics_with_mode(
+        &self,
+        glyph: u16,
+        native_hint_mode: NativeHintMode,
+    ) -> Result<scaler::ScaledGlyph, FontError> {
         if self.data.fpgm.is_some() && self.data.cvt.is_some() {
-            let bytecode_context = self.native_bytecode_context()?;
-            scaler::scale_glyph_for_metrics_with_bytecode_context(
+            let bytecode_context = self.native_bytecode_context_for_mode(native_hint_mode)?;
+            scaler::scale_glyph_for_metrics_with_bytecode_context_and_mode(
                 &self.data,
                 glyph,
                 self.is_italic,
+                native_hint_mode,
                 bytecode_context,
             )
         } else {
