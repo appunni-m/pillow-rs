@@ -45,7 +45,10 @@
         },
         "variability": {
           "axes": [
-            "fonts"
+            "fonts",
+            "glyph_indices",
+            "load_flags",
+            "render_modes"
           ]
         }
       },

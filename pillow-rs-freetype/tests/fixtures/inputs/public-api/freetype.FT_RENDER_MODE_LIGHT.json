@@ -68,6 +68,11 @@
           "load_flags": 0,
           "render_mode": "FT_RENDER_MODE_LIGHT",
           "representative_load_target": "FT_LOAD_TARGET_LIGHT"
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

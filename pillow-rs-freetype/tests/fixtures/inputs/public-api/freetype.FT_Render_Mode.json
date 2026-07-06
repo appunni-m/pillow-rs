@@ -82,6 +82,11 @@
             "FT_RENDER_MODE_LCD_V",
             "FT_RENDER_MODE_SDF"
           ]
+        },
+        "variability": {
+          "axes": [
+            "render_modes"
+          ]
         }
       },
       "classifiers": [

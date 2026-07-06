@@ -67,6 +67,11 @@
           "char_code": 65,
           "load_flags": 0,
           "render_mode": "FT_RENDER_MODE_SDF"
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
