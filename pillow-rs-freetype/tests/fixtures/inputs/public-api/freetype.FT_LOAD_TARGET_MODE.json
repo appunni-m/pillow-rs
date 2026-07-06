@@ -99,6 +99,11 @@
               "FT_LOAD_TARGET_LCD_V"
             ]
           ]
+        },
+        "variability": {
+          "axes": [
+            "load_flags"
+          ]
         }
       },
       "classifiers": [

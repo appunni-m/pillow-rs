@@ -160,6 +160,14 @@
             "LCD",
             "LCD_V"
           ]
+        },
+        "variability": {
+          "axes": [
+            "fonts",
+            "sizes",
+            "codepoints",
+            "load_flags"
+          ]
         }
       },
       "classifiers": [
@@ -209,6 +217,11 @@
             "FT_LOAD_RENDER"
           ],
           "selected_charmap": "FT_ENCODING_UNICODE"
+        },
+        "variability": {
+          "axes": [
+            "codepoints"
+          ]
         }
       },
       "classifiers": [
