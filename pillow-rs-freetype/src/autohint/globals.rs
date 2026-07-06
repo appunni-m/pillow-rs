@@ -90,6 +90,13 @@ impl FaceGlobals {
 
     /// Get the metrics for a given glyph index, lazily computing if needed.
     pub fn get_metrics(&self, glyph_index: u16) -> Option<Rc<AfLatinMetrics>> {
+        if glyph_index == 0 {
+            // C `af_face_globals_compute_style_coverage` skips `gindex == 0`
+            // while scanning cmap coverage (afglobal.c:187-203).  The CJK
+            // fallback keeps `.notdef` slot metrics native in the public load
+            // APIs; routing it through Rust's Latin hinter changes advances.
+            return None;
+        }
         self.ensure_coverage();
         let coverage = self.coverage.borrow();
         let coverage = coverage.as_ref()?;
@@ -103,9 +110,26 @@ impl FaceGlobals {
             si = STYLE_FALLBACK;
         }
 
+        self.get_metrics_for_style(si)
+    }
+
+    /// Return the configured fallback style metrics for render-only paths that
+    /// need FreeType's fallback outline hinting without changing load metrics.
+    pub(crate) fn get_fallback_metrics(&self) -> Option<Rc<AfLatinMetrics>> {
+        self.get_metrics_for_style(STYLE_FALLBACK)
+    }
+
+    fn get_metrics_for_style(&self, mut si: usize) -> Option<Rc<AfLatinMetrics>> {
+        self.ensure_coverage();
+        if si == STYLE_UNASSIGNED || si >= STYLE_TABLE.len() {
+            si = STYLE_FALLBACK;
+        }
+
         let mut cache = self.metrics_cache.borrow_mut();
 
         if cache[si].is_none() {
+            let coverage = self.coverage.borrow();
+            let coverage = coverage.as_ref()?;
             let style = &STYLE_TABLE[si];
             let upem = self.font_data.head.units_per_em as i32;
             let mut m = AfLatinMetrics::new(upem, self.glyph_count);
@@ -228,7 +252,7 @@ fn build_coverage(font_data: &FontData, glyph_count: u16) -> FaceCoverage {
         let mut ch = first;
         loop {
             if let Some(gi) = font_data.cmap.char_index(ch) {
-                if (gi as usize) < ng {
+                if gi != 0 && (gi as usize) < ng {
                     non_base[gi as usize] = true;
                 }
             }
@@ -253,7 +277,7 @@ fn build_coverage(font_data: &FontData, glyph_count: u16) -> FaceCoverage {
             let mut cp = range.first;
             while cp <= range.last {
                 if let Some(gi) = font_data.cmap.char_index(cp) {
-                    if (gi as usize) < ng {
+                    if gi != 0 && (gi as usize) < ng {
                         non_base[gi as usize] = true;
                     }
                 }
@@ -288,7 +312,7 @@ fn compute_style_coverage(cmap: &CmapTable, num_glyphs: u16, glyph_styles: &mut 
             while cp <= range.last {
                 if let Some(gi) = cmap.char_index(cp) {
                     let gi = gi as usize;
-                    if gi < ng && glyph_styles[gi] == STYLE_UNASSIGNED {
+                    if gi != 0 && gi < ng && glyph_styles[gi] == STYLE_UNASSIGNED {
                         glyph_styles[gi] = si;
                     }
                 }

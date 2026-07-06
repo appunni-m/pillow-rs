@@ -11,6 +11,7 @@ use crate::fixed::{ft_mul_div, ft_mul_fix};
 use crate::outline::{Outline, OutlinePoint};
 use crate::tables::FontData;
 use crate::tt::glyf::{GlyphOutline, load_glyph, load_glyph_with_scaled_component_offsets};
+use crate::tt::hinter::NativeHintMode;
 
 /// Fixed-point scale factors derived from point size and units-per-em.
 ///
@@ -147,6 +148,7 @@ pub fn scale_glyph(
         },
         true,
         false,
+        NativeHintMode::Normal,
         false,
         false,
         false,
@@ -173,6 +175,7 @@ pub fn scale_glyph_for_metrics(
         },
         true,
         false,
+        NativeHintMode::Normal,
         true,
         false,
         false,
@@ -185,6 +188,22 @@ pub fn scale_glyph_for_metrics_with_bytecode_context(
     data: &FontData,
     glyph_index: u16,
     is_italic: bool,
+    bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_for_metrics_with_bytecode_context_and_mode(
+        data,
+        glyph_index,
+        is_italic,
+        NativeHintMode::Normal,
+        bytecode_context,
+    )
+}
+
+pub fn scale_glyph_for_metrics_with_bytecode_context_and_mode(
+    data: &FontData,
+    glyph_index: u16,
+    is_italic: bool,
+    native_hint_mode: NativeHintMode,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<ScaledGlyph, FontError> {
     scale_glyph_impl(
@@ -200,6 +219,7 @@ pub fn scale_glyph_for_metrics_with_bytecode_context(
         },
         true,
         false,
+        native_hint_mode,
         true,
         false,
         false,
@@ -227,6 +247,7 @@ pub fn scale_glyph_for_metrics_with_autohint(
         },
         true,
         false,
+        NativeHintMode::Normal,
         false,
         true,
         false,
@@ -254,7 +275,36 @@ pub fn scale_glyph_for_metrics_with_autohint_preserve_advance(
         },
         true,
         false,
+        NativeHintMode::Normal,
         true,
+        false,
+        false,
+        true,
+        None,
+    )
+}
+
+pub fn scale_glyph_for_metrics_light(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: true,
+            stem_adjust: false,
+            horz_snap: false,
+            vert_snap: false,
+        },
+        true,
+        false,
+        NativeHintMode::Normal,
+        false,
         false,
         false,
         true,
@@ -282,6 +332,7 @@ pub fn scale_glyph_native_default(
         },
         true,
         false,
+        NativeHintMode::Normal,
         false,
         false,
         true,
@@ -310,11 +361,40 @@ pub fn scale_glyph_native_default_with_bytecode_context(
         },
         true,
         false,
+        NativeHintMode::Normal,
         false,
         false,
         true,
         false,
         bytecode_context,
+    )
+}
+
+pub fn scale_glyph_light(
+    data: &FontData,
+    glyph_index: u16,
+    latin_metrics: Option<&crate::autohint::AfLatinMetrics>,
+    is_italic: bool,
+) -> Result<ScaledGlyph, FontError> {
+    scale_glyph_impl(
+        data,
+        glyph_index,
+        latin_metrics,
+        HintStyle {
+            is_italic,
+            no_horizontal_hinting: true,
+            stem_adjust: false,
+            horz_snap: false,
+            vert_snap: false,
+        },
+        true,
+        false,
+        NativeHintMode::Normal,
+        false,
+        false,
+        false,
+        false,
+        None,
     )
 }
 
@@ -341,6 +421,7 @@ pub fn scale_glyph_lcd(
         },
         true,
         false,
+        NativeHintMode::Lcd,
         false,
         false,
         false,
@@ -372,6 +453,7 @@ pub fn scale_glyph_lcd_v(
         },
         true,
         false,
+        NativeHintMode::LcdV,
         false,
         false,
         false,
@@ -400,6 +482,7 @@ pub fn scale_glyph_mono(
         },
         true,
         true,
+        NativeHintMode::Mono,
         false,
         false,
         false,
@@ -429,6 +512,7 @@ pub fn scale_glyph_no_hinting(
         },
         false,
         false,
+        NativeHintMode::Normal,
         false,
         false,
         false,
@@ -445,6 +529,7 @@ fn scale_glyph_impl(
     style: HintStyle,
     allow_bytecode: bool,
     target_mono: bool,
+    native_hint_mode: NativeHintMode,
     round_component_offsets: bool,
     use_autohint_advance: bool,
     reset_vectors_at_glyph_entry: bool,
@@ -489,6 +574,7 @@ fn scale_glyph_impl(
     }
 
     let fallback_metrics = if latin_metrics.is_none()
+        && glyph_index != 0
         && allow_bytecode
         && !round_component_offsets
         && should_use_default_autohint(data)
@@ -628,6 +714,7 @@ fn scale_glyph_impl(
                 style.is_italic,
                 &scale,
                 legacy_hinter_phantoms,
+                native_hint_mode,
                 bytecode_context,
             )?
         } else {
@@ -695,6 +782,7 @@ fn scale_glyph_impl(
                 is_composite: outline_raw.is_composite,
                 reset_vectors_at_glyph_entry,
                 metrics_legacy_phantoms: legacy_hinter_phantoms,
+                native_hint_mode,
             };
             let prep = data.prep.as_deref().unwrap_or(&[]);
             let (raw_ascender, raw_descender) = data
@@ -917,6 +1005,7 @@ fn scale_composite_components(
     is_italic: bool,
     scale: &ScaleMetrics,
     legacy_hinter_phantoms: bool,
+    native_hint_mode: NativeHintMode,
     bytecode_context: Option<&crate::tt::hinter::exec::ExecContext>,
 ) -> Result<Vec<OutlinePoint>, FontError> {
     let mut points: Vec<OutlinePoint> = Vec::with_capacity(outline_raw.points.len());
@@ -934,6 +1023,7 @@ fn scale_composite_components(
             },
             true,
             false,
+            native_hint_mode,
             false,
             false,
             false,

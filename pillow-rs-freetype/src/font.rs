@@ -11,6 +11,7 @@ use crate::fixed::{ft_div_fix, ft_mul_div, ft_mul_fix};
 use crate::grays::{self, RasterResult};
 use crate::scaler::{self, ft_pix_ceil, ft_pix_floor, ft_pix_round, pixel_round};
 use crate::tables::FontData;
+use crate::tt::hinter::NativeHintMode;
 use crate::tt::{self, tag};
 use std::sync::{Arc, OnceLock};
 
@@ -22,6 +23,8 @@ pub enum LoadMode {
     Default,
     /// `FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT`: force the auto-hinter.
     ForceAutoHint,
+    /// `FT_LOAD_TARGET_LIGHT`: auto-hint with vertical-only light target behavior.
+    TargetLight,
     /// `FT_LOAD_NO_HINTING`: scale outlines without native or automatic hinting.
     NoHinting,
     /// `FT_LOAD_NO_AUTOHINT`: prefer native hints, but do not fall back to autohinting.
@@ -42,7 +45,26 @@ pub struct Font {
     pub is_italic: bool,
     size_metrics: SizeMetrics,
     selected_charmap: usize,
-    bytecode_context: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
+    bytecode_context: BytecodeContextCache,
+}
+
+#[derive(Clone, Default)]
+struct BytecodeContextCache {
+    normal: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
+    mono: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
+    lcd: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
+    lcd_v: Arc<OnceLock<tt::hinter::exec::ExecContext>>,
+}
+
+impl BytecodeContextCache {
+    fn slot(&self, mode: NativeHintMode) -> &OnceLock<tt::hinter::exec::ExecContext> {
+        match mode {
+            NativeHintMode::Normal => &self.normal,
+            NativeHintMode::Mono => &self.mono,
+            NativeHintMode::Lcd => &self.lcd,
+            NativeHintMode::LcdV => &self.lcd_v,
+        }
+    }
 }
 
 /// FreeType-style bounding box.
@@ -341,7 +363,7 @@ impl Font {
             is_italic,
             size_metrics,
             selected_charmap,
-            bytecode_context: Arc::new(OnceLock::new()),
+            bytecode_context: BytecodeContextCache::default(),
         })
     }
 
@@ -740,6 +762,23 @@ impl Font {
         Ok(self.slot_metrics_from_scaled(glyph, &scaled, grid_fit_for_layout(vertical_layout)))
     }
 
+    pub(crate) fn glyph_metrics_for_index_target_light_with_layout(
+        &self,
+        glyph: u16,
+        _vertical_layout: bool,
+    ) -> Result<GlyphSlotMetrics, FontError> {
+        let metrics_cache = self.face_globals.get_metrics(glyph);
+        let scaled = scaler::scale_glyph_for_metrics_light(
+            &self.data,
+            glyph,
+            metrics_cache.as_deref(),
+            self.is_italic,
+        )?;
+        // C target-light keeps the light horizontal metric box even when
+        // FT_LOAD_VERTICAL_LAYOUT is set; only the slot advance vector changes.
+        Ok(self.slot_metrics_from_scaled(glyph, &scaled, MetricsGridFit::Horizontal))
+    }
+
     pub(crate) fn glyph_metrics_for_index_no_hinting(
         &self,
         glyph: u16,
@@ -929,6 +968,21 @@ impl Font {
                 let metrics_cache = self.face_globals.get_metrics(glyph);
                 scaler::scale_glyph(&self.data, glyph, metrics_cache.as_deref(), self.is_italic)
             }
+            LoadMode::TargetLight => {
+                let metrics_cache = if glyph == 0 {
+                    // C target-light loads keep `.notdef` slot metrics native,
+                    // but the render path still uses the fallback light outline.
+                    self.face_globals.get_fallback_metrics()
+                } else {
+                    self.face_globals.get_metrics(glyph)
+                };
+                scaler::scale_glyph_light(
+                    &self.data,
+                    glyph,
+                    metrics_cache.as_deref(),
+                    self.is_italic,
+                )
+            }
             LoadMode::NoHinting => {
                 scaler::scale_glyph_no_hinting(&self.data, glyph, self.is_italic)
             }
@@ -1006,10 +1060,18 @@ impl Font {
     }
 
     fn native_bytecode_context(&self) -> Result<Option<&tt::hinter::exec::ExecContext>, FontError> {
+        self.native_bytecode_context_for_mode(NativeHintMode::Normal)
+    }
+
+    fn native_bytecode_context_for_mode(
+        &self,
+        mode: NativeHintMode,
+    ) -> Result<Option<&tt::hinter::exec::ExecContext>, FontError> {
         let (Some(fpgm), Some(cvt)) = (&self.data.fpgm, &self.data.cvt) else {
             return Ok(None);
         };
-        if self.bytecode_context.get().is_none() {
+        let slot = self.bytecode_context.slot(mode);
+        if slot.get().is_none() {
             let scale = tt::hinter::HintScale {
                 x_scale: self.size_metrics.x_scale,
                 y_scale: self.size_metrics.y_scale,
@@ -1019,12 +1081,13 @@ impl Font {
                 is_composite: false,
                 reset_vectors_at_glyph_entry: false,
                 metrics_legacy_phantoms: false,
+                native_hint_mode: mode,
             };
             let prep = self.data.prep.as_deref().unwrap_or(&[]);
             let prepared = tt::hinter::prepare_context(cvt, fpgm, prep, &scale)?;
-            let _ = self.bytecode_context.set(prepared);
+            let _ = slot.set(prepared);
         }
-        Ok(self.bytecode_context.get())
+        Ok(slot.get())
     }
 
     fn layout_glyphs(&self, text: &str) -> Result<Vec<PositionedGlyph>, FontError> {

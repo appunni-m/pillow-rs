@@ -39,6 +39,19 @@ use crate::error::FontError;
 use crate::outline::OutlinePoint;
 use zone::GlyphZone;
 
+/// TrueType interpreter render mode used by GETINFO and prep re-execution.
+///
+/// C stores this in `exec->mode` from `FT_LOAD_TARGET_MODE(load_flags)`
+/// (`src/truetype/ttgload.c:2203-2228`) and exposes it to bytecode through
+/// `GETINFO` (`src/truetype/ttinterp.c:6570-6597`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeHintMode {
+    Normal,
+    Mono,
+    Lcd,
+    LcdV,
+}
+
 /// Scale factors and ppem for bytecode hinting, replacing individual params.
 pub struct HintScale {
     pub x_scale: i32,
@@ -49,6 +62,7 @@ pub struct HintScale {
     pub is_composite: bool,
     pub reset_vectors_at_glyph_entry: bool,
     pub metrics_legacy_phantoms: bool,
+    pub native_hint_mode: NativeHintMode,
 }
 
 /// Metrics side effects produced by glyph bytecode hinting.
@@ -69,15 +83,7 @@ pub fn prepare_context(
     prep: &[u8],
     scale: &HintScale,
 ) -> Result<exec::ExecContext, FontError> {
-    let mut ctx = exec::ExecContext::new(
-        scale.x_scale,
-        scale.y_scale,
-        scale.ppem,
-        cvt,
-        fpgm,
-        scale.storage_size,
-        scale.twilight_points,
-    );
+    let mut ctx = exec::ExecContext::new(cvt, fpgm, scale);
 
     if !fpgm.is_empty() {
         ctx.run_fpgm()?;

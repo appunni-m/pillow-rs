@@ -122,7 +122,13 @@ def main():
         print(f"    StyleClass {{ description: \"{desc}\", script_tag: \"{tag}\",")
         print(f"        blue_entries: {bc}, uni_ranges: RANGES_{utag}_UNI,")
         print(f"        non_base_ranges: RANGES_{utag}_NONBASE }},")
-        if tag == 'latn': fallback = i
+        # FreeType builds with AF_CONFIG_OPTION_CJK use Hani as the autofit
+        # fallback style (afglobal.h:68-71).  Keep Latin as the non-CJK
+        # fallback if the generated style list lacks Hani.
+        if tag == 'latn' and fallback == 0:
+            fallback = i
+        if tag == 'hani':
+            fallback = i
     print("];")
     print(f"pub const STYLE_FALLBACK: usize = {fallback};")
     print("pub const STYLE_UNASSIGNED: usize = usize::MAX;")

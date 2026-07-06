@@ -58,6 +58,8 @@ impl LoadFlags {
     pub const NO_SCALE: Self = Self(1 << 7);
     /// Use vertical layout advances for the loaded glyph slot.
     pub const VERTICAL_LAYOUT: Self = Self(1 << 8);
+    /// Use FreeType's light auto-hint target: vertical hinting only, gray render.
+    pub const TARGET_LIGHT: Self = Self(1 << 9);
 
     /// Return true if all bits in `other` are set.
     pub fn contains(self, other: Self) -> bool {
@@ -153,6 +155,7 @@ struct RenderFontKey {
 enum RenderLoadModeKey {
     Default,
     ForceAutoHint,
+    TargetLight,
     NoHinting,
     NoAutoHint,
 }
@@ -198,6 +201,7 @@ impl From<LoadMode> for RenderLoadModeKey {
         match load_mode {
             LoadMode::Default => Self::Default,
             LoadMode::ForceAutoHint => Self::ForceAutoHint,
+            LoadMode::TargetLight => Self::TargetLight,
             LoadMode::NoHinting => Self::NoHinting,
             LoadMode::NoAutoHint => Self::NoAutoHint,
         }
@@ -253,6 +257,10 @@ impl Face {
             self.font.glyph_metrics_for_index_no_scale(glyph_index)?
         } else if flags.contains(LoadFlags::NO_HINTING) {
             self.font.glyph_metrics_for_index_no_hinting(glyph_index)?
+        } else if flags.contains(LoadFlags::TARGET_LIGHT) && !flags.contains(LoadFlags::NO_AUTOHINT)
+        {
+            self.font
+                .glyph_metrics_for_index_target_light_with_layout(glyph_index, vertical_layout)?
         } else if flags.contains(LoadFlags::FORCE_AUTOHINT)
             && !flags.contains(LoadFlags::NO_AUTOHINT)
         {
@@ -292,6 +300,9 @@ impl Face {
     fn render_font(&self, flags: LoadFlags) -> Result<Font, FontError> {
         let load_mode = if flags.contains(LoadFlags::NO_HINTING) {
             LoadMode::NoHinting
+        } else if flags.contains(LoadFlags::TARGET_LIGHT) && !flags.contains(LoadFlags::NO_AUTOHINT)
+        {
+            LoadMode::TargetLight
         } else if flags.contains(LoadFlags::FORCE_AUTOHINT) {
             if flags.contains(LoadFlags::NO_AUTOHINT) {
                 LoadMode::NoAutoHint

@@ -12,6 +12,7 @@ use super::gs::GraphicsState;
 use super::gs::RoundMode;
 use super::iup;
 use super::zone::GlyphZone;
+use super::{HintScale, NativeHintMode};
 use crate::error::FontError;
 use crate::fixed::{ft_mul_fix, ft_normalize_2dot14};
 
@@ -162,31 +163,24 @@ pub struct ExecContext {
     /// FreeType v40 backward-compatibility state: bit 2 enables the mode,
     /// bits 0-1 track whether IUP\[y\]/IUP\[x\] have executed.
     pub backward_compatibility: u8,
+
+    /// FreeType TrueType render mode for bytecode GETINFO.
+    pub native_hint_mode: NativeHintMode,
 }
 
 impl ExecContext {
     /// Create a new execution context.
     ///
     /// # Arguments
-    /// * `x_scale` — horizontal scale in 16.16 format
-    /// * `y_scale` — vertical scale in 16.16 format
-    /// * `ppem` — pixels per em
     /// * `cvt` — control value table (in 26.6, already scaled)
     /// * `fpgm` — font program bytecode
-    pub fn new(
-        x_scale: i32,
-        y_scale: i32,
-        ppem: i32,
-        cvt: &[i32],
-        fpgm: &[u8],
-        storage_size: usize,
-        twilight_points: usize,
-    ) -> Self {
+    /// * `scale` — size, storage, twilight, and target-mode setup
+    pub fn new(cvt: &[i32], fpgm: &[u8], scale: &HintScale) -> Self {
         ExecContext {
             gs: GraphicsState::default(),
-            x_scale,
-            y_scale,
-            ppem,
+            x_scale: scale.x_scale,
+            y_scale: scale.y_scale,
+            ppem: scale.ppem,
             font_range: CodeRange {
                 base: 0,
                 size: fpgm.len(),
@@ -195,7 +189,7 @@ impl ExecContext {
             glyph_range: CodeRange::default(),
             font_program: fpgm.to_vec(),
             stack: Vec::with_capacity(DEFAULT_MAX_STACK),
-            storage: vec![0; storage_size.max(1)],
+            storage: vec![0; scale.storage_size.max(1)],
             cvt: cvt.to_vec(),
             functions: vec![None; MAX_FUNCTIONS],
             instruction_defs: vec![None; MAX_INSTRUCTION_DEFS],
@@ -209,8 +203,9 @@ impl ExecContext {
             // C `TT_Load_Context` allocates the twilight zone from
             // maxp.maxTwilightPoints.  Some bytecode programs address points
             // well past 16 while building interpolation control points.
-            twilight: Self::new_twilight_zone(twilight_points),
+            twilight: Self::new_twilight_zone(scale.twilight_points),
             backward_compatibility: 0,
+            native_hint_mode: scale.native_hint_mode,
         }
     }
 
@@ -747,25 +742,34 @@ impl ExecContext {
         ft_normalize_2dot14(vx, vy).unwrap_or((0x4000, 0))
     }
 
-    fn get_info(selector: i32) -> i32 {
+    fn get_info(&self, selector: i32) -> i32 {
         let mut result = 0;
         if selector & 1 != 0 {
             result = 40;
         }
-        // FreeType v40 normal rendering sets `exec->grayscale = FALSE`
-        // in `ttgload.c::tt_loader_init`, so `Ins_GETINFO` does not return
-        // the old v1.6 grayscale bit (selector 32 -> result bit 12).
-        if selector & 64 != 0 {
-            result |= 1 << 13;
-        }
-        if selector & 1024 != 0 {
-            result |= 1 << 17;
-        }
-        if selector & 2048 != 0 {
-            result |= 1 << 18;
-        }
-        if selector & 4096 != 0 {
-            result |= 1 << 19;
+        // FreeType v40 sets `exec->grayscale = FALSE` in
+        // `tt_loader_init`, so selector bit 5 does not return legacy
+        // grayscale.  The subpixel/smoothing bits below are gated by
+        // `exec->mode`, and mono deliberately clears them.
+        if self.native_hint_mode != NativeHintMode::Mono {
+            if selector & 64 != 0 {
+                result |= 1 << 13;
+            }
+            if selector & 256 != 0 && self.native_hint_mode == NativeHintMode::LcdV {
+                result |= 1 << 15;
+            }
+            if selector & 1024 != 0 {
+                result |= 1 << 17;
+            }
+            if selector & 2048 != 0 {
+                result |= 1 << 18;
+            }
+            if selector & 4096 != 0
+                && self.native_hint_mode != NativeHintMode::Lcd
+                && self.native_hint_mode != NativeHintMode::LcdV
+            {
+                result |= 1 << 19;
+            }
         }
         result
     }
@@ -1785,7 +1789,7 @@ impl ExecContext {
                 // ── GetINFO (0x88) — Get Info ───────────────────────
                 0x88 => {
                     let selector = self.pop()?;
-                    self.push(Self::get_info(selector));
+                    self.push(self.get_info(selector));
                 }
 
                 // ── UTP (0x29) — UnTouch Point ───────────────────
