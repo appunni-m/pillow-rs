@@ -17,8 +17,8 @@ The active source is `tests/fixtures/inputs/public-api/*.json`. Workers process
 | 150-179 | 30 | `codex/unified-inputs-150-179` | merged, 9 cases |
 | 180-209 | 30 | `codex/unified-inputs-180-209` | merged, 10 cases |
 | 210-239 | 30 | `codex/unified-inputs-210-239-v2` | active |
-| 240-269 | 30 | `codex/unified-inputs-240-269-v2` | active |
-| 270-299 | 30 | `codex/unified-inputs-270-299` | pending thread slot |
+| 240-269 | 30 | `codex/unified-inputs-240-269-v2` | merged, 2 cases |
+| 270-299 | 30 | `codex/unified-inputs-270-299-v2` | active |
 
 ## Worker Acceptance Criteria
 
