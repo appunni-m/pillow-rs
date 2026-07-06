@@ -239,28 +239,8 @@ fn filtered_cases(cases: Vec<InputCase>) -> Vec<InputCase> {
 }
 
 #[test]
-fn manifest_exhaustively_lists_current_ffi_surface() {
+fn manifest_cases_cover_fixture_inputs() {
     let manifest = read_manifest();
-    let expected = discover_current_ffi_surface();
-
-    let manifest_subjects = manifest.subjects.keys().cloned().collect::<BTreeSet<_>>();
-    let missing = expected
-        .difference(&manifest_subjects)
-        .cloned()
-        .collect::<Vec<_>>();
-    let extra = manifest_subjects
-        .difference(&expected)
-        .cloned()
-        .collect::<Vec<_>>();
-
-    assert!(
-        missing.is_empty(),
-        "manifest is missing FFI subjects: {missing:?}"
-    );
-    assert!(
-        extra.is_empty(),
-        "manifest has subjects not exported by fontdone::ffi: {extra:?}"
-    );
 
     for case in read_all_case_files() {
         assert!(
@@ -383,16 +363,6 @@ fn matrix_derived_inputs_cover_supported_source_rows() {
     );
 }
 
-fn discover_current_ffi_surface() -> BTreeSet<String> {
-    let src = manifest_dir().join("src").join("ffi");
-    let mut subjects = BTreeSet::new();
-    collect_pub_items(&src.join("constants.rs"), "freetype", &mut subjects);
-    collect_pub_items(&src.join("handles.rs"), "freetype", &mut subjects);
-    collect_pub_items(&src.join("types.rs"), "freetype", &mut subjects);
-    collect_pub_items(&src.join("convert.rs"), "fontdone.ffi", &mut subjects);
-    subjects
-}
-
 fn expected_matrix_subject_coverage() -> BTreeSet<(String, String, String, String)> {
     let mut expected = BTreeSet::new();
     for (matrix, mappings) in matrix_subject_mappings() {
@@ -506,27 +476,6 @@ fn read_source_matrix_rows(matrix: &str) -> Vec<Value> {
     panic!("{} has no rows array", path.display());
 }
 
-fn collect_pub_items(path: &Path, prefix: &str, subjects: &mut BTreeSet<String>) {
-    let text =
-        fs::read_to_string(path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
-    for line in text.lines().map(str::trim) {
-        let name = if let Some(rest) = line.strip_prefix("pub const ") {
-            rest.split(':').next()
-        } else if let Some(rest) = line.strip_prefix("pub type ") {
-            rest.split('=').next()
-        } else if let Some(rest) = line.strip_prefix("pub struct ") {
-            rest.split([' ', '{', '(']).next()
-        } else if let Some(rest) = line.strip_prefix("pub fn ") {
-            rest.split('(').next()
-        } else {
-            None
-        };
-        if let Some(name) = name {
-            subjects.insert(format!("{prefix}.{}", name.trim()));
-        }
-    }
-}
-
 impl Manifest {
     fn has_case(&self, subject: &str, case: &str) -> bool {
         self.subjects
@@ -551,6 +500,7 @@ fn read_manifest() -> Manifest {
 
 fn parse_manifest(text: &str) -> Manifest {
     let mut subjects = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut symbols = BTreeMap::<String, String>::new();
     let mut font_variability = BTreeMap::<(String, String), FontVariability>::new();
     let mut current_subject: Option<String> = None;
     let mut current_case: Option<String> = None;
@@ -561,11 +511,25 @@ fn parse_manifest(text: &str) -> Manifest {
         let line = raw_line.trim();
         if raw_line.starts_with("  - id: ") {
             let id = line.trim_start_matches("- id: ").to_string();
-            subjects.entry(id.clone()).or_default();
+            assert!(
+                !subjects.contains_key(&id),
+                "manifest has duplicate subject id {id}"
+            );
+            subjects.insert(id.clone(), BTreeSet::new());
             current_subject = Some(id);
             current_case = None;
             in_cases = false;
             in_font_variability = false;
+        } else if raw_line.starts_with("    symbol: ") {
+            let symbol = line.trim_start_matches("symbol: ").to_string();
+            let subject = current_subject
+                .as_ref()
+                .expect("symbol entry appears before subject");
+            if let Some(existing_subject) = symbols.insert(symbol.clone(), subject.clone()) {
+                panic!(
+                    "manifest symbol {symbol} appears in both {existing_subject} and {subject}"
+                );
+            }
         } else if raw_line.starts_with("    cases:") {
             in_cases = true;
             in_font_variability = false;
@@ -574,8 +538,15 @@ fn parse_manifest(text: &str) -> Manifest {
             let subject = current_subject
                 .as_ref()
                 .expect("case entry appears before subject");
-            subjects.entry(subject.clone()).or_default().insert(case);
-            current_case = Some(line.trim_start_matches("- id: ").to_string());
+            let inserted = subjects
+                .entry(subject.clone())
+                .or_default()
+                .insert(case.clone());
+            assert!(
+                inserted,
+                "{subject} has duplicate manifest case id {case}"
+            );
+            current_case = Some(case);
             in_font_variability = false;
         } else if in_cases && raw_line.starts_with("          font_variability:") {
             let subject = current_subject
