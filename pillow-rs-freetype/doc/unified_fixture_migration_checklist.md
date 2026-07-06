@@ -13,8 +13,8 @@ The active source is `tests/fixtures/inputs/public-api/*.json`. Workers process
 | 030-059 | 30 | `codex/unified-inputs-030-059` | merged, 1 case |
 | 060-089 | 30 | `codex/unified-inputs-060-089` | merged, 11 cases |
 | 090-119 | 30 | `codex/unified-inputs-090-119` | complete, no changes |
-| 120-149 | 30 | `codex/unified-inputs-120-149` | active |
-| 150-179 | 30 | `codex/unified-inputs-150-179` | active |
+| 120-149 | 30 | `codex/unified-inputs-120-149` | merged, 6 cases |
+| 150-179 | 30 | `codex/unified-inputs-150-179` | merged, 9 cases |
 | 180-209 | 30 | `codex/unified-inputs-180-209` | active |
 | 210-239 | 30 | `codex/unified-inputs-210-239-v2` | active |
 | 240-269 | 30 | `codex/unified-inputs-240-269-v2` | active |
