@@ -15,13 +15,22 @@ def main() -> None:
     root = pathlib.Path(__file__).resolve().parent.parent
     out = root / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
+    source = root / "scripts" / "gen_unified_oracle.c"
+    library = root / "freetype" / "build" / "libfreetype.so"
+
+    if out.exists() and out.stat().st_mtime >= max(
+        source.stat().st_mtime,
+        library.stat().st_mtime,
+    ):
+        print(out)
+        return
 
     cmd = [
         os.environ.get("CC", "cc"),
         "-std=c11",
         "-I",
         str(root / "freetype" / "include"),
-        str(root / "scripts" / "gen_unified_oracle.c"),
+        str(source),
         "-L",
         str(root / "freetype" / "build"),
         "-lfreetype",

@@ -93,6 +93,8 @@ fn trace_one_glyph() {
         is_italic,
         false,
         true,
+        false,
+        false,
         Some(&fd),
         false,
     );
@@ -122,19 +124,63 @@ fn dump_render_mode_glyph() {
         .chars()
         .next()
         .unwrap();
+    let mode = match std::env::var("PIPE_MODE").unwrap_or("mono".into()).as_str() {
+        "normal" => RenderMode::Normal,
+        "mono" => RenderMode::Mono,
+        "lcd" => RenderMode::Lcd,
+        "lcd_v" => RenderMode::LcdV,
+        other => panic!("unknown PIPE_MODE {other}"),
+    };
 
     let font_path = format!("tests/fixtures/input/fonts_autohint/{font_name}.ttf");
     let data = std::fs::read(&font_path).unwrap();
     let font = Font::truetype(&data, size_pt).unwrap();
-    let bitmap = font.render_char_mode(ch, RenderMode::Mono).unwrap();
+    let gid = font.data.cmap.char_index(ch as u32).unwrap_or(0);
+    let metrics_cache = font.face_globals.get_metrics(gid);
+    let scaled = match mode {
+        RenderMode::Normal => {
+            scaler::scale_glyph_native_default(&font.data, gid, None, font.is_italic).unwrap()
+        }
+        RenderMode::Mono => {
+            scaler::scale_glyph_mono(&font.data, gid, metrics_cache.as_deref(), font.is_italic)
+                .unwrap()
+        }
+        RenderMode::Lcd => {
+            scaler::scale_glyph_lcd(&font.data, gid, metrics_cache.as_deref(), font.is_italic)
+                .unwrap()
+        }
+        RenderMode::LcdV => {
+            scaler::scale_glyph_lcd_v(&font.data, gid, metrics_cache.as_deref(), font.is_italic)
+                .unwrap()
+        }
+    };
+    let bitmap = font.render_char_mode(ch, mode).unwrap();
 
     eprintln!(
-        "BITMAP width={} rows={} pitch={} left={} top={} len={}",
+        "SCALED gid={} cbox=({}, {}, {}, {}) bbox=({}, {}, {}, {}) outline_cbox=({}, {}, {}, {})",
+        gid,
+        scaled.cbox_x_min,
+        scaled.cbox_y_min,
+        scaled.cbox_x_max,
+        scaled.cbox_y_max,
+        scaled.bbox_x_min,
+        scaled.bbox_y_min,
+        scaled.bbox_x_max,
+        scaled.bbox_y_max,
+        scaled.outline_cbox_x_min,
+        scaled.outline_cbox_y_min,
+        scaled.outline_cbox_x_max,
+        scaled.outline_cbox_y_max,
+    );
+    eprintln!(
+        "BITMAP mode={:?} width={} rows={} pitch={} left={} top={} sha={} len={}",
+        mode,
         bitmap.width,
         bitmap.rows,
         bitmap.pitch,
         bitmap.left,
         bitmap.top,
+        sha256(&bitmap.buffer),
         bitmap.buffer.len()
     );
     let pitch = usize::try_from(bitmap.pitch).unwrap();
