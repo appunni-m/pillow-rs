@@ -92,9 +92,9 @@ impl FaceGlobals {
     pub fn get_metrics(&self, glyph_index: u16) -> Option<Rc<AfLatinMetrics>> {
         if glyph_index == 0 {
             // C `af_face_globals_compute_style_coverage` skips `gindex == 0`
-            // while scanning cmap coverage (afglobal.c:187-203).  The CJK
-            // fallback keeps `.notdef` slot metrics native in the public load
-            // APIs; routing it through Rust's Latin hinter changes advances.
+            // while scanning cmap coverage (afglobal.c:187-203).  Callers
+            // that actually enter the auto-hinter can request the fallback
+            // style explicitly; native/no-autohint paths keep `None`.
             return None;
         }
         self.ensure_coverage();

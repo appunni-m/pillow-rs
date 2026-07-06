@@ -28,7 +28,16 @@ fn main() {
     };
 
     let data = fs::read(font_path).expect("read font");
-    let font = fontdone::Font::truetype(&data, size_pt).expect("load font");
+    let load_mode = match env::var("FT_RS_LOAD_MODE").ok().as_deref() {
+        Some("force-autohint") => fontdone::LoadMode::ForceAutoHint,
+        Some("target-light") => fontdone::LoadMode::TargetLight,
+        Some("no-hinting") => fontdone::LoadMode::NoHinting,
+        Some("no-autohint") => fontdone::LoadMode::NoAutoHint,
+        Some("default") | None => fontdone::LoadMode::Default,
+        Some(other) => panic!("unknown FT_RS_LOAD_MODE={other}"),
+    };
+    let font =
+        fontdone::Font::truetype_with_load_mode(&data, size_pt, load_mode).expect("load font");
 
     if env::var_os("FT_RS_DUMP_METRICS").is_some() {
         let glyph = glyph_override.unwrap_or_else(|| font.char_index(ch as u32));
