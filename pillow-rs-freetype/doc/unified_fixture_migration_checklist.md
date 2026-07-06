@@ -18,7 +18,18 @@ The active source is `tests/fixtures/inputs/public-api/*.json`. Workers process
 | 180-209 | 30 | `codex/unified-inputs-180-209` | merged, 10 cases |
 | 210-239 | 30 | `codex/unified-inputs-210-239-v2` | merged, 18 cases |
 | 240-269 | 30 | `codex/unified-inputs-240-269-v2` | merged, 2 cases |
-| 270-299 | 30 | `codex/unified-inputs-270-299-v2` | active |
+| 270-299 | 30 | `codex/unified-inputs-270-299-v2` | merged, 2 cases |
+
+## Remaining Aggregate-Axis Slices
+
+After the initial 300-file pass, an audit found 77 files with 85 aggregate-ish
+cases that still need explicit `inputs.variability.axes`.
+
+| Slice | Files | Branch | Status |
+|---|---:|---|---|
+| remaining-00 | 30 | `codex/unified-inputs-remaining-00` | pending |
+| remaining-01 | 30 | `codex/unified-inputs-remaining-01` | pending |
+| remaining-02 | 17 | `codex/unified-inputs-remaining-02` | pending |
 
 ## Worker Acceptance Criteria
 
