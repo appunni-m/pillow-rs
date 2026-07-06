@@ -1,0 +1,241 @@
+- id: ttnameid.TT_MS_LANGID_SPANISH_DOMINICAN_REPUBLIC
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_DOMINICAN_REPUBLIC
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Dominican Republic name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x1C0A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_DOMINICAN_REPUBLIC as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_ECUADOR
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_ECUADOR
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Ecuador name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x300A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_ECUADOR as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_EL_SALVADOR
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_EL_SALVADOR
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in El Salvador name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x440A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_EL_SALVADOR as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_GUATEMALA
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_GUATEMALA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Guatemala name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x100A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_GUATEMALA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_HONDURAS
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_HONDURAS
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Honduras name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x480A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_HONDURAS as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_LATIN_AMERICA
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_LATIN_AMERICA
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id for Spanish as used in Latin America name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0xE40A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_LATIN_AMERICA as a public constant expression.
+    - id: windows_spanish_latin_america_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0xE40A and preserves exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-es-419.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_SPANISH_LATIN_AMERICA}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_MEXICO
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_MEXICO
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Mexico name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x080A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_MEXICO as a public constant expression.
+    - id: windows_spanish_mexico_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x080A and preserves exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-es-mx.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_SPANISH_MEXICO}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_NICARAGUA
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_NICARAGUA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Nicaragua name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x4C0A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_NICARAGUA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_PANAMA
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_PANAMA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Panama name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x180A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_PANAMA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_PARAGUAY
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_PARAGUAY
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Paraguay name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x3C0A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_PARAGUAY as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_PERU
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_PERU
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Peru name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x280A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_PERU as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_PUERTO_RICO
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_PUERTO_RICO
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Puerto Rico name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x500A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_PUERTO_RICO as a public constant expression.
+    - id: windows_spanish_puerto_rico_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x500A and preserves exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-es-pr.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_SPANISH_PUERTO_RICO}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_SPAIN_INTERNATIONAL_SORT
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_SPAIN_INTERNATIONAL_SORT
+  header: freetype/ttnameid.h
+  description: Legacy alias for Microsoft Spanish Spain modern sort language id.
+  cases:
+    - id: value_matches_header
+      description: Macro aliases TT_MS_LANGID_SPANISH_SPAIN_MODERN_SORT and therefore expands to integer value 0x0C0A in the pinned C public header.
+    - id: alias_matches_modern_sort
+      description: Macro equality with TT_MS_LANGID_SPANISH_SPAIN_MODERN_SORT is preserved by the pinned public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_SPAIN_INTERNATIONAL_SORT as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_SPAIN_MODERN_SORT
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_SPAIN_MODERN_SORT
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish Spain modern sort name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0C0A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_SPAIN_MODERN_SORT as a public constant expression.
+    - id: windows_spanish_spain_modern_sort_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x0C0A and preserves exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-es-es-modern.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_SPANISH_SPAIN_MODERN_SORT}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_SPAIN_TRADITIONAL_SORT
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_SPAIN_TRADITIONAL_SORT
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish Spain traditional sort name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x040A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_SPAIN_TRADITIONAL_SORT as a public constant expression.
+    - id: windows_spanish_spain_traditional_sort_name_runtime
+      description: C oracle exposes Microsoft name records with language_id 0x040A and preserves exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-es-es-traditional.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_SPANISH_SPAIN_TRADITIONAL_SORT}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_UNITED_STATES
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_UNITED_STATES
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in United States name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x540A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_UNITED_STATES as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_URUGUAY
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_URUGUAY
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Uruguay name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x380A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_URUGUAY as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SPANISH_VENEZUELA
+  kind: tag
+  symbol: TT_MS_LANGID_SPANISH_VENEZUELA
+  header: freetype/ttnameid.h
+  description: Microsoft platform language id for Spanish as used in Venezuela name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x200A in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SPANISH_VENEZUELA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SUTU_SOUTH_AFRICA
+  kind: tag
+  symbol: TT_MS_LANGID_SUTU_SOUTH_AFRICA
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft platform language id for Sutu as used in South Africa name records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0430 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SUTU_SOUTH_AFRICA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_SWAHILI_KENYA
+  kind: tag
+  symbol: TT_MS_LANGID_SWAHILI_KENYA
+  header: freetype/ttnameid.h
+  description: Legacy alias for Microsoft Kiswahili Kenya language id.
+  cases:
+    - id: value_matches_header
+      description: Macro aliases TT_MS_LANGID_KISWAHILI_KENYA and therefore expands to integer value 0x0441 in the pinned C public header.
+    - id: alias_matches_kiswahili_kenya
+      description: Macro equality with TT_MS_LANGID_KISWAHILI_KENYA is preserved by the pinned public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_SWAHILI_KENYA as a public constant expression.
+    - id: windows_swahili_kenya_name_runtime
+      description: C oracle exposes Microsoft name records through the alias value 0x0441 and preserves exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/windows-name-sw-ke.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_SWAHILI_KENYA}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.

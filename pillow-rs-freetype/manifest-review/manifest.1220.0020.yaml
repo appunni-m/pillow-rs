@@ -1,0 +1,236 @@
+- id: ttnameid.TT_MAC_ID_UNINTERP
+  kind: constant
+  symbol: TT_MAC_ID_UNINTERP
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 32 for uninterpreted script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 32 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_UNINTERP as a public constant expression.
+
+- id: ttnameid.TT_MAC_ID_VIETNAMESE
+  kind: constant
+  symbol: TT_MAC_ID_VIETNAMESE
+  header: freetype/ttnameid.h
+  description: Macintosh platform encoding id 30 for Vietnamese script records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 30 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_ID_VIETNAMESE as a public constant expression.
+
+- id: ttnameid.TT_MAC_LANGID_TAGALOG
+  kind: constant
+  symbol: TT_MAC_LANGID_TAGALOG
+  header: freetype/ttnameid.h
+  description: Macintosh name-table language id 82 for Tagalog records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 82 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_TAGALOG as a public constant expression.
+    - id: mac_tagalog_name_record_runtime
+      description: C oracle exposes a Macintosh SFNT name record with language_id 82 and preserves the exact string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/mac-tagalog-name.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, language_id=TT_MAC_LANGID_TAGALOG}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_ID_BIG_5
+  kind: constant
+  symbol: TT_MS_ID_BIG_5
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 4 for Traditional Chinese Big5 charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 4 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_BIG_5 as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_GB2312
+  kind: constant
+  symbol: TT_MS_ID_GB2312
+  header: freetype/ttnameid.h
+  description: Deprecated Microsoft platform encoding alias for PRC GB2312-compatible charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to TT_MS_ID_PRC, which has integer value 3 in the pinned C public header.
+    - id: alias_matches_prc
+      description: C preprocessor equality TT_MS_ID_GB2312 == TT_MS_ID_PRC holds in a translation unit including <freetype/ttnameid.h>.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_GB2312 as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_JOHAB
+  kind: constant
+  symbol: TT_MS_ID_JOHAB
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 6 for Korean Johab charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 6 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_JOHAB as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_PRC
+  kind: constant
+  symbol: TT_MS_ID_PRC
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 3 for PRC GB2312, GBK, and GB18030 charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 3 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_PRC as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_SJIS
+  kind: constant
+  symbol: TT_MS_ID_SJIS
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 2 for Shift JIS Japanese charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 2 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_SJIS as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_SYMBOL_CS
+  kind: constant
+  symbol: TT_MS_ID_SYMBOL_CS
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 0 for symbol character-set charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_SYMBOL_CS as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_UCS_4
+  kind: constant
+  symbol: TT_MS_ID_UCS_4
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 10 for UCS-4 or UTF-32 charmaps.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 10 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_UCS_4 as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_UNICODE_CS
+  kind: constant
+  symbol: TT_MS_ID_UNICODE_CS
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 1 for Unicode WGL4 charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 1 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_UNICODE_CS as a public constant expression.
+
+- id: ttnameid.TT_MS_ID_WANSUNG
+  kind: constant
+  symbol: TT_MS_ID_WANSUNG
+  header: freetype/ttnameid.h
+  description: Microsoft platform encoding id 5 for Korean Extended Wansung charmaps and name entries.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 5 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_ID_WANSUNG as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_AFRIKAANS_SOUTH_AFRICA
+  kind: constant
+  symbol: TT_MS_LANGID_AFRIKAANS_SOUTH_AFRICA
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x0436 for Afrikaans as used in South Africa.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0436 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_AFRIKAANS_SOUTH_AFRICA as a public constant expression.
+    - id: microsoft_afrikaans_name_record_runtime
+      description: C oracle exposes a Microsoft SFNT name record with language_id 0x0436 and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/ms-afrikaans-name.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_AFRIKAANS_SOUTH_AFRICA}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_ALBANIAN_ALBANIA
+  kind: constant
+  symbol: TT_MS_LANGID_ALBANIAN_ALBANIA
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x041C for Albanian as used in Albania.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x041C in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_ALBANIAN_ALBANIA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_ALSATIAN_FRANCE
+  kind: constant
+  symbol: TT_MS_LANGID_ALSATIAN_FRANCE
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x0484 for Alsatian as used in France.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0484 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_ALSATIAN_FRANCE as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_AMHARIC_ETHIOPIA
+  kind: constant
+  symbol: TT_MS_LANGID_AMHARIC_ETHIOPIA
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x045E for Amharic as used in Ethiopia.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x045E in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_AMHARIC_ETHIOPIA as a public constant expression.
+    - id: microsoft_amharic_name_record_runtime
+      description: C oracle exposes a Microsoft SFNT name record with language_id 0x045E and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/ms-amharic-name.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_AMHARIC_ETHIOPIA}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_ARABIC_ALGERIA
+  kind: constant
+  symbol: TT_MS_LANGID_ARABIC_ALGERIA
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x1401 for Arabic as used in Algeria.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x1401 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_ARABIC_ALGERIA as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_ARABIC_BAHRAIN
+  kind: constant
+  symbol: TT_MS_LANGID_ARABIC_BAHRAIN
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x3C01 for Arabic as used in Bahrain.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x3C01 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_ARABIC_BAHRAIN as a public constant expression.
+
+- id: ttnameid.TT_MS_LANGID_ARABIC_EGYPT
+  kind: constant
+  symbol: TT_MS_LANGID_ARABIC_EGYPT
+  header: freetype/ttnameid.h
+  description: Microsoft SFNT name-table language id 0x0C01 for Arabic as used in Egypt.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0C01 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_ARABIC_EGYPT as a public constant expression.
+    - id: microsoft_arabic_egypt_name_record_runtime
+      description: C oracle exposes a Microsoft SFNT name record with language_id 0x0C01 and preserves the exact UTF-16BE string bytes.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/ms-arabic-egypt-name.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_ARABIC_EGYPT}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.
+
+- id: ttnameid.TT_MS_LANGID_ARABIC_GENERAL
+  kind: constant
+  symbol: TT_MS_LANGID_ARABIC_GENERAL
+  header: freetype/ttnameid.h
+  description: Legacy Microsoft SFNT name-table language id 0x0001 for generic Arabic records.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to integer value 0x0001 in the pinned C public header.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MS_LANGID_ARABIC_GENERAL as a public constant expression.
+    - id: legacy_microsoft_arabic_general_name_record_runtime
+      description: C oracle preserves the legacy generic Arabic language_id 0x0001 in SFNT name records instead of normalizing to a regional Arabic LCID.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/name-cmap/ms-arabic-general-name.ttf; params={platform_id=TT_PLATFORM_MICROSOFT, encoding_id=TT_MS_ID_UNICODE_CS, language_id=TT_MS_LANGID_ARABIC_GENERAL}; expected output shape={FT_Error, name_count, platform_id, encoding_id, language_id, name_id, string_len, string_bytes}; comparison=exact C oracle name-record fields and bytes.

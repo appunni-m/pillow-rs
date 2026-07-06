@@ -1,0 +1,234 @@
+- id: ttnameid.TT_UCR_BOX_DRAWING
+  kind: constant
+  symbol: TT_UCR_BOX_DRAWING
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for Box Drawing; pinned FreeType defines it as 1UL << 11, value 2048.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2048 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_BOX_DRAWING as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range_bit
+      description: A representative SFNT fixture with Box Drawing coverage exposes TT_OS2.ulUnicodeRange2 with the TT_UCR_BOX_DRAWING bit set exactly as the C oracle reports.
+  # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/os2/ucr-box-drawing.ttf; params={sfnt_table=FT_SFNT_OS2}; expected output shape={FT_Error, TT_OS2.ulUnicodeRange1, TT_OS2.ulUnicodeRange2, TT_OS2.ulUnicodeRange3, TT_OS2.ulUnicodeRange4}; comparison=exact C oracle status and 32-bit OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_BRAILLE
+  kind: constant
+  symbol: TT_UCR_BRAILLE
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit mask for Braille Patterns; pinned FreeType defines it as 1UL << 18, value 262144.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 262144 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_BRAILLE as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range_bit
+      description: A representative SFNT fixture with Braille coverage exposes TT_OS2.ulUnicodeRange3 with the TT_UCR_BRAILLE bit set exactly as the C oracle reports.
+  # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/os2/ucr-braille.ttf; params={sfnt_table=FT_SFNT_OS2}; expected output shape={FT_Error, TT_OS2.ulUnicodeRange1, TT_OS2.ulUnicodeRange2, TT_OS2.ulUnicodeRange3, TT_OS2.ulUnicodeRange4}; comparison=exact C oracle status and 32-bit OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_BUGINESE
+  kind: constant
+  symbol: TT_UCR_BUGINESE
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit mask for Buginese; pinned FreeType defines it as 1UL << 0, value 1.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_BUGINESE as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CANADIAN_ABORIGINAL_SYLLABICS
+  kind: constant
+  symbol: TT_UCR_CANADIAN_ABORIGINAL_SYLLABICS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit mask for Unified Canadian Aboriginal Syllabics; pinned FreeType defines it as 1UL << 13, value 8192.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 8192 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CANADIAN_ABORIGINAL_SYLLABICS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CHAM
+  kind: constant
+  symbol: TT_UCR_CHAM
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit mask for Cham; pinned FreeType defines it as 1UL << 22, value 4194304.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4194304 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CHAM as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range_bit
+      description: A representative SFNT fixture with Cham coverage exposes TT_OS2.ulUnicodeRange4 with the TT_UCR_CHAM bit set exactly as the C oracle reports.
+  # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/os2/ucr-cham.ttf; params={sfnt_table=FT_SFNT_OS2}; expected output shape={FT_Error, TT_OS2.ulUnicodeRange1, TT_OS2.ulUnicodeRange2, TT_OS2.ulUnicodeRange3, TT_OS2.ulUnicodeRange4}; comparison=exact C oracle status and 32-bit OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_CHEROKEE
+  kind: constant
+  symbol: TT_UCR_CHEROKEE
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit mask for Cherokee; pinned FreeType defines it as 1UL << 12, value 4096.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4096 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CHEROKEE as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CJK_COMPATIBILITY
+  kind: constant
+  symbol: TT_UCR_CJK_COMPATIBILITY
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for CJK Compatibility; pinned FreeType defines it as 1UL << 23, value 8388608.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 8388608 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CJK_COMPATIBILITY as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CJK_COMPATIBILITY_FORMS
+  kind: constant
+  symbol: TT_UCR_CJK_COMPATIBILITY_FORMS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit mask for Vertical Forms and CJK Compatibility Forms; pinned FreeType defines it as 1UL << 1, value 2.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CJK_COMPATIBILITY_FORMS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CJK_COMPATIBILITY_IDEOGRAPHS
+  kind: constant
+  symbol: TT_UCR_CJK_COMPATIBILITY_IDEOGRAPHS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for CJK Strokes and Compatibility Ideographs; pinned FreeType defines it as 1UL << 29, value 536870912.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 536870912 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CJK_COMPATIBILITY_IDEOGRAPHS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CJK_MISC
+  kind: constant
+  symbol: TT_UCR_CJK_MISC
+  header: freetype/ttnameid.h
+  description: Deprecated public alias for TT_UCR_PHAGSPA; pinned FreeType defines it as the same 1UL << 21 mask, value 2097152.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2097152 through the TT_UCR_PHAGSPA alias in pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CJK_MISC as a deprecated preprocessor-visible public alias.
+
+- id: ttnameid.TT_UCR_CJK_SYMBOLS
+  kind: constant
+  symbol: TT_UCR_CJK_SYMBOLS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for CJK Symbols and Punctuation; pinned FreeType defines it as 1UL << 16, value 65536.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 65536 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CJK_SYMBOLS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CJK_UNIFIED_IDEOGRAPHS
+  kind: constant
+  symbol: TT_UCR_CJK_UNIFIED_IDEOGRAPHS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for CJK Unified Ideographs and related ranges; pinned FreeType defines it as 1UL << 27, value 134217728.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 134217728 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CJK_UNIFIED_IDEOGRAPHS as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range_bit
+      description: A representative SFNT fixture with CJK unified ideograph coverage exposes TT_OS2.ulUnicodeRange2 with the TT_UCR_CJK_UNIFIED_IDEOGRAPHS bit set exactly as the C oracle reports.
+  # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/os2/ucr-cjk-unified-ideographs.ttf; params={sfnt_table=FT_SFNT_OS2}; expected output shape={FT_Error, TT_OS2.ulUnicodeRange1, TT_OS2.ulUnicodeRange2, TT_OS2.ulUnicodeRange3, TT_OS2.ulUnicodeRange4}; comparison=exact C oracle status and 32-bit OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_COMBINING_DIACRITICAL_MARKS
+  kind: constant
+  symbol: TT_UCR_COMBINING_DIACRITICAL_MARKS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit mask for Combining Diacritical Marks; pinned FreeType defines it as 1UL << 6, value 64.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 64 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COMBINING_DIACRITICAL_MARKS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_COMBINING_DIACRITICAL_MARKS_SYMB
+  kind: constant
+  symbol: TT_UCR_COMBINING_DIACRITICAL_MARKS_SYMB
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for Combining Diacritical Marks for Symbols; pinned FreeType defines it as 1UL << 2, value 4.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COMBINING_DIACRITICAL_MARKS_SYMB as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_COMBINING_DIACRITICS
+  kind: constant
+  symbol: TT_UCR_COMBINING_DIACRITICS
+  header: freetype/ttnameid.h
+  description: Deprecated public alias for TT_UCR_COMBINING_DIACRITICAL_MARKS; pinned FreeType defines it as value 64.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 64 through the TT_UCR_COMBINING_DIACRITICAL_MARKS alias in pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COMBINING_DIACRITICS as a deprecated preprocessor-visible public alias.
+
+- id: ttnameid.TT_UCR_COMBINING_DIACRITICS_SYMB
+  kind: constant
+  symbol: TT_UCR_COMBINING_DIACRITICS_SYMB
+  header: freetype/ttnameid.h
+  description: Deprecated public alias for TT_UCR_COMBINING_DIACRITICAL_MARKS_SYMB; pinned FreeType defines it as value 4.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 4 through the TT_UCR_COMBINING_DIACRITICAL_MARKS_SYMB alias in pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COMBINING_DIACRITICS_SYMB as a deprecated preprocessor-visible public alias.
+
+- id: ttnameid.TT_UCR_COMBINING_HALF_MARKS
+  kind: constant
+  symbol: TT_UCR_COMBINING_HALF_MARKS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange3 bit mask for Combining Half Marks; pinned FreeType defines it as 1UL << 0, value 1.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COMBINING_HALF_MARKS as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_CONTROL_PICTURES
+  kind: constant
+  symbol: TT_UCR_CONTROL_PICTURES
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange2 bit mask for Control Pictures; pinned FreeType defines it as 1UL << 8, value 256.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 256 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_CONTROL_PICTURES as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_COPTIC
+  kind: constant
+  symbol: TT_UCR_COPTIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange1 bit mask for Coptic; pinned FreeType defines it as 1UL << 8, value 256.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 256 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COPTIC as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_UCR_COUNTING_ROD_NUMERALS
+  kind: constant
+  symbol: TT_UCR_COUNTING_ROD_NUMERALS
+  header: freetype/ttnameid.h
+  description: Public OS/2 ulUnicodeRange4 bit mask for Counting Rod Numerals; pinned FreeType defines it as 1UL << 15, value 32768.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 32768 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_COUNTING_ROD_NUMERALS as a preprocessor-visible public constant.
+    - id: representative_os2_unicode_range_bit
+      description: A representative SFNT fixture with Counting Rod Numerals coverage exposes TT_OS2.ulUnicodeRange4 with the TT_UCR_COUNTING_ROD_NUMERALS bit set exactly as the C oracle reports.
+  # needs-input: operation=FT_Get_Sfnt_Table; fixture_asset=input/fonts/os2/ucr-counting-rod-numerals.ttf; params={sfnt_table=FT_SFNT_OS2}; expected output shape={FT_Error, TT_OS2.ulUnicodeRange1, TT_OS2.ulUnicodeRange2, TT_OS2.ulUnicodeRange3, TT_OS2.ulUnicodeRange4}; comparison=exact C oracle status and 32-bit OS/2 unicode-range fields.

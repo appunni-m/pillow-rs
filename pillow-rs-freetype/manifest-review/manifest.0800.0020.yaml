@@ -1,0 +1,297 @@
+- id: fttrigon.FT_Vector_Unit
+  kind: function
+  symbol: FT_Vector_Unit
+  header: freetype/fttrigon.h
+  description: Public fixed-point helper that writes the unit vector for an FT_Angle using FreeType's CORDIC pseudo-rotation path.
+  cases:
+    - id: import_contract
+      description: Declaration is visible from freetype/fttrigon.h as void FT_Vector_Unit(FT_Vector* vec, FT_Angle angle).
+    - id: cardinal_angles_write_exact_unit_vectors
+      description: Angles 0, FT_ANGLE_PI2, FT_ANGLE_PI, FT_ANGLE_2PI, and their negative equivalents write exact C oracle 16.16 vector components after the final +0x80 rounding shift.
+    - id: diagonal_and_sector_boundary_angles
+      description: Angles around +/-FT_ANGLE_PI4 and other CORDIC sector boundaries match the pinned C pseudo-rotation table and rounding behavior exactly.
+    - id: periodic_and_large_angle_inputs
+      description: Angles outside one turn, including multiple positive and negative turns, reduce through C's angle normalization loops and produce exact periodic vector outputs.
+    - id: null_vector_noop
+      description: Passing a null FT_Vector pointer returns immediately with no status and no output, matching the void/no-output C contract.
+  # needs-input: operation=FT_Vector_Unit through C/Rust/C-FFI/WASM parity harness; fixture_asset=no font needed; params={angles:[0, +/-FT_ANGLE_PI4, +/-FT_ANGLE_PI2, FT_ANGLE_PI, FT_ANGLE_2PI, arbitrary, large_positive, large_negative], vec:null/valid}; output shape={void status class, FT_Vector x/y for valid output, null/no-output sentinel}; comparison=exact C oracle 16.16 integers and void no-op classification.
+
+- id: fttrigon.FT_Angle
+  kind: type
+  symbol: FT_Angle
+  header: freetype/fttrigon.h
+  description: Public angle typedef used by FreeType trigonometric APIs, defined as FT_Fixed in 16.16 degree units.
+  cases:
+    - id: alias_defined
+      description: The pinned public header typedefs FT_Angle to FT_Fixed.
+    - id: fixed_point_degree_contract
+      description: The type carries 16.16 fixed-point degree values and interoperates with FT_ANGLE_* constants and trigonometric function parameters.
+    - id: abi_matches_ft_fixed
+      description: Size, alignment, signedness, and call ABI match FT_Fixed exactly in C.
+  # needs-input: operation=C ABI type probe plus trigon calls; fixture_asset=no font needed; params={types:[FT_Angle, FT_Fixed], angles:[0, FT_ANGLE_PI4, FT_ANGLE_PI]}; output shape={sizeof, alignof, signed range behavior, function-call result}; comparison=exact C ABI layout and exact oracle trigon outputs.
+
+- id: fttypes.FT_BOOL
+  kind: macro
+  symbol: FT_BOOL
+  header: freetype/fttypes.h
+  description: Public function-like macro that normalizes an expression to an FT_Bool false-or-true value.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_BOOL(x) and expands through FT_STATIC_CAST(FT_Bool, (x) != 0).
+    - id: zero_maps_to_false
+      description: Numeric zero evaluates to FT_Bool value 0.
+    - id: any_nonzero_maps_to_true
+      description: Positive, negative, and pointer-like nonzero expressions evaluate to FT_Bool value 1, not the original numeric value.
+    - id: result_type_is_ft_bool
+      description: The macro result has FT_Bool representation, matching unsigned char size and truncation rules in C.
+  # needs-input: operation=macro_eval through C/Rust/C-FFI/WASM ABI harness; fixture_asset=no font needed; params={values:[0, 1, -1, 2, pointer_null, pointer_nonnull]}; output shape={FT_Bool integer value, sizeof result type}; comparison=exact C preprocessor/evaluation result.
+
+- id: fttypes.FT_ERR
+  kind: macro
+  symbol: FT_ERR
+  header: freetype/fttypes.h
+  description: Public function-like macro that builds a prefixed FreeType error token using FT_ERR_CAT.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERR(e) and expands to FT_ERR_CAT(FT_ERR_PREFIX, e).
+    - id: default_prefix_resolves_error_symbol
+      description: With the normal FreeType error prefix setup, FT_ERR(Invalid_Argument) resolves to the same value as the public FT_Err_Invalid_Argument code.
+    - id: custom_prefix_token_contract
+      description: Under a controlled compile probe with a custom FT_ERR_PREFIX, the macro concatenates the prefix and suffix tokens exactly as C preprocessing specifies.
+    - id: used_by_error_comparison_macros
+      description: FT_ERR_EQ and FT_ERR_NEQ consume FT_ERR(e), so this token construction is part of the observable public error comparison contract.
+  # needs-input: operation=macro_eval compile probe; fixture_asset=no font needed; params={error_names:[Ok, Invalid_Argument, Invalid_Face_Handle], prefix:default/custom}; output shape={expanded numeric FT_Error values or compile-token sentinel}; comparison=exact C preprocessor expansion and public error values.
+
+- id: fttypes.FT_ERROR_BASE
+  kind: macro
+  symbol: FT_ERROR_BASE
+  header: freetype/fttypes.h
+  description: Public function-like macro that extracts the low-byte base error from an FT_Error value.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERROR_BASE(x) and expands to ((x) & 0xFF).
+    - id: base_byte_extraction
+      description: Values with module bits set return only the low 8-bit base code.
+    - id: zero_and_full_mask_edges
+      description: Inputs 0, 0xFF, 0x100, and mixed high-bit values match C integer masking exactly.
+  # needs-input: operation=macro_eval; fixture_asset=no font needed; params={errors:[0, 1, 0xFF, 0x100, 0x1207, public module-composed errors]}; output shape={integer base value}; comparison=exact C macro result.
+
+- id: fttypes.FT_ERROR_MODULE
+  kind: macro
+  symbol: FT_ERROR_MODULE
+  header: freetype/fttypes.h
+  description: Public function-like macro that extracts the module error bits from an FT_Error value.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERROR_MODULE(x) and expands to ((x) & 0xFF00U).
+    - id: module_byte_extraction
+      description: Values with base bits set return only the 0xFF00 module portion.
+    - id: zero_and_mixed_value_edges
+      description: Inputs 0, 0xFF, 0x100, 0x1207, and public module-composed errors match C unsigned-mask semantics exactly.
+  # needs-input: operation=macro_eval; fixture_asset=no font needed; params={errors:[0, 0xFF, 0x100, 0x1207, public module-composed errors]}; output shape={integer module value}; comparison=exact C macro result.
+
+- id: fttypes.FT_ERR_CAT
+  kind: macro
+  symbol: FT_ERR_CAT
+  header: freetype/fttypes.h
+  description: Public helper macro that concatenates two tokens after one level of macro expansion.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERR_CAT(x, y) and expands to FT_ERR_XCAT(x, y).
+    - id: expands_arguments_before_concatenation
+      description: If x or y are themselves object-like macros, FT_ERR_CAT expands them before delegating to token pasting.
+    - id: error_prefix_suffix_join
+      description: Joining FT_ERR_PREFIX and an error suffix yields the same token used by FT_ERR(e) in the public error API.
+  # needs-input: operation=macro_eval compile probe; fixture_asset=no font needed; params={tokens:[literal/literal, macro/literal, prefix/error_suffix]}; output shape={compiled sentinel values from concatenated tokens}; comparison=exact C preprocessor token result.
+
+- id: fttypes.FT_ERR_EQ
+  kind: macro
+  symbol: FT_ERR_EQ
+  header: freetype/fttypes.h
+  description: Public function-like macro that compares only the base error portion of an FT_Error value to a named FreeType error.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERR_EQ(x, e) and compares FT_ERROR_BASE(x) to FT_ERROR_BASE(FT_ERR(e)).
+    - id: ignores_module_bits_for_equal_base
+      description: Errors with different module bits but the same low-byte base error compare equal.
+    - id: distinguishes_different_base_codes
+      description: Errors with different low-byte base codes compare false even if their module bits match.
+    - id: ok_error_comparison
+      description: Comparing zero status to Ok returns true and comparing nonzero status to Ok returns false according to C macro evaluation.
+  # needs-input: operation=macro_eval; fixture_asset=no font needed; params={pairs:[same_base_different_module, different_base_same_module, zero_vs_Ok, invalid_argument_variants]}; output shape={boolean integer result}; comparison=exact C macro result.
+
+- id: fttypes.FT_ERR_NEQ
+  kind: macro
+  symbol: FT_ERR_NEQ
+  header: freetype/fttypes.h
+  description: Public function-like macro that negates the base-error comparison used by FT_ERR_EQ.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERR_NEQ(x, e) and compares FT_ERROR_BASE(x) != FT_ERROR_BASE(FT_ERR(e)).
+    - id: ignores_module_bits_for_equal_base
+      description: Errors with different module bits but the same low-byte base error compare false.
+    - id: distinguishes_different_base_codes
+      description: Errors with different low-byte base codes compare true regardless of matching module bits.
+    - id: ok_error_comparison
+      description: Comparing zero status to Ok returns false and comparing nonzero status to Ok returns true according to C macro evaluation.
+  # needs-input: operation=macro_eval; fixture_asset=no font needed; params={pairs:[same_base_different_module, different_base_same_module, zero_vs_Ok, invalid_argument_variants]}; output shape={boolean integer result}; comparison=exact C macro result.
+
+- id: fttypes.FT_ERR_XCAT
+  kind: macro
+  symbol: FT_ERR_XCAT
+  header: freetype/fttypes.h
+  description: Public helper macro that directly pastes two C preprocessor tokens.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_ERR_XCAT(x, y) and expands to x ## y.
+    - id: direct_token_paste_without_argument_expansion
+      description: Unlike FT_ERR_CAT, arguments are pasted at the direct macro expansion level, preserving standard C token-paste behavior.
+    - id: valid_identifier_concatenation
+      description: Controlled token pairs concatenate into valid identifiers whose compile-time sentinel values match the C preprocessor result.
+  # needs-input: operation=macro_eval compile probe; fixture_asset=no font needed; params={tokens:[prefix/suffix, macro-token/literal control]}; output shape={compiled sentinel values from pasted identifiers}; comparison=exact C preprocessor token-paste result.
+
+- id: fttypes.FT_IS_EMPTY
+  kind: macro
+  symbol: FT_IS_EMPTY
+  header: freetype/fttypes.h
+  description: Public function-like macro that reports whether an FT_ListRec has a null head pointer.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_IS_EMPTY(list) and expands to ((list).head == 0).
+    - id: empty_when_head_null
+      description: A list with head null evaluates true, even if tail is also null as the normal empty-list state.
+    - id: tail_is_not_considered
+      description: A malformed list with head null and tail non-null still evaluates true because the macro only reads head.
+    - id: non_empty_when_head_nonnull
+      description: Any non-null head pointer evaluates false regardless of tail value.
+  # needs-input: operation=macro_eval with synthetic FT_ListRec values; fixture_asset=no font needed; params={head:null/nonnull, tail:null/nonnull}; output shape={boolean integer result}; comparison=exact C macro result and one-field read behavior.
+
+- id: fttypes.FT_Data
+  kind: record
+  symbol: FT_Data
+  header: freetype/fttypes.h
+  description: Public record representing a read-only byte buffer pointer plus byte length.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C header for pointer and length.
+    - id: field_order_pointer_then_length
+      description: The public fields are const FT_Byte* pointer followed by FT_UInt length.
+    - id: binary_payload_reference_contract
+      description: The record carries borrowed binary data; comparison must preserve pointer-null versus non-null and length independently, including null pointer with zero length.
+  # needs-input: operation=C ABI layout probe and data echo fixture; fixture_asset=small shared binary blob under fixture assets; params={pointer:null/blob, length:[0, 1, blob_len, truncated_len]}; output shape={sizeof, alignof, field_offsets, echoed length and byte hash/null class}; comparison=exact C ABI layout and referenced-byte observations without embedding blob bytes in JSON.
+
+- id: fttypes.FT_Generic
+  kind: record
+  symbol: FT_Generic
+  header: freetype/fttypes.h
+  description: Public record for caller-owned object metadata and an optional finalizer callback pointer.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C header for data and finalizer.
+    - id: field_order_data_then_finalizer
+      description: The public fields are void* data followed by FT_Generic_Finalizer finalizer.
+    - id: null_finalizer_is_valid
+      description: A null finalizer pointer is a valid public state and must not synthesize a callback.
+    - id: callback_pointer_abi_contract
+      description: A non-null finalizer has C signature void (*)(void*) and receives the public object pointer supplied by the owning FreeType object.
+  # needs-input: operation=C ABI layout probe plus object lifecycle with generic finalizer where a public object exposes FT_Generic; fixture_asset=valid small font bytes; params={data_token:null/nonnull, finalizer:null/custom}; output shape={sizeof, alignof, field_offsets, callback event log, data pointer identity}; comparison=exact C ABI layout and callback/null behavior.
+
+- id: fttypes.FT_ListNodeRec
+  kind: record
+  symbol: FT_ListNodeRec
+  header: freetype/fttypes.h
+  description: Public doubly-linked list node record used by FreeType list APIs.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C header for prev, next, and data.
+    - id: field_order_prev_next_data
+      description: The public fields are FT_ListNode prev, FT_ListNode next, and void* data in that order.
+    - id: pointer_topology_contract
+      description: Node prev and next fields are raw public handles whose null/non-null topology is consumed directly by FT_List_* APIs.
+  # needs-input: operation=C ABI layout probe plus FT_List_Insert/Remove/Up topology echo; fixture_asset=synthetic list nodes with token data pointers; params={topologies:[isolated, head, middle, tail]}; output shape={sizeof, alignof, field_offsets, prev/next/data token graph}; comparison=exact C ABI layout and pointer topology.
+
+- id: fttypes.FT_ListRec
+  kind: record
+  symbol: FT_ListRec
+  header: freetype/fttypes.h
+  description: Public doubly-linked list header record used by FreeType list APIs.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C header for head and tail.
+    - id: field_order_head_then_tail
+      description: The public fields are FT_ListNode head followed by FT_ListNode tail.
+    - id: empty_state_contract
+      description: The normal empty list has both head and tail null, while FT_IS_EMPTY only tests head.
+  # needs-input: operation=C ABI layout probe plus FT_IS_EMPTY/FT_List_* fixtures; fixture_asset=synthetic FT_ListRec and node records; params={head:null/nonnull, tail:null/nonnull, list_operations:[insert, remove, up]}; output shape={sizeof, alignof, field_offsets, head/tail token graph, macro result}; comparison=exact C ABI layout and public list behavior.
+
+- id: fttypes.FT_Matrix
+  kind: record
+  symbol: FT_Matrix
+  header: freetype/fttypes.h
+  description: Public 2x2 matrix record whose coefficients are FT_Fixed 16.16 values.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C header for xx, xy, yx, and yy.
+    - id: field_order_xx_xy_yx_yy
+      description: The public fields are FT_Fixed xx, xy, yx, and yy in row-major order as used by outline and vector transforms.
+    - id: identity_and_shear_values
+      description: Common matrix values such as identity, scale, shear, and rotation coefficients preserve exact 16.16 signed integer representation.
+  # needs-input: operation=C ABI layout probe plus FT_Vector_Transform or FT_Outline_Transform comparison; fixture_asset=no font needed for vector transform, synthetic outline for outline transform; params={matrices:[identity, scale2, shear, rotate90], vectors:[zero, unit, arbitrary, negative]}; output shape={sizeof, alignof, field_offsets, transformed FT_Vector/outline points}; comparison=exact C ABI layout and 26.6/16.16 transformed integer outputs.
+
+- id: fttypes.FT_UnitVector
+  kind: record
+  symbol: FT_UnitVector
+  header: freetype/fttypes.h
+  description: Public two-coordinate unit-vector record using FT_F2Dot14 components.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C header for x and y.
+    - id: field_order_x_then_y
+      description: The public fields are FT_F2Dot14 x followed by FT_F2Dot14 y.
+    - id: f2dot14_component_contract
+      description: Components are signed 2.14 fixed-point values and preserve exact signed-short representation for axes, diagonals, and negative vectors.
+  # needs-input: operation=C ABI layout and value echo probe; fixture_asset=no font needed; params={vectors:[zero, unit_x, unit_y, negative_x, diagonal_approx]}; output shape={sizeof, alignof, field_offsets, signed component integers}; comparison=exact C ABI layout and FT_F2Dot14 integer representation.
+
+- id: fttypes.FT_MAKE_TAG
+  kind: tag
+  symbol: FT_MAKE_TAG
+  header: freetype/fttypes.h
+  description: Public function-like macro that packs four bytes into a 32-bit FT_Tag in big-endian order.
+  cases:
+    - id: macro_import_contract
+      description: Macro is visible from freetype/fttypes.h as FT_MAKE_TAG(_x1, _x2, _x3, _x4) and uses FT_STATIC_BYTE_CAST for each component.
+    - id: standard_sfnt_tags
+      description: Inputs such as 'n','a','m','e' and 'g','l','y','f' produce the exact public SFNT tag integers used by C.
+    - id: byte_order_big_endian
+      description: The first byte occupies bits 31..24, then 23..16, 15..8, and 7..0 respectively.
+    - id: high_bit_bytes_do_not_sign_extend
+      description: Bytes with the high bit set are cast to FT_Tag byte values before shifting, avoiding signed-char extension differences.
+  # needs-input: operation=macro_eval; fixture_asset=no font needed; params={byte_quads:[name,glyf,zeroes,high_bit_bytes,0xFF/0x80/0x01/0x00]}; output shape={FT_Tag integer value, hex representation}; comparison=exact C macro result.
+
+- id: fttypes.FT_Bool
+  kind: type
+  symbol: FT_Bool
+  header: freetype/fttypes.h
+  description: Public boolean typedef represented as unsigned char.
+  cases:
+    - id: alias_defined
+      description: The pinned public header typedefs FT_Bool to unsigned char.
+    - id: abi_unsigned_char
+      description: Size, alignment, unsignedness, and call ABI match C unsigned char.
+    - id: boolean_value_convention
+      description: Public APIs and FT_BOOL conventionally use 0 for false and 1 for true, while the storage type can carry any unsigned char value.
+  # needs-input: operation=C ABI type probe and value echo; fixture_asset=no font needed; params={values:[0, 1, 2, 255]}; output shape={sizeof, alignof, signedness probe, echoed integer value}; comparison=exact C ABI and unsigned char value behavior.
+
+- id: fttypes.FT_Byte
+  kind: type
+  symbol: FT_Byte
+  header: freetype/fttypes.h
+  description: Public byte typedef represented as unsigned char and used for binary font data.
+  cases:
+    - id: alias_defined
+      description: The pinned public header typedefs FT_Byte to unsigned char.
+    - id: abi_unsigned_char
+      description: Size, alignment, unsignedness, and call ABI match C unsigned char.
+    - id: binary_byte_range
+      description: Values 0 through 255 are preserved exactly, including high-bit bytes used by FT_MAKE_TAG and binary fixture data.
+  # needs-input: operation=C ABI type probe and byte-array echo; fixture_asset=small shared binary blob containing 0x00, ASCII, 0x80, and 0xFF bytes; params={byte_values:[0, 1, 65, 127, 128, 255], blob_ref}; output shape={sizeof, alignof, signedness probe, echoed byte values, blob hash}; comparison=exact C ABI and byte preservation without embedding large blobs in JSON.

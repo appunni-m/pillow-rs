@@ -1,0 +1,258 @@
+- id: ftcache.FTC_Manager_Reset
+  kind: function
+  symbol: FTC_Manager_Reset
+  header: freetype/ftcache.h
+  description: FreeType C API function that empties a cache manager's cached faces, sizes, and cache nodes.
+  cases:
+    # needs-input: operation FTC_Manager_New with a counting FTC_Face_Requester, FTC_Manager_LookupFace, FTC_Manager_LookupSize, FTC_SBitCache_Lookup, then FTC_Manager_Reset; fixture asset input/fonts/DejaVuSans.ttf or equivalent memory face source retained by req_data; params one reusable FTC_FaceID, at least two scaler sizes, and one glyph index; expected output shape requester call counts, face/size pointer identity before and after reset, cache-node count/weight snapshots if exposed by oracle helper, and post-reset lookup error/results; comparison rule exact C oracle errors plus pointer identity classification before reset and fresh object classification after reset.
+    - id: null_manager_noop
+      description: A null manager argument returns immediately without error or writes, matching ftcmanag.c's early return.
+    - id: clears_cached_faces_sizes_and_nodes
+      description: Reset removes cached FT_Face, FT_Size, and cache-node contents so later lookups repopulate through the requester like the pinned C manager.
+    - id: retained_manager_remains_usable
+      description: The manager itself remains valid after reset, preserving its requester, request data, limits, and ability to service later cache lookups.
+
+- id: ftcache.FTC_Node_Unref
+  kind: function
+  symbol: FTC_Node_Unref
+  header: freetype/ftcache.h
+  description: FreeType C API function that releases one cache-node reference acquired by a cache lookup.
+  cases:
+    # needs-input: operation FTC_SBitCache_Lookup or FTC_ImageCache_Lookup with non-null anode followed by FTC_Node_Unref and manager pressure; fixture asset input/fonts/DejaVuSans.ttf plus requester-backed FTC_Manager; params one glyph index, small cache max_bytes, repeated lookup/fill sequence; expected output shape node pointer, ref_count classification before and after unref if oracle helper exposes it, and survival/flush classification under cache pressure; comparison rule exact C oracle no-op behavior for null/foreign-invalid handles and exact lifecycle classification for referenced versus unreferenced nodes.
+    - id: null_or_invalid_inputs_noop
+      description: Null node, null manager, or a node whose cache index is outside the manager cache count is ignored like ftcmanag.c.
+    - id: releases_lookup_reference
+      description: A node returned through an anode output has its cache reference released by decrementing the internal reference count.
+    - id: unreferenced_node_becomes_flushable
+      description: After the reference count reaches zero, the node is not destroyed immediately but becomes eligible for later cache flushes.
+
+- id: ftcache.FTC_SBitCache_Lookup
+  kind: function
+  symbol: FTC_SBitCache_Lookup
+  header: freetype/ftcache.h
+  description: FreeType C API function that looks up a small bitmap descriptor using an FTC_ImageTypeRec.
+  cases:
+    # needs-input: operation FTC_Manager_New, FTC_SBitCache_New, FTC_SBitCache_Lookup, optional FTC_Node_Unref; fixture asset bitmap-strike font and scalable control font through requester-backed FTC_FaceID; params FTC_ImageTypeRec with pixel width/height, load flags including FT_LOAD_DEFAULT and FT_LOAD_RENDER-compatible bitmap paths, glyph indexes for present outline-rendered bitmap, present embedded bitmap, and missing glyph bitmap; expected output shape FT_Error, FTC_SBitRec fields, buffer bytes or null classification, anode pointer/null and node reference lifecycle; comparison rule exact C oracle error, field, byte, null, and node-retention behavior.
+    - id: rejects_null_sbit_output
+      description: A null sbit output returns Invalid_Argument before cache lookup, matching ftcbasic.c.
+    - id: clears_outputs_before_lookup
+      description: The sbit output and optional anode output are set to null before lookup, including failing lookup paths.
+    - id: returns_cache_owned_sbit
+      description: A successful lookup returns a cache-owned FTC_SBitRec whose bitmap metrics, pitch, format, advances, buffer pointer/null status, and bytes match C.
+    - id: optional_anode_locks_node
+      description: A non-null anode output receives the cache node and increments its reference count until FTC_Node_Unref releases it.
+    - id: missing_bitmap_has_null_buffer
+      description: Missing small bitmap data is represented by a successful descriptor with buffer set to null when C does so.
+
+- id: ftcache.FTC_SBitCache_LookupScaler
+  kind: function
+  symbol: FTC_SBitCache_LookupScaler
+  header: freetype/ftcache.h
+  description: FreeType C API function that looks up a small bitmap descriptor using an FTC_ScalerRec and load flags.
+  cases:
+    # needs-input: operation FTC_Manager_New, FTC_SBitCache_New, FTC_SBitCache_LookupScaler, optional FTC_Node_Unref; fixture asset bitmap-strike font and scalable control font through requester-backed FTC_FaceID; params FTC_ScalerRec cases with pixel=1 dimensions, pixel=0 point sizes with x_res/y_res, load_flags including FT_LOAD_DEFAULT, FT_LOAD_NO_HINTING, FT_LOAD_TARGET_MONO, and a high-bit FT_ULong value on 64-bit hosts; expected output shape FT_Error, FTC_SBitRec fields and bytes, output nulling, anode lifecycle, and requester/size lookup side effects; comparison rule exact C oracle error, field, byte, null, and low-32-bit load flag truncation behavior.
+    - id: rejects_null_sbit_or_scaler
+      description: Null sbit output or null scaler returns Invalid_Argument before cache lookup.
+    - id: clears_outputs_before_lookup
+      description: The sbit output and optional anode output are cleared before lookup, including error paths.
+    - id: scaler_size_semantics_match_c
+      description: Pixel and point-size FTC_ScalerRec inputs select the same cached size and rendered small bitmap as C.
+    - id: load_flags_truncate_to_int32
+      description: On hosts where FT_ULong is wider than FT_Int32, higher load_flags bits are dropped for the cache query like ftcbasic.c.
+
+- id: ftcache.FTC_SBitCache_New
+  kind: function
+  symbol: FTC_SBitCache_New
+  header: freetype/ftcache.h
+  description: FreeType C API function that creates a small bitmap cache owned by an FTC_Manager.
+  cases:
+    # needs-input: operation FTC_Manager_New, FTC_SBitCache_New, FTC_Manager_Done; fixture asset not required beyond a live FT_Library and requester stub; params valid manager, null manager, null acache pointer, repeated cache creation until manager cache limit if reachable; expected output shape FT_Error and acache pointer/null state before manager destruction; comparison rule exact C oracle error and output write behavior, with cache lifetime tied to manager destruction.
+    - id: creates_manager_owned_cache
+      description: A valid manager and output pointer return a usable sbit cache that is destroyed with the manager.
+    - id: error_outputs_null_cache
+      description: Failure leaves or sets the output cache handle according to FTC_GCache_New behavior observed in the pinned C oracle.
+    - id: invalid_arguments_match_c
+      description: Null manager or null output pointer return the same C error and write behavior as FTC_GCache_New.
+
+- id: ftcache.FTC_IMAGE_TYPE_COMPARE
+  kind: macro
+  symbol: FTC_IMAGE_TYPE_COMPARE
+  header: freetype/ftcache.h
+  description: FreeType public function-like macro that compares FTC_ImageTypeRec face_id, width, and flags fields.
+  cases:
+    - id: value_matches_header
+      description: Macro expansion matches the pinned C public header and compares face_id, width, and flags.
+    - id: height_is_ignored
+      description: Two image types that differ only by height compare equal, matching the pinned header macro.
+    - id: compared_fields_must_match
+      description: Differences in face_id, width, or flags make the macro return false.
+
+- id: ftcache.FTC_ImageTypeRec
+  kind: record
+  symbol: FTC_ImageTypeRec
+  header: freetype/ftcache.h
+  description: FreeType public image-cache descriptor record from freetype/ftcache.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for face_id, width, height, and flags match the pinned C header.
+    - id: drives_image_and_sbit_lookup
+      description: The record's face_id, dimensions, and load flags select cache families and glyph images with C-compatible semantics.
+
+- id: ftcache.FTC_SBitRec
+  kind: record
+  symbol: FTC_SBitRec
+  header: freetype/ftcache.h
+  description: FreeType public small bitmap descriptor record from freetype/ftcache.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for width, height, left, top, format, max_grays, pitch, xadvance, yadvance, and buffer match the pinned C header.
+    - id: lookup_populates_bitmap_fields
+      description: FTC_SBitCache lookups populate bitmap metrics, advances, pitch, format, max_grays, buffer nullability, and buffer bytes exactly like C.
+    - id: descriptor_is_cache_owned
+      description: Returned descriptors and buffers are cache-owned and are only stable while protected by cache-node lifetime rules.
+
+- id: ftcache.FTC_ScalerRec
+  kind: record
+  symbol: FTC_ScalerRec
+  header: freetype/ftcache.h
+  description: FreeType public cache scaler descriptor record from freetype/ftcache.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for face_id, width, height, pixel, x_res, and y_res match the pinned C header.
+    - id: pixel_scaler_uses_integer_pixels
+      description: When pixel is nonzero, width and height are interpreted as integer pixel sizes and resolutions are ignored like C.
+    - id: point_scaler_uses_26_6_points_and_resolution
+      description: When pixel is zero, width and height are 1/64 point values and x_res/y_res affect the cached size like C.
+
+- id: ftcache.FTC_CMapCache
+  kind: type
+  symbol: FTC_CMapCache
+  header: freetype/ftcache.h
+  description: FreeType public opaque charmap cache handle typedef from freetype/ftcache.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_CMapCacheRec is present in the pinned C public interface.
+    - id: manager_owned_opaque_cache
+      description: CMap cache handles are opaque manager-owned cache objects and are destroyed with the owning FTC_Manager.
+
+- id: ftcache.FTC_FaceID
+  kind: type
+  symbol: FTC_FaceID
+  header: freetype/ftcache.h
+  description: FreeType public face identity typedef used as requester key in the cache subsystem.
+  cases:
+    - id: alias_defined
+      description: FTC_FaceID is typedefed as FT_Pointer in the pinned C public interface.
+    - id: pointer_identity_key
+      description: Cache manager lookup treats the pointer value as the face identity passed unchanged to FTC_Face_Requester.
+
+- id: ftcache.FTC_ImageCache
+  kind: type
+  symbol: FTC_ImageCache
+  header: freetype/ftcache.h
+  description: FreeType public opaque glyph image cache handle typedef from freetype/ftcache.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_ImageCacheRec is present in the pinned C public interface.
+    - id: manager_owned_opaque_cache
+      description: Image cache handles are opaque manager-owned cache objects and are destroyed with the owning FTC_Manager.
+
+- id: ftcache.FTC_ImageType
+  kind: type
+  symbol: FTC_ImageType
+  header: freetype/ftcache.h
+  description: FreeType public handle typedef for FTC_ImageTypeRec.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_ImageTypeRec is present in the pinned C public interface.
+    - id: points_to_call_owned_descriptor
+      description: The cache lookup APIs read the caller-owned descriptor during lookup and do not take ownership of it.
+
+- id: ftcache.FTC_Manager
+  kind: type
+  symbol: FTC_Manager
+  header: freetype/ftcache.h
+  description: FreeType public opaque cache manager handle typedef from freetype/ftcache.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_ManagerRec is present in the pinned C public interface.
+    - id: owns_faces_sizes_and_cache_nodes
+      description: The manager owns cached FT_Face objects, FT_Size objects, and cache nodes returned by cache lookups.
+    - id: reset_and_done_lifecycle
+      description: Reset empties manager-owned cached content while keeping the manager usable; Done destroys the manager and its caches.
+
+- id: ftcache.FTC_Node
+  kind: type
+  symbol: FTC_Node
+  header: freetype/ftcache.h
+  description: FreeType public opaque cache node handle typedef from freetype/ftcache.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_NodeRec is present in the pinned C public interface.
+    - id: reference_counted_cache_handle
+      description: Nodes returned from lookup with anode are reference-counted handles that prevent flushing until FTC_Node_Unref releases them.
+
+- id: ftcache.FTC_SBit
+  kind: type
+  symbol: FTC_SBit
+  header: freetype/ftcache.h
+  description: FreeType public handle typedef for FTC_SBitRec.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_SBitRec is present in the pinned C public interface.
+    - id: cache_owned_descriptor_handle
+      description: Handles returned by sbit lookup point to cache-owned descriptors that can disappear after later cache activity unless their node is held.
+
+- id: ftcache.FTC_SBitCache
+  kind: type
+  symbol: FTC_SBitCache
+  header: freetype/ftcache.h
+  description: FreeType public opaque small bitmap cache handle typedef from freetype/ftcache.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_SBitCacheRec is present in the pinned C public interface.
+    - id: manager_owned_sbit_cache
+      description: SBit cache handles are opaque manager-owned cache objects used to store small bitmap descriptors and are destroyed with the owning FTC_Manager.
+
+- id: ftcache.FTC_Scaler
+  kind: type
+  symbol: FTC_Scaler
+  header: freetype/ftcache.h
+  description: FreeType public handle typedef for FTC_ScalerRec.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FTC_ScalerRec is present in the pinned C public interface.
+    - id: points_to_call_owned_scaler
+      description: LookupScaler reads the caller-owned scaler during lookup and copies its fields into the cache query.
+
+- id: ftcid.FT_Get_CID_From_Glyph_Index
+  kind: function
+  symbol: FT_Get_CID_From_Glyph_Index
+  header: freetype/ftcid.h
+  description: FreeType C API function that retrieves the CID corresponding to a glyph index for CID-capable faces.
+  cases:
+    # needs-input: operation FT_Open_Face or FT_New_Memory_Face followed by FT_Get_CID_From_Glyph_Index; fixture assets one non-SFNT CID-keyed Type 1/CFF font, one OpenType/CFF CID-keyed-internally font, and one non-CID control font; params glyph indexes 0, first mapped glyph, last valid glyph, and out-of-range glyph; expected output shape FT_Error plus cid output value and output-preservation/defaulting behavior with null cid pointer; comparison rule exact C oracle error and cid values, including zero output on invalid face or missing service.
+    - id: cid_face_returns_cid
+      description: For a face whose CID service implements glyph-index mapping, valid glyph indexes return the same CID values as C.
+    - id: opentype_cid_face_supported
+      description: OpenType fonts with internal CID data are handled according to the service behavior exposed by the pinned C build.
+    - id: non_cid_or_null_face_errors_and_clears_output
+      description: Null faces or faces without a CID glyph-index service return Invalid_Argument and write zero to a non-null cid output.
+    - id: null_cid_output_matches_c
+      description: A null cid output pointer follows the pinned C source behavior for success and error paths without project-side strengthening.
+
+- id: ftcid.FT_Get_CID_Is_Internally_CID_Keyed
+  kind: function
+  symbol: FT_Get_CID_Is_Internally_CID_Keyed
+  header: freetype/ftcid.h
+  description: FreeType C API function that reports whether a face is internally CID-keyed, including SFNT-wrapped CID fonts.
+  cases:
+    # needs-input: operation FT_Open_Face or FT_New_Memory_Face followed by FT_Get_CID_Is_Internally_CID_Keyed and FT_IS_CID_KEYED macro snapshot; fixture assets one non-SFNT CID-keyed Type 1/CFF font, one SFNT-wrapped OpenType/CFF CID font, and one ordinary non-CID TrueType/OpenType font; params live face handles and null face/null output variants; expected output shape FT_Error, FT_Bool is_cid value, and public FT_FACE_FLAG_CID_KEYED macro result; comparison rule exact C oracle error and boolean values, proving this function can succeed for internally CID-keyed SFNT faces even when FT_IS_CID_KEYED differs.
+    - id: cid_face_reports_true
+      description: A CID-keyed face with a CID service reports true and returns the same success code as C.
+    - id: sfnt_wrapped_cid_supported
+      description: A SFNT-wrapped internally CID-keyed font can return successfully through this function even when the FT_IS_CID_KEYED macro is not the public signal.
+    - id: non_cid_or_null_face_errors_and_clears_output
+      description: Null faces or faces without an is-cid service return Invalid_Argument and write false to a non-null output.
+    - id: null_output_matches_c
+      description: A null is_cid output pointer follows the pinned C source behavior rather than assuming caller-side validation.

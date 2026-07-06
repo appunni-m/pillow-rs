@@ -1,0 +1,284 @@
+- id: ftglyph.FT_Done_Glyph
+  kind: function
+  symbol: FT_Done_Glyph
+  header: freetype/ftglyph.h
+  description: FreeType C API function that releases a detached FT_Glyph object created by FT_New_Glyph, FT_Get_Glyph, FT_Glyph_Copy, or FT_Glyph_To_Bitmap.
+  cases:
+    - id: success_releases_owned_glyph
+      description: A live outline, bitmap, or SVG glyph invokes the class-specific done hook, releases owned outline/bitmap/SVG storage, and frees the glyph allocation exactly once.
+    - id: success_null_is_noop
+      description: Passing a null glyph returns without reading library memory or mutating observable state.
+    - id: lifetime_before_library_done
+      description: Detached glyphs are owned by the caller and must be destroyed before the owning library is finalized; fixture comparison records C lifetime ordering and invalid-use behavior through the FFI facade.
+  # needs-input: operation=FT_Get_Glyph/FT_New_Glyph followed by FT_Done_Glyph; fixture_asset=outline, bitmap-strike, and OT-SVG capable fonts where available; params={glyph_format, destroy_order, null_glyph}; output shape={no return, allocation/free event stream, sanitizer-safe lifetime classification}; comparison=exact C oracle free/done hook sequence and no-op behavior for null.
+- id: ftglyph.FT_Get_Glyph
+  kind: function
+  symbol: FT_Get_Glyph
+  header: freetype/ftglyph.h
+  description: FreeType C API function that copies the current FT_GlyphSlot image into a detached FT_Glyph object with 16.16 advance fields.
+  cases:
+    - id: success_outline_slot_deep_copy
+      description: After FT_Load_Glyph on an outline glyph, returns FT_Err_Ok, writes a detached FT_OutlineGlyph, copies the outline points/contours/tags, and converts slot advance from 26.6 to 16.16 by multiplying by 1024.
+    - id: success_bitmap_slot_deep_copy
+      description: For a bitmap glyph slot, returns a detached FT_BitmapGlyph with left/top, bitmap descriptor, buffer bytes, and advance fields matching C.
+    - id: success_svg_slot_deep_copy
+      description: When SVG glyph support is enabled and the slot contains a valid FT_SVG_Document, copies the SVG document bytes, metrics, glyph range, transform, and delta into FT_SvgGlyphRec.
+    - id: error_null_slot_or_output
+      description: A null slot returns FT_Err_Invalid_Slot_Handle, a null aglyph returns FT_Err_Invalid_Argument, and C output write/preservation behavior is recorded exactly.
+    - id: error_unsupported_format_or_bad_slot_payload
+      description: Unsupported glyph formats, mismatched slot format for the class init hook, null SVG document, or zero-length SVG document return C errors and leave *aglyph null.
+    - id: error_advance_out_of_16_16_range
+      description: Slot advances outside the open range ]-32768,32768[ pixels return FT_Err_Invalid_Argument after allocation cleanup and write *aglyph as null.
+  # needs-input: operation=FT_Load_Glyph/FT_Render_Glyph/FT_Get_Glyph; fixture_asset=outline font, bitmap-strike font, SVG font if enabled, and synthetic slot facade for unsupported format/large advance; params={glyph_index, load_flags, size, render_mode, null_slot, null_aglyph, advance_boundaries}; output shape={FT_Error, glyph kind, root format, advance.x/y 16.16, outline arrays or bitmap bytes or SVG fields, output null/preservation}; comparison=exact C oracle error, scalar fields, bytes/arrays, ownership classification, and output pointer nullness.
+- id: ftglyph.FT_Glyph_Copy
+  kind: function
+  symbol: FT_Glyph_Copy
+  header: freetype/ftglyph.h
+  description: FreeType C API function that deep-copies a detached glyph using the glyph class copy hook.
+  cases:
+    - id: success_outline_copy_is_independent
+      description: Copies outline glyph root fields, advance, format, and outline arrays so later source transforms or destruction do not mutate the target.
+    - id: success_bitmap_copy_is_independent
+      description: Copies bitmap glyph left/top and bitmap descriptor/buffer so later source destruction does not invalidate target bitmap bytes.
+    - id: success_svg_copy_is_independent
+      description: Copies SVG document bytes and metadata fields when SVG support is enabled, preserving transform and delta values.
+    - id: error_null_source_target_or_class
+      description: Null target, null source, or a source with null clazz returns FT_Err_Invalid_Argument; when target is non-null C first writes *target to null before later failure paths.
+    - id: error_copy_hook_failure_cleans_target
+      description: Allocation or class copy failure destroys the partial copy and leaves the returned target null.
+  # needs-input: operation=FT_Get_Glyph then FT_Glyph_Copy; fixture_asset=outline, bitmap, and SVG fonts where available plus allocation-failure facade; params={glyph_kind, source_mutation_after_copy, source_destroy_before_target, null_source, null_target, bad_class}; output shape={FT_Error, target nullness, copied root fields, outline arrays/bitmap bytes/SVG bytes, allocation/free events}; comparison=exact C oracle deep-copy contents, independence after source mutation/free, and error cleanup.
+- id: ftglyph.FT_Glyph_Get_CBox
+  kind: function
+  symbol: FT_Glyph_Get_CBox
+  header: freetype/ftglyph.h
+  description: FreeType C API function that writes a glyph control box in one of the public FT_Glyph_BBox_Mode coordinate modes.
+  cases:
+    - id: success_outline_modes
+      description: Outline glyphs return the class cbox in 26.6 coordinates, with GRIDFIT applying floor/ceil and TRUNCATE/PIXELS shifting to integer pixels exactly like C.
+    - id: success_bitmap_modes
+      description: Bitmap glyph cbox is computed from left, top, bitmap width, and rows, then mode conversion is applied exactly like C.
+    - id: success_null_or_no_bbox_zeroes_output
+      description: Null glyph, null clazz, or glyph classes without a bbox hook write a zero FT_BBox when acbox is non-null.
+    - id: success_null_output_is_noop
+      description: A null acbox returns immediately without zeroing or touching caller memory.
+    - id: mode_aliases_and_unknown_modes
+      description: UNSCALED and SUBPIXELS are both mode 0; unknown mode values only receive the raw class cbox because no gridfit or pixel conversion branch is selected.
+  # needs-input: operation=FT_Get_Glyph then FT_Glyph_Get_CBox; fixture_asset=outline glyphs with negative bearings/control points, bitmap glyphs with varied left/top, SVG glyph when enabled; params={bbox_mode:0,1,2,3,unknown, null_glyph, null_acbox}; output shape={FT_BBox xMin/yMin/xMax/yMax and write/no-write classification}; comparison=exact C oracle bbox fields including floor/ceil/truncate behavior and no-op behavior for null acbox.
+- id: ftglyph.FT_Glyph_To_Bitmap
+  kind: function
+  symbol: FT_Glyph_To_Bitmap
+  header: freetype/ftglyph.h
+  description: FreeType C API function that converts a scalable detached glyph to a detached bitmap glyph through a dummy glyph slot and FT_Render_Glyph_Internal.
+  cases:
+    - id: success_outline_to_bitmap_destroy_false
+      description: Converts an outline glyph to a bitmap glyph, preserves the original glyph on destroy false, restores origin translation after rendering, and replaces *the_glyph with the new bitmap glyph.
+    - id: success_outline_to_bitmap_destroy_true
+      description: Converts an outline glyph and destroys the original glyph only after successful bitmap creation and rendering.
+    - id: success_already_bitmap_noop
+      description: Passing a bitmap glyph returns FT_Err_Ok and leaves the glyph handle, bitmap bytes, and ownership unchanged.
+    - id: success_origin_translation_affects_render
+      description: A non-null origin translates the glyph before rendering, affects bitmap left/top and pixels like C, and is undone on the original glyph when destroy is false.
+    - id: error_invalid_arguments_or_unrenderable_format
+      description: Null the_glyph, null *the_glyph, null library, null clazz, or a class without glyph_prepare returns FT_Err_Invalid_Argument and preserves the caller handle according to C.
+    - id: error_render_failure_preserves_original
+      description: Renderer failures do not destroy the original glyph even when destroy is true, free the partial bitmap glyph, and leave the caller handle unchanged.
+  # needs-input: operation=FT_Get_Glyph then FT_Glyph_To_Bitmap; fixture_asset=outline font with glyphs covering normal/mono/lcd render, bitmap glyph control, and malformed or unsupported glyph format facade; params={render_mode, origin vectors including null/negative/fractional 26.6, destroy true/false, null handle cases}; output shape={FT_Error, resulting glyph kind, handle replacement class, bitmap fields/bytes, left/top, advance, original-glyph mutation/free events}; comparison=exact C oracle error, bytes, placement, ownership, origin restoration, and output-handle preservation.
+- id: ftglyph.FT_Glyph_Transform
+  kind: function
+  symbol: FT_Glyph_Transform
+  header: freetype/ftglyph.h
+  description: FreeType C API function that applies a matrix and/or 26.6 delta to scalable detached glyphs and transforms the advance vector when a matrix is supplied.
+  cases:
+    - id: success_outline_matrix_delta
+      description: Outline glyph points are transformed by the supplied 16.16 matrix and 26.6 delta, and the root advance vector is transformed by the matrix only.
+    - id: success_outline_delta_only_or_matrix_only
+      description: Null matrix and null delta are accepted independently by the outline class hook and produce C-equivalent point and advance mutations.
+    - id: success_svg_transform_accumulates
+      description: SVG glyph transforms compose the supplied matrix with the stored transform and update the stored delta using the C order and fixed-point arithmetic.
+    - id: error_null_or_bad_glyph
+      description: Null glyph or null clazz returns FT_Err_Invalid_Argument without mutation.
+    - id: error_non_scalable_bitmap
+      description: Bitmap glyphs have no transform hook and return FT_Err_Invalid_Glyph_Format without changing bitmap fields or advance.
+  # needs-input: operation=FT_Get_Glyph then FT_Glyph_Transform; fixture_asset=outline and bitmap fonts plus SVG font when enabled; params={identity, scale, rotate/shear, null matrix, null delta, positive/negative delta, bitmap glyph}; output shape={FT_Error, root advance, outline point arrays or SVG transform/delta or bitmap preservation}; comparison=exact C oracle fixed-point arithmetic, point/advance fields, and error-preservation behavior.
+- id: ftglyph.FT_Matrix_Invert
+  kind: function
+  symbol: FT_Matrix_Invert
+  header: freetype/ftglyph.h
+  description: FreeType C API function that inverts a 2x2 16.16 FT_Matrix in place using FT_MulFix and FT_DivFix arithmetic.
+  cases:
+    - id: success_identity_scale_rotate_shear
+      description: Invertible identity, scale, rotation, and shear matrices return FT_Err_Ok and mutate xx, xy, yx, yy to the exact C fixed-point inverse.
+    - id: error_null_matrix
+      description: A null matrix pointer returns FT_Err_Invalid_Argument.
+    - id: error_singular_preserves_matrix
+      description: A matrix whose determinant is zero returns FT_Err_Invalid_Argument and leaves all four fields untouched.
+    - id: fixed_point_rounding_and_signs
+      description: Negative determinants and non-integral fixed-point inverses match C FT_MulFix/FT_DivFix rounding and sign behavior exactly.
+  # needs-input: operation=FT_Matrix_Invert; fixture_asset=synthetic matrix table; params={identity, +/- scale, rotations, shear, near-singular, singular, null}; output shape={FT_Error, matrix before/after fields}; comparison=exact C oracle error and 16.16 field values, including preservation on singular/null cases.
+- id: ftglyph.FT_Matrix_Multiply
+  kind: function
+  symbol: FT_Matrix_Multiply
+  header: freetype/ftglyph.h
+  description: FreeType C API function that performs b = a * b for 2x2 16.16 matrices using FT_MulFix and wrap-around arithmetic.
+  cases:
+    - id: success_composes_matrices
+      description: Identity, scale, rotation, shear, and mixed matrices mutate b to the exact C product and leave a unchanged.
+    - id: success_null_operand_noop
+      description: A null a or null b returns without mutating the non-null operand, matching the implementation guard.
+    - id: overflow_wraparound_matches_c
+      description: Large FT_Fixed values use C wrap-around helper arithmetic and the fixture compares the resulting fields exactly.
+  # needs-input: operation=FT_Matrix_Multiply; fixture_asset=synthetic matrix-pair table; params={identity pairs, transform compositions, null a, null b, large values}; output shape={matrix a preservation, matrix b before/after fields}; comparison=exact C oracle 16.16 field values and no-op behavior for null operands.
+- id: ftglyph.FT_New_Glyph
+  kind: function
+  symbol: FT_New_Glyph
+  header: freetype/ftglyph.h
+  description: FreeType C API function that creates an empty detached glyph object for a public glyph image format supported by a built-in glyph class or renderer.
+  cases:
+    - id: success_bitmap_outline_svg_empty_glyph
+      description: Valid bitmap, outline, and SVG formats allocate an FT_Glyph object with library, clazz, format, zeroed class-specific payload, and caller ownership.
+    - id: success_renderer_supported_custom_format
+      description: For non-built-in formats, C asks FT_Lookup_Renderer and uses the renderer glyph class if present.
+    - id: error_null_library_or_output
+      description: Null library or null aglyph returns FT_Err_Invalid_Argument and records C output write/preservation behavior.
+    - id: error_unsupported_format
+      description: Unsupported glyph formats return FT_Err_Invalid_Glyph_Format without allocating a glyph.
+    - id: error_allocation_failure
+      description: Allocation failure returns C memory error and leaves *aglyph null.
+  # needs-input: operation=FT_New_Glyph; fixture_asset=library handle plus optional renderer-enabled format facade; params={format bitmap, outline, SVG if enabled, unsupported tag, null library, null aglyph, forced allocation failure}; output shape={FT_Error, aglyph nullness, root fields, class kind, zeroed payload, allocation/free event stream}; comparison=exact C oracle error, root fields, output nullness, and ownership.
+- id: ftglyph.FT_BitmapGlyphRec
+  kind: record
+  symbol: FT_BitmapGlyphRec
+  header: freetype/ftglyph.h
+  description: FreeType public bitmap glyph record containing the FT_GlyphRec root, integer bitmap bearings, and an owned FT_Bitmap descriptor.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for root, left, top, and bitmap match the pinned C header.
+    - id: fields_match_get_glyph_and_to_bitmap
+      description: FT_Get_Glyph and FT_Glyph_To_Bitmap populate root, left, top, and bitmap fields with exact C values for bitmap glyph fixtures.
+    - id: owns_bitmap_buffer
+      description: The bitmap buffer is owned by FT_BitmapGlyphRec and is released by FT_Done_Glyph through the bitmap glyph done hook.
+  # needs-input: operation=FT_Get_Glyph and FT_Glyph_To_Bitmap with record inspection; fixture_asset=bitmap strike font and outline font rendered to bitmap; params={glyph index, size, render mode}; output shape={layout metadata, root fields, left/top, FT_Bitmap fields/bytes, free events}; comparison=exact C oracle layout, field values, bytes, and ownership.
+- id: ftglyph.FT_GlyphRec
+  kind: record
+  symbol: FT_GlyphRec
+  header: freetype/ftglyph.h
+  description: FreeType public root glyph record containing library handle, private glyph class pointer, glyph image format, and 16.16 advance vector.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for library, clazz, format, and advance match the pinned C header.
+    - id: root_fields_match_created_glyphs
+      description: FT_New_Glyph, FT_Get_Glyph, and FT_Glyph_Copy populate root fields and advance values exactly like C.
+    - id: clazz_is_private_identity_only
+      description: The clazz pointer is treated as an opaque class identity; comparisons classify null/non-null/class kind rather than dereferencing private implementation details.
+  # needs-input: operation=FT_New_Glyph/FT_Get_Glyph/FT_Glyph_Copy with record inspection; fixture_asset=outline and bitmap fonts; params={format, glyph index, size}; output shape={layout metadata, library pointer identity class, clazz identity class, format tag, advance vector}; comparison=exact C oracle layout and public field values with opaque pointer classification.
+- id: ftglyph.FT_OutlineGlyphRec
+  kind: record
+  symbol: FT_OutlineGlyphRec
+  header: freetype/ftglyph.h
+  description: FreeType public outline glyph record containing the FT_GlyphRec root and an owned FT_Outline descriptor.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for root and outline match the pinned C header.
+    - id: fields_match_get_glyph_copy_transform
+      description: FT_Get_Glyph, FT_Glyph_Copy, and FT_Glyph_Transform expose outline points, contours, tags, flags, and root fields exactly like C.
+    - id: owns_outline_arrays
+      description: Outline arrays copied from a slot are owned by FT_OutlineGlyphRec and released by FT_Done_Glyph.
+  # needs-input: operation=FT_Get_Glyph, FT_Glyph_Copy, FT_Glyph_Transform with record inspection; fixture_asset=outline font with simple/composite glyphs; params={glyph index, load flags, transform matrix/delta}; output shape={layout metadata, root fields, FT_Outline fields and arrays, ownership/free events}; comparison=exact C oracle layout, outline arrays, transformed coordinates, and ownership.
+- id: ftglyph.FT_SvgGlyphRec
+  kind: record
+  symbol: FT_SvgGlyphRec
+  header: freetype/ftglyph.h
+  description: FreeType public SVG glyph record containing FT_GlyphRec root, SVG document bytes, metrics, glyph range, transform, and delta.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for root, svg_document, svg_document_length, glyph_index, metrics, units_per_EM, start_glyph_id, end_glyph_id, transform, and delta match the pinned C header.
+    - id: fields_match_svg_get_copy_transform
+      description: When SVG support is enabled, FT_Get_Glyph, FT_Glyph_Copy, and FT_Glyph_Transform populate and mutate SVG document and transform fields exactly like C.
+    - id: svg_feature_disabled_classification
+      description: If the pinned build lacks FT_CONFIG_OPTION_SVG, SVG cases are classified as unsupported rather than silently skipped.
+  # needs-input: operation=FT_Get_Glyph/FT_Glyph_Copy/FT_Glyph_Transform on SVG glyphs; fixture_asset=OT-SVG font plus build-feature probe; params={glyph index, transform matrix/delta}; output shape={layout metadata, SVG bytes hash/length, metrics fields, glyph range, transform/delta, unsupported classification}; comparison=exact C oracle fields and feature availability.
+- id: ftglyph.FT_BitmapGlyph
+  kind: type
+  symbol: FT_BitmapGlyph
+  header: freetype/ftglyph.h
+  description: FreeType public typedef for a pointer to FT_BitmapGlyphRec, used as the bitmap glyph subclass handle.
+  cases:
+    - id: alias_defined
+      description: Type alias is present in the pinned C public interface as struct FT_BitmapGlyphRec_*.
+    - id: pointer_alias_matches_record
+      description: A glyph whose root format is FT_GLYPH_FORMAT_BITMAP can be cast to FT_BitmapGlyph and exposes the same FT_BitmapGlyphRec fields as C.
+  # needs-input: operation=FT_Get_Glyph/FT_Glyph_To_Bitmap then cast inspection; fixture_asset=bitmap glyph fixture; params={glyph index, render mode}; output shape={alias pointer shape, record fields}; comparison=exact C oracle type layout relationship and field values.
+- id: ftglyph.FT_Glyph
+  kind: type
+  symbol: FT_Glyph
+  header: freetype/ftglyph.h
+  description: FreeType public typedef for a pointer to FT_GlyphRec, the caller-owned detached glyph handle.
+  cases:
+    - id: alias_defined
+      description: Type alias is present in the pinned C public interface as struct FT_GlyphRec_*.
+    - id: caller_owned_lifetime
+      description: Handles returned by FT_New_Glyph, FT_Get_Glyph, FT_Glyph_Copy, and FT_Glyph_To_Bitmap are caller-owned and must be released with FT_Done_Glyph.
+  # needs-input: operation=create/copy/convert/done glyph lifecycle; fixture_asset=outline and bitmap fonts; params={creation path, destroy order}; output shape={handle nullness, root fields, allocation/free event stream}; comparison=exact C oracle handle ownership and root record relationship.
+- id: ftglyph.FT_Glyph_Class
+  kind: type
+  symbol: FT_Glyph_Class
+  header: freetype/ftglyph.h
+  description: FreeType public forward typedef for the private FT_Glyph_Class_ record used as an opaque glyph class pointer in FT_GlyphRec.
+  cases:
+    - id: alias_defined
+      description: Type alias is present in the pinned C public interface as an opaque forward declaration.
+    - id: opaque_class_identity_only
+      description: Public tests compare only nullness and stable class identity effects through public operations, not private FT_Glyph_Class_ field names.
+  # needs-input: operation=FT_New_Glyph/FT_Get_Glyph class identity inspection through public behavior; fixture_asset=outline/bitmap/SVG glyphs; params={glyph format}; output shape={clazz nullness/class-kind classification, supported operation behavior}; comparison=exact C oracle public behavior without private struct dereference.
+- id: ftglyph.FT_OutlineGlyph
+  kind: type
+  symbol: FT_OutlineGlyph
+  header: freetype/ftglyph.h
+  description: FreeType public typedef for a pointer to FT_OutlineGlyphRec, used as the outline glyph subclass handle.
+  cases:
+    - id: alias_defined
+      description: Type alias is present in the pinned C public interface as struct FT_OutlineGlyphRec_*.
+    - id: pointer_alias_matches_record
+      description: A glyph whose root format is FT_GLYPH_FORMAT_OUTLINE can be cast to FT_OutlineGlyph and exposes the same FT_OutlineGlyphRec fields as C.
+  # needs-input: operation=FT_Get_Glyph then cast inspection; fixture_asset=outline font; params={glyph index, load flags, size}; output shape={alias pointer shape, root fields, outline fields/arrays}; comparison=exact C oracle type layout relationship and field values.
+- id: ftglyph.FT_SvgGlyph
+  kind: type
+  symbol: FT_SvgGlyph
+  header: freetype/ftglyph.h
+  description: FreeType public typedef for a pointer to FT_SvgGlyphRec, used as the SVG glyph subclass handle.
+  cases:
+    - id: alias_defined
+      description: Type alias is present in the pinned C public interface as struct FT_SvgGlyphRec_*.
+    - id: pointer_alias_matches_record_when_enabled
+      description: When SVG support is enabled, a glyph whose root format is FT_GLYPH_FORMAT_SVG can be cast to FT_SvgGlyph and exposes the same FT_SvgGlyphRec fields as C.
+    - id: feature_availability_recorded
+      description: Build configurations without SVG support record unsupported behavior instead of inventing SVG outputs.
+  # needs-input: operation=FT_Get_Glyph then cast inspection; fixture_asset=OT-SVG font plus build-feature probe; params={glyph index}; output shape={alias pointer shape, SVG record fields or unsupported classification}; comparison=exact C oracle type relationship, feature availability, and field values.
+- id: ftgxval.FT_VALIDATE_APPLE
+  kind: flag
+  symbol: FT_VALIDATE_APPLE
+  header: freetype/ftgxval.h
+  description: FreeType public classic kern validation flag selecting Apple classic kern dialect handling in FT_ClassicKern_Validate.
+  cases:
+    - id: value_matches_header
+      description: Value equals (FT_VALIDATE_GX_START << 1), which is 0x8000 in the pinned public header.
+    - id: runtime_selects_apple_classic_kern
+      description: Passing this flag to FT_ClassicKern_Validate accepts Apple classic kern tables and rejects Microsoft-only dialect assumptions according to gxvkern.c.
+    - id: absent_or_invalid_kern_table
+      description: Missing kern table yields a null validated table with C error behavior, while malformed Apple kern data returns the exact C validation error.
+  # needs-input: operation=FT_ClassicKern_Validate and FT_ClassicKern_Free; fixture_asset=Apple classic kern font, Microsoft classic kern font, missing-kern font, malformed kern controls; params={validation_flags:FT_VALIDATE_APPLE, ckern_table null/non-null}; output shape={constant value, FT_Error, returned table nullness/bytes, free behavior}; comparison=exact C oracle value 0x8000, error, table bytes, and nullness.
+- id: ftgxval.FT_VALIDATE_CKERN
+  kind: flag
+  symbol: FT_VALIDATE_CKERN
+  header: freetype/ftgxval.h
+  description: FreeType public classic kern validation flag selecting either Microsoft or Apple classic kern dialect handling.
+  cases:
+    - id: value_matches_header
+      description: Value equals FT_VALIDATE_MS | FT_VALIDATE_APPLE, which is 0xC000 in the pinned public header.
+    - id: runtime_accepts_ms_or_apple
+      description: Passing this flag to FT_ClassicKern_Validate masks the request with FT_VALIDATE_CKERN and accepts either supported classic kern dialect.
+    - id: output_table_lifetime
+      description: A non-null returned kern table is owned by the caller and must be released with FT_ClassicKern_Free, matching C allocation and free behavior.
+    - id: malformed_table_error_matches_c
+      description: Invalid offsets, lengths, or pair ordering in classic kern data produce the exact C validation error and leave ckern_table null.
+  # needs-input: operation=FT_ClassicKern_Validate and FT_ClassicKern_Free; fixture_asset=Microsoft classic kern font, Apple classic kern font, missing-kern font, malformed kern controls; params={validation_flags:FT_VALIDATE_CKERN, ckern_table null/non-null}; output shape={constant value, FT_Error, returned table nullness/bytes, allocation/free events}; comparison=exact C oracle value 0xC000, validation result, table bytes, and ownership.

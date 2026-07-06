@@ -1,0 +1,271 @@
+- id: ftimage.FT_RASTER_FLAG_SDF
+  kind: flag
+  symbol: FT_RASTER_FLAG_SDF
+  header: freetype/ftimage.h
+  description: Public raster parameter flag selecting signed-distance-field rendering.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x8 in the pinned C public header.
+    - id: sdf_render_mode_sets_flag
+      description: C SDF renderers pass this flag through SDF_Raster_Params.root.flags and reject bitmap-SDF calls when the flag is missing.
+    - id: non_sdf_raster_rejects_sdf_shape
+      description: Non-SDF raster paths do not treat this as AA or direct rendering; observable success or error must match the selected C renderer.
+  # needs-input: operation=FT_Render_Glyph/FT_Outline_Render; fixture_asset=outline glyphs and bitmap glyphs exercised with FT_RENDER_MODE_SDF plus malformed SDF params; params render_mode=SDF and direct FT_Raster_Params flags=[FT_RASTER_FLAG_SDF,0]; expected output shape=FT_Error, bitmap pixel_mode, dimensions, pitch, buffer hash, and renderer error code; comparison=exact C oracle success/error and exact bitmap bytes where generated.
+
+- id: ftimage.FT_BBox
+  kind: record
+  symbol: FT_BBox
+  header: freetype/ftimage.h
+  description: Public bounding-box record using FT_Pos extrema in xMin, yMin, xMax, and yMax order.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match C for four consecutive FT_Pos fields.
+    - id: outline_cbox_output_shape
+      description: FT_Outline_Get_CBox and FT_Outline_Render direct-mode clip boxes populate and consume the same coordinate ordering.
+    - id: negative_and_empty_bounds
+      description: Negative descenders, empty outlines, and zero-area boxes preserve C field values exactly.
+  # needs-input: operation=FT_Outline_Get_CBox and FT_Outline_Render; fixture_asset=fonts with positive, negative, empty, composite, and transformed outlines; params glyph_index, size, load_flags, optional clip_box; expected output shape=FT_BBox fields and FT_Error; comparison=exact C oracle 26.6 values for cbox and exact direct-mode clipping behavior.
+
+- id: ftimage.FT_Bitmap
+  kind: record
+  symbol: FT_Bitmap
+  header: freetype/ftimage.h
+  description: Public bitmap record describing rows, width, pitch, buffer, num_grays, pixel_mode, palette_mode, and palette.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C record.
+    - id: public_fields_match_render_output
+      description: Rendered glyph outputs match C for dimensions, pitch sign, pixel mode, gray count, and buffer bytes.
+    - id: empty_bitmap_is_valid
+      description: C accepts empty bitmaps with null buffer when width or rows are zero and reports matching zero-output behavior.
+    - id: invalid_target_buffer_errors
+      description: Non-empty target bitmaps with null buffers produce C-equivalent Invalid_Argument behavior.
+  # needs-input: operation=FT_Render_Glyph, FT_Outline_Get_Bitmap, FT_Bitmap_* APIs; fixture_asset=outline, embedded bitmap, LCD/LCD_V, color BGRA, SDF, and empty glyph fonts; params size, glyph_index, render_mode, target bitmap dimensions/pitch/null-buffer variants; expected output shape=FT_Error plus all FT_Bitmap fields and buffer hash/bytes; comparison=exact C oracle fields, byte output, and error code.
+
+- id: ftimage.FT_Outline
+  kind: record
+  symbol: FT_Outline
+  header: freetype/ftimage.h
+  description: Public outline record containing point, tag, contour, and outline flag arrays for rasterization and decomposition.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match C for n_contours, n_points, points, tags, contours, and flags.
+    - id: glyph_slot_outline_matches_c
+      description: Loaded outline glyphs expose point coordinates, tags, contour ends, and flags matching C for the same load flags.
+    - id: invalid_outline_errors
+      description: Missing points or contours and mismatched n_points versus final contour end produce the same C raster/decompose errors.
+    - id: empty_outline_success
+      description: C rasterizers return success without output for outlines with zero points or contours.
+  # needs-input: operation=FT_Load_Glyph, FT_Outline_Decompose, FT_Outline_Render; fixture_asset=TrueType, CFF, composite, empty, and malformed-outline fixtures; params glyph_index, size, load_flags, render flags; expected output shape=outline arrays, FT_Error, callback event list, and rendered bitmap/span hash; comparison=exact C oracle arrays/events/errors and bytes where rendered.
+
+- id: ftimage.FT_Outline_Funcs
+  kind: record
+  symbol: FT_Outline_Funcs
+  header: freetype/ftimage.h
+  description: Public callback table for outline decomposition with move, line, conic, cubic, shift, and delta fields.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match the pinned C callback table.
+    - id: callback_order_matches_c
+      description: FT_Outline_Decompose emits move, line, conic, and cubic callbacks in the same order as C.
+    - id: shift_delta_transform_matches_c
+      description: Callback coordinates apply x'=(x<<shift)-delta and y'=(y<<shift)-delta exactly like C.
+    - id: callback_error_propagates
+      description: A non-zero callback return stops decomposition and returns the same error code as C.
+  # needs-input: operation=FT_Outline_Decompose; fixture_asset=fonts/glyphs containing line, conic, cubic, multi-contour, and malformed paths; params shift, delta, callback failure point; expected output shape=callback event sequence with transformed FT_Vector coordinates and FT_Error; comparison=exact C oracle event order, coordinates, and propagated error.
+
+- id: ftimage.FT_Raster_Funcs
+  kind: record
+  symbol: FT_Raster_Funcs
+  header: freetype/ftimage.h
+  description: Public raster class record exposing glyph format and constructor/reset/set-mode/render/done callbacks.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match C for glyph_format and all callback function pointers.
+    - id: callback_slots_match_registered_renderers
+      description: Standard, smooth, SDF, and bitmap-SDF renderer classes expose C-equivalent glyph format and callback slot presence.
+    - id: render_callback_error_contract
+      description: Invoking raster_render through the class follows C error behavior for null raster, unsupported flags, invalid outline, and invalid target.
+  # needs-input: operation=renderer_class_probe and FT_Outline_Render; fixture_asset=library instance with standard, smooth, SDF, and bitmap-SDF renderers plus outline fixtures; params renderer selection and FT_Raster_Params variants; expected output shape=glyph_format tags, callback-null bitmap, FT_Error, and output bytes/spans; comparison=exact C oracle class metadata and render results.
+
+- id: ftimage.FT_Raster_Params
+  kind: record
+  symbol: FT_Raster_Params
+  header: freetype/ftimage.h
+  description: Public raster render parameter record containing target/source pointers, flags, span callbacks, user data, and clip box.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match C for all pointer, flag, callback, user, and clip_box fields.
+    - id: target_bitmap_render_matches_c
+      description: Non-direct rendering consumes target bitmap dimensions, pitch, pixel mode, and buffer exactly as C.
+    - id: direct_span_render_matches_c
+      description: AA direct rendering ignores target, calls gray_spans with user data, and emits C-equivalent spans.
+    - id: clip_box_matches_c
+      description: Direct rendering without CLIP presets clip_box from outline cbox, while CLIP uses caller-provided integer pixel bounds.
+    - id: invalid_param_errors
+      description: Null params, null target for non-direct, null non-empty buffers, non-AA smooth, and AA/direct black-raster calls return C-equivalent errors.
+  # needs-input: operation=FT_Outline_Render; fixture_asset=outline glyphs with small, large, clipped, empty, and malformed contours; params flags=[DEFAULT,AA,AA|DIRECT,AA|DIRECT|CLIP,SDF], target bitmap variants, clip_box variants, null callback variants; expected output shape=FT_Error, bitmap bytes, span callback log, mutated clip_box, and callback user echo; comparison=exact C oracle fields, bytes/spans, and error code.
+
+- id: ftimage.FT_Span
+  kind: record
+  symbol: FT_Span
+  header: freetype/ftimage.h
+  description: Public anti-aliased direct-rendering span record with x, len, and coverage fields.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match C for unsigned-short x, unsigned-short len, and unsigned-char coverage.
+    - id: direct_span_values_match_c
+      description: Smooth direct rendering emits identical y, count, span x, len, and coverage values to the callback.
+    - id: wide_outline_span_limit
+      description: C rejects or clips outlines that cannot be represented with 16-bit FT_Span x/len values; parity must preserve the same error/output.
+  # needs-input: operation=FT_Outline_Render direct mode; fixture_asset=AA outline glyphs with narrow, wide, clipped, overlapping, and empty contours; params flags=FT_RASTER_FLAG_AA|FT_RASTER_FLAG_DIRECT with optional CLIP; expected output shape=ordered span callback log; comparison=exact C oracle y/count/x/len/coverage/user sequence.
+
+- id: ftimage.FT_Vector
+  kind: record
+  symbol: FT_Vector
+  header: freetype/ftimage.h
+  description: Public two-dimensional coordinate record with FT_Pos x and y fields.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets match C for x followed by y.
+    - id: outline_points_match_c
+      description: Loaded glyph outline point coordinates match C in 26.6 or font-unit coordinates according to load flags.
+    - id: transform_matches_c
+      description: FT_Vector_Transform applies C-equivalent fixed-point matrix multiplication, including negative and overflow-near values.
+  # needs-input: operation=FT_Load_Glyph and FT_Vector_Transform; fixture_asset=fonts with simple, composite, hinted, unhinted, and transformed glyphs; params glyph_index, size, load_flags, FT_Matrix values; expected output shape=FT_Vector arrays or transformed vector; comparison=exact C oracle FT_Pos coordinates.
+
+- id: ftimage.FT_CURVE_TAG
+  kind: macro
+  symbol: FT_CURVE_TAG
+  header: freetype/ftimage.h
+  description: Public function-like macro that masks an outline tag to its low two curve-type bits.
+  cases:
+    - id: expansion_matches_header
+      description: Macro expansion is flag & 0x03 in the pinned public header.
+    - id: classifies_outline_tags
+      description: C decomposition and rasterization classify ON, CONIC, and CUBIC tags through this mask while preserving higher scan/touch bits.
+  # needs-input: operation=constant_eval and FT_Outline_Decompose; fixture_asset=small C macro probe plus outlines containing curve tags with scanmode/touch bits set; params tag_values=[0x00,0x01,0x02,0x04,0x09,0x12]; expected output shape=macro integer results and callback event sequence; comparison=exact C oracle masked values and decomposition behavior.
+
+- id: ftimage.FT_CURVE_TAG_CONIC
+  kind: tag
+  symbol: FT_CURVE_TAG_CONIC
+  header: freetype/ftimage.h
+  description: Public outline tag value for a second-order Bezier control point.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x00 in the pinned C public header.
+    - id: conic_decomposition_matches_c
+      description: Consecutive conic off-curve points and implied on-curve midpoint behavior match C callback output.
+  # needs-input: operation=FT_Outline_Decompose; fixture_asset=glyphs or synthetic outlines with single and consecutive conic controls; params shift/delta variants; expected output shape=callback event sequence and FT_Error; comparison=exact C oracle conic events and coordinates.
+
+- id: ftimage.FT_CURVE_TAG_CUBIC
+  kind: tag
+  symbol: FT_CURVE_TAG_CUBIC
+  header: freetype/ftimage.h
+  description: Public outline tag value for a third-order Bezier control point.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x02 in the pinned C public header.
+    - id: cubic_decomposition_matches_c
+      description: Paired cubic control points emit C-equivalent cubic callbacks, while malformed cubic sequences return the same C error.
+  # needs-input: operation=FT_Outline_Decompose; fixture_asset=CFF/Type1 glyphs and malformed synthetic cubic outlines; params shift/delta variants and callback failure point; expected output shape=callback events and FT_Error; comparison=exact C oracle events, coordinates, and malformed-outline error.
+
+- id: ftimage.FT_CURVE_TAG_HAS_SCANMODE
+  kind: tag
+  symbol: FT_CURVE_TAG_HAS_SCANMODE
+  header: freetype/ftimage.h
+  description: Public outline tag bit indicating that bits 5 through 7 carry TrueType scan conversion mode for the first point of a contour.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x04 in the pinned C public header.
+    - id: monochrome_scanmode_affects_dropout
+      description: The black rasterizer checks this bit on the first point of each contour and applies C-equivalent dropout scan mode behavior.
+  # needs-input: operation=FT_Render_Glyph/FT_Outline_Render mono; fixture_asset=TrueType glyphs or synthetic outlines with SCANTYPE-driven tags on contour starts; params render_mode=MONO, outline flags/dropout variants; expected output shape=FT_Error and mono bitmap bytes; comparison=exact C oracle error and bitmap bytes.
+
+- id: ftimage.FT_CURVE_TAG_ON
+  kind: tag
+  symbol: FT_CURVE_TAG_ON
+  header: freetype/ftimage.h
+  description: Public outline tag value for an on-curve point.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x01 in the pinned C public header.
+    - id: on_curve_decomposition_matches_c
+      description: On-curve points emit C-equivalent move and line callbacks and terminate conic/cubic segments identically.
+  # needs-input: operation=FT_Outline_Decompose; fixture_asset=glyphs with single-contour, multi-contour, and line-only outlines; params shift/delta variants; expected output shape=callback event sequence and FT_Error; comparison=exact C oracle move/line event order and coordinates.
+
+- id: ftimage.FT_CURVE_TAG_TOUCH_BOTH
+  kind: tag
+  symbol: FT_CURVE_TAG_TOUCH_BOTH
+  header: freetype/ftimage.h
+  description: Public TrueType hinter tag mask combining horizontal and vertical touch bits.
+  cases:
+    - id: value_matches_header
+      description: Value is FT_CURVE_TAG_TOUCH_X | FT_CURVE_TAG_TOUCH_Y, producing 0x18.
+    - id: hinted_outline_touch_bits_match_c
+      description: Native TrueType hinting sets and clears combined touch bits in loaded outline tags the same way as C.
+  # needs-input: operation=FT_Load_Glyph; fixture_asset=TrueType fonts with instructions that touch points in x, y, and both axes; params size, glyph_index, load_flags including hinted/native and no-hinting controls; expected output shape=outline tag bytes; comparison=exact C oracle tags including touch bits.
+
+- id: ftimage.FT_CURVE_TAG_TOUCH_X
+  kind: tag
+  symbol: FT_CURVE_TAG_TOUCH_X
+  header: freetype/ftimage.h
+  description: Public TrueType hinter tag bit marking points touched in the x direction.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x08 in the pinned C public header.
+    - id: hinted_outline_touch_x_matches_c
+      description: Native TrueType instructions that move points horizontally produce C-equivalent outline tag bytes.
+  # needs-input: operation=FT_Load_Glyph; fixture_asset=TrueType fonts with horizontal point movement instructions; params size, glyph_index, load_flags; expected output shape=outline tag bytes and point coordinates; comparison=exact C oracle tags and coordinates.
+
+- id: ftimage.FT_CURVE_TAG_TOUCH_Y
+  kind: tag
+  symbol: FT_CURVE_TAG_TOUCH_Y
+  header: freetype/ftimage.h
+  description: Public TrueType hinter tag bit marking points touched in the y direction.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x10 in the pinned C public header.
+    - id: hinted_outline_touch_y_matches_c
+      description: Native TrueType instructions that move points vertically produce C-equivalent outline tag bytes.
+  # needs-input: operation=FT_Load_Glyph; fixture_asset=TrueType fonts with vertical point movement instructions; params size, glyph_index, load_flags; expected output shape=outline tag bytes and point coordinates; comparison=exact C oracle tags and coordinates.
+
+- id: ftimage.FT_IMAGE_TAG
+  kind: macro
+  symbol: FT_IMAGE_TAG
+  header: freetype/ftimage.h
+  description: Public function-like macro that constructs four-byte glyph-format tags or can be overridden before including ftimage.h.
+  cases:
+    - id: expansion_matches_header
+      description: Default macro shifts four unsigned byte values into an unsigned long tag value.
+    - id: glyph_format_values_match_c
+      description: FT_GLYPH_FORMAT_* enum values generated through FT_IMAGE_TAG match C for none, comp, bits, outl, plot, and SVG.
+    - id: override_contract_matches_c
+      description: Redefining FT_IMAGE_TAG before including the header follows the documented C override behavior.
+  # needs-input: operation=constant_eval; fixture_asset=small C compile-time probes with default macro and pre-include override; params symbols=[FT_GLYPH_FORMAT_NONE,COMPOSITE,BITMAP,OUTLINE,PLOTTER,SVG] and chars; expected output shape=integer tag values; comparison=exact C oracle values and expected compile behavior.
+
+- id: ftimage.FT_Pos
+  kind: type
+  symbol: FT_Pos
+  header: freetype/ftimage.h
+  description: Public signed long coordinate typedef used for vectors, boxes, outlines, and fixed-point pixel positions.
+  cases:
+    - id: alias_matches_c
+      description: Typedef resolves to signed long with C-equivalent size, alignment, signedness, and range on the target ABI.
+    - id: coordinate_outputs_use_ft_pos
+      description: Public coordinate-bearing records and functions preserve C FT_Pos values exactly.
+  # needs-input: operation=abi_probe and coordinate endpoint parity; fixture_asset=ABI probe plus glyphs with negative, large, hinted, unhinted, and transformed coordinates; params target ABI, glyph_index, size, matrix; expected output shape=sizeof/alignof/signedness and coordinate arrays; comparison=exact C oracle ABI and FT_Pos values.
+
+- id: ftimage.FT_Raster
+  kind: type
+  symbol: FT_Raster
+  header: freetype/ftimage.h
+  description: Public opaque raster handle typedef to struct FT_RasterRec_*.
+  cases:
+    - id: alias_matches_c
+      description: Typedef is an opaque pointer with C-equivalent pointer size, alignment, and nullability.
+    - id: lifecycle_callback_contract
+      description: Raster constructor, reset, render, set-mode, and done callbacks consume and produce handles with C-equivalent success and error behavior.
+    - id: null_raster_errors
+      description: Raster render callbacks return the same C errors for null raster handles in smooth, black, SDF, and bitmap-SDF implementations.
+  # needs-input: operation=renderer_class_probe and raster callback invocation; fixture_asset=library renderer registry and outline/bitmap fixtures; params raster_new/reset/render/done sequence and null-raster render variants; expected output shape=FT_Error, handle-null state, and output bitmap/span hash; comparison=exact C oracle lifecycle and null-handle error behavior.

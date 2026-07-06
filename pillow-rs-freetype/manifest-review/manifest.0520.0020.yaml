@@ -1,0 +1,265 @@
+- id: ftimage.FT_Outline_MoveTo_Func
+  kind: macro
+  symbol: FT_Outline_MoveTo_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_Outline_MoveToFunc callback typedef.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_Outline_MoveToFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is int (*)(const FT_Vector* to, void* user).
+    - id: decompose_starts_each_contour
+      description: FT_Outline_Decompose invokes move_to at the beginning of each contour with shift and delta applied exactly like C.
+    - id: decompose_propagates_callback_error
+      description: A non-zero move_to callback return aborts FT_Outline_Decompose with the same error value as C.
+  # needs-input: operation=FT_Outline_Decompose with instrumented move_to callback; fixture_asset=outline fixture/font glyph with multiple contours, empty contour rejection control, and negative coordinates; params={shift:0/1, delta:0/32, callback_return:0/nonzero}; output shape={FT_Error, ordered callback event list, transformed FT_Vector coordinates}; comparison=exact C oracle callback order, contour start coordinates, shift/delta transform, Invalid_Outline behavior, and first nonzero callback error propagation.
+
+- id: ftimage.FT_Raster_Done_Func
+  kind: macro
+  symbol: FT_Raster_Done_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_Raster_DoneFunc callback typedef used by renderer classes.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_Raster_DoneFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is void (*)(FT_Raster raster).
+    - id: renderer_lifecycle_calls_done
+      description: A raster class registered through a renderer module receives raster_done during renderer teardown with the same raster handle created by raster_new.
+  # needs-input: operation=custom renderer module lifecycle through C ABI harness; fixture_asset=test renderer module binary/source fixture registered with FT_Add_Module; params={glyph_format:FT_GLYPH_FORMAT_OUTLINE, create_renderer:true, remove_module:true}; output shape={callback event log with raster handle identity and no return value}; comparison=exact C oracle lifecycle order new/reset/done and handle identity.
+
+- id: ftimage.FT_Raster_New_Func
+  kind: macro
+  symbol: FT_Raster_New_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_Raster_NewFunc callback typedef used by renderer classes.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_Raster_NewFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is int (*)(void* memory, FT_Raster* raster).
+    - id: renderer_lifecycle_calls_new
+      description: Registering a renderer class calls raster_new with a memory handle and stores the returned raster handle on success.
+    - id: renderer_new_error_propagates
+      description: A non-zero raster_new return prevents renderer installation with the same public error classification as C.
+  # needs-input: operation=FT_Add_Module with custom renderer module; fixture_asset=test renderer module source/binary whose raster_new can return success or selected FT_Error; params={raster_new_result:0/nonzero, raster_handle:sentinel}; output shape={FT_Error, installed-module class, callback event log, output raster handle}; comparison=exact C oracle error code, callback order, module install side effect, and raster handle preservation.
+
+- id: ftimage.FT_Raster_Render_Func
+  kind: macro
+  symbol: FT_Raster_Render_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_Raster_RenderFunc callback typedef used to scan-convert glyph images.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_Raster_RenderFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is int (*)(FT_Raster raster, const FT_Raster_Params* params).
+    - id: outline_render_passes_params
+      description: FT_Outline_Render forwards the source outline, target bitmap, flags, callbacks, user pointer, and clip box to the selected outline renderer.
+    - id: render_error_propagates
+      description: A non-zero raster_render return is propagated by FT_Outline_Render and leaves target mutation matching C.
+  # needs-input: operation=FT_Outline_Render with custom outline renderer and with built-in smooth renderer direct mode; fixture_asset=outline fixture/font glyph with visible spans plus custom renderer module; params={flags:AA/DIRECT/CLIP/SDF combinations, clip_box, target bitmap, raster_render_result}; output shape={FT_Error, raster params snapshot, span or bitmap bytes, target mutation class}; comparison=exact C oracle params fields, callback order, error code, target buffer bytes/hash, and mutation/preservation on error.
+
+- id: ftimage.FT_Raster_Reset_Func
+  kind: macro
+  symbol: FT_Raster_Reset_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_Raster_ResetFunc callback typedef used after raster creation.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_Raster_ResetFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is void (*)(FT_Raster raster, unsigned char* pool_base, unsigned long pool_size).
+    - id: renderer_lifecycle_calls_reset
+      description: FreeType calls raster_reset after raster_new using a null pool pointer and zero pool size for the modern no-render-pool path.
+  # needs-input: operation=FT_Add_Module with custom renderer module; fixture_asset=test renderer module source/binary logging raster callbacks; params={successful raster_new, renderer glyph_format}; output shape={callback event log with raster handle, pool_base nullness, pool_size}; comparison=exact C oracle lifecycle order and reset arguments.
+
+- id: ftimage.FT_Raster_Set_Mode_Func
+  kind: macro
+  symbol: FT_Raster_Set_Mode_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_Raster_SetModeFunc callback typedef used for renderer-specific modes.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_Raster_SetModeFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is int (*)(FT_Raster raster, unsigned long mode, void* args).
+    - id: set_mode_result_is_observable
+      description: Renderer property or mode dispatch reaches raster_set_mode when supported and returns the same error value as C.
+  # needs-input: operation=FT_Property_Set or renderer mode dispatch through custom renderer harness; fixture_asset=test renderer module whose raster_set_mode logs mode/args and returns configurable FT_Error; params={mode tag, args pointer class, return code}; output shape={FT_Error, callback event log, mode value, args pointer nullness}; comparison=exact C oracle callback invocation, tag value, error propagation, and no-call behavior for renderers without set_mode.
+
+- id: ftimage.FT_Raster_Span_Func
+  kind: macro
+  symbol: FT_Raster_Span_Func
+  header: freetype/ftimage.h
+  description: Deprecated public macro alias for the FT_SpanFunc callback typedef used by direct anti-aliased rendering.
+  cases:
+    - id: macro_alias_matches_typedef
+      description: Macro expands to FT_SpanFunc in the pinned C header.
+    - id: callback_abi_matches_c
+      description: Callback ABI is void (*)(int y, int count, const FT_Span* spans, void* user).
+    - id: direct_render_emits_spans
+      description: FT_Outline_Render with AA and DIRECT calls gray_spans with C-identical y values, span counts, x/len/coverage records, and user pointer.
+    - id: missing_span_callback_errors
+      description: Direct anti-aliased rendering without gray_spans returns the same error and target mutation behavior as C.
+  # needs-input: operation=FT_Outline_Render with FT_RASTER_FLAG_AA|FT_RASTER_FLAG_DIRECT and instrumented gray_spans; fixture_asset=outline fixture/font glyph with non-empty coverage and clipping variant; params={clip on/off, clip_box, user sentinel, null gray_spans}; output shape={FT_Error, ordered span rows, FT_Span{x,len,coverage} arrays, user pointer identity}; comparison=exact C oracle span stream, clipping, coverage values, null-callback error, and target ignore behavior in direct mode.
+
+- id: ftimage.FT_Glyph_Format
+  kind: enum
+  symbol: FT_Glyph_Format
+  header: freetype/ftimage.h
+  description: Public FreeType enum describing the image format stored in FT_GlyphSlotRec and detached FT_Glyph objects.
+  cases:
+    - id: enum_variants_match_header
+      description: Variants match the pinned C header for NONE, COMPOSITE, BITMAP, OUTLINE, PLOTTER, and SVG tag values.
+    - id: slot_format_matches_loaded_glyph
+      description: Public load and render operations expose C-identical slot format transitions for outline, bitmap, composite, and SVG-capable glyphs.
+  # needs-input: operation=FT_Load_Glyph, FT_Render_Glyph, FT_Get_Glyph, and FT_Glyph_To_Bitmap; fixture_asset=scalable outline font, composite glyph font, embedded bitmap strike font, and SVG OpenType font if enabled; params={glyph_index, load_flags including FT_LOAD_NO_RECURSE/FT_LOAD_COLOR/FT_LOAD_SVG_ONLY, render_mode}; output shape={FT_Error, slot.format, detached glyph root format, bitmap/outline/SVG payload class}; comparison=exact C oracle tag value, format transitions, output payload class, and unsupported-SVG build classification.
+
+- id: ftimage.FT_Pixel_Mode
+  kind: enum
+  symbol: FT_Pixel_Mode
+  header: freetype/ftimage.h
+  description: Public FreeType enum describing FT_Bitmap pixel storage modes.
+  cases:
+    - id: enum_variants_match_header
+      description: Variants match the pinned C header from NONE through BGRA and the sentinel MAX.
+    - id: bitmap_pixel_mode_matches_render_output
+      description: Rendering and bitmap conversion APIs expose C-identical FT_Bitmap.pixel_mode values for mono, gray, LCD, LCD_V, and color bitmap outputs.
+  # needs-input: operation=FT_Load_Glyph, FT_Render_Glyph, FT_Bitmap_Convert, and FT_Bitmap_Blend where applicable; fixture_asset=scalable outline font, color bitmap/COLR fixture, embedded gray2/gray4 bitmap fixture if available, and empty glyph control; params={render_mode:NORMAL/MONO/LCD/LCD_V, load_flags:FT_LOAD_RENDER/FT_LOAD_COLOR, conversion alignment}; output shape={FT_Error, FT_Bitmap rows,width,pitch,num_grays,pixel_mode, buffer bytes/hash}; comparison=exact C oracle pixel_mode value, bitmap metadata, byte buffer, empty-bitmap null buffer behavior, and unsupported fixture classification.
+
+- id: ftimage.FT_GLYPH_FORMAT_BITMAP
+  kind: enum_variant
+  symbol: FT_GLYPH_FORMAT_BITMAP
+  header: freetype/ftimage.h
+  description: Public FT_Glyph_Format tag for bitmap glyph images.
+  cases:
+    - id: value_matches_header
+      description: Value matches FT_IMAGE_TAG('b','i','t','s') from the pinned C header.
+    - id: produced_by_rendered_or_embedded_bitmap
+      description: FT_Render_Glyph and embedded bitmap glyph loading set slot.format to FT_GLYPH_FORMAT_BITMAP like C.
+  # needs-input: operation=FT_Load_Glyph/FT_Render_Glyph; fixture_asset=scalable outline font and embedded bitmap strike font; params={render_mode:NORMAL/MONO/LCD, load_flags:FT_LOAD_RENDER and bitmap strike selection}; output shape={FT_Error, slot.format, FT_Bitmap fields and bytes}; comparison=exact C oracle format tag, bitmap metadata, and buffer bytes/hash.
+
+- id: ftimage.FT_GLYPH_FORMAT_COMPOSITE
+  kind: enum_variant
+  symbol: FT_GLYPH_FORMAT_COMPOSITE
+  header: freetype/ftimage.h
+  description: Public FT_Glyph_Format tag for non-recursed composite glyph images.
+  cases:
+    - id: value_matches_header
+      description: Value matches FT_IMAGE_TAG('c','o','m','p') from the pinned C header.
+    - id: produced_by_no_recurse_composite_load
+      description: FT_Load_Glyph with FT_LOAD_NO_RECURSE on a compound glyph sets slot.format to COMPOSITE and exposes subglyph data like C.
+  # needs-input: operation=FT_Load_Glyph plus FT_Get_SubGlyph_Info; fixture_asset=TrueType font with compound glyph such as accented Latin composite; params={load_flags:FT_LOAD_NO_RECURSE, glyph_index}; output shape={FT_Error, slot.format, num_subglyphs, per-subglyph index/flags/arg1/arg2/transform}; comparison=exact C oracle format tag, subglyph count, subglyph fields, and metrics side effects.
+
+- id: ftimage.FT_GLYPH_FORMAT_NONE
+  kind: enum_variant
+  symbol: FT_GLYPH_FORMAT_NONE
+  header: freetype/ftimage.h
+  description: Public FT_Glyph_Format reserved zero tag for empty or reset glyph slots.
+  cases:
+    - id: value_matches_header
+      description: Value is 0 in the pinned C header.
+    - id: reset_slot_uses_none
+      description: Newly initialized or cleared glyph slots use FT_GLYPH_FORMAT_NONE until a successful load sets a concrete format.
+  # needs-input: operation=FT_New_Memory_Face and slot reset path before/after failed FT_Load_Glyph; fixture_asset=valid scalable font plus invalid glyph index control; params={glyph_index:invalid, load_flags:default}; output shape={FT_Error, slot.format, slot bitmap/outline sentinel fields}; comparison=exact C oracle zero tag and slot preservation/reset behavior on failed load.
+
+- id: ftimage.FT_GLYPH_FORMAT_OUTLINE
+  kind: enum_variant
+  symbol: FT_GLYPH_FORMAT_OUTLINE
+  header: freetype/ftimage.h
+  description: Public FT_Glyph_Format tag for vector outline glyph images.
+  cases:
+    - id: value_matches_header
+      description: Value matches FT_IMAGE_TAG('o','u','t','l') from the pinned C header.
+    - id: produced_by_scalable_glyph_load
+      description: FT_Load_Glyph on scalable outline glyphs without rendering sets slot.format to OUTLINE like C.
+    - id: outline_payload_matches_format
+      description: When this format is reported, slot.outline point, tag, and contour arrays are populated with C-identical geometry.
+  # needs-input: operation=FT_Load_Glyph and FT_Outline_Get_CBox; fixture_asset=scalable TrueType/CFF fonts with simple and compound outline glyphs; params={pixel_size, load_flags default/no_hinting/no_scale}; output shape={FT_Error, slot.format, FT_Outline arrays, cbox}; comparison=exact C oracle tag value, outline point/tag/contour arrays, flags, and cbox fields.
+
+- id: ftimage.FT_GLYPH_FORMAT_PLOTTER
+  kind: enum_variant
+  symbol: FT_GLYPH_FORMAT_PLOTTER
+  header: freetype/ftimage.h
+  description: Public FT_Glyph_Format tag for plotter vector paths documented by FreeType but rarely produced by current drivers.
+  cases:
+    - id: value_matches_header
+      description: Value matches FT_IMAGE_TAG('p','l','o','t') from the pinned C header.
+    - id: source_emitter_inventory
+      description: Pinned source is audited for public paths that can produce PLOTTER so runtime fixtures do not invent an unreachable format.
+  # needs-input: operation=source-emitter audit plus FT_Load_Glyph if a reachable driver fixture exists; fixture_asset=Hershey/plotter-style font only if accepted by pinned FreeType build, otherwise none; params={glyph_index, load_flags}; output shape={format tag or explicit unreachable-source classification}; comparison=exact C oracle value and documented no-runtime-emitter classification for the pinned source tree.
+
+- id: ftimage.FT_GLYPH_FORMAT_SVG
+  kind: enum_variant
+  symbol: FT_GLYPH_FORMAT_SVG
+  header: freetype/ftimage.h
+  description: Public FT_Glyph_Format tag for SVG glyph documents from OpenType SVG tables.
+  cases:
+    - id: value_matches_header
+      description: Value matches FT_IMAGE_TAG('S','V','G',' ') from the pinned C header.
+    - id: produced_by_svg_glyph_load_when_enabled
+      description: FT_Load_Glyph with SVG support and SVG-capable font sets slot.format to SVG before rendering, matching C.
+    - id: unsupported_svg_build_classification
+      description: Builds without SVG support keep the C oracle's NONE/error behavior for the same font and load flags.
+  # needs-input: operation=FT_Load_Glyph and FT_Get_Glyph on OpenType-SVG font; fixture_asset=SVG table font plus non-SVG control; params={load_flags:FT_LOAD_COLOR/FT_LOAD_SVG_ONLY/default, glyph_index with SVG doc}; output shape={FT_Error, slot.format, SVG document length/bytes hash, detached glyph format}; comparison=exact C oracle tag, SVG payload metadata/bytes, and build-disabled error or fallback classification.
+
+- id: ftimage.FT_PIXEL_MODE_BGRA
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_BGRA
+  header: freetype/ftimage.h
+  description: Public FT_Pixel_Mode value for premultiplied BGRA color bitmap glyphs.
+  cases:
+    - id: value_matches_header
+      description: Value is 7 in the pinned C header.
+    - id: produced_by_color_bitmap_load
+      description: Color bitmap glyph loading exposes BGRA pixel mode, four bytes per pixel, and premultiplied channel bytes like C.
+  # needs-input: operation=FT_Load_Glyph/FT_Render_Glyph with FT_LOAD_COLOR; fixture_asset=color bitmap font with CBDT/CBLC, sbix, or COLR-rendered bitmap path where C yields BGRA; params={glyph_index, strike size, load_flags:FT_LOAD_COLOR|FT_LOAD_RENDER}; output shape={FT_Error, bitmap.pixel_mode, rows,width,pitch,num_grays, BGRA buffer bytes/hash}; comparison=exact C oracle pixel mode value, pitch, dimensions, premultiplied BGRA bytes, and unsupported-color path classification.
+
+- id: ftimage.FT_PIXEL_MODE_GRAY
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_GRAY
+  header: freetype/ftimage.h
+  description: Public FT_Pixel_Mode value for 8-bit anti-aliased grayscale bitmaps.
+  cases:
+    - id: value_matches_header
+      description: Value is 2 in the pinned C header.
+    - id: produced_by_normal_render
+      description: FT_Render_Glyph with FT_RENDER_MODE_NORMAL or LIGHT produces GRAY bitmap output with C-identical num_grays and buffer bytes.
+  # needs-input: operation=FT_Load_Glyph followed by FT_Render_Glyph; fixture_asset=scalable outline fonts covering simple, compound, and empty glyphs; params={pixel_size set, render_mode:NORMAL/LIGHT, load_flags default/no_hinting}; output shape={FT_Error, bitmap.pixel_mode, num_grays, rows,width,pitch,left/top, buffer bytes/hash}; comparison=exact C oracle pixel mode, 256 gray levels, bitmap placement, metadata, and byte buffer.
+
+- id: ftimage.FT_PIXEL_MODE_GRAY2
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_GRAY2
+  header: freetype/ftimage.h
+  description: Public FT_Pixel_Mode value for packed 2-bit embedded grayscale bitmap glyphs.
+  cases:
+    - id: value_matches_header
+      description: Value is 3 in the pinned C header.
+    - id: embedded_bitmap_gray2_or_unreachable
+      description: Embedded bitmap fixtures that use 2-bit grayscale expose GRAY2 like C; if no pinned fixture can produce it, the source/fixture audit records that gap explicitly.
+  # needs-input: operation=FT_Load_Glyph on embedded bitmap strike; fixture_asset=font with 2-bit embedded bitmap strike or generated SFNT bitmap fixture, plus absence-control font; params={strike size, glyph_index, load_flags:FT_LOAD_DEFAULT and FT_LOAD_RENDER}; output shape={FT_Error, bitmap.pixel_mode, rows,width,pitch,num_grays, packed buffer bytes/hash or unreachable classification}; comparison=exact C oracle value, packed-byte layout, metadata, and explicit fixture-unavailable classification.
+
+- id: ftimage.FT_PIXEL_MODE_GRAY4
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_GRAY4
+  header: freetype/ftimage.h
+  description: Public FT_Pixel_Mode value for packed 4-bit embedded grayscale bitmap glyphs.
+  cases:
+    - id: value_matches_header
+      description: Value is 4 in the pinned C header.
+    - id: embedded_bitmap_gray4_or_unreachable
+      description: Embedded bitmap fixtures that use 4-bit grayscale expose GRAY4 like C; if no pinned fixture can produce it, the source/fixture audit records that gap explicitly.
+  # needs-input: operation=FT_Load_Glyph on embedded bitmap strike; fixture_asset=font with 4-bit embedded bitmap strike or generated SFNT bitmap fixture, plus absence-control font; params={strike size, glyph_index, load_flags:FT_LOAD_DEFAULT and FT_LOAD_RENDER}; output shape={FT_Error, bitmap.pixel_mode, rows,width,pitch,num_grays, packed buffer bytes/hash or unreachable classification}; comparison=exact C oracle value, packed-nibble layout, metadata, and explicit fixture-unavailable classification.
+
+- id: ftimage.FT_PIXEL_MODE_LCD
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_LCD
+  header: freetype/ftimage.h
+  description: Public FT_Pixel_Mode value for horizontal subpixel LCD glyph bitmaps.
+  cases:
+    - id: value_matches_header
+      description: Value is 5 in the pinned C header.
+    - id: produced_by_lcd_render
+      description: FT_Render_Glyph with FT_RENDER_MODE_LCD produces LCD pixel mode with physical width three times the logical glyph coverage.
+  # needs-input: operation=FT_Load_Glyph followed by FT_Render_Glyph; fixture_asset=scalable outline fonts with simple, compound, and narrow glyphs; params={pixel_size, render_mode:FT_RENDER_MODE_LCD, load_flags default/no_hinting, lcd_filter default/light if exposed}; output shape={FT_Error, bitmap.pixel_mode, rows,width,pitch,left/top,num_grays, LCD buffer bytes/hash}; comparison=exact C oracle pixel mode value, physical width, pitch, placement, filter-dependent bytes, and empty-glyph behavior.

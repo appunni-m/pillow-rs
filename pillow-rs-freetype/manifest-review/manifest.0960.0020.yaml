@@ -1,0 +1,234 @@
+- id: ttnameid.TT_MAC_LANGID_MALAYALAM
+  kind: constant
+  symbol: TT_MAC_LANGID_MALAYALAM
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Malayalam name-table records; pinned FreeType defines it as 72.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 72 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MALAYALAM as a preprocessor-visible public constant.
+    - id: representative_name_record_language_match
+      description: A representative Mac name record tagged with platform Mac and language ID 72 is selected and reported with the same language identity as the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/mac-malayalam.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, language_id=TT_MAC_LANGID_MALAYALAM, name_id=TT_NAME_ID_FULL_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes.
+
+- id: ttnameid.TT_MAC_LANGID_MALAY_ARABIC_SCRIPT
+  kind: constant
+  symbol: TT_MAC_LANGID_MALAY_ARABIC_SCRIPT
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Malay Arabic-script name-table records; pinned FreeType defines it as 84.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 84 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MALAY_ARABIC_SCRIPT as a preprocessor-visible public constant.
+    - id: representative_name_record_language_match
+      description: A representative Mac name record tagged with the Malay Arabic-script language ID 84 is selected distinctly from Malay Roman-script language ID 83.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/mac-malay-script-pair.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, language_id=TT_MAC_LANGID_MALAY_ARABIC_SCRIPT, name_id=TT_NAME_ID_FULL_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes, including distinction from TT_MAC_LANGID_MALAY_ROMAN_SCRIPT.
+
+- id: ttnameid.TT_MAC_LANGID_MALAY_ROMAN_SCRIPT
+  kind: constant
+  symbol: TT_MAC_LANGID_MALAY_ROMAN_SCRIPT
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Malay Roman-script name-table records; pinned FreeType defines it as 83.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 83 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MALAY_ROMAN_SCRIPT as a preprocessor-visible public constant.
+    - id: representative_name_record_language_match
+      description: A representative Mac name record tagged with the Malay Roman-script language ID 83 is selected distinctly from Malay Arabic-script language ID 84.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/mac-malay-script-pair.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, language_id=TT_MAC_LANGID_MALAY_ROMAN_SCRIPT, name_id=TT_NAME_ID_FULL_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes, including distinction from TT_MAC_LANGID_MALAY_ARABIC_SCRIPT.
+
+- id: ttnameid.TT_MAC_LANGID_MALTESE
+  kind: constant
+  symbol: TT_MAC_LANGID_MALTESE
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Maltese name-table records; pinned FreeType defines it as 16.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 16 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MALTESE as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_MANX_GAELIC
+  kind: constant
+  symbol: TT_MAC_LANGID_MANX_GAELIC
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Manx Gaelic name-table records; pinned FreeType defines it as 145.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 145 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MANX_GAELIC as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_MARATHI
+  kind: constant
+  symbol: TT_MAC_LANGID_MARATHI
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Marathi name-table records; pinned FreeType defines it as 66.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 66 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MARATHI as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_MOLDAVIAN
+  kind: constant
+  symbol: TT_MAC_LANGID_MOLDAVIAN
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Moldavian name-table records; pinned FreeType defines it as 53.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 53 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MOLDAVIAN as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_MONGOLIAN
+  kind: constant
+  symbol: TT_MAC_LANGID_MONGOLIAN
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID alias for Mongolian name-table records; pinned FreeType defines it as 57, matching the Mongolian-script alias.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 57 as defined by pinned freetype/ttnameid.h, matching TT_MAC_LANGID_MONGOLIAN_MONGOLIAN_SCRIPT.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MONGOLIAN as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_MONGOLIAN_CYRILLIC_SCRIPT
+  kind: constant
+  symbol: TT_MAC_LANGID_MONGOLIAN_CYRILLIC_SCRIPT
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Mongolian Cyrillic-script name-table records; pinned FreeType defines it as 58.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 58 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MONGOLIAN_CYRILLIC_SCRIPT as a preprocessor-visible public constant.
+    - id: representative_name_record_language_match
+      description: A representative Mac name record tagged with Mongolian Cyrillic-script language ID 58 is selected distinctly from Mongolian-script language ID 57.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/mac-mongolian-script-pair.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, language_id=TT_MAC_LANGID_MONGOLIAN_CYRILLIC_SCRIPT, name_id=TT_NAME_ID_FULL_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes, including distinction from TT_MAC_LANGID_MONGOLIAN_MONGOLIAN_SCRIPT.
+
+- id: ttnameid.TT_MAC_LANGID_MONGOLIAN_MONGOLIAN_SCRIPT
+  kind: constant
+  symbol: TT_MAC_LANGID_MONGOLIAN_MONGOLIAN_SCRIPT
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID alias for Mongolian-script name-table records; pinned FreeType defines it as 57, matching TT_MAC_LANGID_MONGOLIAN.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 57 as defined by pinned freetype/ttnameid.h, matching TT_MAC_LANGID_MONGOLIAN.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_MONGOLIAN_MONGOLIAN_SCRIPT as a preprocessor-visible public constant.
+    - id: representative_name_record_language_match
+      description: A representative Mac name record tagged with Mongolian-script language ID 57 is selected distinctly from Mongolian Cyrillic-script language ID 58.
+  # needs-input: operation=FT_Get_Sfnt_Name; fixture_asset=input/fonts/names/mac-mongolian-script-pair.ttf; params={platform_id=TT_PLATFORM_MACINTOSH, language_id=TT_MAC_LANGID_MONGOLIAN_MONGOLIAN_SCRIPT, name_id=TT_NAME_ID_FULL_NAME}; expected output shape={FT_Error, name_index, platform_id, encoding_id, language_id, name_id, string_bytes}; comparison=exact C oracle status and name-record scalar/string bytes, including distinction from TT_MAC_LANGID_MONGOLIAN_CYRILLIC_SCRIPT.
+
+- id: ttnameid.TT_MAC_LANGID_NEPALI
+  kind: constant
+  symbol: TT_MAC_LANGID_NEPALI
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Nepali name-table records; pinned FreeType defines it as 64.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 64 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_NEPALI as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_NORWEGIAN
+  kind: constant
+  symbol: TT_MAC_LANGID_NORWEGIAN
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Norwegian name-table records; pinned FreeType defines it as 9.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 9 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_NORWEGIAN as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_ORIYA
+  kind: constant
+  symbol: TT_MAC_LANGID_ORIYA
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Oriya name-table records; pinned FreeType defines it as 71.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 71 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_ORIYA as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_PASHTO
+  kind: constant
+  symbol: TT_MAC_LANGID_PASHTO
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Pashto name-table records; pinned FreeType defines it as 59.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 59 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_PASHTO as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_POLISH
+  kind: constant
+  symbol: TT_MAC_LANGID_POLISH
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Polish name-table records; pinned FreeType defines it as 25.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 25 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_POLISH as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_PORTUGUESE
+  kind: constant
+  symbol: TT_MAC_LANGID_PORTUGUESE
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Portuguese name-table records; pinned FreeType defines it as 8.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 8 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_PORTUGUESE as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_PUNJABI
+  kind: constant
+  symbol: TT_MAC_LANGID_PUNJABI
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Punjabi name-table records; pinned FreeType defines it as 70.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 70 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_PUNJABI as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_QUECHUA
+  kind: constant
+  symbol: TT_MAC_LANGID_QUECHUA
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Quechua name-table records; pinned FreeType defines it as 132.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 132 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_QUECHUA as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_ROMANIAN
+  kind: constant
+  symbol: TT_MAC_LANGID_ROMANIAN
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Romanian name-table records; pinned FreeType defines it as 37.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 37 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_ROMANIAN as a preprocessor-visible public constant.
+
+- id: ttnameid.TT_MAC_LANGID_RUANDA
+  kind: constant
+  symbol: TT_MAC_LANGID_RUANDA
+  header: freetype/ttnameid.h
+  description: Public Mac platform language ID constant for Ruanda name-table records; pinned FreeType defines it as 90.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 90 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_MAC_LANGID_RUANDA as a preprocessor-visible public constant.

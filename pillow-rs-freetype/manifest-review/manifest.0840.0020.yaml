@@ -1,0 +1,243 @@
+- id: fttypes.FT_UShort
+  kind: type
+  symbol: FT_UShort
+  header: freetype/fttypes.h
+  description: Public unsigned-short typedef used throughout FreeType public records and scalar API fields.
+  cases:
+    - id: alias_defined
+      description: The pinned C header defines FT_UShort as unsigned short.
+    - id: abi_width_alignment_matches_c
+      description: Size and alignment match C unsigned short on the target ABI and remain distinct from FT_UInt and FT_ULong widths.
+    - id: winfnt_header_field_contract
+      description: WinFNT header fields such as version, file_type, ascent, weight, and bytes_per_row are read as little-endian FT_UShort values.
+  # needs-input: operation=ABI layout probe plus FT_Get_WinFNT_Header; fixture_asset=minimal .fnt/.fon assets with known FT_UShort header fields; params={font, face_index}; expected output shape={sizeof, alignof, selected FT_WinFNT_HeaderRec FT_UShort fields}; comparison=exact C ABI values and exact little-endian field values.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1250
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1250
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1250, East European.
+  cases:
+    - id: value_matches_header
+      description: Value equals 238 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 238 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=238; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1251
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1251
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1251, Cyrillic.
+  cases:
+    - id: value_matches_header
+      description: Value equals 204 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 204 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=204; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1252
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1252
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1252, ANSI Latin.
+  cases:
+    - id: value_matches_header
+      description: Value equals 0 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 0 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=0; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1253
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1253
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1253, Greek.
+  cases:
+    - id: value_matches_header
+      description: Value equals 161 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 161 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=161; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1254
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1254
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1254, Turkish.
+  cases:
+    - id: value_matches_header
+      description: Value equals 162 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 162 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=162; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1255
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1255
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1255, Hebrew.
+  cases:
+    - id: value_matches_header
+      description: Value equals 177 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 177 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=177; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1256
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1256
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1256, Arabic.
+  cases:
+    - id: value_matches_header
+      description: Value equals 178 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 178 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=178; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1257
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1257
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1257, Baltic.
+  cases:
+    - id: value_matches_header
+      description: Value equals 186 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 186 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=186; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1258
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1258
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1258, Vietnamese.
+  cases:
+    - id: value_matches_header
+      description: Value equals 163 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 163 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=163; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP1361
+  kind: constant
+  symbol: FT_WinFNT_ID_CP1361
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 1361, Korean Johab.
+  cases:
+    - id: value_matches_header
+      description: Value equals 130 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 130 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=130; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP874
+  kind: constant
+  symbol: FT_WinFNT_ID_CP874
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 874, Thai.
+  cases:
+    - id: value_matches_header
+      description: Value equals 222 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 222 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=222; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP932
+  kind: constant
+  symbol: FT_WinFNT_ID_CP932
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 932, Japanese Shift-JIS.
+  cases:
+    - id: value_matches_header
+      description: Value equals 128 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 128 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=128; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP936
+  kind: constant
+  symbol: FT_WinFNT_ID_CP936
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 936, simplified Chinese.
+  cases:
+    - id: value_matches_header
+      description: Value equals 134 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 134 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=134; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP949
+  kind: constant
+  symbol: FT_WinFNT_ID_CP949
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 949, Korean Hangul.
+  cases:
+    - id: value_matches_header
+      description: Value equals 129 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 129 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=129; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_CP950
+  kind: constant
+  symbol: FT_WinFNT_ID_CP950
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows code page 950, traditional Chinese Big5.
+  cases:
+    - id: value_matches_header
+      description: Value equals 136 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 136 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=136; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_DEFAULT
+  kind: constant
+  symbol: FT_WinFNT_ID_DEFAULT
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Windows DEFAULT charset, documented as a don't-care enumeration value rather than valid font-file charset data.
+  cases:
+    - id: value_matches_header
+      description: Value equals 1 in the pinned C public header.
+    - id: invalid_as_real_font_charset
+      description: The public header documents DEFAULT as not contained by valid font files, so runtime coverage should use it for value/import parity, not a success font-header fixture.
+  # needs-input: operation=constant_eval plus malformed/synthetic WinFNT load if such inputs are intentionally supported; fixture_asset=no valid font asset should claim charset=1; params={symbol}; expected output shape={constant_value, optional load error for synthetic invalid font}; comparison=exact C macro value and exact C error if an invalid synthetic asset is added.
+
+- id: ftwinfnt.FT_WinFNT_ID_MAC
+  kind: constant
+  symbol: FT_WinFNT_ID_MAC
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for Mac Roman.
+  cases:
+    - id: value_matches_header
+      description: Value equals 77 in the pinned C public header.
+    - id: mac_charset_selects_apple_roman_charmap
+      description: C WinFNT face initialization maps charset 77 to FT_ENCODING_APPLE_ROMAN and Macintosh platform metadata.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 77 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_New_Memory_Face plus FT_Get_WinFNT_Header and charmap inspection; fixture_asset=.fnt or .fon with charset=77; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset, charmap.encoding, platform_id, encoding_id}; comparison=exact C oracle charset and charmap fields.
+
+- id: ftwinfnt.FT_WinFNT_ID_OEM
+  kind: constant
+  symbol: FT_WinFNT_ID_OEM
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for OEM character sets.
+  cases:
+    - id: value_matches_header
+      description: Value equals 255 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 255 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=255; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.
+
+- id: ftwinfnt.FT_WinFNT_ID_SYMBOL
+  kind: constant
+  symbol: FT_WinFNT_ID_SYMBOL
+  header: freetype/ftwinfnt.h
+  description: Public WinFNT charset byte value for symbol fonts.
+  cases:
+    - id: value_matches_header
+      description: Value equals 2 in the pinned C public header.
+    - id: charset_roundtrip_from_header
+      description: A WinFNT face whose header charset byte is 2 reports the same value through FT_Get_WinFNT_Header.
+  # needs-input: operation=FT_Get_WinFNT_Header; fixture_asset=.fnt or .fon with charset=2; params={font, face_index}; expected output shape={FT_Error, FT_WinFNT_HeaderRec.charset}; comparison=exact success status and charset byte against C oracle.

@@ -1,0 +1,287 @@
+- id: ftmoderr.FT_Mod_Err_Raster
+  kind: error
+  symbol: FT_Mod_Err_Raster
+  header: freetype/ftmoderr.h
+  description: Public module error base for the classic raster module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x0F00 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: Raster module errors use this high-byte base when rasterrs.h defines FT_ERR_BASE as FT_Mod_Err_Raster.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the raster module, preserving source-compatible module classification.
+  # needs-input: operation=compile-time constant extraction plus raster error fixture; fixture_asset=outline that triggers raster Invalid_Outline/Cannot_Render_Glyph where reachable; params={module_errors_enabled, render_mode, malformed_outline}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE}; comparison=exact C oracle constant and returned error base/module bits.
+
+- id: ftmoderr.FT_Mod_Err_SFNT
+  kind: error
+  symbol: FT_Mod_Err_SFNT
+  header: freetype/ftmoderr.h
+  description: Public module error base for the SFNT module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1000 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: SFNT parser errors use this high-byte base when the sfnt module emits table/load errors.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the SFNT module, preserving source-compatible module classification.
+  # needs-input: operation=FT_New_Memory_Face/FT_Open_Face on SFNT fixtures; fixture_asset=valid TrueType/OpenType plus malformed sfnt table directory binaries; params={module_errors_enabled, malformed_table_kind}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE}; comparison=exact C oracle constant and returned error base/module bits.
+
+- id: ftmoderr.FT_Mod_Err_Sdf
+  kind: error
+  symbol: FT_Mod_Err_Sdf
+  header: freetype/ftmoderr.h
+  description: Public module error base for the signed distance field raster module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1700 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: SDF raster errors use this high-byte base where ftsdferrs.h defines FT_ERR_BASE as FT_Mod_Err_Sdf.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the signed distance field raster module, preserving source-compatible module classification.
+  # needs-input: operation=FT_Render_Glyph/FT_Outline_Render with SDF renderer where available; fixture_asset=outline glyph and malformed/oversized outline fixtures; params={module_errors_enabled, sdf_renderer_available, render_mode}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE, bitmap descriptor when success}; comparison=exact C oracle constant, capability-dependent error class, module bits, and output bitmap bytes on success.
+
+- id: ftmoderr.FT_Mod_Err_Smooth
+  kind: error
+  symbol: FT_Mod_Err_Smooth
+  header: freetype/ftmoderr.h
+  description: Public module error base for the smooth raster module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1100 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: Anti-aliased outline rasterization errors use this high-byte base when emitted by the smooth renderer.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the smooth raster module, preserving source-compatible module classification.
+  # needs-input: operation=FT_Outline_Render/FT_Render_Glyph using gray/LCD renderers; fixture_asset=valid outline font plus malformed and out-of-range outline cases; params={module_errors_enabled, render_mode=normal/lcd/lcd_v, cbox_bounds}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE, bitmap descriptor/bytes}; comparison=exact C oracle module bits, success/error status, dimensions, placement, pitch, and bitmap bytes.
+
+- id: ftmoderr.FT_Mod_Err_TrueType
+  kind: error
+  symbol: FT_Mod_Err_TrueType
+  header: freetype/ftmoderr.h
+  description: Public module error base for the TrueType module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1200 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: TrueType driver and bytecode errors use this high-byte base when module errors are enabled.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the TrueType module, preserving source-compatible module classification.
+  # needs-input: operation=FT_New_Memory_Face followed by FT_Load_Glyph on TrueType fixtures; fixture_asset=valid hinted TTF plus malformed glyf/loca/cvt/prep bytecode binaries; params={module_errors_enabled, glyph_index, load_flags}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE, glyph metrics/outline when success}; comparison=exact C oracle module bits, status, and public glyph output fields.
+
+- id: ftmoderr.FT_Mod_Err_Type1
+  kind: error
+  symbol: FT_Mod_Err_Type1
+  header: freetype/ftmoderr.h
+  description: Public module error base for the Type 1 module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1300 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: Type 1 parser and glyph-load errors use this high-byte base when module errors are enabled.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the Type 1 module, preserving source-compatible module classification.
+  # needs-input: operation=FT_New_Memory_Face/FT_Load_Glyph on Type 1 fixtures; fixture_asset=valid PFA/PFB plus malformed charstring/private-dict binaries; params={module_errors_enabled, glyph_index, load_flags}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE, glyph metrics/outline when success}; comparison=exact C oracle module bits, status, and public glyph output fields.
+
+- id: ftmoderr.FT_Mod_Err_Type42
+  kind: error
+  symbol: FT_Mod_Err_Type42
+  header: freetype/ftmoderr.h
+  description: Public module error base for the Type 42 module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1400 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: Type 42 wrapper/parser errors use this high-byte base when module errors are enabled.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the Type 42 module, preserving source-compatible module classification.
+  # needs-input: operation=FT_New_Memory_Face/FT_Load_Glyph on Type 42 fixtures; fixture_asset=valid Type42 font plus malformed embedded TrueType/table binaries; params={module_errors_enabled, glyph_index, load_flags}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE, glyph metrics/outline when success}; comparison=exact C oracle module bits, status, and public glyph output fields.
+
+- id: ftmoderr.FT_Mod_Err_Winfonts
+  kind: error
+  symbol: FT_Mod_Err_Winfonts
+  header: freetype/ftmoderr.h
+  description: Public module error base for the Windows FON/FNT module.
+  cases:
+    - id: value_matches_configured_header
+      description: Value is 0x1500 when FT_CONFIG_OPTION_USE_MODULE_ERRORS is enabled and 0 otherwise, exactly as FT_MODERRDEF expands in the pinned C header.
+    - id: prefixed_error_base
+      description: Windows bitmap font driver errors use this high-byte base when module errors are enabled.
+    - id: module_name_contract
+      description: The public FT_MODERRDEF list labels this entry as the Windows FON/FNT module, preserving source-compatible module classification.
+  # needs-input: operation=FT_New_Memory_Face/FT_Load_Glyph on WinFNT fixtures; fixture_asset=valid FNT/FON plus malformed header/strike binaries; params={module_errors_enabled, face_index, glyph_index}; expected output shape={constant_value, FT_Error, FT_ERROR_BASE, FT_ERROR_MODULE, bitmap metrics/bytes when success}; comparison=exact C oracle module bits, status, metrics, bitmap descriptor, and bytes.
+
+- id: ftmoderr.FT_Mod_Err_e
+  kind: error
+  symbol: FT_Mod_Err_e
+  header: freetype/ftmoderr.h
+  description: Public enum tag generated by FT_MODERR_START_LIST for the module error-base list.
+  cases:
+    - id: enum_tag_exists
+      description: The public module-error list is emitted as an enum when FT_MODERRDEF is not pre-defined, and this subject records the generated enum tag shape.
+    - id: import_contract
+      description: Including freetype/ftmoderr.h with default setup macros exposes the module error enum without requiring client-side FT_MODERRDEF definitions.
+    - id: cleanup_macros_removed
+      description: FT_MODERR_START_LIST, FT_MODERR_END_LIST, and FT_MODERRDEF are undefined after inclusion as in the pinned C header.
+  # needs-input: operation=C import/ABI compile probe; fixture_asset=small C translation unit including freetype/ftmoderr.h twice with and without custom FT_MODERRDEF; params={default_include, custom_list_include}; expected output shape={compile_status, enum_tag_available, generated_constants, cleanup_macro_visibility}; comparison=exact C compiler success and preprocessor/import shape.
+
+- id: ftotval.FT_VALIDATE_BASE
+  kind: flag
+  symbol: FT_VALIDATE_BASE
+  header: freetype/ftotval.h
+  description: Public OpenType validation flag for the BASE table.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x0100 in the pinned C public header.
+    - id: validate_selects_base_table
+      description: FT_OpenType_Validate passes this bit to the OpenType validation service and only requests BASE output for this flag.
+    - id: absent_table_returns_null_output
+      description: For a valid OpenType face without BASE, C succeeds or reports service-specific validation status while leaving the BASE output pointer null as the validator dictates.
+  # needs-input: operation=FT_OpenType_Validate; fixture_asset=OpenType font with BASE table, OpenType font without BASE table, malformed BASE table binary; params={validation_flags=FT_VALIDATE_BASE, output_pointer_null=false}; expected output shape={FT_Error, BASE_table pointer class, table byte length/hash, other table pointer classes}; comparison=exact C oracle status, null/non-null outputs, and copied table bytes.
+
+- id: ftotval.FT_VALIDATE_GDEF
+  kind: flag
+  symbol: FT_VALIDATE_GDEF
+  header: freetype/ftotval.h
+  description: Public OpenType validation flag for the GDEF table.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x0200 in the pinned C public header.
+    - id: validate_selects_gdef_table
+      description: FT_OpenType_Validate passes this bit to the OpenType validation service and only requests GDEF output for this flag.
+    - id: malformed_table_error
+      description: Malformed GDEF data returns the same validation error class and leaves/freeable output pointers in the same state as C.
+  # needs-input: operation=FT_OpenType_Validate then FT_OpenType_Free for non-null outputs; fixture_asset=OpenType fonts with valid, absent, and malformed GDEF tables; params={validation_flags=FT_VALIDATE_GDEF}; expected output shape={FT_Error, GDEF_table pointer class, table byte length/hash, freed pointers}; comparison=exact C oracle status, output bytes, null classes, and free behavior.
+
+- id: ftotval.FT_VALIDATE_GPOS
+  kind: flag
+  symbol: FT_VALIDATE_GPOS
+  header: freetype/ftotval.h
+  description: Public OpenType validation flag for the GPOS table.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x0400 in the pinned C public header.
+    - id: validate_selects_gpos_table
+      description: FT_OpenType_Validate passes this bit to the OpenType validation service and only requests GPOS output for this flag.
+    - id: malformed_table_error
+      description: Malformed GPOS data returns the same validation error class and output-pointer cleanup behavior as C.
+  # needs-input: operation=FT_OpenType_Validate then FT_OpenType_Free for non-null outputs; fixture_asset=OpenType fonts with valid, absent, and malformed GPOS tables; params={validation_flags=FT_VALIDATE_GPOS}; expected output shape={FT_Error, GPOS_table pointer class, table byte length/hash, freed pointers}; comparison=exact C oracle status, output bytes, null classes, and free behavior.
+
+- id: ftotval.FT_VALIDATE_GSUB
+  kind: flag
+  symbol: FT_VALIDATE_GSUB
+  header: freetype/ftotval.h
+  description: Public OpenType validation flag for the GSUB table.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x0800 in the pinned C public header.
+    - id: validate_selects_gsub_table
+      description: FT_OpenType_Validate passes this bit to the OpenType validation service and only requests GSUB output for this flag.
+    - id: malformed_table_error
+      description: Malformed GSUB data returns the same validation error class and output-pointer cleanup behavior as C.
+  # needs-input: operation=FT_OpenType_Validate then FT_OpenType_Free for non-null outputs; fixture_asset=OpenType fonts with valid, absent, and malformed GSUB tables; params={validation_flags=FT_VALIDATE_GSUB}; expected output shape={FT_Error, GSUB_table pointer class, table byte length/hash, freed pointers}; comparison=exact C oracle status, output bytes, null classes, and free behavior.
+
+- id: ftotval.FT_VALIDATE_JSTF
+  kind: flag
+  symbol: FT_VALIDATE_JSTF
+  header: freetype/ftotval.h
+  description: Public OpenType validation flag for the JSTF table.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x1000 in the pinned C public header.
+    - id: validate_selects_jstf_table
+      description: FT_OpenType_Validate passes this bit to the OpenType validation service and only requests JSTF output for this flag.
+    - id: absent_or_malformed_table
+      description: C behavior is captured for common absent JSTF tables and malformed JSTF binaries without assuming a table exists.
+  # needs-input: operation=FT_OpenType_Validate then FT_OpenType_Free for non-null outputs; fixture_asset=OpenType fonts with absent, valid, and malformed JSTF table variants; params={validation_flags=FT_VALIDATE_JSTF}; expected output shape={FT_Error, JSTF_table pointer class, table byte length/hash, freed pointers}; comparison=exact C oracle status, null class, output bytes when present, and free behavior.
+
+- id: ftotval.FT_VALIDATE_MATH
+  kind: flag
+  symbol: FT_VALIDATE_MATH
+  header: freetype/ftotval.h
+  description: Public OpenType validation flag for the MATH table.
+  cases:
+    - id: value_matches_header
+      description: Value is 0x2000 in the pinned C public header.
+    - id: validate_selects_math_table
+      description: FT_OpenType_Validate passes this bit to the OpenType validation service and validates MATH when the service implementation supports it, without exposing a MATH output pointer in the public function signature.
+    - id: absent_or_malformed_table
+      description: C behavior is captured for fonts without MATH and malformed math-layout binaries without inventing synthetic output.
+  # needs-input: operation=FT_OpenType_Validate; fixture_asset=math OpenType font plus absent and malformed MATH table variants; params={validation_flags=FT_VALIDATE_MATH}; expected output shape={FT_Error, MATH validation status, BASE/GDEF/GPOS/GSUB/JSTF pointer classes}; comparison=exact C oracle status, absence of a MATH output pointer, and capability/table-presence behavior.
+
+- id: ftotval.FT_VALIDATE_OT
+  kind: flag
+  symbol: FT_VALIDATE_OT
+  header: freetype/ftotval.h
+  description: Public aggregate OpenType validation flag for BASE, GDEF, GPOS, GSUB, JSTF, and MATH.
+  cases:
+    - id: value_matches_header_expression
+      description: Value equals the bitwise OR of FT_VALIDATE_BASE, FT_VALIDATE_GDEF, FT_VALIDATE_GPOS, FT_VALIDATE_GSUB, FT_VALIDATE_JSTF, and FT_VALIDATE_MATH in the pinned C header.
+    - id: validate_all_requested_tables
+      description: FT_OpenType_Validate requests all supported OpenType validation tables and returns the five public output pointers exactly as C does.
+    - id: partial_failure_cleanup_contract
+      description: If one table fails validation, output pointer state and caller free obligations match C for tables allocated before the failure.
+  # needs-input: operation=FT_OpenType_Validate then FT_OpenType_Free for every non-null public output; fixture_asset=OpenType font containing multiple valid tables plus table-specific malformed variants; params={validation_flags=FT_VALIDATE_OT, malformed_table_kind}; expected output shape={FT_Error, BASE/GDEF/GPOS/GSUB/JSTF pointer classes, output byte length/hash, free event list, MATH validation status without output pointer}; comparison=exact C oracle aggregate flag value, validation status, output bytes, and cleanup behavior.
+
+- id: ftotval.FT_OpenType_Free
+  kind: function
+  symbol: FT_OpenType_Free
+  header: freetype/ftotval.h
+  description: Public C API function that frees buffers allocated by FT_OpenType_Validate.
+  cases:
+    - id: declaration_matches_header
+      description: Declaration is void FT_OpenType_Free(FT_Face face, FT_Bytes table) exactly as exported by the pinned C header.
+    - id: null_face_noop
+      description: ftotval.c returns immediately when face is null and does not free or dereference the table pointer.
+    - id: frees_validated_table_with_face_memory
+      description: For a non-null face, the table is released through the face memory allocator exactly once.
+    - id: null_table_noop
+      description: Passing a null table with a valid face is accepted as the C FT_FREE macro path defines.
+  # needs-input: operation=FT_OpenType_Validate followed by FT_OpenType_Free; fixture_asset=OpenType font producing at least one non-null validation table; params={face_valid, table_null, table_from_validate, double_free_attempt=false}; expected output shape={void_status, allocator free event count, pointer identity class}; comparison=exact C oracle no-op/free behavior and absence of observable output mutation.
+
+- id: ftotval.FT_OpenType_Validate
+  kind: function
+  symbol: FT_OpenType_Validate
+  header: freetype/ftotval.h
+  description: Public C API function that validates selected OpenType layout tables and returns copied table buffers.
+  cases:
+    - id: declaration_matches_header
+      description: Declaration is FT_Error FT_OpenType_Validate(FT_Face, FT_UInt, FT_Bytes*, FT_Bytes*, FT_Bytes*, FT_Bytes*) with five output table pointers exactly as exported by the pinned C header.
+    - id: null_face_error
+      description: ftotval.c returns Invalid_Face_Handle when face is null before touching validation service state.
+    - id: null_output_pointer_error
+      description: If any of BASE, GDEF, GPOS, GSUB, or JSTF output pointer parameters is null, C returns Invalid_Argument.
+    - id: service_missing_error
+      description: If the face has no OPENTYPE_VALIDATE service, C returns Unimplemented_Feature.
+    - id: selected_tables_success
+      description: Valid selected tables produce C-owned buffers whose bytes match the original validated table data and must be released with FT_OpenType_Free.
+    - id: malformed_table_error
+      description: Malformed selected tables propagate the validation service error and preserve output-pointer state exactly as C does.
+  # needs-input: operation=FT_OpenType_Validate; fixture_asset=OpenType fonts with valid layout tables, no-layout fonts, and malformed BASE/GDEF/GPOS/GSUB/JSTF/MATH table binaries; params={validation_flags, null_face, null_output_index, face_without_service}; expected output shape={FT_Error, BASE/GDEF/GPOS/GSUB/JSTF pointer classes, table byte length/hash, allocator ownership ids, MATH validation status without output pointer}; comparison=exact C oracle status, output byte payloads, null classes, and ownership/free requirements.
+
+- id: ftoutln.FT_Orientation
+  kind: enum
+  symbol: FT_Orientation
+  header: freetype/ftoutln.h
+  description: Public enum describing the fill orientation of an outline contour set.
+  cases:
+    - id: enum_variants_match_header
+      description: Variants and aliases match the pinned header, with TRUETYPE/FILL_RIGHT as 0, POSTSCRIPT/FILL_LEFT as 1, and NONE following them.
+    - id: orientation_algorithm_contract
+      description: FT_Outline_Get_Orientation uses ftoutln.c polygon-area accumulation over control points, returns TRUETYPE for null/empty outlines, and NONE for collapsed, oversized, or zero-area outlines.
+    - id: geometry_fixture_matrix
+      description: Runtime fixtures must include clockwise, counter-clockwise, reversed, empty, collapsed, multi-contour, translated, transformed, and malformed outlines with exact cbox/bbox and decompose event comparison.
+  # needs-input: operation=FT_Outline_Get_Orientation plus FT_Outline_Get_CBox, FT_Outline_Get_BBox, FT_Outline_Decompose, FT_Outline_Translate, FT_Outline_Transform, and FT_Outline_Reverse on the same outline inputs; fixture_asset=shared outline JSON/binary fixtures with line, conic, cubic, degenerate, oversized, and malformed contour cases; params={points, tags, contours, transform_matrix, translate_dx_dy, reverse=false/true, callback_error_at_event}; expected output shape={FT_Orientation, FT_BBox cbox, FT_BBox bbox, transformed point array, decompose event log, FT_Error}; comparison=exact C oracle enum value, 26.6 geometry, callback order/arguments, and propagated callback/error status.
+
+- id: ftoutln.FT_ORIENTATION_FILL_LEFT
+  kind: enum_variant
+  symbol: FT_ORIENTATION_FILL_LEFT
+  header: freetype/ftoutln.h
+  description: Public FT_Orientation alias for PostScript fill-left winding semantics.
+  cases:
+    - id: value_matches_header
+      description: Value aliases FT_ORIENTATION_POSTSCRIPT and is 1 in the pinned C public header.
+    - id: returned_for_positive_area
+      description: FT_Outline_Get_Orientation returns this value through the POSTSCRIPT alias when polygon-area accumulation is positive.
+    - id: reverse_toggles_orientation_fixture
+      description: After FT_Outline_Reverse changes point/tag order and toggles FT_OUTLINE_REVERSE_FILL, an orientation fixture that was fill-right should compare against C as fill-left where the resulting area sign changes.
+  # needs-input: operation=FT_Outline_Get_Orientation before/after FT_Outline_Reverse, with CBox/BBox and decompose cross-checks; fixture_asset=counter-clockwise/PostScript outline and reversed TrueType outline fixtures; params={points, tags, contours, reverse, transform_matrix_optional}; expected output shape={FT_Orientation, outline flags, point/tag arrays, cbox, bbox, decompose event log}; comparison=exact C oracle enum value, alias numeric value, 26.6 geometry, flags, and event order.

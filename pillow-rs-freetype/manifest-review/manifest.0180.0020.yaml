@@ -1,0 +1,276 @@
+- id: freetype.FT_SizeRec
+  kind: record
+  symbol: FT_SizeRec
+  header: freetype/freetype.h
+  description: FreeType public size object record from freetype/freetype.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for face, generic, metrics, and internal match the pinned C header.
+    - id: active_size_record_runtime
+      description: A live face exposes an active size record whose face pointer, client generic field, and metrics field follow C FreeType lifetime and mutation behavior after size changes.
+  # needs-input: operation=FT_Set_Char_Size and FT_Set_Pixel_Sizes followed by FT_SizeRec inspection; fixture_asset=input/fonts/DejaVuSans.ttf; params face_index=0 with multiple point and pixel sizes; expected output shape=FT_SizeRec layout metadata plus face pointer identity, generic pointer preservation, metrics fields, and internal pointer/null policy; comparison=exact C oracle field equality where public and exact pointer-null/identity classification where opaque.
+
+- id: freetype.FT_Size_Metrics
+  kind: record
+  symbol: FT_Size_Metrics
+  header: freetype/freetype.h
+  description: FreeType public size metrics record from freetype/freetype.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for x_ppem, y_ppem, x_scale, y_scale, ascender, descender, height, and max_advance match the pinned C header.
+    - id: returns_active_size_metrics
+      description: Accessor returns active face size metrics with C FreeType rounding and 16.16/26.6 units.
+      coverage:
+        font_variability:
+          folder: input/fonts
+          sizes: [20]
+    - id: matrix_active_size_metrics
+      description: Accessor returns active face size metrics for matrix fixture fonts and sizes.
+
+- id: freetype.FT_Size_RequestRec
+  kind: record
+  symbol: FT_Size_RequestRec
+  header: freetype/freetype.h
+  description: FreeType public size request record from freetype/freetype.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for type, width, height, horiResolution, and vertResolution match the pinned C header.
+    - id: request_size_input_semantics
+      description: FT_Request_Size interprets the record fields like C FreeType, including zero width/height mirroring, resolution fields, and direct 16.16 scale values for FT_SIZE_REQUEST_TYPE_SCALES.
+  # needs-input: operation=FT_Request_Size; fixture_asset=input/fonts/DejaVuSans.ttf; params FT_Size_RequestRec values covering NOMINAL, REAL_DIM, BBOX, CELL, SCALES, zero width, zero height, and varied resolutions; expected output shape=FT_Error plus active FT_Size_Metrics; comparison=exact C oracle error and metrics equality.
+
+- id: freetype.FT_ENC_TAG
+  kind: tag
+  symbol: FT_ENC_TAG
+  header: freetype/freetype.h
+  description: FreeType public encoding tag macro from freetype/freetype.h.
+  cases:
+    - id: value_matches_header
+      description: Four input bytes are cast to FT_UInt32 and packed as a big-endian 32-bit tag matching the pinned C public header.
+    - id: encoding_enum_tag_values
+      description: FT_Encoding enum values built with FT_ENC_TAG match the pinned C constants, including space and digit bytes.
+
+- id: freetype.FT_CharMap
+  kind: type
+  symbol: FT_CharMap
+  header: freetype/freetype.h
+  description: FreeType public opaque charmap handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_CharMapRec is present in the pinned C public interface.
+    - id: owned_by_face_runtime
+      description: Handles from face->charmaps and face->charmap remain face-owned and select character mapping behavior like the C oracle.
+  # needs-input: operation=FT_New_Memory_Face, FT_Set_Charmap, FT_Get_Char_Index; fixture_asset=font with at least two charmaps plus input/fonts/DejaVuSans.ttf control; params iterate face->charmaps and select each valid charmap; expected output shape=FT_CharMapRec public fields, active charmap pointer identity, and glyph index results; comparison=exact C oracle field and glyph-index equality.
+
+- id: freetype.FT_Driver
+  kind: type
+  symbol: FT_Driver
+  header: freetype/freetype.h
+  description: FreeType public opaque font driver handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_DriverRec is present in the pinned C public interface.
+    - id: opaque_handle_policy
+      description: Public ABI preserves driver handles as opaque module-owned pointers without exposing private record layout.
+
+- id: freetype.FT_Face
+  kind: type
+  symbol: FT_Face
+  header: freetype/freetype.h
+  description: FreeType public face handle typedef from freetype/freetype.h.
+  cases:
+    - id: valid_font_bytes
+      description: Face handle can be created from tracked font bytes.
+    - id: owns_slot_size_and_charmaps
+      description: A live face owns its glyph slot, active size object, and charmap array with pointer identity and lifetime matching C FreeType.
+    - id: null_and_done_handle_errors
+      description: APIs that accept FT_Face classify null and destroyed handles according to the pinned C error behavior or the project ABI safety policy.
+
+- id: freetype.FT_Face_Internal
+  kind: type
+  symbol: FT_Face_Internal
+  header: freetype/freetype.h
+  description: FreeType public opaque private face-data handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_Face_InternalRec is present in the pinned C public interface.
+    - id: opaque_private_layout
+      description: ABI exposes only pointer/null behavior and never depends on private FT_Face_InternalRec layout.
+
+- id: freetype.FT_GlyphSlot
+  kind: type
+  symbol: FT_GlyphSlot
+  header: freetype/freetype.h
+  description: FreeType public glyph slot handle typedef from freetype/freetype.h.
+  cases:
+    - id: populated_from_load
+      description: Loaded glyph slot fields match C FreeType for migrated load cases.
+    - id: overwritten_by_subsequent_load
+      description: Reusing the same face overwrites the face-owned slot contents on each FT_Load_Glyph or FT_Load_Char call like C FreeType.
+    - id: render_mutates_slot
+      description: FT_Render_Glyph mutates the same slot's format, bitmap, placement, and advance-visible fields like the C oracle.
+
+- id: freetype.FT_Module
+  kind: type
+  symbol: FT_Module
+  header: freetype/freetype.h
+  description: FreeType public opaque module handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_ModuleRec is present in the pinned C public interface.
+    - id: opaque_handle_policy
+      description: Public ABI preserves module handles as opaque library-owned pointers without exposing private record layout.
+
+- id: freetype.FT_Renderer
+  kind: type
+  symbol: FT_Renderer
+  header: freetype/freetype.h
+  description: FreeType public opaque renderer handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_RendererRec is present in the pinned C public interface.
+    - id: opaque_handle_policy
+      description: Public ABI preserves renderer handles as opaque module-owned pointers without exposing private record layout.
+
+- id: freetype.FT_Size
+  kind: type
+  symbol: FT_Size
+  header: freetype/freetype.h
+  description: FreeType public size handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_SizeRec is present in the pinned C public interface.
+    - id: active_size_handle_runtime
+      description: Face sizing APIs update the active FT_Size object used by later glyph loading and metric queries like C FreeType.
+
+- id: freetype.FT_Size_Internal
+  kind: type
+  symbol: FT_Size_Internal
+  header: freetype/freetype.h
+  description: FreeType public opaque private size-data handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_Size_InternalRec is present in the pinned C public interface.
+    - id: opaque_private_layout
+      description: ABI exposes only pointer/null behavior and never depends on private FT_Size_InternalRec layout.
+
+- id: freetype.FT_Slot_Internal
+  kind: type
+  symbol: FT_Slot_Internal
+  header: freetype/freetype.h
+  description: FreeType public opaque private glyph-slot-data handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_Slot_InternalRec is present in the pinned C public interface.
+    - id: opaque_private_layout
+      description: ABI exposes only pointer/null behavior and never depends on private FT_Slot_InternalRec layout.
+
+- id: freetype.FT_SubGlyph
+  kind: type
+  symbol: FT_SubGlyph
+  header: freetype/freetype.h
+  description: FreeType public opaque subglyph handle typedef from freetype/freetype.h.
+  cases:
+    - id: alias_defined
+      description: Pointer alias to FT_SubGlyphRec is present in the pinned C public interface.
+    - id: composite_subglyph_query_runtime
+      description: FT_Get_SubGlyph_Info observes composite subglyph data through this opaque handle path without exposing private layout.
+  # needs-input: operation=FT_Load_Glyph and FT_Get_SubGlyph_Info; fixture_asset=composite glyph font such as input/fonts/DejaVuSans.ttf; params composite glyph index loaded with FT_LOAD_NO_RECURSE; expected output shape=subglyph count plus each subglyph index, flags, arguments, and transform; comparison=exact C oracle numeric equality.
+
+- id: ftadvanc.FT_ADVANCE_FLAG_FAST_ONLY
+  kind: flag
+  symbol: FT_ADVANCE_FLAG_FAST_ONLY
+  header: freetype/ftadvanc.h
+  description: FreeType public quick-advance flag constant from freetype/ftadvanc.h.
+  cases:
+    - id: value_matches_header
+      description: Numeric value 0x20000000 matches the pinned C public header.
+    - id: fast_only_error_behavior
+      description: FT_Get_Advance and FT_Get_Advances fail instead of falling back to slow glyph loading when C FreeType lacks a quick advance path for the requested face and load flags.
+  # needs-input: operation=FT_Get_Advance and FT_Get_Advances; fixture_asset=input/fonts/DejaVuSans.ttf plus bitmap or driver-specific control if needed; params load_flags including FT_LOAD_DEFAULT|FT_ADVANCE_FLAG_FAST_ONLY, FT_LOAD_NO_HINTING|FT_ADVANCE_FLAG_FAST_ONLY, FT_LOAD_NO_SCALE|FT_ADVANCE_FLAG_FAST_ONLY, and FT_LOAD_VERTICAL_LAYOUT|FT_ADVANCE_FLAG_FAST_ONLY; expected output shape=FT_Error plus written FT_Fixed value or output preservation on error; comparison=exact C oracle error and write behavior.
+
+- id: ftadvanc.FT_Get_Advance
+  kind: function
+  symbol: FT_Get_Advance
+  header: freetype/ftadvanc.h
+  description: FreeType C API function that retrieves one glyph advance in scaled 16.16 pixels or unscaled font units.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_horizontal_scaled_advance
+      description: Valid face and glyph index return the same horizontal scaled 16.16 advance as C for default, no-hinting, and hinted load flags.
+    - id: success_unscaled_font_units
+      description: FT_LOAD_NO_SCALE returns the same font-unit advance as C without accidental 26.6 conversion.
+    - id: success_vertical_advance
+      description: FT_LOAD_VERTICAL_LAYOUT returns C-compatible vertical advances for fonts with real vertical metrics and for fonts where C synthesizes vertical metrics.
+    - id: fast_only_success_or_error
+      description: FT_ADVANCE_FLAG_FAST_ONLY returns exactly C's fast-path success or failure and associated output write behavior.
+    - id: error_null_face_or_output
+      description: Null face and null padvance pointers return the pinned C error classification and match C output preservation behavior.
+    - id: error_invalid_glyph_or_flags
+      description: Out-of-range glyph indexes and unsupported flag combinations return the same C error code and write behavior.
+  # needs-input: operation=FT_Get_Advance; fixture_asset=input/fonts/DejaVuSans.ttf plus a fixture with real vertical metrics; params glyph indexes for .notdef, A, V, out-of-range, sizes 9/20/72px or pt, load_flags FT_LOAD_DEFAULT, FT_LOAD_NO_HINTING, FT_LOAD_NO_SCALE, FT_LOAD_VERTICAL_LAYOUT, and FAST_ONLY combinations; expected output shape=FT_Error and FT_Fixed advance; comparison=exact C oracle error, scalar value, and output write/preservation behavior.
+
+- id: ftadvanc.FT_Get_Advances
+  kind: function
+  symbol: FT_Get_Advances
+  header: freetype/ftadvanc.h
+  description: FreeType C API function that retrieves a contiguous range of glyph advances in scaled 16.16 pixels or unscaled font units.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_horizontal_scaled_range
+      description: Valid glyph ranges return ordered horizontal scaled 16.16 advances matching repeated FT_Get_Advance calls and the C oracle.
+    - id: success_unscaled_range
+      description: FT_LOAD_NO_SCALE returns ordered font-unit advances for the range without accidental 26.6 conversion.
+    - id: success_vertical_range
+      description: FT_LOAD_VERTICAL_LAYOUT returns ordered C-compatible vertical advances for real and synthesized vertical metrics.
+    - id: fast_only_range_success_or_error
+      description: FT_ADVANCE_FLAG_FAST_ONLY returns exactly C's fast-path success or failure for the full range and matches partial-write behavior.
+    - id: zero_count_behavior
+      description: A zero count returns the same C error/success classification and output write behavior.
+    - id: error_null_face_or_output
+      description: Null face and null padvances pointers return the pinned C error classification and match C output preservation behavior.
+    - id: error_invalid_range_or_flags
+      description: Out-of-range start/count combinations and unsupported flag combinations return the same C error code and write behavior.
+  # needs-input: operation=FT_Get_Advances; fixture_asset=input/fonts/DejaVuSans.ttf plus a fixture with real vertical metrics; params ranges including start=0/count=3, A..V-containing range, count=0, out-of-range start/count, load_flags FT_LOAD_DEFAULT, FT_LOAD_NO_HINTING, FT_LOAD_NO_SCALE, FT_LOAD_VERTICAL_LAYOUT, and FAST_ONLY combinations; expected output shape=FT_Error and caller-owned FT_Fixed array with before/after sentinels; comparison=exact C oracle error, ordered values, untouched sentinel boundaries, and partial-write/preservation behavior.
+
+- id: ftbbox.FT_Outline_Get_BBox
+  kind: function
+  symbol: FT_Outline_Get_BBox
+  header: freetype/ftbbox.h
+  description: FreeType C API function that computes the exact outline bounding box including Bezier extrema.
+  coverage:
+    font_variability: required
+  cases:
+    - id: success_simple_outline_bbox
+      description: Loaded glyph outlines whose cbox and bbox coincide return the exact same FT_BBox 26.6 coordinates as C.
+    - id: success_curve_extrema_bbox
+      description: Outlines with conic or cubic extrema between endpoints return exact C bbox values rather than only point control-box values.
+    - id: success_empty_outline_bbox
+      description: Empty outlines return the same success/error classification and zero or preserved bbox behavior as C.
+    - id: no_scale_tricky_font_behavior
+      description: Tricky fonts loaded with FT_LOAD_NO_SCALE preserve C FreeType's documented meaningless-but-observable bbox behavior.
+    - id: error_null_outline_or_output
+      description: Null outline and null abbox pointers return the pinned C error classification and match C output preservation behavior.
+    - id: error_malformed_outline
+      description: Invalid point, tag, contour, or count combinations return the same C error classification.
+  # needs-input: operation=FT_Outline_Get_BBox; fixture_asset=input/fonts/DejaVuSans.ttf plus fonts/glyphs with off-curve extrema and an optional tricky TrueType control; params outlines loaded at multiple sizes and load flags including FT_LOAD_NO_SCALE, plus synthetic malformed FT_Outline records; expected output shape=FT_Error and FT_BBox xMin/yMin/xMax/yMax in 26.6 or font units according to C; comparison=exact C oracle error, bbox fields, and output write/preservation behavior.
+
+- id: ftbdf.FT_Get_BDF_Charset_ID
+  kind: function
+  symbol: FT_Get_BDF_Charset_ID
+  header: freetype/ftbdf.h
+  description: FreeType C API function that retrieves face-owned BDF charset encoding and registry strings.
+  cases:
+    - id: success_bdf_face_charset
+      description: A BDF face returns C-compatible face-owned charset encoding and registry string pointers and contents.
+    - id: success_sfnt_bdf_table_selected_strike
+      description: An SFNT face with a BDF table returns the same strings as C after a bitmap strike has been selected.
+    - id: error_non_bdf_face
+      description: Non-BDF faces and SFNT faces without a usable BDF table return the pinned C error classification.
+    - id: error_sfnt_bdf_without_selected_strike
+      description: SFNT fonts with a BDF table but no selected bitmap strike return the same C error classification.
+    - id: error_null_face_or_outputs
+      description: Null face, null acharset_encoding, and null acharset_registry pointers return the pinned C error classification and match C output preservation behavior.
+  # needs-input: operation=FT_Get_BDF_Charset_ID; fixture_asset=BDF font with STARTCHAR/CHARSET metadata, SFNT bitmap font with BDF table, and input/fonts/DejaVuSans.ttf non-BDF control; params live faces before/after strike selection plus null output pointer variants; expected output shape=FT_Error plus charset_encoding and charset_registry C string contents/pointer-null classification; comparison=exact C oracle error, string contents, pointer ownership/lifetime classification, and output write/preservation behavior.

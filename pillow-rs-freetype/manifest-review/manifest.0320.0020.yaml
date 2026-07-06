@@ -1,0 +1,273 @@
+- id: ftcolor.FT_PaintRadialGradient
+  kind: record
+  symbol: FT_PaintRadialGradient
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintRadialGradient record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for colorline, c0, r0, c1, and r1 match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is colorline, c0, r0, c1, r1 exactly, with centers as FT_Vector and radii as 16.16 FT_Pos values.
+    - id: get_paint_radial_gradient_values
+      description: FT_Get_Paint returns ColorLine plus c0/r0/c1/r1 values exactly as C, including variable COLR v1 interpolation when available.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, and FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with static and variable PaintRadialGradient records covering equal centers, distinct centers, r0=0, r1=0, r0<r1, r0>r1, negative coordinates, and nested transforms; params resolve gradients under default and varied design coordinates, then iterate color stops; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_RADIAL_GRADIENT, u.radial_gradient { colorline { extend, color_stop_iterator }, c0, r0, c1, r1 } } plus FT_ColorStop sequence; comparison=exact C oracle format, 16.16 center/radius fields, colorline iterator fields, color stop sequence, variable interpolation, and output preservation on malformed/truncated gradient data.
+
+- id: ftcolor.FT_PaintRotate
+  kind: record
+  symbol: FT_PaintRotate
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintRotate record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for paint, angle, center_x, and center_y match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is paint, angle, center_x, center_y exactly, with all scalar transform fields represented as 16.16 FT_Fixed values.
+    - id: get_paint_rotate_values
+      description: FT_Get_Paint normalizes all COLR PaintRotate variants into FT_PaintRotate with C-compatible angle, center, and child opaque paint fields.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint plus recursive FT_Get_Paint traversal; fixture_asset=COLR v1 font containing PaintRotate and PaintRotateAroundCenter records with zero, positive, negative, and wraparound angles plus variable center/angle forms if supported; params base_glyph, active size, optional variable coordinates, and nested child paints; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_ROTATE, u.rotate { paint, angle, center_x, center_y } }; comparison=exact C oracle equality for 16.16 angle/center fields, child FT_OpaquePaint null/non-null identity class, variable interpolation, and malformed child-offset output preservation.
+
+- id: ftcolor.FT_PaintScale
+  kind: record
+  symbol: FT_PaintScale
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintScale record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for paint, scale_x, scale_y, center_x, and center_y match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is paint, scale_x, scale_y, center_x, center_y exactly, with scale and center fields represented as 16.16 FT_Fixed values.
+    - id: get_paint_scale_values
+      description: FT_Get_Paint normalizes all COLR PaintScale variants into FT_PaintScale, setting absent centers to zero and uniform variants to equal scale_x and scale_y like C.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint plus recursive FT_Get_Paint traversal; fixture_asset=COLR v1 font containing PaintScale, PaintScaleAroundCenter, PaintScaleUniform, and PaintScaleUniformAroundCenter records with zero, positive, negative, fractional, and variable scale values; params base_glyph, optional variation coordinates, and nested child paints; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_SCALE, u.scale { paint, scale_x, scale_y, center_x, center_y } }; comparison=exact C oracle equality for 16.16 scale/center fields, zero-center normalization, uniform-scale normalization, child opaque paint identity class, and malformed child-offset output preservation.
+
+- id: ftcolor.FT_PaintSkew
+  kind: record
+  symbol: FT_PaintSkew
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintSkew record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for paint, x_skew_angle, y_skew_angle, center_x, and center_y match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is paint, x_skew_angle, y_skew_angle, center_x, center_y exactly, with all scalar transform fields represented as 16.16 FT_Fixed values.
+    - id: get_paint_skew_values
+      description: FT_Get_Paint normalizes all COLR PaintSkew variants into FT_PaintSkew with C-compatible skew angles, center, and child opaque paint fields.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint plus recursive FT_Get_Paint traversal; fixture_asset=COLR v1 font containing PaintSkew and PaintSkewAroundCenter records with x-only, y-only, both-axis, zero, positive, negative, and variable skew angles; params base_glyph, optional variation coordinates, and nested child paints; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_SKEW, u.skew { paint, x_skew_angle, y_skew_angle, center_x, center_y } }; comparison=exact C oracle equality for 16.16 angle/center fields, zero-center normalization, child opaque paint identity class, variable interpolation, and malformed child-offset output preservation.
+
+- id: ftcolor.FT_PaintSolid
+  kind: record
+  symbol: FT_PaintSolid
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintSolid record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and the field offset for color match the pinned C header.
+    - id: field_order_matches_c
+      description: The sole field is color exactly, with type FT_ColorIndex containing palette_index then alpha.
+    - id: get_paint_solid_values
+      description: FT_Get_Paint returns FT_PaintSolid color.palette_index and color.alpha exactly as C for normal palette entries and foreground color index 0xFFFF.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, FT_Palette_Select, and FT_Palette_Set_Foreground_Color; fixture_asset=COLR v1 font with PaintSolid records using palette index 0, last valid palette index, foreground index 0xFFFF, alpha 0, fractional alpha, and alpha 1.0; params selected palette index, foreground BGRA values, null/missing CPAL controls, and malformed solid paint offsets; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_SOLID, u.solid { color { palette_index, alpha } } } plus selected CPAL FT_Color records; comparison=exact C oracle equality for field layout, palette index, F2Dot14 alpha, foreground-color handling, CPAL bounds errors, and false-path output preservation.
+
+- id: ftcolor.FT_PaintSweepGradient
+  kind: record
+  symbol: FT_PaintSweepGradient
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintSweepGradient record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for colorline, center, start_angle, and end_angle match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is colorline, center, start_angle, end_angle exactly, with center as FT_Vector and angles as 16.16 FT_Fixed values.
+    - id: get_paint_sweep_gradient_values
+      description: FT_Get_Paint returns ColorLine plus center/start_angle/end_angle values exactly as C, including variable COLR v1 interpolation when available.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint, FT_Get_Paint, and FT_Get_Colorline_Stops; fixture_asset=COLR v1 font with static and variable PaintSweepGradient records covering zero-width angle ranges, positive and negative angles, ranges crossing the wrap boundary, negative centers, PAD/REPEAT/REFLECT color lines, and nested transforms; params resolve gradients under default and varied design coordinates, then iterate color stops; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_SWEEP_GRADIENT, u.sweep_gradient { colorline { extend, color_stop_iterator }, center, start_angle, end_angle } } plus FT_ColorStop sequence; comparison=exact C oracle format, 16.16 center/angle fields, colorline iterator fields, color stop sequence, variable interpolation, and output preservation on malformed/truncated gradient data.
+
+- id: ftcolor.FT_PaintTransform
+  kind: record
+  symbol: FT_PaintTransform
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintTransform record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for paint and affine match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is paint then affine exactly, with affine as FT_Affine23 containing xx, xy, dx, yx, yy, and dy 16.16 fields.
+    - id: get_paint_transform_values
+      description: FT_Get_Paint returns font transform paints and inserted root transforms with the same FT_Affine23 values and child opaque paint fields as C.
+  # needs-input: operation=FT_Set_Char_Size or FT_Set_Pixel_Sizes, optional FT_Set_Transform, FT_Get_Color_Glyph_Paint, and FT_Get_Paint; fixture_asset=COLR v1 font with PaintTransform nodes plus a root paint requiring optional root-transform insertion; params include/no root transform, ppem sizes 0/12/48, identity and non-identity matrices, delta values, and variable transform data if supported; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_TRANSFORM, u.transform { paint, affine { xx, xy, dx, yx, yy, dy } } }; comparison=exact C oracle equality for FT_Affine23 field order, 16.16 affine values, root-transform insertion flag behavior, child opaque identity class, and malformed child-offset output preservation.
+
+- id: ftcolor.FT_PaintTranslate
+  kind: record
+  symbol: FT_PaintTranslate
+  header: freetype/ftcolor.h
+  description: FreeType public COLR v1 PaintTranslate record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for paint, dx, and dy match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is paint, dx, dy exactly, with translation values represented as 16.16 FT_Fixed fields.
+    - id: get_paint_translate_values
+      description: FT_Get_Paint returns translate dx/dy values and child opaque paint fields exactly as C, including variable COLR v1 interpolation when available.
+  # needs-input: operation=FT_Get_Color_Glyph_Paint plus recursive FT_Get_Paint traversal; fixture_asset=COLR v1 font containing PaintTranslate records with zero, positive, negative, fractional, large, and variable dx/dy values plus nested child paints; params base_glyph, optional variation coordinates, and malformed child-paint controls; expected output shape=FT_COLR_Paint { format=FT_COLR_PAINTFORMAT_TRANSLATE, u.translate { paint, dx, dy } }; comparison=exact C oracle equality for 16.16 dx/dy fields, child opaque paint identity class, variable interpolation, and output preservation on invalid/truncated translate data.
+
+- id: ftcolor.FT_Palette_Data
+  kind: record
+  symbol: FT_Palette_Data
+  header: freetype/ftcolor.h
+  description: FreeType public CPAL palette metadata record from freetype/ftcolor.h.
+  cases:
+    - id: layout_matches_c
+      description: Size, alignment, and field offsets for num_palettes, palette_name_ids, palette_flags, num_palette_entries, and palette_entry_name_ids match the pinned C header.
+    - id: field_order_matches_c
+      description: Field order is num_palettes, palette_name_ids, palette_flags, num_palette_entries, palette_entry_name_ids exactly, with pointer fields face-owned and nullable like C.
+    - id: palette_data_get_values
+      description: FT_Palette_Data_Get writes this record with C-compatible scalar counts, pointer nullability, and array contents for CPAL and non-CPAL faces.
+  # needs-input: operation=FT_Palette_Data_Get; fixture_asset=CPAL/COLR font with palette labels, light/dark palette flags, entry labels, multiple palettes and entries, plus SFNT without CPAL and non-SFNT controls if supported; params valid face, null face, null apalette, and sentinel-initialized FT_Palette_Data; expected output shape=FT_Error plus FT_Palette_Data { num_palettes, palette_name_ids array/null, palette_flags array/null, num_palette_entries, palette_entry_name_ids array/null }; comparison=exact C oracle field layout, error code, scalar values, array contents including name-id 0xFFFF, pointer-null classification, and output preservation on errors.
+
+- id: ftdriver.FT_AUTOHINTER_SCRIPT_CJK
+  kind: constant
+  symbol: FT_AUTOHINTER_SCRIPT_CJK
+  header: freetype/ftdriver.h
+  description: FreeType public auto-hinter script constant for CJK glyph hinting.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2, matching the pinned freetype/ftdriver.h macro.
+    - id: fallback_script_property_roundtrip
+      description: FT_Property_Set/Get on module "autofitter" property "fallback-script" accepts this value when a matching default-coverage style exists and reads it back as C does.
+    - id: glyph_to_script_map_runtime
+      description: FT_Property_Get on "autofitter:glyph-to-script-map" can expose this script value in the face-specific glyph map for CJK Unicode coverage.
+  # needs-input: operation=FT_Property_Set, FT_Property_Get, FT_New_Face, and FT_Load_Glyph with FT_LOAD_FORCE_AUTOHINT; fixture_asset=font with CJK cmap coverage plus a control Latin font; params module_name="autofitter", property names "fallback-script" and "glyph-to-script-map", value FT_AUTOHINTER_SCRIPT_CJK, valid face before and after first auto-hinted load, invalid script control; expected output shape=FT_Error plus FT_UInt fallback_script readback, FT_Prop_GlyphToScriptMap { face, map pointer/null-class, map[glyph_index] values }, and auto-hinted glyph load status; comparison=exact C oracle macro value, property error codes, readback value, map value for CJK glyphs, timing behavior, and output preservation on invalid property values.
+
+- id: ftdriver.FT_AUTOHINTER_SCRIPT_INDIC
+  kind: constant
+  symbol: FT_AUTOHINTER_SCRIPT_INDIC
+  header: freetype/ftdriver.h
+  description: FreeType public auto-hinter script constant for Indic glyph hinting.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 3, matching the pinned freetype/ftdriver.h macro.
+    - id: fallback_script_property_validation
+      description: FT_Property_Set on "autofitter:fallback-script" accepts or rejects this value exactly as afmodule.c, depending on whether the pinned build has a matching default-coverage style.
+    - id: glyph_to_script_map_runtime
+      description: FT_Property_Get on "autofitter:glyph-to-script-map" can expose this script value in the face-specific glyph map for Indic Unicode coverage when supported by the pinned auto-hinter.
+  # needs-input: operation=FT_Property_Set, FT_Property_Get, FT_New_Face, and FT_Load_Glyph with FT_LOAD_FORCE_AUTOHINT; fixture_asset=font with Indic cmap coverage plus a control font without Indic coverage; params module_name="autofitter", property names "fallback-script" and "glyph-to-script-map", value FT_AUTOHINTER_SCRIPT_INDIC, valid face before and after first auto-hinted load, invalid script control; expected output shape=FT_Error plus FT_UInt fallback_script readback or Invalid_Argument, FT_Prop_GlyphToScriptMap { face, map pointer/null-class, map[glyph_index] values }, and auto-hinted glyph load status; comparison=exact C oracle macro value, property acceptance/error code, readback value, map value for Indic glyphs where C assigns one, timing behavior, and output preservation on invalid property values.
+
+- id: ftdriver.FT_AUTOHINTER_SCRIPT_LATIN
+  kind: constant
+  symbol: FT_AUTOHINTER_SCRIPT_LATIN
+  header: freetype/ftdriver.h
+  description: FreeType public auto-hinter script constant for Latin-family glyph hinting.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1, matching the pinned freetype/ftdriver.h macro.
+    - id: default_script_property_roundtrip
+      description: FT_Property_Set/Get on module "autofitter" property "default-script" accepts this value and reads it back exactly as afmodule.c.
+    - id: glyph_to_script_map_runtime
+      description: FT_Property_Get on "autofitter:glyph-to-script-map" exposes this script value for Latin, Greek, Cyrillic, and related default Unicode coverages as C does.
+  # needs-input: operation=FT_Property_Set, FT_Property_Get, FT_New_Face, and FT_Load_Glyph with FT_LOAD_FORCE_AUTOHINT; fixture_asset=font with Basic Latin, Greek, and Cyrillic cmap coverage; params module_name="autofitter", property names "default-script" and "glyph-to-script-map", value FT_AUTOHINTER_SCRIPT_LATIN, valid face before and after first auto-hinted load, invalid module/property controls; expected output shape=FT_Error plus FT_UInt default_script readback, FT_Prop_GlyphToScriptMap { face, map pointer/null-class, map[glyph_index] values }, and auto-hinted glyph load status; comparison=exact C oracle macro value, property error codes, readback value, glyph map script values for covered glyphs, timing behavior, and output preservation on missing properties.
+
+- id: ftdriver.FT_AUTOHINTER_SCRIPT_NONE
+  kind: constant
+  symbol: FT_AUTOHINTER_SCRIPT_NONE
+  header: freetype/ftdriver.h
+  description: FreeType public auto-hinter script constant for disabling auto-hinting of a mapped glyph.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0, matching the pinned freetype/ftdriver.h macro.
+    - id: default_and_fallback_property_roundtrip
+      description: FT_Property_Set/Get on "autofitter" properties "default-script" and "fallback-script" handle this value with the exact C acceptance and readback behavior.
+    - id: glyph_to_script_map_runtime
+      description: Modifying the face-specific glyph-to-script map to this value disables auto-hinter script assignment for that glyph like C.
+  # needs-input: operation=FT_Property_Set, FT_Property_Get, FT_New_Face, and FT_Load_Glyph with FT_LOAD_FORCE_AUTOHINT; fixture_asset=font with at least one Latin glyph and one unmapped/control glyph; params module_name="autofitter", property names "default-script", "fallback-script", and "glyph-to-script-map", value FT_AUTOHINTER_SCRIPT_NONE, mutate map[glyph_index] before first auto-hinted load, invalid face/property controls; expected output shape=FT_Error plus FT_UInt property readbacks, FT_Prop_GlyphToScriptMap { face, map pointer/null-class, before/after map[glyph_index] }, and auto-hinted glyph load status; comparison=exact C oracle macro value, property acceptance/error code, readback values, map mutation side effects, auto-hint behavior classification, and output preservation on invalid inputs.
+
+- id: ftdriver.FT_CFF_HINTING_ADOBE
+  kind: constant
+  symbol: FT_CFF_HINTING_ADOBE
+  header: freetype/ftdriver.h
+  description: Deprecated FreeType CFF hinting constant alias for FT_HINTING_ADOBE.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1 because freetype/ftdriver.h defines FT_CFF_HINTING_ADOBE as FT_HINTING_ADOBE.
+    - id: hinting_engine_property_runtime
+      description: FT_Property_Set/Get on modules "cff", "type1", and "t1cid" property "hinting-engine" accepts this value and reads back Adobe hinting exactly as ftpsprop.c.
+  # needs-input: operation=FT_Property_Set and FT_Property_Get; fixture_asset=CFF, Type 1, and CID-keyed Type 1 fonts plus missing-module controls; params module_name in {"cff","type1","t1cid"}, property_name="hinting-engine", FT_UInt value FT_CFF_HINTING_ADOBE, string value "adobe" when environment-property path is enabled, invalid numeric and string controls; expected output shape=FT_Error plus FT_UInt hinting_engine readback per module and post-set glyph load/render status for a representative glyph; comparison=exact C oracle macro alias value, set/get error codes, readback value, string-vs-integer behavior, and output preservation on invalid module/property/value.
+
+- id: ftdriver.FT_CFF_HINTING_FREETYPE
+  kind: constant
+  symbol: FT_CFF_HINTING_FREETYPE
+  header: freetype/ftdriver.h
+  description: Deprecated FreeType CFF hinting constant alias for FT_HINTING_FREETYPE.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0 because freetype/ftdriver.h defines FT_CFF_HINTING_FREETYPE as FT_HINTING_FREETYPE.
+    - id: hinting_engine_property_runtime
+      description: FT_Property_Set/Get on "cff:hinting-engine" accepts or rejects this value exactly as ftpsprop.c for the pinned CFF_CONFIG_OPTION_OLD_ENGINE build.
+  # needs-input: operation=FT_Property_Set and FT_Property_Get; fixture_asset=CFF font plus Type 1 and CID controls; params module_name in {"cff","type1","t1cid"}, property_name="hinting-engine", FT_UInt value FT_CFF_HINTING_FREETYPE, string value "freetype" when environment-property path is enabled, pinned build variants with and without old-engine support if available; expected output shape=FT_Error plus FT_UInt hinting_engine readback per module and post-set glyph load/render status for a representative glyph; comparison=exact C oracle macro alias value, old-engine-dependent acceptance or Unimplemented_Feature, set/get readback, string-vs-integer behavior, and output preservation on rejected values.
+
+- id: ftdriver.FT_HINTING_ADOBE
+  kind: constant
+  symbol: FT_HINTING_ADOBE
+  header: freetype/ftdriver.h
+  description: FreeType public hinting-engine property constant selecting the Adobe CFF/Type1/CID hinting engine.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1, matching the pinned freetype/ftdriver.h macro.
+    - id: hinting_engine_property_runtime
+      description: FT_Property_Set/Get on modules "cff", "type1", and "t1cid" property "hinting-engine" accepts this value and reads it back as C does.
+  # needs-input: operation=FT_Property_Set and FT_Property_Get; fixture_asset=CFF, Type 1, and CID-keyed Type 1 fonts; params module_name in {"cff","type1","t1cid"}, property_name="hinting-engine", FT_UInt value FT_HINTING_ADOBE, string value "adobe" when environment-property path is enabled, repeated set/get before and after opening faces; expected output shape=FT_Error plus FT_UInt hinting_engine readback per module and representative glyph load/render status; comparison=exact C oracle macro value, property error codes, readback value, string-vs-integer behavior, module defaults, and output preservation on invalid property names.
+
+- id: ftdriver.FT_HINTING_FREETYPE
+  kind: constant
+  symbol: FT_HINTING_FREETYPE
+  header: freetype/ftdriver.h
+  description: FreeType public hinting-engine property constant selecting the old FreeType CFF/Type1/CID hinting engine when compiled in.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0, matching the pinned freetype/ftdriver.h macro.
+    - id: hinting_engine_property_runtime
+      description: FT_Property_Set/Get on modules "cff", "type1", and "t1cid" property "hinting-engine" accepts or rejects this value exactly as ftpsprop.c for the pinned old-engine configuration.
+  # needs-input: operation=FT_Property_Set and FT_Property_Get; fixture_asset=CFF, Type 1, and CID-keyed Type 1 fonts; params module_name in {"cff","type1","t1cid"}, property_name="hinting-engine", FT_UInt value FT_HINTING_FREETYPE, string value "freetype" when environment-property path is enabled, pinned build variants with and without old-engine support if available; expected output shape=FT_Error plus FT_UInt hinting_engine readback per module and representative glyph load/render status; comparison=exact C oracle macro value, old-engine-dependent acceptance or Unimplemented_Feature, property readback after success/rejection, string-vs-integer behavior, and output preservation on invalid values.
+
+- id: ftdriver.TT_INTERPRETER_VERSION_35
+  kind: constant
+  symbol: TT_INTERPRETER_VERSION_35
+  header: freetype/ftdriver.h
+  description: FreeType public TrueType interpreter-version property constant for version 35.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 35, matching the pinned freetype/ftdriver.h macro.
+    - id: interpreter_version_property_roundtrip
+      description: FT_Property_Set/Get on module "truetype" property "interpreter-version" accepts this value and reads back 35 exactly as ttdriver.c.
+    - id: glyph_hinting_runtime_effect
+      description: A TrueType glyph loaded after setting this value follows the pinned C version-35 bytecode interpreter behavior.
+  # needs-input: operation=FT_Property_Set, FT_Property_Get, FT_New_Face, FT_Set_Char_Size, and FT_Load_Glyph; fixture_asset=TrueType font with bytecode that exercises GETINFO and backward-compatibility-sensitive instructions; params module_name="truetype", property_name="interpreter-version", FT_UInt value TT_INTERPRETER_VERSION_35, string value "35" when environment-property path is enabled, invalid values before/after success; expected output shape=FT_Error plus FT_UInt interpreter_version readback, representative glyph metrics/outline/bitmap hashes, and GETINFO-observable behavior if fixture exposes it; comparison=exact C oracle macro value, set/get error codes, readback 35, hinting outputs, string-vs-integer behavior, and output preservation on invalid values.
+
+- id: ftdriver.TT_INTERPRETER_VERSION_38
+  kind: constant
+  symbol: TT_INTERPRETER_VERSION_38
+  header: freetype/ftdriver.h
+  description: FreeType public TrueType interpreter-version property constant for version 38, normalized by the pinned minimal subpixel-hinting build to version 40.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 38, matching the pinned freetype/ftdriver.h macro.
+    - id: interpreter_version_property_normalizes_to_40
+      description: FT_Property_Set on "truetype:interpreter-version" accepts 38 but stores TT_INTERPRETER_VERSION_40 when TT_SUPPORT_SUBPIXEL_HINTING_MINIMAL is enabled, matching ttdriver.c.
+    - id: glyph_hinting_runtime_effect
+      description: A TrueType glyph loaded after setting this value matches C behavior for the stored interpreter version rather than assuming readback remains 38.
+  # needs-input: operation=FT_Property_Set, FT_Property_Get, FT_New_Face, FT_Set_Char_Size, and FT_Load_Glyph; fixture_asset=TrueType font with bytecode sensitive to subpixel/minimal interpreter behavior and GETINFO; params module_name="truetype", property_name="interpreter-version", FT_UInt value TT_INTERPRETER_VERSION_38, string value "38" when environment-property path is enabled, pinned build variants with and without TT_SUPPORT_SUBPIXEL_HINTING_MINIMAL if available; expected output shape=FT_Error plus FT_UInt interpreter_version readback, representative glyph metrics/outline/bitmap hashes, and GETINFO-observable behavior if fixture exposes it; comparison=exact C oracle macro value 38, set/get error code, readback normalization to 40 or Unimplemented_Feature per build config, hinting outputs, string-vs-integer behavior, and output preservation on invalid values.
+
+- id: ftdriver.TT_INTERPRETER_VERSION_40
+  kind: constant
+  symbol: TT_INTERPRETER_VERSION_40
+  header: freetype/ftdriver.h
+  description: FreeType public TrueType interpreter-version property constant for version 40.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 40, matching the pinned freetype/ftdriver.h macro.
+    - id: interpreter_version_property_roundtrip
+      description: FT_Property_Set/Get on module "truetype" property "interpreter-version" accepts this value and reads back 40 when TT_SUPPORT_SUBPIXEL_HINTING_MINIMAL is enabled, matching ttdriver.c.
+    - id: default_interpreter_version
+      description: The pinned build default readback is 40 because ttobjs.c initializes the TrueType driver to TT_INTERPRETER_VERSION_40 when TT_SUPPORT_SUBPIXEL_HINTING_MINIMAL is defined.
+    - id: glyph_hinting_runtime_effect
+      description: A TrueType glyph loaded after setting this value follows the pinned C version-40 bytecode interpreter behavior.
+  # needs-input: operation=FT_Property_Get, FT_Property_Set, FT_New_Face, FT_Set_Char_Size, and FT_Load_Glyph; fixture_asset=TrueType font with bytecode sensitive to version-40 minimal subpixel hinting, GETINFO, backward compatibility, and phantom-point behavior; params module_name="truetype", property_name="interpreter-version", initial get before set, FT_UInt value TT_INTERPRETER_VERSION_40, string value "40" when environment-property path is enabled, invalid value controls; expected output shape=FT_Error plus FT_UInt initial and post-set interpreter_version readback, representative glyph metrics/outline/bitmap hashes, and GETINFO-observable behavior if fixture exposes it; comparison=exact C oracle macro value, default readback for pinned build config, set/get error codes, readback 40 or Unimplemented_Feature per build config, hinting outputs, string-vs-integer behavior, and output preservation on invalid values.

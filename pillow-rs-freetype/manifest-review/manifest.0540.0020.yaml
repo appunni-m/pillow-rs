@@ -1,0 +1,238 @@
+- id: ftimage.FT_PIXEL_MODE_LCD_V
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_LCD_V
+  header: freetype/ftimage.h
+  description: Vertical LCD bitmap pixel-mode enum variant used for FT_RENDER_MODE_LCD_V output; physical bitmap rows are three times the logical glyph height.
+  cases:
+    - id: value_matches_header
+      description: Numeric value follows FT_Pixel_Mode declaration order in ftimage.h after FT_PIXEL_MODE_LCD and before FT_PIXEL_MODE_BGRA.
+    - id: render_mode_lcd_v_sets_bitmap_shape
+      description: Rendering an outline with FT_RENDER_MODE_LCD_V writes bitmap.pixel_mode as FT_PIXEL_MODE_LCD_V, triples physical rows, keeps width untripled, and sets num_grays to 256.
+  # needs-input: operation=FT_Render_Glyph/FT_Outline_Get_Bitmap; fixture_asset=outline fonts with vertical LCD renderable glyphs across sizes; params={render_mode:LCD_V, load_flags, glyph_index, size}; output shape={FT_Error, bitmap.pixel_mode, width, rows, pitch, num_grays, buffer bytes}; comparison=exact C oracle scalar fields and bitmap bytes.
+- id: ftimage.FT_PIXEL_MODE_MAX
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_MAX
+  header: freetype/ftimage.h
+  description: Sentinel enum variant that terminates the FT_Pixel_Mode public value range and must remain synchronized with FreeType debug pixel-mode names.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is one greater than FT_PIXEL_MODE_BGRA in the pinned ftimage.h enum.
+    - id: not_emitted_as_runtime_bitmap_mode
+      description: Public bitmap-producing paths never report FT_PIXEL_MODE_MAX as bitmap.pixel_mode for valid glyph or bitmap conversion outputs.
+  # needs-input: operation=render/load bitmap-producing APIs plus synthetic invalid pixel-mode import case; fixture_asset=outline, embedded bitmap, color bitmap, and empty glyph fixtures; params={render_mode, load_color, strike}; output shape={pixel_mode distribution and errors}; comparison=exact absence from successful C outputs and exact error behavior for synthetic invalid use.
+- id: ftimage.FT_PIXEL_MODE_MONO
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_MONO
+  header: freetype/ftimage.h
+  description: Monochrome bitmap pixel-mode enum variant where each byte stores pixels most-significant-bit first and FreeType uses even byte pitch for rendered mono glyphs.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is 1 in the pinned FT_Pixel_Mode enum.
+    - id: render_mode_mono_sets_bitmap_shape
+      description: FT_RENDER_MODE_MONO writes bitmap.pixel_mode as FT_PIXEL_MODE_MONO and uses the C mono pitch formula, including even byte-row alignment.
+    - id: embedded_bitmap_mono_preserves_mode
+      description: Embedded monochrome strikes from supported bitmap font formats expose FT_PIXEL_MODE_MONO with C-equivalent rows, width, pitch, and packed buffer bits.
+  # needs-input: operation=FT_Render_Glyph and embedded bitmap FT_Load_Glyph; fixture_asset=outline fonts and bitmap strike fonts that expose mono glyphs; params={render_mode:MONO, glyph_index, size, strike}; output shape={FT_Error, bitmap fields, packed buffer bytes}; comparison=exact C oracle fields, pitch, and MSB-first byte buffer.
+- id: ftimage.FT_PIXEL_MODE_NONE
+  kind: enum_variant
+  symbol: FT_PIXEL_MODE_NONE
+  header: freetype/ftimage.h
+  description: Reserved zero pixel-mode enum variant used for empty or uninitialized bitmaps and accepted as an empty target state by bitmap helpers.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is 0 in the pinned FT_Pixel_Mode enum.
+    - id: empty_bitmap_state
+      description: Empty bitmap outputs with null buffers can carry FT_PIXEL_MODE_NONE without implying renderable pixel storage.
+    - id: invalid_render_target_errors
+      description: Rendering into an unsupported or uninitialized target mode follows the exact C error and output-preservation behavior.
+  # needs-input: operation=FT_Bitmap_Init, FT_Bitmap_Convert, FT_Outline_Get_Bitmap; fixture_asset=empty outline and synthetic empty bitmap targets; params={rows,width,pitch,buffer,pixel_mode:NONE}; output shape={FT_Error, bitmap fields, buffer nullness}; comparison=exact C oracle empty-state fields and error/output preservation.
+- id: ftimage.FT_OUTLINE_CONTOURS_MAX
+  kind: constant
+  symbol: FT_OUTLINE_CONTOURS_MAX
+  header: freetype/ftimage.h
+  description: Public outline contour-count limit macro tied to the unsigned-short FT_Outline.n_contours storage width.
+  cases:
+    - id: value_matches_header
+      description: Macro value equals USHRT_MAX in the pinned public header.
+    - id: layout_limit_matches_record_field
+      description: Limit matches the maximum representable value of FT_Outline.n_contours and does not depend on platform pointer size.
+  # needs-input: operation=compile-time constant probe plus FT_Outline layout probe; fixture_asset=none; params={constant:FT_OUTLINE_CONTOURS_MAX, field:n_contours}; output shape={constant value, sizeof/offsetof layout}; comparison=exact C ABI constant and layout values.
+- id: ftimage.FT_OUTLINE_EVEN_ODD_FILL
+  kind: flag
+  symbol: FT_OUTLINE_EVEN_ODD_FILL
+  header: freetype/ftimage.h
+  description: Outline flag requesting even-odd fill rule for smooth rasterization instead of FreeType's default non-zero winding fill.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x2 in the pinned public header.
+    - id: smooth_raster_fill_rule_changes_spans
+      description: For overlapping contours, setting the flag can change smooth raster coverage/spans while leaving unrelated outline geometry fields unchanged.
+  # needs-input: operation=FT_Outline_Render direct span mode and FT_Outline_Get_Bitmap; fixture_asset=synthetic overlapping outline plus font glyphs with overlaps; params={outline.flags toggling EVEN_ODD_FILL, render_mode:NORMAL, clip_box}; output shape={FT_Error, span sequence or bitmap bytes}; comparison=exact C oracle spans/bitmap and unchanged input geometry.
+- id: ftimage.FT_OUTLINE_HIGH_PRECISION
+  kind: flag
+  symbol: FT_OUTLINE_HIGH_PRECISION
+  header: freetype/ftimage.h
+  description: Outline flag hinting the scan converter to use highest practical precision; public value is preserved even where a renderer ignores it.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x100 in the pinned public header.
+    - id: raster_hint_behavior
+      description: Rendering with the flag set records whether the active C renderer changes output or ignores the hint for normal, mono, and LCD paths.
+  # needs-input: operation=FT_Outline_Render/FT_Outline_Get_Bitmap; fixture_asset=small-size outlines with diagonal and thin stems; params={outline.flags with/without HIGH_PRECISION, render_mode:NORMAL/MONO/LCD}; output shape={FT_Error, bitmap fields/bytes or span sequence}; comparison=exact C oracle output including no-op equivalence where ignored.
+- id: ftimage.FT_OUTLINE_IGNORE_DROPOUTS
+  kind: flag
+  symbol: FT_OUTLINE_IGNORE_DROPOUTS
+  header: freetype/ftimage.h
+  description: Outline flag requesting dropout correction to be ignored by the monochrome rasterizer; smooth rasterizer ignores this family of dropout flags.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x8 in the pinned public header.
+    - id: mono_dropout_behavior
+      description: Monochrome raster output records C dropout handling when the flag is set versus unset on thin outlines and SCANTYPE-tagged contours.
+    - id: smooth_raster_ignored
+      description: Anti-aliased smooth rendering ignores this flag and produces C-equivalent output to the unset case for the same outline.
+  # needs-input: operation=FT_Outline_Render/FT_Outline_Get_Bitmap; fixture_asset=thin synthetic outlines and hinted TrueType glyphs that expose dropout cases; params={outline.flags with/without IGNORE_DROPOUTS, render_mode:MONO/NORMAL}; output shape={FT_Error, mono bytes, gray bytes}; comparison=exact C oracle bytes and equality/inequality classification.
+- id: ftimage.FT_OUTLINE_INCLUDE_STUBS
+  kind: flag
+  symbol: FT_OUTLINE_INCLUDE_STUBS
+  header: freetype/ftimage.h
+  description: Outline dropout-control flag that includes stubs in monochrome dropout handling unless FT_OUTLINE_IGNORE_DROPOUTS overrides it.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x20 in the pinned public header.
+    - id: mono_stub_dropout_behavior
+      description: Monochrome raster output records C behavior for stub contours with INCLUDE_STUBS set, unset, and overridden by IGNORE_DROPOUTS.
+  # needs-input: operation=FT_Outline_Render/FT_Outline_Get_Bitmap; fixture_asset=synthetic one-pixel stem/stub outlines plus hinted glyphs with SCANTYPE dropout modes; params={outline.flags combinations INCLUDE_STUBS/IGNORE_DROPOUTS/SMART_DROPOUTS, render_mode:MONO}; output shape={FT_Error, bitmap bytes, span coverage classification}; comparison=exact C oracle mono bytes and override behavior.
+- id: ftimage.FT_OUTLINE_NONE
+  kind: flag
+  symbol: FT_OUTLINE_NONE
+  header: freetype/ftimage.h
+  description: Zero outline flag value indicating no ownership, fill-rule, dropout, overlap, or precision hints are set.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x0 in the pinned public header.
+    - id: default_outline_render_baseline
+      description: Rendering with flags set to FT_OUTLINE_NONE provides the baseline C output against which individual outline flags are compared.
+  # needs-input: operation=FT_Outline_Render/FT_Outline_Get_Bitmap; fixture_asset=representative simple, overlapping, and thin outlines; params={outline.flags:0, render_mode:NORMAL/MONO/LCD}; output shape={FT_Error, bitmap fields/bytes or span sequence}; comparison=exact C oracle baseline output.
+- id: ftimage.FT_OUTLINE_OVERLAP
+  kind: flag
+  symbol: FT_OUTLINE_OVERLAP
+  header: freetype/ftimage.h
+  description: Outline flag marking overlapping contours so anti-aliased rendering can apply overlap mitigation where supported.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x40 in the pinned public header.
+    - id: smooth_overlap_behavior
+      description: For overlapping contours, setting the flag records C smooth-renderer output including any oversampling/mitigation effect and performance-neutral public fields.
+    - id: non_overlap_no_spurious_change
+      description: For well-formed non-overlapping outlines, setting the flag records whether C output remains byte-identical or differs for the active renderer.
+  # needs-input: operation=FT_Outline_Render/FT_Render_Glyph; fixture_asset=overlap-heavy color/outline glyphs and simple non-overlap outlines; params={outline.flags with/without OVERLAP, render_mode:NORMAL/LCD}; output shape={FT_Error, bitmap fields/bytes or span sequence}; comparison=exact C oracle bytes and flag-effect classification.
+- id: ftimage.FT_OUTLINE_OWNER
+  kind: flag
+  symbol: FT_OUTLINE_OWNER
+  header: freetype/ftimage.h
+  description: Outline ownership flag indicating that point, tag, and contour arrays are owned by the outline object and should be freed by outline destruction APIs.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x1 in the pinned public header.
+    - id: destruction_ownership_behavior
+      description: FT_Outline_Done and glyph cleanup free owned arrays only when OWNER is set and preserve caller-owned arrays otherwise.
+  # needs-input: operation=FT_Outline_New/FT_Outline_Done and FT_Get_Glyph/FT_Done_Glyph; fixture_asset=synthetic allocated outline and loaded outline glyphs; params={flags with/without OWNER, n_points, n_contours}; output shape={FT_Error, flags after init, allocation/free event stream, sanitizer-safe ownership classification}; comparison=exact C oracle ownership/free behavior.
+- id: ftimage.FT_OUTLINE_POINTS_MAX
+  kind: constant
+  symbol: FT_OUTLINE_POINTS_MAX
+  header: freetype/ftimage.h
+  description: Public outline point-count limit macro tied to the unsigned-short FT_Outline.n_points storage width.
+  cases:
+    - id: value_matches_header
+      description: Macro value equals USHRT_MAX in the pinned public header.
+    - id: layout_limit_matches_record_field
+      description: Limit matches the maximum representable value of FT_Outline.n_points and does not depend on platform pointer size.
+  # needs-input: operation=compile-time constant probe plus FT_Outline layout probe; fixture_asset=none; params={constant:FT_OUTLINE_POINTS_MAX, field:n_points}; output shape={constant value, sizeof/offsetof layout}; comparison=exact C ABI constant and layout values.
+- id: ftimage.FT_OUTLINE_REVERSE_FILL
+  kind: flag
+  symbol: FT_OUTLINE_REVERSE_FILL
+  header: freetype/ftimage.h
+  description: Outline flag indicating opposite contour orientation from the TrueType clockwise outside-contour convention.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x4 in the pinned public header.
+    - id: orientation_flag_render_behavior
+      description: Rendering records whether active C rasterizers ignore or observe the flag for clockwise and counter-clockwise contours.
+  # needs-input: operation=FT_Outline_Render/FT_Outline_Get_Bitmap; fixture_asset=synthetic clockwise and counter-clockwise contours plus Type1-style glyphs; params={outline.flags with/without REVERSE_FILL, render_mode:NORMAL/MONO}; output shape={FT_Error, bitmap bytes or span sequence}; comparison=exact C oracle output and no-op/effect classification.
+- id: ftimage.FT_OUTLINE_SINGLE_PASS
+  kind: flag
+  symbol: FT_OUTLINE_SINGLE_PASS
+  header: freetype/ftimage.h
+  description: Outline flag hinting the scan converter to render in a single pass, typically for very large glyph sizes.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x200 in the pinned public header.
+    - id: large_outline_raster_hint_behavior
+      description: Large glyph rendering with the flag set records C output and whether the active renderer treats the hint as observable or ignored.
+  # needs-input: operation=FT_Outline_Render/FT_Render_Glyph; fixture_asset=large-size outline glyphs and synthetic large contours within C render limits; params={outline.flags with/without SINGLE_PASS, size, render_mode:NORMAL/MONO}; output shape={FT_Error, bitmap fields/bytes or span sequence}; comparison=exact C oracle output and error behavior at large sizes.
+- id: ftimage.FT_OUTLINE_SMART_DROPOUTS
+  kind: flag
+  symbol: FT_OUTLINE_SMART_DROPOUTS
+  header: freetype/ftimage.h
+  description: Outline dropout-control flag selecting smart dropout handling unless FT_OUTLINE_IGNORE_DROPOUTS overrides it; smooth rasterizer ignores it.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x10 in the pinned public header.
+    - id: mono_smart_dropout_behavior
+      description: Monochrome raster output records C simple versus smart dropout handling and IGNORE_DROPOUTS override behavior.
+    - id: smooth_raster_ignored
+      description: Anti-aliased smooth rendering ignores this flag and produces C-equivalent output to the unset case for the same outline.
+  # needs-input: operation=FT_Outline_Render/FT_Outline_Get_Bitmap; fixture_asset=thin synthetic outlines and hinted TrueType glyphs with dropout-sensitive contours; params={outline.flags with/without SMART_DROPOUTS/IGNORE_DROPOUTS, render_mode:MONO/NORMAL}; output shape={FT_Error, mono bytes, gray bytes}; comparison=exact C oracle bytes and override/no-op classification.
+- id: ftimage.FT_RASTER_FLAG_AA
+  kind: flag
+  symbol: FT_RASTER_FLAG_AA
+  header: freetype/ftimage.h
+  description: Raster-params flag requesting anti-aliased gray rendering; smooth raster requires it and the monochrome raster rejects it.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x1 in the pinned public header.
+    - id: smooth_requires_aa
+      description: Smooth raster render returns Cannot_Render_Glyph when AA is absent and succeeds or continues validation when AA is present.
+    - id: mono_rejects_aa
+      description: Monochrome raster returns Cannot_Render_Glyph when AA is set.
+  # needs-input: operation=FT_Outline_Render direct and target bitmap modes; fixture_asset=valid outline glyphs; params={flags with/without AA, target pixel_mode MONO/GRAY, render_mode through renderer}; output shape={FT_Error, bitmap bytes or span sequence}; comparison=exact C oracle error and output behavior.
+- id: ftimage.FT_RASTER_FLAG_CLIP
+  kind: flag
+  symbol: FT_RASTER_FLAG_CLIP
+  header: freetype/ftimage.h
+  description: Direct-rendering raster flag that makes the raster honor caller-provided integer-pixel clip_box instead of the outline control box-derived default.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x4 in the pinned public header.
+    - id: direct_clip_box_limits_spans
+      description: In direct AA rendering, spans are clipped to the caller clip_box when CLIP is set.
+    - id: direct_without_clip_presets_cbox
+      description: FT_Outline_Render fills params.clip_box from the outline control box when DIRECT is set and CLIP is absent.
+  # needs-input: operation=FT_Outline_Render with span callback; fixture_asset=outline glyphs crossing clip boundaries; params={flags:AA|DIRECT with/without CLIP, clip_box, user callback}; output shape={FT_Error, callback span sequence, mutated params.clip_box}; comparison=exact C oracle spans and clip_box mutation.
+- id: ftimage.FT_RASTER_FLAG_DEFAULT
+  kind: flag
+  symbol: FT_RASTER_FLAG_DEFAULT
+  header: freetype/ftimage.h
+  description: Zero raster flag value used by default outline-to-bitmap rendering for monochrome targets unless anti-aliasing is inferred from target pixel mode.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x0 in the pinned public header.
+    - id: default_monochrome_target_path
+      description: FT_Outline_Get_Bitmap starts with DEFAULT flags and leaves AA unset for mono targets, selecting the monochrome raster path.
+  # needs-input: operation=FT_Outline_Get_Bitmap/FT_Outline_Render; fixture_asset=valid outline glyphs; params={target.pixel_mode:MONO, flags:DEFAULT}; output shape={FT_Error, bitmap fields/bytes}; comparison=exact C oracle mono raster result and errors for invalid targets.
+- id: ftimage.FT_RASTER_FLAG_DIRECT
+  kind: flag
+  symbol: FT_RASTER_FLAG_DIRECT
+  header: freetype/ftimage.h
+  description: Raster-params flag requesting direct span callback rendering; supported for anti-aliased smooth rendering and rejected by the monochrome raster.
+  cases:
+    - id: value_matches_header
+      description: Macro value is 0x2 in the pinned public header.
+    - id: direct_gray_span_callback
+      description: With AA and DIRECT set, smooth raster ignores target storage and invokes gray_spans with user data for generated spans.
+    - id: direct_missing_callback_noop
+      description: Smooth raster returns success without drawing when DIRECT is set but gray_spans is null for a non-empty valid outline.
+    - id: mono_rejects_direct
+      description: Monochrome raster returns Cannot_Render_Glyph when DIRECT is set.
+  # needs-input: operation=FT_Outline_Render with span callback and without callback; fixture_asset=valid non-empty outline glyphs; params={flags:AA|DIRECT, gray_spans:null/callback, user, target sentinel, render mode}; output shape={FT_Error, callback span sequence, target buffer preservation}; comparison=exact C oracle spans, no-callback success/no-op, and mono rejection.

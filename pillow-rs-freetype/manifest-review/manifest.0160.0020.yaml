@@ -1,0 +1,275 @@
+  - id: freetype.FT_HAS_KERNING
+    kind: macro
+    symbol: FT_HAS_KERNING
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_KERNING on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_HAS_KERNING after FT_New_Memory_Face; fixture assets one scalable font with a legacy kern table or basic pair-wise GPOS kerning enabled in the pinned C build and one comparable font with no supported kerning; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact presence/absence of FT_FACE_FLAG_KERNING.
+      - id: kerning_face_returns_true
+        description: A live face whose face_flags contain FT_FACE_FLAG_KERNING returns true.
+      - id: non_kerning_face_returns_false
+        description: A live face without supported kerning data returns false and FT_Get_Kerning returns the C-compatible zero-vector behavior.
+
+  - id: freetype.FT_HAS_MULTIPLE_MASTERS
+    kind: macro
+    symbol: FT_HAS_MULTIPLE_MASTERS
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_MULTIPLE_MASTERS on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_HAS_MULTIPLE_MASTERS after FT_Open_Face/FT_New_Memory_Face; fixture assets one OpenType Font Variations or TrueType GX variable font plus one static outline font; params live FT_Face handles at base face_index and any available named-instance face_index; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact presence/absence of FT_FACE_FLAG_MULTIPLE_MASTERS.
+      - id: variable_or_mm_face_returns_true
+        description: A multiple-master, GX, or OpenType variation face returns true.
+      - id: static_face_returns_false
+        description: A static face returns false.
+
+  - id: freetype.FT_HAS_SBIX
+    kind: macro
+    symbol: FT_HAS_SBIX
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_SBIX on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_HAS_SBIX after FT_Open_Face; fixture assets one SFNT font with an 'sbix' table and outline glyphs, the same font opened with FT_PARAM_TAG_IGNORE_SBIX, and one SFNT outline font without 'sbix'; params FT_Open_Args with and without FT_OPEN_PARAMS carrying FT_Parameter { tag: FT_PARAM_TAG_IGNORE_SBIX, data: NULL }; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_SBIX behavior for default and ignore-sbix opens.
+      - id: sbix_outline_face_returns_true
+        description: A face with an 'sbix' table and outline glyphs reports true when C sets FT_FACE_FLAG_SBIX.
+      - id: non_sbix_or_ignored_face_returns_false
+        description: A face without 'sbix', or an 'sbix' font opened so C suppresses sbix handling, reports false.
+
+  - id: freetype.FT_HAS_SBIX_OVERLAY
+    kind: macro
+    symbol: FT_HAS_SBIX_OVERLAY
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_SBIX_OVERLAY on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_HAS_SBIX_OVERLAY after FT_Open_Face; fixture assets one 'sbix' SFNT with bit 1 set in the sbix flags field, one 'sbix' SFNT with overlay bit clear, and one non-sbix control font; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_SBIX_OVERLAY behavior.
+      - id: sbix_overlay_face_returns_true
+        description: A face with C's FT_FACE_FLAG_SBIX_OVERLAY set reports true.
+      - id: no_overlay_or_no_sbix_returns_false
+        description: A face whose 'sbix' overlay bit is clear, or that has no 'sbix' table, reports false.
+
+  - id: freetype.FT_HAS_SVG
+    kind: macro
+    symbol: FT_HAS_SVG
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_SVG on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_HAS_SVG after FT_Open_Face/FT_New_Memory_Face; fixture assets one OpenType font with an 'SVG ' table and one SFNT outline font without an SVG table; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_SVG behavior.
+      - id: svg_table_face_returns_true
+        description: A face with an OpenType 'SVG ' table reports true.
+      - id: no_svg_table_face_returns_false
+        description: A face without an SVG table reports false.
+
+  - id: freetype.FT_HAS_VERTICAL
+    kind: macro
+    symbol: FT_HAS_VERTICAL
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_VERTICAL on face->face_flags for real vertical metrics.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_HAS_VERTICAL after FT_New_Memory_Face; fixture assets one SFNT/CJK or other font with real vertical metrics tables and one proportional Latin control font without real vertical metrics; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot and optional FT_Load_Glyph with FT_LOAD_VERTICAL_LAYOUT metrics; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_VERTICAL presence, not synthesized vertical advances.
+      - id: real_vertical_metrics_face_returns_true
+        description: A face with real vertical metrics reports true.
+      - id: synthesized_or_absent_vertical_metrics_returns_false
+        description: A face without real vertical metrics reports false even if vertical advances can be synthesized elsewhere.
+
+  - id: freetype.FT_IS_CID_KEYED
+    kind: macro
+    symbol: FT_IS_CID_KEYED
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_CID_KEYED on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_CID_KEYED after FT_Open_Face/FT_New_Memory_Face; fixture assets one non-SFNT CID-keyed Type 1/CFF face and one OpenType/CFF CID-keyed-internally control face where C does not expose CID-ness through this flag; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_CID_KEYED behavior.
+      - id: exposed_cid_keyed_face_returns_true
+        description: A public CID-keyed face reports true when C exposes FT_FACE_FLAG_CID_KEYED.
+      - id: sfnt_wrapped_or_non_cid_face_returns_false
+        description: SFNT-wrapped CFF CID fonts and ordinary non-CID fonts report false when C leaves the CID flag clear.
+
+  - id: freetype.FT_IS_FIXED_WIDTH
+    kind: macro
+    symbol: FT_IS_FIXED_WIDTH
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_FIXED_WIDTH on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_FIXED_WIDTH after FT_New_Memory_Face; fixture assets one monospace/fixed-pitch font and one proportional font; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_FIXED_WIDTH behavior.
+      - id: fixed_pitch_face_returns_true
+        description: A fixed-width face reports true.
+      - id: proportional_face_returns_false
+        description: A proportional face reports false.
+
+  - id: freetype.FT_IS_NAMED_INSTANCE
+    kind: macro
+    symbol: FT_IS_NAMED_INSTANCE
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests whether face->face_index has nonzero named-instance bits 0x7FFF0000.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_NAMED_INSTANCE after FT_Open_Face; fixture asset one variable font with at least one named instance; params face_index for base face and face_index with named-instance index encoded in bits 16..30, plus optional FT_Set_Var_Design_Coordinates on the base face; expected output shape FT_Bool/int macro result plus face->face_index value; comparison rule exact boolean parity with the C macro, including unchanged false result after coordinate changes that do not call FT_Set_Named_Instance.
+      - id: encoded_named_instance_face_index_returns_true
+        description: A face opened or selected as a named instance reports true because face_index contains named-instance bits.
+      - id: base_face_or_coordinate_only_variation_returns_false
+        description: A base variation face reports false, and changing design coordinates alone does not make this macro true.
+
+  - id: freetype.FT_IS_SCALABLE
+    kind: macro
+    symbol: FT_IS_SCALABLE
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_SCALABLE on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_SCALABLE after FT_Open_Face/FT_New_Memory_Face; fixture assets one scalable outline font and one bitmap-only font or sbix-default bitmap-only face where C leaves FT_FACE_FLAG_SCALABLE clear; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_SCALABLE behavior.
+      - id: scalable_outline_face_returns_true
+        description: A scalable outline face reports true.
+      - id: bitmap_only_face_returns_false
+        description: A bitmap-only face reports false.
+
+  - id: freetype.FT_IS_SFNT
+    kind: macro
+    symbol: FT_IS_SFNT
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_SFNT on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_SFNT after FT_Open_Face/FT_New_Memory_Face; fixture assets one TrueType/OpenType/SFNT font and one non-SFNT font such as Type 1, CFF without SFNT wrapper, BDF, or PCF; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_SFNT behavior.
+      - id: sfnt_face_returns_true
+        description: A TrueType, OpenType, or other SFNT-storage face reports true.
+      - id: non_sfnt_face_returns_false
+        description: A non-SFNT face reports false.
+
+  - id: freetype.FT_IS_TRICKY
+    kind: macro
+    symbol: FT_IS_TRICKY
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_TRICKY on face->face_flags.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_TRICKY after FT_Open_Face/FT_New_Memory_Face; fixture assets one TrueType font from the pinned FreeType tricky-font list and one ordinary TrueType control font; params live FT_Face handles; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_TRICKY behavior for the pinned FreeType version.
+      - id: tricky_font_returns_true
+        description: A face classified by the pinned C FreeType tricky-font list reports true.
+      - id: ordinary_font_returns_false
+        description: A normal face reports false.
+
+  - id: freetype.FT_IS_VARIATION
+    kind: macro
+    symbol: FT_IS_VARIATION
+    header: freetype/freetype.h
+    description: FreeType public face-property macro that tests FT_FACE_FLAG_VARIATION on face->face_flags after variation coordinates or weight vectors alter the face.
+    coverage:
+      font_variability: required
+    cases:
+      # needs-input: operation FT_IS_VARIATION before and after FT_Set_MM_Design_Coordinates, FT_Set_Var_Design_Coordinates, FT_Set_Var_Blend_Coordinates, or FT_Set_MM_WeightVector; fixture asset one variable or multiple-master font; params live FT_Face handle, default coordinates, and non-default coordinates/weight vector; expected output shape FT_Bool/int macro result plus face->face_flags snapshot; comparison rule exact boolean parity with the C macro and exact FT_FACE_FLAG_VARIATION transition behavior.
+      - id: altered_variation_face_returns_true
+        description: A variation face altered through C variation-coordinate APIs reports true.
+      - id: unaltered_variation_or_static_face_returns_false
+        description: A newly opened variation face at its default instance and a static face report false.
+
+  - id: freetype.FT_Bitmap_Size
+    kind: record
+    symbol: FT_Bitmap_Size
+    header: freetype/freetype.h
+    description: FreeType public record for bitmap strike metrics exposed through FT_FaceRec::available_sizes.
+    coverage:
+      font_variability: required
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order height, width, size, x_ppem, y_ppem with FT_Short and FT_Pos field types.
+      # needs-input: operation inspect face->available_sizes after FT_Open_Face/FT_New_Memory_Face; fixture assets one bitmap-strike font such as SFNT embedded bitmaps, PCF/BDF, or Windows FNT plus one scalable outline control with no fixed sizes; params live FT_Face handles; expected output shape array of FT_Bitmap_Size records with num_fixed_sizes count; comparison rule exact count and per-record field parity for height/width pixels and size/x_ppem/y_ppem 26.6 values, with NULL or zero-count behavior matching C for no strikes.
+      - id: available_sizes_values_match_c
+        description: Bitmap strike records exposed by a face match C counts and per-field values exactly.
+
+  - id: freetype.FT_CharMapRec
+    kind: record
+    symbol: FT_CharMapRec
+    header: freetype/freetype.h
+    description: FreeType public record for a character map owned by FT_FaceRec::charmaps or referenced by FT_FaceRec::charmap.
+    coverage:
+      font_variability: required
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order face, encoding, platform_id, encoding_id.
+      # needs-input: operation inspect face->charmaps and face->charmap after FT_Open_Face plus FT_Select_Charmap/FT_Set_Charmap; fixture asset one SFNT font with multiple charmaps including Unicode and at least one non-Unicode or symbol charmap; params live FT_Face handle and selected charmap; expected output shape array of FT_CharMap handles and records plus active FT_CharMap pointer; comparison rule exact num_charmaps, record field parity, pointer identity to owning face, active charmap index, and encoding tag parity with C.
+      - id: face_charmap_records_match_c
+        description: Charmap records owned by a face match C field values and active-charmap pointer behavior.
+
+  - id: freetype.FT_FaceRec
+    kind: record
+    symbol: FT_FaceRec
+    header: freetype/freetype.h
+    description: FreeType public face object record containing public face metadata, active child handles, and private implementation fields.
+    coverage:
+      font_variability: required
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order from num_faces through internal, including handle, FT_Generic, FT_BBox, FT_ListRec, string pointer, and private pointer fields.
+      # needs-input: operation inspect FT_FaceRec immediately after FT_Open_Face/FT_New_Memory_Face and after FT_Set_Char_Size, FT_Load_Glyph, FT_Select_Charmap, FT_Attach_Stream, and variation-coordinate calls; fixture assets scalable SFNT, bitmap-strike font, variable font, and optional auxiliary AFM attachment font; params live FT_Face handles and operation-specific inputs; expected output shape public scalar fields, string contents/pointers, child handle pointers, bbox/metrics, flags, charmap arrays, and available_sizes; comparison rule exact C parity for stable public fields, pointer NULL/non-NULL and identity relationships, and documented mutation behavior after operations.
+      - id: populated_public_fields_match_c
+        description: Public metadata, strings, flags, metrics, bbox, strike, charmap, glyph, size, and active charmap fields match the pinned C oracle for representative faces and state transitions.
+
+  - id: freetype.FT_GlyphSlotRec
+    kind: record
+    symbol: FT_GlyphSlotRec
+    header: freetype/freetype.h
+    description: FreeType public glyph slot record populated by glyph loading and rendering APIs.
+    coverage:
+      font_variability: required
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order library, face, next, glyph_index, generic, metrics, linear advances, advance, format, bitmap, bitmap_left, bitmap_top, outline, subglyph data, control data, lsb_delta, rsb_delta, other, internal.
+      # needs-input: operation inspect face->glyph after FT_Load_Glyph and FT_Render_Glyph; fixture assets scalable outline font, composite glyph font, bitmap strike font, and native-hinted TrueType font; params glyph indices, load flags including default, FT_LOAD_NO_SCALE, FT_LOAD_NO_RECURSE, FT_LOAD_RENDER, FT_LOAD_VERTICAL_LAYOUT, and render modes normal/mono/lcd where supported; expected output shape FT_GlyphSlotRec public fields, nested metrics/bitmap/outline records, glyph_index, advances, deltas, format, placement, subglyph count; comparison rule exact C parity for scalar fields, nested records, bitmap bytes/placement where rendered, outline geometry where outline, and pointer NULL/non-NULL/identity relationships.
+      - id: loaded_and_rendered_slot_fields_match_c
+        description: Glyph loading and rendering populate slot fields exactly like C for outline, bitmap, composite, and hinted glyph cases.
+
+  - id: freetype.FT_Glyph_Metrics
+    kind: record
+    symbol: FT_Glyph_Metrics
+    header: freetype/freetype.h
+    description: FreeType public glyph metrics record stored in FT_GlyphSlotRec::metrics.
+    coverage:
+      font_variability: required
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order width, height, horiBearingX, horiBearingY, horiAdvance, vertBearingX, vertBearingY, vertAdvance with FT_Pos field types.
+      # needs-input: operation inspect face->glyph->metrics after FT_Load_Glyph; fixture assets fonts with horizontal metrics, real vertical metrics, and representative hinted/unhinted scalable glyphs; params glyph index, size, load flags default, FT_LOAD_NO_HINTING, FT_LOAD_NO_SCALE, and FT_LOAD_VERTICAL_LAYOUT; expected output shape FT_Glyph_Metrics record in FT_Pos units; comparison rule exact field parity with C, including font-unit values for no-scale and 26.6 hinted/unhinted values otherwise.
+      - id: loaded_glyph_metrics_match_c
+        description: Loaded glyph metrics match C field-for-field across horizontal, vertical, hinted, unhinted, and no-scale cases.
+
+  - id: freetype.FT_Open_Args
+    kind: record
+    symbol: FT_Open_Args
+    header: freetype/freetype.h
+    description: FreeType public record consumed by FT_Open_Face and FT_Attach_Stream to describe a font source, optional driver, and optional parameters.
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order flags, memory_base, memory_size, pathname, stream, driver, num_params, params.
+      # needs-input: operation FT_Open_Face and FT_Attach_Stream using FT_Open_Args; fixture assets valid font bytes, valid pathname font, invalid/missing source, optional custom stream fixture, and an 'sbix' font for FT_OPEN_PARAMS with FT_PARAM_TAG_IGNORE_SBIX; params FT_Open_Args combinations for FT_OPEN_MEMORY, FT_OPEN_PATHNAME, FT_OPEN_STREAM, FT_OPEN_DRIVER, FT_OPEN_PARAMS, no source flag, and multiple source flags; expected output shape FT_Error, output FT_Face pointer/null, and selected face flags; comparison rule exact C error-code parity, exact source-selection precedence/invalidity behavior, no caller-owned buffer copies or ownership changes beyond C rules, and exact parameter effect where observable.
+      - id: open_face_consumes_args_like_c
+        description: FT_Open_Face interprets source, driver, and parameter fields with the same validation, ownership, and observable face-state behavior as C.
+
+  - id: freetype.FT_Parameter
+    kind: record
+    symbol: FT_Parameter
+    header: freetype/freetype.h
+    description: FreeType public tag/data parameter record used by FT_Open_Face, FT_Attach_Stream, FT_Set_Renderer, and FT_Face_Properties style APIs.
+    cases:
+      - id: layout_matches_c
+        description: Size, alignment, and offsets match the pinned C field order tag, data with FT_ULong and FT_Pointer field types.
+      # needs-input: operation FT_Open_Face with FT_OPEN_PARAMS and FT_Face_Properties where implemented; fixture assets 'sbix' font for FT_PARAM_TAG_IGNORE_SBIX and a face/property case such as LCD filter weights, random seed, or TrueType interpreter version if exposed by the pinned build; params FT_Parameter arrays with known tags, unknown tags, NULL data where accepted, non-NULL data, and num_params zero/nonzero; expected output shape FT_Error plus observable face flags/properties; comparison rule exact tag numeric handling, exact data pointer interpretation/lifetime, exact C error-code parity, and exact ignore/accept/reject behavior for known and unknown parameter tags.
+      - id: tag_data_parameters_match_c_behavior
+        description: APIs that consume FT_Parameter arrays preserve C tag dispatch, data pointer interpretation, and error behavior.

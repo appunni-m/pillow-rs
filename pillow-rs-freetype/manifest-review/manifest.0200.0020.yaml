@@ -1,0 +1,373 @@
+- id: ftbdf.FT_Get_BDF_Property
+  kind: function
+  symbol: FT_Get_BDF_Property
+  header: freetype/ftbdf.h
+  description: FreeType C API function that retrieves a named BDF property from BDF, PCF, or selected-strike SFNT BDF-table faces.
+  cases:
+    - id: success_bdf_string_integer_cardinal_properties
+      description: BDF faces return exact property type and value for atom, signed integer, and BDF-only cardinal properties.
+    - id: success_pcf_properties_signed_only
+      description: PCF faces return exact property values while integer properties are reported as signed, never cardinal.
+    - id: success_sfnt_bdf_table_selected_strike
+      description: SFNT faces with a BDF table return C-compatible property values after a bitmap strike has been selected.
+    - id: error_missing_property_sets_none
+      description: Missing properties return the pinned C error and set aproperty.type to BDF_PROPERTY_TYPE_NONE.
+    - id: error_unsupported_face_or_unselected_strike
+      description: Non-BDF/PCF faces and SFNT BDF-table faces without a selected bitmap strike return the pinned C error and NONE type.
+    - id: error_null_face_or_output
+      description: Null face returns Invalid_Face_Handle; null aproperty returns Invalid_Argument; output write behavior matches C.
+  # needs-input: operation=FT_Get_BDF_Property; fixture_asset=BDF font with STARTPROPERTIES atoms/integers/cardinals, PCF font with signed props, SFNT bitmap font with BDF table, and input/fonts/DejaVuSans.ttf control; params prop_name values such as FAMILY_NAME, POINT_SIZE, PIXEL_SIZE, missing name, null face, null prop_name if supported by runner, null aproperty, before/after strike selection; output shape=FT_Error plus BDF_PropertyRec{type, atom|string pointer contents, integer, cardinal} and output sentinel state; comparison=exact C oracle error, property type/value, string contents, pointer-null classification, and NONE/write-preservation behavior.
+
+- id: ftbitmap.FT_Bitmap_Blend
+  kind: function
+  symbol: FT_Bitmap_Blend
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that blends a source bitmap of any supported pixel mode into a BGRA target bitmap with allocation and offset adjustment.
+  cases:
+    - id: success_empty_target_allocates_bgra
+      description: Blending into an FT_Bitmap_Init target allocates BGRA storage, sets pitch to 4*width, and updates target offset like C.
+    - id: success_existing_bgra_reallocates_or_preserves
+      description: Blending into an existing BGRA target expands or preserves the target rectangle and pixel bytes exactly like C.
+    - id: success_source_pixel_modes_and_flow
+      description: MONO, GRAY2, GRAY4, GRAY, LCD, LCD_V, and BGRA sources with positive and negative pitch produce exact C BGRA bytes.
+    - id: success_integerizes_offsets
+      description: Source and target offsets have their low six 26.6 bits cleared and the returned target offset matches C.
+    - id: error_invalid_arguments_or_target_mode
+      description: Null library/source/target/atarget_offset and non-empty non-BGRA target modes return C error classifications and write behavior.
+    - id: error_overflow_or_flow_mismatch
+      description: Coordinate overflow and source/target pitch-flow mismatch return the same C error and preserve/release buffers exactly as C.
+  # needs-input: operation=FT_Bitmap_Blend; fixture_asset=synthetic FT_Bitmap matrices plus rendered glyph bitmaps from input/fonts/DejaVuSans.ttf; params source pixel modes MONO/GRAY2/GRAY4/GRAY/LCD/LCD_V/BGRA, positive and negative pitch, source_offset and target_offset with fractional 26.6 bits, empty and preallocated BGRA targets, null pointers, invalid target mode, overflow coordinates; output shape=FT_Error, target FT_Bitmap fields rows/width/pitch/pixel_mode/num_grays/buffer bytes, updated FT_Vector target_offset, and allocation/free classification; comparison=exact C oracle error, fields, bytes, offset, and write/preservation behavior.
+
+- id: ftbitmap.FT_Bitmap_Convert
+  kind: function
+  symbol: FT_Bitmap_Convert
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that converts 1/2/4/8/32bpp FT_Bitmap data to 8bpp rows with requested pitch alignment.
+  cases:
+    - id: success_supported_depths_to_gray
+      description: MONO, GRAY2, GRAY4, GRAY, LCD/LCD_V-style 8bpp, and BGRA inputs convert to exact C 8bpp output bytes where C supports the mode.
+    - id: success_alignment_and_flow
+      description: Target pitch is aligned to 1, 2, or 4 bytes and preserves positive or negative bitmap flow like C.
+    - id: success_repeated_conversion_reallocates
+      description: Reusing a target without FT_Bitmap_Done reallocates and overwrites fields and bytes exactly like C.
+    - id: success_empty_or_null_source_buffer
+      description: Empty source dimensions or null source buffer follow C field and allocation behavior.
+    - id: error_invalid_arguments_or_alignment
+      description: Null library/source/target and invalid alignment values return C errors and target preservation behavior.
+    - id: error_unsupported_pixel_mode
+      description: Unsupported pixel modes return the pinned C error and match target write behavior.
+  # needs-input: operation=FT_Bitmap_Convert; fixture_asset=synthetic FT_Bitmap rows for each pixel mode plus rendered mono/gray glyph bitmaps; params alignments 1/2/4 and invalid 0/3, positive and negative pitch, empty bitmaps, null buffers, repeated conversion into non-empty target, null library/source/target; output shape=FT_Error plus target FT_Bitmap fields and buffer bytes with sentinel boundaries; comparison=exact C oracle error, pitch alignment, field values, converted bytes, allocation/free behavior, and sentinel preservation.
+
+- id: ftbitmap.FT_Bitmap_Copy
+  kind: function
+  symbol: FT_Bitmap_Copy
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that deep-copies an FT_Bitmap while respecting target flow and library memory ownership.
+  cases:
+    - id: success_deep_copy_all_public_fields
+      description: Non-overlapping source and target produce identical public fields and independent buffer contents.
+    - id: success_source_equals_target_noop
+      description: Passing the same bitmap as source and target returns success without freeing or changing the bitmap.
+    - id: success_null_source_buffer
+      description: A source with null buffer copies fields and leaves target buffer null like C.
+    - id: success_flow_flip
+      description: Opposite source and target pitch signs copy rows in reversed order and negate target pitch like C.
+    - id: error_null_library_or_bitmaps
+      description: Null library, source, and target return the exact C error and preserve existing target state where C does.
+    - id: ownership_replaces_target_buffer
+      description: A preexisting target buffer is freed/replaced using the library allocator before the copy.
+  # needs-input: operation=FT_Bitmap_Copy; fixture_asset=synthetic FT_Bitmap buffers with sentinel allocations; params source/target combinations including same pointer, null buffer, positive/negative pitch pairs, preallocated target, null library/source/target, multiple pixel modes; output shape=FT_Error plus target FT_Bitmap fields, buffer bytes, allocation identity/free events, and sentinels; comparison=exact C oracle error, fields, copied row order, buffer independence, and preservation/free behavior.
+
+- id: ftbitmap.FT_Bitmap_Done
+  kind: function
+  symbol: FT_Bitmap_Done
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that frees an FT_Bitmap buffer and resets the record to the null bitmap.
+  cases:
+    - id: success_frees_and_zeroes_bitmap
+      description: A bitmap initialized or allocated through FreeType is freed and all public fields are reset to the C null bitmap.
+    - id: success_empty_bitmap
+      description: An already-empty bitmap returns success and remains the C null bitmap.
+    - id: success_repeated_done_after_reinit
+      description: Repeated lifecycle through init/convert/done matches C allocation and field reset behavior.
+    - id: error_null_library_or_bitmap
+      description: Null library returns Invalid_Library_Handle and null bitmap pointer returns Invalid_Argument with no writes.
+  # needs-input: operation=FT_Bitmap_Done; fixture_asset=synthetic FT_Bitmap allocated through FT_Bitmap_Convert/Copy plus empty initialized bitmap; params live library, null library, null bitmap, repeated init/convert/done cycles; output shape=FT_Error, final FT_Bitmap fields, buffer pointer nullness, and allocator free count; comparison=exact C oracle error, null_bitmap field equality, and free/write behavior.
+
+- id: ftbitmap.FT_Bitmap_Embolden
+  kind: function
+  symbol: FT_Bitmap_Embolden
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that emboldens an FT_Bitmap by x/y 26.6 pixel strengths while keeping left and bottom borders unchanged.
+  cases:
+    - id: success_gray_and_packed_modes
+      description: MONO, GRAY2, GRAY4, and GRAY inputs produce exact C dimensions, pitch, pixel mode, and emboldened bytes.
+    - id: success_strength_rounding_and_zero
+      description: Zero, subpixel, and multi-pixel 26.6 x/y strengths are rounded and applied exactly like C.
+    - id: success_gray2_gray4_convert_to_gray
+      description: GRAY2 and GRAY4 sources are converted to 8bpp GRAY output with C-compatible values.
+    - id: error_mono_strength_limit
+      description: MONO xStrength greater than C's limit returns the pinned error and write behavior.
+    - id: error_invalid_arguments_or_modes
+      description: Null library/bitmap and unsupported pixel modes return exact C errors.
+    - id: ownership_reallocates_bitmap_buffer
+      description: Successful embolden reallocates buffer and updates rows, width, pitch, and buffer ownership exactly like C.
+  # needs-input: operation=FT_Bitmap_Embolden; fixture_asset=synthetic MONO/GRAY2/GRAY4/GRAY bitmaps plus rendered glyph bitmaps; params xStrength/yStrength values 0, 32, 64, 96, 512, MONO over-limit, positive/negative pitch, null library/bitmap, unsupported mode; output shape=FT_Error plus mutated FT_Bitmap fields and buffer bytes with allocation/free events; comparison=exact C oracle error, dimensions, pitch, pixel mode, bytes, and preservation behavior.
+
+- id: ftbitmap.FT_Bitmap_Init
+  kind: function
+  symbol: FT_Bitmap_Init
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that initializes an FT_Bitmap record to the C null bitmap.
+  cases:
+    - id: success_zeroes_record
+      description: A dirty FT_Bitmap record is overwritten with the pinned C null_bitmap field values.
+    - id: success_null_pointer_noop
+      description: A null bitmap pointer is accepted and performs no write.
+    - id: alias_matches_ft_bitmap_new
+      description: FT_Bitmap_Init and deprecated FT_Bitmap_New produce identical record state.
+  # needs-input: operation=FT_Bitmap_Init; fixture_asset=synthetic dirty FT_Bitmap record; params non-null dirty record, null pointer, comparison with FT_Bitmap_New; output shape=void result plus FT_Bitmap fields rows/width/pitch/buffer/num_grays/pixel_mode/palette fields; comparison=exact C null_bitmap field equality and null-pointer no-op behavior.
+
+- id: ftbitmap.FT_Bitmap_New
+  kind: function
+  symbol: FT_Bitmap_New
+  header: freetype/ftbitmap.h
+  description: Deprecated FreeType C API alias for FT_Bitmap_Init retained for ABI compatibility.
+  cases:
+    - id: success_zeroes_record
+      description: A dirty FT_Bitmap record is overwritten with the same C null_bitmap field values as FT_Bitmap_Init.
+    - id: success_null_pointer_noop
+      description: A null bitmap pointer is accepted and performs no write.
+    - id: abi_alias_behavior
+      description: The symbol is exported separately while matching FT_Bitmap_Init runtime behavior.
+  # needs-input: operation=FT_Bitmap_New; fixture_asset=synthetic dirty FT_Bitmap record; params non-null dirty record, null pointer, side-by-side FT_Bitmap_Init baseline; output shape=void result plus FT_Bitmap fields and export/symbol presence; comparison=exact C null_bitmap field equality, null-pointer no-op behavior, and ABI symbol availability.
+
+- id: ftbitmap.FT_GlyphSlot_Own_Bitmap
+  kind: function
+  symbol: FT_GlyphSlot_Own_Bitmap
+  header: freetype/ftbitmap.h
+  description: FreeType C API function that ensures a bitmap glyph slot owns its bitmap buffer before bitmap mutation.
+  cases:
+    - id: success_borrowed_bitmap_copied_and_flagged
+      description: A bitmap-format slot without FT_GLYPH_OWN_BITMAP gets a deep-copied bitmap and has the ownership flag set like C.
+    - id: success_already_owned_noop
+      description: A bitmap-format slot that already owns its bitmap returns success without changing buffer identity or bytes.
+    - id: success_non_bitmap_or_null_slot_noop
+      description: Non-bitmap glyph slots and null slot handles return FT_Err_Ok with C-compatible no-op behavior.
+    - id: error_copy_allocation_failure
+      description: Allocation failure while copying a borrowed bitmap returns C's error and leaves slot ownership state unchanged.
+  # needs-input: operation=FT_GlyphSlot_Own_Bitmap; fixture_asset=input/fonts/DejaVuSans.ttf rendered bitmap glyph plus synthetic/fixture bitmap-strike glyph with borrowed slot bitmap; params slot format bitmap borrowed, bitmap owned, outline format, null slot, allocator failure injection if harness supports it; output shape=FT_Error, slot bitmap fields/bytes, internal ownership flag classification, buffer identity before/after; comparison=exact C oracle error, no-op/copy behavior, ownership flag, and buffer byte equality.
+
+- id: ftbzip2.FT_Stream_OpenBzip2
+  kind: function
+  symbol: FT_Stream_OpenBzip2
+  header: freetype/ftbzip2.h
+  description: FreeType C API function that wraps an already-open source stream with a bzip2-decompressing FT_Stream when bzip2 support is compiled in.
+  cases:
+    - id: success_open_valid_bzip2_stream
+      description: A valid bzip2-compressed source initializes the target stream with C-compatible memory, size sentinel, pos, read, close, and descriptor behavior.
+    - id: success_read_decompressed_bytes
+      description: Reads through the wrapped stream produce exact decompressed bytes and seek/read behavior matching C.
+    - id: lifecycle_close_does_not_close_source
+      description: Closing the bzip2 stream releases wrapper state but does not close or free the source stream object.
+    - id: error_null_stream_or_source
+      description: Null target or source stream returns Invalid_Stream_Handle and preserves target/source state.
+    - id: error_invalid_or_truncated_bzip2_header
+      description: Invalid, empty, or truncated compressed data returns the same C error and avoids unnecessary wrapper allocation.
+    - id: out_of_scope_uncompiled_bzip2_policy
+      description: If this build intentionally excludes bzip2, the ABI-visible behavior must be documented as C-compatible Unimplemented_Feature rather than silently omitting the symbol.
+  # needs-input: operation=FT_Stream_OpenBzip2 plus FT_Stream read/close through wrapper; fixture_asset=valid .pcf.bz2 or compressed byte fixture, raw expected decompressed bytes, invalid/truncated bzip2 byte fixtures; params valid source stream, null target, null source, corrupt header, truncated stream, uncompiled-bzip2 feature configuration; output shape=FT_Error, target FT_Stream fields memory/size/pos/base/read/close/descriptor classification, read byte chunks, and source close-count state; comparison=exact C oracle error, stream field classification, decompressed bytes, close ownership behavior, and Unimplemented_Feature policy when excluded.
+
+- id: ftcache.FTC_CMapCache_Lookup
+  kind: function
+  symbol: FTC_CMapCache_Lookup
+  header: freetype/ftcache.h
+  description: FreeType C API function that maps a character code to a glyph index through an FTC_CMapCache.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Cache APIs are public planned compatibility surface; if temporarily excluded, the artifact must keep that intent visible rather than treating them as out_of_scope.
+    - id: success_lookup_hit_and_repeat_hit
+      description: First lookup and repeated cache hit return the exact glyph index as FT_Get_Char_Index for the requested face ID and charmap.
+    - id: success_lookup_miss_returns_zero
+      description: Missing character codes return glyph index 0 exactly like C.
+    - id: success_negative_cmap_index_uses_current_charmap
+      description: Negative cmap_index does not change the face charmap and uses the requester-selected/default charmap behavior from C.
+    - id: error_null_cache_returns_zero
+      description: Null cache returns 0 without invoking the requester or changing state.
+    - id: lifecycle_remove_faceid_and_reset
+      description: Lookups after FTC_Manager_RemoveFaceID or manager reset refetch face data and avoid stale mappings like C.
+  # needs-input: operation=FTC_Manager_New, FTC_CMapCache_New, FTC_CMapCache_Lookup, FTC_Manager_RemoveFaceID, FTC_Manager_Reset; fixture_asset=input/fonts/DejaVuSans.ttf plus font with multiple charmaps; params persistent face_id callback data, cmap_index valid/negative/out-of-range, char_code hit/miss, repeated lookup, null cache, remove-face-id then changed face backing; output shape=FT_UInt glyph index plus requester invocation log and active charmap identity; comparison=exact C oracle glyph index, requester call sequence where observable, no-change current charmap behavior, and stale-entry removal behavior.
+
+- id: ftcache.FTC_CMapCache_New
+  kind: function
+  symbol: FTC_CMapCache_New
+  header: freetype/ftcache.h
+  description: FreeType C API function that creates a charmap cache owned by an FTC_Manager.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: The CMap cache constructor is planned public cache surface and must not be silently excluded.
+    - id: success_create_and_destroy_with_manager
+      description: A valid manager creates a non-null cache handle that is destroyed automatically by FTC_Manager_Done.
+    - id: success_multiple_cache_registration_limit
+      description: Multiple cache registrations follow C handle allocation and Too_Many_Caches behavior at the manager limit.
+    - id: error_null_manager_or_output
+      description: Null manager or null acache returns the pinned C Invalid_Argument behavior and output state.
+    - id: lifecycle_after_manager_reset
+      description: Resetting the manager clears cache contents without invalidating the cache handle before manager destruction.
+  # needs-input: operation=FTC_Manager_New, FTC_CMapCache_New, FTC_Manager_Reset, FTC_Manager_Done; fixture_asset=input/fonts/DejaVuSans.ttf callback fixture; params valid manager, null manager, null acache, repeated cache creation up to FTC_MAX_CACHES if exposed, reset then lookup; output shape=FT_Error, FTC_CMapCache pointer null/non-null classification, manager cache count/handle validity classification, and cleanup event log; comparison=exact C oracle error, output write behavior, handle lifecycle, and registration-limit behavior.
+
+- id: ftcache.FTC_ImageCache_Lookup
+  kind: function
+  symbol: FTC_ImageCache_Lookup
+  header: freetype/ftcache.h
+  description: FreeType C API function that retrieves an FT_Glyph image from an FTC_ImageCache using an FTC_ImageType descriptor.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Image cache lookup is planned public compatibility surface and must remain audit-visible if not implemented yet.
+    - id: success_lookup_hit_and_repeat_hit
+      description: First lookup and repeated lookup return an owned-by-cache FT_Glyph whose public glyph data matches direct FT_Load_Glyph plus FT_Get_Glyph.
+    - id: success_node_acquire_and_unref
+      description: Non-null anode increments the node reference count and FTC_Node_Unref releases it, preserving node/glyph through cache pressure until unref.
+    - id: success_null_anode_ephemeral_glyph
+      description: Null anode leaves node reference unchanged and the returned glyph is treated as cache-owned and flushable on later cache calls.
+    - id: error_null_aglyph
+      description: Null aglyph returns Invalid_Argument before lookup and matches output write behavior for anode.
+    - id: error_invalid_cache_type_face_or_glyph
+      description: Null cache, null type, requester failure, invalid face ID, and out-of-range glyph indexes return exact C errors and null outputs.
+  # needs-input: operation=FTC_ImageCache_New, FTC_ImageCache_Lookup, FTC_Node_Unref, FTC_Manager_Reset/RemoveFaceID; fixture_asset=input/fonts/DejaVuSans.ttf; params FTC_ImageTypeRec face_id,width,height,flags for DEFAULT/RENDER/NO_HINTING, glyph indexes .notdef/A/out-of-range, aglyph null/non-null, anode null/non-null, repeated lookup, cache pressure/reset/remove-face-id; output shape=FT_Error, FT_Glyph public fields/cbox or bitmap bytes, FTC_Node pointer identity/ref lifecycle classification, output nullness; comparison=exact C oracle error, glyph data, node acquire/unref behavior, cache hit/miss identity where observable, and output preservation.
+
+- id: ftcache.FTC_ImageCache_LookupScaler
+  kind: function
+  symbol: FTC_ImageCache_LookupScaler
+  header: freetype/ftcache.h
+  description: FreeType C API variant of FTC_ImageCache_Lookup that uses an FTC_ScalerRec and load flags.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Scaler-based image cache lookup is planned public cache surface and must remain visible if staged later.
+    - id: success_pixel_and_point_scalers
+      description: Pixel and point-size FTC_ScalerRec values select sizes and return glyphs matching C direct load behavior.
+    - id: success_lookup_hit_miss_and_repeated
+      description: Hit, miss/out-of-range, and repeated lookup behavior matches C for glyph output and requester calls.
+    - id: success_node_acquire_and_unref
+      description: Non-null anode acquires the node until FTC_Node_Unref and survives cache pressure like C.
+    - id: error_null_scaler_or_aglyph
+      description: Null scaler or aglyph returns Invalid_Argument and writes null outputs exactly as C.
+    - id: load_flags_truncation_policy
+      description: Load flags above 32 bits follow the pinned C truncation behavior on platforms where FT_ULong is wider than FT_Int32.
+  # needs-input: operation=FTC_ImageCache_New, FTC_ImageCache_LookupScaler, FTC_Node_Unref; fixture_asset=input/fonts/DejaVuSans.ttf plus vertical/bitmap strike font if available; params FTC_ScalerRec pixel=1 width/height 9/20, pixel=0 26.6 point sizes with x_res/y_res, load_flags DEFAULT/NO_HINTING/RENDER/high-bit FT_ULong, glyph indexes hit/miss, null scaler/aglyph/anode; output shape=FT_Error, FT_Glyph public data, selected FT_Size metrics classification, node identity/ref lifecycle; comparison=exact C oracle error, glyph/metrics data, load_flags truncation behavior, and node ownership/unref behavior.
+
+- id: ftcache.FTC_ImageCache_New
+  kind: function
+  symbol: FTC_ImageCache_New
+  header: freetype/ftcache.h
+  description: FreeType C API function that creates a glyph image cache owned by an FTC_Manager.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Image cache creation is planned public cache surface and should not be classified as a true exclusion.
+    - id: success_create_lookup_destroy_lifecycle
+      description: A valid manager creates a non-null image cache usable for lookup and destroyed by FTC_Manager_Done.
+    - id: success_manager_reset_preserves_handle
+      description: FTC_Manager_Reset clears cache nodes while preserving the cache handle for subsequent lookups.
+    - id: error_null_manager_or_output
+      description: Null manager or null acache returns C Invalid_Argument behavior and output write state.
+    - id: error_too_many_caches
+      description: Creating caches beyond FTC_MAX_CACHES returns C Too_Many_Caches and preserves output nullness.
+  # needs-input: operation=FTC_Manager_New, FTC_ImageCache_New, FTC_ImageCache_Lookup, FTC_Manager_Reset, FTC_Manager_Done; fixture_asset=input/fonts/DejaVuSans.ttf callback fixture; params valid/null manager, valid/null acache, repeated cache registrations, reset before/after lookup; output shape=FT_Error, FTC_ImageCache pointer null/non-null, lookup usability result, cleanup event log; comparison=exact C oracle error, output write behavior, handle lifecycle, and registration-limit behavior.
+
+- id: ftcache.FTC_Manager_Done
+  kind: function
+  symbol: FTC_Manager_Done
+  header: freetype/ftcache.h
+  description: FreeType C API function that destroys an FTC_Manager, its registered caches, and manager-owned faces and sizes.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Manager destruction is part of planned public cache lifecycle surface and must remain visible if cache support is staged.
+    - id: success_destroy_empty_manager
+      description: A newly created manager is destroyed without leaks and with C-compatible requester face cleanup behavior.
+    - id: success_destroy_populated_manager
+      description: Registered cmap/image caches, managed faces, managed sizes, and unreferenced nodes are released in C-compatible lifecycle order.
+    - id: success_null_or_invalid_library_noop
+      description: Null manager and manager with null library follow C's no-op return behavior.
+    - id: node_reference_lifecycle_on_done
+      description: Outstanding acquired nodes are invalid after manager destruction; tests must document the project safety policy rather than exposing use-after-free.
+  # needs-input: operation=FTC_Manager_New, cache creation/lookups, FTC_Manager_Done; fixture_asset=input/fonts/DejaVuSans.ttf callback fixture; params empty manager, populated manager with cmap/image cache, acquired node released before done, null manager, synthetic manager-with-null-library only if ABI harness can model it; output shape=void result plus cleanup/destructor event log and post-done handle invalidation classification; comparison=exact C oracle no-op/destroy behavior where safe, cleanup counts/order where observable, and documented safety policy for post-done use.
+
+- id: ftcache.FTC_Manager_LookupFace
+  kind: function
+  symbol: FTC_Manager_LookupFace
+  header: freetype/ftcache.h
+  description: FreeType C API function that retrieves the manager-owned FT_Face for a persistent FTC_FaceID.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Manager face lookup is planned public cache surface and must not be globally out_of_scope.
+    - id: success_first_lookup_invokes_requester
+      description: First lookup calls the FTC_Face_Requester with face_id, library, and req_data and returns a manager-owned face.
+    - id: success_repeat_lookup_returns_cached_face
+      description: Repeated lookup for the same face ID returns the cached face without unnecessary requester calls until eviction/removal.
+    - id: success_face_has_no_required_current_size
+      description: Returned face may have no current size after C destroys the initial size object; size-specific access goes through LookupSize.
+    - id: error_null_output_or_manager
+      description: Null aface returns Invalid_Argument; null manager returns Invalid_Cache_Handle after setting aface to null.
+    - id: error_requester_failure
+      description: Requester failure returns the exact C error and leaves aface null.
+  # needs-input: operation=FTC_Manager_New, FTC_Manager_LookupFace, FTC_Manager_RemoveFaceID; fixture_asset=input/fonts/DejaVuSans.ttf callback fixture plus requester-failure sentinel face_id; params persistent face_id, repeated lookup, null manager, null aface, requester returning selected FT_Error, remove-face-id then lookup; output shape=FT_Error, FT_Face pointer identity/nullness, face public fields, face->size null/non-null classification, requester invocation log; comparison=exact C oracle error, output nulling, pointer identity/cache hit behavior, and callback arguments.
+
+- id: ftcache.FTC_Manager_LookupSize
+  kind: function
+  symbol: FTC_Manager_LookupSize
+  header: freetype/ftcache.h
+  description: FreeType C API function that retrieves a manager-owned FT_Size matching an FTC_ScalerRec.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Manager size lookup is planned public cache surface and should remain visible during staged implementation.
+    - id: success_pixel_size_scaler
+      description: Pixel scaler records select size metrics matching FT_Set_Pixel_Sizes through the C cache manager.
+    - id: success_point_size_resolution_scaler
+      description: Point-size scaler records use width/height in 1/64 points plus x/y resolution exactly like C.
+    - id: success_repeat_lookup_cached_size
+      description: Repeated lookup returns a manager-owned size with stable C-compatible face and metrics identity until eviction/reset.
+    - id: error_null_scaler_output_or_manager
+      description: Null scaler or asize returns Invalid_Argument; null manager returns Invalid_Cache_Handle after nulling asize.
+    - id: error_requester_or_size_selection_failure
+      description: Requester failures and invalid scaler values return exact C errors and leave asize null.
+  # needs-input: operation=FTC_Manager_New, FTC_Manager_LookupSize, FTC_Manager_Reset; fixture_asset=input/fonts/DejaVuSans.ttf plus optional bitmap strike font; params FTC_ScalerRec pixel=1 width/height 9/20/0, pixel=0 width/height in 26.6 points with x_res/y_res 72/96, repeated lookup, null manager/scaler/asize, requester failure; output shape=FT_Error, FT_Size pointer/nullness, FT_Size_Metrics fields, parent face identity, requester invocation log; comparison=exact C oracle error, output nulling, metrics equality, cache identity behavior, and callback behavior.
+
+- id: ftcache.FTC_Manager_New
+  kind: function
+  symbol: FTC_Manager_New
+  header: freetype/ftcache.h
+  description: FreeType C API function that creates a cache manager with face requester callback, MRU face/size limits, and byte cache budget.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: Cache manager creation is planned public C replacement surface; if cache is excluded in an interim build, expose a deliberate unsupported policy rather than omitting it.
+    - id: success_defaults_for_zero_limits
+      description: Zero max_faces, max_sizes, and max_bytes are replaced with C default limits and produce a usable manager.
+    - id: success_custom_limits_and_req_data
+      description: Custom limits and req_data are stored and later passed unchanged to the requester.
+    - id: error_null_library
+      description: Null library returns Invalid_Library_Handle and does not write a manager.
+    - id: error_null_requester_or_output
+      description: Null requester or amanager returns Invalid_Argument and matches C output preservation behavior.
+    - id: lifecycle_create_lookup_reset_done
+      description: A created manager supports face/size/cache lookup, reset, remove-face-id, and done lifecycle in C-compatible order.
+  # needs-input: operation=FTC_Manager_New followed by LookupFace/LookupSize/Reset/Done smoke; fixture_asset=input/fonts/DejaVuSans.ttf callback fixture; params max_faces/max_sizes/max_bytes as 0 defaults and small custom values, req_data sentinel pointer, null library, null requester, null amanager; output shape=FT_Error, FTC_Manager pointer null/non-null, callback argument log on later lookup, default-limit behavior classification, lifecycle event log; comparison=exact C oracle error, output write behavior, callback req_data identity, and lifecycle behavior.
+
+- id: ftcache.FTC_Manager_RemoveFaceID
+  kind: function
+  symbol: FTC_Manager_RemoveFaceID
+  header: freetype/ftcache.h
+  description: FreeType C API function that tells a cache manager a persistent FTC_FaceID is invalid and flushes matching faces, sizes, and cache nodes.
+  cases:
+    - id: planned_cache_subsystem_not_out_of_scope
+      description: RemoveFaceID is required cache lifecycle surface for safe persistent face IDs and must not be classified as out_of_scope.
+    - id: success_removes_unreferenced_face_size_and_nodes
+      description: Unreferenced cached faces, sizes, cmap entries, and image nodes for the face ID are removed and later lookups re-request the face.
+    - id: success_referenced_nodes_hidden_until_unref
+      description: Referenced nodes are not returned by later same-face lookups and are destroyed only after FTC_Node_Unref releases them.
+    - id: success_other_face_ids_unchanged
+      description: Removing one face ID does not disturb cached entries for other persistent face IDs.
+    - id: success_null_manager_noop
+      description: Null manager is accepted as a no-op void function.
+    - id: success_null_or_unknown_face_id
+      description: Null or unknown face IDs follow C's selection/removal behavior without corrupting existing cache state.
+  # needs-input: operation=FTC_Manager_New, CMap/Image cache lookups, FTC_Manager_RemoveFaceID, repeated lookup, FTC_Node_Unref; fixture_asset=two persistent face_id callback fixtures using input/fonts/DejaVuSans.ttf and another tracked font or mutated backing for same id; params face_id A/B, unknown face_id, null face_id, null manager, acquired image node with anode, remove while referenced, unref then cache pressure; output shape=void result plus requester invocation log, glyph/cmap results before/after removal, node pointer identity/ref lifecycle classification, surviving other-face cache results; comparison=exact C oracle cache invalidation, no-op behavior, node hiding/destroy-after-unref behavior, and other-face preservation.

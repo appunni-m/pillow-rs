@@ -1,0 +1,270 @@
+- id: ttnameid.TT_UCR_ORIYA
+  kind: constant
+  symbol: TT_UCR_ORIYA
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange1 bit mask for Oriya/Odia.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 19), value 0x00080000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_ORIYA as an unsigned long constant expression.
+    - id: os2_oriya_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+0B00-U+0B7F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange1 bit 19 set; compare TT_OS2 ulUnicodeRange fields from FT_Get_Sfnt_Table against C.
+
+- id: ttnameid.TT_UCR_OSMANYA
+  kind: constant
+  symbol: TT_UCR_OSMANYA
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Osmanya.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 10), value 0x00000400, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_OSMANYA as an unsigned long constant expression.
+    - id: os2_osmanya_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+10480-U+104AF coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange4 bit 10 set and non-BMP Osmanya cmap entries; compare TT_OS2 fields and char index lookups against C.
+
+- id: ttnameid.TT_UCR_PHAGSPA
+  kind: constant
+  symbol: TT_UCR_PHAGSPA
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange2 bit mask for Phags-Pa.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 21), value 0x00200000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_PHAGSPA as an unsigned long constant expression.
+    - id: os2_phagspa_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+A840-U+A87F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange2 bit 21 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_PHAISTOS_DISC
+  kind: constant
+  symbol: TT_UCR_PHAISTOS_DISC
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Phaistos Disc.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 24), value 0x01000000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_PHAISTOS_DISC as an unsigned long constant expression.
+
+- id: ttnameid.TT_UCR_PHILIPPINE
+  kind: constant
+  symbol: TT_UCR_PHILIPPINE
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange3 bit mask for Tagalog, Hanunoo, Buhid, and Tagbanwa.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 20), value 0x00100000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_PHILIPPINE as an unsigned long constant expression.
+    - id: os2_philippine_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring Philippine script coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange3 bit 20 set and Tagalog/Hanunoo/Buhid/Tagbanwa cmap coverage; compare TT_OS2 fields against C.
+
+- id: ttnameid.TT_UCR_PHOENICIAN
+  kind: constant
+  symbol: TT_UCR_PHOENICIAN
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange2 bit mask for Phoenician.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 26), value 0x04000000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_PHOENICIAN as an unsigned long constant expression.
+    - id: os2_phoenician_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+10900-U+1091F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange2 bit 26 set and non-BMP Phoenician cmap entries; compare TT_OS2 fields and char index lookups against C.
+
+- id: ttnameid.TT_UCR_PRIVATE_USE
+  kind: constant
+  symbol: TT_UCR_PRIVATE_USE
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange2 bit mask for BMP Private Use Area.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 28), value 0x10000000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_PRIVATE_USE as an unsigned long constant expression.
+    - id: os2_private_use_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+E000-U+F8FF coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange2 bit 28 set and private-use cmap entries; compare TT_OS2 fields and glyph lookup behavior against C.
+
+- id: ttnameid.TT_UCR_PRIVATE_USE_SUPPLEMENTARY
+  kind: constant
+  symbol: TT_UCR_PRIVATE_USE_SUPPLEMENTARY
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange3 bit mask for supplementary Private Use planes 15 and 16.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 26), value 0x04000000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_PRIVATE_USE_SUPPLEMENTARY as an unsigned long constant expression.
+    - id: os2_private_use_supplementary_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+F0000-U+FFFFD or U+100000-U+10FFFD coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange3 bit 26 set and supplementary private-use cmap entries; compare TT_OS2 fields and char index lookups against C.
+
+- id: ttnameid.TT_UCR_REJANG
+  kind: constant
+  symbol: TT_UCR_REJANG
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Rejang.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 21), value 0x00200000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_REJANG as an unsigned long constant expression.
+    - id: os2_rejang_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+A930-U+A95F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange4 bit 21 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_RUNIC
+  kind: constant
+  symbol: TT_UCR_RUNIC
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange3 bit mask for Runic.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 15), value 0x00008000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_RUNIC as an unsigned long constant expression.
+    - id: os2_runic_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+16A0-U+16FF coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange3 bit 15 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_SAURASHTRA
+  kind: constant
+  symbol: TT_UCR_SAURASHTRA
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Saurashtra.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 19), value 0x00080000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SAURASHTRA as an unsigned long constant expression.
+    - id: os2_saurashtra_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+A880-U+A8DF coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange4 bit 19 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_SHAVIAN
+  kind: constant
+  symbol: TT_UCR_SHAVIAN
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Shavian.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 9), value 0x00000200, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SHAVIAN as an unsigned long constant expression.
+    - id: os2_shavian_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+10450-U+1047F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange4 bit 9 set and non-BMP Shavian cmap entries; compare TT_OS2 fields and char index lookups against C.
+
+- id: ttnameid.TT_UCR_SINHALA
+  kind: constant
+  symbol: TT_UCR_SINHALA
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange3 bit mask for Sinhala.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 9), value 0x00000200, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SINHALA as an unsigned long constant expression.
+    - id: os2_sinhala_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+0D80-U+0DFF coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange3 bit 9 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_SMALL_FORM_VARIANTS
+  kind: constant
+  symbol: TT_UCR_SMALL_FORM_VARIANTS
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange3 bit mask for Small Form Variants.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 2), value 0x00000004, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SMALL_FORM_VARIANTS as an unsigned long constant expression.
+
+- id: ttnameid.TT_UCR_SPACING_MODIFIER
+  kind: constant
+  symbol: TT_UCR_SPACING_MODIFIER
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange1 bit mask for Spacing Modifier Letters and Modifier Tone Letters.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 5), value 0x00000020, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SPACING_MODIFIER as an unsigned long constant expression.
+    - id: os2_spacing_modifier_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+02B0-U+02FF or U+A700-U+A71F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange1 bit 5 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_SPECIALS
+  kind: constant
+  symbol: TT_UCR_SPECIALS
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange3 bit mask for Specials.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 5), value 0x00000020, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SPECIALS as an unsigned long constant expression.
+
+- id: ttnameid.TT_UCR_SUNDANESE
+  kind: constant
+  symbol: TT_UCR_SUNDANESE
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Sundanese.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 16), value 0x00010000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SUNDANESE as an unsigned long constant expression.
+    - id: os2_sundanese_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+1B80-U+1BBF coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange4 bit 16 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_SUPERSCRIPTS_SUBSCRIPTS
+  kind: constant
+  symbol: TT_UCR_SUPERSCRIPTS_SUBSCRIPTS
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange2 bit mask for Superscripts and Subscripts.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 0), value 0x00000001, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SUPERSCRIPTS_SUBSCRIPTS as an unsigned long constant expression.
+    - id: os2_superscripts_subscripts_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+2070-U+209F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange2 bit 0 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.
+
+- id: ttnameid.TT_UCR_SURROGATES
+  kind: constant
+  symbol: TT_UCR_SURROGATES
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange2 bit mask indicating at least one supported codepoint beyond the Basic Multilingual Plane.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 25), value 0x02000000, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SURROGATES as an unsigned long constant expression.
+    - id: os2_non_plane_0_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring non-BMP character coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange2 bit 25 set and non-BMP cmap entries; compare TT_OS2 fields and char index lookups against C.
+
+- id: ttnameid.TT_UCR_SYLOTI_NAGRI
+  kind: constant
+  symbol: TT_UCR_SYLOTI_NAGRI
+  header: freetype/ttnameid.h
+  description: OS/2 ulUnicodeRange4 bit mask for Syloti Nagri.
+  cases:
+    - id: value_matches_header
+      description: Macro expands to (1UL << 4), value 0x00000010, in the pinned C public header.
+    - id: import_contract
+      description: Public C code can import freetype/ttnameid.h and use TT_UCR_SYLOTI_NAGRI as an unsigned long constant expression.
+    - id: os2_syloti_nagri_range_runtime
+      description: C oracle reports this bit in the OS/2 ulUnicodeRange fields for a font declaring U+A800-U+A82F coverage.
+      # needs-input: SFNT fixture with OS/2 ulUnicodeRange4 bit 4 set; compare TT_OS2 ulUnicodeRange fields and representative cmap lookups against C.

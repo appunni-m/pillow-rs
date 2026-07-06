@@ -1,0 +1,243 @@
+- id: ttnameid.TT_UCR_SYRIAC
+  kind: constant
+  symbol: TT_UCR_SYRIAC
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Syriac; pinned FreeType defines it as (1UL << 7) for U+0700-U+074F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 7), evaluating to 128, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_SYRIAC as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Syriac font reports the Syriac unicode-range bit through OS/2 fields exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2-ranges/syriac.ttf; params={codepoints=[U+0710]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_TAI_LE
+  kind: constant
+  symbol: TT_UCR_TAI_LE
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Tai Le; pinned FreeType defines it as (1UL << 30) for U+1950-U+197F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 30), evaluating to 1073741824, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_TAI_LE as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_TAI_XUAN_JING
+  kind: constant
+  symbol: TT_UCR_TAI_XUAN_JING
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Tai Xuan Jing Symbols; pinned FreeType defines it as (1UL << 13) for U+1D300-U+1D35F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 13), evaluating to 8192, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_TAI_XUAN_JING as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_TAMIL
+  kind: constant
+  symbol: TT_UCR_TAMIL
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Tamil; pinned FreeType defines it as (1UL << 20) for U+0B80-U+0BFF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 20), evaluating to 1048576, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_TAMIL as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Tamil font reports the Tamil unicode-range bit through OS/2 fields exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2-ranges/tamil.ttf; params={codepoints=[U+0B85]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_TELUGU
+  kind: constant
+  symbol: TT_UCR_TELUGU
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Telugu; pinned FreeType defines it as (1UL << 21) for U+0C00-U+0C7F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 21), evaluating to 2097152, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_TELUGU as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Telugu font reports the Telugu unicode-range bit through OS/2 fields exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2-ranges/telugu.ttf; params={codepoints=[U+0C05]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_THAANA
+  kind: constant
+  symbol: TT_UCR_THAANA
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Thaana; pinned FreeType defines it as (1UL << 8) for U+0780-U+07BF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 8), evaluating to 256, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_THAANA as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_THAI
+  kind: constant
+  symbol: TT_UCR_THAI
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Thai; pinned FreeType defines it as (1UL << 24) for U+0E00-U+0E7F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 24), evaluating to 16777216, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_THAI as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Thai font reports the Thai unicode-range bit through OS/2 fields exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2-ranges/thai.ttf; params={codepoints=[U+0E01]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_TIBETAN
+  kind: constant
+  symbol: TT_UCR_TIBETAN
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Tibetan; pinned FreeType defines it as (1UL << 6) for U+0F00-U+0FFF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 6), evaluating to 64, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_TIBETAN as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative Tibetan font reports the Tibetan unicode-range bit through OS/2 fields exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2-ranges/tibetan.ttf; params={codepoints=[U+0F40]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_TIFINAGH
+  kind: constant
+  symbol: TT_UCR_TIFINAGH
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Tifinagh; pinned FreeType defines it as (1UL << 2) for U+2D30-U+2D7F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 2), evaluating to 4, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_TIFINAGH as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_UGARITIC
+  kind: constant
+  symbol: TT_UCR_UGARITIC
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Ugaritic; pinned FreeType defines it as (1UL << 7) for U+10380-U+1039F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 7), evaluating to 128, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_UGARITIC as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_VAI
+  kind: constant
+  symbol: TT_UCR_VAI
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Vai; pinned FreeType defines it as (1UL << 12) for U+A500-U+A63F.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 12), evaluating to 4096, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_VAI as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_VARIATION_SELECTORS
+  kind: constant
+  symbol: TT_UCR_VARIATION_SELECTORS
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Variation Selectors and Variation Selectors Supplement; pinned FreeType defines it as (1UL << 27) for U+FE00-U+FE0F and U+E0100-U+E01EF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 27), evaluating to 134217728, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_VARIATION_SELECTORS as a public preprocessor constant.
+    - id: representative_os2_unicode_range_match
+      description: A representative font with variation-selector coverage reports the expected OS/2 unicode-range fields exactly like the C oracle.
+  # needs-input: operation=FT_Get_Sfnt_Table(face, ft_sfnt_os2); fixture_asset=input/fonts/os2-ranges/variation-selectors.ttf; params={codepoints=[U+FE00, U+E0100]}; expected output shape={FT_Error, has_os2_table, ulUnicodeRange1, ulUnicodeRange2, ulUnicodeRange3, ulUnicodeRange4}; comparison=exact C oracle status and OS/2 unicode-range fields.
+
+- id: ttnameid.TT_UCR_YI
+  kind: constant
+  symbol: TT_UCR_YI
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Yi Syllables and Yi Radicals; pinned FreeType defines it as (1UL << 19) for U+A000-U+A48F and U+A490-U+A4CF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 19), evaluating to 524288, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_YI as a public preprocessor constant.
+
+- id: ttnameid.TT_UCR_YIJING
+  kind: constant
+  symbol: TT_UCR_YIJING
+  header: freetype/ttnameid.h
+  description: Public OS/2 Unicode-range bit macro for Yijing Hexagram Symbols; pinned FreeType defines it as (1UL << 3) for U+4DC0-U+4DFF.
+  cases:
+    - id: value_matches_header
+      description: Macro expression is exactly (1UL << 3), evaluating to 8, as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_UCR_YIJING as a public preprocessor constant.
+
+- id: ttnameid.TT_ADOBE_ID_CUSTOM
+  kind: constant
+  symbol: TT_ADOBE_ID_CUSTOM
+  header: freetype/ttnameid.h
+  description: Public FreeType-specific Adobe platform encoding-id constant for custom encoding; pinned FreeType defines it as 2.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 2 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ADOBE_ID_CUSTOM as a public constant.
+    - id: representative_charmap_encoding_match
+      description: A representative Adobe-platform custom-encoded face exposes platform_id TT_PLATFORM_ADOBE and encoding_id TT_ADOBE_ID_CUSTOM exactly like the C oracle.
+  # needs-input: operation=enumerate_face_charmaps; fixture_asset=input/fonts/charmaps/adobe-custom-cmap.pfb; params={platform=TT_PLATFORM_ADOBE, encoding=TT_ADOBE_ID_CUSTOM}; expected output shape={FT_Error, num_charmaps, charmaps[{platform_id, encoding_id, encoding_tag}]}; comparison=exact C oracle status and charmap metadata.
+
+- id: ttnameid.TT_ADOBE_ID_EXPERT
+  kind: constant
+  symbol: TT_ADOBE_ID_EXPERT
+  header: freetype/ttnameid.h
+  description: Public FreeType-specific Adobe platform encoding-id constant for expert encoding; pinned FreeType defines it as 1.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 1 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ADOBE_ID_EXPERT as a public constant.
+
+- id: ttnameid.TT_ADOBE_ID_LATIN_1
+  kind: constant
+  symbol: TT_ADOBE_ID_LATIN_1
+  header: freetype/ttnameid.h
+  description: Public FreeType-specific Adobe platform encoding-id constant for Latin-1 encoding; pinned FreeType defines it as 3.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 3 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ADOBE_ID_LATIN_1 as a public constant.
+
+- id: ttnameid.TT_ADOBE_ID_STANDARD
+  kind: constant
+  symbol: TT_ADOBE_ID_STANDARD
+  header: freetype/ttnameid.h
+  description: Public FreeType-specific Adobe platform encoding-id constant for standard encoding; pinned FreeType defines it as 0.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_ADOBE_ID_STANDARD as a public constant.
+
+- id: ttnameid.TT_APPLE_ID_DEFAULT
+  kind: constant
+  symbol: TT_APPLE_ID_DEFAULT
+  header: freetype/ttnameid.h
+  description: Public Apple Unicode platform encoding-id constant for Unicode 1.0; pinned FreeType defines it as 0.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 0 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_DEFAULT as a public constant.
+
+- id: ttnameid.TT_APPLE_ID_FULL_UNICODE
+  kind: constant
+  symbol: TT_APPLE_ID_FULL_UNICODE
+  header: freetype/ttnameid.h
+  description: Public Apple Unicode platform encoding-id constant for type 13 full Unicode fallback charmaps; pinned FreeType defines it as 6.
+  cases:
+    - id: value_matches_header
+      description: Numeric value is exactly 6 as defined by pinned freetype/ttnameid.h.
+    - id: public_import_contract
+      description: A C translation unit including <freetype/ttnameid.h> can reference TT_APPLE_ID_FULL_UNICODE as a public constant.
+    - id: representative_charmap_encoding_match
+      description: A representative type 13 cmap face exposes Apple Unicode platform encoding_id TT_APPLE_ID_FULL_UNICODE exactly like the C oracle.
+  # needs-input: operation=enumerate_face_charmaps; fixture_asset=input/fonts/charmaps/apple-full-unicode-type13.ttf; params={platform=TT_PLATFORM_APPLE_UNICODE, encoding=TT_APPLE_ID_FULL_UNICODE, cmap_format=13}; expected output shape={FT_Error, num_charmaps, charmaps[{platform_id, encoding_id, format, encoding_tag}]}; comparison=exact C oracle status and charmap metadata.

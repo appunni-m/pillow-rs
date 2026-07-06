@@ -1,0 +1,309 @@
+- id: ftstroke.FT_STROKER_LINEJOIN_ROUND
+  kind: enum_variant
+  symbol: FT_STROKER_LINEJOIN_ROUND
+  header: freetype/ftstroke.h
+  description: Public FT_Stroker_LineJoin value for rounded joins in the FreeType path stroker.
+  cases:
+    - id: value_matches_header
+      description: Value is 0 in the pinned C public header.
+    - id: round_join_geometry
+      description: FT_Stroker_Set with this join emits rounded corner arcs for angled line, conic, and cubic joins.
+    - id: wide_curve_join_restoration
+      description: C can temporarily use round joins while stroking curves and restores the saved line join after the corner.
+  # needs-input: operation=FT_Stroker_Set plus FT_Stroker_BeginSubPath/LineTo/ConicTo/CubicTo/EndSubPath/Export; fixture_asset=synthetic outline path records with acute line, conic, and cubic joins; params={radius,line_cap,line_join=ROUND,miter_limit,path}; expected output shape={constant_value, FT_Error sequence, point_count, contour_count, exported_outline points/tags/contours, cbox}; comparison=exact C oracle enum value, status, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Glyph_Stroke
+  kind: function
+  symbol: FT_Glyph_Stroke
+  header: freetype/ftstroke.h
+  description: Public glyph-level helper that replaces an outline glyph with the full stroked outline.
+  cases:
+    - id: outline_glyph_stroked_success
+      description: A valid outline glyph is copied, parsed as closed, resized to the combined border counts, and exported as a stroked outline.
+    - id: destroy_original_option
+      description: With destroy set, C releases the original glyph after the replacement glyph is successfully built.
+    - id: invalid_glyph_arguments
+      description: Null pglyph, null glyph, and non-outline glyph inputs return Invalid_Argument.
+    - id: failure_sets_output_null_when_preserving_original
+      description: If stroking or allocation fails after copying and destroy is false, C frees the copy and stores null in *pglyph.
+  # needs-input: operation=FT_Get_Glyph followed by FT_Glyph_Stroke; fixture_asset=outline glyph from tests/fixtures/input/fonts/DejaVuSans.ttf plus bitmap glyph fixture and allocator-failure hook; params={glyph_index,size,load_flags,radius,line_cap,line_join,miter_limit,destroy}; expected output shape={FT_Error, glyph_pointer_class, original_destroyed, outline point_count/contour_count, points/tags/contours, cbox}; comparison=exact C oracle status, ownership transition, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Glyph_StrokeBorder
+  kind: function
+  symbol: FT_Glyph_StrokeBorder
+  header: freetype/ftstroke.h
+  description: Public glyph-level helper that replaces an outline glyph with either the inside or outside stroke border.
+  cases:
+    - id: outside_border_success
+      description: C selects the outside border from outline orientation, parses the glyph as closed, allocates the border count, and exports that border only.
+    - id: inside_border_success
+      description: With inside set, C flips the outside border and exports the opposite border.
+    - id: destroy_original_option
+      description: With destroy set, C releases the original glyph only after a replacement border glyph is successfully built.
+    - id: invalid_glyph_arguments
+      description: Null pglyph, null glyph, and non-outline glyph inputs return Invalid_Argument.
+  # needs-input: operation=FT_Get_Glyph followed by FT_Glyph_StrokeBorder; fixture_asset=TrueType and CFF outline glyphs with opposite orientations plus bitmap glyph fixture; params={glyph_index,size,load_flags,radius,line_cap,line_join,miter_limit,inside,destroy}; expected output shape={FT_Error, selected_border, glyph_pointer_class, outline point_count/contour_count, points/tags/contours, cbox}; comparison=exact C oracle status, border enum, ownership transition, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Outline_GetInsideBorder
+  kind: function
+  symbol: FT_Outline_GetInsideBorder
+  header: freetype/ftstroke.h
+  description: Public helper mapping outline orientation to the stroker border that represents the inside edge.
+  cases:
+    - id: truetype_orientation_returns_right
+      description: C returns FT_STROKER_BORDER_RIGHT for FT_ORIENTATION_TRUETYPE outlines.
+    - id: non_truetype_orientation_returns_left
+      description: C returns FT_STROKER_BORDER_LEFT for PostScript, none, empty, or invalid-or-null orientation results.
+    - id: orientation_delegation
+      description: The result is exactly derived from FT_Outline_Get_Orientation without inspecting stroker state.
+  # needs-input: operation=FT_Outline_GetInsideBorder and FT_Outline_Get_Orientation; fixture_asset=synthetic clockwise, counter-clockwise, empty, null, and zero-area outline records; params={outline_pointer_class,points,tags,contours}; expected output shape={orientation_enum, stroker_border_enum}; comparison=exact C oracle orientation and returned border value.
+
+- id: ftstroke.FT_Outline_GetOutsideBorder
+  kind: function
+  symbol: FT_Outline_GetOutsideBorder
+  header: freetype/ftstroke.h
+  description: Public helper mapping outline orientation to the stroker border that represents the outside edge.
+  cases:
+    - id: truetype_orientation_returns_left
+      description: C returns FT_STROKER_BORDER_LEFT for FT_ORIENTATION_TRUETYPE outlines.
+    - id: non_truetype_orientation_returns_right
+      description: C returns FT_STROKER_BORDER_RIGHT for PostScript, none, empty, or invalid-or-null orientation results.
+    - id: orientation_delegation
+      description: The result is exactly derived from FT_Outline_Get_Orientation without inspecting stroker state.
+  # needs-input: operation=FT_Outline_GetOutsideBorder and FT_Outline_Get_Orientation; fixture_asset=synthetic clockwise, counter-clockwise, empty, null, and zero-area outline records; params={outline_pointer_class,points,tags,contours}; expected output shape={orientation_enum, stroker_border_enum}; comparison=exact C oracle orientation and returned border value.
+
+- id: ftstroke.FT_Stroker_BeginSubPath
+  kind: function
+  symbol: FT_Stroker_BeginSubPath
+  header: freetype/ftstroke.h
+  description: Public stroker state-machine entry point that starts an open or closed subpath at a vector.
+  cases:
+    - id: closed_subpath_initial_state
+      description: A valid closed begin records the center and subpath start, marks first_point, and later EndSubPath closes both borders.
+    - id: open_subpath_initial_state
+      description: A valid open begin records open state so EndSubPath emits caps and merges the stroke into the left border.
+    - id: invalid_arguments
+      description: Null stroker or null start vector returns Invalid_Argument.
+    - id: wide_stroke_mode_depends_on_cap_and_join
+      description: C enables wide-stroke special handling when the join is not round or an open path uses butt caps.
+  # needs-input: operation=FT_Stroker_New/Set/BeginSubPath then line/conic/cubic/end/export; fixture_asset=synthetic open and closed path records; params={start,open,radius,line_cap,line_join,miter_limit}; expected output shape={FT_Error, later border counts, exported_outline points/tags/contours}; comparison=exact C oracle status, state-derived counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_ConicTo
+  kind: function
+  symbol: FT_Stroker_ConicTo
+  header: freetype/ftstroke.h
+  description: Public stroker operation that appends a quadratic Bezier segment to the current subpath.
+  cases:
+    - id: conic_curve_success
+      description: A valid conic segment is split as needed and emitted into both stroke borders with C's rounded approximation.
+    - id: first_segment_starts_subpath
+      description: If this is the first segment after BeginSubPath, C initializes the border start from the conic entry angle.
+    - id: coincident_control_and_end_noop
+      description: A nearly coincident control/end curve updates the center and produces no border geometry.
+    - id: invalid_arguments
+      description: Null stroker, control vector, or destination vector returns Invalid_Argument.
+  # needs-input: operation=FT_Stroker_BeginSubPath/ConicTo/EndSubPath/GetCounts/Export; fixture_asset=synthetic conic path records including coincident and high-curvature cases; params={start,control,to,open,radius,line_cap,line_join,miter_limit}; expected output shape={FT_Error, point_count, contour_count, exported_outline points/tags/contours, cbox}; comparison=exact C oracle status, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_CubicTo
+  kind: function
+  symbol: FT_Stroker_CubicTo
+  header: freetype/ftstroke.h
+  description: Public stroker operation that appends a cubic Bezier segment to the current subpath.
+  cases:
+    - id: cubic_curve_success
+      description: A valid cubic segment is recursively split as needed and emitted into both stroke borders with C's cubic approximation.
+    - id: first_segment_starts_subpath
+      description: If this is the first segment after BeginSubPath, C initializes the border start from the cubic entry angle.
+    - id: coincident_controls_and_end_noop
+      description: A nearly coincident cubic updates the center and produces no border geometry.
+    - id: invalid_arguments
+      description: Null stroker, either control vector, or destination vector returns Invalid_Argument.
+  # needs-input: operation=FT_Stroker_BeginSubPath/CubicTo/EndSubPath/GetCounts/Export; fixture_asset=synthetic cubic path records including coincident, inflection, and high-curvature cases; params={start,control1,control2,to,open,radius,line_cap,line_join,miter_limit}; expected output shape={FT_Error, point_count, contour_count, exported_outline points/tags/contours, cbox}; comparison=exact C oracle status, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_Done
+  kind: function
+  symbol: FT_Stroker_Done
+  header: freetype/ftstroke.h
+  description: Public stroker destructor that releases border buffers and the stroker object.
+  cases:
+    - id: valid_stroker_releases_buffers
+      description: C frees both stroke border buffers, clears the stored library, and frees the stroker allocation.
+    - id: null_stroker_noop
+      description: Passing a null stroker is a no-op.
+    - id: after_export_cleanup
+      description: Destruction after parsed and exported paths frees all temporary border storage without changing exported caller-owned outlines.
+  # needs-input: operation=FT_Stroker_New/Set/parse or manual path/Export/Done; fixture_asset=synthetic stroked paths plus allocation-event probe; params={path,radius,line_cap,line_join}; expected output shape={allocation_event_log, exported_outline_before_done, post_done_pointer_class}; comparison=exact C oracle free ordering where observable and unchanged exported outline geometry.
+
+- id: ftstroke.FT_Stroker_EndSubPath
+  kind: function
+  symbol: FT_Stroker_EndSubPath
+  header: freetype/ftstroke.h
+  description: Public stroker operation that closes the current subpath or caps an open one.
+  cases:
+    - id: closed_subpath_closes_two_borders
+      description: For closed subpaths, C optionally draws the closing segment, processes the final corner, and closes left and right borders.
+    - id: open_subpath_emits_caps_and_single_border
+      description: For open subpaths, C emits caps, appends the reversed left border into the right border, and leaves the left export empty.
+    - id: invalid_stroker
+      description: Null stroker returns Invalid_Argument.
+    - id: no_segment_after_begin
+      description: A subpath that never received a drawable segment remains effectively empty when parsed through the public outline parser.
+  # needs-input: operation=FT_Stroker_BeginSubPath with LineTo/ConicTo/CubicTo then EndSubPath/GetBorderCounts/ExportBorder; fixture_asset=synthetic open line, closed triangle, and empty/degenerate subpaths; params={open,line_cap,line_join,radius,path}; expected output shape={FT_Error, left/right point_count, left/right contour_count, border outlines}; comparison=exact C oracle status, per-border counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_Export
+  kind: function
+  symbol: FT_Stroker_Export
+  header: freetype/ftstroke.h
+  description: Public helper that appends both stroker borders to a caller-provided FT_Outline.
+  cases:
+    - id: exports_left_then_right
+      description: C exports the left border first and then the right border into the target outline.
+    - id: append_to_existing_outline
+      description: Export appends to the target outline's current point and contour counts without resizing arrays.
+    - id: invalid_inputs_noop
+      description: Null stroker or null outline silently leaves the target unchanged through ExportBorder no-op behavior.
+  # needs-input: operation=FT_Stroker_GetCounts then FT_Outline_New/Export; fixture_asset=synthetic closed and open paths plus sentinel prefilled target outline; params={path,open,preexisting_points,preexisting_contours,capacity}; expected output shape={target_outline points/tags/contours, n_points, n_contours, unchanged_sentinel_on_null}; comparison=exact C oracle append order, counts, tags, contours, and 26.6 points.
+
+- id: ftstroke.FT_Stroker_ExportBorder
+  kind: function
+  symbol: FT_Stroker_ExportBorder
+  header: freetype/ftstroke.h
+  description: Public helper that appends one selected stroker border to a caller-provided FT_Outline.
+  cases:
+    - id: valid_left_and_right_export
+      description: Valid left and right border selections export only that border's points and contours.
+    - id: open_path_right_border_empty
+      description: For open paths, C leaves the right border empty after caps are merged into the left border.
+    - id: invalid_inputs_or_border_noop
+      description: Null stroker, null outline, invalid border values, or an invalid internal border leave the target unchanged.
+    - id: append_to_existing_outline
+      description: ExportBorder appends to caller-owned outline arrays and does not allocate or resize them.
+  # needs-input: operation=FT_Stroker_GetBorderCounts then FT_Outline_New/ExportBorder; fixture_asset=synthetic open line, closed triangle, and sentinel prefilled target outline; params={border,open,path,preexisting_points,preexisting_contours,capacity}; expected output shape={target_outline points/tags/contours, n_points, n_contours, unchanged_sentinel_on_noop}; comparison=exact C oracle per-border append order, counts, tags, contours, and 26.6 points.
+
+- id: ftstroke.FT_Stroker_GetBorderCounts
+  kind: function
+  symbol: FT_Stroker_GetBorderCounts
+  header: freetype/ftstroke.h
+  description: Public query for point and contour counts needed to export one stroker border.
+  cases:
+    - id: closed_path_border_counts
+      description: Closed paths return non-empty counts for both left and right borders after EndSubPath or ParseOutline.
+    - id: open_path_single_border_counts
+      description: Open paths return all stroke counts on the left border and zero counts on the right border.
+    - id: invalid_stroker_or_border
+      description: Null stroker or border values greater than 1 return Invalid_Argument and write zero counts where output pointers are non-null.
+    - id: optional_output_pointers
+      description: Null output count pointers are accepted and skipped while the function still returns the C status.
+  # needs-input: operation=FT_Stroker_BeginSubPath/LineTo/EndSubPath/GetBorderCounts; fixture_asset=synthetic open and closed paths; params={border,output_pointer_mask,path,radius,line_cap,line_join}; expected output shape={FT_Error, num_points, num_contours}; comparison=exact C oracle status and integer counts, including zeroing on invalid inputs.
+
+- id: ftstroke.FT_Stroker_GetCounts
+  kind: function
+  symbol: FT_Stroker_GetCounts
+  header: freetype/ftstroke.h
+  description: Public query for combined point and contour counts needed to export all stroker borders.
+  cases:
+    - id: combined_closed_path_counts
+      description: C sums left and right border point and contour counts for closed paths.
+    - id: combined_open_path_counts
+      description: C returns the merged open-stroke counts, matching the non-empty border count after caps are emitted.
+    - id: invalid_stroker
+      description: Null stroker returns Invalid_Argument and writes zero counts where output pointers are non-null.
+    - id: optional_output_pointers
+      description: Null output count pointers are accepted and skipped while the function still returns the C status.
+  # needs-input: operation=FT_Stroker_BeginSubPath/LineTo/ConicTo/CubicTo/EndSubPath/GetCounts; fixture_asset=synthetic open, closed, and mixed curve paths; params={output_pointer_mask,path,radius,line_cap,line_join,miter_limit}; expected output shape={FT_Error, num_points, num_contours}; comparison=exact C oracle status and integer counts, cross-checked against exported outline lengths.
+
+- id: ftstroke.FT_Stroker_LineTo
+  kind: function
+  symbol: FT_Stroker_LineTo
+  header: freetype/ftstroke.h
+  description: Public stroker operation that appends a straight line segment to the current subpath.
+  cases:
+    - id: line_segment_success
+      description: A valid line segment creates matching offset line geometry on both borders.
+    - id: first_segment_starts_subpath
+      description: If this is the first segment after BeginSubPath, C initializes the border starts from the line angle and length.
+    - id: zero_length_line_noop
+      description: A destination equal to the current center is a no-op and avoids creating a spurious corner.
+    - id: invalid_arguments
+      description: Null stroker or null destination vector returns Invalid_Argument.
+  # needs-input: operation=FT_Stroker_BeginSubPath/LineTo/EndSubPath/GetCounts/Export; fixture_asset=synthetic line path records including zero-length and sharp-corner paths; params={start,to,open,radius,line_cap,line_join,miter_limit}; expected output shape={FT_Error, point_count, contour_count, exported_outline points/tags/contours, cbox}; comparison=exact C oracle status, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_New
+  kind: function
+  symbol: FT_Stroker_New
+  header: freetype/ftstroke.h
+  description: Public constructor for a FreeType path stroker object.
+  cases:
+    - id: valid_library_allocates_stroker
+      description: A valid library allocates a stroker, stores the library, and initializes both stroke borders.
+    - id: invalid_library
+      description: Null library returns Invalid_Library_Handle and does not produce a stroker.
+    - id: invalid_output_pointer
+      description: Null astroker returns Invalid_Argument.
+    - id: allocation_failure
+      description: Allocator failure returns the C allocation error and stores the null stroker value through astroker.
+  # needs-input: operation=FT_Init_FreeType/FT_Stroker_New with optional allocator-failure hook; fixture_asset=no font needed; params={library_pointer_class, astroker_pointer_class, allocation_failure_at}; expected output shape={FT_Error, stroker_pointer_class, allocation_event_log}; comparison=exact C oracle status, null/non-null output pointer, and allocation behavior.
+
+- id: ftstroke.FT_Stroker_ParseOutline
+  kind: function
+  symbol: FT_Stroker_ParseOutline
+  header: freetype/ftstroke.h
+  description: Public convenience parser that feeds an FT_Outline into a stroker as an open or closed path.
+  cases:
+    - id: line_conic_cubic_success
+      description: C parses on-curve lines, implied conic starts/midpoints, conic arcs, and cubic segments into stroker operations in exact order.
+    - id: opened_outline_success
+      description: With opened set, C treats contours as open subpaths and produces a single capped stroke border.
+    - id: invalid_outline
+      description: Null outline, cubic-first contours, and malformed cubic pairs return Invalid_Outline.
+    - id: invalid_stroker
+      description: Null stroker returns Invalid_Argument after the outline null check.
+    - id: degenerate_contours_skipped
+      description: Empty or single-point contours are skipped without generating subpath output.
+  # needs-input: operation=FT_Stroker_ParseOutline/GetCounts/Export; fixture_asset=synthetic outline records with line, conic, cubic, implied conic, malformed cubic, and degenerate contour cases plus glyph outlines from tests/fixtures/input/fonts/DejaVuSans.ttf; params={opened,radius,line_cap,line_join,miter_limit,outline}; expected output shape={FT_Error, point_count, contour_count, exported_outline points/tags/contours, cbox}; comparison=exact C oracle status, parse event effects, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_Rewind
+  kind: function
+  symbol: FT_Stroker_Rewind
+  header: freetype/ftstroke.h
+  description: Public reset operation that clears accumulated stroker borders while preserving stroker attributes.
+  cases:
+    - id: clears_previous_path
+      description: After a parsed or manually built path, Rewind resets both border counts so subsequent exports are empty until new path commands run.
+    - id: attributes_preserved
+      description: Radius, cap, join, and miter settings remain in effect for the next path after Rewind.
+    - id: null_stroker_noop
+      description: Passing a null stroker is a no-op.
+    - id: set_calls_rewind
+      description: FT_Stroker_Set invokes Rewind, so changing attributes clears previously accumulated path data.
+  # needs-input: operation=FT_Stroker_Set/path/GetCounts/Rewind/path/GetCounts/Export; fixture_asset=two synthetic paths with different geometry; params={first_path,second_path,radius,line_cap,line_join,miter_limit}; expected output shape={counts_before_rewind, counts_after_rewind, second_export_outline}; comparison=exact C oracle counts and second-path 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker_Set
+  kind: function
+  symbol: FT_Stroker_Set
+  header: freetype/ftstroke.h
+  description: Public stroker attribute setter for radius, cap, join, and miter limit.
+  cases:
+    - id: attributes_affect_geometry
+      description: Radius, cap, join, and miter limit choices change later exported stroke geometry exactly as C emits it.
+    - id: miter_limit_clamped_to_one
+      description: Miter limits below 0x10000 are clamped to 0x10000 before later miter calculations.
+    - id: clears_existing_path
+      description: Setting attributes calls Rewind and clears any previously accumulated border geometry.
+    - id: null_stroker_noop
+      description: Passing a null stroker is a no-op.
+  # needs-input: operation=FT_Stroker_Set/path/GetCounts/Export across cap/join/radius matrix; fixture_asset=synthetic line, corner, conic, cubic, and open path records; params={radius,line_cap=[BUTT,ROUND,SQUARE],line_join=[ROUND,BEVEL,MITER_VARIABLE,MITER_FIXED],miter_limit,path}; expected output shape={FT_Error sequence, point_count, contour_count, exported_outline points/tags/contours, cbox}; comparison=exact C oracle status, counts, and 26.6 outline geometry.
+
+- id: ftstroke.FT_Stroker
+  kind: type
+  symbol: FT_Stroker
+  header: freetype/ftstroke.h
+  description: Public opaque handle typedef for the FreeType path stroker object.
+  cases:
+    - id: alias_defined
+      description: The pinned public header defines FT_Stroker as a pointer to struct FT_StrokerRec_.
+    - id: opaque_handle_import_contract
+      description: Client code can declare, pass, compare, and destroy FT_Stroker handles without the public header exposing the record fields.
+    - id: lifecycle_contract
+      description: Handles produced by FT_Stroker_New are consumed by FT_Stroker_Set, path commands, export/count queries, and FT_Stroker_Done.
+  # needs-input: operation=C import/ABI compile probe plus FT_Stroker_New/Done lifecycle fixture; fixture_asset=small C translation unit and no-font lifecycle run; params={include=freetype/ftstroke.h, declare_handle, pass_to_public_functions}; expected output shape={compile_status, pointer_size, lifecycle FT_Error sequence}; comparison=exact C compiler success, ABI pointer shape, and constructor/destructor status.
